@@ -70,6 +70,13 @@ export const JOB_NAMES = {
    * per segment. relevance_pct comes ONLY from the scorer (no interpolation).
    */
   SEGMENT_RELEVANCE_FILL: 'segment-relevance-fill',
+  /**
+   * CP505 [CV-NOTE-WIRE] — note targeted visual CV enrich. Haiku detects figure
+   * targets in the book's sections → /numerize extraction (cached) → filter
+   * chart/table/diagram/equation → attach to section.figures (additive). Flag-gated
+   * (VISUAL_CV_ENABLED=true) and inert when SNAPSHOT_SERVICE_TOKEN is unset (graceful []).
+   */
+  NOTE_CV_ENRICH: 'note-cv-enrich',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -350,6 +357,25 @@ export interface DeckBuildPayload {
   userId: string;
   mandalaId: string;
 }
+
+/**
+ * CP505 [CV-NOTE-WIRE] — figure detection + extraction + section attachment.
+ * Runs asynchronously after a successful book fill (VISUAL_CV_ENABLED gate).
+ * Extraction is ~148s/ts; up to 8 targets (hard cap) per book run worst case.
+ */
+export interface NoteCvEnrichPayload {
+  mandalaId: string;
+  userId: string;
+}
+
+// Extraction can take ~148s per timestamp (up to 8 targets hard cap); generous
+// expiry absorbs worst-case fan-out. Retry once for transient DB/network errors.
+export const NOTE_CV_ENRICH_OPTIONS = {
+  retryLimit: 1,
+  retryDelay: 30,
+  retryBackoff: true,
+  expireInMinutes: 30,
+} as const;
 
 // ============================================================================
 // Queue Configuration

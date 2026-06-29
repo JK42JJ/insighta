@@ -35,6 +35,7 @@ import type {
   MandalaBookChapter,
   MandalaBookSection,
   MandalaBookAtom,
+  MandalaBookFigure,
 } from '@/shared/lib/api-client';
 import type { TiptapDoc, TiptapNode } from '@/features/video-side-panel/lib/note-parser';
 
@@ -163,6 +164,37 @@ function groupAtomsByVid(
   }));
 }
 
+// [CV-NOTE-WIRE] — render targeted CV figures attached to a section as
+// `figureBlock` nodes (registered in useNoteDocument extensions). Filters
+// defensively (backend already filters to verified + renderable): only
+// chart/table/diagram/equation, drops unverified + keyframe + empty payloads.
+const FIGURE_KINDS = new Set(['chart', 'table', 'diagram', 'equation']);
+function figureBlockNode(attrs: {
+  kind: string;
+  latex: string | null;
+  assetPath: string | null;
+  caption: string | null;
+}): TiptapNode {
+  return { type: 'figureBlock', attrs };
+}
+function renderFigures(figures: MandalaBookFigure[] | undefined): TiptapNode[] {
+  const out: TiptapNode[] = [];
+  for (const f of figures ?? []) {
+    if (!FIGURE_KINDS.has(f.kind)) continue; // drops keyframe
+    if (f.verification_status === 'unverified') continue; // defensive
+    if (f.kind === 'equation') {
+      const latex = (f.latex ?? '').trim();
+      if (!latex) continue;
+      out.push(figureBlockNode({ kind: 'equation', latex, assetPath: null, caption: null }));
+    } else {
+      const assetPath = (f.asset_path ?? '').trim();
+      if (!assetPath) continue;
+      out.push(figureBlockNode({ kind: f.kind, latex: null, assetPath, caption: f.kind }));
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Section / chapter renderers
 // ---------------------------------------------------------------------------
@@ -206,6 +238,7 @@ function renderSection(
       const endSec = groupEndSec(g.atoms);
       out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
     }
+    out.push(...renderFigures(section.figures)); // [CV-NOTE-WIRE]
     out.push(horizontalRule());
     return out;
   }
@@ -234,6 +267,8 @@ function renderSection(
       content: [paragraph(section.narrative)],
     });
   }
+
+  out.push(...renderFigures(section.figures)); // [CV-NOTE-WIRE]
 
   // Section divider (skip after the last section — handled by caller).
   out.push(horizontalRule());

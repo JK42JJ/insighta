@@ -33,6 +33,7 @@ import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import type { TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
 
 import { VideoBlock } from '../lib/video-block';
+import { FigureBlock } from '../lib/figure-block';
 import { buildInitialNoteDoc } from '../lib/note-document-generator';
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,8 @@ export function useNoteDocument(input: UseNoteDocumentInput): UseNoteDocumentRes
       CodeBlockLowlight.configure({ lowlight }),
       // CP445.x — VideoBlock owns its click handling (inline iframe via store).
       VideoBlock.configure({ HTMLAttributes: {} }),
+      // [CV-NOTE-WIRE] — CV figures (equation: lazy KaTeX / chart|diagram|table: img).
+      FigureBlock.configure({ HTMLAttributes: {} }),
     ],
     []
   );

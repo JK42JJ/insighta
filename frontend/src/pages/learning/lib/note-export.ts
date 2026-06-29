@@ -116,6 +116,17 @@ function renderBlock(node: TiptapNode, depth: number): string {
       const url = `https://www.youtube.com/watch?v=${vid}&t=${Math.floor(fromSec)}s`;
       return `[${label}](${url})\n\n`;
     }
+    case 'figureBlock': {
+      // [CV-NOTE-WIRE] — equation → $$..$$ ; chart/diagram/table → ![caption](src).
+      const kind = (node.attrs?.['kind'] as string | undefined) ?? '';
+      if (kind === 'equation') {
+        const latex = (node.attrs?.['latex'] as string | undefined) ?? '';
+        return latex ? `$$\n${latex}\n$$\n\n` : '';
+      }
+      const assetPath = (node.attrs?.['assetPath'] as string | undefined) ?? '';
+      const caption = (node.attrs?.['caption'] as string | undefined) ?? kind;
+      return assetPath ? `![${caption}](${assetPath})\n\n` : '';
+    }
     default:
       // Fallback for unknown block types: render any text children.
       if (Array.isArray(node.content)) {

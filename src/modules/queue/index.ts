@@ -22,6 +22,7 @@ export { enqueueEnrichRichSummary } from './handlers/enrich-rich-summary';
 export { enqueueBatchVideoCollectorRun } from './handlers/batch-video-collector';
 export { enqueuePoolMaintenanceRun } from './handlers/pool-maintenance';
 export { enqueueRelevanceQuick } from './handlers/enrich-relevance-quick';
+export { enqueueNoteCvEnrich } from './handlers/note-cv-enrich';
 
 import { getJobQueue } from './manager';
 import { registerEnrichVideoWorker } from './handlers/enrich-video';
@@ -36,6 +37,7 @@ import { registerMandalaBookFillWorker } from './handlers/mandala-book-fill';
 import { registerTranslateMandalaBulkWorker } from './handlers/translate-mandala-bulk';
 import { registerSegmentRelevanceFillWorker } from './handlers/segment-relevance-fill';
 import { registerDeckBuildWorker } from './handlers/deck-build';
+import { registerNoteCvEnrichWorker } from './handlers/note-cv-enrich';
 import { logger } from '../../utils/logger';
 
 /**
@@ -62,6 +64,7 @@ export async function initJobQueue(): Promise<void> {
   await registerTranslateMandalaBulkWorker();
   await registerSegmentRelevanceFillWorker();
   await registerDeckBuildWorker();
+  await registerNoteCvEnrichWorker();
 
-  logger.info('Job queue fully initialized (pg-boss + 10 workers)');
+  logger.info('Job queue fully initialized (pg-boss + 13 workers)');
 }
