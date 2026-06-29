@@ -261,6 +261,13 @@ services:
       # backfill = half-activation, intended). Scoring unchanged; single call
       # site (fill-book). Config-flip rollback = delete this line → 'absolute'.
       - BOOK_GATE_MODE=relative
+      # CP504 §4.5.1 — narrative book (skeleton + chapter-body weave). Activates
+      # PR #993 (merged flag-off). fill-book reconstructs cells' §1⑤ topics into a
+      # narrative book (기승전결, cross-cell, chapter intro) via Sonnet, and the
+      # note-mode sidebar renders book.chapters directly. Config-flip rollback =
+      # delete this line (or =false) → legacy cell=chapter. Adds N+1 Sonnet calls
+      # per book-fill (skeleton + per-chapter body); cost ~$0.25/book (§7.5).
+      - BOOK_NARRATIVE_SKELETON=true
       # CP500++ CONFIG-SSOT (2026-06-16) — MIGRATED from deploy.yml→.env to compose
       # (single SSOT; removes the §10-C dual-channel where compose silently wins).
       # Values preserved verbatim from prod printenv 2026-06-16 (value-invariant).
