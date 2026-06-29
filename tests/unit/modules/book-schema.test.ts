@@ -161,3 +161,35 @@ describe('book-schema v2 contract', () => {
     expect(bookJsonSchema.safeParse(book).success).toBe(false);
   });
 });
+
+describe('book-schema — CP504 loop-2 additive keys (G-SHAPE: additive, no rejection)', () => {
+  it('legacy book WITHOUT references/research/verification.checks still parses', () => {
+    expect(() => parseBookJson(validBook())).not.toThrow();
+  });
+
+  it('book WITH references[] + chapter.research[] + section.verification.checks[] parses', () => {
+    const book = validBook();
+    book.references = [{ id: 1, title: 'Source A', url: 'https://ex.com/a' }];
+    book.chapters[0]!.research = [{ perspective: 'gap X', fact: 'web fact', ref_id: 1 }];
+    book.chapters[0]!.sections[0]!.verification = {
+      status: 'verified',
+      checks: [
+        { atom_text: 'claim a', verdict: 'FALSE', evidence_url: 'https://ex.com/a', correction: 'fixed' },
+        { atom_text: 'claim b', verdict: 'TRUE' },
+      ],
+    };
+    const parsed = parseBookJson(book);
+    expect(parsed.references?.[0]?.url).toBe('https://ex.com/a');
+    expect(parsed.chapters[0]?.research?.[0]?.ref_id).toBe(1);
+    expect(parsed.chapters[0]?.sections[0]?.verification?.checks?.[0]?.verdict).toBe('FALSE');
+  });
+
+  it('rejects an invalid factcheck verdict', () => {
+    const book = validBook();
+    book.chapters[0]!.sections[0]!.verification = {
+      status: 'verified',
+      checks: [{ atom_text: 'x', verdict: 'BOGUS' as 'TRUE' }],
+    };
+    expect(bookJsonSchema.safeParse(book).success).toBe(false);
+  });
+});

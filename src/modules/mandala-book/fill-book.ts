@@ -12,18 +12,22 @@ import { getPrismaClient } from '@/modules/database/client';
 import { getMandalaManager } from '@/modules/mandala/manager';
 import { logger } from '@/utils/logger';
 import { buildBookJson, type CellInput, type CellVideoV2 } from './build-book';
-import { parseBookJson } from './book-schema';
+import { parseBookJson, type BookJsonInput } from './book-schema';
 import {
   loadBookGateConfig,
   passesBookGate,
   computeMandalaMedian,
   isBookTopicSynthesisEnabled,
   isBookNarrativeSkeletonEnabled,
+  isBookEnrichEnabled,
   loadNoteMaxSections,
 } from '@/config/book-gate';
 import { synthesizeCellTopics } from './topic-synthesis';
 import { synthesizeBookSkeleton, type BookSkeleton } from './book-skeleton';
 import { weaveChapterBody } from './book-body';
+import { researchBookGaps } from './book-research';
+import { factcheckChapterBody } from './book-factcheck';
+import { createGoogleCseClient, loadGoogleCseConfig } from '@/modules/google-cse';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
 import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
 import { getStoredTranslation } from '@/modules/skills/rich-summary-translator';
@@ -483,6 +487,16 @@ export async function fillMandalaBook(params: {
     skeleton, // §4.5.1 — undefined ⇒ legacy cell=chapter assembly
   });
 
+  // 4b. §4.5.1 [4] loop-2 enrichment — research gap-fill (STORM) + factcheck.
+  // ONLY when a narrative skeleton exists AND enrich is enabled (separate flag —
+  // external CSE + Haiku calls, real cost). Augments `book` ADDITIVELY before
+  // validation: book.references[] + chapter.research[] (web facts) and
+  // section.verification.checks[] (per-atom verdict + correction PROPOSAL — the
+  // woven prose is NOT rewritten, A1). Best-effort; failures leave book unchanged.
+  if (skeleton && isBookEnrichEnabled()) {
+    await enrichBookLoop2(book, mandala.title ?? '', mandalaId);
+  }
+
   let validated;
   try {
     validated = parseBookJson(book);
@@ -548,4 +562,102 @@ export async function fillMandalaBook(params: {
     version,
     coverage: { gatePassed, v2Done, v2Pending: v2Pending.size },
   };
+}
+
+// Bound external CSE+Haiku calls per book-fill (cost guard, RPT-5).
+const MAX_FACTCHECK_ATOMS = 24;
+
+/**
+ * §4.5.1 [4] loop-2 enrichment — mutates `book` ADDITIVELY (caller gates on
+ * skeleton + BOOK_ENRICH_ENABLED). research (STORM): web gap-fill → book.references[]
+ * + chapter.research[] (fact + ref_id). factcheck (A1): per-section atoms (the
+ * sourced fact units) → section.verification.checks[] (verdict + correction
+ * PROPOSAL; the woven prose is NOT rewritten). Each half is best-effort (try/catch)
+ * so a CSE/LLM failure leaves the book unchanged. External call counts logged.
+ */
+async function enrichBookLoop2(
+  book: BookJsonInput,
+  centerGoal: string,
+  mandalaId: string
+): Promise<void> {
+  const chapters = book.chapters ?? [];
+  const cse = createGoogleCseClient(loadGoogleCseConfig());
+
+  // research (loop-2-B) — web gap-fill, reference-tracked (P-2B-REF).
+  try {
+    const chapterInputs = chapters.map((c) => ({
+      title: c.title,
+      intro: c.intro ?? '',
+      sectionSummaries: (c.sections ?? []).map((s) => s.narrative).filter(Boolean),
+    }));
+    const research = await researchBookGaps(chapterInputs, centerGoal, cse);
+    if (research.ok && research.findings.length > 0) {
+      const refs: Array<{ id: number; title: string; url: string }> = [];
+      const idByUrl = new Map<string, number>();
+      for (const f of research.findings) {
+        let id = idByUrl.get(f.reference.url);
+        if (id == null) {
+          id = refs.length + 1;
+          idByUrl.set(f.reference.url, id);
+          refs.push({ id, title: f.reference.title, url: f.reference.url });
+        }
+        const ch = chapters.find((c) => c.title === f.chapterTitle);
+        if (ch) (ch.research ??= []).push({ perspective: f.perspective, fact: f.fact, ref_id: id });
+      }
+      if (refs.length > 0) book.references = refs;
+      log.info('book research enrich (CSE)', {
+        mandalaId,
+        findings: research.findings.length,
+        references: refs.length,
+        cseCalls: research.findings.length, // ~1 CSE search per gap (RPT-5)
+      });
+    }
+  } catch (err) {
+    log.warn('book research enrich failed (non-fatal)', {
+      mandalaId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // factcheck (loop-2-A, A1) — atoms are the sourced fact units; verdicts +
+  // correction PROPOSALS land in section.verification (prose untouched). Capped.
+  try {
+    let budget = MAX_FACTCHECK_ATOMS;
+    let sectionsChecked = 0;
+    for (const ch of chapters) {
+      for (const s of ch.sections ?? []) {
+        if (budget <= 0) break;
+        const atoms = (s.atoms ?? []).slice(0, budget);
+        if (atoms.length === 0) continue;
+        budget -= atoms.length;
+        sectionsChecked += 1;
+        const fc = await factcheckChapterBody(
+          atoms.map((a) => ({ text: a.text, hasSource: true })),
+          cse
+        );
+        if (fc.ok && fc.results.length > 0) {
+          s.verification = {
+            status: 'verified',
+            checks: fc.results.map((r) => ({
+              atom_text: r.sentence,
+              verdict: r.verdict,
+              ...(r.evidenceUrl ? { evidence_url: r.evidenceUrl } : {}),
+              ...(r.correction ? { correction: r.correction } : {}),
+            })),
+          };
+        }
+      }
+      if (budget <= 0) break;
+    }
+    log.info('book factcheck enrich (CSE+Haiku)', {
+      mandalaId,
+      sectionsChecked,
+      atomsBudgetUsed: MAX_FACTCHECK_ATOMS - budget,
+    });
+  } catch (err) {
+    log.warn('book factcheck enrich failed (non-fatal)', {
+      mandalaId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
