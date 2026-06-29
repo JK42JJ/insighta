@@ -168,3 +168,17 @@ export function isBookNarrativeSkeletonEnabled(env: NodeJS.ProcessEnv = process.
     .toLowerCase();
   return v === 'true' || v === '1' || v === 'yes'; // unset ⇒ false (default off)
 }
+
+/**
+ * §4.5.1 [4] loop-2 enrichment (STORM research + Factcheck) on/off. Default FALSE
+ * — SEPARATE from the skeleton flag because it makes EXTERNAL calls (Google CSE +
+ * Haiku per atom/gap) with real cost/latency. Runs only when a narrative skeleton
+ * also exists. Lets James enable narrative-only (skeleton) vs narrative+enrich
+ * independently. Rollback = unset / BOOK_ENRICH_ENABLED=false.
+ */
+export function isBookEnrichEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = String(env['BOOK_ENRICH_ENABLED'] ?? '')
+    .trim()
+    .toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes'; // unset ⇒ false (default off)
+}

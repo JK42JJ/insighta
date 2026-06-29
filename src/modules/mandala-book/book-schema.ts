@@ -39,10 +39,21 @@ const provenanceSchema = z
   })
   .nullish();
 
+// CP504 loop-2-A (A1) — per-atom factcheck stored ADDITIVELY in section.verification.
+// Atoms are the sourced fact units; the woven prose is NOT rewritten — `correction`
+// is a PROPOSAL only. Optional → books without it stay valid.
+const factcheckCheckSchema = z.object({
+  atom_text: z.string(),
+  verdict: z.enum(['TRUE', 'SUBSTANTIALLY_TRUE', 'FALSE', 'MISLEADING', 'UNVERIFIABLE']),
+  evidence_url: z.string().optional(),
+  correction: z.string().optional(), // proposal only (FALSE/MISLEADING, evidence-grounded)
+});
+
 const verificationSchema = z
   .object({
     status: z.enum(['unverified', 'verified', 'flagged']).default('unverified'),
     notes: z.string().optional(),
+    checks: z.array(factcheckCheckSchema).optional(), // CP504 loop-2-A factcheck proposals
   })
   .nullish();
 
@@ -55,11 +66,29 @@ export const bookSectionSchema = z.object({
   verification: verificationSchema, // Fork D placeholder
 });
 
+// CP504 loop-2-B — STORM gap-fill findings attached to a chapter (additive).
+// Each fact carries a ref_id into book.references[] (web provenance). Optional.
+const chapterResearchSchema = z.object({
+  perspective: z.string(),
+  fact: z.string(),
+  ref_id: z.number().int(),
+});
+
 export const bookChapterSchema = z.object({
   ch: z.number().int(),
   title: z.string(),
   intro: z.string(),
   sections: z.array(bookSectionSchema),
+  research: z.array(chapterResearchSchema).optional(), // CP504 loop-2-B (additive)
+});
+
+// CP504 loop-2-B (B) — web references from STORM research. Video provenance stays
+// inline on atoms (atom.vid/ts); this is the WEB half of dual-source tracking
+// (P-REF-DUAL). Rendered as a bottom "참고 자료" section. Optional → legacy valid.
+const bookReferenceSchema = z.object({
+  id: z.number().int(),
+  title: z.string(),
+  url: z.string(),
 });
 
 export const bookJsonSchema = z.object({
@@ -80,6 +109,7 @@ export const bookJsonSchema = z.object({
   // Fork D placeholder — book-level completeness, fill job not implemented.
   completeness: z.object({ status: z.string(), checked_at: z.string() }).nullish(),
   chapters: z.array(bookChapterSchema),
+  references: z.array(bookReferenceSchema).optional(), // CP504 loop-2-B web refs (additive)
 });
 
 /** Pre-parse input shape (defaults + Fork-D placeholders optional) — for fixtures/generators. */
