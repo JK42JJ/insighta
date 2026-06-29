@@ -18,9 +18,11 @@ import {
   passesBookGate,
   computeMandalaMedian,
   isBookTopicSynthesisEnabled,
+  isBookNarrativeSkeletonEnabled,
   loadNoteMaxSections,
 } from '@/config/book-gate';
 import { synthesizeCellTopics } from './topic-synthesis';
+import { synthesizeBookSkeleton, type BookSkeleton } from './book-skeleton';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
 import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
 import { getStoredTranslation } from '@/modules/skills/rich-summary-translator';
@@ -398,6 +400,42 @@ export async function fillMandalaBook(params: {
     }
   }
 
+  // 3c. §4.5.1 [2] narrative skeleton (flag-gated; off ⇒ legacy cell=chapter).
+  // Reconstruct ALL cells' §1⑤ topics into a narrative book outline (cross-cell
+  // merge + 기승전결 order + chapter intro). The flat topic list = cells in order,
+  // each cell's topics flattened — this MUST match build-book's flatTopics order
+  // (input.cells.flatMap(c => c.topics)) so the skeleton's topic_refs line up.
+  // HARD fail → skeleton stays undefined → build-book uses legacy cell=chapter.
+  let skeleton: BookSkeleton | undefined;
+  if (isBookNarrativeSkeletonEnabled()) {
+    const skeletonTopics = cells.flatMap((cell) =>
+      (cell.topics ?? []).map((tp) => ({
+        cellIndex: cell.cellIndex,
+        cellTitle: cell.title,
+        topicTitle: tp.topic_title,
+        summary: tp.summary,
+      }))
+    );
+    if (skeletonTopics.length > 0) {
+      const sk = await synthesizeBookSkeleton(skeletonTopics, mandala.title ?? '');
+      if (sk.ok) {
+        skeleton = sk.skeleton;
+        log.info('book narrative skeleton (compression→reconstruction)', {
+          mandalaId,
+          topicsIn: skeletonTopics.length,
+          chapters: sk.skeleton.chapters.length,
+          topicsUnplaced: sk.unplaced.length, // transparency — surfaced, not auto-appended
+        });
+      } else {
+        // Surfaced LOUDLY — NOT a silent revert (caller falls to cell=chapter).
+        log.error('book narrative skeleton HARD-FAILED → legacy cell=chapter (NOT silent)', {
+          mandalaId,
+          reason: sk.reason,
+        });
+      }
+    }
+  }
+
   // 4. Assemble (pure, LLM-free) + validate (hard gate).
   const generatedAt = new Date().toISOString();
   const { book, sourceVideos, sourceAtoms } = buildBookJson({
@@ -405,6 +443,7 @@ export async function fillMandalaBook(params: {
     mandalaTitle: mandala.title ?? '',
     generatedAt,
     cells,
+    skeleton, // §4.5.1 — undefined ⇒ legacy cell=chapter assembly
   });
 
   let validated;
