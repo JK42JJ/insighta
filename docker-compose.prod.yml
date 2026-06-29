@@ -267,10 +267,15 @@ services:
       # note-mode sidebar renders book.chapters directly. Config-flip rollback =
       # delete this line (or =false) → legacy cell=chapter. Adds N+1 Sonnet calls
       # per book-fill (skeleton + per-chapter body); cost ~$0.25/book (§7.5).
-      # CP504 loop-1b — parked OFF during the body-weave RENDER-gap fix (the woven
-      # narrative renders as a trailing blockquote while atom-text dumps the body;
-      # see note-document-generator renderSection). Re-flip =true to re-verify.
-      - BOOK_NARRATIVE_SKELETON=false
+      # CP504 ACTIVATION — narrative note pipeline ON for James a/b/c/d verdict.
+      # =true: fill-book builds the narrative book (skeleton + woven body) + note
+      # renders book.chapters / woven prose / atom citations. Rollback = =false.
+      - BOOK_NARRATIVE_SKELETON=true
+      # CP504 loop-2 enrich ON — research(STORM)+factcheck. EXTERNAL CSE+Haiku per
+      # book-fill (≤6 CSE gaps + ≤24 factcheck atoms; RPT-5). Produces references[]
+      # + 보강 자료 + section.verification proposals. Rollback = =false (narrative
+      # stays on, enrich off). Both flip together for the full a/b/c/d test.
+      - BOOK_ENRICH_ENABLED=true
       # CP500++ CONFIG-SSOT (2026-06-16) — MIGRATED from deploy.yml→.env to compose
       # (single SSOT; removes the §10-C dual-channel where compose silently wins).
       # Values preserved verbatim from prod printenv 2026-06-16 (value-invariant).
