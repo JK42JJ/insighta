@@ -25,6 +25,11 @@ const NOTE_CV_ENRICH_CONCURRENCY = 2;
 // Renderable kinds the renderer supports; keyframe is binary-only (deferred).
 const RENDERABLE_KINDS = new Set<string>(['chart', 'table', 'diagram', 'equation']);
 
+// numerize returns a figure within ±NUMERIZE_WINDOW_SEC (slidegen=10s) of a requested
+// ts, so the figure's ACTUAL ts (slide-display time) rarely equals the target ts
+// (subtitle/atom time). Match within this window, not exact ts. = slidegen NUMERIZE_WINDOW_SEC.
+const FIGURE_TS_WINDOW_SEC = 10;
+
 export async function registerNoteCvEnrichWorker(): Promise<void> {
   const boss = getJobQueue().getInstance();
   await boss.work<NoteCvEnrichPayload>(
@@ -123,7 +128,19 @@ export async function handleNoteCvEnrich(job: PgBoss.Job<NoteCvEnrichPayload>): 
       };
 
       // e. Attach to section.figures — additive, dedup by (video_id, ts_sec).
-      const matching = videoTargets.filter((t) => t.tsSec === fig.tsSec);
+      // Figure ts (actual slide location) ≠ target ts (subtitle time) but is within
+      // numerize's ±window → match the NEAREST target in that window. Exact-ts match
+      // dropped every figure (e.g. figure@184 vs target 150/190 → 0 attached → book 0).
+      const inWindow = videoTargets.filter(
+        (t) => Math.abs(t.tsSec - fig.tsSec) <= FIGURE_TS_WINDOW_SEC
+      );
+      const matching = inWindow.length
+        ? [
+            inWindow.reduce((a, b) =>
+              Math.abs(a.tsSec - fig.tsSec) <= Math.abs(b.tsSec - fig.tsSec) ? a : b
+            ),
+          ]
+        : [];
       for (const target of matching) {
         const ch = book.chapters[target.chapterIdx];
         if (!ch) continue;

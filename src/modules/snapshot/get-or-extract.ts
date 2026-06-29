@@ -21,6 +21,12 @@ import type { FigureKind, FigureRef } from './types';
 
 const log = logger.child({ module: 'snapshot/get-or-extract' });
 
+// A figure's stored ts (actual slide/figure location) rarely equals the requested
+// ts (subtitle/atom time); numerize returns it within ±NUMERIZE_WINDOW_SEC (slidegen
+// =10s). Cache lookup must match by window, not exact ts — exact match never hit a
+// real figure (figure@184 vs request 150/190 → perpetual re-extract + 148s timeouts).
+const FIGURE_TS_WINDOW_SEC = 10;
+
 interface CacheRow {
   video_id: string;
   ts_sec: number;
@@ -85,19 +91,24 @@ export async function getOrExtractSnapshots(
   const uniqueTs = Array.from(new Set(tsList.filter((t) => Number.isFinite(t))));
   if (uniqueTs.length === 0) return [];
 
-  // GET — serve from cache (non-expired). Independent of the extractor.
+  // GET — serve cached figures within ±FIGURE_TS_WINDOW_SEC of any requested ts
+  // (not exact ts — see const note). Non-expired only. Independent of the extractor.
   const cached = await prisma.$queryRawUnsafe<CacheRow[]>(
     `SELECT video_id, ts_sec, kind, struct, latex, asset_path, verification_status, source
      FROM video_figure_snapshots
-     WHERE video_id = $1 AND ts_sec = ANY($2::int[]) AND expires_at > NOW()`,
+     WHERE video_id = $1 AND expires_at > NOW()
+       AND EXISTS (SELECT 1 FROM unnest($2::int[]) t WHERE ts_sec BETWEEN t - $3 AND t + $3)`,
     videoId,
-    uniqueTs
+    uniqueTs,
+    FIGURE_TS_WINDOW_SEC
   );
-  const cachedTs = new Set(cached.map((r) => r.ts_sec));
   const result: FigureRef[] = cached.map(rowToFigure);
 
-  // EXTRACT — only the missing timestamps. Empty result ⇒ those ts stay absent.
-  const missingTs = uniqueTs.filter((t) => !cachedTs.has(t));
+  // EXTRACT — only requested ts with NO cached figure within the window. A covered ts
+  // (figure already within ±window) is NOT re-extracted (was: exact-ts miss → re-extract).
+  const missingTs = uniqueTs.filter(
+    (t) => !cached.some((r) => Math.abs(r.ts_sec - t) <= FIGURE_TS_WINDOW_SEC)
+  );
   if (missingTs.length > 0) {
     const extracted = await extractFigures(videoId, missingTs);
     for (const fig of extracted) {
@@ -107,7 +118,7 @@ export async function getOrExtractSnapshots(
     log.info('get-or-extract', {
       videoId,
       requested: uniqueTs.length,
-      cacheHit: cachedTs.size,
+      cacheHit: cached.length,
       extracted: extracted.length,
     });
   }
