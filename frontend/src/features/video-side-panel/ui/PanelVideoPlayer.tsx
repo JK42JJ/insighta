@@ -7,9 +7,10 @@
  *   - Timestamp seek: seekTo() via playerRef
  *   - Panel close: component unmounts → player.destroy()
  */
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { getYouTubeVideoId, loadYouTubeAPI } from '@/widgets/video-player/model/youtube-api';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
+import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
 
 export type PanelPlayerState = 'playing' | 'paused' | 'buffering' | 'ended' | 'unstarted' | 'cued';
 
@@ -63,6 +64,14 @@ export function PanelVideoPlayer({
   const initialStartTimeRef = useRef(startTime);
   const initialYoutubeIdRef = useRef(youtubeId);
 
+  // Poster facade — the videoId whose sharp poster overlay is shown (null =
+  // hidden). YouTube's NATIVE cued/paused iframe poster is low-res/blurry; we
+  // cover it with a maxres <img> (deep fallback) until the video starts playing.
+  // Initial: shown when the player opens cued (autoplay off); hidden if autoplay.
+  const [posterVid, setPosterVid] = useState<string | null>(
+    initialAutoplayRef.current ? null : (youtubeId ?? null)
+  );
+
   const setPlayer = useCallback(
     (p: YTPlayer | null) => {
       internalPlayerRef.current = p;
@@ -93,6 +102,7 @@ export function PanelVideoPlayer({
         onStateChange: (event: { data: number }) => {
           // YT.PlayerState.PLAYING = 1, PAUSED = 2
           if (event.data === 1) {
+            setPosterVid(null); // playing → drop the poster facade (reveals iframe)
             if (!userPlayedFiredRef.current) {
               userPlayedFiredRef.current = true;
               onUserPlayed?.();
@@ -129,6 +139,9 @@ export function PanelVideoPlayer({
     if (currentVideoIdRef.current === youtubeId) return;
 
     currentVideoIdRef.current = youtubeId;
+    // New video cued (paused → blurry native poster) → re-show our sharp poster;
+    // autoplay → clear (it plays straight away, 'playing' would clear it anyway).
+    setPosterVid(shouldAutoplay ? null : youtubeId);
     const player = internalPlayerRef.current;
     if (shouldAutoplay) {
       // loadVideoById per YT API spec: loads AND plays
@@ -237,6 +250,29 @@ export function PanelVideoPlayer({
         allowFullScreen
         title="Video player"
       />
+      {/* Poster facade — covers YouTube's blurry native cued/paused poster with a
+          sharp maxres thumbnail (deep fallback via image-utils handlers) until the
+          video plays. pointer-events-none → clicks pass THROUGH to the iframe's
+          native play; 'playing' (onStateChange) clears posterVid → overlay unmounts.
+          Decorative play glyph only. No player API call → zero state-machine risk. */}
+      {posterVid && (
+        <div className="pointer-events-none absolute inset-0 z-10">
+          <img
+            src={`https://img.youtube.com/vi/${posterVid}/maxresdefault.jpg`}
+            onError={handleThumbnailError}
+            onLoad={handleThumbnailLoad}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60">
+              <svg viewBox="0 0 24 24" className="h-7 w-7 translate-x-0.5 fill-white" aria-hidden="true">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
