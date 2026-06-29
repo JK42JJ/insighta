@@ -8,11 +8,13 @@
  *
  *  - kind='equation' → lazy-loads KaTeX (dynamic import; only when an equation
  *    figure mounts) and renders displayMode HTML.
- *  - kind∈{chart,diagram,table} → renders the asset_path as an <img> + caption.
+ *  - kind∈{chart,diagram} → renders the server-generated inline SVG (sanitized).
+ *  - kind='table' → renders an HTML <table> from struct.headers/rows.
+ *  The broken pod-local asset_path <img> path was removed.
  *
  * Inert until the backend populates section.figures (flag-gated server-side).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 
@@ -22,11 +24,30 @@ export interface FigureBlockOptions {
 
 export type FigureKind = 'chart' | 'diagram' | 'table' | 'equation';
 
+export interface FigureStruct {
+  headers?: string[];
+  rows?: string[][];
+}
+
 export interface FigureBlockAttrs {
   kind: FigureKind;
   latex: string | null;
-  assetPath: string | null;
+  svg: string | null;
+  struct: FigureStruct | null;
   caption: string | null;
+}
+
+// Minimal SVG sanitizer (no DOMPurify dep). Server SVG is graphviz/matplotlib
+// output, but we still strip the XSS surface before dangerouslySetInnerHTML:
+// <script>, on* event handlers, <foreignObject>, external <image> refs and
+// javascript: URLs.
+function sanitizeSvg(svg: string): string {
+  return svg
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
+    .replace(/<image\b[\s\S]*?>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/(href|xlink:href)\s*=\s*("javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]+)/gi, '');
 }
 
 // Lazy KaTeX render — dynamic import keeps the heavy lib out of the main bundle.
@@ -59,25 +80,60 @@ function EquationView({ latex }: { latex: string }) {
   return <div className="note-figure-equation" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+// Table figure → semantic HTML <table> from struct headers/rows.
+function TableView({ struct }: { struct: FigureStruct }) {
+  const headers = Array.isArray(struct.headers) ? struct.headers : [];
+  const rows = Array.isArray(struct.rows) ? struct.rows : [];
+  if (headers.length === 0 && rows.length === 0) return null;
+  return (
+    <figure className="note-figure-table">
+      <table>
+        {headers.length > 0 && (
+          <thead>
+            <tr>
+              {headers.map((h, i) => (
+                <th key={i}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+        )}
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td key={ci}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </figure>
+  );
+}
+
 function FigureBlockNodeView({ node }: NodeViewProps) {
   const attrs = node.attrs as unknown as FigureBlockAttrs;
-  const [imgBroken, setImgBroken] = useState(false);
 
+  let body: JSX.Element | null = null;
+  if (attrs.kind === 'equation' && attrs.latex) {
+    body = <EquationView latex={attrs.latex} />;
+  } else if (attrs.kind === 'table' && attrs.struct) {
+    body = <TableView struct={attrs.struct} />;
+  } else if ((attrs.kind === 'chart' || attrs.kind === 'diagram') && attrs.svg) {
+    // SVG is server-generated; sanitized above to close the XSS surface.
+    const html = sanitizeSvg(attrs.svg);
+    body = (
+      <figure className="note-figure-image">
+        <div className="note-figure-svg" dangerouslySetInnerHTML={{ __html: html }} />
+        {attrs.caption && <figcaption>{attrs.caption}</figcaption>}
+      </figure>
+    );
+  }
+
+  // Missing/empty payload → render nothing inside the wrapper (no broken img).
   return (
     <NodeViewWrapper className="note-figure-block" data-kind={attrs.kind}>
-      {attrs.kind === 'equation' && attrs.latex ? (
-        <EquationView latex={attrs.latex} />
-      ) : attrs.assetPath && !imgBroken ? (
-        <figure className="note-figure-image">
-          <img
-            src={attrs.assetPath}
-            alt={attrs.caption ?? attrs.kind}
-            loading="lazy"
-            onError={() => setImgBroken(true)}
-          />
-          {attrs.caption && <figcaption>{attrs.caption}</figcaption>}
-        </figure>
-      ) : null}
+      {body}
     </NodeViewWrapper>
   );
 }
@@ -106,11 +162,24 @@ export const FigureBlock = Node.create<FigureBlockOptions>({
         parseHTML: (el) => el.getAttribute('data-latex'),
         renderHTML: (attrs) => (attrs['latex'] ? { 'data-latex': String(attrs['latex']) } : {}),
       },
-      assetPath: {
+      svg: {
         default: null,
-        parseHTML: (el) => el.getAttribute('data-asset-path'),
+        parseHTML: (el) => el.getAttribute('data-svg'),
+        renderHTML: (attrs) => (attrs['svg'] ? { 'data-svg': String(attrs['svg']) } : {}),
+      },
+      struct: {
+        default: null,
+        parseHTML: (el) => {
+          const raw = el.getAttribute('data-struct');
+          if (!raw) return null;
+          try {
+            return JSON.parse(raw);
+          } catch {
+            return null;
+          }
+        },
         renderHTML: (attrs) =>
-          attrs['assetPath'] ? { 'data-asset-path': String(attrs['assetPath']) } : {},
+          attrs['struct'] ? { 'data-struct': JSON.stringify(attrs['struct']) } : {},
       },
       caption: {
         default: null,
