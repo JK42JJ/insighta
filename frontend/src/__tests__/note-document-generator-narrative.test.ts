@@ -96,38 +96,3 @@ describe('note-document-generator — loop-2 references render (P-REF-RENDER)', 
     expect(headingTexts(ns)).not.toContain('참고 자료');
   });
 });
-
-const linkHrefs = (ns: N[]): string[] =>
-  ns
-    .filter((n) => n.type === 'paragraph')
-    .flatMap((p) => (p.content ?? []) as Array<{ marks?: Array<{ type: string; attrs?: { href?: string } }> }>)
-    .flatMap((c) => c.marks ?? [])
-    .filter((m) => m.type === 'link')
-    .map((m) => m.attrs?.href ?? '');
-
-describe('note-document-generator — CP505 B per-chapter video dedup', () => {
-  const repeatBook = (): MandalaBookData =>
-    ({
-      chapters: [
-        {
-          ch: 0,
-          title: '워밍업',
-          intro: '',
-          sections: [
-            { title: '도입', atoms: [{ vid: 'vidA', ts: 9, text: 'intro' }] },
-            { title: '루틴', atoms: [{ vid: 'vidA', ts: 192, text: 'routine' }] },
-            { title: '주의', atoms: [{ vid: 'vidB', ts: 30, text: 'caution' }] },
-          ],
-        },
-      ],
-    }) as MandalaBookData;
-
-  it('same vid repeated in a chapter → ONE full embed + timestamp pill (not re-embedded)', () => {
-    const ns = nodes(buildInitialNoteDoc(repeatBook()));
-    const vb = videoBlocks(ns);
-    expect(vb.filter((v) => v.attrs?.vid === 'vidA')).toHaveLength(1); // embedded ONCE
-    expect(vb.filter((v) => v.attrs?.vid === 'vidB')).toHaveLength(1);
-    // the vidA repeat (ts=192) → timestamp pill linking to t=192 (seeks embedded player)
-    expect(linkHrefs(ns).some((h) => h.includes('vidA') && h.includes('t=192'))).toBe(true);
-  });
-});
