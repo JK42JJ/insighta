@@ -45,22 +45,27 @@ export function isYouTubePlaceholder(img: HTMLImageElement): boolean {
 }
 
 /**
+ * Pure descent helper: given a YouTube thumbnail URL, return the next
+ * lower-quality URL in the chain (maxresdefault → sddefault → hqdefault →
+ * mqdefault → default), or `null` when the chain is exhausted or the URL is
+ * not a recognised YouTube thumbnail quality. Does not mutate. Callers decide
+ * the terminal action (local placeholder, hide the element, …).
+ */
+export function nextYouTubeThumbnail(src: string): string | null {
+  const currentIdx = YT_FALLBACK_CHAIN.findIndex((q) => src.includes(q));
+  if (currentIdx >= 0 && currentIdx < YT_FALLBACK_CHAIN.length - 1) {
+    return src.replace(YT_FALLBACK_CHAIN[currentIdx], YT_FALLBACK_CHAIN[currentIdx + 1]);
+  }
+  return null;
+}
+
+/**
  * onError handler: walks the full YouTube quality chain, then falls back to local placeholder.
  */
 export function handleThumbnailError(e: { currentTarget: HTMLImageElement }): void {
   const img = e.currentTarget;
-  const src = img.src;
-
-  // YouTube thumbnail — try next quality level
-  const currentIdx = YT_FALLBACK_CHAIN.findIndex((q) => src.includes(q));
-  if (currentIdx >= 0 && currentIdx < YT_FALLBACK_CHAIN.length - 1) {
-    const next = YT_FALLBACK_CHAIN[currentIdx + 1];
-    img.src = src.replace(YT_FALLBACK_CHAIN[currentIdx], next);
-    return;
-  }
-
   // All YouTube qualities exhausted or non-YouTube image — local placeholder
-  img.src = '/placeholder.svg';
+  img.src = nextYouTubeThumbnail(img.src) ?? '/placeholder.svg';
 }
 
 /**
@@ -75,15 +80,7 @@ export function handleThumbnailLoad(e: { currentTarget: HTMLImageElement }): voi
   if (img.src.endsWith('/placeholder.svg')) return;
   if (!isYouTubePlaceholder(img)) return;
 
-  const src = img.src;
-  const currentIdx = YT_FALLBACK_CHAIN.findIndex((q) => src.includes(q));
-  if (currentIdx >= 0 && currentIdx < YT_FALLBACK_CHAIN.length - 1) {
-    const next = YT_FALLBACK_CHAIN[currentIdx + 1];
-    img.src = src.replace(YT_FALLBACK_CHAIN[currentIdx], next);
-    return;
-  }
-
-  img.src = '/placeholder.svg';
+  img.src = nextYouTubeThumbnail(img.src) ?? '/placeholder.svg';
 }
 
 /**

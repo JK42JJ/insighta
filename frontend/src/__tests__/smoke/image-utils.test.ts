@@ -3,6 +3,7 @@ import {
   upgradeYouTubeThumbnail,
   getYouTubeFallback,
   handleThumbnailError,
+  nextYouTubeThumbnail,
 } from '@shared/lib/image-utils';
 
 describe('upgradeYouTubeThumbnail', () => {
@@ -53,5 +54,32 @@ describe('handleThumbnailError', () => {
     const img = { src: 'https://example.com/broken.jpg' } as HTMLImageElement;
     handleThumbnailError({ currentTarget: img });
     expect(img.src).toBe('/placeholder.svg');
+  });
+});
+
+describe('nextYouTubeThumbnail', () => {
+  // Regression (fix/video-thumbnail): the descent must be DEEP — walk every
+  // tier down to an always-present one, not stop after a single fallback.
+  it('descends the full chain maxres → sd → hq → mq → default', () => {
+    expect(nextYouTubeThumbnail('https://img.youtube.com/vi/abc/maxresdefault.jpg')).toBe(
+      'https://img.youtube.com/vi/abc/sddefault.jpg'
+    );
+    expect(nextYouTubeThumbnail('https://img.youtube.com/vi/abc/sddefault.jpg')).toBe(
+      'https://img.youtube.com/vi/abc/hqdefault.jpg'
+    );
+    expect(nextYouTubeThumbnail('https://img.youtube.com/vi/abc/hqdefault.jpg')).toBe(
+      'https://img.youtube.com/vi/abc/mqdefault.jpg'
+    );
+    expect(nextYouTubeThumbnail('https://img.youtube.com/vi/abc/mqdefault.jpg')).toBe(
+      'https://img.youtube.com/vi/abc/default.jpg'
+    );
+  });
+
+  it('returns null when the chain is exhausted (default tier)', () => {
+    expect(nextYouTubeThumbnail('https://img.youtube.com/vi/abc/default.jpg')).toBeNull();
+  });
+
+  it('returns null for non-YouTube / unrecognised URLs', () => {
+    expect(nextYouTubeThumbnail('https://example.com/broken.jpg')).toBeNull();
   });
 });
