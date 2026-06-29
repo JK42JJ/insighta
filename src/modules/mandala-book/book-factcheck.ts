@@ -45,9 +45,7 @@ export interface CheckResult {
   correction?: string;
 }
 
-export type FactcheckResult =
-  | { ok: true; results: CheckResult[] }
-  | { ok: false; reason: string };
+export type FactcheckResult = { ok: true; results: CheckResult[] } | { ok: false; reason: string };
 
 // CSE client interface (minimal — matches createGoogleCseClient return shape).
 interface CseClient {
@@ -197,10 +195,7 @@ export function parseFactcheckResponse(
 // Stage 2 — CSE + Haiku verify for one batch of claims
 // ---------------------------------------------------------------------------
 
-async function verifyClaims(
-  claims: FactSentence[],
-  cseClient: CseClient
-): Promise<CheckResult[]> {
+async function verifyClaims(claims: FactSentence[], cseClient: CseClient): Promise<CheckResult[]> {
   // Gather CSE evidence for each claim (3 snippets per claim).
   const enriched = await Promise.all(
     claims.map(async (c) => {
@@ -229,7 +224,10 @@ async function verifyClaims(
     } catch (err) {
       lastReason = `provider_error: ${err instanceof Error ? err.message : String(err)}`;
       if (attempt < VERIFY_ATTEMPTS) {
-        log.warn('book-factcheck verify attempt failed — retrying', { attempt, reason: lastReason });
+        log.warn('book-factcheck verify attempt failed — retrying', {
+          attempt,
+          reason: lastReason,
+        });
         continue;
       }
       throw new Error(lastReason);

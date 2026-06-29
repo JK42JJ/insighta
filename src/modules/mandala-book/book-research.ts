@@ -126,10 +126,8 @@ export function parsePerspectiveResponse(
 
   const perspectives: ResearchGap[] = [];
   for (const g of (json.gaps as Array<Record<string, unknown>>).slice(0, MAX_GAPS)) {
-    const chapterTitle =
-      typeof g['chapterTitle'] === 'string' ? g['chapterTitle'].trim() : '';
-    const perspective =
-      typeof g['perspective'] === 'string' ? g['perspective'].trim() : '';
+    const chapterTitle = typeof g['chapterTitle'] === 'string' ? g['chapterTitle'].trim() : '';
+    const perspective = typeof g['perspective'] === 'string' ? g['perspective'].trim() : '';
     const query = typeof g['query'] === 'string' ? g['query'].trim() : '';
     if (!chapterTitle || !perspective || !query) continue;
     perspectives.push({ chapterTitle, perspective, query });
@@ -169,9 +167,7 @@ export async function retrieveForGaps(
     const item = result.items[0];
     if (!item || !item.link) continue; // noUncheckedIndexedAccess + empty-url guard
 
-    const fact = item.snippet
-      ? item.snippet.replace(/\s*\n+\s*/g, ' ').trim()
-      : item.title;
+    const fact = item.snippet ? item.snippet.replace(/\s*\n+\s*/g, ' ').trim() : item.title;
     if (!fact) continue;
 
     findings.push({
