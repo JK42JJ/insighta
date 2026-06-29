@@ -25,6 +25,7 @@ import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tip
 import { Play } from 'lucide-react';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import { loadYouTubeAPI, type YTPlayer } from '@/widgets/video-player/model/youtube-api';
+import { nextYouTubeThumbnail, isYouTubePlaceholder } from '@/shared/lib/image-utils';
 
 // CP446.x — YT.PlayerState constants. Avoid relying on window.YT.PlayerState
 // at module load (loaded async).
@@ -211,16 +212,25 @@ function VideoBlockNodeView({ node, getPos, editor }: NodeViewProps) {
             className="video-block-thumb"
             draggable={false}
             onError={(e) => {
-              // CP504 — prefer maxresdefault (1280×720). It 404s for videos that
-              // never produced a maxres thumb, so fall back to hqdefault (480×360,
-              // always exists); only mark broken if even that fails.
+              // Prefer maxresdefault (1280×720). When a quality tier 404s
+              // (older/short videos lack maxres/sd) descend the FULL chain
+              // maxres → sd → hq → mq → default — hq/mq/default effectively
+              // always exist — instead of stopping after one step. Only hide
+              // the block once every tier is gone (deleted/private vid).
+              const next = nextYouTubeThumbnail(e.currentTarget.src);
+              if (next) e.currentTarget.src = next;
+              else setThumbBroken(true);
+            }}
+            onLoad={(e) => {
+              // YouTube serves a 120×90 grey placeholder with HTTP 200 (no
+              // onError) when a quality tier is missing. Detect it by natural
+              // dimensions and descend until a real thumbnail loads, so a
+              // remounted block never latches the blurry/blank low-res poster.
               const img = e.currentTarget;
-              if (!img.dataset.fellBack) {
-                img.dataset.fellBack = '1';
-                img.src = `https://img.youtube.com/vi/${attrs.vid}/hqdefault.jpg`;
-              } else {
-                setThumbBroken(true);
-              }
+              if (!isYouTubePlaceholder(img)) return;
+              const next = nextYouTubeThumbnail(img.src);
+              if (next) img.src = next;
+              else setThumbBroken(true);
             }}
           />
           <span className="video-block-overlay" />
