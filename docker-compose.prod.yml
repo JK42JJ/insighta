@@ -276,6 +276,13 @@ services:
       # + 보강 자료 + section.verification proposals. Rollback = =false (narrative
       # stays on, enrich off). Both flip together for the full a/b/c/d test.
       - BOOK_ENRICH_ENABLED=true
+      # CP505 [CV-NOTE-WIRE] ACTIVATION — note targeted-CV ON. fill-book enqueues
+      # NOTE_CV_ENRICH (Haiku detect ≤8 → Mac Mini /numerize → RunPod YOLO+Qwen →
+      # section.figures; equation→KaTeX, chart/table/diagram→img). ★ REQUIRES at
+      # fill time: RunPod (Qwen3-VL :8000 + YOLO :8080) UP + Mac Mini slidegen
+      # :8077 in http mode + SNAPSHOT_SERVICE_TOKEN set — else /numerize → [] (graceful
+      # no-op, no figures). Async ~148s/ts. Cache = video_figure_snapshots. Rollback = =false.
+      - VISUAL_CV_ENABLED=true
       # CP500++ CONFIG-SSOT (2026-06-16) — MIGRATED from deploy.yml→.env to compose
       # (single SSOT; removes the §10-C dual-channel where compose silently wins).
       # Values preserved verbatim from prod printenv 2026-06-16 (value-invariant).
