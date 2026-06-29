@@ -291,11 +291,20 @@ export interface MandalaBookAtom {
   seg_ref?: { from_sec: number; to_sec: number };
 }
 
+// CP504 loop-2-A — per-atom factcheck stored additively in section.verification.
+export interface MandalaBookFactcheck {
+  atom_text: string;
+  verdict: 'TRUE' | 'SUBSTANTIALLY_TRUE' | 'FALSE' | 'MISLEADING' | 'UNVERIFIABLE';
+  evidence_url?: string;
+  correction?: string; // proposal only (prose not rewritten)
+}
+
 export interface MandalaBookSection {
   title: string;
   narrative?: string;
   atoms?: MandalaBookAtom[];
   qa?: Array<{ q: string; a: string }>;
+  verification?: { status?: string; notes?: string; checks?: MandalaBookFactcheck[] }; // CP504 loop-2-A
 }
 
 export interface MandalaBookChapter {
@@ -303,6 +312,8 @@ export interface MandalaBookChapter {
   title: string;
   intro?: string;
   sections: MandalaBookSection[];
+  // CP504 loop-2-B — STORM gap-fill findings (web facts); ref_id → references[].
+  research?: Array<{ perspective: string; fact: string; ref_id: number }>;
 }
 
 export interface MandalaBookData {
@@ -314,6 +325,8 @@ export interface MandalaBookData {
   estimated_pages?: number;
   chapters: MandalaBookChapter[];
   stats?: Record<string, unknown>;
+  // CP504 loop-2-B (B) — web references (STORM). Rendered as bottom "참고 자료".
+  references?: Array<{ id: number; title: string; url: string }>;
 }
 
 export interface MandalaBookResponse {

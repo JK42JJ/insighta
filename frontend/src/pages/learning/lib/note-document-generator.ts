@@ -272,6 +272,16 @@ function renderChapter(chapter: MandalaBookChapter, narrativeMode: boolean): Tip
     out.push(...renderSection(sec, chapter.ch, i, narrativeMode));
   }
 
+  // CP504 loop-2-B — STORM gap-fill: web-sourced supplemental facts for this
+  // chapter, each marked [n] into the bottom 참고 자료 list (ref_id). Present only
+  // when enrich ran (BOOK_ENRICH_ENABLED); absent for normal books → no-op.
+  if (chapter.research && chapter.research.length > 0) {
+    out.push(heading(3, '보강 자료'));
+    for (const r of chapter.research) {
+      out.push(paragraph(`${r.fact} [${r.ref_id}]`));
+    }
+  }
+
   return out;
 }
 
@@ -304,6 +314,16 @@ export function buildInitialNoteDoc(book: MandalaBookData | null | undefined): T
   for (const ch of sortedChapters) {
     if (!ch || !Array.isArray(ch.sections)) continue;
     content.push(...renderChapter(ch, narrativeMode));
+  }
+
+  // CP504 loop-2-B (B) — bottom "참고 자료" web references (STORM). Video provenance
+  // (atom vid/ts) stays inline on the cards; this is the WEB half (P-REF-DUAL).
+  // Present only when enrich ran; absent for normal books → no section.
+  if (book.references && book.references.length > 0) {
+    content.push(heading(2, '참고 자료'));
+    for (const ref of book.references) {
+      content.push(paragraph(`[${ref.id}] ${ref.title} — ${ref.url}`));
+    }
   }
 
   // If the last node is a horizontalRule, drop it (clean trailing).
