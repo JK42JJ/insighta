@@ -22,10 +22,17 @@ import type { FigureKind, FigureRef } from './types';
 const log = logger.child({ module: 'snapshot/get-or-extract' });
 
 // A figure's stored ts (actual slide/figure location) rarely equals the requested
-// ts (subtitle/atom time); numerize returns it within ±NUMERIZE_WINDOW_SEC (slidegen
-// =10s). Cache lookup must match by window, not exact ts — exact match never hit a
-// real figure (figure@184 vs request 150/190 → perpetual re-extract + 148s timeouts).
-const FIGURE_TS_WINDOW_SEC = 10;
+// ts (subtitle/atom time); numerize returns it within ±this window. Cache lookup +
+// attach match by window, not exact ts. ★ KEEP IN SYNC with slidegen NUMERIZE_WINDOW_SEC
+// (app.py / numerize_job.py) — widened 10→30s (CP505) so a slide shown near the topic
+// discussion (not exactly at the subtitle ts) is still matched. no-fallback safety
+// holds: a figure >30s from any requested ts is still excluded (no 619-style leak).
+const FIGURE_TS_WINDOW_SEC = 30;
+
+// Negative-cache sentinel: a requested ts that yielded NO figure gets a marker row
+// (CP505) so future calls skip the expensive (~148s) re-extract instead of probing
+// the same empty ts every run. Excluded from returned figures; expires via expires_at.
+const NEGATIVE_KIND = '__none__';
 
 interface CacheRow {
   video_id: string;
@@ -79,6 +86,22 @@ async function upsertFigure(prisma: PrismaLike, f: FigureRef): Promise<void> {
   );
 }
 
+/** Upsert a negative-cache sentinel for a ts that yielded no figure. */
+async function upsertSentinel(prisma: PrismaLike, videoId: string, tsSec: number): Promise<void> {
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO video_figure_snapshots
+       (video_id, ts_sec, kind, struct, latex, asset_path, verification_status, source, computed_at)
+     VALUES ($1, $2, $3, NULL, NULL, NULL, $4, $5, NOW())
+     ON CONFLICT (video_id, ts_sec, kind) DO UPDATE SET
+       computed_at = NOW()`,
+    videoId,
+    tsSec,
+    NEGATIVE_KIND,
+    'none',
+    'negative-cache'
+  );
+}
+
 /**
  * Return cached figures for the given timestamps, extracting (and caching) only
  * the timestamps that have no live cache row.
@@ -93,6 +116,8 @@ export async function getOrExtractSnapshots(
 
   // GET — serve cached figures within ±FIGURE_TS_WINDOW_SEC of any requested ts
   // (not exact ts — see const note). Non-expired only. Independent of the extractor.
+  // Sentinel rows (NEGATIVE_KIND) are intentionally included here so they count as
+  // "covered" in the missingTs filter below — preventing re-extraction of known-empty ts.
   const cached = await prisma.$queryRawUnsafe<CacheRow[]>(
     `SELECT video_id, ts_sec, kind, struct, latex, asset_path, verification_status, source
      FROM video_figure_snapshots
@@ -102,10 +127,11 @@ export async function getOrExtractSnapshots(
     uniqueTs,
     FIGURE_TS_WINDOW_SEC
   );
-  const result: FigureRef[] = cached.map(rowToFigure);
 
-  // EXTRACT — only requested ts with NO cached figure within the window. A covered ts
-  // (figure already within ±window) is NOT re-extracted (was: exact-ts miss → re-extract).
+  // Exclude sentinel rows from results — they mark "no figure here" but are not figures.
+  const result: FigureRef[] = cached.filter((r) => r.kind !== NEGATIVE_KIND).map(rowToFigure);
+
+  // EXTRACT — only requested ts with NO cached figure (or sentinel) within the window.
   const missingTs = uniqueTs.filter(
     (t) => !cached.some((r) => Math.abs(r.ts_sec - t) <= FIGURE_TS_WINDOW_SEC)
   );
@@ -115,11 +141,24 @@ export async function getOrExtractSnapshots(
       await upsertFigure(prisma, fig);
       result.push(fig);
     }
+
+    // Write negative-cache sentinels for each requested ts that got no figure.
+    // Future calls skip re-extraction for these ts values (expensive ~148s pipeline).
+    let sentinelWritten = 0;
+    for (const ts of missingTs) {
+      const covered = extracted.some((f) => Math.abs(f.tsSec - ts) <= FIGURE_TS_WINDOW_SEC);
+      if (!covered) {
+        await upsertSentinel(prisma, videoId, ts);
+        sentinelWritten++;
+      }
+    }
+
     log.info('get-or-extract', {
       videoId,
       requested: uniqueTs.length,
       cacheHit: cached.length,
       extracted: extracted.length,
+      sentinelWritten,
     });
   }
 
