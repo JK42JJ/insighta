@@ -165,14 +165,17 @@ function groupAtomsByVid(
 }
 
 // [CV-NOTE-WIRE] — render targeted CV figures attached to a section as
-// `figureBlock` nodes (registered in useNoteDocument extensions). Filters
-// defensively (backend already filters to verified + renderable): only
+// `figureBlock` nodes (registered in useNoteDocument extensions). Base is the
+// DURABLE payload (svg for chart/diagram, struct for table, latex for equation);
+// the broken pod-local asset_path is dropped. Filters defensively: only
 // chart/table/diagram/equation, drops unverified + keyframe + empty payloads.
 const FIGURE_KINDS = new Set(['chart', 'table', 'diagram', 'equation']);
+type FigureStruct = { headers?: string[]; rows?: string[][] };
 function figureBlockNode(attrs: {
   kind: string;
   latex: string | null;
-  assetPath: string | null;
+  svg: string | null;
+  struct: FigureStruct | null;
   caption: string | null;
 }): TiptapNode {
   return { type: 'figureBlock', attrs };
@@ -185,11 +188,20 @@ function renderFigures(figures: MandalaBookFigure[] | undefined): TiptapNode[] {
     if (f.kind === 'equation') {
       const latex = (f.latex ?? '').trim();
       if (!latex) continue;
-      out.push(figureBlockNode({ kind: 'equation', latex, assetPath: null, caption: null }));
+      out.push(figureBlockNode({ kind: 'equation', latex, svg: null, struct: null, caption: null }));
+    } else if (f.kind === 'table') {
+      const s = (f.struct ?? {}) as FigureStruct;
+      const headers = Array.isArray(s.headers) ? s.headers : [];
+      const rows = Array.isArray(s.rows) ? s.rows : [];
+      if (headers.length === 0 && rows.length === 0) continue;
+      out.push(
+        figureBlockNode({ kind: 'table', latex: null, svg: null, struct: { headers, rows }, caption: null })
+      );
     } else {
-      const assetPath = (f.asset_path ?? '').trim();
-      if (!assetPath) continue;
-      out.push(figureBlockNode({ kind: f.kind, latex: null, assetPath, caption: f.kind }));
+      // chart | diagram → server-rendered inline SVG (asset_path is dropped).
+      const svg = (f.svg ?? '').trim();
+      if (!svg) continue;
+      out.push(figureBlockNode({ kind: f.kind, latex: null, svg, struct: null, caption: f.kind }));
     }
   }
   return out;

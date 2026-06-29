@@ -54,6 +54,7 @@ export async function handleNoteCvEnrich(job: PgBoss.Job<NoteCvEnrichPayload>): 
   const { safeParseBookJson, parseBookJson } = await import('@/modules/mandala-book/book-schema');
   const { detectFigureTargets } = await import('@/modules/mandala-book/book-figure-detect');
   const { getOrExtractSnapshots } = await import('@/modules/snapshot/get-or-extract');
+  const { renderFigureSvg } = await import('@/modules/snapshot/render-figure-client');
 
   const prisma = getPrismaClient();
 
@@ -94,6 +95,8 @@ export async function handleNoteCvEnrich(job: PgBoss.Job<NoteCvEnrichPayload>): 
   let extractCount = 0;
   let kept = 0;
   let dropped = 0;
+  let droppedNoSvg = 0; // chart/diagram where /render-figure returned null (degenerate)
+  let svgRendered = 0; // chart/diagram that got a valid SVG
   let totalCalls = 0;
 
   for (const [videoId, videoTargets] of targetsByVideo) {
@@ -110,20 +113,37 @@ export async function handleNoteCvEnrich(job: PgBoss.Job<NoteCvEnrichPayload>): 
         dropped++;
         continue;
       }
-      kept++;
 
       // Map FigureRef → BookFigure (struct narrowed from unknown to Record<string,unknown>).
       const struct =
         typeof fig.struct === 'object' && fig.struct !== null && !Array.isArray(fig.struct)
           ? (fig.struct as Record<string, unknown>)
           : undefined;
+
+      // chart/diagram: require a rendered SVG (struct→SVG via /render-figure).
+      // table: renders from struct (HTML); equation: renders from latex (KaTeX).
+      // asset_path is no longer written — struct/svg/latex is the canonical base.
+      let figSvg: string | undefined;
+      if (fig.kind === 'chart' || fig.kind === 'diagram') {
+        const svg = await renderFigureSvg(fig.kind, fig.struct);
+        if (svg === null) {
+          // Degenerate figure — no usable SVG; drop rather than attach an empty entry.
+          droppedNoSvg++;
+          continue;
+        }
+        figSvg = svg;
+        svgRendered++;
+      }
+
+      kept++;
+
       const bookFig: BookFigure = {
         video_id: fig.videoId,
         ts_sec: fig.tsSec,
         kind: fig.kind,
         ...(fig.latex != null ? { latex: fig.latex } : {}),
-        ...(fig.assetPath != null ? { asset_path: fig.assetPath } : {}),
         ...(struct != null ? { struct } : {}),
+        ...(figSvg !== undefined ? { svg: figSvg } : {}),
         verification_status: fig.verificationStatus,
       };
 
@@ -165,6 +185,8 @@ export async function handleNoteCvEnrich(job: PgBoss.Job<NoteCvEnrichPayload>): 
     extractCount,
     kept,
     dropped,
+    droppedNoSvg,
+    svgRendered,
     wallMs,
   });
 

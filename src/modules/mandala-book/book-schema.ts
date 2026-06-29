@@ -61,15 +61,16 @@ const verificationSchema = z
 // Sourced from the slidegen /numerize service (cached in video_figure_snapshots),
 // mirroring snapshot FigureRef. The note CV enrich job stores ONLY verified,
 // renderable kinds (chart/table/diagram/equation); keyframe + unverified dropped.
-// Optional → books without CV stay valid. Render: equation→KaTeX(latex),
-// chart/table/diagram→img(asset_path). slidegen repo untouched.
+// Optional → books without CV stay valid. Render: chart/diagram→SVG (svg field),
+// table→HTML (struct), equation→KaTeX (latex). asset_path kept for legacy rows.
 const bookFigureSchema = z.object({
   video_id: z.string(),
   ts_sec: z.number().int(),
   kind: z.enum(['chart', 'diagram', 'table', 'equation', 'keyframe']),
   latex: z.string().optional(), // equation → LaTeX (KaTeX render)
-  asset_path: z.string().optional(), // chart/table/diagram → image
+  asset_path: z.string().optional(), // legacy image pointer (no longer written by enrich job)
   struct: z.record(z.unknown()).optional(), // mode-B JSON (chart/table/diagram)
+  svg: z.string().optional(), // chart/diagram → SVG from /render-figure (CP505 struct→SVG)
   verification_status: z.string().optional(),
 });
 
