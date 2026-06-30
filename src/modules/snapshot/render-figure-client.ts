@@ -2,8 +2,10 @@
  * render-figure client (CP505 [CV-NOTE-WIRE]) — calls the slidegen-service
  * POST /render-figure to convert a structured figure (struct) to an SVG string.
  *
- * Contract: body {kind, struct} → {svg: string|null}
+ * Contract: body {kind, struct, theme} → {svg: string|null}
  * svg=null = degenerate/unrenderable figure (caller MUST drop the figure).
+ * theme='dark' so SVGs render light ink + transparent bg for the dark note
+ * (the endpoint defaults to "light" for the deck).
  *
  * Fail-closed: any error, non-2xx, timeout, or null svg → returns null.
  * CPU render only (no vision pipeline); 20s is generous for SVG generation.
@@ -42,7 +44,8 @@ export async function renderFigureSvg(kind: string, struct: unknown): Promise<st
         'content-type': 'application/json',
         authorization: `Bearer ${cfg.serviceToken}`,
       },
-      body: JSON.stringify({ kind, struct }),
+      // theme:'dark' → light ink + transparent bg SVG for the dark note plate.
+      body: JSON.stringify({ kind, struct, theme: 'dark' }),
       signal: controller.signal,
     });
 

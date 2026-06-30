@@ -751,8 +751,8 @@ const NOTE_PROSE_STYLE = `
 }
 
 /* [CV-FIGURE-PRESENTATION] — CV figures (svg chart/diagram, table, equation).
-   Framed on a light paper plate (legible dark ink), scaled to body width, with
-   a muted caption + dimmer "video title · mm:ss" source line below. */
+   Framed on a dark card (theme='dark' SVGs carry light ink), scaled to body
+   width, with a muted caption + dimmer "video title · mm:ss" source line below. */
 .note-prose-root .note-figure-block { margin: 40px auto; max-width: 600px; }
 .note-prose-root .note-figure-block.hidden { display: none; }
 .note-prose-root .note-figure {
@@ -762,7 +762,7 @@ const NOTE_PROSE_STYLE = `
   border-radius: 12px;
   padding: 20px 20px 16px;
   overflow: hidden;
-  color: var(--nm-figure-ink); /* KaTeX/table text + currentColor SVG render dark */
+  color: var(--nm-figure-ink); /* KaTeX/table text + currentColor SVG render light */
 }
 .note-prose-root .note-figure-canvas {
   display: flex;
@@ -777,7 +777,7 @@ const NOTE_PROSE_STYLE = `
   width: 100%;
   height: auto;
   max-width: 100%;
-  /* fix #2 bg — neutralize the SVG's own opaque bg so only the plate shows. */
+  /* fix #2 bg — theme='dark' SVG bg is transparent; keep belt so only the plate shows. */
   background: transparent;
 }
 /* fix #3 font — override graphviz/matplotlib default sans so labels (esp.

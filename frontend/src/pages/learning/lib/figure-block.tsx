@@ -12,9 +12,9 @@
  *    the body width; falls back to a legacy <img> asset when no svg.
  *  - kind='table' → renders struct headers/rows as an HTML table.
  *
- * [CV-FIGURE-PRESENTATION] — each figure is framed on a light "paper" plate
- * (graphviz/matplotlib render dark ink → a light plate keeps them legible on the
- * dark note) with a muted caption + a dimmer "video title · mm:ss" source line.
+ * [CV-FIGURE-PRESENTATION] — each figure is framed on a dark card (theme='dark'
+ * SVGs render light ink + transparent bg, so they sit directly on the note's dark
+ * surface) with a muted caption + a dimmer "video title · mm:ss" source line.
  * Video title is resolved at render from useMandalaCards (the book has no title
  * map); it falls back to "영상 · mm:ss" when the card isn't found.
  *
