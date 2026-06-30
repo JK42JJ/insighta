@@ -11,7 +11,7 @@
  *   ```mermaid … ```          → mermaid node      (source kept verbatim)
  *   ``` / ```lang … ```       → codeBlock         (lowlight; language attr)
  *   > [!note|tip|warning] …   → callout node      (kind + parsed body)
- *   | a | b |  + |---|---|    → markdownTable     (GFM; {headers, rows})
+ *   | a | b |  + |---|---|    → native table      (GFM; editable cells, inline marks)
  *   > …                       → blockquote        (plain quote; parsed body)
  *   #…###### …                → heading           (level capped at 3)
  *   --- or *** or ___ (alone) → horizontalRule
@@ -23,7 +23,7 @@
  * asterisk or "__"), italic (single asterisk or "_") — composable (e.g. nested
  * bold + italic).
  *
- * Nodes emitted here that are NOT in StarterKit (mermaid, callout, markdownTable)
+ * Nodes emitted here that are NOT in StarterKit (mermaid, callout, native table)
  * MUST be registered as TipTap extensions in useNoteDocument — an unregistered
  * node type makes ProseMirror throw on doc load. Pure function, 0 LLM calls.
  */
@@ -118,6 +118,33 @@ function splitTableRow(line: string): string[] {
     .map((c) => c.trim());
 }
 
+/**
+ * Build a NATIVE TipTap table node (table > tableRow > tableHeader|tableCell >
+ * paragraph > inline). Cell text is parsed as inline markdown so `**bold**` etc.
+ * render as marks, not literal asterisks. Rows are padded to a rectangular column
+ * count so the table renders cleanly. Shared by the parser and the load-path
+ * migration of legacy `markdownTable` atoms.
+ */
+export function buildTableNode(headers: string[], rows: string[][]): TiptapNode {
+  const colCount = Math.max(headers.length, ...rows.map((r) => r.length), 1);
+  const cell = (text: string, header: boolean): TiptapNode => {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    return {
+      type: header ? 'tableHeader' : 'tableCell',
+      content: [{ type: 'paragraph', content: normalized ? parseInline(normalized) : [] }],
+    };
+  };
+  const pad = (cells: string[], header: boolean): TiptapNode => {
+    const content: TiptapNode[] = [];
+    for (let c = 0; c < colCount; c++) content.push(cell(cells[c] ?? '', header));
+    return { type: 'tableRow', content };
+  };
+  const tableRows: TiptapNode[] = [];
+  if (headers.length > 0) tableRows.push(pad(headers, true));
+  for (const row of rows) tableRows.push(pad(row, false));
+  return { type: 'table', content: tableRows };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -209,7 +236,7 @@ export function parseMarkdownToTiptap(md: string | null | undefined): TiptapNode
         rows.push(splitTableRow(lines[i]));
         i++;
       }
-      out.push({ type: 'markdownTable', attrs: { tableJson: JSON.stringify({ headers, rows }) } });
+      out.push(buildTableNode(headers, rows));
       continue;
     }
 

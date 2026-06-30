@@ -16,6 +16,10 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Blockquote from '@tiptap/extension-blockquote';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import { createLowlight, common } from 'lowlight';
 
 import { VideoBlock } from '@/pages/learning/lib/video-block';
@@ -56,6 +60,10 @@ const extensions = [
   FigureBlock.configure({ HTMLAttributes: {} }),
   Callout.configure({ HTMLAttributes: {} }),
   MermaidBlock.configure({ HTMLAttributes: {} }),
+  Table.configure({ resizable: false }),
+  TableRow,
+  TableHeader,
+  TableCell,
   MarkdownTable.configure({ HTMLAttributes: {} }),
 ];
 
@@ -241,7 +249,7 @@ describe('[NOTE-FULL-TOOLSET] generator output round-trips through the schema', 
     for (const t of [
       'callout',
       'mermaid',
-      'markdownTable',
+      'table', // native editable table (was markdownTable atom)
       'orderedList',
       'bulletList',
       'blockquote',

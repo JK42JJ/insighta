@@ -164,8 +164,11 @@ function renderBlock(node: TiptapNode, depth: number): string {
       return '```mermaid\n' + source + '\n```\n\n';
     }
     case 'markdownTable':
-      // [NOTE-FULL-TOOLSET] read-only GFM table → pipe-delimited markdown.
+      // [NOTE-FULL-TOOLSET] legacy read-only GFM table → pipe-delimited markdown.
       return renderMarkdownTable(node) + '\n';
+    case 'table':
+      // [NOTE-EDITABLE-TABLES] native table → pipe-delimited GFM markdown.
+      return renderNativeTable(node) + '\n';
     default:
       // Fallback for unknown block types: render any text children.
       if (Array.isArray(node.content)) {
@@ -202,6 +205,39 @@ function renderMarkdownTable(node: TiptapNode): string {
     return `| ${c.map((x) => x.replace(/\|/g, '\\|')).join(' | ')} |`;
   };
   const lines = [pad(headers), `| ${Array(width).fill('---').join(' | ')} |`, ...rows.map(pad)];
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * [NOTE-EDITABLE-TABLES] native table node (table > tableRow > tableHeader|
+ * tableCell > paragraph) → GFM pipe table. The first row (if it holds any
+ * tableHeader cell) is the header; remaining rows are the body. Cell text is the
+ * inline render of its paragraph(s), so marks (**bold**) survive the round-trip.
+ */
+function renderNativeTable(node: TiptapNode): string {
+  const trs = (node.content ?? []).filter((r) => r.type === 'tableRow');
+  if (trs.length === 0) return '';
+  const cellText = (cellNode: TiptapNode): string =>
+    (cellNode.content ?? [])
+      .map((p) => renderInline(p.content ?? []))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const rowCells = (tr: TiptapNode): string[] =>
+    (tr.content ?? [])
+      .filter((c) => c.type === 'tableHeader' || c.type === 'tableCell')
+      .map(cellText);
+  const firstIsHeader = (trs[0].content ?? []).some((c) => c.type === 'tableHeader');
+  const headers = firstIsHeader ? rowCells(trs[0]) : [];
+  const bodyRows = (firstIsHeader ? trs.slice(1) : trs).map(rowCells);
+  const width = Math.max(headers.length, ...bodyRows.map((r) => r.length), 1);
+  const pad = (cells: string[]) => {
+    const c = cells.slice();
+    while (c.length < width) c.push('');
+    return `| ${c.map((x) => x.replace(/\|/g, '\\|')).join(' | ')} |`;
+  };
+  const headerLine = pad(headers);
+  const lines = [headerLine, `| ${Array(width).fill('---').join(' | ')} |`, ...bodyRows.map(pad)];
   return lines.join('\n') + '\n';
 }
 

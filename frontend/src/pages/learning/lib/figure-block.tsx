@@ -7,10 +7,12 @@
  * ProseMirror throw on doc load and break the note.
  *
  *  - kind='equation' → lazy-loads KaTeX (dynamic import; only when an equation
- *    figure mounts) and renders displayMode HTML.
+ *    figure mounts) and renders displayMode HTML. EDITABLE: in edit mode the LaTeX
+ *    source is exposed in a textarea (EditableSource) bound to the `latex` attr —
+ *    equations are math the user can edit (Obsidian $$…$$ model), not locked CV art.
  *  - kind∈{chart,diagram} → renders the server SVG inline (sanitized), scaled to
- *    the body width; falls back to a legacy <img> asset when no svg.
- *  - kind='table' → renders struct headers/rows as an HTML table.
+ *    the body width; falls back to a legacy <img> asset when no svg. LOCKED.
+ *  - kind='table' → renders struct headers/rows as an HTML table. LOCKED.
  *
  * [CV-FIGURE-PRESENTATION] — each figure is framed on an ink-tinted plate. theme='auto'
  * SVGs carry transparent bg + #808080 sentinel ink which sanitizeSvg swaps to
@@ -26,6 +28,7 @@ import { useParams } from 'react-router-dom';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { useMandalaCards } from '@/pages/learning/model/useMandalaCards';
+import { EditableSource } from './editable-source';
 
 export interface FigureBlockOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -195,7 +198,7 @@ function FigureTable({ table }: { table: ParsedTable }) {
   );
 }
 
-function FigureBlockNodeView({ node }: NodeViewProps) {
+function FigureBlockNodeView({ node, updateAttributes, editor }: NodeViewProps) {
   const attrs = node.attrs as unknown as FigureBlockAttrs;
   const [imgBroken, setImgBroken] = useState(false);
 
@@ -208,8 +211,19 @@ function FigureBlockNodeView({ node }: NodeViewProps) {
   const table = useMemo(() => parseTable(attrs.tableJson), [attrs.tableJson]);
 
   let body: React.ReactNode = null;
-  if (attrs.kind === 'equation' && attrs.latex) {
-    body = <EquationView latex={attrs.latex} />;
+  if (attrs.kind === 'equation') {
+    // EDITABLE math — KaTeX preview + a LaTeX-source textarea in edit mode. Always
+    // rendered (even when latex is empty) so the edit affordance never disappears.
+    const latex = attrs.latex ?? '';
+    body = (
+      <EditableSource
+        source={latex}
+        editable={editor.isEditable}
+        onCommit={(next) => updateAttributes({ latex: next })}
+        label="수식 편집"
+        preview={<EquationView latex={latex} />}
+      />
+    );
   } else if (cleanSvg) {
     // Server SVG is backend-rendered + sanitized above (script/handlers stripped).
     body = <div className="note-figure-svg" dangerouslySetInnerHTML={{ __html: cleanSvg }} />;
@@ -284,7 +298,8 @@ export const FigureBlock = Node.create<FigureBlockOptions>({
       tableJson: {
         default: null,
         parseHTML: (el) => el.getAttribute('data-table'),
-        renderHTML: (attrs) => (attrs['tableJson'] ? { 'data-table': String(attrs['tableJson']) } : {}),
+        renderHTML: (attrs) =>
+          attrs['tableJson'] ? { 'data-table': String(attrs['tableJson']) } : {},
       },
       caption: {
         default: null,

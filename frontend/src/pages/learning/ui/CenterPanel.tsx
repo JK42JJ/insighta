@@ -945,7 +945,7 @@ const NOTE_PROSE_STYLE = `
   overflow-x: auto;
 }
 
-/* GFM table (read-only markdownTable node) */
+/* GFM table (legacy read-only markdownTable node — kept for unmigrated docs) */
 .note-prose-root .note-md-table-block { margin: 28px 0; overflow-x: auto; }
 .note-prose-root .note-md-table-block.hidden { display: none; }
 .note-prose-root .note-md-table {
@@ -968,6 +968,71 @@ const NOTE_PROSE_STYLE = `
   font-weight: 600;
   color: var(--nm-strong);
 }
+
+/* Native editable table (@tiptap/extension-table) — matches .note-md-table */
+.note-prose-root .ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 28px 0;
+  font-family: var(--nm-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--nm-text);
+  overflow: hidden;
+}
+.note-prose-root .ProseMirror th,
+.note-prose-root .ProseMirror td {
+  border: 1px solid var(--nm-line);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  position: relative;
+}
+.note-prose-root .ProseMirror th {
+  background: var(--nm-figure-th-bg);
+  font-weight: 600;
+  color: var(--nm-strong);
+}
+.note-prose-root .ProseMirror th > p,
+.note-prose-root .ProseMirror td > p { margin: 0; }
+/* selected-cell highlight (table editing) — accent tint via token */
+.note-prose-root .ProseMirror .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--nm-accent);
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+/* Obsidian-style editable source (mermaid diagram / equation LaTeX) */
+.note-prose-root .note-source-edit { margin-top: 12px; text-align: left; }
+.note-prose-root .note-source-textarea {
+  width: 100%;
+  min-height: 96px;
+  font-family: var(--nm-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--nm-strong);
+  background: var(--nm-figure-bg);
+  border: 1px solid var(--nm-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  resize: vertical;
+}
+.note-prose-root .note-source-textarea:focus { outline: 1.5px solid var(--nm-accent); }
+.note-prose-root .note-source-btn {
+  font-family: var(--nm-sans);
+  font-size: 12px;
+  color: var(--nm-accent);
+  background: transparent;
+  border: 1px solid var(--nm-line);
+  border-radius: 8px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.note-prose-root .note-source-btn:hover { border-color: var(--nm-accent); }
 `;
 
 function NoteEditorView({
