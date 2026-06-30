@@ -618,14 +618,10 @@ export function InsightCardItemV2({
           {decodeHtmlEntities(card.title)}
         </h4>
 
-        {/* AI 핵심 — mockup: teal #36d6c3 label 11px/700/.55px + essence 13.5px #aeb4be */}
+        {/* essence — "AI 핵심" label replaced by a divider (white/7%, 1px) */}
         {cardSummary && (
-          <div className="mt-3">
-            <div className="flex items-center gap-1 text-[11px] font-bold tracking-[0.55px] text-[#36d6c3]">
-              <span aria-hidden="true">✦</span>
-              <span>AI 핵심</span>
-            </div>
-            <p className="mt-1 text-[13.5px] leading-snug text-[#aeb4be] line-clamp-2 break-words">
+          <div className="mt-3 border-t border-white/[0.07] pt-3">
+            <p className="text-[13.5px] leading-snug text-[#aeb4be] line-clamp-2 break-words">
               {decodeHtmlEntities(cardSummary)}
             </p>
           </div>
