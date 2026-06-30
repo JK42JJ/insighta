@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, NotepadText, Loader2, Play, Bookmark, Archive, Sparkles } from 'lucide-react';
+import { GripVertical, NotepadText, Loader2, Play, Bookmark, Archive, Sparkle } from 'lucide-react';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
 import { useArchivedReaddToast } from '@/features/card-management/model/useArchivedReaddToast';
@@ -30,6 +30,7 @@ import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 // never shown to the user, so these are display-only thresholds).
 const RELEVANCE_TIER_CORE = 80; // ≥80 → "핵심"
 const RELEVANCE_TIER_PICK = 70; // 70–79 → "추천" ; <70 → no badge (number never shown)
+const RELEVANCE_DIM_MAX = 30; // ≤30 relevance → toned down (unless bookmarked)
 const MAX_CARD_TAGS = 3;
 
 // Tier badge styles — complete class strings (RING_STYLES pattern, NO dynamic
@@ -37,9 +38,9 @@ const MAX_CARD_TAGS = 3;
 // deliberately NO traffic-light green/amber.
 const RELEVANCE_TIER_STYLES = {
   // 핵심: indigo tinted pill + accent border + spark glyph — the one signal that draws the eye.
-  core: 'inline-flex items-center gap-0.5 rounded-full border border-[hsl(var(--primary)/0.45)] bg-[hsl(var(--primary)/0.15)] px-2 py-0.5 text-[10.5px] font-medium leading-none text-[hsl(var(--primary))]',
+  core: 'inline-flex items-center gap-0.5 rounded-full border border-[hsl(var(--primary)/0.45)] bg-[hsl(var(--primary)/0.15)] px-2.5 py-1 text-[11px] font-medium leading-none text-[hsl(var(--primary))]',
   // 추천: ghost outline — transparent bg + faint indigo border/text, no glyph.
-  pick: 'inline-flex items-center rounded-full border border-[hsl(var(--primary)/0.30)] bg-transparent px-2 py-0.5 text-[10.5px] font-normal leading-none text-[hsl(var(--primary)/0.80)]',
+  pick: 'inline-flex items-center rounded-full border border-[hsl(var(--primary)/0.30)] bg-transparent px-2.5 py-1 text-[11px] font-normal leading-none text-[hsl(var(--primary)/0.80)]',
 } as const;
 
 // ── Helpers ────────────────────────────────────────────────
@@ -426,6 +427,12 @@ export function InsightCardItemV2({
   // row never reached v2. Show the retry icon until enrichment succeeds.
   const v2EnrichmentPending = liked && mandalaRelevancePct == null;
 
+  // ≤30 relevance ⇒ tone the card down (quiet "not very relevant" signal without
+  // calling it out). Bookmarked (liked) cards are exempt — the user chose them.
+  // Hover restores full tone so the card stays inspectable.
+  const dimLowRelevance =
+    card.relevancePct != null && card.relevancePct <= RELEVANCE_DIM_MAX && !liked;
+
   return (
     <Card
       ref={setNodeRef}
@@ -454,6 +461,7 @@ export function InsightCardItemV2({
         // enrichment flow); no more ring/animate-pulse on the card.
         isSelected && canDrag && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-30',
+        dimLowRelevance && 'opacity-60 saturate-[.6] hover:opacity-100 hover:saturate-100',
         className
       )}
     >
@@ -702,7 +710,7 @@ export function InsightCardItemV2({
                 title={`주제 적합도 ${relevanceBadge.raw}`}
               >
                 {relevanceBadge.showSpark && (
-                  <Sparkles className="w-2.5 h-2.5" strokeWidth={2.2} aria-hidden="true" />
+                  <Sparkle className="w-3 h-3" fill="currentColor" strokeWidth={0} aria-hidden="true" />
                 )}
                 {relevanceBadge.label}
               </span>
