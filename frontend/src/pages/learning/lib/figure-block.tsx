@@ -12,9 +12,10 @@
  *    the body width; falls back to a legacy <img> asset when no svg.
  *  - kind='table' → renders struct headers/rows as an HTML table.
  *
- * [CV-FIGURE-PRESENTATION] — each figure is framed on a dark card (theme='dark'
- * SVGs render light ink + transparent bg, so they sit directly on the note's dark
- * surface) with a muted caption + a dimmer "video title · mm:ss" source line.
+ * [CV-FIGURE-PRESENTATION] — each figure is framed on an ink-tinted plate. theme='auto'
+ * SVGs carry transparent bg + #808080 sentinel ink which sanitizeSvg swaps to
+ * currentColor, so the ink inherits the note body color (one image, dual-mode). A
+ * muted caption + a dimmer "video title · mm:ss" source line sit below.
  * Video title is resolved at render from useMandalaCards (the book has no title
  * map); it falls back to "영상 · mm:ss" when the card isn't found.
  *
@@ -68,12 +69,19 @@ function useVideoTitle(videoId: string | null): string | null {
   }, [cards, videoId]);
 }
 
+// Adaptive (theme='auto') SVGs paint ALL ink (text/edges/labels) in this sentinel
+// hex; we swap it for currentColor so the figure inherits the note's text color per
+// mode. Category accent-color borders use other hues and are left untouched.
+const ADAPTIVE_INK_SENTINEL_RE = /#808080/gi;
+
 /**
  * Sanitize a server-rendered SVG before inlining it. Drops <script>, event
  * handlers (on*) and javascript: hrefs; strips the root width/height so CSS
- * scales the figure by its viewBox (fix #1). Returns '' on parse failure.
+ * scales the figure by its viewBox (fix #1). Swaps the adaptive ink sentinel
+ * #808080 → currentColor (theme='auto', dual-mode). Returns '' on parse failure.
+ * Exported for unit tests.
  */
-function sanitizeSvg(raw: string): string {
+export function sanitizeSvg(raw: string): string {
   if (typeof window === 'undefined' || !window.DOMParser) return '';
   let doc: Document;
   try {
@@ -100,7 +108,9 @@ function sanitizeSvg(raw: string): string {
   svg.removeAttribute('width');
   svg.removeAttribute('height');
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-  return svg.outerHTML;
+  // Swap adaptive ink sentinel → currentColor across fill=/stroke=/stop-color/color:/style.
+  // The sentinel is a dedicated color value, so a single serialized replace is exhaustive.
+  return svg.outerHTML.replace(ADAPTIVE_INK_SENTINEL_RE, 'currentColor');
 }
 
 interface ParsedTable {
@@ -131,8 +141,18 @@ function EquationView({ latex }: { latex: string }) {
       try {
         const katex = (await import('katex')).default;
         await import('katex/dist/katex.min.css');
+        // copy-tex self-registers a global copy handler that rewrites a selected
+        // equation to its LaTeX source via the MathML <annotation>; lazy so it only
+        // loads with an equation figure. output:'htmlAndMathml' guarantees the annotation.
+        await import('katex/contrib/copy-tex');
         if (cancelled) return;
-        setHtml(katex.renderToString(latex, { throwOnError: false, displayMode: true }));
+        setHtml(
+          katex.renderToString(latex, {
+            throwOnError: false,
+            displayMode: true,
+            output: 'htmlAndMathml',
+          })
+        );
       } catch {
         if (!cancelled) setFailed(true);
       }
