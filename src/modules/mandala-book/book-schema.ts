@@ -76,10 +76,16 @@ const bookFigureSchema = z.object({
 
 export const bookSectionSchema = z.object({
   title: z.string(),
-  narrative: z.string(), // 살붙임 body assembled from v2 analysis + segments
-  // NOTE-DENSITY ① — 2-3 compressed take-aways per section (distilled, NOT narrative repeat).
-  // Optional: absent/empty ⇒ renders nothing; existing books without this field stay valid.
+  // Rich markdown: **bold** on key terms/numbers, bullet/numbered lists, callouts,
+  // mermaid blocks, GFM tables, prose paragraphs. FE parses into TipTap nodes.
+  narrative: z.string(),
+  // NOTE-DENSITY ① (back-compat) — bullet take-away array from PR #1017 design.
+  // Kept optional; generation now fills keyPoint (singular prose synthesis) instead.
   keyPoints: z.array(z.string()).optional(),
+  // NOTE-DENSITY ①-v2 — 2-3 sentence prose synthesis (the "핵심 포인트" quote).
+  // Rendered as a left-bar QUOTE block. Optional: absent ⇒ nothing rendered;
+  // existing books without this field stay valid.
+  keyPoint: z.string().optional(),
   atoms: z.array(bookAtomSchema).default([]),
   qa: z.array(bookQaSchema).default([]),
   provenance: provenanceSchema, // Fork D placeholder

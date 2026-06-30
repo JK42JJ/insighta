@@ -162,10 +162,11 @@ describe('book-schema v2 contract', () => {
   });
 });
 
-describe('book-schema — NOTE-DENSITY ① keyPoints (additive, optional)', () => {
+describe('book-schema — NOTE-DENSITY ① keyPoints back-compat (additive, optional)', () => {
   it('accepts a section with keyPoints present', () => {
     const b = validBook();
-    (b.chapters[0]!.sections[0] as Record<string, unknown>).keyPoints = [
+    // Use bracket notation: noPropertyAccessFromIndexSignature is strict in this project.
+    (b.chapters[0]!.sections[0] as Record<string, unknown>)['keyPoints'] = [
       'INT8 양자화: 메모리 75%↓, 성능 손실 1-2%',
       '배치 추론 병렬화: 처리량 4×↑',
     ];
@@ -184,8 +185,49 @@ describe('book-schema — NOTE-DENSITY ① keyPoints (additive, optional)', () =
 
   it('rejects a keyPoints value that is not an array', () => {
     const b = validBook();
-    (b.chapters[0]!.sections[0] as Record<string, unknown>).keyPoints = 'not-an-array';
+    (b.chapters[0]!.sections[0] as Record<string, unknown>)['keyPoints'] = 'not-an-array';
     expect(bookJsonSchema.safeParse(b).success).toBe(false);
+  });
+});
+
+describe('book-schema — NOTE-DENSITY ①-v2 keyPoint prose synthesis (additive, optional)', () => {
+  it('accepts a section with keyPoint (prose string)', () => {
+    const b = validBook();
+    (b.chapters[0]!.sections[0] as Record<string, unknown>)['keyPoint'] =
+      'INT8 양자화는 메모리를 75% 줄이면서 성능 손실을 1-2%로 억제한다. 배치 추론과 결합하면 처리량이 4배 향상된다.';
+    const parsed = parseBookJson(b);
+    expect(firstSection(parsed).keyPoint).toMatch(/INT8/);
+  });
+
+  it('accepts a section WITHOUT keyPoint — back-compat: existing books stay valid', () => {
+    const b = validBook(); // no keyPoint field
+    const parsed = parseBookJson(b);
+    expect(firstSection(parsed).keyPoint).toBeUndefined();
+  });
+
+  it('accepts both keyPoint and keyPoints on the same section', () => {
+    const b = validBook();
+    const sec = b.chapters[0]!.sections[0] as Record<string, unknown>;
+    sec['keyPoint'] = '핵심 통찰 요약 문장.';
+    sec['keyPoints'] = ['항목 A', '항목 B'];
+    const parsed = parseBookJson(b);
+    expect(firstSection(parsed).keyPoint).toBe('핵심 통찰 요약 문장.');
+    expect(firstSection(parsed).keyPoints).toEqual(['항목 A', '항목 B']);
+  });
+
+  it('rejects a keyPoint value that is not a string', () => {
+    const b = validBook();
+    (b.chapters[0]!.sections[0] as Record<string, unknown>)['keyPoint'] = 42;
+    expect(bookJsonSchema.safeParse(b).success).toBe(false);
+  });
+
+  it('narrative may contain rich markdown (newlines, bold, lists, callouts)', () => {
+    const b = validBook();
+    // Multi-line rich markdown — schema accepts any string; FE parser handles structure.
+    b.chapters[0]!.sections[0]!.narrative =
+      '**양자화**는 모델 크기를 줄이는 핵심 기술이다.\n\n- INT8: 메모리 75%↓\n- FP16: 균형점\n\n> [!note]\n> 성능 손실은 태스크에 따라 다르다.';
+    expect(() => parseBookJson(b)).not.toThrow();
+    expect(firstSection(parseBookJson(b)).narrative).toContain('**양자화**');
   });
 });
 
@@ -201,7 +243,12 @@ describe('book-schema — CP504 loop-2 additive keys (G-SHAPE: additive, no reje
     book.chapters[0]!.sections[0]!.verification = {
       status: 'verified',
       checks: [
-        { atom_text: 'claim a', verdict: 'FALSE', evidence_url: 'https://ex.com/a', correction: 'fixed' },
+        {
+          atom_text: 'claim a',
+          verdict: 'FALSE',
+          evidence_url: 'https://ex.com/a',
+          correction: 'fixed',
+        },
         { atom_text: 'claim b', verdict: 'TRUE' },
       ],
     };
