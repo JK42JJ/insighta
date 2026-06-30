@@ -638,7 +638,7 @@ export function InsightCardItemV2({
             {tags.slice(0, MAX_CARD_TAGS).map((tg) => (
               <span
                 key={tg}
-                className="rounded-full bg-[rgba(54,214,195,0.12)] px-2.5 py-1 text-[11px] font-normal leading-none text-[#f4f5f7]"
+                className="rounded-full bg-[rgba(54,214,195,0.12)] px-2.5 py-1 text-[11px] font-light leading-none text-[#cdd2da]"
               >
                 #{tg}
               </span>
