@@ -162,6 +162,33 @@ describe('book-schema v2 contract', () => {
   });
 });
 
+describe('book-schema — NOTE-DENSITY ① keyPoints (additive, optional)', () => {
+  it('accepts a section with keyPoints present', () => {
+    const b = validBook();
+    (b.chapters[0]!.sections[0] as Record<string, unknown>).keyPoints = [
+      'INT8 양자화: 메모리 75%↓, 성능 손실 1-2%',
+      '배치 추론 병렬화: 처리량 4×↑',
+    ];
+    const parsed = parseBookJson(b);
+    expect(firstSection(parsed).keyPoints).toEqual([
+      'INT8 양자화: 메모리 75%↓, 성능 손실 1-2%',
+      '배치 추론 병렬화: 처리량 4×↑',
+    ]);
+  });
+
+  it('accepts a section WITHOUT keyPoints — existing books stay valid', () => {
+    const b = validBook(); // no keyPoints field
+    const parsed = parseBookJson(b);
+    expect(firstSection(parsed).keyPoints).toBeUndefined();
+  });
+
+  it('rejects a keyPoints value that is not an array', () => {
+    const b = validBook();
+    (b.chapters[0]!.sections[0] as Record<string, unknown>).keyPoints = 'not-an-array';
+    expect(bookJsonSchema.safeParse(b).success).toBe(false);
+  });
+});
+
 describe('book-schema — CP504 loop-2 additive keys (G-SHAPE: additive, no rejection)', () => {
   it('legacy book WITHOUT references/research/verification.checks still parses', () => {
     expect(() => parseBookJson(validBook())).not.toThrow();
