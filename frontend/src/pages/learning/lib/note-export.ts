@@ -90,21 +90,18 @@ function renderBlock(node: TiptapNode, depth: number): string {
     case 'orderedList':
       return renderList(node, '1.', depth);
     case 'blockquote': {
-      // NOTE-DENSITY ① — "핵심 요점" key-point callout = blockquote wrapping only
-      // a bulletList. Serialize as a labeled heading + plain bullets (not a quote).
-      const children = node.content ?? [];
-      if (children.length > 0 && children.every((c) => c.type === 'bulletList')) {
-        const bullets = children.map((c) => renderBlock(c, depth)).join('');
-        return `**핵심 요점**\n\n${bullets}\n`;
-      }
       const inner = (node.content ?? []).map((c) => renderBlock(c, depth)).join('');
-      return (
-        inner
-          .split('\n')
-          .map((line) => (line ? `> ${line}` : ''))
-          .join('\n')
-          .trimEnd() + '\n\n'
-      );
+      const quoted = inner
+        .split('\n')
+        .map((line) => (line ? `> ${line}` : ''))
+        .join('\n')
+        .trimEnd();
+      // NOTE-DENSITY ① — the key-point quote (keypoint attr) carries a labeled
+      // "핵심 포인트" line; a plain markdown quote serializes as a bare blockquote.
+      if (node.attrs?.['keypoint']) {
+        return `> **핵심 포인트**\n>\n${quoted}\n\n`;
+      }
+      return quoted + '\n\n';
     }
     case 'codeBlock': {
       const lang = (node.attrs?.['language'] as string | undefined) ?? '';
@@ -149,6 +146,26 @@ function renderBlock(node: TiptapNode, depth: number): string {
       const srcLine = source ? `_${source}_\n\n` : '';
       return `${img}${capLine}${srcLine}`;
     }
+    case 'callout': {
+      // [NOTE-FULL-TOOLSET] admonition → Obsidian/GFM `> [!kind]` block.
+      const kind = (node.attrs?.['kind'] as string | undefined) ?? 'note';
+      const inner = (node.content ?? []).map((c) => renderBlock(c, depth)).join('');
+      const body = inner
+        .split('\n')
+        .map((line) => (line ? `> ${line}` : ''))
+        .join('\n')
+        .replace(/(?:^|\n)>\s*(?=\n|$)/g, '') // drop blank quote lines
+        .trimEnd();
+      return `> [!${kind}]\n${body}\n\n`;
+    }
+    case 'mermaid': {
+      // [NOTE-FULL-TOOLSET] mermaid diagram → fenced ```mermaid block.
+      const source = ((node.attrs?.['source'] as string | undefined) ?? '').replace(/\s+$/, '');
+      return '```mermaid\n' + source + '\n```\n\n';
+    }
+    case 'markdownTable':
+      // [NOTE-FULL-TOOLSET] read-only GFM table → pipe-delimited markdown.
+      return renderMarkdownTable(node) + '\n';
     default:
       // Fallback for unknown block types: render any text children.
       if (Array.isArray(node.content)) {
@@ -157,6 +174,35 @@ function renderBlock(node: TiptapNode, depth: number): string {
       }
       return '';
   }
+}
+
+/**
+ * [NOTE-FULL-TOOLSET] markdownTable node → GFM table. Reads the {headers, rows}
+ * JSON stored in `tableJson`; returns '' on empty/parse failure.
+ */
+function renderMarkdownTable(node: TiptapNode): string {
+  const json = (node.attrs?.['tableJson'] as string | null | undefined) ?? null;
+  if (!json) return '';
+  let headers: string[] = [];
+  let rows: string[][] = [];
+  try {
+    const parsed = JSON.parse(json) as { headers?: unknown; rows?: unknown };
+    headers = Array.isArray(parsed.headers) ? parsed.headers.map(String) : [];
+    rows = Array.isArray(parsed.rows)
+      ? parsed.rows.map((r) => (Array.isArray(r) ? r.map(String) : [String(r)]))
+      : [];
+  } catch {
+    return '';
+  }
+  if (headers.length === 0 && rows.length === 0) return '';
+  const width = Math.max(headers.length, ...rows.map((r) => r.length), 1);
+  const pad = (cells: string[]) => {
+    const c = cells.slice();
+    while (c.length < width) c.push('');
+    return `| ${c.map((x) => x.replace(/\|/g, '\\|')).join(' | ')} |`;
+  };
+  const lines = [pad(headers), `| ${Array(width).fill('---').join(' | ')} |`, ...rows.map(pad)];
+  return lines.join('\n') + '\n';
 }
 
 function renderList(node: TiptapNode, marker: string, depth: number): string {

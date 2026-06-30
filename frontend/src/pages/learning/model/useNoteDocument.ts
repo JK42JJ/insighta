@@ -25,6 +25,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import Blockquote from '@tiptap/extension-blockquote';
 import { createLowlight, common } from 'lowlight';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -34,7 +35,26 @@ import type { TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
 
 import { VideoBlock } from '../lib/video-block';
 import { FigureBlock } from '../lib/figure-block';
+import { Callout } from '../lib/callout-block';
+import { MermaidBlock } from '../lib/mermaid-block';
+import { MarkdownTable } from '../lib/markdown-table-block';
 import { buildInitialNoteDoc } from '../lib/note-document-generator';
+
+// [NOTE-FULL-TOOLSET] — Blockquote with a `keypoint` attr so the note-mode CSS
+// "핵심 포인트" label targets ONLY the generated key-point quote (data-keypoint),
+// leaving plain markdown blockquotes from narrative unlabeled. StarterKit's own
+// blockquote is disabled (below) and this extended one registered in its place.
+const KeyPointBlockquote = Blockquote.extend({
+  addAttributes() {
+    return {
+      keypoint: {
+        default: false,
+        parseHTML: (el) => el.getAttribute('data-keypoint') === 'true',
+        renderHTML: (attrs) => (attrs['keypoint'] ? { 'data-keypoint': 'true' } : {}),
+      },
+    };
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -135,7 +155,11 @@ export function useNoteDocument(input: UseNoteDocumentInput): UseNoteDocumentRes
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         codeBlock: false,
+        // [NOTE-FULL-TOOLSET] — disable the built-in blockquote; register the
+        // keypoint-aware one below so the "핵심 포인트" label can be scoped.
+        blockquote: false,
       }),
+      KeyPointBlockquote,
       Placeholder.configure({ placeholder: '내용을 작성하거나 ▶ 영상으로 돌아가세요.' }),
       Link.configure({ openOnClick: false, autolink: true }),
       CodeBlockLowlight.configure({ lowlight }),
@@ -143,6 +167,12 @@ export function useNoteDocument(input: UseNoteDocumentInput): UseNoteDocumentRes
       VideoBlock.configure({ HTMLAttributes: {} }),
       // [CV-NOTE-WIRE] — CV figures (equation: lazy KaTeX / chart|diagram|table: img).
       FigureBlock.configure({ HTMLAttributes: {} }),
+      // [NOTE-FULL-TOOLSET] — rich-markdown narrative nodes (must be registered or
+      // ProseMirror throws on doc load): admonition callout, mermaid diagram,
+      // read-only GFM table.
+      Callout.configure({ HTMLAttributes: {} }),
+      MermaidBlock.configure({ HTMLAttributes: {} }),
+      MarkdownTable.configure({ HTMLAttributes: {} }),
     ],
     []
   );

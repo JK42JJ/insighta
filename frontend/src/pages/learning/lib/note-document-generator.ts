@@ -38,6 +38,7 @@ import type {
   MandalaBookFigure,
 } from '@/shared/lib/api-client';
 import type { TiptapDoc, TiptapNode } from '@/features/video-side-panel/lib/note-parser';
+import { parseMarkdownToTiptap, parseInline } from './markdown-to-tiptap';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -127,24 +128,18 @@ function videoBlockNode(
   };
 }
 
-// NOTE-DENSITY ① — "핵심 요점" key-point callout. Reuses the registered
-// blockquote + bulletList nodes (no new TipTap extension); the bulletList child
-// distinguishes it from the legacy narrative blockquote (> p) for note-mode CSS
-// (blockquote:has(> ul)) and markdown export. Returns null when no real points.
-function keyPointBlockNode(keyPoints: string[] | undefined): TiptapNode | null {
-  const points = (keyPoints ?? []).map((p) => normalizeText(p ?? '')).filter(Boolean);
-  if (points.length === 0) return null;
+// NOTE-DENSITY ① (revised) — "핵심 포인트" key-point quote. `section.keyPoint` is a
+// prose synthesis string; render it as a left-bar quote (blockquote > p, keypoint
+// attr → note-mode "핵심 포인트" label) — the legacy quote style the user prefers,
+// NOT a gold callout box or bullets. Inline marks (**bold**) are parsed. Returns
+// null when absent/empty (flag-safe: existing notes byte-unchanged).
+function keyPointQuoteNode(keyPoint: string | undefined): TiptapNode | null {
+  const text = normalizeText(keyPoint ?? '');
+  if (!text) return null;
   return {
     type: 'blockquote',
-    content: [
-      {
-        type: 'bulletList',
-        content: points.map((p) => ({
-          type: 'listItem',
-          content: [paragraph(p)],
-        })),
-      },
-    ],
+    attrs: { keypoint: true },
+    content: [{ type: 'paragraph', content: parseInline(text) }],
   };
 }
 
@@ -199,7 +194,8 @@ const KIND_LABEL_KO: Record<string, string> = { chart: '차트', diagram: '도�
 /** Caption = what the figure shows: struct.insight when present, else a kind
  *  label. Equation gets no label (neutral). */
 function figureCaption(f: MandalaBookFigure): string | null {
-  const insight = typeof f.struct?.['insight'] === 'string' ? (f.struct['insight'] as string).trim() : '';
+  const insight =
+    typeof f.struct?.['insight'] === 'string' ? (f.struct['insight'] as string).trim() : '';
   if (insight) return insight;
   if (f.kind === 'equation') return null;
   return KIND_LABEL_KO[f.kind] ?? null;
@@ -209,7 +205,9 @@ function figureCaption(f: MandalaBookFigure): string | null {
  *  table in the NodeView). null when no tabular payload. */
 function serializeTable(struct: Record<string, unknown> | undefined): string | null {
   if (!struct) return null;
-  const headers = Array.isArray(struct['headers']) ? (struct['headers'] as unknown[]).map(String) : [];
+  const headers = Array.isArray(struct['headers'])
+    ? (struct['headers'] as unknown[]).map(String)
+    : [];
   const rows = Array.isArray(struct['rows'])
     ? (struct['rows'] as unknown[]).map((r) => (Array.isArray(r) ? r.map(String) : [String(r)]))
     : [];
@@ -245,7 +243,14 @@ function renderFigures(figures: MandalaBookFigure[] | undefined): TiptapNode[] {
       const latex = (f.latex ?? '').trim();
       if (!latex) continue;
       out.push(
-        figureBlockNode({ kind: 'equation', latex, svg: null, assetPath: null, tableJson: null, ...base })
+        figureBlockNode({
+          kind: 'equation',
+          latex,
+          svg: null,
+          assetPath: null,
+          tableJson: null,
+          ...base,
+        })
       );
     } else if (f.kind === 'table') {
       const tableJson = serializeTable(f.struct);
@@ -303,7 +308,11 @@ function renderSection(
   // unchanged path below. Empty narrative (weave/skeleton edge) also falls
   // through → graceful legacy render (R-1b-FALLBACK).
   if (narrativeMode && section.narrative && section.narrative.trim()) {
-    out.push(paragraph(section.narrative));
+    // [NOTE-FULL-TOOLSET] section.narrative is rich markdown (bold/lists/callouts/
+    // mermaid/tables) — parse it into the full TipTap node set instead of a single
+    // plain paragraph. Plain prose (no markdown) still parses to one paragraph, so
+    // pre-toolset narrative books are visually unchanged.
+    out.push(...parseMarkdownToTiptap(section.narrative));
     for (const g of groups) {
       if (g.atoms.length === 0) continue;
       const firstTs = g.atoms[0].ts ?? 0;
@@ -311,10 +320,10 @@ function renderSection(
       out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
     }
     out.push(...renderFigures(section.figures)); // [CV-NOTE-WIRE]
-    // NOTE-DENSITY ① — real key-point take-aways AFTER prose + figures (flag-safe:
-    // absent/empty keyPoints → emit nothing → existing notes byte-unchanged).
-    const keyPoints = keyPointBlockNode(section.keyPoints);
-    if (keyPoints) out.push(keyPoints);
+    // NOTE-DENSITY ① — the distilled take-away AFTER prose + figures, as a left-bar
+    // "핵심 포인트" quote (flag-safe: absent keyPoint → nothing → byte-unchanged).
+    const keyPoint = keyPointQuoteNode(section.keyPoint);
+    if (keyPoint) out.push(keyPoint);
     out.push(horizontalRule());
     return out;
   }
@@ -336,10 +345,12 @@ function renderSection(
   }
 
   // Section narrative (if present) — placed AFTER atoms as a wrap-up. Rendered
-  // as a blockquote so note-mode CSS styles it as the gold "핵심 포인트" keypoint.
+  // as a keypoint blockquote so note-mode CSS styles it as the gold "핵심 포인트"
+  // quote (keypoint attr gates the label, so plain markdown quotes stay unlabeled).
   if (section.narrative && section.narrative.trim()) {
     out.push({
       type: 'blockquote',
+      attrs: { keypoint: true },
       content: [paragraph(section.narrative)],
     });
   }
