@@ -172,7 +172,7 @@ export function AddCardsList({
           <div className="px-5 pt-1 sm:px-6 text-[11px] text-muted-foreground">
             {formatRelativeDate(activeRound.at)}
           </div>
-          <ul className="grid grid-cols-3 gap-3 px-5 py-3 sm:px-6">
+          <ul className="grid grid-cols-2 gap-3 px-5 py-3 sm:px-6">
             {activeRound.cards.map((card) => (
               <CardItem
                 key={card.videoId}
