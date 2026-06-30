@@ -150,6 +150,9 @@ interface InsightCardItemV2Props {
   sectorLabel?: string | null;
   /** Keyword/tag chips (≤3): v2 keyConcepts → fallbackTags → video_summaries.tags. */
   tags?: string[];
+  /** When true (a specific sector filter is active), the meta leads with the
+   *  channel name instead of the sector (sector is redundant in that view). */
+  showChannel?: boolean;
 }
 
 // ── Component ──────────────────────────────────────────────
@@ -173,6 +176,7 @@ export function InsightCardItemV2({
   onArchived,
   sectorLabel,
   tags,
+  showChannel = false,
 }: InsightCardItemV2Props) {
   const { t } = useTranslation();
   const isSelected = selectedCardIds?.has(card.id) ?? false;
@@ -651,10 +655,12 @@ export function InsightCardItemV2({
             <span className="truncate flex items-center gap-1.5 min-w-0">
               {(() => {
                 const parts: { key: string; node: React.ReactNode }[] = [];
-                if (sectorLabel)
+                // 전체 보기 → sector name; 특정 섹터 필터 → channel name (less redundant).
+                const firstLabel = showChannel ? (ytMeta.channelTitle ?? sectorLabel) : sectorLabel;
+                if (firstLabel)
                   parts.push({
-                    key: 'sector',
-                    node: <span className="truncate text-foreground/80">{sectorLabel}</span>,
+                    key: 'label',
+                    node: <span className="truncate text-foreground/80">{firstLabel}</span>,
                   });
                 if (footerRight)
                   parts.push({

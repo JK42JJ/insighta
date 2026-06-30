@@ -74,6 +74,9 @@ interface CardListProps {
   /** CP463 — 8 sector names from currentLevel.subjects, used to render
    *  the per-card sector label in the new footer row. */
   sectorSubjects?: string[];
+  /** When a specific sector filter is active, cards show channel name instead of
+   *  sector name in the meta row (sector is redundant when all cards share it). */
+  showChannel?: boolean;
 }
 
 // Wrapper to make each card slot a droppable for reorder.
@@ -133,6 +136,7 @@ export function CardList({
   gridColumns = 4,
   compact = false,
   sectorSubjects,
+  showChannel = false,
 }: CardListProps) {
   const { t } = useTranslation();
 
@@ -515,6 +519,7 @@ export function CardList({
                     ? sectorSubjects[card.cellIndex]
                     : null
                 }
+                showChannel={showChannel}
                 tags={(() => {
                   const vid = safeVideoId(card.videoUrl);
                   const v2 = vid ? v2SummariesMap.get(vid) : undefined;
