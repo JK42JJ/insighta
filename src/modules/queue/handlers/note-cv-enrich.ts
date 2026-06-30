@@ -16,6 +16,7 @@ import { getJobQueue } from '../manager';
 import { JOB_NAMES, NOTE_CV_ENRICH_OPTIONS, type NoteCvEnrichPayload } from '../types';
 import { richSummaryWorkOptions } from './rich-summary-work-options';
 import type { BookFigure } from '@/modules/mandala-book/book-schema';
+import { passesFigureValueGate } from '@/modules/mandala-book/figure-value-gate';
 
 const log = logger.child({ module: 'queue/note-cv-enrich' });
 
@@ -96,7 +97,9 @@ export async function handleNoteCvEnrich(job: PgBoss.Job<NoteCvEnrichPayload>): 
   let kept = 0;
   let dropped = 0;
   let droppedNoSvg = 0; // chart/diagram where /render-figure returned null (degenerate)
+  let valueDropped = 0; // passed SVG filter but dropped by figure value gate
   let svgRendered = 0; // chart/diagram that got a valid SVG
+  let attached = 0; // figures actually pushed into section.figures
   let totalCalls = 0;
 
   for (const [videoId, videoTargets] of targetsByVideo) {
@@ -161,6 +164,28 @@ export async function handleNoteCvEnrich(job: PgBoss.Job<NoteCvEnrichPayload>): 
             ),
           ]
         : [];
+
+      // f. Value gate: drop generic illustrations that add no information beyond
+      // the section text. Evaluate once per figure using the first matched section
+      // as context (diagram judge needs section title+narrative; for diagrams
+      // the figure almost always maps to exactly one section). Skip when no
+      // matching target exists — no push will happen regardless.
+      if (matching.length > 0) {
+        const firstTarget = matching[0]!;
+        const firstCh = book.chapters[firstTarget.chapterIdx];
+        const firstSec = firstCh?.sections[firstTarget.sectionIdx];
+        const passes = await passesFigureValueGate({
+          kind: fig.kind,
+          struct,
+          sectionTitle: firstSec?.title ?? '',
+          sectionNarrative: firstSec?.narrative ?? '',
+        });
+        if (!passes) {
+          valueDropped++;
+          continue;
+        }
+      }
+
       for (const target of matching) {
         const ch = book.chapters[target.chapterIdx];
         if (!ch) continue;
@@ -172,6 +197,7 @@ export async function handleNoteCvEnrich(job: PgBoss.Job<NoteCvEnrichPayload>): 
         if (alreadyPresent) continue;
         if (!sec.figures) sec.figures = [];
         sec.figures.push(bookFig);
+        attached++;
       }
     }
   }
@@ -186,11 +212,13 @@ export async function handleNoteCvEnrich(job: PgBoss.Job<NoteCvEnrichPayload>): 
     kept,
     dropped,
     droppedNoSvg,
+    valueDropped,
     svgRendered,
+    attached,
     wallMs,
   });
 
-  if (kept === 0) return; // Nothing to write back.
+  if (attached === 0) return; // Nothing to write back.
 
   // f. Bump generated_at, re-validate with parseBookJson before write.
   book.generated_at = new Date().toISOString();
