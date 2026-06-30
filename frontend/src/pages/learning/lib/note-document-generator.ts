@@ -164,20 +164,49 @@ function groupAtomsByVid(
   }));
 }
 
-// [CV-NOTE-WIRE] — render targeted CV figures attached to a section as
-// `figureBlock` nodes (registered in useNoteDocument extensions). Base is the
-// DURABLE payload (svg for chart/diagram, struct for table, latex for equation);
-// the broken pod-local asset_path is dropped. Filters defensively: only
+// [CV-NOTE-WIRE] / [CV-FIGURE-PRESENTATION] — render targeted CV figures attached
+// to a section as `figureBlock` nodes (registered in useNoteDocument extensions).
+// Filters defensively (backend already filters to verified + renderable): only
 // chart/table/diagram/equation, drops unverified + keyframe + empty payloads.
+// CP505: chart/diagram carry a server-rendered `svg`; table carries struct
+// headers/rows; equation carries latex. asset_path kept as a legacy fallback.
 const FIGURE_KINDS = new Set(['chart', 'table', 'diagram', 'equation']);
-type FigureStruct = { headers?: string[]; rows?: string[][] };
-function figureBlockNode(attrs: {
+
+// Korean kind labels for the caption fallback (never the raw english word).
+const KIND_LABEL_KO: Record<string, string> = { chart: '차트', diagram: '도식', table: '표' };
+
+/** Caption = what the figure shows: struct.insight when present, else a kind
+ *  label. Equation gets no label (neutral). */
+function figureCaption(f: MandalaBookFigure): string | null {
+  const insight = typeof f.struct?.['insight'] === 'string' ? (f.struct['insight'] as string).trim() : '';
+  if (insight) return insight;
+  if (f.kind === 'equation') return null;
+  return KIND_LABEL_KO[f.kind] ?? null;
+}
+
+/** Table struct → compact {headers, rows} JSON string (rendered as an HTML
+ *  table in the NodeView). null when no tabular payload. */
+function serializeTable(struct: Record<string, unknown> | undefined): string | null {
+  if (!struct) return null;
+  const headers = Array.isArray(struct['headers']) ? (struct['headers'] as unknown[]).map(String) : [];
+  const rows = Array.isArray(struct['rows'])
+    ? (struct['rows'] as unknown[]).map((r) => (Array.isArray(r) ? r.map(String) : [String(r)]))
+    : [];
+  if (headers.length === 0 && rows.length === 0) return null;
+  return JSON.stringify({ headers, rows });
+}
+
+interface FigureNodeAttrs {
   kind: string;
   latex: string | null;
   svg: string | null;
-  struct: FigureStruct | null;
+  assetPath: string | null;
+  tableJson: string | null;
   caption: string | null;
-}): TiptapNode {
+  videoId: string | null;
+  tsSec: number | null;
+}
+function figureBlockNode(attrs: FigureNodeAttrs): TiptapNode {
   return { type: 'figureBlock', attrs };
 }
 function renderFigures(figures: MandalaBookFigure[] | undefined): TiptapNode[] {
@@ -185,31 +214,33 @@ function renderFigures(figures: MandalaBookFigure[] | undefined): TiptapNode[] {
   for (const f of figures ?? []) {
     if (!FIGURE_KINDS.has(f.kind)) continue; // drops keyframe
     if (f.verification_status === 'unverified') continue; // defensive
+    // Shared source/caption — drives the caption + "title · mm:ss" provenance line.
+    const base = {
+      caption: figureCaption(f),
+      videoId: f.video_id ?? null,
+      tsSec: typeof f.ts_sec === 'number' ? f.ts_sec : null,
+    };
     if (f.kind === 'equation') {
       const latex = (f.latex ?? '').trim();
       if (!latex) continue;
       out.push(
-        figureBlockNode({ kind: 'equation', latex, svg: null, struct: null, caption: null })
+        figureBlockNode({ kind: 'equation', latex, svg: null, assetPath: null, tableJson: null, ...base })
       );
     } else if (f.kind === 'table') {
-      const s = (f.struct ?? {}) as FigureStruct;
-      const headers = Array.isArray(s.headers) ? s.headers : [];
-      const rows = Array.isArray(s.rows) ? s.rows : [];
-      if (headers.length === 0 && rows.length === 0) continue;
+      const tableJson = serializeTable(f.struct);
+      const assetPath = (f.asset_path ?? '').trim() || null;
+      if (!tableJson && !assetPath) continue;
       out.push(
-        figureBlockNode({
-          kind: 'table',
-          latex: null,
-          svg: null,
-          struct: { headers, rows },
-          caption: null,
-        })
+        figureBlockNode({ kind: 'table', latex: null, svg: null, assetPath, tableJson, ...base })
       );
     } else {
-      // chart | diagram → server-rendered inline SVG (asset_path is dropped).
-      const svg = (f.svg ?? '').trim();
-      if (!svg) continue;
-      out.push(figureBlockNode({ kind: f.kind, latex: null, svg, struct: null, caption: f.kind }));
+      // chart | diagram → prefer inline SVG, fall back to a legacy image pointer.
+      const svg = (f.svg ?? '').trim() || null;
+      const assetPath = (f.asset_path ?? '').trim() || null;
+      if (!svg && !assetPath) continue;
+      out.push(
+        figureBlockNode({ kind: f.kind, latex: null, svg, assetPath, tableJson: null, ...base })
+      );
     }
   }
   return out;

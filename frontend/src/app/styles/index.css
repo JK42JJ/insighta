@@ -1254,6 +1254,13 @@ html.dark .lemonsqueezy-loader {
   --nm-sans: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --nm-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
+  /* [CV-FIGURE-PRESENTATION] — CV figure plate. graphviz/matplotlib render dark
+     ink, so figures sit on a light "paper" plate to stay legible on the dark note. */
+  --nm-figure-bg: #faf9f6;          /* warm near-white plate */
+  --nm-figure-border: rgba(0,0,0,0.10);
+  --nm-figure-ink: #1a1a1a;         /* default dark ink (KaTeX/table/currentColor SVG) */
+  --nm-figure-th-bg: rgba(0,0,0,0.045);
+
   background: #0e0f10;
 }
 

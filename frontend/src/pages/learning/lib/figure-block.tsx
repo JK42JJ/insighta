@@ -8,15 +8,23 @@
  *
  *  - kind='equation' → lazy-loads KaTeX (dynamic import; only when an equation
  *    figure mounts) and renders displayMode HTML.
- *  - kind∈{chart,diagram} → renders the server-generated inline SVG (sanitized).
- *  - kind='table' → renders an HTML <table> from struct.headers/rows.
- *  The broken pod-local asset_path <img> path was removed.
+ *  - kind∈{chart,diagram} → renders the server SVG inline (sanitized), scaled to
+ *    the body width; falls back to a legacy <img> asset when no svg.
+ *  - kind='table' → renders struct headers/rows as an HTML table.
+ *
+ * [CV-FIGURE-PRESENTATION] — each figure is framed on a light "paper" plate
+ * (graphviz/matplotlib render dark ink → a light plate keeps them legible on the
+ * dark note) with a muted caption + a dimmer "video title · mm:ss" source line.
+ * Video title is resolved at render from useMandalaCards (the book has no title
+ * map); it falls back to "영상 · mm:ss" when the card isn't found.
  *
  * Inert until the backend populates section.figures (flag-gated server-side).
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
+import { useMandalaCards } from '@/pages/learning/model/useMandalaCards';
 
 export interface FigureBlockOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -24,30 +32,92 @@ export interface FigureBlockOptions {
 
 export type FigureKind = 'chart' | 'diagram' | 'table' | 'equation';
 
-export interface FigureStruct {
-  headers?: string[];
-  rows?: string[][];
-}
-
 export interface FigureBlockAttrs {
   kind: FigureKind;
   latex: string | null;
   svg: string | null;
-  struct: FigureStruct | null;
+  assetPath: string | null;
+  tableJson: string | null;
   caption: string | null;
+  videoId: string | null;
+  tsSec: number | null;
 }
 
-// Minimal SVG sanitizer (no DOMPurify dep). Server SVG is graphviz/matplotlib
-// output, but we still strip the XSS surface before dangerouslySetInnerHTML:
-// <script>, on* event handlers, <foreignObject>, external <image> refs and
-// javascript: URLs.
-function sanitizeSvg(svg: string): string {
-  return svg
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
-    .replace(/<image\b[\s\S]*?>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/(href|xlink:href)\s*=\s*("javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]+)/gi, '');
+const YT_URL_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/;
+
+function formatTs(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Resolve a YouTube video_id → its card title (the book carries no title map;
+ * useMandalaCards is the same source VideoStrip uses). null when unavailable.
+ */
+function useVideoTitle(videoId: string | null): string | null {
+  const { mandalaId } = useParams<{ mandalaId?: string }>();
+  const { cards } = useMandalaCards(mandalaId ?? '');
+  return useMemo(() => {
+    if (!videoId) return null;
+    for (const c of cards) {
+      const m = c.videoUrl.match(YT_URL_RE);
+      if (m?.[1] === videoId) return c.title?.trim() || null;
+    }
+    return null;
+  }, [cards, videoId]);
+}
+
+/**
+ * Sanitize a server-rendered SVG before inlining it. Drops <script>, event
+ * handlers (on*) and javascript: hrefs; strips the root width/height so CSS
+ * scales the figure by its viewBox (fix #1). Returns '' on parse failure.
+ */
+function sanitizeSvg(raw: string): string {
+  if (typeof window === 'undefined' || !window.DOMParser) return '';
+  let doc: Document;
+  try {
+    doc = new window.DOMParser().parseFromString(raw, 'image/svg+xml');
+  } catch {
+    return '';
+  }
+  if (doc.querySelector('parsererror')) return '';
+  const svg = doc.querySelector('svg');
+  if (!svg) return '';
+  svg.querySelectorAll('script').forEach((el) => el.remove());
+  const scrub = (el: Element) => {
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const val = attr.value.trim().toLowerCase();
+      if (name.startsWith('on')) el.removeAttribute(attr.name);
+      else if ((name === 'href' || name === 'xlink:href') && val.startsWith('javascript:'))
+        el.removeAttribute(attr.name);
+    }
+    Array.from(el.children).forEach(scrub);
+  };
+  scrub(svg);
+  // fix #1 — let CSS control size via viewBox (graphviz/matplotlib both emit one).
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  return svg.outerHTML;
+}
+
+interface ParsedTable {
+  headers: string[];
+  rows: string[][];
+}
+function parseTable(json: string | null): ParsedTable | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json) as ParsedTable;
+    const headers = Array.isArray(parsed.headers) ? parsed.headers : [];
+    const rows = Array.isArray(parsed.rows) ? parsed.rows : [];
+    if (headers.length === 0 && rows.length === 0) return null;
+    return { headers, rows };
+  } catch {
+    return null;
+  }
 }
 
 // Lazy KaTeX render — dynamic import keeps the heavy lib out of the main bundle.
@@ -80,60 +150,78 @@ function EquationView({ latex }: { latex: string }) {
   return <div className="note-figure-equation" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-// Table figure → semantic HTML <table> from struct headers/rows.
-function TableView({ struct }: { struct: FigureStruct }) {
-  const headers = Array.isArray(struct.headers) ? struct.headers : [];
-  const rows = Array.isArray(struct.rows) ? struct.rows : [];
-  if (headers.length === 0 && rows.length === 0) return null;
+function FigureTable({ table }: { table: ParsedTable }) {
   return (
-    <figure className="note-figure-table">
-      <table>
-        {headers.length > 0 && (
-          <thead>
-            <tr>
-              {headers.map((h, i) => (
-                <th key={i}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-        )}
-        <tbody>
-          {rows.map((row, ri) => (
-            <tr key={ri}>
-              {row.map((cell, ci) => (
-                <td key={ci}>{cell}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </figure>
+    <table className="note-figure-table">
+      {table.headers.length > 0 && (
+        <thead>
+          <tr>
+            {table.headers.map((h, i) => (
+              <th key={i}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+      )}
+      <tbody>
+        {table.rows.map((row, ri) => (
+          <tr key={ri}>
+            {row.map((cell, ci) => (
+              <td key={ci}>{cell}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
 function FigureBlockNodeView({ node }: NodeViewProps) {
   const attrs = node.attrs as unknown as FigureBlockAttrs;
+  const [imgBroken, setImgBroken] = useState(false);
 
-  let body: JSX.Element | null = null;
+  // fix #4 — source line "video title · mm:ss" (title from cards, ts always).
+  const title = useVideoTitle(attrs.videoId);
+  const ts = typeof attrs.tsSec === 'number' ? formatTs(attrs.tsSec) : null;
+  const sourceText = title ? (ts ? `${title} · ${ts}` : title) : ts ? `영상 · ${ts}` : null;
+
+  const cleanSvg = useMemo(() => (attrs.svg ? sanitizeSvg(attrs.svg) : ''), [attrs.svg]);
+  const table = useMemo(() => parseTable(attrs.tableJson), [attrs.tableJson]);
+
+  let body: React.ReactNode = null;
   if (attrs.kind === 'equation' && attrs.latex) {
     body = <EquationView latex={attrs.latex} />;
-  } else if (attrs.kind === 'table' && attrs.struct) {
-    body = <TableView struct={attrs.struct} />;
-  } else if ((attrs.kind === 'chart' || attrs.kind === 'diagram') && attrs.svg) {
-    // SVG is server-generated; sanitized above to close the XSS surface.
-    const html = sanitizeSvg(attrs.svg);
+  } else if (cleanSvg) {
+    // Server SVG is backend-rendered + sanitized above (script/handlers stripped).
+    body = <div className="note-figure-svg" dangerouslySetInnerHTML={{ __html: cleanSvg }} />;
+  } else if (table) {
+    body = <FigureTable table={table} />;
+  } else if (attrs.assetPath && !imgBroken) {
     body = (
-      <figure className="note-figure-image">
-        <div className="note-figure-svg" dangerouslySetInnerHTML={{ __html: html }} />
-        {attrs.caption && <figcaption>{attrs.caption}</figcaption>}
-      </figure>
+      <img
+        src={attrs.assetPath}
+        alt={attrs.caption ?? attrs.kind}
+        loading="lazy"
+        onError={() => setImgBroken(true)}
+      />
     );
   }
 
-  // Missing/empty payload → render nothing inside the wrapper (no broken img).
+  // Nothing renderable (broken legacy image / empty payload) → drop the block.
+  if (!body) {
+    return <NodeViewWrapper className="note-figure-block hidden" data-kind={attrs.kind} />;
+  }
+
   return (
     <NodeViewWrapper className="note-figure-block" data-kind={attrs.kind}>
-      {body}
+      <figure className="note-figure" data-figkind={attrs.kind}>
+        <div className="note-figure-canvas">{body}</div>
+        {(attrs.caption || sourceText) && (
+          <figcaption className="note-figure-meta">
+            {attrs.caption && <div className="note-figure-caption">{attrs.caption}</div>}
+            {sourceText && <div className="note-figure-source">{sourceText}</div>}
+          </figcaption>
+        )}
+      </figure>
     </NodeViewWrapper>
   );
 }
@@ -167,25 +255,37 @@ export const FigureBlock = Node.create<FigureBlockOptions>({
         parseHTML: (el) => el.getAttribute('data-svg'),
         renderHTML: (attrs) => (attrs['svg'] ? { 'data-svg': String(attrs['svg']) } : {}),
       },
-      struct: {
+      assetPath: {
         default: null,
-        parseHTML: (el) => {
-          const raw = el.getAttribute('data-struct');
-          if (!raw) return null;
-          try {
-            return JSON.parse(raw);
-          } catch {
-            return null;
-          }
-        },
+        parseHTML: (el) => el.getAttribute('data-asset-path'),
         renderHTML: (attrs) =>
-          attrs['struct'] ? { 'data-struct': JSON.stringify(attrs['struct']) } : {},
+          attrs['assetPath'] ? { 'data-asset-path': String(attrs['assetPath']) } : {},
+      },
+      tableJson: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-table'),
+        renderHTML: (attrs) => (attrs['tableJson'] ? { 'data-table': String(attrs['tableJson']) } : {}),
       },
       caption: {
         default: null,
         parseHTML: (el) => el.getAttribute('data-caption'),
         renderHTML: (attrs) =>
           attrs['caption'] ? { 'data-caption': String(attrs['caption']) } : {},
+      },
+      videoId: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-video-id'),
+        renderHTML: (attrs) =>
+          attrs['videoId'] ? { 'data-video-id': String(attrs['videoId']) } : {},
+      },
+      tsSec: {
+        default: null,
+        parseHTML: (el) => {
+          const v = el.getAttribute('data-ts-sec');
+          return v == null ? null : Number(v);
+        },
+        renderHTML: (attrs) =>
+          attrs['tsSec'] != null ? { 'data-ts-sec': String(attrs['tsSec']) } : {},
       },
     };
   },
