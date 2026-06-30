@@ -128,6 +128,21 @@ export function passesBookGate(
 }
 
 /**
+ * Gate decision INCLUDING the bookmark exception (pure). A card the user
+ * bookmarked (pinned) is kept in the book regardless of relevance — explicit
+ * user intent wins over the relevance gate. Otherwise defers to passesBookGate.
+ */
+export function passesBookGateOrBookmarked(
+  relevance: number | null,
+  bookmarked: boolean,
+  ctx: BookGateContext,
+  cfg: BookGateConfig
+): boolean {
+  if (bookmarked) return true;
+  return passesBookGate(relevance, ctx, cfg);
+}
+
+/**
  * §1⑤ topic synthesis on/off. Default TRUE (verified §1⑤ Done — 942 clickbait 0,
  * drop 0, content-name topics). Every fill now synthesizes content topics (one
  * Haiku call per non-empty cell). Code-revert-free rollback = set

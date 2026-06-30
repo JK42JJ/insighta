@@ -7,6 +7,7 @@
 
 import {
   passesBookGate,
+  passesBookGateOrBookmarked,
   computeMandalaMedian,
   loadBookGateConfig,
   isBookTopicSynthesisEnabled,
@@ -147,5 +148,16 @@ describe('loadNoteMaxSections — CP504 §1⑤ surface-fix #3', () => {
     expect(loadNoteMaxSections({ NOTE_MAX_SECTIONS: 'abc' })).toBe(20);
     expect(loadNoteMaxSections({ NOTE_MAX_SECTIONS: '0' })).toBe(20);
     expect(loadNoteMaxSections({ NOTE_MAX_SECTIONS: '-5' })).toBe(20);
+  });
+});
+
+describe('passesBookGateOrBookmarked — bookmark exception', () => {
+  it('bookmarked card stays in the book even below the gate min (and when unscored)', () => {
+    expect(passesBookGateOrBookmarked(10, true, NO_CTX, cfg({ minRelevance: 50 }))).toBe(true);
+    expect(passesBookGateOrBookmarked(null, true, NO_CTX, cfg({ passNull: false }))).toBe(true);
+  });
+  it('non-bookmarked card still obeys the relevance gate', () => {
+    expect(passesBookGateOrBookmarked(10, false, NO_CTX, cfg({ minRelevance: 50 }))).toBe(false);
+    expect(passesBookGateOrBookmarked(60, false, NO_CTX, cfg({ minRelevance: 50 }))).toBe(true);
   });
 });

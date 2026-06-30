@@ -15,7 +15,7 @@ import { buildBookJson, type CellInput, type CellVideoV2 } from './build-book';
 import { parseBookJson, type BookJsonInput } from './book-schema';
 import {
   loadBookGateConfig,
-  passesBookGate,
+  passesBookGateOrBookmarked,
   computeMandalaMedian,
   isBookTopicSynthesisEnabled,
   isBookNarrativeSkeletonEnabled,
@@ -61,6 +61,7 @@ interface Placement {
   videoId: string; // 11-char YouTube id
   title: string;
   relevance: number | null; // uvs/ulc relevance_pct; null = never scored
+  bookmarked: boolean; // pinned_at != null — bookmarked cards bypass the relevance gate
 }
 
 interface V2Columns {
@@ -97,6 +98,7 @@ export async function fillMandalaBook(params: {
       select: {
         cell_index: true,
         relevance_pct: true,
+        pinned_at: true,
         video: { select: { youtube_video_id: true, title: true } },
       },
     }),
@@ -108,6 +110,7 @@ export async function fillMandalaBook(params: {
         title: true,
         metadata_title: true,
         relevance_pct: true,
+        pinned_at: true,
       },
     }),
   ]);
@@ -128,6 +131,7 @@ export async function fillMandalaBook(params: {
       videoId: vid,
       title: r.video?.title ?? vid,
       relevance: r.relevance_pct ?? null,
+      bookmarked: r.pinned_at != null,
     });
   }
   for (const r of localCards) {
@@ -139,6 +143,7 @@ export async function fillMandalaBook(params: {
       videoId: r.video_id,
       title: r.title ?? r.metadata_title ?? r.video_id,
       relevance: r.relevance_pct ?? null,
+      bookmarked: r.pinned_at != null,
     });
   }
 
@@ -253,7 +258,9 @@ export async function fillMandalaBook(params: {
       if (seen.has(p.videoId)) continue; // dedup a video within one cell
       // §1③ GATE FIRST (before v2) — a scored-low / off-topic card is dropped
       // regardless of v2. Reordered: v2-absence no longer short-circuits the gate.
-      if (!passesBookGate(p.relevance, gateCtx, gate)) {
+      // Bookmark exception (user directive): a card the user bookmarked (pinned)
+      // stays in the book even below the relevance gate — explicit intent wins.
+      if (!passesBookGateOrBookmarked(p.relevance, p.bookmarked, gateCtx, gate)) {
         gatedLow += 1; // scored below the gate min → excluded from the book
         continue;
       }
