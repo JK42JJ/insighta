@@ -77,6 +77,9 @@ const bookFigureSchema = z.object({
 export const bookSectionSchema = z.object({
   title: z.string(),
   narrative: z.string(), // 살붙임 body assembled from v2 analysis + segments
+  // NOTE-DENSITY ① — 2-3 compressed take-aways per section (distilled, NOT narrative repeat).
+  // Optional: absent/empty ⇒ renders nothing; existing books without this field stay valid.
+  keyPoints: z.array(z.string()).optional(),
   atoms: z.array(bookAtomSchema).default([]),
   qa: z.array(bookQaSchema).default([]),
   provenance: provenanceSchema, // Fork D placeholder

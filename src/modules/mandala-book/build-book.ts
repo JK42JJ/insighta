@@ -171,7 +171,14 @@ function sectionFromTopic(
       seenQa.add(k);
       return true;
     });
-  return { title: topic.topic_title, narrative: topic.summary, atoms, qa };
+  return {
+    title: topic.topic_title,
+    narrative: topic.summary,
+    // NOTE-DENSITY ① — pass through keyPoints written by book-body weave step.
+    ...(topic.keyPoints && topic.keyPoints.length > 0 ? { keyPoints: topic.keyPoints } : {}),
+    atoms,
+    qa,
+  };
 }
 
 /**
@@ -285,7 +292,14 @@ export function buildBookJson(input: BuildBookInput): BuildBookResult {
               seenQa.add(k);
               return true;
             });
-          return { title: topic.topic_title, narrative: topic.summary, atoms, qa };
+          return {
+            title: topic.topic_title,
+            narrative: topic.summary,
+            // NOTE-DENSITY ① — carry keyPoints from the book-body weave step.
+            ...(topic.keyPoints && topic.keyPoints.length > 0 ? { keyPoints: topic.keyPoints } : {}),
+            atoms,
+            qa,
+          };
         });
       } else {
         // LEGACY mode: one section per video (synthesis off/failed → safe fallback;

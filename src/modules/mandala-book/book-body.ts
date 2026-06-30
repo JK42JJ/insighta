@@ -35,13 +35,20 @@ export interface BodyTopicInput {
   summary: string;
 }
 
+/** Per-section output carrying both the woven prose and the distilled key-points. */
+export interface BodySectionResult {
+  narrative: string;
+  keyPoints: string[]; // 2-3 compressed take-aways; empty when model omits
+}
+
 export type ChapterBodyResult =
-  | { ok: true; narratives: string[] } // index-aligned with the input topics
+  | { ok: true; sections: BodySectionResult[] } // index-aligned with the input topics
   | { ok: false; reason: string };
 
 interface LlmBodySection {
   idx?: unknown;
   narrative?: unknown;
+  keyPoints?: unknown; // NOTE-DENSITY ① — model may emit array of strings
 }
 
 /**
@@ -70,10 +77,11 @@ export function buildChapterBodyPrompt(
     `2. 연결·전환·맥락 문장은 창작해도 된다(예: "앞에서 다진 기초를 바탕으로"). 그러나 ★사실은 주어진 요약에 있는 것만 써라 — 요약에 없는 새 사실(표현·수치·이름·개념)을 절대 지어내지 마라.`,
     `3. 토픽 순서와 개수를 유지한다(입력 ${topics.length}개 → 출력 ${topics.length}개, idx 일치).`,
     `4. 각 narrative는 토픽 요약보다 풍부하되 간결하게(2-4문장). 영상제목·채널명 금지.`,
+    `5. 각 토픽에 대해 keyPoints(2-3개)를 작성한다: 독자가 반드시 기억해야 할 압축 핵심. ★중요: keyPoints는 narrative의 문장 반복이 아니다 — narrative를 읽지 않아도 핵심을 알 수 있는 밀도 높은 bullet(예: "INT8 양자화: 메모리 75%↓, 성능 손실 1-2%"). 수치·원칙·결론 중심, 각 항목 한 줄 이내.`,
     ``,
-    `★ 각 narrative는 한 줄(개행·줄바꿈 문자 절대 금지 — JSON 파싱 보호).`,
+    `★ narrative와 keyPoints 각 항목은 반드시 한 줄(개행·줄바꿈 문자 절대 금지 — JSON 파싱 보호).`,
     `JSON만 출력(코드펜스 금지):`,
-    `{"sections":[{"idx":0,"narrative":"..."}]}`,
+    `{"sections":[{"idx":0,"narrative":"...","keyPoints":["핵심1","핵심2"]}]}`,
   ]
     .filter((l) => l !== ``)
     .join('\n');
@@ -140,8 +148,10 @@ async function attemptBody(
 
 /**
  * Pure parse + index-map of the body response. Exported for fixture unit tests
- * (no live LLM). Returns narratives index-aligned with the input topics; any
- * topic the model omits keeps an empty slot (caller falls back to its summary).
+ * (no live LLM). Returns sections index-aligned with the input topics; any
+ * topic the model omits keeps an empty-narrative slot (caller falls back to its
+ * summary). keyPoints: trimmed non-empty strings, capped at 3, empty array when
+ * the model omits the field (flag-safe — existing call sites unaffected).
  * Fails only if the response is unusable (not JSON / no sections / none mapped).
  */
 export function parseChapterBodyResponse(raw: string, topicCount: number): ChapterBodyResult {
@@ -159,7 +169,10 @@ export function parseChapterBodyResponse(raw: string, topicCount: number): Chapt
   }
   if (!Array.isArray(json.sections)) return { ok: false, reason: 'no_sections_array' };
 
-  const narratives: string[] = new Array(topicCount).fill('');
+  const sections: BodySectionResult[] = Array.from({ length: topicCount }, () => ({
+    narrative: '',
+    keyPoints: [],
+  }));
   let mapped = 0;
   for (const s of json.sections as LlmBodySection[]) {
     const i = typeof s.idx === 'number' ? s.idx : Number(s.idx);
@@ -167,9 +180,16 @@ export function parseChapterBodyResponse(raw: string, topicCount: number): Chapt
     const narrative =
       typeof s.narrative === 'string' ? s.narrative.replace(/\s*\n+\s*/g, ' ').trim() : '';
     if (!narrative) continue;
-    if (narratives[i] === '') mapped += 1; // first write for this idx
-    narratives[i] = narrative;
+    if (sections[i]!.narrative === '') mapped += 1; // first write for this idx
+    // Extract keyPoints: array of strings, trimmed, non-empty, capped at 3.
+    const rawKp = Array.isArray(s.keyPoints) ? (s.keyPoints as unknown[]) : [];
+    const keyPoints = rawKp
+      .filter((k): k is string => typeof k === 'string')
+      .map((k) => k.replace(/\s*\n+\s*/g, ' ').trim())
+      .filter((k) => k.length > 0)
+      .slice(0, 3);
+    sections[i] = { narrative, keyPoints };
   }
   if (mapped === 0) return { ok: false, reason: 'no_mapped_sections' };
-  return { ok: true, narratives };
+  return { ok: true, sections };
 }
