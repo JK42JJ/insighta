@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { InsightCard } from '@/entities/card/model/types';
 import { Card } from '@/shared/ui/card';
 import { cn } from '@/shared/lib/utils';
-import { GripVertical, NotepadText, Loader2, Play, Bookmark, Archive } from 'lucide-react';
+import { GripVertical, NotepadText, Loader2, Play, Bookmark, Archive, Sparkles } from 'lucide-react';
 import { useLikeCard } from '@/features/card-management/model/useLikeCard';
 import { useArchiveCard } from '@/features/card-management/model/useArchiveCard';
 import { useArchivedReaddToast } from '@/features/card-management/model/useArchivedReaddToast';
@@ -26,32 +26,43 @@ import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 // ── Constants ──────────────────────────────────────────────
 
 // CP499 #4 — A-stage relevance badge tiers (USER-SCOPED relevance_pct, 0-100).
-const RELEVANCE_BADGE_THRESHOLD_HIGH = 90;
-const RELEVANCE_BADGE_THRESHOLD_MID = 80;
-const RELEVANCE_BADGE_THRESHOLD_LOW = 70;
+// Relevance tier cuts — tune by looking at the live distribution (raw % is
+// never shown to the user, so these are display-only thresholds).
+const RELEVANCE_TIER_CORE = 80; // ≥80 → "핵심"
+const RELEVANCE_TIER_PICK = 70; // 70–79 → "추천" ; <70 → no badge (number never shown)
 const MAX_CARD_TAGS = 3;
+
+// Tier badge styles — complete class strings (RING_STYLES pattern, NO dynamic
+// Tailwind). Single indigo-intensity ladder on --primary (note/CV token parity);
+// deliberately NO traffic-light green/amber.
+const RELEVANCE_TIER_STYLES = {
+  // 핵심: indigo tinted pill + accent border + spark glyph — the one signal that draws the eye.
+  core: 'inline-flex items-center gap-0.5 rounded-full border border-[hsl(var(--primary)/0.45)] bg-[hsl(var(--primary)/0.15)] px-2 py-0.5 text-[10.5px] font-medium leading-none text-[hsl(var(--primary))]',
+  // 추천: ghost outline — transparent bg + faint indigo border/text, no glyph.
+  pick: 'inline-flex items-center rounded-full border border-[hsl(var(--primary)/0.30)] bg-transparent px-2 py-0.5 text-[10.5px] font-normal leading-none text-[hsl(var(--primary)/0.80)]',
+} as const;
 
 // ── Helpers ────────────────────────────────────────────────
 // formatDuration / formatViewCount live in shared/lib/format-number so
 // the Add Cards panel + future card surfaces share the same rules.
 
 /**
- * CP499 #4 — A-stage relevance badge from the USER-SCOPED relevance_pct
- * (InsightCard.relevancePct), NOT the video-keyed mandala_relevance_pct (which
- * stays the v2-completion signal for the dot/SSE only). Plain coloured text
- * (CP463 directive). null ⇒ no badge — the card is not yet scored; it appears
- * once wizard/manual/backfill fills relevance_pct (display = stored value).
+ * Relevance TIER badge from the USER-SCOPED relevance_pct (InsightCard.relevancePct),
+ * NOT the video-keyed mandala_relevance_pct (v2-completion dot/SSE signal only).
+ * The raw % is never rendered (negative-framing removed) — only a tier label, with
+ * the exact score available on hover. null/unscored ⇒ no badge; <70 (gate-passed
+ * but low) ⇒ no badge either. Tune cuts via RELEVANCE_TIER_CORE/PICK.
  */
 export function getRelevanceBadge(
   pct: number | null | undefined
-): { label: string; className: string } | null {
+): { tier: 'core' | 'pick'; label: string; className: string; raw: number; showSpark: boolean } | null {
   if (pct == null) return null;
-  const value = Math.max(0, Math.min(100, Math.round(pct)));
-  const label = `${value}%`;
-  if (value >= RELEVANCE_BADGE_THRESHOLD_HIGH) return { label, className: 'text-[#818cf8]' };
-  if (value >= RELEVANCE_BADGE_THRESHOLD_MID) return { label, className: 'text-[#34d399]' };
-  if (value >= RELEVANCE_BADGE_THRESHOLD_LOW) return { label, className: 'text-[#fbbf24]' };
-  return { label, className: 'text-[#94a3b8]' };
+  const raw = Math.max(0, Math.min(100, Math.round(pct)));
+  if (raw >= RELEVANCE_TIER_CORE)
+    return { tier: 'core', label: '핵심', className: RELEVANCE_TIER_STYLES.core, raw, showSpark: true };
+  if (raw >= RELEVANCE_TIER_PICK)
+    return { tier: 'pick', label: '추천', className: RELEVANCE_TIER_STYLES.pick, raw, showSpark: false };
+  return null;
 }
 
 /** Extract YouTube metadata from InsightCard.metadata (runtime fields beyond UrlMetadata type) */
@@ -687,8 +698,12 @@ export function InsightCardItemV2({
             </span>
             {relevanceBadge ? (
               <span
-                className={cn('text-xs font-semibold shrink-0 tabular-nums', relevanceBadge.className)}
+                className={cn('shrink-0', relevanceBadge.className)}
+                title={`주제 적합도 ${relevanceBadge.raw}`}
               >
+                {relevanceBadge.showSpark && (
+                  <Sparkles className="w-2.5 h-2.5" strokeWidth={2.2} aria-hidden="true" />
+                )}
                 {relevanceBadge.label}
               </span>
             ) : v2EnrichmentPending && !showFailedGlow ? (
