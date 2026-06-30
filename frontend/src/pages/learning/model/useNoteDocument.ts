@@ -38,7 +38,7 @@ import { FigureBlock } from '../lib/figure-block';
 import { Callout } from '../lib/callout-block';
 import { MermaidBlock } from '../lib/mermaid-block';
 import { MarkdownTable } from '../lib/markdown-table-block';
-import { buildInitialNoteDoc } from '../lib/note-document-generator';
+import { buildInitialNoteDoc, sanitizeNoteDoc } from '../lib/note-document-generator';
 
 // [NOTE-FULL-TOOLSET] — Blockquote with a `keypoint` attr so the note-mode CSS
 // "핵심 포인트" label targets ONLY the generated key-point quote (data-keypoint),
@@ -148,7 +148,11 @@ export function useNoteDocument(input: UseNoteDocumentInput): UseNoteDocumentRes
 
   // 4. Editor mount.
   const docId = (docQuery.data?.id ?? null) || null;
-  const initialContent = (docQuery.data?.content_json as TiptapDoc | null | undefined) ?? null;
+  // Sanitize on load: docs persisted by the pre-fix generator can carry empty text
+  // nodes (e.g. a heading from a blank section.title) that make TipTap silently
+  // collapse the whole note to one empty paragraph. Heal them before mount.
+  const rawContent = (docQuery.data?.content_json as TiptapDoc | null | undefined) ?? null;
+  const initialContent = rawContent ? sanitizeNoteDoc(rawContent) : null;
 
   const extensions = useMemo(
     () => [
@@ -259,7 +263,7 @@ export function useNoteDocument(input: UseNoteDocumentInput): UseNoteDocumentRes
     const fresh = mandalaId ? await apiClient.getNoteDocument(mandalaId) : null;
     const original = (fresh?.original_json as TiptapDoc | null | undefined) ?? null;
     if (!original) return;
-    editor.commands.setContent(original, false);
+    editor.commands.setContent(sanitizeNoteDoc(original), false);
     // Force-clear history so undo can't go past the restore point.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const histAny = (editor as any).commands as { clearHistory?: () => void };
