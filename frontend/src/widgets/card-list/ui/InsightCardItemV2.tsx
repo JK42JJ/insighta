@@ -29,6 +29,7 @@ import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 const RELEVANCE_BADGE_THRESHOLD_HIGH = 90;
 const RELEVANCE_BADGE_THRESHOLD_MID = 80;
 const RELEVANCE_BADGE_THRESHOLD_LOW = 70;
+const MAX_CARD_TAGS = 3;
 
 // ── Helpers ────────────────────────────────────────────────
 // formatDuration / formatViewCount live in shared/lib/format-number so
@@ -147,6 +148,8 @@ interface InsightCardItemV2Props {
    * relevance % badge on the right.
    */
   sectorLabel?: string | null;
+  /** Keyword/tag chips (≤3): v2 keyConcepts → fallbackTags → video_summaries.tags. */
+  tags?: string[];
 }
 
 // ── Component ──────────────────────────────────────────────
@@ -169,6 +172,7 @@ export function InsightCardItemV2({
   isV2Loading = false,
   onArchived,
   sectorLabel,
+  tags,
 }: InsightCardItemV2Props) {
   const { t } = useTranslation();
   const isSelected = selectedCardIds?.has(card.id) ?? false;
@@ -417,14 +421,16 @@ export function InsightCardItemV2({
       onDragStart={(e) => e.preventDefault()}
       className={cn(
         'group relative cursor-pointer transition-all duration-200',
-        'border-0 shadow-none bg-transparent rounded-[10px]',
-        'hover:-translate-y-0.5 hover:ring-1 hover:ring-border/60',
+        // group1 — mockup .ist-card: bg #121419, 1px white/7% border, 16px
+        // radius, no shadow, overflow-hidden.
+        'bg-card border border-white/[0.07] rounded-2xl overflow-hidden',
+        'hover:-translate-y-0.5 hover:border-white/15',
         // CP473 — card sizes itself to its own content so the hover
         // ring only outlines the visible body. The grid cell
         // (CardSlot) still stretches to the row's max height via the
         // CSS-grid default, so empty space below a short card sits
         // outside the card (in the cell) and not inside the ring.
-        'w-[95%]',
+        'w-full',
         // CP463 — outer glow / pulse removed per user directive
         // 2026-05-17: "수집중/분석중일때 카드가 심각하게 깜빡임. 매우
         // 어지러움 ... 카드 외곽하일라이트 > 하단 프로그래스로 수정".
@@ -463,7 +469,7 @@ export function InsightCardItemV2({
       )}
 
       {/* ── Thumbnail ── */}
-      <div className="relative aspect-video overflow-hidden rounded-[10px] bg-gradient-to-br from-[#1a1c28] to-[#13141c] transition-[filter] duration-300 group-hover:brightness-[0.96] group-hover:contrast-[1.04]">
+      <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-[#1a1c28] to-[#13141c] transition-[filter] duration-300 group-hover:brightness-[0.96] group-hover:contrast-[1.04]">
         <img
           src={upgradeYouTubeThumbnail(card.thumbnail) ?? card.thumbnail}
           alt={card.title}
@@ -606,31 +612,48 @@ export function InsightCardItemV2({
             so longer summaries truncate with "…" instead of stretching
             the card. min-h reserves the 3-line slot so cards stay the
             same height regardless of summary length. */}
-      <div className="px-3 pt-2 pb-4">
-        <h4 className="text-[13px] font-semibold leading-[1.4] text-foreground line-clamp-2 tracking-[-0.1px]">
+      {/* group1 body — mockup-exact (measured). Category dot is group2 (deferred). */}
+      <div className="px-4 pt-[15px] pb-[17px]">
+        <h4 className="text-[15.5px] font-[650] leading-[1.35] text-[#ebedf0] line-clamp-2">
           {decodeHtmlEntities(card.title)}
         </h4>
 
+        {/* AI 핵심 — mockup: teal #36d6c3 label 11px/700/.55px + essence 13.5px #aeb4be */}
+        {cardSummary && (
+          <div className="mt-3">
+            <div className="flex items-center gap-1 text-[11px] font-bold tracking-[0.55px] text-[#36d6c3]">
+              <span aria-hidden="true">✦</span>
+              <span>AI 핵심</span>
+            </div>
+            <p className="mt-1 text-[13.5px] leading-snug text-[#aeb4be] line-clamp-2 break-words">
+              {decodeHtmlEntities(cardSummary)}
+            </p>
+          </div>
+        )}
+
+        {/* keyword chips — mockup .chip: pill, accent/12% bg, 13px, #f4f5f7 */}
+        {tags && tags.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {tags.slice(0, MAX_CARD_TAGS).map((tg) => (
+              <span
+                key={tg}
+                className="rounded-full bg-[rgba(54,214,195,0.12)] px-3.5 py-[5px] text-[13px] leading-none text-[#f4f5f7]"
+              >
+                #{tg}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* meta — views · date + relevance % (sector → category dot is group2) */}
         {(footerLeft ||
           footerRight ||
-          sectorLabel ||
           relevanceBadge ||
-          isEnrichFailed ||
-          showFailedGlow) && (
-          <div className="mt-2 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground/70">
+          (v2EnrichmentPending && !showFailedGlow)) && (
+          <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground/70">
             <span className="truncate flex items-center gap-1.5 min-w-0">
               {(() => {
-                // CP473 user directive 2026-05-19:
-                //   "장애 제거 70.2K 7 months ago   85%"
-                //   "채널명은 표기하지 않는거야."
-                // Order: sector → views → date | relevance %.
-                // Channel intentionally omitted from the row.
                 const parts: { key: string; node: React.ReactNode }[] = [];
-                if (sectorLabel)
-                  parts.push({
-                    key: 'sector',
-                    node: <span className="truncate text-foreground/80">{sectorLabel}</span>,
-                  });
                 if (footerRight)
                   parts.push({
                     key: 'views',
@@ -653,25 +676,13 @@ export function InsightCardItemV2({
                 );
               })()}
             </span>
-            {/* Right slot priority (CP499 #4 — badge revived on the USER-SCOPED
-                relevance_pct, NOT the video-keyed mandala_relevance_pct):
-                  scored (relevancePct != null) → relevance % (color-tiered)
-                  else liked && v2-pending && !failed → breathing dot
-                  else → empty
-                The dot still keys off mandalaRelevancePct==null (v2-completion
-                signal) — distinct source from this user-scoped badge. */}
             {relevanceBadge ? (
               <span
-                className={cn(
-                  'text-[10.5px] font-semibold shrink-0 tabular-nums',
-                  relevanceBadge.className
-                )}
+                className={cn('text-xs font-semibold shrink-0 tabular-nums', relevanceBadge.className)}
               >
                 {relevanceBadge.label}
               </span>
             ) : v2EnrichmentPending && !showFailedGlow ? (
-              // CP475+ — breathing dot for the Heart-enrichment window (bookmark
-              // click → quick-result arrival); stops when v2 lands.
               <span
                 className="block w-1.5 h-1.5 rounded-full bg-foreground/40 shrink-0 animate-[breathe_1.6s_ease-in-out_infinite]"
                 aria-label={t('cards.enrichingAria')}
@@ -679,18 +690,6 @@ export function InsightCardItemV2({
               />
             ) : null}
           </div>
-        )}
-
-        {/* CP473 — summary at the bottom + line-clamp-3 with "…" for
-            long content. When the one-liner is missing, the block is
-            NOT rendered — the parent `flex-grow` body absorbs the
-            leftover space and the empty area sits flush at the card's
-            bottom (YouTube-style: no empty line between meta and the
-            absent summary). */}
-        {cardSummary && (
-          <blockquote className="mt-2 text-[10.5px] italic text-muted-foreground/75 leading-relaxed line-clamp-3 break-words">
-            {decodeHtmlEntities(cardSummary)}
-          </blockquote>
         )}
       </div>
     </Card>

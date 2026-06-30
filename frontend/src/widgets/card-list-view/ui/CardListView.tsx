@@ -69,8 +69,10 @@ const COMPACT_THRESHOLD = 5;
 // area). Previously cards dropped to 1-col below 600px, which made every
 // card read as a thumbnail strip when the video panel was expanded.
 const SHOW_GRID_SLIDER = false;
-const CONTAINER_5COL = 1600;
-const CONTAINER_4COL = 1300;
+// group1 #3 — thresholds raised so 3 columns dominate (collapsing the sidebar
+// grows the cards instead of adding a 4th smaller one).
+const CONTAINER_5COL = 2300;
+const CONTAINER_4COL = 1900;
 const CONTAINER_3COL = 1050;
 // Minimum legible card width is ~220px (matches user screenshot showing
 // 2-col at ~460px container where thumbnails are still readable). Below
@@ -645,7 +647,7 @@ export function CardListView({
         onDrop={handleExternalDrop}
         // OUTER: drop hit area only — extend across the lg:px-[70px] padding
         // applied by IndexPage's main content. Visual is intentionally none.
-        className="-mx-6 md:-mx-10 lg:-mx-[70px] px-6 md:px-10 lg:px-[70px]"
+        className="-mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8"
       >
         <div
           ref={containerRef}
@@ -678,8 +680,18 @@ export function CardListView({
               </div>
             </div>
           )}
-          {contextHeaderElement}
-          {sectorPillsElement}
+          {/* group1 #5 — pin title + filter chips while the grid scrolls. The
+              `-top-6 -mt-6 pt-6` (cards>0) covers the scroll container's top
+              padding so no card peeks above; empty state keeps the spinner clear. */}
+          <div
+            className={cn(
+              'sticky z-20 bg-background pb-2',
+              sortedCards.length > 0 ? '-top-6 -mt-6 pt-6' : 'top-0'
+            )}
+          >
+            {contextHeaderElement}
+            {sectorPillsElement}
+          </div>
           <CardList
             cards={sortedCards}
             isLoading={isLoading}

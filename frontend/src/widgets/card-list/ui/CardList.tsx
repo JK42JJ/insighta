@@ -113,7 +113,7 @@ const PAGE_SIZE = 24;
  * The minHeight keeps the empty area a drag/drop target; do not remove.
  */
 const CARD_GRID_CLASS =
-  'grid grid-cols-1 gap-4 p-3 min-h-full flex-1 pb-20 justify-items-center transition-all duration-200';
+  'grid grid-cols-1 gap-3 p-3 min-h-full flex-1 pb-20 transition-all duration-200';
 function cardGridStyle(gridColumns: number): CSSProperties {
   return {
     minHeight: 'calc(100vh - 200px)',
@@ -426,7 +426,7 @@ export function CardList({
     return (
       <div className={CARD_GRID_CLASS} style={cardGridStyle(gridColumns)}>
         {Array.from({ length: gridColumns * 2 }).map((_, i) => (
-          <CardSkeletonCell key={i} index={i} className="w-[95%]" />
+          <CardSkeletonCell key={i} index={i} className="w-full" />
         ))}
       </div>
     );
@@ -515,6 +515,15 @@ export function CardList({
                     ? sectorSubjects[card.cellIndex]
                     : null
                 }
+                tags={(() => {
+                  const vid = safeVideoId(card.videoUrl);
+                  const v2 = vid ? v2SummariesMap.get(vid) : undefined;
+                  const kc = v2?.keyConcepts ?? [];
+                  if (kc.length) return kc;
+                  const ft = v2?.fallbackTags ?? [];
+                  if (ft.length) return ft;
+                  return card.videoSummary?.tags ?? [];
+                })()}
                 onArchived={handleArchived}
               />
             </CardSlot>
@@ -529,7 +538,7 @@ export function CardList({
         {hasMore && (
           <>
             {Array.from({ length: Math.min(sortedCards.length - visibleCount, 6) }).map((_, i) => (
-              <CardSkeletonCell key={`skeleton-${i}`} index={i} className="w-[95%]" />
+              <CardSkeletonCell key={`skeleton-${i}`} index={i} className="w-full" />
             ))}
             <div ref={sentinelRef} aria-hidden className="col-span-full h-1" />
           </>

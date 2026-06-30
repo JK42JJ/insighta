@@ -159,14 +159,14 @@
     --bg-sunken: 0 0% 8%;
 
     /* Core semantic tokens */
-    /* CP445.x — main surface 8% 단일 톤 (ChatGPT-flat). card/popover 도 통일. */
-    --background: 0 0% 8%;
+    /* CARD-GRID group1 — mockup-exact: grid/page bg #0A0B0D, card/popover #121419. */
+    --background: 220 13% 4.5%; /* #0A0B0D */
     --foreground: 0 0% 95%;
 
-    --card: 0 0% 8%;
+    --card: 223 16% 8.4%; /* #121419 */
     --card-foreground: 0 0% 95%;
 
-    --popover: 0 0% 8%;
+    --popover: 223 16% 8.4%; /* #121419 */
     --popover-foreground: 0 0% 95%;
 
     /* Accent color - Muted light indigo for dark mode (AA ~5.5:1) */
