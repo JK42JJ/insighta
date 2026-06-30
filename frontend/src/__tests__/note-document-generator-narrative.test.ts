@@ -237,7 +237,7 @@ describe('note-document-generator — CV figures render ([CV-NOTE-WIRE])', () =>
     expect(f.tsSec).toBe(565); // mm:ss formatting (→ 9:25) happens in the NodeView
   });
 
-  it('chart without insight → Korean kind-label caption (not the raw english word)', () => {
+  it('chart without insight → no caption (no kind-label fallback)', () => {
     const b = book('이 장은 기초 회화를 다룬다');
     b.chapters[0]!.sections[0]!.figures = [
       {
@@ -249,7 +249,7 @@ describe('note-document-generator — CV figures render ([CV-NOTE-WIRE])', () =>
       },
     ];
     const f = figureBlocks(nodes(buildInitialNoteDoc(b)))[0]!;
-    expect(f.caption).toBe('차트');
+    expect(f.caption).toBeNull();
   });
 
   it('table → struct headers/rows serialized to tableJson; equation gets no caption', () => {
@@ -285,7 +285,7 @@ describe('note-document-generator — CV figures render ([CV-NOTE-WIRE])', () =>
         ['3', '4'],
       ],
     });
-    expect(tableFig.caption).toBe('표');
+    expect(tableFig.caption).toBeNull(); // no insight → no caption (kind-label removed)
     const eqFig = figs.find((f) => f.kind === 'equation')!;
     expect(eqFig.caption).toBeNull(); // equation → neutral, no label
   });

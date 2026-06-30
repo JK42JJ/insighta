@@ -887,7 +887,6 @@ const NOTE_PROSE_STYLE = `
   margin: 32px 0;
   padding: 16px 18px;
   border: 1px solid var(--nm-callout-border);
-  border-left: 3px solid var(--nm-callout-accent);
   border-radius: 10px;
   background: var(--nm-callout-bg);
   color: var(--nm-callout-ink);

@@ -195,17 +195,13 @@ function groupAtomsByVid(
 // headers/rows; equation carries latex. asset_path kept as a legacy fallback.
 const FIGURE_KINDS = new Set(['chart', 'table', 'diagram', 'equation']);
 
-// Korean kind labels for the caption fallback (never the raw english word).
-const KIND_LABEL_KO: Record<string, string> = { chart: '차트', diagram: '도식', table: '표' };
-
-/** Caption = what the figure shows: struct.insight when present, else a kind
- *  label. Equation gets no label (neutral). */
+/** Caption = what the figure shows: struct.insight when present, else none.
+ *  No kind-label fallback ("표"/"차트"/"도식") — a bare kind word adds noise,
+ *  not meaning (user directive 2026-06-30). */
 function figureCaption(f: MandalaBookFigure): string | null {
   const insight =
     typeof f.struct?.['insight'] === 'string' ? (f.struct['insight'] as string).trim() : '';
-  if (insight) return insight;
-  if (f.kind === 'equation') return null;
-  return KIND_LABEL_KO[f.kind] ?? null;
+  return insight || null;
 }
 
 /** Table struct → compact {headers, rows} JSON string (rendered as an HTML
