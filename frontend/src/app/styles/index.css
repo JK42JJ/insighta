@@ -1254,12 +1254,14 @@ html.dark .lemonsqueezy-loader {
   --nm-sans: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --nm-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* [CV-FIGURE-PRESENTATION] — CV figure plate. theme='dark' SVGs render light
-     ink + transparent bg, so figures sit directly on a dark card on the note. */
-  --nm-figure-bg: rgba(255,255,255,0.03);  /* subtle elevated dark card surface */
-  --nm-figure-border: var(--nm-line);      /* subtle dark border */
-  --nm-figure-ink: var(--nm-text);         /* light ink (KaTeX/table/currentColor SVG) */
-  --nm-figure-th-bg: rgba(255,255,255,0.045);
+  /* [CV-FIGURE-PRESENTATION] — CV figure plate. theme='auto' SVGs paint ink with
+     the #808080 sentinel that the FE swaps to currentColor, so figure ink follows
+     --nm-text (the note body ink). Plate tones are ink-derived (not hardcoded white)
+     so they track whatever --nm-text resolves to — one image, mode-agnostic. */
+  --nm-figure-ink: var(--nm-text);                                       /* drives currentColor SVG + KaTeX/table text */
+  --nm-figure-border: var(--nm-line);                                    /* matches the note's hairline dividers */
+  --nm-figure-bg: color-mix(in srgb, var(--nm-text) 4%, transparent);    /* subtle ink-tinted plate */
+  --nm-figure-th-bg: color-mix(in srgb, var(--nm-text) 6%, transparent); /* table header tint */
 
   /* NOTE-DENSITY ① — "핵심 요점" key-point callout box: gold-tinted surface +
      border (derived from --nm-accent #c2a878 = rgb 194,168,120) so it reads as a

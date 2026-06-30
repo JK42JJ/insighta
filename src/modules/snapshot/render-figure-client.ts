@@ -4,8 +4,10 @@
  *
  * Contract: body {kind, struct, theme} → {svg: string|null}
  * svg=null = degenerate/unrenderable figure (caller MUST drop the figure).
- * theme='dark' so SVGs render light ink + transparent bg for the dark note
- * (the endpoint defaults to "light" for the deck).
+ * theme='auto' emits an ADAPTIVE SVG: transparent bg, transparent node fills,
+ * category accent-color borders kept, and ALL ink (node text, edges, cluster/graph
+ * labels) in a single sentinel hex #808080. The FE swaps #808080 → currentColor so
+ * the figure inherits the page text color per mode (works in BOTH dark and light).
  *
  * Fail-closed: any error, non-2xx, timeout, or null svg → returns null.
  * CPU render only (no vision pipeline); 20s is generous for SVG generation.
@@ -44,8 +46,9 @@ export async function renderFigureSvg(kind: string, struct: unknown): Promise<st
         'content-type': 'application/json',
         authorization: `Bearer ${cfg.serviceToken}`,
       },
-      // theme:'dark' → light ink + transparent bg SVG for the dark note plate.
-      body: JSON.stringify({ kind, struct, theme: 'dark' }),
+      // theme:'auto' → adaptive SVG (transparent bg + #808080 sentinel ink the FE
+      // swaps to currentColor) so one image works in both dark and light note modes.
+      body: JSON.stringify({ kind, struct, theme: 'auto' }),
       signal: controller.signal,
     });
 
