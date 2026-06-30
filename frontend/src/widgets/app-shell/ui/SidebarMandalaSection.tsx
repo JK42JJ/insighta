@@ -316,17 +316,22 @@ export function SidebarMandalaSection({
                   }
                 }}
                 className={cn(
-                  'group flex items-center gap-1 pl-1.5 pr-1 py-1.5 text-[13px] cursor-pointer transition-colors duration-150',
+                  'group flex items-start gap-1 pl-1.5 pr-1 py-1.5 text-[13px] cursor-pointer transition-colors duration-150',
                   isSelected
                     ? 'font-semibold text-sidebar-primary'
                     : 'font-normal text-sidebar-foreground/55 hover:text-sidebar-foreground'
                 )}
               >
-                <span className="flex flex-1 min-w-0 items-center gap-2 text-left">
-                  {/* CP504 — narrow sidebar clips long names (DB stores the full
-                      title); keep the ellipsis for layout but expose the full
-                      name on hover via the native title tooltip. */}
-                  <span className="truncate flex-1" title={getCenterLabel(mandala)}>
+                <span className="flex flex-1 min-w-0 items-start gap-2 text-left">
+                  {/* List bullet — marks each mandala as a list item (user request). */}
+                  <span
+                    className="mt-[7px] w-1 h-1 shrink-0 rounded-full bg-current opacity-40"
+                    aria-hidden="true"
+                  />
+                  {/* CP504→2026-06-30 — show the FULL mandala name: wrap instead of
+                      clipping (DB stores the full title; ellipsis hid the rest).
+                      title tooltip kept as a harmless extra. */}
+                  <span className="flex-1 break-words leading-snug" title={getCenterLabel(mandala)}>
                     {getCenterLabel(mandala)}
                   </span>
                   {newlySyncedCount > 0 && (
