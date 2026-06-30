@@ -1263,11 +1263,19 @@ html.dark .lemonsqueezy-loader {
   --nm-figure-bg: color-mix(in srgb, var(--nm-text) 4%, transparent);    /* subtle ink-tinted plate */
   --nm-figure-th-bg: color-mix(in srgb, var(--nm-text) 6%, transparent); /* table header tint */
 
-  /* NOTE-DENSITY ① — "핵심 요점" key-point callout box: gold-tinted surface +
-     border (derived from --nm-accent #c2a878 = rgb 194,168,120) so it reads as a
-     distinct take-away box, not body prose. */
-  --nm-keypoint-bg: rgba(194,168,120,0.07);
-  --nm-keypoint-border: rgba(194,168,120,0.22);
+  /* [NOTE-FULL-TOOLSET] — markdown admonition callouts. Each kind gets a tinted
+     surface + border + accent: note = editorial gold (--nm-accent #c2a878 =
+     rgb 194,168,120), tip = muted sage, warning = amber. Tokens only (literals
+     live here, components reference them). */
+  --nm-callout-note-bg: rgba(194,168,120,0.07);
+  --nm-callout-note-border: rgba(194,168,120,0.22);
+  --nm-callout-note-accent: var(--nm-accent);
+  --nm-callout-tip-bg: rgba(120,180,140,0.08);
+  --nm-callout-tip-border: rgba(120,180,140,0.26);
+  --nm-callout-tip-accent: #7fbf95;
+  --nm-callout-warning-bg: rgba(210,160,90,0.09);
+  --nm-callout-warning-border: rgba(210,160,90,0.30);
+  --nm-callout-warning-accent: #d8a85f;
 
   background: #0e0f10;
 }

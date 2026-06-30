@@ -646,8 +646,9 @@ const NOTE_PROSE_STYLE = `
   font-size: 17.5px;
   line-height: 1.7;
 }
-/* "핵심 포인트" label above the keypoint (시안 .lbl) — CSS-only, no generator change. */
-.note-prose-root .ProseMirror blockquote::before {
+/* NOTE-DENSITY ① (revised) — "핵심 포인트" label gated to the generated key-point
+   quote (data-keypoint) so plain markdown quotes from narrative stay UNlabeled. */
+.note-prose-root .ProseMirror blockquote[data-keypoint="true"]::before {
   content: "핵심 포인트";
   display: block;
   font-family: var(--nm-sans);
@@ -658,32 +659,6 @@ const NOTE_PROSE_STYLE = `
   color: var(--nm-accent);
   margin-bottom: 10px;
 }
-/* NOTE-DENSITY ① — "핵심 요점" key-point callout: a gold-tinted box (distinct
-   from body prose + from the legacy gold left-rule keypoint). Discriminated from
-   the narrative blockquote (> p) by its bulletList child. Academic/dense look. */
-.note-prose-root .ProseMirror blockquote:has(> ul) {
-  border-left: none;
-  background: var(--nm-keypoint-bg);
-  border: 1px solid var(--nm-keypoint-border);
-  border-radius: 10px;
-  padding: 18px 22px;
-  margin: 40px 0;
-}
-.note-prose-root .ProseMirror blockquote:has(> ul)::before { content: "핵심 요점"; }
-.note-prose-root .ProseMirror blockquote:has(> ul) ul {
-  margin: 0;
-  padding-left: 1.15em;
-  list-style: disc;
-}
-.note-prose-root .ProseMirror blockquote:has(> ul) li {
-  font-family: var(--nm-serif);
-  font-size: 16px;
-  line-height: 1.65;
-  color: var(--nm-strong);
-  margin: 0 0 0.5em;
-}
-.note-prose-root .ProseMirror blockquote:has(> ul) li:last-child { margin-bottom: 0; }
-.note-prose-root .ProseMirror blockquote:has(> ul) li::marker { color: var(--nm-accent); }
 .note-prose-root .ProseMirror code {
   font-family: var(--nm-mono);
   font-size: 0.82em;
@@ -864,6 +839,135 @@ const NOTE_PROSE_STYLE = `
   font-size: 11.5px;
   letter-spacing: -0.01em;
   color: var(--nm-faint);
+}
+
+/* [NOTE-FULL-TOOLSET] — markdown narrative now emits real lists, code blocks,
+   callouts, mermaid diagrams and GFM tables. Below styles each in note-mode tokens. */
+
+/* lists (top-level bullet/ordered from narrative) */
+.note-prose-root .ProseMirror ul,
+.note-prose-root .ProseMirror ol {
+  margin: 0 0 1.55em;
+  padding-left: 1.4em;
+}
+.note-prose-root .ProseMirror ul { list-style: disc; }
+.note-prose-root .ProseMirror ol { list-style: decimal; }
+.note-prose-root .ProseMirror li {
+  margin: 0 0 0.4em;
+  color: var(--nm-text);
+}
+.note-prose-root .ProseMirror li::marker { color: var(--nm-accent); }
+.note-prose-root .ProseMirror li > p { margin: 0 0 0.4em; }
+
+/* fenced code block (CodeBlockLowlight → pre > code) */
+.note-prose-root .ProseMirror pre {
+  font-family: var(--nm-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--nm-strong);
+  background: var(--nm-figure-bg);
+  border: 1px solid var(--nm-line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin: 28px 0;
+  overflow-x: auto;
+}
+.note-prose-root .ProseMirror pre code {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: pre;
+}
+
+/* admonition callout (note / tip / warning) */
+.note-prose-root .note-callout {
+  margin: 32px 0;
+  padding: 16px 18px;
+  border: 1px solid var(--nm-callout-border);
+  border-left: 3px solid var(--nm-callout-accent);
+  border-radius: 10px;
+  background: var(--nm-callout-bg);
+  color: var(--nm-callout-ink);
+}
+.note-prose-root .note-callout[data-kind="note"] {
+  --nm-callout-bg: var(--nm-callout-note-bg);
+  --nm-callout-border: var(--nm-callout-note-border);
+  --nm-callout-accent: var(--nm-callout-note-accent);
+}
+.note-prose-root .note-callout[data-kind="tip"] {
+  --nm-callout-bg: var(--nm-callout-tip-bg);
+  --nm-callout-border: var(--nm-callout-tip-border);
+  --nm-callout-accent: var(--nm-callout-tip-accent);
+}
+.note-prose-root .note-callout[data-kind="warning"] {
+  --nm-callout-bg: var(--nm-callout-warning-bg);
+  --nm-callout-border: var(--nm-callout-warning-border);
+  --nm-callout-accent: var(--nm-callout-warning-accent);
+}
+.note-prose-root .note-callout-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--nm-callout-accent);
+}
+.note-prose-root .note-callout-icon { width: 15px; height: 15px; flex: 0 0 auto; }
+.note-prose-root .note-callout-label {
+  font-family: var(--nm-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.note-prose-root .note-callout-body > :last-child { margin-bottom: 0; }
+.note-prose-root .note-callout-body p {
+  margin: 0 0 0.6em;
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: var(--nm-text);
+}
+
+/* mermaid diagram (rendered SVG, centered) + raw-source fallback */
+.note-prose-root .note-mermaid { margin: 32px auto; max-width: 600px; text-align: center; }
+.note-prose-root .note-mermaid-canvas svg { max-width: 100%; height: auto; }
+.note-prose-root .note-mermaid-fallback {
+  font-family: var(--nm-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: left;
+  color: var(--nm-strong);
+  background: var(--nm-figure-bg);
+  border: 1px solid var(--nm-line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  overflow-x: auto;
+}
+
+/* GFM table (read-only markdownTable node) */
+.note-prose-root .note-md-table-block { margin: 28px 0; overflow-x: auto; }
+.note-prose-root .note-md-table-block.hidden { display: none; }
+.note-prose-root .note-md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--nm-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--nm-text);
+}
+.note-prose-root .note-md-table th,
+.note-prose-root .note-md-table td {
+  border: 1px solid var(--nm-line);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+.note-prose-root .note-md-table thead th {
+  background: var(--nm-figure-th-bg);
+  font-weight: 600;
+  color: var(--nm-strong);
 }
 `;
 

@@ -55,7 +55,11 @@ describe('note-document-generator — loop-1b narrative render', () => {
     expect(texts).not.toContain('ATOM_TEXT_A 인사'); // no per-video atom-text dump
     expect(texts).not.toContain('ATOM_TEXT_B 주문');
     expect(blockquotes(ns)).toHaveLength(0); // P-1b-NO-DUP: narrative not a footer
-    expect(videoBlocks(ns).map((v) => v.attrs?.vid).sort()).toEqual(['vidA', 'vidB']); // P-1b-PROV-KEPT
+    expect(
+      videoBlocks(ns)
+        .map((v) => v.attrs?.vid)
+        .sort()
+    ).toEqual(['vidA', 'vidB']); // P-1b-PROV-KEPT
   });
 
   it('legacy mode (no intro): UNCHANGED — atom-text paragraphs + narrative blockquote', () => {
@@ -72,48 +76,46 @@ describe('note-document-generator — loop-1b narrative render', () => {
   });
 });
 
-// NOTE-DENSITY ① — "핵심 요점" key-point callout (blockquote wrapping a bulletList).
-const liTexts = (bq: N): string[] => {
-  const list = (bq.content ?? []).find((c) => c.type === 'bulletList');
-  return ((list?.content ?? []) as N[]).map((li) =>
-    (li.content ?? [])
-      .flatMap((p) => (p.content ?? []).map((c) => (c as { text?: string }).text ?? ''))
-      .join('')
-  );
-};
+// NOTE-DENSITY ① (revised) — "핵심 포인트" key-point QUOTE (blockquote > p, keypoint
+// attr). Revises the #1016 gold bullet callout → the legacy left-bar quote style.
+const bqText = (bq: N): string =>
+  (bq.content ?? [])
+    .flatMap((p) => (p.content ?? []).map((c) => (c as { text?: string }).text ?? ''))
+    .join('');
 
-describe('note-document-generator — NOTE-DENSITY ① key-point callout', () => {
-  const withKeyPoints = (kp?: string[]): MandalaBookData => {
+describe('note-document-generator — NOTE-DENSITY ① key-point quote', () => {
+  const withKeyPoint = (kp?: string): MandalaBookData => {
     const b = book('이 장은 기초 회화를 다룬다');
-    if (kp) b.chapters[0]!.sections[0]!.keyPoints = kp;
+    if (kp !== undefined) b.chapters[0]!.sections[0]!.keyPoint = kp;
     return b;
   };
 
-  it('narrative mode + keyPoints → 핵심 요점 callout (blockquote > bulletList items)', () => {
-    const ns = nodes(buildInitialNoteDoc(withKeyPoints(['KP_ONE 인사 먼저', 'KP_TWO 주문 표현'])));
-    const bq = blockquotes(ns);
-    expect(bq).toHaveLength(1); // the callout (narrative is the body, not a blockquote)
-    const list = (bq[0].content ?? []).find((c) => c.type === 'bulletList');
-    expect(list).toBeDefined();
-    expect(liTexts(bq[0])).toEqual(['KP_ONE 인사 먼저', 'KP_TWO 주문 표현']);
-  });
-
-  it('narrative mode WITHOUT keyPoints → no callout (byte-unchanged)', () => {
-    expect(blockquotes(nodes(buildInitialNoteDoc(withKeyPoints())))).toHaveLength(0);
-  });
-
-  it('empty keyPoints array → no callout (flag-safe)', () => {
-    expect(blockquotes(nodes(buildInitialNoteDoc(withKeyPoints([]))))).toHaveLength(0);
-  });
-
-  it('markdown export → "핵심 요점" heading + plain bullets (not a > quote)', () => {
-    const md = exportToMarkdown(
-      buildInitialNoteDoc(withKeyPoints(['KP_ONE 인사 먼저', 'KP_TWO 주문 표현'])) as TiptapDoc
+  it('narrative mode + keyPoint → 핵심 포인트 left-bar quote (blockquote > p, keypoint attr, no bullets)', () => {
+    const ns = nodes(
+      buildInitialNoteDoc(withKeyPoint('핵심은 인사와 주문 표현을 먼저 익히는 것이다'))
     );
-    expect(md).toContain('**핵심 요점**');
-    expect(md).toContain('- KP_ONE 인사 먼저');
-    expect(md).toContain('- KP_TWO 주문 표현');
-    expect(md).not.toContain('> - KP_ONE'); // not serialized as a blockquote
+    const bq = blockquotes(ns);
+    expect(bq).toHaveLength(1);
+    expect((bq[0] as N & { attrs?: { keypoint?: boolean } }).attrs?.keypoint).toBe(true);
+    expect((bq[0].content ?? []).some((c) => c.type === 'bulletList')).toBe(false); // prose, not bullets
+    expect(bqText(bq[0])).toBe('핵심은 인사와 주문 표현을 먼저 익히는 것이다');
+  });
+
+  it('narrative mode WITHOUT keyPoint → no quote (byte-unchanged)', () => {
+    expect(blockquotes(nodes(buildInitialNoteDoc(withKeyPoint())))).toHaveLength(0);
+  });
+
+  it('empty keyPoint string → no quote (flag-safe)', () => {
+    expect(blockquotes(nodes(buildInitialNoteDoc(withKeyPoint(''))))).toHaveLength(0);
+  });
+
+  it('markdown export → "> **핵심 포인트**" quote (not a 핵심 요점 bullet callout)', () => {
+    const md = exportToMarkdown(
+      buildInitialNoteDoc(withKeyPoint('핵심은 인사와 주문 표현을 먼저 익히는 것이다')) as TiptapDoc
+    );
+    expect(md).toContain('> **핵심 포인트**');
+    expect(md).toContain('> 핵심은 인사와 주문 표현을 먼저 익히는 것이다');
+    expect(md).not.toContain('**핵심 요점**'); // old bullet-callout label gone
   });
 });
 
@@ -133,7 +135,9 @@ describe('note-document-generator — loop-2 references render (P-REF-RENDER)', 
   it('renders chapter 보강 자료 (fact [ref_id]) + bottom 참고 자료 (id, url)', () => {
     const ns = nodes(buildInitialNoteDoc(enriched()));
     const texts = paraTexts(ns);
-    expect(texts.some((t) => t.includes('WEB_FACT 모음 발음 핵심') && t.includes('[1]'))).toBe(true);
+    expect(texts.some((t) => t.includes('WEB_FACT 모음 발음 핵심') && t.includes('[1]'))).toBe(
+      true
+    );
     expect(headingTexts(ns)).toContain('참고 자료');
     expect(texts.some((t) => t.includes('[1]') && t.includes('https://ex.com/p'))).toBe(true);
   });
@@ -162,10 +166,34 @@ describe('note-document-generator — CV figures render ([CV-NOTE-WIRE])', () =>
   const withFigures = (): MandalaBookData => {
     const b = book('이 장은 기초 회화를 다룬다');
     b.chapters[0]!.sections[0]!.figures = [
-      { video_id: 'vidA', ts_sec: 10, kind: 'equation', latex: 'E=mc^2', verification_status: 'verified' },
-      { video_id: 'vidA', ts_sec: 12, kind: 'chart', asset_path: 'https://cdn.ex.com/chart.png', verification_status: 'verified' },
-      { video_id: 'vidA', ts_sec: 14, kind: 'diagram', asset_path: 'https://cdn.ex.com/diag.png', verification_status: 'unverified' }, // DROP unverified
-      { video_id: 'vidA', ts_sec: 16, kind: 'keyframe', asset_path: 'https://cdn.ex.com/kf.png', verification_status: 'verified' }, // DROP keyframe
+      {
+        video_id: 'vidA',
+        ts_sec: 10,
+        kind: 'equation',
+        latex: 'E=mc^2',
+        verification_status: 'verified',
+      },
+      {
+        video_id: 'vidA',
+        ts_sec: 12,
+        kind: 'chart',
+        asset_path: 'https://cdn.ex.com/chart.png',
+        verification_status: 'verified',
+      },
+      {
+        video_id: 'vidA',
+        ts_sec: 14,
+        kind: 'diagram',
+        asset_path: 'https://cdn.ex.com/diag.png',
+        verification_status: 'unverified',
+      }, // DROP unverified
+      {
+        video_id: 'vidA',
+        ts_sec: 16,
+        kind: 'keyframe',
+        asset_path: 'https://cdn.ex.com/kf.png',
+        verification_status: 'verified',
+      }, // DROP keyframe
     ];
     return b;
   };
@@ -173,7 +201,9 @@ describe('note-document-generator — CV figures render ([CV-NOTE-WIRE])', () =>
   it('renders equation + chart figureBlock nodes; drops unverified + keyframe', () => {
     const figs = figureBlocks(nodes(buildInitialNoteDoc(withFigures())));
     expect(figs.some((f) => f.kind === 'equation' && f.latex === 'E=mc^2')).toBe(true); // equation kept
-    expect(figs.some((f) => f.kind === 'chart' && f.assetPath === 'https://cdn.ex.com/chart.png')).toBe(true); // chart kept (legacy image)
+    expect(
+      figs.some((f) => f.kind === 'chart' && f.assetPath === 'https://cdn.ex.com/chart.png')
+    ).toBe(true); // chart kept (legacy image)
     expect(figs.some((f) => f.assetPath === 'https://cdn.ex.com/diag.png')).toBe(false); // unverified dropped
     expect(figs.some((f) => f.kind === 'keyframe')).toBe(false); // keyframe dropped
     expect(figs).toHaveLength(2);
@@ -210,7 +240,13 @@ describe('note-document-generator — CV figures render ([CV-NOTE-WIRE])', () =>
   it('chart without insight → Korean kind-label caption (not the raw english word)', () => {
     const b = book('이 장은 기초 회화를 다룬다');
     b.chapters[0]!.sections[0]!.figures = [
-      { video_id: 'vidA', ts_sec: 30, kind: 'chart', svg: '<svg viewBox="0 0 4 4"></svg>', verification_status: 'verified' },
+      {
+        video_id: 'vidA',
+        ts_sec: 30,
+        kind: 'chart',
+        svg: '<svg viewBox="0 0 4 4"></svg>',
+        verification_status: 'verified',
+      },
     ];
     const f = figureBlocks(nodes(buildInitialNoteDoc(b)))[0]!;
     expect(f.caption).toBe('차트');
@@ -223,14 +259,32 @@ describe('note-document-generator — CV figures render ([CV-NOTE-WIRE])', () =>
         video_id: 'vidA',
         ts_sec: 40,
         kind: 'table',
-        struct: { headers: ['A', 'B'], rows: [['1', '2'], ['3', '4']] },
+        struct: {
+          headers: ['A', 'B'],
+          rows: [
+            ['1', '2'],
+            ['3', '4'],
+          ],
+        },
         verification_status: 'verified',
       },
-      { video_id: 'vidA', ts_sec: 50, kind: 'equation', latex: 'x^2', verification_status: 'verified' },
+      {
+        video_id: 'vidA',
+        ts_sec: 50,
+        kind: 'equation',
+        latex: 'x^2',
+        verification_status: 'verified',
+      },
     ];
     const figs = figureBlocks(nodes(buildInitialNoteDoc(b)));
     const tableFig = figs.find((f) => f.kind === 'table')!;
-    expect(JSON.parse(tableFig.tableJson!)).toEqual({ headers: ['A', 'B'], rows: [['1', '2'], ['3', '4']] });
+    expect(JSON.parse(tableFig.tableJson!)).toEqual({
+      headers: ['A', 'B'],
+      rows: [
+        ['1', '2'],
+        ['3', '4'],
+      ],
+    });
     expect(tableFig.caption).toBe('표');
     const eqFig = figs.find((f) => f.kind === 'equation')!;
     expect(eqFig.caption).toBeNull(); // equation → neutral, no label
