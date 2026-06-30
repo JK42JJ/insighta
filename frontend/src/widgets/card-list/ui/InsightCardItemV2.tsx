@@ -38,9 +38,9 @@ const MAX_CARD_TAGS = 3;
 // deliberately NO traffic-light green/amber.
 const RELEVANCE_TIER_STYLES = {
   // 핵심: indigo tinted pill + accent border + spark glyph — the one signal that draws the eye.
-  core: 'inline-flex items-center gap-0.5 rounded-full border border-[hsl(var(--primary)/0.45)] bg-[hsl(var(--primary)/0.15)] px-2.5 py-1 text-[11px] font-medium leading-none text-[hsl(var(--primary))]',
+  core: 'inline-flex items-center gap-0.5 rounded-full border border-[hsl(var(--primary)/0.40)] bg-[hsl(var(--primary)/0.13)] px-2.5 py-1 text-[11px] font-normal leading-none text-[hsl(var(--primary))]',
   // 추천: ghost outline — transparent bg + faint indigo border/text, no glyph.
-  pick: 'inline-flex items-center rounded-full border border-[hsl(var(--primary)/0.30)] bg-transparent px-2.5 py-1 text-[11px] font-normal leading-none text-[hsl(var(--primary)/0.80)]',
+  pick: 'inline-flex items-center rounded-full border border-[hsl(var(--primary)/0.35)] bg-[hsl(var(--primary)/0.07)] px-2.5 py-1 text-[11px] font-normal leading-none text-[hsl(var(--primary)/0.92)]',
 } as const;
 
 // ── Helpers ────────────────────────────────────────────────
