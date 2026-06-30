@@ -614,14 +614,14 @@ export function InsightCardItemV2({
             same height regardless of summary length. */}
       {/* group1 body — mockup-exact (measured). Category dot is group2 (deferred). */}
       <div className="px-4 pt-[15px] pb-[17px]">
-        <h4 className="text-[15.5px] font-[650] leading-[1.35] text-[#ebedf0] line-clamp-2">
+        <h4 className="text-[14.5px] font-[650] leading-[1.35] text-[#ebedf0] line-clamp-2">
           {decodeHtmlEntities(card.title)}
         </h4>
 
         {/* essence — "AI 핵심" label replaced by a divider (white/7%, 1px) */}
         {cardSummary && (
           <div className="mt-3 border-t border-white/[0.07] pt-3">
-            <p className="text-[13.5px] leading-snug text-[#aeb4be] line-clamp-2 break-words">
+            <p className="text-[12.5px] leading-snug text-[#aeb4be] line-clamp-2 break-words">
               {decodeHtmlEntities(cardSummary)}
             </p>
           </div>
@@ -633,7 +633,7 @@ export function InsightCardItemV2({
             {tags.slice(0, MAX_CARD_TAGS).map((tg) => (
               <span
                 key={tg}
-                className="rounded-full bg-[rgba(54,214,195,0.12)] px-3.5 py-[5px] text-[13px] leading-none text-[#f4f5f7]"
+                className="rounded-full bg-[rgba(54,214,195,0.12)] px-3.5 py-[5px] text-[12px] leading-none text-[#f4f5f7]"
               >
                 #{tg}
               </span>
