@@ -622,13 +622,14 @@ export function InsightCardItemV2({
           {decodeHtmlEntities(card.title)}
         </h4>
 
-        {/* essence — "AI 핵심" label replaced by a divider (white/7%, 1px) */}
+        {/* divider under the title — ALWAYS (consistent whether or not the card
+            has a summary). 1px white/7%, matches the card border. */}
+        <div className="mt-3 border-t border-white/[0.07]" />
+
         {cardSummary && (
-          <div className="mt-3 border-t border-white/[0.07] pt-3">
-            <p className="text-[12.5px] leading-snug text-[#aeb4be] line-clamp-2 break-words">
-              {decodeHtmlEntities(cardSummary)}
-            </p>
-          </div>
+          <p className="mt-3 text-[12.5px] leading-snug text-[#aeb4be] line-clamp-2 break-words">
+            {decodeHtmlEntities(cardSummary)}
+          </p>
         )}
 
         {/* keyword chips — mockup .chip: pill, accent/12% bg, 13px, #f4f5f7 */}
@@ -637,7 +638,7 @@ export function InsightCardItemV2({
             {tags.slice(0, MAX_CARD_TAGS).map((tg) => (
               <span
                 key={tg}
-                className="rounded-full bg-[rgba(54,214,195,0.12)] px-3.5 py-[5px] text-[12px] leading-none text-[#f4f5f7]"
+                className="rounded-full bg-[rgba(54,214,195,0.12)] px-2.5 py-1 text-[11px] leading-none text-[#f4f5f7]"
               >
                 #{tg}
               </span>
