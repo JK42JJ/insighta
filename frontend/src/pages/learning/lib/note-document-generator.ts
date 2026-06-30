@@ -105,10 +105,17 @@ function groupAtomsIntoParagraphs(atoms: Array<{ text?: string; type?: string }>
 }
 
 function heading(level: 2 | 3, text: string): TiptapNode {
+  // Guard empty / whitespace-only titles like paragraph() does: ProseMirror
+  // forbids empty text nodes ({type:'text', text:''}). The #1020 rich-markdown BE
+  // can leave section.title blank (headings now live inside the narrative), and
+  // an unguarded text node here makes schema.nodeFromJSON throw "Empty text nodes
+  // are not allowed" — which TipTap (errorOnInvalidContent:false) swallows,
+  // collapsing the WHOLE note to one empty paragraph.
+  const normalized = normalizeText(text);
   return {
     type: 'heading',
     attrs: { level },
-    content: [{ type: 'text', text }],
+    content: normalized ? [{ type: 'text', text: normalized }] : [],
   };
 }
 
@@ -188,17 +195,13 @@ function groupAtomsByVid(
 // headers/rows; equation carries latex. asset_path kept as a legacy fallback.
 const FIGURE_KINDS = new Set(['chart', 'table', 'diagram', 'equation']);
 
-// Korean kind labels for the caption fallback (never the raw english word).
-const KIND_LABEL_KO: Record<string, string> = { chart: '차트', diagram: '도식', table: '표' };
-
-/** Caption = what the figure shows: struct.insight when present, else a kind
- *  label. Equation gets no label (neutral). */
+/** Caption = what the figure shows: struct.insight when present, else none.
+ *  No kind-label fallback ("표"/"차트"/"도식") — a bare kind word adds noise,
+ *  not meaning (user directive 2026-06-30). */
 function figureCaption(f: MandalaBookFigure): string | null {
   const insight =
     typeof f.struct?.['insight'] === 'string' ? (f.struct['insight'] as string).trim() : '';
-  if (insight) return insight;
-  if (f.kind === 'equation') return null;
-  return KIND_LABEL_KO[f.kind] ?? null;
+  return insight || null;
 }
 
 /** Table struct → compact {headers, rows} JSON string (rendered as an HTML
@@ -405,6 +408,43 @@ function renderChapter(chapter: MandalaBookChapter, narrativeMode: boolean): Tip
   }
 
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Doc sanitizer (load-path safety net)
+// ---------------------------------------------------------------------------
+
+const EMPTY_DOC: TiptapDoc = { type: 'doc', content: [{ type: 'paragraph' }] };
+
+/** Drop ProseMirror-invalid empty text nodes; recurse into content. Returns null
+ *  when the node itself is an empty text node (caller filters it out). */
+function sanitizeNode(node: TiptapNode): TiptapNode | null {
+  if (node.type === 'text') {
+    // ProseMirror rejects empty text nodes — drop them (a parent heading/paragraph
+    // with `content: []` is valid 'inline*').
+    return typeof node.text === 'string' && node.text.length > 0 ? node : null;
+  }
+  if (Array.isArray(node.content)) {
+    const content = node.content.map(sanitizeNode).filter((n): n is TiptapNode => n !== null);
+    return { ...node, content };
+  }
+  return node;
+}
+
+/**
+ * Heal a persisted note doc before handing it to TipTap. Strips empty text nodes
+ * ({type:'text', text:''}) that make schema.nodeFromJSON throw "Empty text nodes
+ * are not allowed" — which TipTap silently swallows (errorOnInvalidContent:false),
+ * collapsing the whole note to one empty paragraph. Existing docs persisted by the
+ * pre-fix generator are recovered on load. Pure: input is not mutated.
+ */
+export function sanitizeNoteDoc(doc: TiptapDoc | null | undefined): TiptapDoc {
+  if (!doc || typeof doc !== 'object') return EMPTY_DOC;
+  const cleaned = sanitizeNode(doc as TiptapNode);
+  if (!cleaned || !Array.isArray(cleaned.content) || cleaned.content.length === 0) {
+    return EMPTY_DOC;
+  }
+  return cleaned as TiptapDoc;
 }
 
 // ---------------------------------------------------------------------------
