@@ -38,7 +38,7 @@ import type {
   MandalaBookFigure,
 } from '@/shared/lib/api-client';
 import type { TiptapDoc, TiptapNode } from '@/features/video-side-panel/lib/note-parser';
-import { parseMarkdownToTiptap, parseInline } from './markdown-to-tiptap';
+import { parseMarkdownToTiptap, parseInline, buildTableNode } from './markdown-to-tiptap';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -416,9 +416,35 @@ function renderChapter(chapter: MandalaBookChapter, narrativeMode: boolean): Tip
 
 const EMPTY_DOC: TiptapDoc = { type: 'doc', content: [{ type: 'paragraph' }] };
 
+/**
+ * [NOTE-EDITABLE-TABLES] Migrate a legacy read-only `markdownTable` atom (its
+ * data lives in a `tableJson` attr) into a NATIVE, editable table node. Run on the
+ * load path so EVERY already-persisted note's tables become editable WITHOUT
+ * regeneration. Returns null for an empty/unparseable payload (caller drops it).
+ */
+function migrateMarkdownTable(attrs: Record<string, unknown> | undefined): TiptapNode | null {
+  const raw = attrs?.['tableJson'];
+  if (typeof raw !== 'string') return null;
+  try {
+    const parsed = JSON.parse(raw) as { headers?: unknown; rows?: unknown };
+    const headers = Array.isArray(parsed.headers) ? parsed.headers.map(String) : [];
+    const rows = Array.isArray(parsed.rows)
+      ? parsed.rows.map((r) => (Array.isArray(r) ? r.map(String) : [String(r)]))
+      : [];
+    if (headers.length === 0 && rows.length === 0) return null;
+    return buildTableNode(headers, rows);
+  } catch {
+    return null;
+  }
+}
+
 /** Drop ProseMirror-invalid empty text nodes; recurse into content. Returns null
  *  when the node itself is an empty text node (caller filters it out). */
 function sanitizeNode(node: TiptapNode): TiptapNode | null {
+  // Legacy markdownTable atom → native editable table (load-path migration).
+  if (node.type === 'markdownTable') {
+    return migrateMarkdownTable(node.attrs);
+  }
   if (node.type === 'text') {
     // ProseMirror rejects empty text nodes — drop them (a parent heading/paragraph
     // with `content: []` is valid 'inline*').

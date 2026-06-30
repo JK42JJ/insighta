@@ -26,6 +26,10 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Blockquote from '@tiptap/extension-blockquote';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import { createLowlight, common } from 'lowlight';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -176,6 +180,13 @@ export function useNoteDocument(input: UseNoteDocumentInput): UseNoteDocumentRes
       // read-only GFM table.
       Callout.configure({ HTMLAttributes: {} }),
       MermaidBlock.configure({ HTMLAttributes: {} }),
+      // [NOTE-EDITABLE-TABLES] native editable GFM tables. The markdown parser +
+      // load-path sanitizer emit/migrate to these; MarkdownTable stays registered
+      // so any unmigrated legacy `markdownTable` atom still renders on load.
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
       MarkdownTable.configure({ HTMLAttributes: {} }),
     ],
     []

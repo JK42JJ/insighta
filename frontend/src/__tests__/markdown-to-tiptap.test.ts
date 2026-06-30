@@ -112,16 +112,27 @@ describe('parseMarkdownToTiptap — block constructs', () => {
     expect(ns[0].content![0].text).toBe('const x = 1;');
   });
 
-  it('GFM table → markdownTable node with {headers, rows}', () => {
+  it('GFM table → native editable table node (header row + body rows)', () => {
     const ns = parseMarkdownToTiptap('| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |');
-    expect(ns[0].type).toBe('markdownTable');
-    expect(JSON.parse(ns[0].attrs!['tableJson'] as string)).toEqual({
-      headers: ['A', 'B'],
-      rows: [
-        ['1', '2'],
-        ['3', '4'],
-      ],
-    });
+    const table = ns[0];
+    expect(table.type).toBe('table');
+    // table > tableRow*; first row = headers, rest = body cells.
+    expect(table.content!.map((r) => r.type)).toEqual(['tableRow', 'tableRow', 'tableRow']);
+    const header = table.content![0];
+    expect(header.content!.map((c) => c.type)).toEqual(['tableHeader', 'tableHeader']);
+    // header cell → paragraph → inline text
+    expect(txt(header.content![0].content![0])).toBe('A');
+    const firstBody = table.content![1];
+    expect(firstBody.content!.map((c) => c.type)).toEqual(['tableCell', 'tableCell']);
+    expect(txt(firstBody.content![0].content![0])).toBe('1');
+    expect(txt(firstBody.content![1].content![0])).toBe('2');
+  });
+
+  it('table cells parse inline markdown as marks (not literal asterisks)', () => {
+    const ns = parseMarkdownToTiptap('| Mode |\n| --- |\n| **INT8** |');
+    const cell = ns[0].content![1].content![0]; // body row → first cell
+    const inline = cell.content![0].content!; // paragraph inline content
+    expect(inline).toEqual([{ type: 'text', text: 'INT8', marks: [{ type: 'bold' }] }]);
   });
 
   it('--- alone → horizontalRule (not a table)', () => {
@@ -162,7 +173,7 @@ describe('buildInitialNoteDoc — rich narrative integration', () => {
       ],
     }) as MandalaBookData;
 
-  it('emits callout + mermaid + markdownTable nodes from rich narrative', () => {
+  it('emits callout + mermaid + native table nodes from rich narrative', () => {
     const doc = buildInitialNoteDoc(
       richBook(
         '도입 문장.\n\n> [!note] 주의점\n\n```mermaid\ngraph TD\nA-->B\n```\n\n| A | B |\n| --- | --- |\n| 1 | 2 |'
@@ -171,7 +182,8 @@ describe('buildInitialNoteDoc — rich narrative integration', () => {
     const present = new Set((doc.content ?? []).map((n) => n.type));
     expect(present.has('callout')).toBe(true);
     expect(present.has('mermaid')).toBe(true);
-    expect(present.has('markdownTable')).toBe(true);
+    expect(present.has('table')).toBe(true);
+    expect(present.has('markdownTable')).toBe(false);
   });
 
   it('markdown-less narrative → single paragraph (byte-stable woven body)', () => {
@@ -184,6 +196,6 @@ describe('buildInitialNoteDoc — rich narrative integration', () => {
     const present = new Set((doc.content ?? []).map((n) => n.type));
     expect(present.has('callout')).toBe(false);
     expect(present.has('mermaid')).toBe(false);
-    expect(present.has('markdownTable')).toBe(false);
+    expect(present.has('table')).toBe(false);
   });
 });
