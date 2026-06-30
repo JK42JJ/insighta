@@ -645,8 +645,9 @@ export function InsightCardItemV2({
           </div>
         )}
 
-        {/* meta — views · date + relevance % (sector → category dot is group2) */}
-        {(footerLeft ||
+        {/* meta — sector · views · date + relevance % */}
+        {(sectorLabel ||
+          footerLeft ||
           footerRight ||
           relevanceBadge ||
           (v2EnrichmentPending && !showFailedGlow)) && (
@@ -654,6 +655,11 @@ export function InsightCardItemV2({
             <span className="truncate flex items-center gap-1.5 min-w-0">
               {(() => {
                 const parts: { key: string; node: React.ReactNode }[] = [];
+                if (sectorLabel)
+                  parts.push({
+                    key: 'sector',
+                    node: <span className="truncate text-foreground/80">{sectorLabel}</span>,
+                  });
                 if (footerRight)
                   parts.push({
                     key: 'views',
