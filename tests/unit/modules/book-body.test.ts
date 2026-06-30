@@ -1,9 +1,11 @@
 /**
- * book-body (§4.5.1 [3] chapter body weave, CP504 + NOTE-DENSITY ①). OpenRouter
- * MOCKED (no live LLM). Locks: idx→section index-aligned map, keyPoints extracted
- * + capped at 3, omitted topic → empty slot (caller falls back), out-of-range idx
- * ignored, fence strip, newline collapse, honest fail (json / no-sections /
- * none-mapped), retry→fail, no_topics, legacy response without keyPoints accepted.
+ * book-body (§4.5.1 [3] chapter body weave, CP504 + NOTE-DENSITY ①/①-v2).
+ * OpenRouter MOCKED (no live LLM).
+ * Locks: idx→section index-aligned map, markdown narrative newlines PRESERVED
+ * (NOT collapsed), keyPoint extracted as prose string, keyPoints back-compat array
+ * (capped at 3), omitted topic → empty slot (caller falls back), out-of-range idx
+ * ignored, fence strip, honest fail (json / no-sections / none-mapped),
+ * retry→fail, no_topics, legacy response without keyPoint/keyPoints accepted.
  */
 
 const mockGenerate = jest.fn();
@@ -23,19 +25,38 @@ import {
 beforeEach(() => mockGenerate.mockReset());
 
 describe('parseChapterBodyResponse (pure — no LLM)', () => {
-  it('maps idx→section index-aligned, collapses newlines, strips fence, extracts keyPoints', () => {
+  it('maps idx→section index-aligned, strips fence, extracts keyPoint + keyPoints back-compat', () => {
     const raw =
       '```json\n{"sections":[' +
-      '{"idx":0,"narrative":"첫\\n문장","keyPoints":["핵심A","핵심B"]},' +
-      '{"idx":1,"narrative":"둘째","keyPoints":["포인트1"]}' +
+      '{"idx":0,"narrative":"**핵심 용어** 설명","keyPoint":"이 섹션의 핵심","keyPoints":["핵심A","핵심B"]},' +
+      '{"idx":1,"narrative":"둘째 단락","keyPoint":"두 번째 통찰"}' +
       ']}\n```';
     const r = parseChapterBodyResponse(raw, 2);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.sections[0]!.narrative).toBe('첫 문장');
+    expect(r.sections[0]!.narrative).toBe('**핵심 용어** 설명');
+    expect(r.sections[0]!.keyPoint).toBe('이 섹션의 핵심');
     expect(r.sections[0]!.keyPoints).toEqual(['핵심A', '핵심B']);
-    expect(r.sections[1]!.narrative).toBe('둘째');
-    expect(r.sections[1]!.keyPoints).toEqual(['포인트1']);
+    expect(r.sections[1]!.narrative).toBe('둘째 단락');
+    expect(r.sections[1]!.keyPoint).toBe('두 번째 통찰');
+  });
+
+  it('preserves markdown newlines in narrative (NOT collapsed — markdown depends on them)', () => {
+    const raw = '{"sections":[{"idx":0,"narrative":"첫 단락\\n\\n둘째 단락","keyPoint":"핵심"}]}';
+    const r = parseChapterBodyResponse(raw, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // \n\n inside the JSON string becomes actual newlines after JSON.parse
+    expect(r.sections[0]!.narrative).toBe('첫 단락\n\n둘째 단락');
+  });
+
+  it('preserves mermaid blocks (multi-line narrative)', () => {
+    const mermaid = '```mermaid\nflowchart LR\nA-->B\n```';
+    const raw = `{"sections":[{"idx":0,"narrative":"${mermaid.replace(/\n/g, '\\n')}","keyPoint":"흐름"}]}`;
+    const r = parseChapterBodyResponse(raw, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.sections[0]!.narrative).toBe(mermaid);
   });
 
   it('leaves an empty-narrative slot for an omitted topic (caller keeps original summary)', () => {
@@ -50,24 +71,25 @@ describe('parseChapterBodyResponse (pure — no LLM)', () => {
   });
 
   it('ignores out-of-range idx', () => {
-    const raw = '{"sections":[{"idx":0,"narrative":"ok","keyPoints":["k"]},{"idx":9,"narrative":"버림"}]}';
+    const raw =
+      '{"sections":[{"idx":0,"narrative":"ok","keyPoints":["k"]},{"idx":9,"narrative":"버림"}]}';
     const r = parseChapterBodyResponse(raw, 1);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.sections[0]!.narrative).toBe('ok');
   });
 
-  it('accepts legacy response without keyPoints field — returns empty array', () => {
+  it('accepts legacy response without keyPoint/keyPoints — keyPoint undefined, keyPoints []', () => {
     const raw = '{"sections":[{"idx":0,"narrative":"레거시 응답 — 키포인트 없음"}]}';
     const r = parseChapterBodyResponse(raw, 1);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.sections[0]!.keyPoints).toEqual([]);
+    expect(r.sections[0]!.keyPoint).toBeUndefined();
   });
 
   it('caps keyPoints at 3 even if model returns more', () => {
-    const raw =
-      '{"sections":[{"idx":0,"narrative":"n","keyPoints":["a","b","c","d","e"]}]}';
+    const raw = '{"sections":[{"idx":0,"narrative":"n","keyPoints":["a","b","c","d","e"]}]}';
     const r = parseChapterBodyResponse(raw, 1);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -85,7 +107,9 @@ describe('parseChapterBodyResponse (pure — no LLM)', () => {
   it('fails on invalid JSON / non-array / none mapped', () => {
     expect(parseChapterBodyResponse('nope', 2).ok).toBe(false);
     expect(parseChapterBodyResponse('{"sections":"x"}', 2).ok).toBe(false);
-    expect(parseChapterBodyResponse('{"sections":[{"idx":5,"narrative":"oob"}]}', 2).ok).toBe(false);
+    expect(parseChapterBodyResponse('{"sections":[{"idx":5,"narrative":"oob"}]}', 2).ok).toBe(
+      false
+    );
   });
 });
 
@@ -95,19 +119,21 @@ describe('weaveChapterBody (OpenRouter mocked)', () => {
     { topicTitle: '주문', summary: '식당 주문 표현' },
   ];
 
-  it('returns index-aligned sections with narratives and keyPoints on success', async () => {
+  it('returns index-aligned sections with narratives, keyPoint, and keyPoints on success', async () => {
     mockGenerate.mockResolvedValueOnce(
       '{"sections":[' +
-        '{"idx":0,"narrative":"먼저 인사로 문을 연다","keyPoints":["인사=대화 시작점"]},' +
-        '{"idx":1,"narrative":"이어 주문으로 나아간다","keyPoints":["주문 공식: I\\'d like + 명사"]}' +
+        '{"idx":0,"narrative":"먼저 **인사**로 문을 연다","keyPoint":"인사는 대화의 시작점이다.","keyPoints":["인사=대화 시작점"]},' +
+        '{"idx":1,"narrative":"이어 주문으로 나아간다","keyPoint":"주문 표현은 공식 패턴이 지배한다."}' +
         ']}'
     );
     const r = await weaveChapterBody('도입', '맥락', topics, 'goal');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.sections[0]!.narrative).toBe('먼저 인사로 문을 연다');
+    expect(r.sections[0]!.narrative).toBe('먼저 **인사**로 문을 연다');
+    expect(r.sections[0]!.keyPoint).toBe('인사는 대화의 시작점이다.');
     expect(r.sections[0]!.keyPoints).toEqual(['인사=대화 시작점']);
     expect(r.sections[1]!.narrative).toBe('이어 주문으로 나아간다');
+    expect(r.sections[1]!.keyPoint).toBe('주문 표현은 공식 패턴이 지배한다.');
   });
 
   it('retries then fails on provider error (caller keeps summaries)', async () => {

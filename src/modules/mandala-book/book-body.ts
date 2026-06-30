@@ -35,10 +35,11 @@ export interface BodyTopicInput {
   summary: string;
 }
 
-/** Per-section output carrying both the woven prose and the distilled key-points. */
+/** Per-section output: rich-markdown narrative + key-point prose synthesis. */
 export interface BodySectionResult {
-  narrative: string;
-  keyPoints: string[]; // 2-3 compressed take-aways; empty when model omits
+  narrative: string; // Rich markdown (newlines preserved); do NOT strip.
+  keyPoints: string[]; // Back-compat (old array contract). Empty by default; generation fills keyPoint.
+  keyPoint?: string; // 2-3 sentence prose synthesis; absent when model omits.
 }
 
 export type ChapterBodyResult =
@@ -48,7 +49,8 @@ export type ChapterBodyResult =
 interface LlmBodySection {
   idx?: unknown;
   narrative?: unknown;
-  keyPoints?: unknown; // NOTE-DENSITY ① — model may emit array of strings
+  keyPoints?: unknown; // Back-compat: old array contract (ignored by parser, kept for back-compat).
+  keyPoint?: unknown; // New: prose synthesis string.
 }
 
 /**
@@ -73,15 +75,26 @@ export function buildChapterBodyPrompt(
     indexed,
     ``,
     `본문 작성 규칙:`,
-    `1. 각 토픽 [n]에 대해, 그 토픽을 챕터 흐름 안에서 자연스럽게 읽히도록 다시 쓴다(서술 narrative).`,
-    `2. 연결·전환·맥락 문장은 창작해도 된다(예: "앞에서 다진 기초를 바탕으로"). 그러나 ★사실은 주어진 요약에 있는 것만 써라 — 요약에 없는 새 사실(표현·수치·이름·개념)을 절대 지어내지 마라.`,
-    `3. 토픽 순서와 개수를 유지한다(입력 ${topics.length}개 → 출력 ${topics.length}개, idx 일치).`,
-    `4. 각 narrative는 토픽 요약보다 풍부하되 간결하게(2-4문장). 영상제목·채널명 금지.`,
-    `5. 각 토픽에 대해 keyPoints(2-3개)를 작성한다: 독자가 반드시 기억해야 할 압축 핵심. ★중요: keyPoints는 narrative의 문장 반복이 아니다 — narrative를 읽지 않아도 핵심을 알 수 있는 밀도 높은 bullet(예: "INT8 양자화: 메모리 75%↓, 성능 손실 1-2%"). 수치·원칙·결론 중심, 각 항목 한 줄 이내.`,
+    `1. 각 토픽 [n]에 대해, 챕터 흐름 안에서 자연스럽게 읽히도록 다시 쓴다(narrative).`,
+    `2. 연결·전환·맥락 문장은 창작해도 된다(예: "앞에서 다진 기초를 바탕으로"). ★사실은 주어진 요약에 있는 것만 써라 — 요약에 없는 사실·수치·이름·개념을 절대 지어내지 마라.`,
+    `3. 토픽 순서·개수를 유지한다(입력 ${topics.length}개 → 출력 ${topics.length}개, idx 일치).`,
+    `4. 영상 제목·채널명 금지.`,
     ``,
-    `★ narrative와 keyPoints 각 항목은 반드시 한 줄(개행·줄바꿈 문자 절대 금지 — JSON 파싱 보호).`,
-    `JSON만 출력(코드펜스 금지):`,
-    `{"sections":[{"idx":0,"narrative":"...","keyPoints":["핵심1","핵심2"]}]}`,
+    `★ narrative는 RICH MARKDOWN — 내용에 적합한 도구를 선택(모든 섹션에 억지로 모든 도구 쓰지 말 것):`,
+    `• **굵게**: 정의되는 핵심 용어 + 결정적 수치("75%", "4비트") 전용. 장식·일반명사에 쓰지 말 것.`,
+    `• \`- \` 불릿 목록: 순서 없는 열거.`,
+    `• \`1. \` 번호 목록: 단계별 절차·순서.`,
+    `• \`> [!note]\` / \`> [!tip]\` / \`> [!warning]\`: 보충 callout (Obsidian admonition 형식).`,
+    `• \`\`\`mermaid\\n...\`\`\`: 흐름·관계·아키텍처(예: flowchart LR; A-->B). 실제 구조가 있을 때만.`,
+    `• \`| 열 | 열 |\` GFM 테이블: A vs B 비교가 있으면 반드시 테이블.`,
+    `• 그 외: 빈 줄로 구분된 산문 단락.`,
+    `도구 강제 원칙: 비교→테이블, 다단계 절차→번호 목록, 흐름·관계→mermaid. 밀도·학술적 명확성 우선.`,
+    ``,
+    `5. 각 토픽에 keyPoint를 작성한다: 이 섹션의 본질을 새 문장으로 압축한 2-3문장 산문 종합.`,
+    `   ★ 불릿 금지. narrative 문장 그대로 반복 금지. 독자가 기억해야 할 핵심 통찰만.`,
+    ``,
+    `JSON만 출력(코드펜스 없이). narrative 안의 개행은 \\n으로 이스케이프(JSON 문자열 규칙):`,
+    `{"sections":[{"idx":0,"narrative":"<마크다운>","keyPoint":"<2-3문장 산문>"}]}`,
   ]
     .filter((l) => l !== ``)
     .join('\n');
@@ -150,8 +163,9 @@ async function attemptBody(
  * Pure parse + index-map of the body response. Exported for fixture unit tests
  * (no live LLM). Returns sections index-aligned with the input topics; any
  * topic the model omits keeps an empty-narrative slot (caller falls back to its
- * summary). keyPoints: trimmed non-empty strings, capped at 3, empty array when
- * the model omits the field (flag-safe — existing call sites unaffected).
+ * summary). narrative is kept raw (markdown; newlines preserved — NOT collapsed).
+ * keyPoint: 2-3 sentence prose synthesis (optional; undefined when model omits).
+ * keyPoints: back-compat array (empty when omitted; generation now fills keyPoint).
  * Fails only if the response is unusable (not JSON / no sections / none mapped).
  */
 export function parseChapterBodyResponse(raw: string, topicCount: number): ChapterBodyResult {
@@ -177,18 +191,20 @@ export function parseChapterBodyResponse(raw: string, topicCount: number): Chapt
   for (const s of json.sections as LlmBodySection[]) {
     const i = typeof s.idx === 'number' ? s.idx : Number(s.idx);
     if (!Number.isInteger(i) || i < 0 || i >= topicCount) continue;
-    const narrative =
-      typeof s.narrative === 'string' ? s.narrative.replace(/\s*\n+\s*/g, ' ').trim() : '';
+    // Preserve raw markdown — do NOT strip newlines (markdown structure depends on them).
+    const narrative = typeof s.narrative === 'string' ? s.narrative.trim() : '';
     if (!narrative) continue;
     if (sections[i]!.narrative === '') mapped += 1; // first write for this idx
-    // Extract keyPoints: array of strings, trimmed, non-empty, capped at 3.
+    // keyPoint: 2-3 sentence prose synthesis (new contract). Optional string.
+    const keyPoint = typeof s.keyPoint === 'string' ? s.keyPoint.trim() || undefined : undefined;
+    // keyPoints: back-compat (old array contract). Trimmed, non-empty, capped at 3.
     const rawKp = Array.isArray(s.keyPoints) ? (s.keyPoints as unknown[]) : [];
     const keyPoints = rawKp
       .filter((k): k is string => typeof k === 'string')
       .map((k) => k.replace(/\s*\n+\s*/g, ' ').trim())
       .filter((k) => k.length > 0)
       .slice(0, 3);
-    sections[i] = { narrative, keyPoints };
+    sections[i] = { narrative, keyPoints, keyPoint };
   }
   if (mapped === 0) return { ok: false, reason: 'no_mapped_sections' };
   return { ok: true, sections };

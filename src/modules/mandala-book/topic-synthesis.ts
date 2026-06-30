@@ -54,8 +54,10 @@ export interface TopicSection {
   topic_title: string; // CONTENT name (e.g. "REST API 라우팅 구조"), NOT a video title
   summary: string; // 1-2 line topic framing (light synthesis, no invented facts)
   atom_refs: Array<{ vid: string; ts: number }>; // provenance — resolved from LLM indices
-  // NOTE-DENSITY ① — populated by book-body weave step; absent until then.
+  // NOTE-DENSITY ① (back-compat) — bullet take-away array. Absent until book-body weave step.
   keyPoints?: string[];
+  // NOTE-DENSITY ①-v2 — 2-3 sentence prose synthesis. Populated by book-body weave step.
+  keyPoint?: string;
 }
 
 /** Atoms intentionally dropped by compression (transparency — CP504 §4.5.0). */

@@ -464,11 +464,12 @@ export async function fillMandalaBook(params: {
         mandala.title ?? ''
       );
       if (woven.ok) {
-        woven.sections.forEach(({ narrative, keyPoints }, i) => {
+        woven.sections.forEach(({ narrative, keyPoints, keyPoint }, i) => {
           const t = chTopics[i];
           if (!t) return;
           if (narrative) t.summary = narrative; // enrich in place; empty slot ⇒ keep original
-          if (keyPoints.length > 0) t.keyPoints = keyPoints; // NOTE-DENSITY ① — thread through
+          if (keyPoints.length > 0) t.keyPoints = keyPoints; // back-compat
+          if (keyPoint) t.keyPoint = keyPoint; // NOTE-DENSITY ①-v2 — prose synthesis quote
         });
         wovenChapters += 1;
       }

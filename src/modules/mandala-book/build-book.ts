@@ -174,8 +174,9 @@ function sectionFromTopic(
   return {
     title: topic.topic_title,
     narrative: topic.summary,
-    // NOTE-DENSITY ① — pass through keyPoints written by book-body weave step.
+    // NOTE-DENSITY ① back-compat + ①-v2 prose synthesis — threaded from book-body weave step.
     ...(topic.keyPoints && topic.keyPoints.length > 0 ? { keyPoints: topic.keyPoints } : {}),
+    ...(topic.keyPoint ? { keyPoint: topic.keyPoint } : {}),
     atoms,
     qa,
   };
@@ -295,10 +296,11 @@ export function buildBookJson(input: BuildBookInput): BuildBookResult {
           return {
             title: topic.topic_title,
             narrative: topic.summary,
-            // NOTE-DENSITY ① — carry keyPoints from the book-body weave step.
+            // NOTE-DENSITY ① back-compat + ①-v2 prose synthesis — threaded from book-body weave step.
             ...(topic.keyPoints && topic.keyPoints.length > 0
               ? { keyPoints: topic.keyPoints }
               : {}),
+            ...(topic.keyPoint ? { keyPoint: topic.keyPoint } : {}),
             atoms,
             qa,
           };

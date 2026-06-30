@@ -128,6 +128,27 @@ describe('buildBookJson — topic mode (§1⑤)', () => {
     expect(secs[0]!.title).toBe('VIDEO TITLE vidA');
   });
 
+  it('threads keyPoint (prose synthesis) from topic into section — NOTE-DENSITY ①-v2', () => {
+    const cell: CellInput = {
+      cellIndex: 0,
+      title: 'c',
+      videos: [vid('vidA', [10])],
+      topics: [
+        {
+          topic_title: '주제',
+          summary: '요약',
+          atom_refs: [{ vid: 'vidA', ts: 10 }],
+          keyPoint: '이 섹션의 핵심 통찰을 2-3문장으로 요약한 산문이다.',
+          keyPoints: ['항목 A'], // back-compat — both can coexist
+        },
+      ],
+    };
+    const { book } = buildBookJson(base([cell]));
+    const sec = sectionsOf(book)[0]! as Record<string, unknown>;
+    expect(sec['keyPoint']).toBe('이 섹션의 핵심 통찰을 2-3문장으로 요약한 산문이다.');
+    expect(sec['keyPoints']).toEqual(['항목 A']);
+  });
+
   it('source counters identical regardless of mode', () => {
     const videos = [vid('vidA', [10, 50]), vid('vidB', [30])];
     const legacy = buildBookJson(base([{ cellIndex: 0, title: 'c', videos }]));
