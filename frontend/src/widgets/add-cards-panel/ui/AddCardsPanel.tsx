@@ -28,7 +28,7 @@ import { AddCardsFilters } from './AddCardsFilters';
 import { TargetLevelChips } from './TargetLevelChips';
 import { AddCardsList } from './AddCardsList';
 
-const PANEL_WIDTH_CLASS = 'w-full md:w-[45vw] md:max-w-[720px]';
+const PANEL_WIDTH_CLASS = 'w-full md:w-[58vw] md:max-w-[936px]';
 const CLOSE_ANIMATION_MS = 200;
 const SCROLL_COLLAPSE_THRESHOLD_PX = 32;
 
