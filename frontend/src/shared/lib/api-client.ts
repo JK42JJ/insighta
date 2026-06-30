@@ -307,12 +307,9 @@ export interface MandalaBookFigure {
   ts_sec: number;
   kind: 'chart' | 'diagram' | 'table' | 'equation' | 'keyframe';
   latex?: string;
-  // Server-rendered inline SVG (graphviz/matplotlib) for chart/diagram — durable.
-  svg?: string;
-  // Tabular payload for kind='table' (headers + rows), durable.
-  struct?: { headers?: string[]; rows?: string[][]; [k: string]: unknown };
-  // DEPRECATED — RunPod pod-local /tmp path, broken in the browser. Do not use.
-  asset_path?: string;
+  asset_path?: string; // legacy image pointer (no longer written by enrich job)
+  struct?: Record<string, unknown>; // mode-B JSON (chart/table/diagram); struct.insight = caption
+  svg?: string; // chart/diagram → server-rendered SVG (CP505 struct→SVG)
   verification_status?: string;
 }
 

@@ -749,6 +749,95 @@ const NOTE_PROSE_STYLE = `
   letter-spacing: -0.01em;
   color: var(--nm-dim);
 }
+
+/* [CV-FIGURE-PRESENTATION] — CV figures (svg chart/diagram, table, equation).
+   Framed on a light paper plate (legible dark ink), scaled to body width, with
+   a muted caption + dimmer "video title · mm:ss" source line below. */
+.note-prose-root .note-figure-block { margin: 40px auto; max-width: 600px; }
+.note-prose-root .note-figure-block.hidden { display: none; }
+.note-prose-root .note-figure {
+  margin: 0;
+  background: var(--nm-figure-bg);
+  border: 1px solid var(--nm-figure-border);
+  border-radius: 12px;
+  padding: 20px 20px 16px;
+  overflow: hidden;
+  color: var(--nm-figure-ink); /* KaTeX/table text + currentColor SVG render dark */
+}
+.note-prose-root .note-figure-canvas {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.note-prose-root .note-figure-canvas > * { max-width: 100%; }
+/* fix #1 size — inline SVG scales to the plate width, aspect ratio preserved. */
+.note-prose-root .note-figure-svg { width: 100%; }
+.note-prose-root .note-figure-svg svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  /* fix #2 bg — neutralize the SVG's own opaque bg so only the plate shows. */
+  background: transparent;
+}
+/* fix #3 font — override graphviz/matplotlib default sans so labels (esp.
+   Korean) use the note body font. !important beats inline style/presentation. */
+.note-prose-root .note-figure-svg svg text,
+.note-prose-root .note-figure-svg svg tspan {
+  font-family: var(--nm-sans) !important;
+}
+.note-prose-root .note-figure-canvas img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  border-radius: 6px;
+}
+.note-prose-root .note-figure-equation {
+  width: 100%;
+  overflow-x: auto;
+  text-align: center;
+}
+.note-prose-root .note-figure-latex-fallback {
+  font-family: var(--nm-mono);
+  font-size: 13px;
+  color: var(--nm-figure-ink);
+}
+/* table figure — struct headers/rows as a clean bordered table on the plate. */
+.note-prose-root .note-figure-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--nm-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--nm-figure-ink);
+}
+.note-prose-root .note-figure-table th,
+.note-prose-root .note-figure-table td {
+  border: 1px solid var(--nm-figure-border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.note-prose-root .note-figure-table thead th {
+  background: var(--nm-figure-th-bg);
+  font-weight: 600;
+}
+/* fix #4 caption + source — muted caption, dimmer source, centered below figure. */
+.note-prose-root .note-figure-meta { margin-top: 14px; text-align: center; }
+.note-prose-root .note-figure-caption {
+  font-family: var(--nm-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--nm-dim);
+}
+.note-prose-root .note-figure-source {
+  margin-top: 4px;
+  font-family: var(--nm-mono);
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+  color: var(--nm-faint);
+}
 `;
 
 function NoteEditorView({

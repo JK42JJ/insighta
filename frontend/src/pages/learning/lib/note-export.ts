@@ -30,21 +30,6 @@
 import type { Editor } from '@tiptap/react';
 import type { TiptapDoc, TiptapNode } from '@/features/video-side-panel/lib/note-parser';
 
-// [CV-NOTE-WIRE] — table figure → GitHub-flavored markdown table from headers/rows.
-function renderMarkdownTable(struct: { headers?: string[]; rows?: string[][] }): string {
-  const headers = Array.isArray(struct.headers) ? struct.headers : [];
-  const rows = Array.isArray(struct.rows) ? struct.rows : [];
-  if (headers.length === 0 && rows.length === 0) return '';
-  const colCount = headers.length || rows[0]?.length || 0;
-  const head = headers.length ? headers : Array.from({ length: colCount }, () => '');
-  const headerLine = `| ${head.join(' | ')} |`;
-  const sepLine = `| ${head.map(() => '---').join(' | ')} |`;
-  const bodyLines = rows.map((r) => `| ${r.join(' | ')} |`).join('\n');
-  return bodyLines
-    ? `${headerLine}\n${sepLine}\n${bodyLines}\n\n`
-    : `${headerLine}\n${sepLine}\n\n`;
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -132,21 +117,30 @@ function renderBlock(node: TiptapNode, depth: number): string {
       return `[${label}](${url})\n\n`;
     }
     case 'figureBlock': {
-      // [CV-NOTE-WIRE] — equation → $$..$$ ; table → markdown table ;
-      // chart/diagram → inline SVG (markdown allows raw HTML); empty → skip.
+      // [CV-NOTE-WIRE] / [CV-FIGURE-PRESENTATION] — equation → $$..$$ ;
+      // chart/diagram/table → caption + "title · mm:ss" source line (+ legacy image).
       const kind = (node.attrs?.['kind'] as string | undefined) ?? '';
+      const caption = (node.attrs?.['caption'] as string | null | undefined) ?? null;
+      const videoId = (node.attrs?.['videoId'] as string | null | undefined) ?? null;
+      const tsSecRaw = node.attrs?.['tsSec'];
+      const ts = typeof tsSecRaw === 'number' ? formatTs(tsSecRaw) : null;
+      // Source: keep ts (+ video link when known); title isn't in the doc attrs.
+      const source = videoId
+        ? `[영상 ${ts ?? ''}](https://www.youtube.com/watch?v=${videoId}${ts ? `&t=${Math.floor(Number(tsSecRaw))}s` : ''})`
+        : ts
+          ? `영상 · ${ts}`
+          : null;
       if (kind === 'equation') {
         const latex = (node.attrs?.['latex'] as string | undefined) ?? '';
-        return latex ? `$$\n${latex}\n$$\n\n` : '';
+        if (!latex) return '';
+        return `$$\n${latex}\n$$\n\n${source ? `_${source}_\n\n` : ''}`;
       }
-      if (kind === 'table') {
-        const struct = node.attrs?.['struct'] as
-          | { headers?: string[]; rows?: string[][] }
-          | undefined;
-        return struct ? renderMarkdownTable(struct) : '';
-      }
-      const svg = (node.attrs?.['svg'] as string | undefined) ?? '';
-      return svg ? `${svg}\n\n` : '';
+      const assetPath = (node.attrs?.['assetPath'] as string | undefined) ?? '';
+      const cap = caption ?? kind;
+      const img = assetPath ? `![${cap}](${assetPath})\n\n` : '';
+      const capLine = caption ? `**${caption}**\n\n` : '';
+      const srcLine = source ? `_${source}_\n\n` : '';
+      return `${img}${capLine}${srcLine}`;
     }
     default:
       // Fallback for unknown block types: render any text children.

@@ -97,14 +97,16 @@ describe('note-document-generator — loop-2 references render (P-REF-RENDER)', 
   });
 });
 
-// [CV-NOTE-WIRE] — CV figures attached to a section render as figureBlock nodes.
-// New base: chart/diagram → inline svg, table → struct, equation → latex.
-// The broken pod-local asset_path <img> path was removed.
+// [CV-NOTE-WIRE] / [CV-FIGURE-PRESENTATION] — CV figures render as figureBlock nodes.
 type FigAttrs = {
   kind?: string;
   latex?: string;
-  svg?: string;
-  struct?: { headers?: string[]; rows?: string[][] };
+  svg?: string | null;
+  assetPath?: string | null;
+  tableJson?: string | null;
+  caption?: string | null;
+  videoId?: string | null;
+  tsSec?: number | null;
 };
 const figureBlocks = (ns: N[]) =>
   ns.filter((n) => n.type === 'figureBlock').map((n) => (n.attrs ?? {}) as FigAttrs);
@@ -114,31 +116,76 @@ describe('note-document-generator — CV figures render ([CV-NOTE-WIRE])', () =>
     const b = book('이 장은 기초 회화를 다룬다');
     b.chapters[0]!.sections[0]!.figures = [
       { video_id: 'vidA', ts_sec: 10, kind: 'equation', latex: 'E=mc^2', verification_status: 'verified' },
-      { video_id: 'vidA', ts_sec: 12, kind: 'diagram', svg: '<svg><g/></svg>', verification_status: 'verified' },
-      { video_id: 'vidA', ts_sec: 14, kind: 'table', struct: { headers: ['A', 'B'], rows: [['1', '2']] }, verification_status: 'verified' },
-      { video_id: 'vidA', ts_sec: 15, kind: 'chart', svg: '', verification_status: 'verified' }, // DROP empty svg
-      { video_id: 'vidA', ts_sec: 16, kind: 'diagram', svg: '<svg/>', verification_status: 'unverified' }, // DROP unverified
-      { video_id: 'vidA', ts_sec: 18, kind: 'keyframe', asset_path: 'https://cdn.ex.com/kf.png', verification_status: 'verified' }, // DROP keyframe
+      { video_id: 'vidA', ts_sec: 12, kind: 'chart', asset_path: 'https://cdn.ex.com/chart.png', verification_status: 'verified' },
+      { video_id: 'vidA', ts_sec: 14, kind: 'diagram', asset_path: 'https://cdn.ex.com/diag.png', verification_status: 'unverified' }, // DROP unverified
+      { video_id: 'vidA', ts_sec: 16, kind: 'keyframe', asset_path: 'https://cdn.ex.com/kf.png', verification_status: 'verified' }, // DROP keyframe
     ];
     return b;
   };
 
-  it('renders diagram(svg) + table(struct) + equation(latex); drops unverified/keyframe/empty', () => {
+  it('renders equation + chart figureBlock nodes; drops unverified + keyframe', () => {
     const figs = figureBlocks(nodes(buildInitialNoteDoc(withFigures())));
     expect(figs.some((f) => f.kind === 'equation' && f.latex === 'E=mc^2')).toBe(true); // equation kept
-    expect(figs.some((f) => f.kind === 'diagram' && f.svg === '<svg><g/></svg>')).toBe(true); // diagram svg kept
-    expect(
-      figs.some(
-        (f) => f.kind === 'table' && f.struct?.headers?.[0] === 'A' && f.struct?.rows?.[0]?.[1] === '2'
-      )
-    ).toBe(true); // table struct kept
-    expect(figs.some((f) => f.kind === 'chart')).toBe(false); // empty svg dropped
+    expect(figs.some((f) => f.kind === 'chart' && f.assetPath === 'https://cdn.ex.com/chart.png')).toBe(true); // chart kept (legacy image)
+    expect(figs.some((f) => f.assetPath === 'https://cdn.ex.com/diag.png')).toBe(false); // unverified dropped
     expect(figs.some((f) => f.kind === 'keyframe')).toBe(false); // keyframe dropped
-    expect(figs).toHaveLength(3);
+    expect(figs).toHaveLength(2);
   });
 
   it('no figures → no figureBlock nodes (existing books byte-unchanged)', () => {
     const figs = figureBlocks(nodes(buildInitialNoteDoc(book('이 장은 기초 회화를 다룬다'))));
     expect(figs).toHaveLength(0);
+  });
+
+  it('threads server SVG + source (video_id/ts_sec) + struct.insight caption (CV-FIGURE-PRESENTATION)', () => {
+    const b = book('이 장은 기초 회화를 다룬다');
+    b.chapters[0]!.sections[0]!.figures = [
+      {
+        video_id: 'vidA',
+        ts_sec: 565,
+        kind: 'diagram',
+        svg: '<svg viewBox="0 0 10 10"><text>노드</text></svg>',
+        struct: { insight: '핵심 흐름을 보여준다' },
+        verification_status: 'verified',
+      },
+    ];
+    const figs = figureBlocks(nodes(buildInitialNoteDoc(b)));
+    expect(figs).toHaveLength(1);
+    const f = figs[0]!;
+    expect(f.kind).toBe('diagram');
+    expect(f.svg).toContain('<svg');
+    expect(f.assetPath).toBeNull();
+    expect(f.caption).toBe('핵심 흐름을 보여준다'); // struct.insight → caption
+    expect(f.videoId).toBe('vidA'); // source provenance
+    expect(f.tsSec).toBe(565); // mm:ss formatting (→ 9:25) happens in the NodeView
+  });
+
+  it('chart without insight → Korean kind-label caption (not the raw english word)', () => {
+    const b = book('이 장은 기초 회화를 다룬다');
+    b.chapters[0]!.sections[0]!.figures = [
+      { video_id: 'vidA', ts_sec: 30, kind: 'chart', svg: '<svg viewBox="0 0 4 4"></svg>', verification_status: 'verified' },
+    ];
+    const f = figureBlocks(nodes(buildInitialNoteDoc(b)))[0]!;
+    expect(f.caption).toBe('차트');
+  });
+
+  it('table → struct headers/rows serialized to tableJson; equation gets no caption', () => {
+    const b = book('이 장은 기초 회화를 다룬다');
+    b.chapters[0]!.sections[0]!.figures = [
+      {
+        video_id: 'vidA',
+        ts_sec: 40,
+        kind: 'table',
+        struct: { headers: ['A', 'B'], rows: [['1', '2'], ['3', '4']] },
+        verification_status: 'verified',
+      },
+      { video_id: 'vidA', ts_sec: 50, kind: 'equation', latex: 'x^2', verification_status: 'verified' },
+    ];
+    const figs = figureBlocks(nodes(buildInitialNoteDoc(b)));
+    const tableFig = figs.find((f) => f.kind === 'table')!;
+    expect(JSON.parse(tableFig.tableJson!)).toEqual({ headers: ['A', 'B'], rows: [['1', '2'], ['3', '4']] });
+    expect(tableFig.caption).toBe('표');
+    const eqFig = figs.find((f) => f.kind === 'equation')!;
+    expect(eqFig.caption).toBeNull(); // equation → neutral, no label
   });
 });
