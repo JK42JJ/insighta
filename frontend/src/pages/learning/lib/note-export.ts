@@ -90,6 +90,13 @@ function renderBlock(node: TiptapNode, depth: number): string {
     case 'orderedList':
       return renderList(node, '1.', depth);
     case 'blockquote': {
+      // NOTE-DENSITY ① — "핵심 요점" key-point callout = blockquote wrapping only
+      // a bulletList. Serialize as a labeled heading + plain bullets (not a quote).
+      const children = node.content ?? [];
+      if (children.length > 0 && children.every((c) => c.type === 'bulletList')) {
+        const bullets = children.map((c) => renderBlock(c, depth)).join('');
+        return `**핵심 요점**\n\n${bullets}\n`;
+      }
       const inner = (node.content ?? []).map((c) => renderBlock(c, depth)).join('');
       return (
         inner

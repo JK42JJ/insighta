@@ -658,6 +658,32 @@ const NOTE_PROSE_STYLE = `
   color: var(--nm-accent);
   margin-bottom: 10px;
 }
+/* NOTE-DENSITY ① — "핵심 요점" key-point callout: a gold-tinted box (distinct
+   from body prose + from the legacy gold left-rule keypoint). Discriminated from
+   the narrative blockquote (> p) by its bulletList child. Academic/dense look. */
+.note-prose-root .ProseMirror blockquote:has(> ul) {
+  border-left: none;
+  background: var(--nm-keypoint-bg);
+  border: 1px solid var(--nm-keypoint-border);
+  border-radius: 10px;
+  padding: 18px 22px;
+  margin: 40px 0;
+}
+.note-prose-root .ProseMirror blockquote:has(> ul)::before { content: "핵심 요점"; }
+.note-prose-root .ProseMirror blockquote:has(> ul) ul {
+  margin: 0;
+  padding-left: 1.15em;
+  list-style: disc;
+}
+.note-prose-root .ProseMirror blockquote:has(> ul) li {
+  font-family: var(--nm-serif);
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--nm-strong);
+  margin: 0 0 0.5em;
+}
+.note-prose-root .ProseMirror blockquote:has(> ul) li:last-child { margin-bottom: 0; }
+.note-prose-root .ProseMirror blockquote:has(> ul) li::marker { color: var(--nm-accent); }
 .note-prose-root .ProseMirror code {
   font-family: var(--nm-mono);
   font-size: 0.82em;

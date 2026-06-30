@@ -316,6 +316,9 @@ export interface MandalaBookFigure {
 export interface MandalaBookSection {
   title: string;
   narrative?: string;
+  // NOTE-DENSITY ① — 2-3 distilled take-aways per section, distinct from the
+  // flowing narrative. Rendered as a "핵심 요점" callout (narrative mode only).
+  keyPoints?: string[];
   atoms?: MandalaBookAtom[];
   qa?: Array<{ q: string; a: string }>;
   verification?: { status?: string; notes?: string; checks?: MandalaBookFactcheck[] }; // CP504 loop-2-A
