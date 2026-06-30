@@ -51,6 +51,12 @@ function MermaidNodeView({ node, updateAttributes, editor }: NodeViewProps) {
         const { svg: out } = await mermaid.render(idRef.current, src);
         if (!cancelled) setSvg(out);
       } catch {
+        // mermaid injects an orphaned error element ("Syntax error" bomb) into
+        // <body> on parse failure — remove it so only our inline source fallback shows.
+        if (typeof document !== 'undefined') {
+          document.getElementById(idRef.current)?.remove();
+          document.getElementById(`d${idRef.current}`)?.remove();
+        }
         if (!cancelled) setFailed(true);
       }
     })();
