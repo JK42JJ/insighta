@@ -221,7 +221,7 @@
     --sidebar-width: 22rem;
     /* CP441 — sidebar bg unified with content area (--background).
        CP445.x — ChatGPT-style neutral very dark. */
-    --sidebar-background: 0 0% 8%;
+    --sidebar-background: 228 17% 5.7%; /* #0C0D11 — mockup sidebar */
     --sidebar-foreground: 0 0% 95%;
     --sidebar-primary: 234 60% 72%;
     --sidebar-primary-foreground: 0 0% 10%;
@@ -229,7 +229,7 @@
     --sidebar-accent-foreground: 234 60% 75%;
     --sidebar-border: 0 0% 22%;
     --sidebar-ring: 234 60% 72%;
-    --sidebar: 0 0% 10%;
+    --sidebar: 228 17% 5.7%; /* #0C0D11 — mockup sidebar */
 
     /* Chart colors */
     --chart-1: 234 60% 72%;
