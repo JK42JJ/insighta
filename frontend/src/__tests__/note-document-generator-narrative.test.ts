@@ -11,7 +11,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { buildInitialNoteDoc } from '@/pages/learning/lib/note-document-generator';
+import { exportToMarkdown } from '@/pages/learning/lib/note-export';
 import type { MandalaBookData } from '@/shared/lib/api-client';
+import type { TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
 
 type N = { type: string; content?: N[]; attrs?: { vid?: string } };
 const nodes = (doc: { content?: unknown[] }): N[] => (doc.content ?? []) as N[];
@@ -67,6 +69,51 @@ describe('note-document-generator — loop-1b narrative render', () => {
   it('fallback: narrative mode but empty section.narrative → legacy render for that section', () => {
     const ns = nodes(buildInitialNoteDoc(book('이 장은 기초 회화를 다룬다', '')));
     expect(paraTexts(ns)).toContain('ATOM_TEXT_A 인사'); // fell through to legacy atom render
+  });
+});
+
+// NOTE-DENSITY ① — "핵심 요점" key-point callout (blockquote wrapping a bulletList).
+const liTexts = (bq: N): string[] => {
+  const list = (bq.content ?? []).find((c) => c.type === 'bulletList');
+  return ((list?.content ?? []) as N[]).map((li) =>
+    (li.content ?? [])
+      .flatMap((p) => (p.content ?? []).map((c) => (c as { text?: string }).text ?? ''))
+      .join('')
+  );
+};
+
+describe('note-document-generator — NOTE-DENSITY ① key-point callout', () => {
+  const withKeyPoints = (kp?: string[]): MandalaBookData => {
+    const b = book('이 장은 기초 회화를 다룬다');
+    if (kp) b.chapters[0]!.sections[0]!.keyPoints = kp;
+    return b;
+  };
+
+  it('narrative mode + keyPoints → 핵심 요점 callout (blockquote > bulletList items)', () => {
+    const ns = nodes(buildInitialNoteDoc(withKeyPoints(['KP_ONE 인사 먼저', 'KP_TWO 주문 표현'])));
+    const bq = blockquotes(ns);
+    expect(bq).toHaveLength(1); // the callout (narrative is the body, not a blockquote)
+    const list = (bq[0].content ?? []).find((c) => c.type === 'bulletList');
+    expect(list).toBeDefined();
+    expect(liTexts(bq[0])).toEqual(['KP_ONE 인사 먼저', 'KP_TWO 주문 표현']);
+  });
+
+  it('narrative mode WITHOUT keyPoints → no callout (byte-unchanged)', () => {
+    expect(blockquotes(nodes(buildInitialNoteDoc(withKeyPoints())))).toHaveLength(0);
+  });
+
+  it('empty keyPoints array → no callout (flag-safe)', () => {
+    expect(blockquotes(nodes(buildInitialNoteDoc(withKeyPoints([]))))).toHaveLength(0);
+  });
+
+  it('markdown export → "핵심 요점" heading + plain bullets (not a > quote)', () => {
+    const md = exportToMarkdown(
+      buildInitialNoteDoc(withKeyPoints(['KP_ONE 인사 먼저', 'KP_TWO 주문 표현'])) as TiptapDoc
+    );
+    expect(md).toContain('**핵심 요점**');
+    expect(md).toContain('- KP_ONE 인사 먼저');
+    expect(md).toContain('- KP_TWO 주문 표현');
+    expect(md).not.toContain('> - KP_ONE'); // not serialized as a blockquote
   });
 });
 

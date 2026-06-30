@@ -127,6 +127,27 @@ function videoBlockNode(
   };
 }
 
+// NOTE-DENSITY ① — "핵심 요점" key-point callout. Reuses the registered
+// blockquote + bulletList nodes (no new TipTap extension); the bulletList child
+// distinguishes it from the legacy narrative blockquote (> p) for note-mode CSS
+// (blockquote:has(> ul)) and markdown export. Returns null when no real points.
+function keyPointBlockNode(keyPoints: string[] | undefined): TiptapNode | null {
+  const points = (keyPoints ?? []).map((p) => normalizeText(p ?? '')).filter(Boolean);
+  if (points.length === 0) return null;
+  return {
+    type: 'blockquote',
+    content: [
+      {
+        type: 'bulletList',
+        content: points.map((p) => ({
+          type: 'listItem',
+          content: [paragraph(p)],
+        })),
+      },
+    ],
+  };
+}
+
 /**
  * Segment end for a vid group: the furthest segment boundary (max seg_ref.to_sec)
  * so playback covers the group's whole span, not just up to the last atom START.
@@ -290,6 +311,10 @@ function renderSection(
       out.push(videoBlockNode(g.vid, firstTs, endSec, section.title ?? null));
     }
     out.push(...renderFigures(section.figures)); // [CV-NOTE-WIRE]
+    // NOTE-DENSITY ① — real key-point take-aways AFTER prose + figures (flag-safe:
+    // absent/empty keyPoints → emit nothing → existing notes byte-unchanged).
+    const keyPoints = keyPointBlockNode(section.keyPoints);
+    if (keyPoints) out.push(keyPoints);
     out.push(horizontalRule());
     return out;
   }
