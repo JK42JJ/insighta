@@ -296,7 +296,9 @@ export function buildBookJson(input: BuildBookInput): BuildBookResult {
             title: topic.topic_title,
             narrative: topic.summary,
             // NOTE-DENSITY ① — carry keyPoints from the book-body weave step.
-            ...(topic.keyPoints && topic.keyPoints.length > 0 ? { keyPoints: topic.keyPoints } : {}),
+            ...(topic.keyPoints && topic.keyPoints.length > 0
+              ? { keyPoints: topic.keyPoints }
+              : {}),
             atoms,
             qa,
           };
