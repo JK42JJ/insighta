@@ -274,10 +274,14 @@ export function SidebarMandalaSection({
     .filter((m) => !deletingIds.has(m.id))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const getCenterLabel = (m: (typeof mandalas)[0]) => {
+  // Sidebar list shows the FULL mandala title. `centerLabel` is the truncated
+  // minimap center-cell abbreviation (e.g. "Docker 마이크" ← "Docker로 마이크로서비스 배포")
+  // — it was being shown here, clipping every list name. Title first; centerLabel
+  // is only a fallback when a mandala has no title.
+  const getMandalaListLabel = (m: (typeof mandalas)[0]) => {
     const rootLevel = m.levels?.find((l: { depth: number }) => l.depth === 0);
-    const label = (rootLevel as { centerLabel?: string | null } | undefined)?.centerLabel;
-    return label || m.title || '—';
+    const centerLabel = (rootLevel as { centerLabel?: string | null } | undefined)?.centerLabel;
+    return m.title || centerLabel || '—';
   };
 
   return (
@@ -331,8 +335,8 @@ export function SidebarMandalaSection({
                   {/* CP504→2026-06-30 — show the FULL mandala name: wrap instead of
                       clipping (DB stores the full title; ellipsis hid the rest).
                       title tooltip kept as a harmless extra. */}
-                  <span className="flex-1 break-words leading-snug" title={getCenterLabel(mandala)}>
-                    {getCenterLabel(mandala)}
+                  <span className="flex-1 break-words leading-snug" title={getMandalaListLabel(mandala)}>
+                    {getMandalaListLabel(mandala)}
                   </span>
                   {newlySyncedCount > 0 && (
                     <span
