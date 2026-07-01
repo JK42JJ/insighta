@@ -77,6 +77,12 @@ export const JOB_NAMES = {
    * (VISUAL_CV_ENABLED=true) and inert when SNAPSHOT_SERVICE_TOKEN is unset (graceful []).
    */
   NOTE_CV_ENRICH: 'note-cv-enrich',
+  /**
+   * Observability Phase 2-A — daily 🔴 alarm when the active YouTube SEARCH key
+   * pool exceeds the threshold (multi-key = ToS ban risk, M4: 8 keys). Counts
+   * only; emails the operator when OBSERVABILITY_ALERT_EMAIL is set.
+   */
+  KEY_ALARM_SCAN: 'key-alarm-scan',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -384,6 +390,8 @@ export const NOTE_CV_ENRICH_OPTIONS = {
 export const QUEUE_CONFIG = {
   /** Batch scan schedule: every 30 minutes (cron) */
   BATCH_SCAN_CRON: '*/30 * * * *',
+  /** Observability Phase 2-A key-count alarm: daily at 08:07 (off-hour). */
+  KEY_ALARM_CRON: '7 8 * * *',
   /** Max concurrent enrichment workers */
   ENRICH_CONCURRENCY: 1,
   /**

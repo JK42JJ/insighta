@@ -175,6 +175,14 @@ const envSchema = z.object({
   GMAIL_SMTP_PORT: z.coerce.number().default(587),
   GMAIL_SMTP_FROM: z.string().default('noreply@insighta.one'),
 
+  // Observability Phase 2-A — ops alarm recipient (admin inbox). Empty = the
+  // alarm job logs the count but sends NO email (inert until the operator sets a
+  // real inbox). An email address is config, not a secret (CP392).
+  OBSERVABILITY_ALERT_EMAIL: z.string().default(''),
+  // Alarm when active YouTube SEARCH keys exceed this — multi-key distribution
+  // across Google projects is a ToS ban risk (M4: 8 keys). Expected steady = 1.
+  OBSERVABILITY_KEY_ALARM_MAX: z.coerce.number().int().min(1).default(1),
+
   // Pipeline events — round id stamped on each measurement event (paper §6.2).
   // Increment when starting a new measurement batch.
   PIPELINE_EVENTS_ROUND: z.coerce.number().int().min(1).default(1),
@@ -467,6 +475,12 @@ export const config = {
     smtpHost: env.GMAIL_SMTP_HOST,
     smtpPort: env.GMAIL_SMTP_PORT,
     smtpFrom: env.GMAIL_SMTP_FROM,
+  },
+
+  // Observability Phase 2-A — ops alarms.
+  observability: {
+    alertEmail: env.OBSERVABILITY_ALERT_EMAIL,
+    keyAlarmMaxKeys: env.OBSERVABILITY_KEY_ALARM_MAX,
   },
 
   // Pipeline events (paper §6.2 measurement)
