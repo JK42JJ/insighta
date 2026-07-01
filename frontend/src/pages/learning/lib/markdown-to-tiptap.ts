@@ -32,6 +32,31 @@ import type { TiptapNode } from '@/features/video-side-panel/lib/note-parser';
 type Mark = { type: string; attrs?: Record<string, unknown> };
 
 // ---------------------------------------------------------------------------
+// Emoji / picto strip (academic-quality guard)
+// ---------------------------------------------------------------------------
+
+// Remove emoji + cheap correct/incorrect markers from TEXT content. The LLM adds
+// ✅❌✓✗⚠️ as redundant markers (the Korean 맞음/틀림 already says it), which ruins
+// the academic tone. PRESERVES meaningful symbols: arrows (→ ← ↑ ↓), math (× ÷ ± =),
+// and typographic punctuation (· — … ‘ ’ “ ”). Extended_Pictographic covers ✅❌⚠️;
+// ✓✗✔✘ (U+2713/2714/2717/2718) are plain dingbats NOT in that class, added explicitly.
+const EMOJI_RE =
+  /[\p{Extended_Pictographic}\u{FE0F}\u{2713}\u{2714}\u{2717}\u{2718}\u{2705}\u{274C}\u{26A0}]/gu;
+
+/**
+ * Strip emoji/picto markers from a text string, then tidy whitespace: collapse
+ * any double-spaces left behind and trim leading spaces on each line (so
+ * "❌ 현재완료 불가" → "현재완료 불가", not " 현재완료 불가"). Pure.
+ */
+export function stripEmoji(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(EMOJI_RE, '')
+    .replace(/ {2,}/g, ' ')
+    .replace(/^[ \t]+/gm, '');
+}
+
+// ---------------------------------------------------------------------------
 // Inline (text + marks)
 // ---------------------------------------------------------------------------
 
@@ -41,9 +66,13 @@ const INLINE_RE =
   /(`[^`]+`)|(\[[^\]]+\]\([^)\s]+\))|(\*\*[^*]+?\*\*)|(__[^_]+?__)|(\*[^*\n]+?\*)|(_[^_\n]+?_)/;
 
 function textNode(text: string, marks: Mark[]): TiptapNode {
+  // Strip emoji/picto markers from rendered text (not code spans — those keep
+  // literal content; handled by the caller passing a 'code' mark, but emoji in
+  // prose code is rare and harmless to strip). Keeps new builds clean.
+  const clean = stripEmoji(text);
   return marks.length
-    ? { type: 'text', text, marks: marks.map((m) => ({ ...m })) }
-    : { type: 'text', text };
+    ? { type: 'text', text: clean, marks: marks.map((m) => ({ ...m })) }
+    : { type: 'text', text: clean };
 }
 
 /**
