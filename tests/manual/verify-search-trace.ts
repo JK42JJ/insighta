@@ -127,14 +127,78 @@ async function main() {
     byId['srs1']?.drop_reason === 'series_dedup' &&
     byId['fmv1']?.drop_reason === 'filter_min_views';
   console.log(
-    `\nRESULT: ${ok ? 'PASS — journey fully reconstructed, live sync gc/cosine null' : 'FAIL'}`
+    `\nRESULT add_cards: ${ok ? 'PASS — journey reconstructed, live sync gc/cosine null' : 'FAIL'}`
   );
 
-  // Cleanup (this is a throwaway verification row).
-  await p.search_trace_candidate.deleteMany({ where: { trace_id: traceId } });
-  await p.search_trace.deleteMany({ where: { trace_id: traceId } });
+  // ── pool_serve case — unlike the null-scored live sync path, pool-serve
+  //    FILLS gc / ts_rank / source_tier. Proves those columns (Int / real /
+  //    varchar) round-trip populated + live-fallback quota_units.
+  const poolTraceId = randomUUID();
+  writeSearchTrace(
+    {
+      traceId: poolTraceId,
+      mandalaId: null,
+      userId: null,
+      trigger: 'pool_serve',
+      quotaUnits: 101, // 100 search.list + 1 videos.list (live fallback)
+      counts: { recruited: 12, scored: 5, pool_passed: 2, inserted: 2 },
+      outcome: { cards_count: 2 },
+    },
+    [
+      {
+        videoId: 'pool1',
+        sourceKind: 'pool',
+        sourceTier: 'v2_promoted',
+        sourceCellIndex: 3,
+        decision: 'PLACED',
+        stageReached: 'pool_gate',
+        relevanceGc: 78,
+        tsRank: 0.4213,
+        finalCellIndex: 3,
+      },
+      {
+        videoId: 'pool2',
+        sourceKind: 'pool',
+        sourceTier: 'v2_promoted',
+        sourceCellIndex: 3,
+        decision: 'DROPPED',
+        dropReason: 'below_relevance_min',
+        stageReached: 'pool_gate',
+        relevanceGc: 41,
+        tsRank: 0.2011,
+      },
+    ]
+  );
+  await new Promise((r) => setTimeout(r, 1500));
+  const poolSt = await p.search_trace.findFirst({ where: { trace_id: poolTraceId } });
+  const poolCands = await p.search_trace_candidate.findMany({ where: { trace_id: poolTraceId } });
+  const poolById = Object.fromEntries(poolCands.map((c) => [c.video_id, c]));
+  console.log(
+    `\n== pool_serve candidates (${poolCands.length}), quota_units=${poolSt?.quota_units} ==`
+  );
+  for (const c of poolCands.sort((a, b) => a.video_id.localeCompare(b.video_id))) {
+    console.log(
+      `  ${c.video_id}: ${c.decision}/${c.drop_reason ?? '-'} tier=${c.source_tier ?? '-'} gc=${c.relevance_gc ?? 'null'} ts=${c.ts_rank ?? 'null'}`
+    );
+  }
+  const poolOk =
+    !!poolSt &&
+    poolSt.quota_units === 101 &&
+    poolCands.length === 2 &&
+    poolById['pool1']?.decision === 'PLACED' &&
+    poolById['pool1']?.relevance_gc === 78 &&
+    poolById['pool1']?.ts_rank != null && // real column — no exact float compare
+    poolById['pool1']?.source_tier === 'v2_promoted' &&
+    poolById['pool2']?.drop_reason === 'below_relevance_min' &&
+    poolById['pool2']?.relevance_gc === 41;
+  console.log(`RESULT pool_serve: ${poolOk ? 'PASS — gc/ts_rank/source_tier populated' : 'FAIL'}`);
+
+  // Cleanup (throwaway verification rows).
+  const ids = [traceId, poolTraceId];
+  await p.search_trace_candidate.deleteMany({ where: { trace_id: { in: ids } } });
+  await p.search_trace.deleteMany({ where: { trace_id: { in: ids } } });
   await p.$disconnect();
-  process.exit(ok ? 0 : 1);
+  process.exit(ok && poolOk ? 0 : 1);
 }
 
 main().catch((e) => {
