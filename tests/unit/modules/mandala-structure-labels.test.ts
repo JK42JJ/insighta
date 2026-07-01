@@ -11,7 +11,7 @@
 import { normalizeStructureLabels } from '@/modules/mandala/generator';
 
 describe('normalizeStructureLabels — slice 3 in-band label parsing', () => {
-  test('valid 8-element sub_labels → hadSubLabels=true + trimmed to EN cap 15', () => {
+  test('valid 8-element sub_labels → hadSubLabels=true + labels kept FULL (no truncation)', () => {
     const parsed: {
       center_label?: unknown;
       sub_labels?: unknown;
@@ -32,12 +32,12 @@ describe('normalizeStructureLabels — slice 3 in-band label parsing', () => {
     };
     const { hadSubLabels } = normalizeStructureLabels(parsed, 'en');
     expect(hadSubLabels).toBe(true);
-    expect(parsed.center_label).toBe('Focus on Daily ');
-    expect((parsed.sub_labels as string[]).every((l) => l.length <= 15)).toBe(true);
-    expect((parsed.sub_labels as string[])[0]).toBe('Morning Routine');
+    // No truncation: labels pass through whole (mid-word slice corrupted the data).
+    expect(parsed.center_label).toBe('Focus on Daily Habit Building');
+    expect((parsed.sub_labels as string[])[0]).toBe('Morning Routine Extensive Block');
   });
 
-  test('valid 8-element sub_labels in KO → trimmed to cap 10', () => {
+  test('valid 8-element sub_labels in KO → kept FULL (no cap truncation)', () => {
     const parsed: {
       center_label?: unknown;
       sub_labels?: unknown;
@@ -58,8 +58,9 @@ describe('normalizeStructureLabels — slice 3 in-band label parsing', () => {
     };
     const { hadSubLabels } = normalizeStructureLabels(parsed, 'ko');
     expect(hadSubLabels).toBe(true);
-    expect((parsed.center_label as string).length).toBeLessThanOrEqual(10);
-    expect((parsed.sub_labels as string[]).every((l) => l.length <= 10)).toBe(true);
+    // No 10-char cap: the full Korean label is preserved (was sliced mid-word before).
+    expect(parsed.center_label).toBe('인생을바꾸는데일리루틴완성');
+    expect((parsed.sub_labels as string[])[0]).toBe('아침루틴 확장 세션');
   });
 
   test('sub_labels count mismatch (7 vs 8 sub_goals) → deleted', () => {
@@ -106,7 +107,8 @@ describe('normalizeStructureLabels — slice 3 in-band label parsing', () => {
     const { hadSubLabels } = normalizeStructureLabels(parsed, 'en');
     expect(hadSubLabels).toBe(false);
     expect(parsed.sub_labels).toBeUndefined();
-    expect(parsed.center_label).toBe('This is a very ');
+    // Kept full (no 15-char slice).
+    expect(parsed.center_label).toBe('This is a very long center label indeed');
   });
 
   test('center_label is non-string → deleted (only string labels accepted)', () => {

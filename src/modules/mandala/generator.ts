@@ -354,16 +354,13 @@ function extractJsonRobust(text: string): GeneratedMandala | null {
  * sub_goals look ugly in mini grid cells.
  */
 async function enrichLabels(m: GeneratedMandala): Promise<GeneratedMandala> {
-  if (!m.center_label && m.center_goal) {
-    m.center_label = m.center_goal.length > 20 ? m.center_goal.slice(0, 20) : m.center_goal;
-  }
-  if (!m.sub_labels || m.sub_labels.length === 0) {
-    // Phase 1 slice 3: log the fallback hit so the metric is observable
-    // in prod. Structure-phase should provide sub_labels under the new
-    // 700-token budget; hitting this branch means either the model
-    // still truncated or the response was malformed. Rate should drop
-    // materially vs pre-slice-3 baseline.
-    logger.info('[TIMING] enrichLabels: fallback triggered (sub_labels missing in structure)');
+  // NEVER truncate the goal into a label (a mid-word slice corrupts the stored
+  // label and can't be recovered). If EITHER label is missing, regenerate proper
+  // short labels via the LLM; on failure leave them empty and let the UI fall
+  // back to the goals.
+  const needsLabels = !m.center_label || !m.sub_labels || m.sub_labels.length === 0;
+  if (needsLabels && m.center_goal) {
+    logger.info('[TIMING] enrichLabels: fallback triggered (labels missing in structure)');
     const fallbackStart = Date.now();
     try {
       const lang = m.language === 'ko' || m.language === 'en' ? m.language : 'en';
@@ -372,16 +369,16 @@ async function enrichLabels(m: GeneratedMandala): Promise<GeneratedMandala> {
         sub_goals: m.sub_goals,
         language: lang,
       });
-      m.center_label = labels.center_label;
-      m.sub_labels = labels.sub_labels;
+      if (!m.center_label) m.center_label = labels.center_label;
+      if (!m.sub_labels || m.sub_labels.length === 0) m.sub_labels = labels.sub_labels;
       logger.info(`[TIMING] enrichLabels: fallback succeeded in ${Date.now() - fallbackStart}ms`);
     } catch (err) {
-      // Label generation failed — leave sub_labels empty.
-      // UI falls back to sub_goals. NEVER truncate sub_goals as labels.
-      logger.warn(`enrichLabels: sub_labels generation failed, leaving empty: ${err}`);
+      // Label generation failed — leave labels empty. UI falls back to goals.
+      // NEVER truncate goals into labels.
+      logger.warn(`enrichLabels: label generation failed, leaving empty: ${err}`);
     }
   } else {
-    logger.info('[TIMING] enrichLabels: skipped (sub_labels present from structure)');
+    logger.info('[TIMING] enrichLabels: skipped (labels present from structure)');
   }
   return m;
 }
@@ -905,21 +902,19 @@ export async function generateMandalaWithQueries(
  */
 export function normalizeStructureLabels(
   parsed: { center_label?: unknown; sub_labels?: unknown; sub_goals: unknown[] },
-  lang: 'ko' | 'en'
+  _lang: 'ko' | 'en'
 ): { hadSubLabels: boolean } {
-  const labelMaxLen = lang === 'ko' ? 10 : 15;
-  if (typeof parsed.center_label === 'string') {
-    parsed.center_label = parsed.center_label.slice(0, labelMaxLen);
-  } else if (parsed.center_label !== undefined) {
+  // Do NOT char-truncate labels: a mid-word slice corrupts the STORED label
+  // (irrecoverable — the source goal survives, but the short label is lost).
+  // Minimap cells apply CSS line-clamp for display; the data stays whole.
+  if (typeof parsed.center_label !== 'string' && parsed.center_label !== undefined) {
     delete parsed.center_label;
   }
   const hadSubLabels =
     Array.isArray(parsed.sub_labels) &&
     parsed.sub_labels.length === parsed.sub_goals.length &&
     parsed.sub_labels.every((l) => typeof l === 'string' && l.length > 0);
-  if (hadSubLabels) {
-    parsed.sub_labels = (parsed.sub_labels as string[]).map((l) => l.slice(0, labelMaxLen));
-  } else {
+  if (!hadSubLabels) {
     delete parsed.sub_labels;
   }
   return { hadSubLabels };
@@ -1137,7 +1132,6 @@ export async function generateLabels(input: LabelGenerateInput): Promise<Generat
   }
 
   const lang = input.language ?? 'en';
-  const maxLen = lang === 'ko' ? KO_SUB_LABEL_MAX : EN_SUB_LABEL_MAX;
 
   logger.info(
     `Label generation started (Haiku): goal="${input.center_goal}" subs=${input.sub_goals.length} lang=${lang}`
@@ -1172,11 +1166,10 @@ export async function generateLabels(input: LabelGenerateInput): Promise<Generat
     throw new MandalaGenError('Label generation: missing fields', 'VALIDATION_FAILED');
   }
 
-  // Enforce max length (trim if LLM exceeded, but never truncate to make labels)
-  parsed.center_label = parsed.center_label.slice(0, maxLen);
-  parsed.sub_labels = parsed.sub_labels
-    .slice(0, input.sub_goals.length)
-    .map((l) => l.slice(0, maxLen));
+  // Enforce COUNT only (one label per sub_goal). Do NOT char-truncate labels —
+  // a mid-word slice corrupts them (irrecoverable); the LLM is already prompted
+  // for short labels, and display surfaces apply CSS line-clamp instead.
+  parsed.sub_labels = parsed.sub_labels.slice(0, input.sub_goals.length);
 
   logger.info(
     `Label generation complete (Haiku): center="${parsed.center_label}" subs=[${parsed.sub_labels.join(', ')}]`
