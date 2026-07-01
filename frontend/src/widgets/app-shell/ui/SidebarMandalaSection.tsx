@@ -2,8 +2,9 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, RefreshCw, Presentation, NotepadText, Sparkles } from 'lucide-react';
+import { ChevronDown, RefreshCw, NotebookText, AlignLeft } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/shared/ui/tooltip';
 import {
   useMandalaList,
   useSwitchMandala,
@@ -22,58 +23,109 @@ type AssetStatus = {
   v2GatePassed: number | null;
 };
 
+// 요약(v2) coverage ring geometry — a 14px ring inside a 16px slot.
+const V2_RING_R = 7;
+const V2_RING_C = 2 * Math.PI * V2_RING_R;
+
 /**
- * P2 — per-mandala asset status icons (deck / note / v2), right-aligned, single row.
- * State via brand indigo intensity (NO traffic-light): ready = primary, in-progress =
- * primary/45 (+pulse for building), absent = ghost. Precise state on hover (title/aria).
+ * Icon intensity is DATA-ONLY — selection has NO effect (clicking a mandala must NOT
+ * change any icon). Present = dark (a note exists / a 요약 is complete); absent = a faint
+ * trace. Inline opacity because the sidebar-foreground token has no alpha slot, so Tailwind
+ * text-token/NN modifiers are no-ops here. level: on / mid(stale·partial) / off.
+ */
+function assetIconOpacity(level: 'on' | 'mid' | 'off'): number {
+  return level === 'on' ? 0.9 : level === 'mid' ? 0.55 : 0.09;
+}
+
+/**
+ * P2 — per-mandala asset status icons, right-aligned. TWO icons only (요약, 노트).
+ * 요약(v2) is quantitative (done/gate), so a determinate coverage ring shows progress:
+ *   in-progress (0 < % < 100) = dim icon + arc ring (angle = done/gate),
+ *   complete (100%) = lit icon (no ring), absent = faint ghost.
+ * 노트 is atomic (fresh/stale/none) → lit / dim(stale) / ghost(absent).
  * Data from the list response (assetStatus, P1) — no per-mandala fetch.
  */
 function MandalaAssetIcons({ status }: { status?: AssetStatus }) {
   const { t } = useTranslation();
-  const deck = status?.deck ?? null;
   const note = status?.note ?? 'none';
   const gate = status?.v2GatePassed ?? 0;
   const done = status?.v2Done ?? 0;
   const v2Pct = gate > 0 ? Math.round((done / gate) * 100) : null;
 
-  const READY = 'text-sidebar-primary';
-  const MID = 'text-sidebar-primary/45';
-  const OFF = 'text-sidebar-foreground/15';
+  const noteLevel = note === 'fresh' ? 'on' : note === 'stale' ? 'mid' : 'off';
+  const noteOpacity = assetIconOpacity(noteLevel);
+  const noteTip = t('sidebar.asset.note', '노트');
 
-  const deckReady = deck === 'done';
-  const deckBusy = deck === 'building' || deck === 'pending';
-  const deckCls = deckReady ? READY : deckBusy ? `${MID} animate-pulse` : OFF;
-  const noteCls = note === 'fresh' ? READY : note === 'stale' ? MID : OFF;
-  const v2Cls = v2Pct === 100 ? READY : v2Pct != null && v2Pct > 0 ? MID : OFF;
-
-  const deckTip = deckReady
-    ? t('sidebar.asset.deckReady', '슬라이드덱 준비됨')
-    : deckBusy
-      ? t('sidebar.asset.deckBusy', '슬라이드덱 생성 중')
-      : t('sidebar.asset.deckNone', '슬라이드덱 없음');
-  const noteTip =
-    note === 'fresh'
-      ? t('sidebar.asset.noteFresh', '노트 최신')
-      : note === 'stale'
-        ? t('sidebar.asset.noteStale', '노트 갱신 필요')
-        : t('sidebar.asset.noteNone', '노트 없음');
-  const v2Tip =
-    v2Pct != null
-      ? t('sidebar.asset.v2Cov', '요약 {{done}}/{{gate}} ({{pct}}%)', { done, gate, pct: v2Pct })
-      : t('sidebar.asset.v2None', '요약 없음');
+  // 요약 — ring only while in progress; dark when complete; trace when absent.
+  const v2InProgress = v2Pct != null && v2Pct > 0 && v2Pct < 100;
+  const v2Level = v2Pct === 100 ? 'on' : v2InProgress ? 'mid' : 'off';
+  const v2IconOpacity = assetIconOpacity(v2Level);
+  const ringProgressOpacity = 0.9;
+  const v2Tip = v2InProgress
+    ? t('sidebar.asset.v2Progress', '요약 {{done}}/{{gate}}', { done, gate })
+    : t('sidebar.asset.v2', '요약');
 
   return (
-    <span className="shrink-0 flex items-center gap-1">
-      <span title={deckTip} aria-label={deckTip}>
-        <Presentation className={cn('w-3.5 h-3.5', deckCls)} strokeWidth={1.9} />
+    <TooltipProvider delayDuration={150}>
+      <span className="shrink-0 flex items-center gap-1.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="relative inline-flex items-center justify-center w-4 h-4"
+              aria-label={v2Tip}
+            >
+              {v2InProgress && (
+                <svg
+                  className="absolute inset-0 text-sidebar-foreground"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r={V2_RING_R}
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    style={{ opacity: 0.12 }}
+                  />
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r={V2_RING_R}
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    style={{ opacity: ringProgressOpacity }}
+                    strokeDasharray={V2_RING_C}
+                    strokeDashoffset={V2_RING_C * (1 - (v2Pct ?? 0) / 100)}
+                    transform="rotate(-90 8 8)"
+                  />
+                </svg>
+              )}
+              <AlignLeft
+                className="w-3 h-3 text-sidebar-foreground"
+                strokeWidth={1.9}
+                style={{ opacity: v2IconOpacity }}
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{v2Tip}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center justify-center w-4 h-4" aria-label={noteTip}>
+              <NotebookText
+                className="w-3.5 h-3.5 text-sidebar-foreground"
+                strokeWidth={1.9}
+                style={{ opacity: noteOpacity }}
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{noteTip}</TooltipContent>
+        </Tooltip>
       </span>
-      <span title={noteTip} aria-label={noteTip}>
-        <NotepadText className={cn('w-3.5 h-3.5', noteCls)} strokeWidth={1.9} />
-      </span>
-      <span title={v2Tip} aria-label={v2Tip}>
-        <Sparkles className={cn('w-3.5 h-3.5', v2Cls)} strokeWidth={1.9} />
-      </span>
-    </span>
+    </TooltipProvider>
   );
 }
 
@@ -392,9 +444,16 @@ export function SidebarMandalaSection({
                   />
                   {/* Single-line label (short center_label; DATA is full — display-only
                       ellipsis for the rare overflow, full title on hover). */}
-                  <span className="flex-1 truncate leading-snug" title={getCenterLabel(mandala)}>
-                    {getCenterLabel(mandala)}
-                  </span>
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="flex-1 truncate leading-snug">
+                          {getCenterLabel(mandala)}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">{getCenterLabel(mandala)}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   {newlySyncedCount > 0 && (
                     <span
                       className="shrink-0 flex items-center gap-1 text-[11px] text-primary font-medium"
