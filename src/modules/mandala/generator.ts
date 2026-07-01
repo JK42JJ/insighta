@@ -1084,8 +1084,10 @@ export interface GeneratedLabels {
 }
 
 const LABEL_MAX_TOKENS = 800;
-const EN_SUB_LABEL_MAX = 15;
-const KO_SUB_LABEL_MAX = 10;
+// Prompt guidance only (labels are no longer hard-sliced). Loosened per user
+// feedback — 10/15 read as over-compressed; allow fuller, complete labels.
+const EN_SUB_LABEL_MAX = 22;
+const KO_SUB_LABEL_MAX = 15;
 
 function buildLabelPrompt(input: LabelGenerateInput): string {
   const lang = input.language ?? 'en';
