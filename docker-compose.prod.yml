@@ -225,6 +225,10 @@ services:
       # Arms the daily 🔴 multi-key alarm + the daily metrics report. Empty ⇒ jobs
       # log only, send no mail. Revert: delete this line → mail no-ops.
       - OBSERVABILITY_ALERT_EMAIL=admin@insighta.one
+      # G1 flag flip (2026-07-01, James-directed) — activate search-trace emission.
+      # Non-secret config (CP392). Off → no-op; on → async fire-and-forget INSERT
+      # of the Card Journey per v5 live search. Rollback: set false / delete line.
+      - SEARCH_TRACE_ENABLED=true
       # CP437 (2026-04-29) — Operator flip: enable v2 layered cron.
       # Default in code is `false` — cron stays dormant unless this env is
       # explicitly true. With this set, `startRichSummaryV2Cron()` schedules
