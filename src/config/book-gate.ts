@@ -42,9 +42,10 @@ const boolFromEnv = z.preprocess((v) => {
 export const bookGateEnvSchema = z.object({
   // A placed card needs relevance_pct >= this to be sectioned in ABSOLUTE mode
   // (also the relative-mode fallback for small/unscored mandalas). 0 disables.
-  // Default 40: drops clearly-off-topic cards (rel=5 stock video, the defect-2
-  // case) while keeping borderline-relevant ones — avoids over-exclusion.
-  BOOK_GATE_MIN_RELEVANCE: z.coerce.number().min(0).max(100).default(40),
+  // Default 70 (user directive): the 요약/book target is 핵심(≥80) + 추천(70–79)
+  // only — mid cards (40–69) are excluded. Unscored cards still pass via
+  // PASS_NULL below until relevance is backfilled. Rollback: set env to 40.
+  BOOK_GATE_MIN_RELEVANCE: z.coerce.number().min(0).max(100).default(70),
   // true ⇒ cards with null relevance_pct (unscored) pass; false ⇒ they are dropped.
   BOOK_GATE_PASS_NULL_RELEVANCE: boolFromEnv.default(true),
   // CP504 §0.3 D3 — gate mode. unset/'absolute' = inert legacy. 'relative' =

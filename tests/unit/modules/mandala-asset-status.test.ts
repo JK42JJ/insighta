@@ -12,6 +12,7 @@ describe('deriveMandalaAssetStatus', () => {
         bookVersion: 5,
         v2Done: 3,
         v2GatePassed: 4,
+        v2Pending: 0,
         noteBasedOnVersion: null,
       }).note
     ).toBe('none');
@@ -24,6 +25,7 @@ describe('deriveMandalaAssetStatus', () => {
         bookVersion: 7,
         v2Done: 10,
         v2GatePassed: 10,
+        v2Pending: 0,
         noteBasedOnVersion: 5,
       }).note
     ).toBe('stale');
@@ -36,6 +38,7 @@ describe('deriveMandalaAssetStatus', () => {
         bookVersion: 5,
         v2Done: 5,
         v2GatePassed: 5,
+        v2Pending: 0,
         noteBasedOnVersion: 5,
       }).note
     ).toBe('fresh');
@@ -47,9 +50,28 @@ describe('deriveMandalaAssetStatus', () => {
       bookVersion: 2,
       v2Done: 16,
       v2GatePassed: 18,
+      v2Pending: 0,
       noteBasedOnVersion: 2,
     });
-    expect(s).toEqual({ deck: 'building', note: 'fresh', v2Done: 16, v2GatePassed: 18 });
+    expect(s).toEqual({
+      deck: 'building',
+      note: 'fresh',
+      v2Done: 16,
+      v2GatePassed: 18,
+      v2Pending: 0,
+    });
+  });
+
+  it('passes v2Pending through (drives the live spinner)', () => {
+    const s = deriveMandalaAssetStatus({
+      deckStatus: null,
+      bookVersion: 3,
+      v2Done: 4,
+      v2GatePassed: 10,
+      v2Pending: 6,
+      noteBasedOnVersion: 3,
+    });
+    expect(s.v2Pending).toBe(6);
   });
 
   it('note=fresh (not stale) when a note exists but there is no book version', () => {
@@ -60,6 +82,7 @@ describe('deriveMandalaAssetStatus', () => {
         bookVersion: null,
         v2Done: null,
         v2GatePassed: null,
+        v2Pending: null,
         noteBasedOnVersion: 0,
       }).note
     ).toBe('fresh');

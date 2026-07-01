@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, RefreshCw, NotebookText, AlignLeft } from 'lucide-react';
+import { ChevronDown, RefreshCw, NotebookText } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/shared/ui/tooltip';
 import {
@@ -21,29 +21,20 @@ type AssetStatus = {
   note: 'fresh' | 'stale' | 'none';
   v2Done: number | null;
   v2GatePassed: number | null;
+  v2Pending: number | null;
 };
 
-// 요약(v2) coverage ring geometry — a 14px ring inside a 16px slot.
-const V2_RING_R = 7;
-const V2_RING_C = 2 * Math.PI * V2_RING_R;
+// 요약(v2) = a plain solid circle. Darkness reflects coverage (v2_done / gate_passed):
+// complete = dark, partial = medium, none = faint trace. No ring / segments.
+const V2_DOT_R = 3.4;
 
 /**
- * Icon intensity is DATA-ONLY — selection has NO effect (clicking a mandala must NOT
- * change any icon). Present = dark (a note exists / a 요약 is complete); absent = a faint
- * trace. Inline opacity because the sidebar-foreground token has no alpha slot, so Tailwind
- * text-token/NN modifiers are no-ops here. level: on / mid(stale·partial) / off.
- */
-function assetIconOpacity(level: 'on' | 'mid' | 'off'): number {
-  return level === 'on' ? 0.9 : level === 'mid' ? 0.55 : 0.09;
-}
-
-/**
- * P2 — per-mandala asset status icons, right-aligned. TWO icons only (요약, 노트).
- * 요약(v2) is quantitative (done/gate), so a determinate coverage ring shows progress:
- *   in-progress (0 < % < 100) = dim icon + arc ring (angle = done/gate),
- *   complete (100%) = lit icon (no ring), absent = faint ghost.
- * 노트 is atomic (fresh/stale/none) → lit / dim(stale) / ghost(absent).
- * Data from the list response (assetStatus, P1) — no per-mandala fetch.
+ * P2 — per-mandala asset status icons, right-aligned. TWO symbols:
+ *   요약(v2) = a plain solid circle; coverage = element opacity (complete / partial / none).
+ *   노트     = NotebookText, binary (generated / not-generated).
+ * ACTIVE icons use the SAME color class as the mandala title (`text-sidebar-foreground/55`)
+ * so they read at a consistent tone; absent = a faint trace via low element opacity.
+ * Selection has NO effect on the icons. Data from the list response (assetStatus, P1).
  */
 function MandalaAssetIcons({ status }: { status?: AssetStatus }) {
   const { t } = useTranslation();
@@ -52,62 +43,42 @@ function MandalaAssetIcons({ status }: { status?: AssetStatus }) {
   const done = status?.v2Done ?? 0;
   const v2Pct = gate > 0 ? Math.round((done / gate) * 100) : null;
 
-  const noteLevel = note === 'fresh' ? 'on' : note === 'stale' ? 'mid' : 'off';
-  const noteOpacity = assetIconOpacity(noteLevel);
+  // 노트 is binary — generated (fresh or stale) = title tone (opacity 1), not = trace.
+  const noteOpacity = note === 'none' ? 0.15 : 1;
   const noteTip = t('sidebar.asset.note', '노트');
 
-  // 요약 — ring only while in progress; dark when complete; trace when absent.
-  const v2InProgress = v2Pct != null && v2Pct > 0 && v2Pct < 100;
-  const v2Level = v2Pct === 100 ? 'on' : v2InProgress ? 'mid' : 'off';
-  const v2IconOpacity = assetIconOpacity(v2Level);
-  const ringProgressOpacity = 0.9;
-  const v2Tip = v2InProgress
-    ? t('sidebar.asset.v2Progress', '요약 {{done}}/{{gate}}', { done, gate })
-    : t('sidebar.asset.v2', '요약');
+  // 요약 coverage → circle element opacity: complete = title tone (1), partial, none = trace.
+  const v2Opacity = v2Pct == null || v2Pct === 0 ? 0.15 : v2Pct >= 100 ? 1 : 0.55;
+  // v2_pending > 0 ⇒ actively generating → the circle pulses (spinner). Live polling
+  // (useMandalaList refetchInterval) refreshes coverage as v2_done climbs, then locks.
+  const v2Generating = (status?.v2Pending ?? 0) > 0;
+  const v2Tip =
+    v2Pct != null && v2Pct > 0 && v2Pct < 100
+      ? t('sidebar.asset.v2Progress', '요약 {{done}}/{{gate}}', { done, gate })
+      : t('sidebar.asset.v2', '요약');
 
   return (
     <TooltipProvider delayDuration={150}>
       <span className="shrink-0 flex items-center gap-1.5">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span
-              className="relative inline-flex items-center justify-center w-4 h-4"
-              aria-label={v2Tip}
-            >
-              {v2InProgress && (
-                <svg
-                  className="absolute inset-0 text-sidebar-foreground"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <circle
-                    cx="8"
-                    cy="8"
-                    r={V2_RING_R}
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    style={{ opacity: 0.12 }}
-                  />
-                  <circle
-                    cx="8"
-                    cy="8"
-                    r={V2_RING_R}
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    style={{ opacity: ringProgressOpacity }}
-                    strokeDasharray={V2_RING_C}
-                    strokeDashoffset={V2_RING_C * (1 - (v2Pct ?? 0) / 100)}
-                    transform="rotate(-90 8 8)"
-                  />
-                </svg>
-              )}
-              <AlignLeft
-                className="w-3 h-3 text-sidebar-foreground"
-                strokeWidth={1.9}
-                style={{ opacity: v2IconOpacity }}
-              />
+            <span className="inline-flex items-center justify-center w-4 h-4" aria-label={v2Tip}>
+              <svg
+                className="text-sidebar-foreground/55"
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="8"
+                  cy="8"
+                  r={V2_DOT_R}
+                  fill="currentColor"
+                  className={cn(v2Generating && 'animate-pulse')}
+                  style={{ opacity: v2Opacity }}
+                />
+              </svg>
             </span>
           </TooltipTrigger>
           <TooltipContent side="top">{v2Tip}</TooltipContent>
@@ -116,7 +87,7 @@ function MandalaAssetIcons({ status }: { status?: AssetStatus }) {
           <TooltipTrigger asChild>
             <span className="inline-flex items-center justify-center w-4 h-4" aria-label={noteTip}>
               <NotebookText
-                className="w-3.5 h-3.5 text-sidebar-foreground"
+                className="w-3.5 h-3.5 text-sidebar-foreground/55"
                 strokeWidth={1.9}
                 style={{ opacity: noteOpacity }}
               />

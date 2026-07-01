@@ -59,6 +59,8 @@ export interface MandalaAssetStatus {
   /** mandala_books.v2_done / gate_passed — coverage snapshot at last fill. */
   v2Done: number | null;
   v2GatePassed: number | null;
+  /** mandala_books.v2_pending — >0 ⇒ v2 still generating (drives the live spinner). */
+  v2Pending: number | null;
 }
 
 /**
@@ -70,6 +72,7 @@ export function deriveMandalaAssetStatus(input: {
   bookVersion: number | null;
   v2Done: number | null;
   v2GatePassed: number | null;
+  v2Pending: number | null;
   /** note_documents.based_on_book_version; null = no note. */
   noteBasedOnVersion: number | null;
 }): MandalaAssetStatus {
@@ -84,6 +87,7 @@ export function deriveMandalaAssetStatus(input: {
     note,
     v2Done: input.v2Done,
     v2GatePassed: input.v2GatePassed,
+    v2Pending: input.v2Pending,
   };
 }
 
@@ -501,7 +505,13 @@ export class MandalaManager {
       }),
       this.prisma.mandala_books.findMany({
         where: { mandala_id: { in: ids } },
-        select: { mandala_id: true, gate_passed: true, v2_done: true, version: true },
+        select: {
+          mandala_id: true,
+          gate_passed: true,
+          v2_done: true,
+          v2_pending: true,
+          version: true,
+        },
       }),
       this.prisma.note_documents.findMany({
         where: { mandala_id: { in: ids }, user_id: userId },
@@ -530,6 +540,7 @@ export class MandalaManager {
         bookVersion: book?.version ?? null,
         v2Done: book?.v2_done ?? null,
         v2GatePassed: book?.gate_passed ?? null,
+        v2Pending: book?.v2_pending ?? null,
         noteBasedOnVersion: noteVerMap.get(id) ?? null,
       });
     };
