@@ -81,6 +81,32 @@ function fromCard(
   };
 }
 
+/**
+ * Reclassify PLACED rows whose videoId is NOT in `keptIds` to DROPPED with the
+ * given reason. Pure; returns a new array. Used when a stage DOWNSTREAM of the
+ * executor cuts cards the executor had placed (add-cards display filter, wizard
+ * inflow-gate) — the executor could not see that stage, so its PLACED rows are
+ * corrected here. Observation-only.
+ */
+export function reclassifyPlacedNotIn(
+  rows: SearchTraceCandidateInput[],
+  keptIds: Set<string>,
+  dropReason: DropReason,
+  stage: string
+): SearchTraceCandidateInput[] {
+  return rows.map((r) =>
+    r.decision === 'PLACED' && !keptIds.has(r.videoId)
+      ? {
+          ...r,
+          decision: 'DROPPED' as const,
+          dropReason,
+          stageReached: stage,
+          finalCellIndex: null,
+        }
+      : r
+  );
+}
+
 export function buildV5TraceCandidates(a: BuildV5TraceArgs): SearchTraceCandidateInput[] {
   const rows: SearchTraceCandidateInput[] = [...a.fanoutDropped];
   const emitted = new Set<string>(a.fanoutDropped.map((d) => d.videoId));

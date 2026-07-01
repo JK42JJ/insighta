@@ -1,4 +1,4 @@
-import { buildV5TraceCandidates } from '../v5/trace-candidates';
+import { buildV5TraceCandidates, reclassifyPlacedNotIn } from '../v5/trace-candidates';
 import type { FanoutCandidate } from '../v5/youtube-fanout';
 import type { V5Card } from '../v5/executor';
 import type { SearchTraceCandidateInput } from '@/modules/search-trace';
@@ -76,6 +76,54 @@ describe('buildV5TraceCandidates', () => {
     expect(rows.length).toBe(Object.keys(byId).length);
     expect(byId['v1']!.relevanceGc ?? null).toBeNull();
     expect(byId['v1']!.cosine ?? null).toBeNull();
+  });
+
+  it('reclassifyPlacedNotIn: PLACED not in kept set → DROPPED with reason (wizard inflow-gate); others untouched', () => {
+    const rows: SearchTraceCandidateInput[] = [
+      {
+        videoId: 'p1',
+        sourceKind: 'live',
+        decision: 'PLACED',
+        finalCellIndex: 0,
+        llmPickScore: 0.9,
+      },
+      {
+        videoId: 'p2',
+        sourceKind: 'live',
+        decision: 'PLACED',
+        finalCellIndex: 1,
+        llmPickScore: 0.8,
+      },
+      { videoId: 'd1', sourceKind: 'live', decision: 'DROPPED', dropReason: 'not_picked' },
+    ];
+    const kept = new Set(['p1']); // inflow-gate cut p2
+    const out = reclassifyPlacedNotIn(rows, kept, 'below_relevance_min', 'inflow_gate');
+    const byId = Object.fromEntries(out.map((r) => [r.videoId, r]));
+
+    expect(byId['p1']).toMatchObject({ decision: 'PLACED', finalCellIndex: 0 }); // kept → untouched
+    expect(byId['p2']).toMatchObject({
+      decision: 'DROPPED',
+      dropReason: 'below_relevance_min',
+      stageReached: 'inflow_gate',
+      finalCellIndex: null,
+    });
+    expect(byId['d1']).toMatchObject({ decision: 'DROPPED', dropReason: 'not_picked' }); // non-PLACED untouched
+    // pure: input array not mutated
+    expect(rows[1]?.decision).toBe('PLACED');
+  });
+
+  it('reclassifyPlacedNotIn: all PLACED kept (gate inert) → no change', () => {
+    const rows: SearchTraceCandidateInput[] = [
+      { videoId: 'p1', sourceKind: 'live', decision: 'PLACED', finalCellIndex: 0 },
+      { videoId: 'p2', sourceKind: 'live', decision: 'PLACED', finalCellIndex: 1 },
+    ];
+    const out = reclassifyPlacedNotIn(
+      rows,
+      new Set(['p1', 'p2']),
+      'below_relevance_min',
+      'inflow_gate'
+    );
+    expect(out.filter((r) => r.decision === 'PLACED')).toHaveLength(2);
   });
 
   it('empty pipeline → only the fanout-internal drops pass through', () => {
