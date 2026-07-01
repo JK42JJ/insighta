@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, RefreshCw } from 'lucide-react';
+import { ChevronDown, RefreshCw, Presentation, NotepadText, Sparkles } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import {
   useMandalaList,
@@ -14,6 +14,68 @@ import { useMandalaStore } from '@/stores/mandalaStore';
 import { queryKeys } from '@/shared/config/query-client';
 import type { InsightCard } from '@/entities/card/model/types';
 import { MandalaRowMenu } from './MandalaRowMenu';
+
+type AssetStatus = {
+  deck: string | null;
+  note: 'fresh' | 'stale' | 'none';
+  v2Done: number | null;
+  v2GatePassed: number | null;
+};
+
+/**
+ * P2 — per-mandala asset status icons (deck / note / v2), right-aligned, single row.
+ * State via brand indigo intensity (NO traffic-light): ready = primary, in-progress =
+ * primary/45 (+pulse for building), absent = ghost. Precise state on hover (title/aria).
+ * Data from the list response (assetStatus, P1) — no per-mandala fetch.
+ */
+function MandalaAssetIcons({ status }: { status?: AssetStatus }) {
+  const { t } = useTranslation();
+  const deck = status?.deck ?? null;
+  const note = status?.note ?? 'none';
+  const gate = status?.v2GatePassed ?? 0;
+  const done = status?.v2Done ?? 0;
+  const v2Pct = gate > 0 ? Math.round((done / gate) * 100) : null;
+
+  const READY = 'text-sidebar-primary';
+  const MID = 'text-sidebar-primary/45';
+  const OFF = 'text-sidebar-foreground/15';
+
+  const deckReady = deck === 'done';
+  const deckBusy = deck === 'building' || deck === 'pending';
+  const deckCls = deckReady ? READY : deckBusy ? `${MID} animate-pulse` : OFF;
+  const noteCls = note === 'fresh' ? READY : note === 'stale' ? MID : OFF;
+  const v2Cls = v2Pct === 100 ? READY : v2Pct != null && v2Pct > 0 ? MID : OFF;
+
+  const deckTip = deckReady
+    ? t('sidebar.asset.deckReady', '슬라이드덱 준비됨')
+    : deckBusy
+      ? t('sidebar.asset.deckBusy', '슬라이드덱 생성 중')
+      : t('sidebar.asset.deckNone', '슬라이드덱 없음');
+  const noteTip =
+    note === 'fresh'
+      ? t('sidebar.asset.noteFresh', '노트 최신')
+      : note === 'stale'
+        ? t('sidebar.asset.noteStale', '노트 갱신 필요')
+        : t('sidebar.asset.noteNone', '노트 없음');
+  const v2Tip =
+    v2Pct != null
+      ? t('sidebar.asset.v2Cov', '요약 {{done}}/{{gate}} ({{pct}}%)', { done, gate, pct: v2Pct })
+      : t('sidebar.asset.v2None', '요약 없음');
+
+  return (
+    <span className="shrink-0 flex items-center gap-1">
+      <span title={deckTip} aria-label={deckTip}>
+        <Presentation className={cn('w-3.5 h-3.5', deckCls)} strokeWidth={1.9} />
+      </span>
+      <span title={noteTip} aria-label={noteTip}>
+        <NotepadText className={cn('w-3.5 h-3.5', noteCls)} strokeWidth={1.9} />
+      </span>
+      <span title={v2Tip} aria-label={v2Tip}>
+        <Sparkles className={cn('w-3.5 h-3.5', v2Cls)} strokeWidth={1.9} />
+      </span>
+    </span>
+  );
+}
 
 export interface MinimapData {
   cardsByCell: Record<number, InsightCard[]>;
@@ -316,22 +378,21 @@ export function SidebarMandalaSection({
                   }
                 }}
                 className={cn(
-                  'group flex items-start gap-1 pl-1.5 pr-1 py-1.5 text-[13px] cursor-pointer transition-colors duration-150',
+                  'group flex items-center gap-1 pl-1.5 pr-1 py-1.5 text-[13px] cursor-pointer transition-colors duration-150',
                   isSelected
                     ? 'font-semibold text-sidebar-primary'
                     : 'font-normal text-sidebar-foreground/55 hover:text-sidebar-foreground'
                 )}
               >
-                <span className="flex flex-1 min-w-0 items-start gap-2 text-left">
+                <span className="flex flex-1 min-w-0 items-center gap-2 text-left">
                   {/* List bullet — marks each mandala as a list item (user request). */}
                   <span
-                    className="mt-[7px] w-1 h-1 shrink-0 rounded-full bg-current opacity-40"
+                    className="w-1 h-1 shrink-0 rounded-full bg-current opacity-40"
                     aria-hidden="true"
                   />
-                  {/* CP504→2026-06-30 — show the FULL mandala name: wrap instead of
-                      clipping (DB stores the full title; ellipsis hid the rest).
-                      title tooltip kept as a harmless extra. */}
-                  <span className="flex-1 break-words leading-snug" title={getCenterLabel(mandala)}>
+                  {/* Single-line label (short center_label; DATA is full — display-only
+                      ellipsis for the rare overflow, full title on hover). */}
+                  <span className="flex-1 truncate leading-snug" title={getCenterLabel(mandala)}>
                     {getCenterLabel(mandala)}
                   </span>
                   {newlySyncedCount > 0 && (
@@ -346,6 +407,7 @@ export function SidebarMandalaSection({
                     </span>
                   )}
                 </span>
+                <MandalaAssetIcons status={mandala.assetStatus} />
                 <MandalaRowMenu
                   mandalaId={mandala.id}
                   isLastMandala={sortedMandalas.length <= 1}
