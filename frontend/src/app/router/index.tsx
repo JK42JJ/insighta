@@ -18,6 +18,7 @@ import { AdminSearchAlgorithms } from '@/pages/admin/ui/AdminSearchAlgorithms';
 import { AdminV2QualityAudit } from '@/pages/admin/ui/AdminV2QualityAudit';
 import { AdminV4ArbiterRuns } from '@/pages/admin/ui/AdminV4ArbiterRuns';
 import { AdminPoolHealth } from '@/pages/admin/ui/AdminPoolHealth';
+import { AdminSearchTraceExplorer } from '@/pages/admin/ui/AdminSearchTraceExplorer';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -159,6 +160,8 @@ export function AppRouter() {
           <Route path="v4-arbiter-runs" element={<AdminV4ArbiterRuns />} />
           {/* Content Pool Health — 5-section pool dashboard. */}
           <Route path="pool-health" element={<AdminPoolHealth />} />
+          {/* Observability G2 — Search-Trace Explorer (Card Journey debug view). */}
+          <Route path="search-trace" element={<AdminSearchTraceExplorer />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
