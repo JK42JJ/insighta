@@ -155,6 +155,14 @@ services:
       # Rollback = flip BOTH back (false / delete line) + redeploy, no revert.
       - V5_KO_EN_TITLE_DROP=true
       - V5_POOL_SERVE=true
+      # G3 W1③ supply bridge — serve the backfilled yt_promoted rows.
+      # W1① backfill embedded 7,015 yt_promoted (gold/silver, classifyQuality —
+      # same gate as v2_promoted, NOT batch_trend). Measured: cohort cos>=0.5
+      # servable candidates jump v2_promoted-only 228 -> +11,320 yt_promoted.
+      # This flip adds 'yt_promoted' to v5 poolSources (config.ts:150) so the
+      # backfill's +87% coverage reaches serving. Rollback = false + redeploy
+      # (revert-free) if golden-cohort gc_median drops below 73 (baseline 76).
+      - SUPPLY_YT_BRIDGE_ENABLED=true
       # CP500+ diversity guard (UX 원칙 2 다양성 축, James-approved 2026-06-12).
       # Same-channel series episodes collapse to the latest one (measured:
       # Basphere "[Kubernetes 6주 코스]" 5-1/5-2/6-2 all placed on cca14d65);
