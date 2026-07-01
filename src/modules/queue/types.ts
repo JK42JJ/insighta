@@ -83,6 +83,11 @@ export const JOB_NAMES = {
    * only; emails the operator when OBSERVABILITY_ALERT_EMAIL is set.
    */
   KEY_ALARM_SCAN: 'key-alarm-scan',
+  /**
+   * Observability Phase 2-B — daily rollup of the 5 quality axes + pool + quota
+   * + funnel from the Phase 1 trail log into search_metrics_daily (one row/day).
+   */
+  SEARCH_METRICS_ROLLUP: 'search-metrics-rollup',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -392,6 +397,8 @@ export const QUEUE_CONFIG = {
   BATCH_SCAN_CRON: '*/30 * * * *',
   /** Observability Phase 2-A key-count alarm: daily at 08:07 (off-hour). */
   KEY_ALARM_CRON: '7 8 * * *',
+  /** Observability Phase 2-B daily metrics rollup: daily at 08:13 (off-hour). */
+  SEARCH_METRICS_ROLLUP_CRON: '13 8 * * *',
   /** Max concurrent enrichment workers */
   ENRICH_CONCURRENCY: 1,
   /**
