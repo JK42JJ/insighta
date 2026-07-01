@@ -493,6 +493,7 @@ interface MandalaResponse {
     note: 'fresh' | 'stale' | 'none';
     v2Done: number | null;
     v2GatePassed: number | null;
+    v2Pending: number | null; // >0 ⇒ v2 still generating (drives the live spinner)
   };
   createdAt: string;
   updatedAt: string;

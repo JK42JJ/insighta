@@ -151,6 +151,13 @@ export function useMandalaList() {
     enabled: isLoggedIn && isTokenReady,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
+    // Live 요약 spinner (load-safe): poll ONLY while some mandala is actively
+    // generating v2 (v2_pending > 0) so the coverage circle fills in real time;
+    // idle ⇒ no polling. Reuses the existing (indexed, batched) list query — no
+    // extra round trip. Tab-hidden ⇒ paused (refetchIntervalInBackground false).
+    refetchInterval: (query) =>
+      query.state.data?.mandalas?.some((m) => (m.assetStatus?.v2Pending ?? 0) > 0) ? 8000 : false,
+    refetchIntervalInBackground: false,
     // P0 hardening: mandala list is service-critical — more aggressive retry
     retry: (failureCount, error) => {
       // Never retry auth errors beyond 1
