@@ -491,7 +491,10 @@ export class MandalaManager {
     // P1 — batch per-mandala asset status (deck/note/v2) in 3 indexed IN-lookups
     // (no N+1) so the sidebar shows at-a-glance icons without per-mandala fetches.
     const ids = mandalas.map((m) => m.id);
-    const [decks, books, notes] = await Promise.all([
+    // Resilient: a failing/absent asset table (e.g. a migration not applied in
+    // some environment) must NOT 500 the whole sidebar list — degrade to "no
+    // status" for that asset and keep the list working.
+    const settled = await Promise.allSettled([
       this.prisma.slide_decks.findMany({
         where: { mandala_id: { in: ids } },
         select: { mandala_id: true, status: true },
@@ -505,6 +508,18 @@ export class MandalaManager {
         select: { mandala_id: true, based_on_book_version: true },
       }),
     ]);
+    settled.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        logger.warn('listMandalas: asset-status query failed (degraded, list still served)', {
+          source: ['slide_decks', 'mandala_books', 'note_documents'][i],
+          error: r.reason instanceof Error ? r.reason.message : String(r.reason),
+        });
+      }
+    });
+    const [decksR, booksR, notesR] = settled;
+    const decks = decksR.status === 'fulfilled' ? decksR.value : [];
+    const books = booksR.status === 'fulfilled' ? booksR.value : [];
+    const notes = notesR.status === 'fulfilled' ? notesR.value : [];
     const deckMap = new Map(decks.map((d) => [d.mandala_id, d.status]));
     const bookMap = new Map(books.map((b) => [b.mandala_id, b]));
     const noteVerMap = new Map(notes.map((n) => [n.mandala_id, n.based_on_book_version]));
