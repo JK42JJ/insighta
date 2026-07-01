@@ -160,6 +160,10 @@ APPLY_FILES=(
   # CREATE INDEX IF NOT EXISTS + NOTIFY pgrst — fully idempotent. Inert until
   # SEARCH_TRACE_ENABLED flips on and the v5 emission (STEP 3) writes rows.
   "prisma/migrations/search-trace/001_create_search_trace.sql"
+  # Observability Phase 2-B — search_metrics_daily (5-axis daily rollup).
+  # CREATE TABLE/INDEX IF NOT EXISTS + NOTIFY pgrst — idempotent. Inert until the
+  # rollup job (daily boss.schedule) writes a row.
+  "prisma/migrations/search-metrics/001_create_search_metrics_daily.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
