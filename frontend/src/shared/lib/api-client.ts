@@ -635,6 +635,30 @@ export interface AdminPoolHealthDetailResponse {
   notes?: string;
 }
 
+/** Observability G2 — one candidate row in a search-trace Card Journey. */
+export interface SearchTraceCandidateDTO {
+  video_id: string;
+  channel_id: string | null;
+  channel_title: string | null;
+  source_kind: string;
+  source_cell_index: number | null;
+  source_query_text: string | null;
+  source_tier: string | null;
+  stage_reached: string | null;
+  decision: string;
+  drop_reason: string | null;
+  relevance_gc: number | null;
+  ts_rank: number | null;
+  cosine: number | null;
+  llm_pick_score: number | null;
+  llm_pick_reason: string | null;
+  view_count: number | null;
+  duration_sec: number | null;
+  published_at: string | null;
+  final_cell_level: number | null;
+  final_cell_index: number | null;
+}
+
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -3057,6 +3081,53 @@ class ApiClient {
   // ========================================
   // Admin — Search Algorithm Versions (CP488)
   // ========================================
+  // Observability G2 — Search-Trace Explorer (Card Journey debug view).
+  // BE routes (super_admin only): src/api/routes/admin/search-trace-explorer.ts
+  //   GET /admin/search-trace/recent?limit=&mandala_id=&trigger=
+  //   GET /admin/search-trace/by-mandala/:mandalaId
+  //   GET /admin/search-trace/journey/:traceId
+  async getSearchTraceRecent(params?: {
+    limit?: number;
+    mandala_id?: string;
+    trigger?: string;
+  }): Promise<{
+    count: number;
+    traces: Array<{
+      trace_id: string;
+      mandala_id: string | null;
+      user_id: string | null;
+      trigger: string;
+      started_at: string;
+      finished_at: string | null;
+      queries_generated: unknown;
+      quota_units: number | null;
+      queries_attempted: number | null;
+      queries_succeeded: number | null;
+      queries_failed: number | null;
+      counts: Record<string, number> | null;
+      outcome: Record<string, unknown> | null;
+      algorithm_version: string | null;
+      created_at: string;
+    }>;
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.mandala_id) qs.set('mandala_id', params.mandala_id);
+    if (params?.trigger) qs.set('trigger', params.trigger);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request(`/admin/search-trace/recent${suffix}`);
+  }
+
+  async getSearchTraceJourney(traceId: string): Promise<{
+    trace: Awaited<ReturnType<ApiClient['getSearchTraceRecent']>>['traces'][number];
+    candidate_count: number;
+    funnel: Array<{ decision: string; drop_reason: string | null; count: number }>;
+    placed_by_cell: Array<{ cell: number; cards: SearchTraceCandidateDTO[] }>;
+    candidates: SearchTraceCandidateDTO[];
+  }> {
+    return this.request(`/admin/search-trace/journey/${encodeURIComponent(traceId)}`);
+  }
+
   // Catalog of named search-algorithm rows (parameters as JSONB). Lets
   // super_admin flip the global default or apply a per-mandala override
   // without a code release; the v3 executor's `resolveAlgorithm` reads

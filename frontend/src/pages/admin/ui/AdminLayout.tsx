@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   Activity,
   Gauge,
+  Footprints,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
@@ -36,6 +37,8 @@ const NAV_ITEMS = [
   { to: '/admin/v4-arbiter-runs', icon: Activity, label: 'V4 Arbiter Runs' },
   // Content Pool Health — 5-section dashboard (volume/enrich/source/reuse/promote).
   { to: '/admin/pool-health', icon: Gauge, label: 'Pool Health' },
+  // Observability G2 — Search-Trace Explorer (Card Journey debug view).
+  { to: '/admin/search-trace', icon: Footprints, label: 'Search Trace' },
 ] as const;
 
 export function AdminLayout() {

@@ -29,6 +29,7 @@ import { adminRelevanceBackfillRoutes } from './relevance-backfill';
 import { adminMandalaBookFillRoutes } from './mandala-book-fill';
 import { adminSegmentRelevanceFillRoutes } from './segment-relevance-fill';
 import { adminPoolServeRoutes } from './pool-serve';
+import { adminSearchTraceExplorerRoutes } from './search-trace-explorer';
 
 /**
  * Admin routes plugin.
@@ -80,5 +81,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminSegmentRelevanceFillRoutes, { prefix: '/segment-relevance-fill' });
   // CP499+ — pool-serve canary trigger (deficit-cell fill, flag bypassed).
   await fastify.register(adminPoolServeRoutes, { prefix: '/pool-serve' });
+  // Observability G2 — Search-Trace Explorer (Card Journey debug view over
+  // search_trace / search_trace_candidate). Read-only; observation-only.
+  await fastify.register(adminSearchTraceExplorerRoutes, { prefix: '/search-trace' });
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }
