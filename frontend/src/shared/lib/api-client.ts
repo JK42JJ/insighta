@@ -486,6 +486,14 @@ interface MandalaResponse {
   fillPendingCells?: number[];
   // CP500+ — cells whose fill run completed <60s ago (grace: invalidate once).
   fillCompletedCells?: number[];
+  // P1 — per-mandala asset status for the sidebar (deck/note/v2), from the LIST
+  // path only. Lets the sidebar show at-a-glance icons without per-mandala fetches.
+  assetStatus?: {
+    deck: string | null; // pending | building | done | failed | null=none
+    note: 'fresh' | 'stale' | 'none';
+    v2Done: number | null;
+    v2GatePassed: number | null;
+  };
   createdAt: string;
   updatedAt: string;
   levels: Array<{

@@ -46,6 +46,47 @@ interface MandalaLevelData {
   parentLevelKey?: string | null;
 }
 
+/**
+ * P1 — per-mandala asset status for the sidebar (deck / note / v2), surfaced in
+ * the LIST response so the FE shows at-a-glance icons without an on-demand fetch
+ * per mandala. All three are cheap single-row lookups keyed by mandala_id.
+ */
+export interface MandalaAssetStatus {
+  /** slide_decks.status: pending | building | done | failed; null = no deck. */
+  deck: string | null;
+  /** note_documents presence + freshness vs mandala_books.version. */
+  note: 'fresh' | 'stale' | 'none';
+  /** mandala_books.v2_done / gate_passed — coverage snapshot at last fill. */
+  v2Done: number | null;
+  v2GatePassed: number | null;
+}
+
+/**
+ * Pure derivation of a mandala's asset status (exported for unit testing).
+ * note: no note row ⇒ 'none'; note present + book re-filled past it ⇒ 'stale'; else 'fresh'.
+ */
+export function deriveMandalaAssetStatus(input: {
+  deckStatus: string | null;
+  bookVersion: number | null;
+  v2Done: number | null;
+  v2GatePassed: number | null;
+  /** note_documents.based_on_book_version; null = no note. */
+  noteBasedOnVersion: number | null;
+}): MandalaAssetStatus {
+  const note: MandalaAssetStatus['note'] =
+    input.noteBasedOnVersion == null
+      ? 'none'
+      : input.bookVersion != null && input.bookVersion > input.noteBasedOnVersion
+        ? 'stale'
+        : 'fresh';
+  return {
+    deck: input.deckStatus,
+    note,
+    v2Done: input.v2Done,
+    v2GatePassed: input.v2GatePassed,
+  };
+}
+
 export interface MandalaWithLevels {
   id: string;
   userId: string;
@@ -73,6 +114,8 @@ export interface MandalaWithLevels {
   // (completed-grace). FE invalidates its card cache ONCE when it lands
   // inside this window (fast runs finish before the first meta fetch).
   fillCompletedCells: number[];
+  /** P1 — deck/note/v2 status (list path only; undefined on single-mandala fetches). */
+  assetStatus?: MandalaAssetStatus;
   createdAt: Date;
   updatedAt: Date;
   levels: {
@@ -170,7 +213,8 @@ export class MandalaManager {
     },
     cardCount?: number,
     fillPendingCells?: number[],
-    fillCompletedCells?: number[]
+    fillCompletedCells?: number[],
+    assetStatus?: MandalaAssetStatus
   ): MandalaWithLevels {
     return {
       id: mandala.id,
@@ -186,6 +230,7 @@ export class MandalaManager {
       cardCount: cardCount ?? 0,
       fillPendingCells: fillPendingCells ?? [],
       fillCompletedCells: fillCompletedCells ?? [],
+      ...(assetStatus ? { assetStatus } : {}),
       createdAt: mandala.created_at,
       updatedAt: mandala.updated_at,
       levels: mandala.levels.map((l) => ({
@@ -443,8 +488,41 @@ export class MandalaManager {
       }),
     ]);
 
+    // P1 — batch per-mandala asset status (deck/note/v2) in 3 indexed IN-lookups
+    // (no N+1) so the sidebar shows at-a-glance icons without per-mandala fetches.
+    const ids = mandalas.map((m) => m.id);
+    const [decks, books, notes] = await Promise.all([
+      this.prisma.slide_decks.findMany({
+        where: { mandala_id: { in: ids } },
+        select: { mandala_id: true, status: true },
+      }),
+      this.prisma.mandala_books.findMany({
+        where: { mandala_id: { in: ids } },
+        select: { mandala_id: true, gate_passed: true, v2_done: true, version: true },
+      }),
+      this.prisma.note_documents.findMany({
+        where: { mandala_id: { in: ids }, user_id: userId },
+        select: { mandala_id: true, based_on_book_version: true },
+      }),
+    ]);
+    const deckMap = new Map(decks.map((d) => [d.mandala_id, d.status]));
+    const bookMap = new Map(books.map((b) => [b.mandala_id, b]));
+    const noteVerMap = new Map(notes.map((n) => [n.mandala_id, n.based_on_book_version]));
+    const assetStatusFor = (id: string): MandalaAssetStatus => {
+      const book = bookMap.get(id);
+      return deriveMandalaAssetStatus({
+        deckStatus: deckMap.get(id) ?? null,
+        bookVersion: book?.version ?? null,
+        v2Done: book?.v2_done ?? null,
+        v2GatePassed: book?.gate_passed ?? null,
+        noteBasedOnVersion: noteVerMap.get(id) ?? null,
+      });
+    };
+
     return {
-      mandalas: mandalas.map((m) => this.mapMandala(m)),
+      mandalas: mandalas.map((m) =>
+        this.mapMandala(m, undefined, undefined, undefined, assetStatusFor(m.id))
+      ),
       total,
       page: hasLimit ? page : 1,
       limit: hasLimit ? limit : total,
