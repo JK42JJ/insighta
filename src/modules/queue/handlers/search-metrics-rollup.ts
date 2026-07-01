@@ -20,6 +20,7 @@ import { logger } from '@/utils/logger';
 import { resolveSearchApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, QUEUE_CONFIG } from '../types';
+import { sendDailyReport } from './search-metrics-report';
 
 const log = logger.child({ module: 'search-metrics-rollup' });
 
@@ -40,6 +41,8 @@ export interface DailyMetrics {
   cards_p90: number | null;
   pct_ge_50: number | null;
   pct_honest_partial: number | null;
+  /** Phase 3 golden-cohort offline — always null from the live rollup. */
+  gc_median: number | null;
   pct_le_6mo: number | null;
   freshness: Record<string, unknown> | null;
   top_channel_share: number | null;
@@ -188,6 +191,7 @@ export async function computeDailyMetrics(start: Date, end: Date): Promise<Daily
     cards_p90: ri(req?.p90),
     pct_ge_50: n(req?.pct_ge_50),
     pct_honest_partial: n(req?.pct_honest_partial),
+    gc_median: null, // Phase 3 golden-cohort offline (no live scorer)
     pct_le_6mo: pct(n(cand?.placed_recent) ?? 0, placed),
     freshness,
     top_channel_share: pct(chTop, chTotal),
@@ -236,7 +240,30 @@ export async function runDailyRollup(
 
 async function handleSearchMetricsRollup(): Promise<void> {
   try {
-    await runDailyRollup(new Date());
+    const { metricDate, metrics } = await runDailyRollup(new Date());
+    const db = getPrismaClient();
+    const start = metricDate;
+    const end = new Date(metricDate.getTime() + 86_400_000);
+    const priorDate = new Date(metricDate.getTime() - 86_400_000);
+    const prior = await db.search_metrics_daily.findUnique({ where: { metric_date: priorDate } });
+    // Representative weakest request that day (fewest cards) → Trace Explorer deep link.
+    const [worst] = await db.$queryRaw<
+      { trace_id: string; mandala_id: string | null; cards: number }[]
+    >`
+      SELECT trace_id, mandala_id, (outcome->>'cards_count')::int AS cards
+      FROM public.search_trace
+      WHERE created_at >= ${start} AND created_at < ${end} AND outcome ? 'cards_count'
+      ORDER BY (outcome->>'cards_count')::int ASC LIMIT 1`;
+    await sendDailyReport(
+      metricDate.toISOString().slice(0, 10),
+      metrics,
+      prior as Partial<Record<keyof DailyMetrics, unknown>> | null,
+      {
+        worstTrace: worst
+          ? { traceId: worst.trace_id, mandalaId: worst.mandala_id, cards: Number(worst.cards) }
+          : null,
+      }
+    );
   } catch (err) {
     log.warn(
       `metrics rollup failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
