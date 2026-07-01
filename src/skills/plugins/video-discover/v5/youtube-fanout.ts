@@ -14,6 +14,8 @@
  */
 
 import { logger } from '@/utils/logger';
+import { config } from '@/config/index';
+import type { SearchTraceCandidateInput, DropReason } from '@/modules/search-trace';
 import {
   searchVideos,
   resolveSearchApiKeys,
@@ -132,6 +134,13 @@ export interface FanoutResult {
   queryGen: QueryGenMeta;
   /** CP492 2차 gate — candidates dropped by the off-language script filter. */
   offLangDropped: number;
+  /**
+   * Observability Phase 1 — per-candidate rows for videos dropped INSIDE the
+   * live fanout loop (duplicate / blocklist / shorts_title / off_lang), which
+   * never appear in `candidates`. Populated only when SEARCH_TRACE_ENABLED.
+   * Observation-only; the drop decisions themselves are unchanged.
+   */
+  droppedCandidates?: SearchTraceCandidateInput[];
   /** CP494 — pool-first backfill telemetry (quota delta + Fork-2 quality tradeoff). */
   poolBackfill: PoolBackfillMeta;
   /** CP494 ④-1 — # of cell queries skipped because the cell was already full. */
@@ -650,13 +659,44 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     if (typeof ci === 'number') cellAssignCounts.set(ci, (cellAssignCounts.get(ci) ?? 0) + 1);
   };
 
-  for (const r of results) {
+  // Observation-only (SEARCH_TRACE_ENABLED). Accumulates fanout-internal drops
+  // that never reach `candidates`. Building this list below changes NO drop
+  // decision — every push sits next to an existing continue, same condition.
+  const traceOn = config.searchTrace.enabled;
+  const traceDrops: SearchTraceCandidateInput[] = [];
+  const mkDrop = (
+    c: FanoutCandidate,
+    reason: DropReason,
+    q: string | null
+  ): SearchTraceCandidateInput => ({
+    videoId: c.videoId,
+    channelId: c.channelId || null,
+    channelTitle: c.channelTitle || null,
+    sourceKind: 'live',
+    sourceCellIndex: c.cellIndex,
+    sourceQueryText: q,
+    stageReached: 'fanout',
+    decision: 'DROPPED',
+    dropReason: reason,
+    publishedAt: c.publishedAt || null,
+  });
+  // One trace row per dropped videoId (a video can recur across overlapping
+  // queries; record only its first true drop).
+  const dropSeen = new Set<string>();
+  const pushDrop = (c: FanoutCandidate, reason: DropReason, q: string | null): void => {
+    if (!traceOn || dropSeen.has(c.videoId)) return;
+    dropSeen.add(c.videoId);
+    traceDrops.push(mkDrop(c, reason, q));
+  };
+
+  for (const [ri, r] of results.entries()) {
     if (r.status !== 'fulfilled') {
       log.debug(`v5 fanout query rejected: ${String(r.reason)}`);
       continue;
     }
     queriesSucceeded += 1;
     const { items, cellIndex } = r.value;
+    const qText = liveQueries[ri]?.query ?? null;
     for (const it of items) {
       rawItemCount += 1;
       const cand = toFanoutCandidate(it, cellIndex);
@@ -673,9 +713,18 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
           countAssigned(cand.cellIndex);
           seen.set(cand.videoId, { ...dup, cellIndex: cand.cellIndex });
         }
+        // A duplicate occurrence is a redundant fetch, NOT a dropped video —
+        // the video survives via its first occurrence, so it is not traced as a
+        // candidate row here (doing so would double-key a placed videoId). The
+        // duplicate volume is still visible via rawItemCount vs candidates.
         continue;
       }
-      if (titleHitsBlocklist(cand.title) || titleIndicatesShorts(cand.title)) continue;
+      const isBlock = titleHitsBlocklist(cand.title);
+      const isShortTitle = titleIndicatesShorts(cand.title);
+      if (isBlock || isShortTitle) {
+        pushDrop(cand, isBlock ? 'blocklist' : 'shorts', qText);
+        continue;
+      }
       // CP492 — off-language hard drop. YouTube backfills sparse queries with
       // high-view global content (Chinese dramas on a Korean basketball query).
       // Conservative: only drop titles dominated by a non-target script (see
@@ -693,6 +742,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
             )
       ) {
         offLangDropped += 1;
+        pushDrop(cand, 'off_lang', qText);
         continue;
       }
       seen.set(cand.videoId, cand);
@@ -746,6 +796,7 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
     queryGenMs,
     queryGen,
     offLangDropped,
+    droppedCandidates: traceOn ? traceDrops : undefined,
     poolBackfill: poolMeta,
     skippedFullCells,
     enPass,

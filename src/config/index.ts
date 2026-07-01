@@ -210,6 +210,14 @@ const envSchema = z.object({
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
 
+  // Observability Phase 1 — per-request + per-candidate search trail log
+  // (search_trace / search_trace_candidate). Off → near-zero overhead. On →
+  // async fire-and-forget INSERT of the full Card Journey for every v5 live
+  // search request (wizard | add_cards | pool_serve). Never blocks the serve path.
+  SEARCH_TRACE_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+
   // CP494 — video_pool ToS hygiene cron (soft-expire + scrub of stale metadata).
   // Default true: this is a compliance job. Kill-switch only — set 'false' to
   // pause the maintenance worker (the GHA cron will then no-op at the handler).
@@ -397,6 +405,11 @@ export const config = {
   // Discover-pipeline tracing (CP457+).
   discoverTracing: {
     enabled: env.V3_TRACE_ENABLED,
+  },
+
+  // Observability Phase 1 — search trail log (search_trace + candidates).
+  searchTrace: {
+    enabled: env.SEARCH_TRACE_ENABLED,
   },
 
   // video_pool ToS hygiene cron (CP494).
