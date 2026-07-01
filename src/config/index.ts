@@ -175,6 +175,14 @@ const envSchema = z.object({
   GMAIL_SMTP_PORT: z.coerce.number().default(587),
   GMAIL_SMTP_FROM: z.string().default('noreply@insighta.one'),
 
+  // Observability Phase 2-A — ops alarm recipient (admin inbox). Empty = the
+  // alarm job logs the count but sends NO email (inert until the operator sets a
+  // real inbox). An email address is config, not a secret (CP392).
+  OBSERVABILITY_ALERT_EMAIL: z.string().default(''),
+  // Alarm when active YouTube SEARCH keys exceed this — multi-key distribution
+  // across Google projects is a ToS ban risk (M4: 8 keys). Expected steady = 1.
+  OBSERVABILITY_KEY_ALARM_MAX: z.coerce.number().int().min(1).default(1),
+
   // Pipeline events — round id stamped on each measurement event (paper §6.2).
   // Increment when starting a new measurement batch.
   PIPELINE_EVENTS_ROUND: z.coerce.number().int().min(1).default(1),
@@ -207,6 +215,14 @@ const envSchema = z.object({
   // Off → near-zero overhead. On → fire-and-forget INSERT into
   // public.video_discover_traces for every LLM/YouTube/Cohere/embed call.
   V3_TRACE_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+
+  // Observability Phase 1 — per-request + per-candidate search trail log
+  // (search_trace / search_trace_candidate). Off → near-zero overhead. On →
+  // async fire-and-forget INSERT of the full Card Journey for every v5 live
+  // search request (wizard | add_cards | pool_serve). Never blocks the serve path.
+  SEARCH_TRACE_ENABLED: z
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
 
@@ -399,6 +415,11 @@ export const config = {
     enabled: env.V3_TRACE_ENABLED,
   },
 
+  // Observability Phase 1 — search trail log (search_trace + candidates).
+  searchTrace: {
+    enabled: env.SEARCH_TRACE_ENABLED,
+  },
+
   // video_pool ToS hygiene cron (CP494).
   poolMaintenance: {
     enabled: env.POOL_MAINTENANCE_ENABLED,
@@ -454,6 +475,12 @@ export const config = {
     smtpHost: env.GMAIL_SMTP_HOST,
     smtpPort: env.GMAIL_SMTP_PORT,
     smtpFrom: env.GMAIL_SMTP_FROM,
+  },
+
+  // Observability Phase 2-A — ops alarms.
+  observability: {
+    alertEmail: env.OBSERVABILITY_ALERT_EMAIL,
+    keyAlarmMaxKeys: env.OBSERVABILITY_KEY_ALARM_MAX,
   },
 
   // Pipeline events (paper §6.2 measurement)

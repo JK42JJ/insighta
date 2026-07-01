@@ -220,6 +220,11 @@ services:
       # inside enrichRichSummary via rich-summary-quota module.
       # Revert: delete this line → feature no-ops.
       - RICH_SUMMARY_ENABLED=true
+      # Observability Phase 2-A/2-B — ops alarm + daily report recipient (admin
+      # inbox, the OAuth/privacy/maintainer contact). Config, not a secret (CP392).
+      # Arms the daily 🔴 multi-key alarm + the daily metrics report. Empty ⇒ jobs
+      # log only, send no mail. Revert: delete this line → mail no-ops.
+      - OBSERVABILITY_ALERT_EMAIL=admin@insighta.one
       # CP437 (2026-04-29) — Operator flip: enable v2 layered cron.
       # Default in code is `false` — cron stays dormant unless this env is
       # explicitly true. With this set, `startRichSummaryV2Cron()` schedules

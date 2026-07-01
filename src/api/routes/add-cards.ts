@@ -38,6 +38,7 @@ import { withTraceContext, recordTrace, getTraceContext } from '@/modules/discov
 import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
 import { getV5Config } from '@/skills/plugins/video-discover/v5/config';
 import { getFullCellIndices } from '@/modules/mandala/cell-fill';
+import { writeSearchTrace, type DropReason } from '@/modules/search-trace';
 import { randomUUID } from 'node:crypto';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -408,6 +409,67 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           // (one round = one runId = one chain of recordTrace rows).
           const roundId = getTraceContext()?.runId ?? randomUUID();
           const roundAt = new Date().toISOString();
+
+          // Observability Phase 1 (STEP 3 stage C) — flush the full Card Journey
+          // fire-and-forget. `traceCandidates` is built only when
+          // SEARCH_TRACE_ENABLED, so this whole block is a no-op when off.
+          // PLACED candidates cut by the display filter above are reclassified
+          // to their filter reason here (the executor could not see the filter).
+          if (v5Result.diagnostics.traceCandidates) {
+            const shown = new Set(v5Filtered.map((c) => c.videoId));
+            const journey = v5Result.diagnostics.traceCandidates.map((tc) => {
+              if (tc.decision !== 'PLACED' || shown.has(tc.videoId)) return tc;
+              const card = v5Result.cards.find((c) => c.videoId === tc.videoId);
+              let reason: DropReason = 'filter_min_views';
+              if (card) {
+                if (minViews != null && card.viewCount != null && card.viewCount < minViews) {
+                  reason = 'filter_min_views';
+                } else if (
+                  durationRange &&
+                  card.durationSec != null &&
+                  (card.durationSec < durationRange.min || card.durationSec >= durationRange.max)
+                ) {
+                  reason = 'filter_duration';
+                } else if (publishedAfterTs != null && card.publishedAt) {
+                  reason = 'filter_published_after';
+                }
+              }
+              return {
+                ...tc,
+                decision: 'DROPPED' as const,
+                dropReason: reason,
+                stageReached: 'display_filter',
+                finalCellIndex: null,
+              };
+            });
+            const d = v5Result.diagnostics;
+            writeSearchTrace(
+              {
+                traceId: roundId,
+                mandalaId,
+                userId,
+                trigger: 'add_cards',
+                startedAt: new Date(t0),
+                finishedAt: new Date(),
+                queriesGenerated: d.perQuery,
+                quotaUnits: d.quotaUnitsApprox,
+                queriesAttempted: d.queriesAttempted,
+                queriesSucceeded: d.queriesSucceeded,
+                queriesFailed: Math.max(0, d.queriesAttempted - d.queriesSucceeded),
+                counts: {
+                  raw: d.rawItemCount,
+                  after_title: d.afterTitleFilter,
+                  after_exclude: d.afterExcludeFilter,
+                  off_lang_dropped: d.offLangDropped,
+                  shorts_dropped: d.shortsDropped,
+                  placed: cards.length,
+                },
+                outcome: { cards_count: cards.length },
+                algorithmVersion: getTraceContext()?.algorithmVersion ?? null,
+              },
+              journey
+            );
+          }
 
           const payload = trace
             ? { cards, mandalaMeta: mandalaMetaOut, roundId, roundAt, trace }

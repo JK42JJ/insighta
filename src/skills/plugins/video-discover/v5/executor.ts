@@ -32,6 +32,9 @@ import { getLlmPickerConfig } from '@/config/llm-picker';
 import { isShortCached, SHORT_MAX_DURATION_SEC } from '@/modules/video-pool/is-short';
 import { reusePickedToPool } from '@/modules/video-pool/reuse-from-v5';
 import type { PickCandidate, PickResult } from '@/modules/llm-picker/types';
+import { config } from '@/config/index';
+import { buildV5TraceCandidates } from './trace-candidates';
+import type { SearchTraceCandidateInput } from '@/modules/search-trace';
 
 const log = logger.child({ module: 'video-discover/v5/executor' });
 
@@ -128,6 +131,8 @@ export interface V5ExecuteResult {
     skippedFullCells: number;
     /** CP499+ EN query pass observability. */
     enPass: import('./youtube-fanout').EnPassMeta;
+    /** Observability Phase 1 — per-candidate Card Journey rows (flag-gated). */
+    traceCandidates?: SearchTraceCandidateInput[];
   };
 }
 
@@ -173,6 +178,9 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   const tExclude0 = Date.now();
   let survivors = fanout.candidates.filter((c) => !input.excludeVideoIds.has(c.videoId));
   const afterExcludeFilter = survivors.length;
+  // Observation-only: hold the post-exclude array before the diversity guard
+  // reassigns `survivors`, so the trace can attribute series-dedup drops.
+  const afterExcludeCands = survivors;
   stage.excludeMs = Date.now() - tExclude0;
 
   // 2.5 CP500+ diversity guard (UX 원칙 2 다양성 축) — same-channel series
@@ -367,6 +375,21 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     }).catch((e) => log.warn(`reuse-loop failed: ${e instanceof Error ? e.message : String(e)}`));
   }
 
+  // Observation-only (SEARCH_TRACE_ENABLED) — reconstruct the per-candidate
+  // journey from the arrays computed above. Pure reads; no decision changed.
+  const traceCandidates = config.searchTrace.enabled
+    ? buildV5TraceCandidates({
+        fanoutDropped: fanout.droppedCandidates ?? [],
+        fanoutCandidates: fanout.candidates,
+        excludeVideoIds: input.excludeVideoIds,
+        afterExcludeCands,
+        pickerInput: survivors,
+        cards,
+        gatedCards,
+        finalCards,
+      })
+    : undefined;
+
   return {
     cards: finalCards,
     diagnostics: {
@@ -390,6 +413,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       poolBackfill: fanout.poolBackfill,
       skippedFullCells: fanout.skippedFullCells,
       enPass: fanout.enPass,
+      traceCandidates,
     },
   };
 }

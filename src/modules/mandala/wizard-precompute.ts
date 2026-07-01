@@ -29,6 +29,8 @@ import { logger } from '@/utils/logger';
 import { loadWizardPrecomputeConfig } from '@/config/wizard-precompute';
 import type { EphemeralDiscoverResult } from '@/skills/plugins/video-discover/v3/executor';
 import { runV5ForWizard } from '@/skills/plugins/video-discover/v5/wizard-adapter';
+import { reclassifyPlacedNotIn } from '@/skills/plugins/video-discover/v5/trace-candidates';
+import { writeSearchTrace, type SearchTraceCandidateInput } from '@/modules/search-trace';
 import { loadInflowGateConfig } from '@/config/inflow-gate';
 import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
 import { MS_PER_DAY } from '@/utils/time-constants';
@@ -189,6 +191,62 @@ export async function startPrecompute(input: StartPrecomputeInput): Promise<void
           { sessionId: input.sessionId }
         );
       }
+    }
+
+    // Observability Phase 1 (STEP 3) — wizard trail log. Emitted HERE (start-
+    // precompute), the ONLY point that runs for every quota-spending discover,
+    // so quota_units is recorded even when consume later MISSES (expired /
+    // goal-mismatch / empty-slots). trigger='wizard', mandalaId null (pre-save,
+    // mirrors the inflow-gate trace). Fire-and-forget; no decision changed.
+    // traceCandidates is built by the executor only when SEARCH_TRACE_ENABLED.
+    const diag = result.diagnostics as unknown as {
+      traceCandidates?: SearchTraceCandidateInput[];
+      quotaUnitsApprox?: number;
+      perQuery?: unknown;
+      queriesAttempted?: number;
+      queriesSucceeded?: number;
+      rawItemCount?: number;
+      afterTitleFilter?: number;
+      afterExcludeFilter?: number;
+      offLangDropped?: number;
+      shortsDropped?: number;
+    };
+    if (diag.traceCandidates) {
+      // The inflow-gate (above) may have cut slots the executor had PLACED —
+      // reclassify those to below_relevance_min against the final kept set.
+      const keptIds = new Set(result.slots.map((s) => s.videoId));
+      const journey = reclassifyPlacedNotIn(
+        diag.traceCandidates,
+        keptIds,
+        'below_relevance_min',
+        'inflow_gate'
+      );
+      writeSearchTrace(
+        {
+          traceId: input.sessionId,
+          mandalaId: null,
+          userId: input.userId,
+          trigger: 'wizard',
+          startedAt: new Date(t0),
+          finishedAt: new Date(),
+          queriesGenerated: diag.perQuery,
+          quotaUnits: diag.quotaUnitsApprox ?? null,
+          queriesAttempted: diag.queriesAttempted ?? null,
+          queriesSucceeded: diag.queriesSucceeded ?? null,
+          queriesFailed: Math.max(0, (diag.queriesAttempted ?? 0) - (diag.queriesSucceeded ?? 0)),
+          counts: {
+            raw: diag.rawItemCount,
+            after_title: diag.afterTitleFilter,
+            after_exclude: diag.afterExcludeFilter,
+            off_lang_dropped: diag.offLangDropped,
+            shorts_dropped: diag.shortsDropped,
+            placed: result.slots.length,
+          },
+          outcome: { cards_count: result.slots.length },
+          algorithmVersion: null,
+        },
+        journey
+      );
     }
 
     await db.mandala_wizard_precompute.update({

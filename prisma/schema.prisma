@@ -433,33 +433,33 @@ model users {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model user_mandalas {
-  id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id         String                    @db.Uuid
-  title           String                    @default("My Mandala")
-  is_default      Boolean                   @default(true)
-  is_public       Boolean                   @default(false)
-  is_template     Boolean                   @default(false)
-  domain          String?
-  language        String?                   @db.VarChar(10)
+  id               String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String                            @db.Uuid
+  title            String                            @default("My Mandala")
+  is_default       Boolean                           @default(true)
+  is_public        Boolean                           @default(false)
+  is_template      Boolean                           @default(false)
+  domain           String?
+  language         String?                           @db.VarChar(10)
   /// CP499+ score pipeline — merged-gen 1-line judgement ('volatile' | 'evergreen').
   /// NULL (pre-existing / non-wizard mandalas) ⇒ recency bonus never applies.
-  volatility      String?                   @db.VarChar(10)
-  like_count      Int                       @default(0)
-  clone_count     Int                       @default(0)
-  share_slug      String?                   @unique
-  position        Int                       @default(0)
-  created_at      DateTime                  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime                  @default(now()) @db.Timestamptz(6)
-  users           users                     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  levels          user_mandala_levels[]
-  videoRelevance  video_mandala_relevance[]
+  volatility       String?                           @db.VarChar(10)
+  like_count       Int                               @default(0)
+  clone_count      Int                               @default(0)
+  share_slug       String?                           @unique
+  position         Int                               @default(0)
+  created_at       DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime                          @default(now()) @db.Timestamptz(6)
+  users            users                             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  levels           user_mandala_levels[]
+  videoRelevance   video_mandala_relevance[]
   segmentRelevance video_mandala_segment_relevance[]
-  videoStates     UserVideoState[]
-  localCards      user_local_cards[]
-  subscriptions   mandala_subscriptions[]
-  activity_logs   mandala_activity_log[]
-  contentEntities content_entities[]
-  sourceMappings  source_mandala_mappings[]
+  videoStates      UserVideoState[]
+  localCards       user_local_cards[]
+  subscriptions    mandala_subscriptions[]
+  activity_logs    mandala_activity_log[]
+  contentEntities  content_entities[]
+  sourceMappings   source_mandala_mappings[]
 
   mandala_shares       mandala_shares[]
   skill_outputs        skill_outputs[]
@@ -696,19 +696,19 @@ model slide_decks {
 /// "원본 복원" replaces content_json with original_json.
 /// Raw SQL DDL: prisma/migrations/note_documents/001_create_table.sql
 model note_documents {
-  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id       String        @db.Uuid
-  mandala_id    String        @db.Uuid
-  content_json  Json          @db.JsonB
-  original_json Json          @db.JsonB
+  id                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id               String        @db.Uuid
+  mandala_id            String        @db.Uuid
+  content_json          Json          @db.JsonB
+  original_json         Json          @db.JsonB
   /// PR3 — the mandala_books.version this note was generated from. note view
   /// compares book.version > based_on_book_version ⇒ STALE (book re-filled with
   /// new cards/translations) ⇒ user-triggered regenerate. 0 = pre-PR3 / unknown.
-  based_on_book_version Int     @default(0)
-  created_at    DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
-  user          users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  mandala       user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  based_on_book_version Int           @default(0)
+  created_at            DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  user                  users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  mandala               user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([user_id, mandala_id], map: "uq_note_documents_user_mandala")
   @@index([user_id, updated_at(sort: Desc)], map: "idx_note_documents_user_updated_at")
@@ -1979,6 +1979,113 @@ model video_discover_traces {
   @@index([user_id, created_at(sort: Desc)], map: "idx_video_discover_traces_user_created")
   @@index([expires_at], map: "idx_video_discover_traces_expires")
   @@index([algorithm_version, created_at(sort: Desc)], map: "idx_video_discover_traces_algo")
+  @@schema("public")
+}
+
+/// Observability Phase 1 — per-request trail log for the v5 live search
+/// pipeline (wizard | add_cards | pool_serve). One row per request; joins to
+/// search_trace_candidate via trace_id. Flag-gated SEARCH_TRACE_ENABLED, async
+/// fire-and-forget writer, 14-day TTL. Design SSOT:
+/// docs/handoffs/insighta-observability-eval-system-design.md
+model search_trace {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trace_id          String    @db.Uuid
+  mandala_id        String?   @db.Uuid
+  user_id           String?   @db.Uuid
+  trigger           String    @db.VarChar(16)
+  started_at        DateTime  @default(now()) @db.Timestamptz(6)
+  finished_at       DateTime? @db.Timestamptz(6)
+  queries_generated Json?
+  quota_units       Int?
+  queries_attempted Int?
+  queries_succeeded Int?
+  queries_failed    Int?
+  counts            Json?
+  outcome           Json?
+  algorithm_version String?   @db.VarChar(50)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at        DateTime  @default(dbgenerated("(now() + interval '14 days')")) @db.Timestamptz(6)
+
+  @@index([mandala_id, created_at(sort: Desc)], map: "idx_search_trace_mandala_created")
+  @@index([trace_id], map: "idx_search_trace_trace")
+  @@index([user_id, created_at(sort: Desc)], map: "idx_search_trace_user_created")
+  @@index([trigger, created_at(sort: Desc)], map: "idx_search_trace_trigger_created")
+  @@index([expires_at], map: "idx_search_trace_expires")
+  @@schema("public")
+}
+
+/// Observability Phase 1 — per-candidate row within a search_trace request.
+/// Records the full Card Journey: source (live query / pool tier), decision +
+/// drop_reason, final cell. gc/cosine nullable by design (see 001 DDL header:
+/// cosine absent on serve path, gc only on async paths, live sync gc = null).
+model search_trace_candidate {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trace_id          String    @db.Uuid
+  video_id          String    @db.VarChar(64)
+  channel_id        String?   @db.VarChar(64)
+  channel_title     String?
+  source_kind       String    @db.VarChar(8)
+  source_cell_index Int?
+  source_query_text String?
+  source_tier       String?   @db.VarChar(16)
+  stage_reached     String?   @db.VarChar(24)
+  decision          String    @db.VarChar(16)
+  drop_reason       String?   @db.VarChar(32)
+  relevance_gc      Int?
+  ts_rank           Float?    @db.Real
+  cosine            Float?    @db.Real
+  llm_pick_score    Float?    @db.Real
+  llm_pick_reason   String?
+  view_count        BigInt?
+  duration_sec      Int?
+  published_at      DateTime? @db.Timestamptz(6)
+  final_cell_level  Int?
+  final_cell_index  Int?
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at        DateTime  @default(dbgenerated("(now() + interval '14 days')")) @db.Timestamptz(6)
+
+  @@index([trace_id], map: "idx_search_trace_cand_trace")
+  @@index([video_id], map: "idx_search_trace_cand_video")
+  @@index([decision, drop_reason], map: "idx_search_trace_cand_decision")
+  @@index([expires_at], map: "idx_search_trace_cand_expires")
+  @@schema("public")
+}
+
+/// Observability Phase 2-B — daily rollup of the 5 quality axes + pool + quota +
+/// funnel, tagged with algorithm_version / flags. One row per metric_date,
+/// computed from search_trace(+candidate) + video_pool + the live key pool.
+/// gc_median / gc_pct_below_65 / coverage are filled by the Phase 3 golden-cohort
+/// offline harness (NULL until then); any axis is NULL when nothing was measured
+/// that day (e.g. trace flag OFF ⇒ 0 rows). Raw DDL:
+/// prisma/migrations/search-metrics/001_create_search_metrics_daily.sql
+model search_metrics_daily {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  metric_date          DateTime @unique(map: "uq_search_metrics_daily_date") @db.Date
+  requests             Int?
+  cards_p10            Int?
+  cards_p50            Int?
+  cards_p90            Int?
+  pct_ge_50            Float?   @db.Real
+  pct_honest_partial   Float?   @db.Real
+  gc_median            Float?   @db.Real
+  gc_pct_below_65      Float?   @db.Real
+  pct_le_6mo           Float?   @db.Real
+  freshness            Json?
+  top_channel_share    Float?   @db.Real
+  channel_hhi          Float?   @db.Real
+  pct_view_lt_1000     Float?   @db.Real
+  off_lang_drops       Int?
+  pool_active          Int?
+  pool_embedded        Int?
+  pool_ttl_expired_pct Float?   @db.Real
+  quota_units_total    Int?
+  active_search_keys   Int?
+  funnel               Json?
+  coverage             Json?
+  algorithm_version    String?  @db.VarChar(50)
+  flags_snapshot       Json?
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+
   @@schema("public")
 }
 

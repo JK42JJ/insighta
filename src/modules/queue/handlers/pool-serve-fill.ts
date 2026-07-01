@@ -49,6 +49,8 @@ import { isOffLanguageTitleToggled } from '@/skills/plugins/video-discover/v5/yo
 import { dedupeSeries, softChannelCap } from '@/skills/plugins/video-discover/diversity-guard';
 import { loadDiversityGuardConfig } from '@/config/diversity-guard';
 import { logger } from '@/utils/logger';
+import { config } from '@/config/index';
+import { writeSearchTrace, type SearchTraceCandidateInput } from '@/modules/search-trace';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, POOL_SERVE_FILL_RETRY_OPTIONS, type PoolServeFillPayload } from '../types';
 import { richSummaryWorkOptions } from './rich-summary-work-options';
@@ -60,6 +62,14 @@ const log = logger.child({ module: 'pool-serve-fill' });
 const SCORE_BURST_SIZE = 4;
 /** Live fallback fetch size — one search.list call, gated downstream. */
 const LIVE_FALLBACK_MAX_RESULTS = 10;
+/** Pool recruitment source whitelist (single tier today — v2_promoted only). */
+const POOL_SOURCES = ['v2_promoted'] as const;
+/** Per-candidate source_tier for pool recruits. When the whitelist is a single
+ *  tier every recruit carries it; if it ever becomes multi-tier, add `source`
+ *  to the hybrid-rerank SELECT to attribute per-candidate instead. */
+const POOL_SOURCE_TIER: string | null = POOL_SOURCES.length === 1 ? POOL_SOURCES[0] : null;
+/** search.list = 100 units/call; videos.list batch = 1 unit (youtube-client). */
+const SEARCH_LIST_UNITS = 100;
 export const POOL_SERVE_SKILL_ID = 'pool-serve-fill';
 
 export async function registerPoolServeFillWorker(): Promise<void> {
@@ -83,10 +93,18 @@ export interface GateCandidate {
   publishedAt: Date | null;
   /** CP500+ shorts gate — pool rows carry it; live rows get it via videos.list. */
   durationSec?: number | null;
+  /** Observability — pool lexical rec_score (ts_rank); null on live candidates. */
+  tsRank?: number | null;
+  /** Observability — 'pool' recruits vs 'live' fallback. */
+  sourceKind?: 'live' | 'pool';
+  /** Observability — pool tier (v2_promoted…); null on live. */
+  sourceTier?: string | null;
 }
 
 interface PassedCandidate extends GateCandidate {
   relevancePct: number;
+  /** Observability — the gate axis value (gc / goalContribution or composite). */
+  gatePct: number;
 }
 
 export interface PoolServeCellResult {
@@ -118,6 +136,16 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
     inserted: 0,
     shortsDropped: 0,
   };
+
+  // Observability Phase 1 (STEP 3) — pool-serve trail log. Observation-only:
+  // accumulate PLACED / below_relevance_min / budget_full rows for SCORED
+  // candidates (gc/ts_rank/source_tier get filled here — pool-serve's unique
+  // value vs the null-scored live sync paths). Emitted in `finally`.
+  const traceOn = config.searchTrace.enabled;
+  const traceRows: SearchTraceCandidateInput[] = [];
+  // Live-fallback quota: search.list (100) + videos.list batch (1). Pool
+  // recruitment is quota-free (DB). Recorded nowhere before Phase 1.
+  let liveVideosUnits = 0;
 
   try {
     const need = Math.min(p.deficit, cfg.maxFillPerCell);
@@ -240,14 +268,40 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
           })
         );
         for (const { c, gatePct, displayPct } of scores) {
-          if (
+          // Identical predicate to the original inline condition — extracted so
+          // the trace can label PLACED vs the drop reason. No decision changed.
+          const willPlace =
             gatePct !== null &&
             displayPct !== null &&
             gatePct >= cfg.relevanceMin &&
-            passed.length < need
-          ) {
-            passed.push({ ...c, relevancePct: displayPct });
+            passed.length < need;
+          if (willPlace) {
+            passed.push({ ...c, relevancePct: displayPct, gatePct: gatePct });
             seen.add(c.youtubeVideoId);
+          }
+          // Observation-only: trace scored candidates (skip scorer errors,
+          // gatePct=null). budget_full = passed the gate but the cell was
+          // already filled to `need`.
+          if (traceOn && gatePct !== null) {
+            traceRows.push({
+              videoId: c.youtubeVideoId,
+              channelTitle: c.channelTitle ?? null,
+              sourceKind: c.sourceKind ?? 'pool',
+              sourceCellIndex: p.cellIndex,
+              sourceTier: c.sourceTier ?? null,
+              stageReached: 'pool_gate',
+              decision: willPlace ? 'PLACED' : 'DROPPED',
+              dropReason: willPlace
+                ? null
+                : gatePct >= cfg.relevanceMin
+                  ? 'budget_full'
+                  : 'below_relevance_min',
+              relevanceGc: Math.round(gatePct),
+              tsRank: c.tsRank ?? null,
+              durationSec: c.durationSec ?? null,
+              publishedAt: c.publishedAt,
+              finalCellIndex: willPlace ? p.cellIndex : null,
+            });
           }
         }
       }
@@ -258,7 +312,7 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
       [{ cellIndex: p.cellIndex, query: p.cellQuery }],
       [...seen],
       cfg.candidatesLimit,
-      ['v2_promoted']
+      POOL_SOURCES
     );
     result.recruited = recruits.length;
     const passed: PassedCandidate[] = [];
@@ -274,6 +328,9 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
               thumbnail: c.thumbnail,
               publishedAt: c.publishedAt,
               durationSec: c.durationSec,
+              tsRank: c.rec_score,
+              sourceKind: 'pool' as const,
+              sourceTier: POOL_SOURCE_TIER,
             }))
           ),
           []
@@ -303,6 +360,7 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
             channelTitle: it.snippet?.channelTitle ?? null,
             thumbnail: it.snippet?.thumbnails?.high?.url ?? null,
             publishedAt: it.snippet?.publishedAt ? new Date(it.snippet.publishedAt) : null,
+            sourceKind: 'live' as const,
           }))
         );
         result.liveRecruited = liveCands.length;
@@ -316,6 +374,8 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
               videoIds: liveCands.map((c) => c.youtubeVideoId),
               apiKey: resolveVideosApiKeys(process.env),
             });
+            liveVideosUnits = 1; // one videos.list batch call = 1 quota unit
+
             const durById = new Map(
               metas.map((m) => [m.id, parseIsoDurationSeconds(m.contentDetails?.duration)])
             );
@@ -384,6 +444,35 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
         `pool-serve run record failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
       )
     );
+
+    // Observability Phase 1 — flush the pool-serve trail log (fire-and-forget,
+    // no-op when SEARCH_TRACE_ENABLED is off). quota_units = live-fallback
+    // search.list + videos.list; pool recruitment itself is quota-free.
+    if (traceOn) {
+      writeSearchTrace(
+        {
+          traceId: p.runId,
+          mandalaId: p.mandalaId,
+          userId: p.userId,
+          trigger: 'pool_serve',
+          finishedAt: new Date(),
+          quotaUnits: (result.liveAttempted ? SEARCH_LIST_UNITS : 0) + liveVideosUnits,
+          counts: {
+            recruited: result.recruited,
+            scored: result.scored,
+            cache_hits: result.cacheHits,
+            pool_passed: result.poolPassed,
+            live_recruited: result.liveRecruited,
+            live_passed: result.livePassed,
+            shorts_dropped: result.shortsDropped,
+            inserted: result.inserted,
+          },
+          outcome: { cards_count: result.inserted },
+          algorithmVersion: null,
+        },
+        traceRows
+      );
+    }
   }
 }
 
