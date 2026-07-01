@@ -30,6 +30,7 @@ import { adminMandalaBookFillRoutes } from './mandala-book-fill';
 import { adminSegmentRelevanceFillRoutes } from './segment-relevance-fill';
 import { adminPoolServeRoutes } from './pool-serve';
 import { adminSearchTraceExplorerRoutes } from './search-trace-explorer';
+import { adminEvalHarnessRoutes } from './eval-harness';
 
 /**
  * Admin routes plugin.
@@ -84,5 +85,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Observability G2 — Search-Trace Explorer (Card Journey debug view over
   // search_trace / search_trace_candidate). Read-only; observation-only.
   await fastify.register(adminSearchTraceExplorerRoutes, { prefix: '/search-trace' });
+  // Observability G2-b — Phase 3 Eval Harness (golden-cohort gc baseline).
+  // gc miss-scoring is prod-only Haiku (admin-triggered); cacheOnly=safe verify.
+  await fastify.register(adminEvalHarnessRoutes, { prefix: '/eval-harness' });
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }
