@@ -26,7 +26,14 @@ folded in) is the SSOT baseline. **daily-coding-en gc=35 (%<65 74.3) = the outli
 - **Reuse embedder**: `embedBatch(inputs, { baseUrl })` + `isOllamaReachable(...)` from
   `@/skills/plugins/iks-scorer/embedding` (the exact call promote-from-* uses).
 
-## Selector — unembedded active gold/silver (~7,023)
+## Selector — unembedded active gold/silver (dry-confirmed = 7,022)
+> ⚠️ **model_version is `qwen3-embedding:8b` (COLON)**, NOT `qwen3-embedding-8b`
+> (dash = the schema DEFAULT, never actually written). The promote INSERT uses
+> `QWEN3_EMBED_MODEL = 'qwen3-embedding:8b'`. Dry-sanity CAUGHT this: a dash
+> filter matched 0 existing rows → mis-counted 11,482 "unembedded"; the colon
+> value (n=32,234 all rows) gives the true **7,022** unembedded (= horizon-0's
+> ~7,023). Using the dash for the backfill would have re-embedded ~4,460 already-
+> embedded rows under a split model_version → cosine-space fracture (prod incident).
 ```sql
 SELECT vp.video_id, vp.source, vp.quality_tier
 FROM video_pool vp
@@ -34,11 +41,19 @@ WHERE vp.is_active = true
   AND vp.quality_tier IN ('gold','silver')
   AND NOT EXISTS (
     SELECT 1 FROM video_pool_embeddings e
-    WHERE e.video_id = vp.video_id AND e.model_version = 'qwen3-embedding-8b'
+    WHERE e.video_id = vp.video_id AND e.model_version = 'qwen3-embedding:8b'
   );
 ```
-(Confirm the count matches the ~7,023 horizon-0 figure before the run; if it drifts,
-re-measure — the "7,023" is the W1 lever's premise.)
+(Re-confirm the count at run time — the pool grows; dry run measured 7,022.)
+
+## Dry-sanity RESULT (2026-07-01, executed) — PASS (space match confirmed)
+- Mac Mini Ollama up (`qwen3-embedding:8b` present); 31 stratified samples embedded.
+- New-embed max_cos vs golden-cohort cells: **med 0.462, max 0.700** (per source:
+  v2 0.33-0.56 / yt 0.34-0.55 / user_curated 0.39-0.70).
+- **Control** (EXISTING embedded pool rows vs same cohort cells): **med 0.405, max
+  0.493**. New ≥ existing baseline ⇒ same cosine space, **mismatch ruled out**. The
+  ~0.46 median is normal (random pool rows vs the 10 cohort mandalas' specific cells).
+- Uniform ~0.1 (mismatch) NOT seen. Dim 4096 both sides. → **backfill space-safe.**
 
 ## Backfill script design (scaffold — not executed)
 1. **Load** the selector rows (batched, e.g. 200/batch), ordered by video_id for
