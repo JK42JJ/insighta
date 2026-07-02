@@ -366,9 +366,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   let trustDropped = 0;
   if (cfg.liveViewFloor > 0) {
     const beforeTrust = gatedCards.length;
-    gatedCards = gatedCards.filter(
-      (c) => c.viewCount != null && c.viewCount >= cfg.liveViewFloor
-    );
+    gatedCards = gatedCards.filter((c) => c.viewCount != null && c.viewCount >= cfg.liveViewFloor);
     trustDropped = beforeTrust - gatedCards.length;
   }
 

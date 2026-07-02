@@ -541,13 +541,10 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           // explicit user signal (never rejected from the USER's own mandala),
           // but a blocklisted title must not enter the shared pool where a
           // future source expansion could serve it to other users.
-          const { titleHitsBlocklist } = await import(
-            '@/skills/plugins/video-discover/v2/youtube-client'
-          );
+          const { titleHitsBlocklist } =
+            await import('@/skills/plugins/video-discover/v2/youtube-client');
           if (ytFull.title && titleHitsBlocklist(ytFull.title)) {
-            log.info(
-              `like → video_pool ingest SKIPPED (blocklisted title): videoId=${videoId}`
-            );
+            log.info(`like → video_pool ingest SKIPPED (blocklisted title): videoId=${videoId}`);
             return;
           }
           const lang = ytFull.title && /[가-힣]/.test(ytFull.title) ? 'ko' : 'en';
