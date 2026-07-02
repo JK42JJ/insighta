@@ -25,16 +25,9 @@ jest.mock('@/modules/database', () => ({
   getPrismaClient: () => ({ $queryRaw: jest.fn() }),
 }));
 
-jest.mock('@/utils/logger', () => ({
-  logger: {
-    child: () => ({
-      debug: jest.fn(),
-      warn: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-    }),
-  },
-}));
+// Manual mock (src/utils/__mocks__/logger.ts) — full export surface,
+// survives module-scope top-level logger calls in imported prod code.
+jest.mock('@/utils/logger');
 
 jest.mock('../config', () => ({
   v3Config: {
