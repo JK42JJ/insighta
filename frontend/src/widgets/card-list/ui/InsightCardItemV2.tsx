@@ -22,6 +22,7 @@ import {
 import { formatRelativeDate } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
 import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
+import { ScrollableChipRow } from '@/shared/ui/scrollable-chip-row';
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -31,7 +32,6 @@ import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 const RELEVANCE_TIER_CORE = 80; // ≥80 → "핵심"
 const RELEVANCE_TIER_PICK = 70; // 70–79 → "추천" ; <70 → no badge (number never shown)
 const RELEVANCE_DIM_MAX = 30; // ≤30 relevance → toned down (unless bookmarked)
-const MAX_CARD_TAGS = 3;
 
 // Tier badge styles — complete class strings (RING_STYLES pattern, NO dynamic
 // Tailwind). Single indigo-intensity ladder on --primary (note/CV token parity);
@@ -54,15 +54,31 @@ const RELEVANCE_TIER_STYLES = {
  * the exact score available on hover. null/unscored ⇒ no badge; <70 (gate-passed
  * but low) ⇒ no badge either. Tune cuts via RELEVANCE_TIER_CORE/PICK.
  */
-export function getRelevanceBadge(
-  pct: number | null | undefined
-): { tier: 'core' | 'pick'; label: string; className: string; raw: number; showSpark: boolean } | null {
+export function getRelevanceBadge(pct: number | null | undefined): {
+  tier: 'core' | 'pick';
+  label: string;
+  className: string;
+  raw: number;
+  showSpark: boolean;
+} | null {
   if (pct == null) return null;
   const raw = Math.max(0, Math.min(100, Math.round(pct)));
   if (raw >= RELEVANCE_TIER_CORE)
-    return { tier: 'core', label: '핵심', className: RELEVANCE_TIER_STYLES.core, raw, showSpark: true };
+    return {
+      tier: 'core',
+      label: '핵심',
+      className: RELEVANCE_TIER_STYLES.core,
+      raw,
+      showSpark: true,
+    };
   if (raw >= RELEVANCE_TIER_PICK)
-    return { tier: 'pick', label: '추천', className: RELEVANCE_TIER_STYLES.pick, raw, showSpark: false };
+    return {
+      tier: 'pick',
+      label: '추천',
+      className: RELEVANCE_TIER_STYLES.pick,
+      raw,
+      showSpark: false,
+    };
   return null;
 }
 
@@ -651,18 +667,21 @@ export function InsightCardItemV2({
           </p>
         )}
 
-        {/* keyword chips — mockup .chip: pill, accent/12% bg, 13px, #f4f5f7 */}
+        {/* keyword chips — SINGLE line (2026-07-02 James: 2줄 랩핑 금지);
+            all tags render (3-cap removed) in a chevron-paged lane — same
+            affordance as the sector filter bar (edge fade + arrows only
+            when that side overflows). */}
         {tags && tags.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            {tags.slice(0, MAX_CARD_TAGS).map((tg) => (
+          <ScrollableChipRow className="mt-3" laneClassName="gap-1.5" fadeFrom="from-card">
+            {tags.map((tg) => (
               <span
                 key={tg}
-                className="rounded-full bg-[rgba(54,214,195,0.12)] px-2.5 py-1 text-[11px] font-light leading-none text-[#cdd2da]"
+                className="shrink-0 whitespace-nowrap rounded-full bg-[rgba(54,214,195,0.12)] px-2.5 py-1 text-[11px] font-light leading-none text-[#cdd2da]"
               >
                 #{tg}
               </span>
             ))}
-          </div>
+          </ScrollableChipRow>
         )}
 
         {/* meta — sector · views · date + relevance % */}
@@ -710,7 +729,12 @@ export function InsightCardItemV2({
                 title={`주제 적합도 ${relevanceBadge.raw}`}
               >
                 {relevanceBadge.showSpark && (
-                  <Sparkle className="w-3 h-3" fill="currentColor" strokeWidth={0} aria-hidden="true" />
+                  <Sparkle
+                    className="w-3 h-3"
+                    fill="currentColor"
+                    strokeWidth={0}
+                    aria-hidden="true"
+                  />
                 )}
                 {relevanceBadge.label}
               </span>
