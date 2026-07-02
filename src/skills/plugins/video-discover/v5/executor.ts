@@ -122,6 +122,7 @@ export interface V5ExecuteResult {
     /** CP491 — Shorts dropped by the post-pick short gate. */
     shortsDropped: number;
     trustDropped: number;
+    channelBlockedDropped: number;
     /** CP492 Track-1 — query-gen telemetry (mode/model/latency/llmCells/fellBack). */
     queryGen: QueryGenMeta;
     /** CP492 2차 gate — candidates dropped by the off-language script filter. */
@@ -333,15 +334,26 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   // (YouTube cap; >=180s short-circuits with no HTTP). A single shared
   // AbortController deadline bounds TOTAL wall-clock regardless of probe
   // count/waves; probes still in-flight at the deadline fail open (kept).
+  // 6a-pre. Channel blocklist (P0 scam-inflow 2026-07-03): impersonation
+  // channels are barred from every discovery surface — filtered before the
+  // shorts probe so blocked channels never consume probe budget.
+  const { filterBlockedChannels } = await import('@/modules/moderation/channel-blocklist');
+  const chFiltered = await filterBlockedChannels(cards, (c) => ({
+    channelId: c.channelId,
+    channelName: c.channelTitle,
+  }));
+  const channelBlockedDropped = chFiltered.blockedCount;
+  const allowedCards = chFiltered.kept;
+
   const tShort0 = Date.now();
   let shortsDropped = 0;
-  let gatedCards = cards;
-  if (cfg.shortProbeDeadlineMs > 0 && cards.length > 0) {
+  let gatedCards = allowedCards;
+  if (cfg.shortProbeDeadlineMs > 0 && allowedCards.length > 0) {
     const shortCtl = new AbortController();
     const shortTimer = setTimeout(() => shortCtl.abort(), cfg.shortProbeDeadlineMs);
     try {
       const shortFlags = await Promise.all(
-        cards.map(async (c) => {
+        allowedCards.map(async (c) => {
           if (c.durationSec != null && c.durationSec >= SHORT_MAX_DURATION_SEC) return false;
           // E-final (CP500+) — known sub-180s dropped on inflow without probing;
           // learning content under 3 min lacks depth. Only unknown duration probes.
@@ -352,8 +364,8 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
           return isShort;
         })
       );
-      gatedCards = cards.filter((_, i) => !shortFlags[i]);
-      shortsDropped = cards.length - gatedCards.length;
+      gatedCards = allowedCards.filter((_, i) => !shortFlags[i]);
+      shortsDropped = allowedCards.length - gatedCards.length;
     } finally {
       clearTimeout(shortTimer);
     }
@@ -416,6 +428,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       pickerModel: pickerModelStr,
       shortsDropped,
       trustDropped,
+      channelBlockedDropped,
       stageMs: stage,
       abortedBatches,
       pickerTimedOut,
@@ -467,6 +480,7 @@ function emptyResult(args: {
       pickerModel: args.pickerCfg.model,
       shortsDropped: 0,
       trustDropped: 0,
+      channelBlockedDropped: 0,
       stageMs: args.stage,
       abortedBatches: args.abortedBatches,
       pickerTimedOut: args.pickerTimedOut,
