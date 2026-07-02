@@ -39,7 +39,22 @@ jest.mock('@/modules/database/client', () => ({
   getPrismaClient: () => ({
     $queryRaw: (...a: unknown[]) => mockQueryRaw(...a),
     $executeRaw: (...a: unknown[]) => mockExecuteRaw(...a),
-    youtube_videos: { findUnique: mockYvFindUnique, create: mockYvCreate },
+    youtube_videos: {
+      findUnique: mockYvFindUnique,
+      create: mockYvCreate,
+      // #911/#924 chokepoint (place-auto-added-cards.ts): :93 owned-exclusion
+      // findMany (where.userState present → none owned), :171 id-map findMany
+      // (must echo candidate ids or every row null-filters before createMany),
+      // :142 metadata backfill createMany. Missing fns failed 6 tests.
+      findMany: jest.fn().mockImplementation((args: any) => {
+        if (args?.where?.userState) return Promise.resolve([]);
+        const ids: string[] = args?.where?.youtube_video_id?.in ?? [];
+        return Promise.resolve(
+          ids.map((vid) => ({ id: `ytrow-${vid}`, youtube_video_id: vid, view_count: 100_000 }))
+        );
+      }),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     userVideoState: { createMany: mockUvsCreateMany },
     skill_runs: { create: mockSkillRunsCreate },
     user_mandalas: { findFirst: mockMandalaFindFirst },
@@ -194,8 +209,10 @@ describe('1차 pool gate', () => {
 
     await handler({ id: 'j1', data: basePayload });
 
-    // both inserted with relevance copy
-    expect(mockUvsCreateMany).toHaveBeenCalledTimes(2);
+    // both inserted with relevance copy — #924 chokepoint batches the cell
+    // into ONE createMany call (rows in order), not one call per candidate.
+    expect(mockUvsCreateMany).toHaveBeenCalledTimes(1);
+    expect(mockUvsCreateMany.mock.calls[0][0].data).toHaveLength(2);
     const first = mockUvsCreateMany.mock.calls[0][0].data[0];
     expect(first).toMatchObject({
       user_id: UUID_USER,
@@ -253,8 +270,9 @@ describe('2차 live fallback', () => {
     });
     // English-dominant live title never reached the scorer
     expect(mockCompute).toHaveBeenCalledTimes(2);
-    // only the ≥60 Korean candidate inserted; youtube_videos upserted for it
-    expect(mockYvCreate).toHaveBeenCalledTimes(1);
+    // only the ≥60 Korean candidate inserted. youtube_videos backfill moved
+    // to the chokepoint's createMany (#924); per-row create is no longer used.
+    expect(mockYvCreate).not.toHaveBeenCalled();
     expect(mockUvsCreateMany).toHaveBeenCalledTimes(1);
     expect(mockUvsCreateMany.mock.calls[0][0].data[0].relevance_pct).toBe(77);
   });
