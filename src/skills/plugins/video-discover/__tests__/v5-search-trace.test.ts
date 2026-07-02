@@ -22,6 +22,9 @@ jest.mock('@/config/index', () => ({
       },
       discoverTracing: { enabled: false },
       app: { isDevelopment: false, isProduction: false, isTest: true },
+      // mailer.ts creates its transporter at module scope from config.gmail —
+      // the import chain reaches it, so the mock must provide the block.
+      gmail: { smtpHost: 'localhost', smtpPort: 587, smtpFrom: 'test@test.local' },
     };
   },
 }));

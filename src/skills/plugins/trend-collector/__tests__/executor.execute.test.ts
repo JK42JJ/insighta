@@ -34,15 +34,9 @@ jest.mock('@/modules/database', () => ({
   }),
 }));
 
-jest.mock('@/utils/logger', () => ({
-  logger: {
-    child: () => ({
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    }),
-  },
-}));
+// Manual mock (src/utils/__mocks__/logger.ts) — full export surface,
+// survives module-scope top-level logger calls in imported prod code.
+jest.mock('@/utils/logger');
 
 import { executor } from '../executor';
 import { TREND_COLLECTOR_SOURCE_LLM, TREND_COLLECTOR_SOURCE_SUGGEST } from '../manifest';
