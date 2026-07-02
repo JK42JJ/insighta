@@ -1,3 +1,4 @@
+import { markOnboardingTask } from '@/features/onboarding';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NotebookPen, Bot, MoreHorizontal } from 'lucide-react';
@@ -140,6 +141,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           <button
             key={id}
             onClick={() => {
+              if (id === 'notes') markOnboardingTask('note');
               setActiveTab(id);
               setActiveRegion(id === 'notes' ? 'notes' : 'chat');
             }}

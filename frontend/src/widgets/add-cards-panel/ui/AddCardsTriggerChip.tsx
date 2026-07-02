@@ -9,6 +9,7 @@
  * Spec: docs/design/add-cards-2026-05-18.md §2.
  */
 
+import { markOnboardingTask } from '@/features/onboarding';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bookmark } from 'lucide-react';
@@ -51,7 +52,10 @@ export function AddCardsTriggerChip({ mandalaId }: AddCardsTriggerChipProps) {
     <button
       type="button"
       data-onboarding="add-cards"
-      onClick={() => openPanel(mandalaId)}
+      onClick={() => {
+        markOnboardingTask('addcards');
+        openPanel(mandalaId);
+      }}
       className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
       style={{
         borderColor: 'hsl(var(--border) / 0.4)',

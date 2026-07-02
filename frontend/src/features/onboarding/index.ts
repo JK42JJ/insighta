@@ -1,2 +1,3 @@
 export { OnboardingController } from './ui/OnboardingController';
-export { useOnboardingStore } from './model/onboardingStore';
+export { OnboardingChecklist } from './ui/OnboardingChecklist';
+export { useOnboardingStore, markOnboardingTask } from './model/onboardingStore';

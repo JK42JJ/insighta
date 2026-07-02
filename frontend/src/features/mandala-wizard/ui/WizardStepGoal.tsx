@@ -267,7 +267,7 @@ export default function WizardStepGoal({
         </h1>
       </div>
 
-      <div className="mt-9">
+      <div className="mt-9" data-onboarding="wizard-goal">
         <WizardSearchBar
           value={localGoal}
           onChange={setLocalGoal}

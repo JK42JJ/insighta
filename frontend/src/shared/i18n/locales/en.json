@@ -1983,12 +1983,21 @@
   "onboarding": {
     "skip": "Skip",
     "next": "Next",
-    "finish": "Get started",
+    "finish": "Got it",
+    "chip": "Getting started",
+    "chipHint": "Do each once and this guide disappears.",
     "welcome": {
       "title": "Welcome to Insighta",
       "body": "Enter a goal and we break it into 8 action areas, each with a curated video curriculum.",
       "cta": "Start with a goal",
       "browse": "Browse templates"
+    },
+    "tasks": {
+      "wizard": "Create a mandala from a goal",
+      "watch": "Open a card and watch",
+      "summary": "Skim the AI summary",
+      "note": "Check notes and jot a memo",
+      "addcards": "Add cards yourself"
     },
     "dash": {
       "sectors": {
@@ -1997,25 +2006,37 @@
       },
       "cards": {
         "title": "Videos curated by goal relevance",
-        "body": "Start with cards carrying the 'Core' badge."
+        "body": "Click a card to open the video with its AI summary."
       },
-      "addcards": {
-        "title": "Fill gaps yourself",
-        "body": "Find more videos with keyword, views and duration filters."
-      },
-      "search": {
-        "title": "⌘K — search anything instantly",
-        "body": "Cards, mandalas, notes and AI summaries in one place."
+      "guide": {
+        "title": "Getting started",
+        "body": "Track your remaining first steps here. It disappears when you finish."
       }
     },
-    "learn": {
+    "task": {
+      "wizard": {
+        "title": "Type your goal",
+        "body": "We turn it into 8 action areas with video curricula."
+      },
+      "watch": {
+        "title": "Click a card",
+        "body": "The learning view opens with a section-by-section AI summary."
+      },
       "summary": {
         "title": "Section-by-section AI summary",
         "body": "Click a timestamp to jump right there. % is goal relevance."
       },
-      "panel": {
-        "title": "Notes & AI chat",
-        "body": "Take notes while watching, ask questions about the video, or try a quiz."
+      "note": {
+        "title": "Notes & memos",
+        "body": "Jot memos while watching; the [Note] toggle opens the note view."
+      },
+      "addcards": {
+        "title": "Find more cards",
+        "body": "Filter by keyword, views and duration. ⌘K search works too."
+      },
+      "learnFallback": {
+        "title": "Open a card first",
+        "body": "Click any card to see the AI summary and notes in the learning view."
       }
     }
   }

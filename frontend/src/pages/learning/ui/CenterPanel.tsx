@@ -1,3 +1,4 @@
+import { markOnboardingTask } from '@/features/onboarding';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -129,6 +130,14 @@ export function CenterPanel({
       setNoteAutoFollow(false);
     }
   }, [centerViewMode, noteDoc.isEditing, setActiveNoteVideoKey, setNoteAutoFollow]);
+
+  // Onboarding task detection — summary tab visible / note view entered.
+  useEffect(() => {
+    if (centerTab === 'summary') markOnboardingTask('summary');
+  }, [centerTab]);
+  useEffect(() => {
+    if (centerViewMode === 'note') markOnboardingTask('note');
+  }, [centerViewMode]);
 
   // CP446.x — mandala 변경 시 auto-follow 초기화. 다른 mandala 의 노트 doc
   // 으로 진입 시 explicit click 다시 필요하도록.

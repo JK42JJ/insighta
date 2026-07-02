@@ -1,12 +1,12 @@
 /**
  * CoachmarkTour — spotlight + speech-bubble step sequence (말풍선 온보딩).
  *
- * Screen dims except the anchored element (box-shadow spotlight); a bubble
- * next to it explains the feature with [다음] advancing and 건너뛰기/ESC
- * ending the tour. Missing anchors are skipped so the tour never blocks.
- * Custom-built (~150 lines) instead of an external tour lib: reuses the
- * existing stack only and stays predictable against the app's z-index
- * terrain (palette z-200 / tooltips z-300 → tour z-400).
+ * v2 design (James 2026-07-02: "포커스가 약해 집중이 안 된다"):
+ * heavier dim (0.85), primary glow ring around the spotlight hole, brighter
+ * elevated bubble with a caret pointing at the target. Missing anchors are
+ * polled (~8s) then skipped so a slow first paint never burns the tour.
+ * Custom-built — no external tour lib (z-terrain: palette 200 / tooltip 300
+ * → tour 400).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -19,9 +19,11 @@ interface Props {
   onDone: () => void;
 }
 
-const BUBBLE_WIDTH = 300;
+const BUBBLE_WIDTH = 320;
+const BUBBLE_EST_HEIGHT = 170;
 const SPOT_PADDING = 6;
 const VIEWPORT_MARGIN = 12;
+const CARET_SIZE = 10;
 
 interface AnchorRect {
   top: number;
@@ -43,7 +45,6 @@ export function CoachmarkTour({ steps, onDone }: Props) {
   const [idx, setIdx] = useState(0);
   const [rect, setRect] = useState<AnchorRect | null>(null);
 
-  // Resolve the current step; skip forward past steps whose anchor is absent.
   const step = steps[idx] ?? null;
 
   const remeasure = useCallback(() => {
@@ -105,19 +106,27 @@ export function CoachmarkTour({ steps, onDone }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onDone]);
 
-  const bubbleStyle = useMemo(() => {
+  const layout = useMemo(() => {
     if (!rect) return null;
-    const below = rect.top + rect.height + 16;
-    const fitsBelow = below + 170 < window.innerHeight;
-    const top = fitsBelow ? below : Math.max(VIEWPORT_MARGIN, rect.top - 16 - 170);
+    const below = rect.top + rect.height + SPOT_PADDING + CARET_SIZE + 8;
+    const placeBelow = below + BUBBLE_EST_HEIGHT < window.innerHeight;
+    const top = placeBelow
+      ? below
+      : Math.max(VIEWPORT_MARGIN, rect.top - SPOT_PADDING - CARET_SIZE - 8 - BUBBLE_EST_HEIGHT);
+    const anchorCenterX = rect.left + rect.width / 2;
     const left = Math.max(
       VIEWPORT_MARGIN,
-      Math.min(rect.left, window.innerWidth - BUBBLE_WIDTH - VIEWPORT_MARGIN)
+      Math.min(anchorCenterX - BUBBLE_WIDTH / 3, window.innerWidth - BUBBLE_WIDTH - VIEWPORT_MARGIN)
     );
-    return { top, left, width: BUBBLE_WIDTH };
+    // Caret x within the bubble, clamped away from rounded corners.
+    const caretLeft = Math.max(
+      16,
+      Math.min(BUBBLE_WIDTH - 26, anchorCenterX - left - CARET_SIZE / 2)
+    );
+    return { top, left, placeBelow, caretLeft };
   }, [rect]);
 
-  if (!step || !rect || !bubbleStyle) return null;
+  if (!step || !rect || !layout) return null;
 
   const isLast = idx === steps.length - 1;
 
@@ -127,8 +136,7 @@ export function CoachmarkTour({ steps, onDone }: Props) {
       role="dialog"
       aria-label={t(step.titleKey, step.titleDefault)}
     >
-      {/* Spotlight — the hole stays interactive-looking but blocks clicks so
-          the tour advances only via its own buttons. */}
+      {/* Spotlight — heavy dim + primary glow ring so the focus is unmistakable. */}
       <div
         className="absolute rounded-lg pointer-events-none transition-all duration-200"
         style={{
@@ -136,33 +144,48 @@ export function CoachmarkTour({ steps, onDone }: Props) {
           left: rect.left - SPOT_PADDING,
           width: rect.width + SPOT_PADDING * 2,
           height: rect.height + SPOT_PADDING * 2,
-          boxShadow: '0 0 0 9999px hsl(var(--background) / 0.72)',
+          boxShadow: [
+            '0 0 0 2px hsl(var(--primary) / 0.75)',
+            '0 0 0 6px hsl(var(--primary) / 0.25)',
+            '0 0 32px 8px hsl(var(--primary) / 0.30)',
+            '0 0 0 9999px hsl(var(--background) / 0.85)',
+          ].join(', '),
         }}
       />
 
-      {/* Speech bubble */}
+      {/* Speech bubble + caret */}
       <div
-        className="absolute rounded-xl border border-border/60 bg-popover shadow-2xl p-4 animate-in fade-in slide-in-from-bottom-1 duration-200"
-        style={bubbleStyle}
+        className="absolute rounded-xl border border-primary/30 bg-popover shadow-[0_16px_48px_rgba(0,0,0,0.6)] p-4 animate-in fade-in slide-in-from-bottom-1 duration-200"
+        style={{ top: layout.top, left: layout.left, width: BUBBLE_WIDTH }}
       >
-        <p className="text-[13.5px] font-semibold text-foreground leading-snug">
+        <span
+          aria-hidden="true"
+          className="absolute h-2.5 w-2.5 rotate-45 bg-popover border-primary/30"
+          style={
+            layout.placeBelow
+              ? { top: -6, left: layout.caretLeft, borderLeftWidth: 1, borderTopWidth: 1 }
+              : { bottom: -6, left: layout.caretLeft, borderRightWidth: 1, borderBottomWidth: 1 }
+          }
+        />
+        <p className="text-[14px] font-semibold text-foreground leading-snug">
           {t(step.titleKey, step.titleDefault)}
         </p>
         <p className="mt-1.5 text-[12.5px] text-muted-foreground leading-relaxed">
           {t(step.bodyKey, step.bodyDefault)}
         </p>
-        <div className="mt-3.5 flex items-center justify-between">
+        <div className="mt-4 flex items-center justify-between">
           <div className="flex items-center gap-1.5" aria-hidden="true">
-            {steps.map((s, i) => (
-              <span
-                key={s.id}
-                className={
-                  i === idx
-                    ? 'w-4 h-1.5 rounded-full bg-primary'
-                    : 'w-1.5 h-1.5 rounded-full bg-muted-foreground/30'
-                }
-              />
-            ))}
+            {steps.length > 1 &&
+              steps.map((s, i) => (
+                <span
+                  key={s.id}
+                  className={
+                    i === idx
+                      ? 'w-4 h-1.5 rounded-full bg-primary'
+                      : 'w-1.5 h-1.5 rounded-full bg-muted-foreground/30'
+                  }
+                />
+              ))}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -177,7 +200,7 @@ export function CoachmarkTour({ steps, onDone }: Props) {
               onClick={() => (isLast ? onDone() : setIdx((i) => i + 1))}
               className="h-7 px-3 rounded-md text-[12px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
-              {isLast ? t('onboarding.finish', '시작하기') : t('onboarding.next', '다음')}
+              {isLast ? t('onboarding.finish', '확인') : t('onboarding.next', '다음')}
             </button>
           </div>
         </div>
