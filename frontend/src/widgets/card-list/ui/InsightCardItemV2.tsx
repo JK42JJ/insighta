@@ -31,7 +31,6 @@ import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 const RELEVANCE_TIER_CORE = 80; // ≥80 → "핵심"
 const RELEVANCE_TIER_PICK = 70; // 70–79 → "추천" ; <70 → no badge (number never shown)
 const RELEVANCE_DIM_MAX = 30; // ≤30 relevance → toned down (unless bookmarked)
-const MAX_CARD_TAGS = 3;
 
 // Tier badge styles — complete class strings (RING_STYLES pattern, NO dynamic
 // Tailwind). Single indigo-intensity ladder on --primary (note/CV token parity);
@@ -56,13 +55,31 @@ const RELEVANCE_TIER_STYLES = {
  */
 export function getRelevanceBadge(
   pct: number | null | undefined
-): { tier: 'core' | 'pick'; label: string; className: string; raw: number; showSpark: boolean } | null {
+): {
+  tier: 'core' | 'pick';
+  label: string;
+  className: string;
+  raw: number;
+  showSpark: boolean;
+} | null {
   if (pct == null) return null;
   const raw = Math.max(0, Math.min(100, Math.round(pct)));
   if (raw >= RELEVANCE_TIER_CORE)
-    return { tier: 'core', label: '핵심', className: RELEVANCE_TIER_STYLES.core, raw, showSpark: true };
+    return {
+      tier: 'core',
+      label: '핵심',
+      className: RELEVANCE_TIER_STYLES.core,
+      raw,
+      showSpark: true,
+    };
   if (raw >= RELEVANCE_TIER_PICK)
-    return { tier: 'pick', label: '추천', className: RELEVANCE_TIER_STYLES.pick, raw, showSpark: false };
+    return {
+      tier: 'pick',
+      label: '추천',
+      className: RELEVANCE_TIER_STYLES.pick,
+      raw,
+      showSpark: false,
+    };
   return null;
 }
 
@@ -651,13 +668,16 @@ export function InsightCardItemV2({
           </p>
         )}
 
-        {/* keyword chips — mockup .chip: pill, accent/12% bg, 13px, #f4f5f7 */}
+        {/* keyword chips — SINGLE line (2026-07-02 James: 2줄 랩핑 금지);
+            overflow scrolls horizontally (hidden scrollbar) so the card
+            height stays uniform and the design doesn't break. */}
         {tags && tags.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            {tags.slice(0, MAX_CARD_TAGS).map((tg) => (
+          <div className="mt-3 flex flex-nowrap items-center gap-1.5 overflow-x-auto scrollbar-none">
+            {/* 2026-07-02 James: 3-cap 제거 — 1줄 스크롤이 감당하므로 전체 태그 표기 */}
+            {tags.map((tg) => (
               <span
                 key={tg}
-                className="rounded-full bg-[rgba(54,214,195,0.12)] px-2.5 py-1 text-[11px] font-light leading-none text-[#cdd2da]"
+                className="shrink-0 whitespace-nowrap rounded-full bg-[rgba(54,214,195,0.12)] px-2.5 py-1 text-[11px] font-light leading-none text-[#cdd2da]"
               >
                 #{tg}
               </span>
@@ -710,7 +730,12 @@ export function InsightCardItemV2({
                 title={`주제 적합도 ${relevanceBadge.raw}`}
               >
                 {relevanceBadge.showSpark && (
-                  <Sparkle className="w-3 h-3" fill="currentColor" strokeWidth={0} aria-hidden="true" />
+                  <Sparkle
+                    className="w-3 h-3"
+                    fill="currentColor"
+                    strokeWidth={0}
+                    aria-hidden="true"
+                  />
                 )}
                 {relevanceBadge.label}
               </span>
