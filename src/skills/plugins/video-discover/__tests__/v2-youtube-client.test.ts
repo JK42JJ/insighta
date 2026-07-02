@@ -210,7 +210,10 @@ describe('searchVideos — key rotation on 403 quota', () => {
     expect(urls[1]).toContain('key=KEY2');
   });
 
-  test('does NOT rotate on non-quota 403 (e.g., referer blocked)', async () => {
+  // 282ac58b "fix(v3): unified hybrid pipeline": isQuotaError now treats ALL
+  // search.list 403/429 as rotatable (youtube-client.ts:208) — the prior
+  // quota|exceeded-only match left referer-blocked/429 keys stuck on first try.
+  test('rotates on non-quota 403 too (e.g., referer blocked) — all 403/429 rotate', async () => {
     let call = 0;
     const fetchFn = (async () => {
       call++;
@@ -226,8 +229,8 @@ describe('searchVideos — key rotation on 403 quota', () => {
     await expect(searchVideos({ query: 'x', apiKey: ['KEY1', 'KEY2'], fetchFn })).rejects.toThrow(
       /referer/
     );
-    // Only one call — did not rotate
-    expect(call).toBe(1);
+    // Both keys tried — referer-blocked 403 rotates instead of failing fast
+    expect(call).toBe(2);
   });
 
   test('throws if all keys quota-exhausted', async () => {

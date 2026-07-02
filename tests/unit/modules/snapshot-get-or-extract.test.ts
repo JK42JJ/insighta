@@ -108,10 +108,13 @@ describe('get-or-extract', () => {
     expect(figs).toEqual([]); // no fabricated figures
 
     // Sentinels upserted for ts=5 and ts=6 to prevent future re-extraction.
+    // CP505 (#1011 f32d0161): upsertSentinel params follow the SQL column order
+    // (get-or-extract.ts:90) — $1 videoId, $2 tsSec, $3 kind, $4 status, $5 source.
     expect(mockExec).toHaveBeenCalledTimes(2);
     const firstCall = mockExec.mock.calls[0]!;
-    expect(firstCall[2]).toBe('__none__'); // kind param is the sentinel marker
-    expect(firstCall[4]).toBe('negative-cache'); // source param
+    expect(firstCall[2]).toBe(5); // ts_sec param
+    expect(firstCall[3]).toBe('__none__'); // kind param is the sentinel marker
+    expect(firstCall[5]).toBe('negative-cache'); // source param
   });
 
   it('(d) negative-cache sentinel within window prevents re-extraction', async () => {
@@ -173,8 +176,10 @@ describe('get-or-extract', () => {
 
     expect(mockExtract).toHaveBeenCalledWith(VID, [500]); // only the miss
     // One sentinel for ts=500 (no extracted figure covered it).
+    // CP505 (#1011 f32d0161): sentinel kind is param $3 (get-or-extract.ts:90).
     expect(mockExec).toHaveBeenCalledTimes(1);
-    expect(mockExec.mock.calls[0]![2]).toBe('__none__');
+    expect(mockExec.mock.calls[0]![2]).toBe(500); // ts_sec param
+    expect(mockExec.mock.calls[0]![3]).toBe('__none__');
     expect(figs).toHaveLength(1); // only the cached ts=10 row
     expect(figs[0]!.tsSec).toBe(10);
   });

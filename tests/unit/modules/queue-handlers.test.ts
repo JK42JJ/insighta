@@ -33,6 +33,15 @@ jest.mock('../../../src/config', () => ({
     // CP498: enrich-rich-summary (PR2) + enrich-relevance-quick (PR3b) workers
     // read these at registration.
     queue: { richSummaryConcurrency: 4, relevanceBackfillConcurrency: 4 },
+    // CP457+: discover-tracing/index.ts reads config.discoverTracing.enabled at
+    // module scope (line 37), imported transitively via v2/youtube-client.
+    discoverTracing: { enabled: false },
+    // Observability Phase 1/2 (#1037): searchTrace read by pool-serve-fill /
+    // search-metrics-rollup; observability + gmail read by key-alarm/report handlers.
+    searchTrace: { enabled: false },
+    poolMaintenance: { enabled: false },
+    observability: { keyAlarmMaxKeys: 8, alertEmail: 'test@example.com' },
+    gmail: { smtpFrom: 'test@example.com' },
   },
 }));
 
@@ -205,13 +214,16 @@ describe('initJobQueue integration', () => {
     const { initJobQueue } = require('../../../src/modules/queue');
     await initJobQueue();
 
-    // Should register all 7 workers: enrich-video, batch-scan,
-    // enrich-rich-summary, batch-video-collector, pool-maintenance,
-    // enrich-relevance-quick (CP498 PR3b), mandala-actions-fill (W1' CP499+).
-    expect(mockBossInstance.work).toHaveBeenCalledTimes(7);
+    // Should register all 15 workers per src/modules/queue/index.ts:57-71:
+    // enrich-video, batch-scan, enrich-rich-summary, batch-video-collector,
+    // pool-maintenance, enrich-relevance-quick, pool-serve-fill,
+    // mandala-actions-fill, mandala-book-fill, translate-mandala-bulk,
+    // segment-relevance-fill, deck-build, note-cv-enrich, key-alarm (#1037),
+    // search-metrics-rollup (#1037).
+    expect(mockBossInstance.work).toHaveBeenCalledTimes(15);
 
-    // Should schedule batch-scan
-    expect(mockBossInstance.schedule).toHaveBeenCalledTimes(1);
+    // Should schedule batch-scan + key-alarm + search-metrics-rollup (#1037).
+    expect(mockBossInstance.schedule).toHaveBeenCalledTimes(3);
     expect(mockBossInstance.schedule).toHaveBeenCalledWith(
       'batch-scan',
       '*/30 * * * *',
