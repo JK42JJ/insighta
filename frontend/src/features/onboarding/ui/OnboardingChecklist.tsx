@@ -11,6 +11,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Check, GraduationCap } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { cn } from '@/shared/lib/utils';
 import { ALL_TASKS, useOnboardingStore } from '../model/onboardingStore';
 import { requestCoachmark } from '../model/coach-controller';
@@ -46,19 +47,26 @@ export function OnboardingChecklist() {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          data-onboarding="guide-chip"
-          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 text-[12px] font-medium text-primary hover:bg-primary/15 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-        >
-          <GraduationCap className="h-4 w-4" strokeWidth={2.2} />
-          <span>{t('onboarding.chip', '시작 가이드')}</span>
-          <span className="opacity-75">
-            {doneCount}/{ALL_TASKS.length}
-          </span>
-        </button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              data-onboarding="guide-chip"
+              aria-label={t('onboarding.chip', '시작 가이드')}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 text-[12px] font-medium text-primary hover:bg-primary/15 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <GraduationCap className="h-4 w-4" strokeWidth={2.2} />
+              <span className="opacity-75">
+                {doneCount}/{ALL_TASKS.length}
+              </span>
+            </button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-[12px]">
+          {t('onboarding.chip', '시작 가이드')}
+        </TooltipContent>
+      </Tooltip>
       <PopoverContent
         align="end"
         sideOffset={8}

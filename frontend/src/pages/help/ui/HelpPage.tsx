@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { Mail, MessageSquarePlus, ChevronDown, ExternalLink, RotateCcw } from 'lucide-react';
+import {
+  Mail,
+  MessageSquarePlus,
+  ChevronDown,
+  ExternalLink,
+  RotateCcw,
+  ArrowLeft,
+} from 'lucide-react';
 import { useOnboardingStore } from '@/features/onboarding';
 import { cn } from '@/shared/lib/utils';
 
@@ -53,6 +60,15 @@ function HelpPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
+      {/* Standalone page (no sidebar) — always give a way back (James 2026-07-02). */}
+      <button
+        type="button"
+        onClick={() => navigate('/')}
+        className="mb-6 inline-flex items-center gap-1.5 rounded-md border border-border/50 px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:border-border hover:bg-accent/30 hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        {t('settings.backToApp', '앱으로 돌아가기')}
+      </button>
       <h1 className="text-2xl font-bold text-foreground mb-2">
         {t('help.title', 'Help & Support')}
       </h1>
