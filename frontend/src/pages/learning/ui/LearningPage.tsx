@@ -89,7 +89,9 @@ export default function LearningPage() {
     <div className="flex h-full overflow-hidden">
       {/* [STEP5] The hover-slide VideoStrip is replaced by the click-to-expand
           FloatingVideoNavigator inside CenterPanel's top bar. */}
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* min-w floor — shrinking the browser must not crush the center column
+          into vertical text (sidebar auto-collapse frees width first). */}
+      <div className="relative flex min-w-[380px] flex-1 flex-col overflow-hidden">
         <CenterPanel
           mandalaId={mandalaId!}
           videoId={videoId!}

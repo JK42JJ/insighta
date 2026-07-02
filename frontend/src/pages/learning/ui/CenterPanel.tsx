@@ -24,6 +24,7 @@ import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
 import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
 import { FloatingVideoNavigator } from './FloatingVideoNavigator';
+import { PlayerChrome } from './PlayerChrome';
 import {
   relevanceLevel,
   relevanceCssVar,
@@ -375,9 +376,15 @@ export function CenterPanel({
       </div>
 
       {/* [STEP5] meta header removed (user: 유튜브 자체 제목과 중복, 공간 비효율).
-          Video title lives in the navigator tooltip / YT hover title / left TOC. */}
+          [STEP6] group/player wrapper mirrors the player's own size cap so the
+          relevance-curve overlay hugs the video box exactly; the player itself
+          (native YT chrome) is untouched. */}
       <div
-        className={cn('mt-2 shrink-0', centerViewMode === 'note' && 'hidden')}
+        className={cn(
+          'group/player relative mx-auto mt-2 w-full shrink-0',
+          centerViewMode === 'note' && 'hidden'
+        )}
+        style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}
         onMouseEnter={() => setActiveRegion('player')}
       >
         <PanelVideoPlayer
@@ -389,6 +396,7 @@ export function CenterPanel({
           onTimeUpdate={setPlayerState}
           startTime={startTime}
         />
+        <PlayerChrome sections={chapterSections} />
       </div>
 
       {centerViewMode === 'player' && (

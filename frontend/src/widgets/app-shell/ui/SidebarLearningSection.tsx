@@ -19,15 +19,9 @@ interface SidebarLearningSectionProps {
   collapsed: boolean;
 }
 
-/**
- * CP505 — sidebar TOC short label (chapter + topic, shared). Book chapter/topic
- * titles run 60-84 chars and wrap or ellipsis-truncate ("…"). Take the lead clause
- * (before the first colon / em-dash / middle-dot) as a short label. Sidebar-only —
- * the note BODY heading keeps the full title; `truncate` stays as a 1-line backstop.
- */
-function tocShortLabel(title: string): string {
-  return title.split(/[:：—–·]/)[0]?.trim() || title;
-}
+// CP505 short label — moved to a shared lib so the right-panel context zone
+// shows the SAME label as this TOC. `truncate` stays as a 1-line backstop.
+import { tocShortLabel } from '@/pages/learning/lib/toc-label';
 
 export function SidebarLearningSection({
   mandalaId,

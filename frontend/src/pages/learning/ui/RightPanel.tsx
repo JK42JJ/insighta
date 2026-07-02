@@ -8,6 +8,8 @@ import { PanelNoteEditor } from '@/features/video-side-panel/ui/PanelNoteEditor'
 import { ChatAssistant } from './ChatAssistant';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useMandalaCards } from '../model/useMandalaCards';
+import { useV2Summaries } from '@/features/card-management/model/useV2Summaries';
+import { tocShortLabel } from '../lib/toc-label';
 import { useLearningStore } from '../model/useLearningStore';
 import { apiClient } from '@/shared/lib/api-client';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
@@ -43,6 +45,19 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   });
 
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  // [STEP7b] context-zone label = same short label the left book index shows:
+  // v2 tocLabel first, lead-clause of the title as fallback.
+  const { summariesByVideoId } = useV2Summaries(videoId ? [videoId] : []);
+  const v2ForVideo = summariesByVideoId.get(videoId);
+  const videoLabel =
+    v2ForVideo?.tocLabel?.trim() || (currentCard?.title ? tocShortLabel(currentCard.title) : null);
+  const contextLabel =
+    (centerViewMode === 'note'
+      ? activeSectionTitle
+        ? tocShortLabel(activeSectionTitle)
+        : videoLabel
+      : videoLabel) ?? '—';
 
   const [richNote, setRichNote] = useState<TiptapDoc | null>(null);
   const [noteLoaded, setNoteLoaded] = useState(false);
@@ -122,11 +137,9 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
         <span className="shrink-0 px-1.5" aria-hidden>
           ·
         </span>
-        <span className="min-w-0 truncate text-foreground/75">
-          {(centerViewMode === 'note'
-            ? (activeSectionTitle ?? currentCard?.title)
-            : currentCard?.title) ?? '—'}
-        </span>
+        {/* [STEP7b] SAME short label as the left book index (v2 tocLabel →
+            lead-clause fallback) — not the full rambling title (user). */}
+        <span className="min-w-0 truncate text-foreground/75">{contextLabel}</span>
       </div>
 
       <div className="flex shrink-0">
