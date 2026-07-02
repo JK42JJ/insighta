@@ -44,7 +44,10 @@ interface MandalaUIStore {
   justCreatedMandalaId: string | null;
   pendingMandala: PendingMandala | null;
   lastOptimisticTitle: { id: string; title: string } | null;
+  /** ⌘K palette → cross-route card highlight handoff (transient — NOT persisted). */
+  pendingCardHighlight: { cardId: string; videoId: string | null } | null;
   selectMandala: (id: string | null) => void;
+  setPendingCardHighlight: (v: { cardId: string; videoId: string | null } | null) => void;
   setNavigation: (mandalaId: string, patch: Partial<MandalaNavigationState>) => void;
   clearNavigation: (mandalaId: string) => void;
   getNavigation: (mandalaId: string | null | undefined) => MandalaNavigationState;
@@ -61,6 +64,7 @@ const INITIAL_STATE = {
   justCreatedMandalaId: null,
   pendingMandala: null,
   lastOptimisticTitle: null,
+  pendingCardHighlight: null as { cardId: string; videoId: string | null } | null,
 };
 
 export const useMandalaStore = create<MandalaUIStore>()(
@@ -68,6 +72,7 @@ export const useMandalaStore = create<MandalaUIStore>()(
     (set, get) => ({
       ...INITIAL_STATE,
       selectMandala: (id) => set({ selectedMandalaId: id }),
+      setPendingCardHighlight: (v) => set({ pendingCardHighlight: v }),
       setNavigation: (mandalaId, patch) =>
         set((state) => ({
           navigationByMandala: {

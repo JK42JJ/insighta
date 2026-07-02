@@ -669,7 +669,7 @@
     "selectSectorDesc": "Choose a sector from the pills above to assign cards."
   },
   "search": {
-    "placeholder": "Search cards... (⌘K)",
+    "placeholder": "Search cards...",
     "clear": "Clear search",
     "noResults": "No results found",
     "resultCount": "{{count}} results",
@@ -678,6 +678,23 @@
     "filterYouTube": "YouTube",
     "filterLink": "Links",
     "filterFile": "Files"
+  },
+  "palette": {
+    "title": "Search and quick actions",
+    "placeholder": "Search cards, mandalas, notes, summaries…",
+    "actionNewMandala": "New mandala",
+    "actionTemplates": "Find templates",
+    "groupActions": "Quick actions",
+    "groupCards": "Cards",
+    "groupMandalas": "Mandalas",
+    "groupNotes": "Notes",
+    "groupSummaries": "Summaries",
+    "untitled": "(untitled)",
+    "noteFallback": "Note",
+    "empty": "No results",
+    "hintSelect": "select",
+    "hintOpen": "open",
+    "hintClose": "close"
   },
   "help": {
     "title": "Help & Support",

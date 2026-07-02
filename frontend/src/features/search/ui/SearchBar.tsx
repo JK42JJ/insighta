@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
 import { Search, X, Loader2, Youtube, Link2, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { SourceFilter } from '../model/useSearchCards';
@@ -65,17 +65,8 @@ export function SearchBar({
     [onClear, onArrowDown, onArrowUp, onEnter]
   );
 
-  // Cmd/Ctrl+K to focus search
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, []);
+  // ⌘K is owned by the global CommandPalette (widgets/command-palette) —
+  // the old focus-binding here was removed to avoid double firing.
 
   const handleFilterClick = useCallback(
     (filter: SourceFilter) => {
@@ -94,7 +85,7 @@ export function SearchBar({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={t('search.placeholder', 'Search cards... (⌘K)')}
+          placeholder={t('search.placeholder', 'Search cards...')}
           className="w-full h-9 pl-9 pr-9 rounded-md border-0 bg-sidebar-foreground/[0.06] text-sm text-foreground/80 placeholder:text-[13px] placeholder:text-muted-foreground focus:outline focus:outline-[1.5px] focus:outline-sidebar-border/60 focus:text-foreground transition-colors duration-150"
           role="combobox"
           aria-expanded={isSearchActive}
