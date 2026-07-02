@@ -6,6 +6,7 @@ import {
   Sparkles,
   Zap,
   BookText,
+  List,
   Play,
   BookOpen,
   Pencil,
@@ -23,13 +24,23 @@ import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
 import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
 import { useMandalaCards } from '../model/useMandalaCards';
+import {
+  relevanceLevel,
+  relevanceCssVar,
+  relevanceBars,
+  type RelevanceLevel,
+} from '../lib/relevance-level';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import { useNoteDocument } from '@/pages/learning/model/useNoteDocument';
 import { useNoteAutoFollow } from '@/pages/learning/model/useNoteAutoFollow';
 import { exportToMarkdown, exportToHtml } from '@/pages/learning/lib/note-export';
 import { cn } from '@/shared/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
-import type { MandalaBookChapter, MandalaBookSection } from '@/shared/lib/api-client';
+import type {
+  MandalaBookChapter,
+  MandalaBookSection,
+  VideoRichSummarySection,
+} from '@/shared/lib/api-client';
 import type { Editor } from '@tiptap/react';
 import type { TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
@@ -46,7 +57,7 @@ interface CenterPanelProps {
   onPlayerHoverOut?: () => void;
 }
 
-type CenterTabId = 'summary' | 'section';
+type CenterTabId = 'chapters' | 'summary' | 'section';
 
 function formatMMSS(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
@@ -266,9 +277,16 @@ export function CenterPanel({
     fallback: string;
     icon: typeof Sparkles;
   }> = [
+    { id: 'chapters', labelKey: 'learning.tabChapters', fallback: '챕터', icon: List },
     { id: 'summary', labelKey: 'learning.tabSummary', fallback: 'AI 요약', icon: Sparkles },
     { id: 'section', labelKey: 'learning.tabSection', fallback: '섹션 내용', icon: BookText },
   ];
+
+  // [STEP3] Chapters = v2 segment sections (same data the highlight reel uses).
+  const chapterSections = (highlightSections ?? [])
+    .filter((s) => s.to_sec > s.from_sec)
+    .slice()
+    .sort((a, b) => a.from_sec - b.from_sec);
 
   // [STEP1] mode switch now lives in the center top bar (single home);
   // the note-not-ready guard moves here with it (was RightPanel's).
@@ -409,23 +427,50 @@ export function CenterPanel({
           style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}
           onMouseEnter={() => setActiveRegion('book-index')}
         >
-          {/* [STEP1] highlight-reel/share cluster moved to the top bar. */}
-          <div className="flex items-center">
-            {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setCenterTab(id)}
-                className={cn(
-                  'flex items-center gap-1.5 py-2.5 px-3 text-[12px] transition-colors border-b-2',
-                  centerTab === id
-                    ? 'border-primary text-foreground font-semibold'
-                    : 'border-transparent text-muted-foreground font-normal hover:text-foreground'
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {t(labelKey, fallback)}
-              </button>
-            ))}
+          {/* [STEP3] mockup segment tabs + relevance legend (highlight-reel/
+              share cluster lives in the top bar since STEP1). */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-1 pt-2.5">
+            <div className="flex gap-1 rounded-[10px] border border-[var(--lp-line-7)] bg-[var(--lp-surface)] p-1">
+              {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setCenterTab(id)}
+                  className={cn(
+                    'flex items-center gap-[7px] rounded-[7px] px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
+                    centerTab === id
+                      ? 'bg-[var(--lp-toggle-active-bg)] text-[var(--lp-tab-active-fg)]'
+                      : 'text-[var(--lp-dim)] hover:text-[var(--lp-strong)]'
+                  )}
+                >
+                  <Icon className="h-[15px] w-[15px]" />
+                  {t(labelKey, fallback)}
+                </button>
+              ))}
+            </div>
+            {chapterSections.length > 0 && (
+              <div className="flex items-center gap-[13px] text-[11.5px] text-[var(--lp-faint)]">
+                <div className="flex items-center gap-[9px]">
+                  <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--lp-mute)]">
+                    {t('learning.relevanceLabel', '관련도')}
+                  </span>
+                  <span className="text-[10.5px] text-[var(--lp-mute)]">
+                    {t('learning.relevanceLow', '낮음')}
+                  </span>
+                  <RelevanceMeter level="low" />
+                  <RelevanceMeter level="mid" />
+                  <RelevanceMeter level="high" />
+                  <span className="text-[10.5px] text-[var(--lp-mute)]">
+                    {t('learning.relevanceHigh', '높음')}
+                  </span>
+                </div>
+                <span className="h-[11px] w-px bg-white/10" aria-hidden />
+                <span>
+                  {t('learning.chaptersCount', '{{count}}개 챕터', {
+                    count: chapterSections.length,
+                  })}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -486,6 +531,14 @@ export function CenterPanel({
             className="mx-auto w-full p-4"
             style={{ maxWidth: 'min(calc(49.5vh * 16 / 9), 760px)' }}
           >
+            {centerTab === 'chapters' && (
+              <ChapterList
+                sections={chapterSections}
+                playerRef={playerRef}
+                onUserPlayed={onUserPlayed}
+                onGoSummary={() => setCenterTab('summary')}
+              />
+            )}
             {centerTab === 'summary' && (
               <div data-onboarding="ai-summary">
                 <PanelAISummary videoSummary={undefined} videoUrl={videoUrl} />
@@ -506,6 +559,158 @@ export function CenterPanel({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** [STEP3] 3-bar ascending signal meter — wordless relevance indicator. */
+function RelevanceMeter({ level }: { level: RelevanceLevel }) {
+  const lit = relevanceBars(level);
+  const color = relevanceCssVar(level);
+  return (
+    <span className="inline-flex h-[11px] items-end gap-[2.5px]" aria-hidden>
+      {[5, 8, 11].map((h, k) => (
+        <span
+          key={h}
+          className="w-[3px] rounded-[1px]"
+          style={{ height: h, background: k < lit ? color : 'var(--lp-meter-off)' }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** [STEP3] Chapter list — v2 segment sections with time range, relevance edge
+ *  bar + meter, hover-expand description, click-to-seek, live "재생 중" chip.
+ *  Subscribes to player time HERE so the 1s tick re-renders only this list. */
+function ChapterList({
+  sections,
+  playerRef,
+  onUserPlayed,
+  onGoSummary,
+}: {
+  sections: VideoRichSummarySection[];
+  playerRef: React.MutableRefObject<YTPlayer | null>;
+  onUserPlayed?: () => void;
+  onGoSummary: () => void;
+}) {
+  const { t } = useTranslation();
+  const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
+  const playerState = useLearningStore((s) => s.playerState);
+
+  if (sections.length === 0) {
+    return (
+      <div className="mt-2 rounded-xl border border-[var(--lp-line-6)] bg-[var(--lp-surface)] px-5 py-6 text-center">
+        <p className="text-[13px] leading-[1.6] text-[var(--lp-dim)]">
+          {t(
+            'learning.chaptersEmpty',
+            '챕터 정보가 아직 준비되지 않았어요. AI 요약이 생성되면 챕터가 나타납니다.'
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={onGoSummary}
+          className="mt-3 rounded-md border border-[var(--lp-line-8)] px-3 py-1.5 text-[12px] text-[var(--lp-text)] transition-colors hover:bg-[var(--lp-hover-tint)]"
+        >
+          {t('learning.tabSummary', 'AI 요약')}
+        </button>
+      </div>
+    );
+  }
+
+  const activeIdx = sections.findIndex(
+    (s) => playerTimeSec >= s.from_sec && playerTimeSec < s.to_sec
+  );
+
+  return (
+    <div className="flex flex-col">
+      {sections.map((s, i) => {
+        const level = typeof s.relevance_pct === 'number' ? relevanceLevel(s.relevance_pct) : null;
+        const color = level ? relevanceCssVar(level) : 'var(--lp-meter-off)';
+        const active = i === activeIdx;
+        const playing = active && playerState === 'playing';
+        return (
+          <button
+            key={`${s.from_sec}-${i}`}
+            type="button"
+            onClick={() => {
+              try {
+                playerRef.current?.seekTo(s.from_sec, true);
+                playerRef.current?.playVideo?.();
+                onUserPlayed?.();
+              } catch {
+                // player not ready
+              }
+            }}
+            className={cn(
+              'group relative flex w-full gap-4 rounded-xl border px-4 py-3.5 pl-[18px] text-left transition-colors',
+              active
+                ? 'border-[var(--lp-accent-border)] bg-[var(--lp-accent-tint)]'
+                : 'border-transparent hover:bg-[var(--lp-hover-tint)]'
+            )}
+          >
+            <span
+              className="absolute bottom-3.5 left-0 top-3.5 w-[3px] rounded-[3px] transition-opacity"
+              style={{ background: color, opacity: active ? 1 : 0.55 }}
+              aria-hidden
+            />
+            <span
+              className={cn(
+                'w-[88px] shrink-0 pt-px text-[13px] font-semibold tabular-nums tracking-[0.01em]',
+                active ? 'text-[var(--lp-accent)]' : 'text-[var(--lp-dim)]'
+              )}
+            >
+              {fmtDuration(s.from_sec)}–{fmtDuration(s.to_sec)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-[9px]">
+                <span
+                  className={cn(
+                    'text-[11px] font-bold tabular-nums',
+                    active ? 'text-[var(--lp-accent)]' : 'text-[var(--lp-num)]'
+                  )}
+                >
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span
+                  className={cn(
+                    'text-[15px] font-semibold leading-[1.4] tracking-[-0.01em]',
+                    active ? 'text-[var(--lp-strong)]' : 'text-[var(--lp-text)]'
+                  )}
+                >
+                  {s.title}
+                </span>
+                {playing && (
+                  <span className="flex shrink-0 items-center gap-[5px] whitespace-nowrap text-[10.5px] font-semibold text-[var(--lp-accent)]">
+                    <span
+                      className="h-[5px] w-[5px] rounded-full bg-[var(--lp-accent)]"
+                      aria-hidden
+                    />
+                    {t('learning.playingNow', '재생 중')}
+                  </span>
+                )}
+              </span>
+              {s.summary && (
+                <span
+                  className={cn(
+                    'block overflow-hidden text-[13.5px] leading-[1.65] text-[var(--lp-desc)] transition-all duration-300',
+                    active
+                      ? 'mt-[7px] max-h-[60px] opacity-100'
+                      : 'mt-0 max-h-0 opacity-0 group-hover:mt-[7px] group-hover:max-h-[60px] group-hover:opacity-100'
+                  )}
+                >
+                  {s.summary}
+                </span>
+              )}
+            </span>
+            {level && (
+              <span className="shrink-0 self-center pt-px">
+                <RelevanceMeter level={level} />
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

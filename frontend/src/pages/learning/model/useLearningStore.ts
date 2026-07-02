@@ -21,7 +21,7 @@ function writeVideoStripEnabled(enabled: boolean): void {
   }
 }
 
-export type CenterTab = 'summary' | 'section';
+export type CenterTab = 'chapters' | 'summary' | 'section';
 
 export type CenterViewMode = 'player' | 'note';
 
@@ -81,7 +81,7 @@ export const useLearningStore = create<LearningState>((set) => ({
   currentVideoId: null,
   activeTab: 'ai-summary',
   selectedCellIndex: null,
-  centerTab: 'summary',
+  centerTab: 'chapters',
   centerViewMode: 'player',
   activeSectionRef: null,
 
