@@ -164,6 +164,11 @@ APPLY_FILES=(
   # CREATE TABLE/INDEX IF NOT EXISTS + NOTIFY pgrst — idempotent. Inert until the
   # rollup job (daily boss.schedule) writes a row.
   "prisma/migrations/search-metrics/001_create_search_metrics_daily.sql"
+  # Global search (⌘K) Phase 1 — pg_trgm + 3 GIN trigram indexes for ILIKE
+  # substring search (yv.title / yv.channel_title / vrs.one_liner). CREATE
+  # EXTENSION/INDEX IF NOT EXISTS — fully idempotent. Perf-only (no schema
+  # change); inert until /api/v1/search is called.
+  "prisma/migrations/global-search/001_pg_trgm_indexes.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

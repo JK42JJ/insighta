@@ -97,6 +97,61 @@ export interface BillingSubscriptionMeResponse {
   subscription: BillingSubscriptionSummary | null;
 }
 
+// Global Search (⌘K palette) — mirrors src/modules/search/global-search.ts
+export interface GlobalSearchCardHit {
+  kind: 'video' | 'local';
+  id: string;
+  title: string | null;
+  channelTitle: string | null;
+  thumbnailUrl: string | null;
+  url: string | null;
+  videoId: string | null;
+  note: string | null;
+  mandalaId: string | null;
+  cellIndex: number | null;
+  createdAt: string;
+}
+
+export interface GlobalSearchMandalaHit {
+  id: string;
+  title: string | null;
+  centerLabel: string | null;
+  createdAt: string;
+}
+
+export interface GlobalSearchNoteHit {
+  id: string;
+  mandalaId: string;
+  mandalaTitle: string | null;
+  snippet: string;
+  updatedAt: string;
+}
+
+export interface GlobalSearchSummaryHit {
+  videoId: string;
+  oneLiner: string;
+  videoTitle: string | null;
+  mandalaId: string | null;
+}
+
+export interface GlobalSearchGroup<T> {
+  items: T[];
+  total: number;
+  /** true = the group missed its server-side time budget (incomplete). */
+  partial: boolean;
+}
+
+export interface GlobalSearchResponse {
+  query: string;
+  groups: {
+    cards: GlobalSearchGroup<GlobalSearchCardHit>;
+    mandalas: GlobalSearchGroup<GlobalSearchMandalaHit>;
+    notes: GlobalSearchGroup<GlobalSearchNoteHit>;
+    summaries: GlobalSearchGroup<GlobalSearchSummaryHit>;
+  };
+  tookMs: number;
+}
+
 export interface VideoRichSummaryChapter {
   start_sec: number;
   title: string;
@@ -980,6 +1035,20 @@ class ApiClient {
     return this.request<void>(`/playlists/${id}/resume`, {
       method: 'PATCH',
     });
+  }
+
+  // ========================================
+  // Global Search (⌘K palette)
+  // ========================================
+
+  /**
+   * Unified user-data search — cards / mandalas / notes / v2 summaries.
+   * BE: GET /api/v1/search (src/api/routes/search.ts). All groups are
+   * user-scoped server-side. Consumed by the ⌘K CommandPalette (PR-2).
+   */
+  async searchAll(q: string, limitPerGroup?: number): Promise<GlobalSearchResponse> {
+    const limitParam = limitPerGroup ? `&limit=${limitPerGroup}` : '';
+    return this.request<GlobalSearchResponse>(`/search?q=${encodeURIComponent(q)}${limitParam}`);
   }
 
   // ========================================
