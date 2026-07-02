@@ -43,6 +43,10 @@ interface AddCardsListProps {
   pickedSet: ReadonlySet<string>;
   isPickPending: boolean;
   onPick: (videoId: string, title: string) => void;
+  /** Controlled active tab (lifted to the panel so 초기화 can scope to the
+   *  selected round). When omitted, the list self-manages (test back-compat). */
+  activeRoundId?: string | null;
+  onActiveRoundChange?: (id: string) => void;
 }
 
 export function AddCardsList({
@@ -55,6 +59,8 @@ export function AddCardsList({
   pickedSet,
   isPickPending,
   onPick,
+  activeRoundId: controlledActiveId,
+  onActiveRoundChange,
 }: AddCardsListProps) {
   const { t } = useTranslation();
   const totalCards = rounds.reduce((n, r) => n + r.cards.length, 0);
@@ -62,11 +68,14 @@ export function AddCardsList({
   // Active tab follows the NEWEST round: initial mount and every newly
   // prepended round auto-activate rounds[0] (the user just searched — show
   // them their result); manual tab clicks win until the next new round.
+  // Controlled from the panel when the props are provided (초기화 scoping).
   const newestRoundId = rounds[0]?.id ?? null;
-  const [activeRoundId, setActiveRoundId] = useState<string | null>(newestRoundId);
+  const [localActiveId, setLocalActiveId] = useState<string | null>(newestRoundId);
   useEffect(() => {
-    setActiveRoundId(newestRoundId);
+    setLocalActiveId(newestRoundId);
   }, [newestRoundId]);
+  const activeRoundId = controlledActiveId !== undefined ? controlledActiveId : localActiveId;
+  const setActiveRoundId = onActiveRoundChange ?? setLocalActiveId;
   const activeRound = rounds.find((r) => r.id === activeRoundId) ?? rounds[0] ?? null;
 
   if (isLoading) {
@@ -127,40 +136,67 @@ export function AddCardsList({
 
   return (
     <div className="flex flex-col">
-      <div
-        role="tablist"
-        aria-label={t('addCards.round.tablist', 'Search rounds')}
-        className="flex items-center gap-1.5 px-5 pt-3 pb-1 sm:px-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {rounds.map((round, idx) => {
-          const roundNumber = totalRounds - idx;
-          const label =
-            roundNumber === 1
-              ? t('addCards.round.first', 'Round 1')
-              : t('addCards.round.nth', 'Round {{n}} (more)', { n: roundNumber });
-          const isActive = round.id === activeRoundId;
-          return (
-            <button
-              key={round.id}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={`add-cards-round-${round.id}`}
-              onClick={() => setActiveRoundId(round.id)}
-              className={cn(
-                'shrink-0 inline-flex items-center gap-1 h-7 rounded-full border px-3 text-[11.5px] font-medium transition-colors',
-                isActive
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'bg-transparent text-foreground/80 border-border/50 hover:border-border hover:bg-foreground/[0.04]'
-              )}
-            >
-              {label}
-              <span className={cn('text-[10.5px]', isActive ? 'opacity-70' : 'opacity-50')}>
-                ({round.cards.length})
+      {/* Sticky tab strip — stays pinned while the results scroll under it
+          (2026-07-02 James: 칩이 스크롤에 말려 올라감). bg matches the panel
+          surface so cards never bleed through. */}
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/30">
+        <div
+          role="tablist"
+          aria-label={t('addCards.round.tablist', 'Search rounds')}
+          className="flex items-center gap-1.5 px-5 pt-3 pb-2 sm:px-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {rounds.map((round, idx) => {
+            const roundNumber = totalRounds - idx;
+            const label =
+              roundNumber === 1
+                ? t('addCards.round.first', 'Round 1')
+                : t('addCards.round.nth', 'Round {{n}} (more)', { n: roundNumber });
+            const isActive = round.id === activeRoundId;
+            // Picked count per round (2026-07-02 James: 선택 수 병기).
+            const pickedInRound = round.cards.reduce(
+              (n, c) => n + (pickedSet.has(c.videoId) ? 1 : 0),
+              0
+            );
+            return (
+              <button
+                key={round.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`add-cards-round-${round.id}`}
+                onClick={() => setActiveRoundId(round.id)}
+                className={cn(
+                  'shrink-0 inline-flex items-center gap-1 h-7 rounded-full border px-3 text-[11.5px] font-medium transition-colors',
+                  isActive
+                    ? 'bg-foreground text-background border-foreground'
+                    : 'bg-transparent text-foreground/80 border-border/50 hover:border-border hover:bg-foreground/[0.04]'
+                )}
+              >
+                {label}
+                <span className={cn('text-[10.5px]', isActive ? 'opacity-70' : 'opacity-50')}>
+                  {pickedInRound > 0
+                    ? `(${pickedInRound}/${round.cards.length})`
+                    : `(${round.cards.length})`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {/* Applied-filter summary for the ACTIVE round (rounds searched after
+            2026-07-02 carry a snapshot; older rounds show date only). */}
+        {activeRound && (
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 px-5 pb-2 sm:px-6 text-[11px] text-muted-foreground">
+            <span className="opacity-70">{formatRelativeDate(activeRound.at)}</span>
+            {formatRoundFilters(activeRound.filters, t).map((part) => (
+              <span
+                key={part}
+                className="inline-flex items-center rounded border border-border/40 bg-foreground/[0.03] px-1.5 py-px"
+              >
+                {part}
               </span>
-            </button>
-          );
-        })}
+            ))}
+          </div>
+        )}
       </div>
       {activeRound && (
         <section
@@ -169,10 +205,7 @@ export function AddCardsList({
           role="tabpanel"
           aria-label={t('addCards.round.activePanel', 'Active round results')}
         >
-          <div className="px-5 pt-1 sm:px-6 text-[11px] text-muted-foreground">
-            {formatRelativeDate(activeRound.at)}
-          </div>
-          <ul className="grid grid-cols-2 gap-3 px-5 py-3 sm:px-6">
+          <ul className="grid grid-cols-2 md:grid-cols-3 gap-3 px-5 py-3 sm:px-6">
             {activeRound.cards.map((card) => (
               <CardItem
                 key={card.videoId}
@@ -187,6 +220,52 @@ export function AddCardsList({
       )}
     </div>
   );
+}
+
+/** Human-readable parts for a round's applied-filter snapshot. Only
+ *  non-default options render; snapshot-less (old) rounds return []. */
+function formatRoundFilters(
+  filters: AddCardsRound['filters'],
+  t: ReturnType<typeof useTranslation>['t']
+): string[] {
+  if (!filters) return [];
+  const parts: string[] = [];
+  if (filters.language)
+    parts.push(
+      filters.language === 'en'
+        ? t('addCards.round.filterEn', 'English')
+        : t('addCards.round.filterKo', '한국어')
+    );
+  if (filters.minViewCount) {
+    const v = filters.minViewCount;
+    const label =
+      v >= 1_000_000 ? '100만+' : v >= 100_000 ? '10만+' : v >= 10_000 ? '1만+' : '1천+';
+    parts.push(t('addCards.round.filterViews', '{{label}} 조회수', { label }));
+  }
+  if (filters.durationBucket) {
+    const map: Record<string, string> = {
+      short: t('addCards.round.durShort', '10분 미만'),
+      medium: t('addCards.round.durMedium', '10–30분'),
+      long: t('addCards.round.durLong', '30–60분'),
+      xlong: t('addCards.round.durXlong', '60분 이상'),
+    };
+    if (map[filters.durationBucket]) parts.push(map[filters.durationBucket]);
+  }
+  if (filters.publishedAfter) {
+    const days = Math.round((Date.now() - new Date(filters.publishedAfter).getTime()) / 86_400_000);
+    const label =
+      days <= 8
+        ? t('addCards.round.pubWeek', '지난 1주')
+        : days <= 32
+          ? t('addCards.round.pubMonth', '지난 1개월')
+          : days <= 190
+            ? t('addCards.round.pubHalf', '지난 6개월')
+            : t('addCards.round.pubYear', '지난 1년');
+    parts.push(label);
+  }
+  if (filters.difficulty) parts.push(filters.difficulty);
+  if (filters.keywords?.length) parts.push(filters.keywords.map((k) => `"${k}"`).join(' '));
+  return parts;
 }
 
 function CardItem({
@@ -267,27 +346,35 @@ function CardItem({
           </div>
         )}
 
-        {/* Picked overlay — post-click dim + center check. */}
+        {/* Picked overlay — SINGLE control (2026-07-02 James: 두 버튼 분리가
+            어색 → 통합). Default = "추가됨" check; hovering the card morphs
+            the SAME center badge into the unpick affordance. Colors stay
+            neutral (no red — user directive). */}
         {isPicked && (
           <>
             <div
               className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px] gap-1"
               aria-hidden="true"
             >
-              <span className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 shadow-lg">
-                <Check className="w-5 h-5 text-white" strokeWidth={3} />
+              {/* Default state — added */}
+              <span className="flex flex-col items-center gap-1 group-hover:hidden">
+                <span className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-500 shadow-lg">
+                  <Check className="w-5 h-5 text-white" strokeWidth={3} />
+                </span>
+                <span className="text-[10.5px] font-semibold text-white tracking-wide">
+                  {t('addCards.actions.picked', 'Picked')}
+                </span>
               </span>
-              <span className="text-[10.5px] font-semibold text-white tracking-wide">
-                {t('addCards.actions.picked', 'Picked')}
+              {/* Hover state — same spot becomes the unpick control */}
+              <span className="hidden flex-col items-center gap-1 group-hover:flex">
+                <span className="flex items-center justify-center w-9 h-9 rounded-full border-2 border-white/80 bg-black/30">
+                  <X className="w-5 h-5 text-white/90" strokeWidth={2.6} />
+                </span>
+                <span className="text-[10.5px] font-semibold text-white/90 tracking-wide">
+                  {t('addCards.actions.unpick', 'Remove from mandala')}
+                </span>
               </span>
             </div>
-
-            <span
-              className="absolute top-1 right-1 z-20 inline-flex items-center justify-center h-6 w-6 rounded-full bg-black/60 text-white shadow-md transition-colors group-hover:bg-white/25"
-              aria-hidden="true"
-            >
-              <X className="w-3.5 h-3.5" strokeWidth={2.6} />
-            </span>
 
             <span
               className="absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center opacity-100"
