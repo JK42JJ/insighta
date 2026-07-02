@@ -677,7 +677,7 @@
     "selectSectorDesc": "카드를 배치할 섹터를 먼저 선택해주세요."
   },
   "search": {
-    "placeholder": "카드 검색... (⌘K)",
+    "placeholder": "카드 검색...",
     "clear": "검색 지우기",
     "noResults": "결과 없음",
     "resultCount": "{{count}}건",
@@ -686,6 +686,23 @@
     "filterYouTube": "YouTube",
     "filterLink": "링크",
     "filterFile": "파일"
+  },
+  "palette": {
+    "title": "검색 및 빠른 작업",
+    "placeholder": "카드, 만다라, 노트, 요약 검색…",
+    "actionNewMandala": "새 만다라",
+    "actionTemplates": "템플릿 찾기",
+    "groupActions": "빠른 작업",
+    "groupCards": "카드",
+    "groupMandalas": "만다라",
+    "groupNotes": "노트",
+    "groupSummaries": "요약",
+    "untitled": "(제목 없음)",
+    "noteFallback": "노트",
+    "empty": "결과가 없습니다",
+    "hintSelect": "선택",
+    "hintOpen": "이동",
+    "hintClose": "닫기"
   },
   "help": {
     "title": "도움말 및 지원",

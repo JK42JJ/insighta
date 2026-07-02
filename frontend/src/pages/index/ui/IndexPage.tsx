@@ -328,6 +328,23 @@ function AuthenticatedApp() {
     }
   }, [highlightedCard]);
 
+  // 5d. ⌘K palette cross-route handoff — scroll + ring the requested card once
+  // it renders (re-runs as displayCards stream in after the mandala switch).
+  const pendingCardHighlight = useMandalaStore((s) => s.pendingCardHighlight);
+  const setPendingCardHighlight = useMandalaStore((s) => s.setPendingCardHighlight);
+  useEffect(() => {
+    if (!pendingCardHighlight) return;
+    const el = document.querySelector(`[data-card-id="${pendingCardHighlight.cardId}"]`);
+    if (!el) return; // cards still loading — effect re-fires on displayCards change
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.add('ring-2', 'ring-primary', 'ring-offset-1');
+    const timer = setTimeout(() => {
+      el.classList.remove('ring-2', 'ring-primary', 'ring-offset-1');
+      setPendingCardHighlight(null);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [pendingCardHighlight, cards.displayCards, setPendingCardHighlight]);
+
   // 6. Video modal
   const modal = useVideoModal(cards.allMandalaCards, cards.scratchPadCards);
   const isSidePanelOpen = useVideoPanelStore((s) => s.isOpen);

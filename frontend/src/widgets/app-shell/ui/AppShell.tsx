@@ -4,6 +4,7 @@ import { DndContext } from '@dnd-kit/core';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
 import { MobileDrawer } from './MobileDrawer';
+import { CommandPalette } from '@/widgets/command-palette';
 import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useDndSensors, pointerWithinThenClosest } from '@/shared/lib/dnd';
@@ -140,6 +141,9 @@ export function AppShell({ children }: AppShellProps) {
           onOpenChange={setMobileDrawerOpen}
           onNavigateHome={onNavigateHome ?? undefined}
         />
+
+        {/* ⌘K global search — works on every authenticated route (incl. no-sidebar ones) */}
+        <CommandPalette />
       </div>
     </DndContext>
   );
