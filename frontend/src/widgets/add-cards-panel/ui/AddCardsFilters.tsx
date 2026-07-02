@@ -44,6 +44,8 @@ const PUBLISHED_PRESETS: ReadonlyArray<FacetPreset<string>> = [
   { value: '30', labelKey: 'addCards.filters.published.30d', defaultLabel: '1mo' },
   { value: '180', labelKey: 'addCards.filters.published.180d', defaultLabel: '6mo' },
   { value: '365', labelKey: 'addCards.filters.published.365d', defaultLabel: '1yr' },
+  { value: '730', labelKey: 'addCards.filters.published.730d', defaultLabel: '2yr' },
+  { value: '1095', labelKey: 'addCards.filters.published.1095d', defaultLabel: '3yr' },
 ];
 
 function daysAgoIso(days: number): string {
@@ -57,7 +59,9 @@ function isoToDaysBucket(iso: string): string {
   if (days <= 8) return '7';
   if (days <= 31) return '30';
   if (days <= 181) return '180';
-  return '365';
+  if (days <= 366) return '365';
+  if (days <= 731) return '730';
+  return '1095';
 }
 
 interface ChipRowProps<V extends string> {
