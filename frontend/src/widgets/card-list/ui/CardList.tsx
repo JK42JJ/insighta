@@ -456,7 +456,12 @@ export function CardList({
   return (
     <div className="animate-fade-in -mx-4 px-4 relative select-none" ref={containerRef}>
       {selectionStyle && <div style={selectionStyle} />}
-      <div ref={gridRef} className={CARD_GRID_CLASS} style={cardGridStyle(gridColumns)}>
+      <div
+        ref={gridRef}
+        data-onboarding="cards"
+        className={CARD_GRID_CLASS}
+        style={cardGridStyle(gridColumns)}
+      >
         {visibleCards.map((card, idx) => {
           const isSelected = selectedCardIds.has(card.id);
           return (

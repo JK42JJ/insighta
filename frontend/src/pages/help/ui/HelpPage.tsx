@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { Mail, MessageSquarePlus, ChevronDown, ExternalLink } from 'lucide-react';
+import { Mail, MessageSquarePlus, ChevronDown, ExternalLink, RotateCcw } from 'lucide-react';
+import { useOnboardingStore } from '@/features/onboarding';
 import { cn } from '@/shared/lib/utils';
 
 interface FaqItem {
@@ -46,6 +48,8 @@ function FaqAccordion({ questionKey, answerKey }: FaqItem) {
 
 function HelpPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const resetTours = useOnboardingStore((s) => s.resetTours);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -55,6 +59,21 @@ function HelpPage() {
       <p className="text-muted-foreground mb-8">
         {t('help.subtitle', 'Find answers to common questions or get in touch with our team.')}
       </p>
+
+      {/* Onboarding replay — explicit user request (UX 원칙 3: 명시 요청은 그대로) */}
+      <section className="mb-10">
+        <button
+          type="button"
+          onClick={() => {
+            resetTours();
+            navigate('/');
+          }}
+          className="inline-flex items-center gap-2 h-9 rounded-lg border border-border/50 px-3.5 text-[13px] text-foreground hover:bg-foreground/[0.04] transition-colors"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          {t('help.replayOnboarding', '시작 가이드 다시 보기')}
+        </button>
+      </section>
 
       {/* FAQ Section */}
       <section className="mb-10">

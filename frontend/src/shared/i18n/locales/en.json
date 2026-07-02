@@ -716,7 +716,8 @@
       "a5": "Yes. Your data is stored securely and only accessible to you. We use Supabase with row-level security to ensure data isolation between users.",
       "q6": "How do I report a bug?",
       "a6": "You can email us at support@insighta.one or create an issue on our GitHub repository. We appreciate your feedback."
-    }
+    },
+    "replayOnboarding": "Replay the getting-started guide"
   },
   "linkTypes": {
     "youtube": "YouTube Video",
@@ -1977,6 +1978,45 @@
       "foundCount": "{{count}} new",
       "tablist": "Search rounds",
       "activePanel": "Active round results"
+    }
+  },
+  "onboarding": {
+    "skip": "Skip",
+    "next": "Next",
+    "finish": "Get started",
+    "welcome": {
+      "title": "Welcome to Insighta",
+      "body": "Enter a goal and we break it into 8 action areas, each with a curated video curriculum.",
+      "cta": "Start with a goal",
+      "browse": "Browse templates"
+    },
+    "dash": {
+      "sectors": {
+        "title": "Your goal, split into 8 action areas",
+        "body": "Tap a chip to filter videos by area."
+      },
+      "cards": {
+        "title": "Videos curated by goal relevance",
+        "body": "Start with cards carrying the 'Core' badge."
+      },
+      "addcards": {
+        "title": "Fill gaps yourself",
+        "body": "Find more videos with keyword, views and duration filters."
+      },
+      "search": {
+        "title": "⌘K — search anything instantly",
+        "body": "Cards, mandalas, notes and AI summaries in one place."
+      }
+    },
+    "learn": {
+      "summary": {
+        "title": "Section-by-section AI summary",
+        "body": "Click a timestamp to jump right there. % is goal relevance."
+      },
+      "panel": {
+        "title": "Notes & AI chat",
+        "body": "Take notes while watching, ask questions about the video, or try a quiz."
+      }
     }
   }
 }

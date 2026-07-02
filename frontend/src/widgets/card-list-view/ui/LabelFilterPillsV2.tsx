@@ -81,7 +81,7 @@ export function LabelFilterPillsV2({
   const handleScrollBy = (dir: 1 | -1) => pageScroll(scrollRef.current, dir);
 
   return (
-    <div data-card-chrome className="relative mb-1.5">
+    <div data-card-chrome data-onboarding="sectors" className="relative mb-1.5">
       <div
         ref={scrollRef}
         className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1"

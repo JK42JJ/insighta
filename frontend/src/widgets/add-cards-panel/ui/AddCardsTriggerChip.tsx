@@ -50,6 +50,7 @@ export function AddCardsTriggerChip({ mandalaId }: AddCardsTriggerChipProps) {
   return (
     <button
       type="button"
+      data-onboarding="add-cards"
       onClick={() => openPanel(mandalaId)}
       className="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
       style={{

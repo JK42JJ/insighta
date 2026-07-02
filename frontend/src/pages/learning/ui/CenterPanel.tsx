@@ -404,7 +404,9 @@ export function CenterPanel({
             style={{ maxWidth: 'min(calc(49.5vh * 16 / 9), 760px)' }}
           >
             {centerTab === 'summary' && (
-              <PanelAISummary videoSummary={undefined} videoUrl={videoUrl} />
+              <div data-onboarding="ai-summary">
+                <PanelAISummary videoSummary={undefined} videoUrl={videoUrl} />
+              </div>
             )}
             {centerTab === 'section' &&
               (activeSection ? (
