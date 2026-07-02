@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, ChevronsDownUp, ChevronsUpDown, PanelTop } from 'lucide-react';
+import { BookOpen, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMandalaQuery } from '@/features/mandala';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
@@ -40,8 +40,6 @@ export function SidebarLearningSection({
   const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
   const setActiveRegion = useLearningStore((s) => s.setActiveRegion);
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
-  const videoStripEnabled = useLearningStore((s) => s.videoStripEnabled);
-  const setVideoStripEnabled = useLearningStore((s) => s.setVideoStripEnabled);
   // CP445.x — multi-chapter expand state. `null` = default (모두 펼침).
   // 사용자가 individual/all 토글 시 explicit Set 으로 전환.
   const [expandedIdxs, setExpandedIdxs] = useState<Set<number> | null>(null);
@@ -298,27 +296,8 @@ export function SidebarLearningSection({
             })()}
           </div>
           <div className="mt-0.5 flex shrink-0 items-center gap-0.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setVideoStripEnabled(!videoStripEnabled)}
-                  aria-label={videoStripEnabled ? '동영상 썸네일 바 끄기' : '동영상 썸네일 바 켜기'}
-                  aria-pressed={videoStripEnabled}
-                  className={cn(
-                    'rounded p-1 transition-colors hover:bg-sidebar-accent/40',
-                    videoStripEnabled
-                      ? 'text-sidebar-foreground/85 hover:text-sidebar-foreground'
-                      : 'text-sidebar-foreground/35 hover:text-sidebar-foreground/85'
-                  )}
-                >
-                  <PanelTop className="h-3.5 w-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-[12px]">
-                {videoStripEnabled ? '동영상 썸네일 바 끄기' : '동영상 썸네일 바 켜기'}
-              </TooltipContent>
-            </Tooltip>
+            {/* [STEP5] strip ON/OFF toggle retired — the floating navigator
+                button in CenterPanel's top bar replaces it. */}
             {/* CP445.x — 전체 펼침/접힘 토글. default = 모두 펼침. */}
             {totalChapters > 0 && (
               <Tooltip>
@@ -446,7 +425,9 @@ export function SidebarLearningSection({
                         <span
                           className={cn(
                             'shrink-0 font-mono text-[11px] tabular-nums transition-colors',
-                            chapterActive ? 'text-sidebar-foreground/80' : 'text-sidebar-foreground/35'
+                            chapterActive
+                              ? 'text-sidebar-foreground/80'
+                              : 'text-sidebar-foreground/35'
                           )}
                         >
                           {String(idx + 1).padStart(2, '0')}

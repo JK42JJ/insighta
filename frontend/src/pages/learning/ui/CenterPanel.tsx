@@ -23,7 +23,7 @@ import { LearningShareMenu } from '@/features/learning-share';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
 import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
-import { useMandalaCards } from '../model/useMandalaCards';
+import { FloatingVideoNavigator } from './FloatingVideoNavigator';
 import {
   relevanceLevel,
   relevanceCssVar,
@@ -53,8 +53,6 @@ interface CenterPanelProps {
   onUserPlayed?: () => void;
   onPlayStateChange?: (isPlaying: boolean) => void;
   startTime?: number;
-  onPlayerHoverIn?: () => void;
-  onPlayerHoverOut?: () => void;
 }
 
 type CenterTabId = 'chapters' | 'summary' | 'section';
@@ -72,8 +70,6 @@ function fmtDuration(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
-const YT_ID_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/;
-
 export function CenterPanel({
   mandalaId,
   videoId,
@@ -82,8 +78,6 @@ export function CenterPanel({
   onUserPlayed,
   onPlayStateChange,
   startTime,
-  onPlayerHoverIn,
-  onPlayerHoverOut,
 }: CenterPanelProps) {
   const { t } = useTranslation();
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -107,11 +101,10 @@ export function CenterPanel({
   const scrollSpyRef = useRef<string | null>(null);
   const setPlayerState = useLearningStore((s) => s.setPlayerState);
   const setCenterViewMode = useLearningStore((s) => s.setCenterViewMode);
-  const playerDurationSec = useLearningStore((s) => s.playerDurationSec);
   const { book, isLoading: bookLoading } = useMandalaBook(mandalaId);
-  // [STEP1] video meta header — title from the mandala card set.
-  const { cards } = useMandalaCards(mandalaId);
-  const currentCard = cards.find((c) => c.videoUrl.match(YT_ID_RE)?.[1] === videoId);
+  // [STEP5] floating navigator expand state — breadcrumb/secondary controls
+  // yield the top-bar width while the strip is expanded.
+  const [navExpanded, setNavExpanded] = useState(false);
   const setActiveNoteVideoKey = useLearningStore((s) => s.setActiveNoteVideoKey);
   const noteAutoFollowEnabled = useLearningStore((s) => s.noteAutoFollowEnabled);
   const setNoteAutoFollow = useLearningStore((s) => s.setNoteAutoFollow);
@@ -303,20 +296,29 @@ export function CenterPanel({
       {/* [STEP1] Top bar (mockup ①) — breadcrumb left; highlight-reel/share +
           [영상|노트] toggle right. Rendered in BOTH modes (toggle's single home). */}
       <div className="flex h-[52px] shrink-0 items-center justify-between gap-3 px-1">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 text-[12.5px] text-[var(--lp-faint)]">
-          {activeSection && (
-            <>
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {/* [STEP5] floating thumbnail navigator — collapsed pill / expanded strip */}
+          {centerViewMode === 'player' && (
+            <FloatingVideoNavigator
+              mandalaId={mandalaId}
+              currentVideoId={videoId}
+              expanded={navExpanded}
+              onExpandedChange={setNavExpanded}
+            />
+          )}
+          {!(navExpanded && centerViewMode === 'player') && activeSection && (
+            <div className="flex min-w-0 items-center gap-2.5 text-[12.5px] text-[var(--lp-faint)]">
               <span className="shrink-0 font-semibold text-[var(--lp-accent)]">
                 {t('learning.topicGroup', '주제군')}{' '}
                 {String((activeSection.chapter.ch ?? 0) + 1).padStart(2, '0')}
               </span>
               <span aria-hidden>·</span>
               <span className="truncate">{activeSection.chapter.title}</span>
-            </>
+            </div>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {centerViewMode === 'player' && (
+          {centerViewMode === 'player' && !navExpanded && (
             <>
               {highlightReel.enabled && (
                 <span
@@ -363,7 +365,7 @@ export function CenterPanel({
               </Tooltip>
             </>
           )}
-          <LearningShareMenu mandalaId={mandalaId} videoId={videoId} />
+          {!navExpanded && <LearningShareMenu mandalaId={mandalaId} videoId={videoId} />}
           <ViewModeToggle
             mode={centerViewMode}
             noteDisabled={!bookLoading && !book}
@@ -372,38 +374,11 @@ export function CenterPanel({
         </div>
       </div>
 
-      {/* [STEP1] Video meta header (mockup ②) — channel-initial avatar + title
-          + duration. Width-aligned with the player (CP445 pattern). */}
-      <div
-        className={cn('mx-auto w-full shrink-0', centerViewMode === 'note' && 'hidden')}
-        style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}
-      >
-        <div className="mb-1 flex items-center gap-[13px]">
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] text-[var(--lp-avatar-fg)]"
-            style={{ background: 'var(--lp-avatar-grad)' }}
-            aria-hidden
-          >
-            {(currentCard?.title ?? 'Y').slice(0, 1)}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-[17px] font-semibold leading-[1.35] tracking-[-0.01em] text-[var(--lp-strong)]">
-              {currentCard?.title ?? t('learning.videoFallbackTitle', '영상')}
-            </div>
-            <div className="mt-0.5 text-[12.5px] text-[var(--lp-faint)]">
-              YouTube{playerDurationSec > 0 ? ` · ${fmtDuration(playerDurationSec)}` : ''}
-            </div>
-          </div>
-        </div>
-      </div>
-
+      {/* [STEP5] meta header removed (user: 유튜브 자체 제목과 중복, 공간 비효율).
+          Video title lives in the navigator tooltip / YT hover title / left TOC. */}
       <div
         className={cn('mt-2 shrink-0', centerViewMode === 'note' && 'hidden')}
-        onMouseEnter={() => {
-          setActiveRegion('player');
-          onPlayerHoverIn?.();
-        }}
-        onMouseLeave={() => onPlayerHoverOut?.()}
+        onMouseEnter={() => setActiveRegion('player')}
       >
         <PanelVideoPlayer
           videoUrl={videoUrl}

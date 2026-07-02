@@ -1,7 +1,11 @@
+/**
+ * @deprecated [VIDEO-VIEW] Replaced by FloatingVideoNavigator (click-to-expand
+ * strip in CenterPanel's top bar). Kept per no-component-deletion rule.
+ */
 import { useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useMandalaCards } from '../model/useMandalaCards';
+import { useMandalaCards } from '../../model/useMandalaCards';
 import { cn } from '@/shared/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 
