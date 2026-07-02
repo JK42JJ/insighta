@@ -412,10 +412,13 @@ export function CenterPanel({
           </div>
         </div>
 
-        {/* Player hero frame (mockup ③) — group/player drives the hover chrome */}
+        {/* Player — ORIGINAL PanelVideoPlayer untouched (user decision after a
+            regression: native YT menus stay exactly as before). The relevance
+            curve overlay is the only custom element; the wrapper mirrors the
+            player's own size cap so the overlay hugs the video box exactly. */}
         <div
-          className="group/player relative overflow-hidden rounded-2xl border border-[var(--lp-line-8)] bg-black"
-          style={{ boxShadow: 'var(--lp-player-shadow)' }}
+          className="group/player relative mx-auto w-full"
+          style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}
           onMouseEnter={() => setActiveRegion('player')}
         >
           <PanelVideoPlayer
@@ -426,7 +429,6 @@ export function CenterPanel({
             onPlayStateChange={onPlayStateChange}
             onTimeUpdate={setPlayerState}
             startTime={startTime}
-            fill
           />
           <PlayerChrome sections={chapterSections} />
         </div>

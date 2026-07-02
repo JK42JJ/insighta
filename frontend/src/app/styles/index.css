@@ -1304,7 +1304,6 @@ html.dark .lemonsqueezy-loader {
   --lp-accent-tint: rgba(201,163,106,0.06);
   --lp-accent-border: rgba(201,163,106,0.30);
   --lp-hover-tint: rgba(255,255,255,0.025);
-  --lp-player-shadow: 0 30px 80px rgba(0,0,0,0.65), 0 0 90px rgba(201,163,106,0.06);
   --lp-avatar-grad: linear-gradient(135deg,#6d3a8f,#2a1840);
   --lp-avatar-fg: #e9d6f5;
   --lp-tab-active-fg: #15171c;
