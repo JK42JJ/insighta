@@ -103,6 +103,9 @@ services:
       # Revert: delete both lines → code defaults 30 / 120.
       - V5_TARGET_PICKS=60
       - V5_DEDUP_HARDCAP=180
+      # P0 trust gate canary (night delegation 2026-07-03): live-search view
+      # floor, NULL views = reject fail-closed. Rollback = delete this line.
+      - V5_LIVE_VIEW_FLOOR=1000
       # CP494 canary — pool-first backfill gate. Fill cells from the quota-FREE +
       # embedding-FREE video_pool (tsvector, v2_promoted ~1.1k) BEFORE live search;
       # a cell with ≥3 pool candidates drops its live search.list query → quota
