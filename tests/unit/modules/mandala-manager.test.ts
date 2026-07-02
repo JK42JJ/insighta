@@ -57,6 +57,17 @@ const mockPrisma: any = {
   mandala_create_timings: {
     create: jest.fn().mockResolvedValue({ id: 'timing-1' }),
   },
+  // listMandalas P1 asset-status batch (#1038) — synchronous property access,
+  // so a missing model here throws before Promise.allSettled can degrade.
+  slide_decks: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  mandala_books: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  note_documents: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
   userVideoState: {
     updateMany: jest.fn(),
   },
@@ -273,7 +284,8 @@ describe('MandalaManager', () => {
       expect(result.mandalas).toEqual([]);
       expect(result.total).toBe(0);
       expect(result.page).toBe(1);
-      expect(result.limit).toBe(20);
+      // No options = unpaginated (limit 0, all rows) — manager.ts listMandalas hasLimit guard
+      expect(result.limit).toBe(0);
     });
 
     test('should apply pagination parameters', async () => {
@@ -290,7 +302,7 @@ describe('MandalaManager', () => {
       );
     });
 
-    test('should order by is_default DESC, position ASC, created_at DESC', async () => {
+    test('should order by is_default DESC, created_at DESC (position dropped in #666)', async () => {
       mockPrisma.user_mandalas.findMany.mockResolvedValue([]);
       mockPrisma.user_mandalas.count.mockResolvedValue(0);
 
@@ -298,7 +310,7 @@ describe('MandalaManager', () => {
 
       expect(mockPrisma.user_mandalas.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          orderBy: [{ is_default: 'desc' }, { position: 'asc' }, { created_at: 'desc' }],
+          orderBy: [{ is_default: 'desc' }, { created_at: 'desc' }],
         })
       );
     });
@@ -1322,23 +1334,20 @@ describe('MandalaManager', () => {
   // ─── checkDuplicateTitle (Bug #386 regression) ───
 
   describe('checkDuplicateTitle', () => {
-    test('should throw DUPLICATE_TITLE when a mandala with the same title exists for the user', async () => {
-      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce({ id: 'existing-id' });
+    // Duplicate titles are now allowed — the method is an intentional no-op
+    // (manager.ts checkDuplicateTitle doc block: users iterate on the same goal).
+    test('is a no-op even when a same-title mandala exists (duplicates allowed)', async () => {
+      // No mockResolvedValueOnce queuing here — the no-op never queries, and an
+      // unconsumed Once value would leak into later tests' findFirst queue.
+      mockPrisma.user_mandalas.findFirst.mockClear();
 
-      const err = await manager.checkDuplicateTitle(mockUserId, 'My Mandala').catch((e) => e);
-
-      expect(err).toBeInstanceOf(Error);
-      expect(err.message).toBe('DUPLICATE_TITLE');
-      expect(err.existingId).toBe('existing-id');
-      expect(mockPrisma.user_mandalas.findFirst).toHaveBeenCalledWith({
-        where: { user_id: mockUserId, title: 'My Mandala' },
-        select: { id: true },
-      });
+      await expect(
+        manager.checkDuplicateTitle(mockUserId, 'My Mandala')
+      ).resolves.toBeUndefined();
+      expect(mockPrisma.user_mandalas.findFirst).not.toHaveBeenCalled();
     });
 
     test('should resolve without error when no duplicate title exists for the user', async () => {
-      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce(null);
-
       await expect(
         manager.checkDuplicateTitle(mockUserId, 'Unique Title')
       ).resolves.toBeUndefined();
@@ -1348,16 +1357,16 @@ describe('MandalaManager', () => {
   // ─── createMandala — duplicate title guard (Bug #386 regression) ───
 
   describe('createMandala — duplicate title guard', () => {
-    test('should reject with DUPLICATE_TITLE before entering the transaction', async () => {
-      // checkDuplicateTitle (Step 0) uses findFirst — return a hit to simulate duplicate
-      mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce({ id: 'existing-id' });
+    test('duplicate title no longer blocks — quota guard is the first pre-transaction reject', async () => {
+      // Same-title hit no longer matters (checkDuplicateTitle is a no-op) —
+      // no findFirst queuing, or the unconsumed Once value leaks to later tests.
+      // With quota exceeded, createMandala rejects on quota before the transaction.
+      mockPrisma.$transaction.mockClear();
 
       await expect(
         manager.createMandala(mockUserId, 'My Mandala', mockLevelsInput)
-      ).rejects.toThrow('DUPLICATE_TITLE');
+      ).rejects.toThrow('Mandala quota exceeded');
 
-      // Step 1 parallel reads and the transaction must never run
-      expect(mockPrisma.user_subscriptions.findUnique).not.toHaveBeenCalled();
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
   });
@@ -1399,6 +1408,11 @@ describe('MandalaManager', () => {
     });
 
     test('should throw Mandala not found for a non-existent mandala (CP362 #385)', async () => {
+      // Reset both call history AND any Once-value queue leaked by earlier
+      // tests — a stale queued mandala would make verifyOwnership pass and
+      // enter the transaction, breaking the not-called assertion below.
+      mockPrisma.$transaction.mockClear();
+      mockPrisma.user_mandalas.findFirst.mockReset();
       // verifyOwnership — the first findFirst call returns null
       mockPrisma.user_mandalas.findFirst.mockResolvedValueOnce(null);
 
