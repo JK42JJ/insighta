@@ -22,11 +22,12 @@
 import { config } from '@/config/index';
 import { logger } from '@/utils/logger';
 import { transporter } from '@/modules/skills/mailer';
+import { MS_PER_HOUR } from '@/utils/time-constants';
 
 const log = logger.child({ module: 'quota-alert' });
 
 /** Min gap between alert emails (6h) — burst of exhausted calls = 1 mail. */
-export const QUOTA_ALERT_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const QUOTA_ALERT_MIN_INTERVAL_MS = 6 * MS_PER_HOUR;
 
 let lastSentAtMs = 0;
 
