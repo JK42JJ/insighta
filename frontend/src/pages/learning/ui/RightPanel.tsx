@@ -121,7 +121,10 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
       // (Sidebar.tsx: border-sidebar-border/40) so both panel seams are identical.
       // Previous border-white/[0.06] read heavier/cruder than the left edge.
       data-onboarding="learn-panel"
-      className="flex w-[400px] shrink-0 flex-col border-l border-sidebar-border/40 pl-5 pr-5"
+      // pt-[5px] mirrors CenterPanel's root offset so the context zone's text
+      // line + bottom divider land on the SAME y as the center top bar (and
+      // the left sidebar's first row) — measured alignment, not eyeballed.
+      className="flex w-[400px] shrink-0 flex-col border-l border-sidebar-border/40 pl-5 pr-5 pt-[5px]"
       onMouseEnter={() => setActiveRegion(activeTab === 'notes' ? 'notes' : 'chat')}
     >
       {/* [STEP7] Context zone — same 52px rhythm as the center top bar (left
