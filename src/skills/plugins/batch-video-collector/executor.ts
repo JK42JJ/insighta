@@ -37,6 +37,7 @@ import {
   BATCH_COLLECTOR_SEARCH_PARALLELISM,
 } from './manifest';
 import { loadTrendKeywords, type TrendKeyword } from './sources/trend-source';
+import { loadGoalKeywords } from './sources/goal-source';
 import { classifyQuality, type QualityTier } from './quality';
 import {
   searchVideos,
@@ -61,6 +62,10 @@ const log = logger.child({ module: 'batch-video-collector' });
 
 const DESC_SNIPPET_LEN = 200;
 const DEFAULT_RUN_TYPE = 'daily_trend';
+/** W3 — goal-driven run type: keywords come from user mandala cell sub-goals
+ *  (goal-source) instead of trend_signals. Set BATCH_COLLECTOR_RUN_TYPE to this
+ *  to collect for the topics users actually asked for. */
+const GOAL_RUN_TYPE = 'popular_goals';
 
 interface HydratedState {
   apiKeys: string[];
@@ -160,12 +165,20 @@ export const executor: SkillExecutor = {
     let quotaExhausted = false;
 
     try {
-      // 2. Load trend keywords
-      const keywords = await loadTrendKeywords(db, state.limit, { offset: state.offset });
+      // 2. Load keywords — trend signals (Source A) or, for the goal-driven
+      //    run type (W3), user mandala cell sub-goals (Source B). Same shape,
+      //    so the search → gate → embed → upsert flow below is unchanged.
+      const keywords =
+        state.runType === GOAL_RUN_TYPE
+          ? await loadGoalKeywords(db, state.limit)
+          : await loadTrendKeywords(db, state.limit, { offset: state.offset });
       if (keywords.length === 0) {
         await finalizeRun(db, run.id, {
           status: 'failed',
-          error: 'No trend keywords available (trend_signals empty or all expired)',
+          error:
+            state.runType === GOAL_RUN_TYPE
+              ? 'No goal keywords available (no mandala cell sub-goals)'
+              : 'No trend keywords available (trend_signals empty or all expired)',
           queriesExecuted: 0,
           videosFound: 0,
           videosNew: 0,
