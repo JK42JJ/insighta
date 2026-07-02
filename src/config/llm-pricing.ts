@@ -42,6 +42,13 @@ export const LLM_PRICING: Record<string, LLMPricing> = {
     source: 'simonw/llm-prices (2026-06): $0.14/M in, $0.28/M out',
   },
   // --- OpenRouter: Qwen family (sourced 2026-04-27) ---
+  // iks-embed-fallback path — without this entry every embedding call logged
+  // cost_usd NULL (30d prod: 1,368 token-bearing calls, 100% NULL).
+  'qwen/qwen3-embedding-8b': {
+    inputPerToken: 0.00000001,
+    outputPerToken: 0,
+    source: 'openrouter.ai/api/v1/embeddings/models (2026-07-02): $0.01/M in, $0 out',
+  },
   'qwen/qwen3-30b-a3b': {
     inputPerToken: 0.00000008,
     outputPerToken: 0.00000028,
