@@ -98,11 +98,12 @@ describe('computeMandalaMedian', () => {
 });
 
 describe('loadBookGateConfig', () => {
-  it('defaults: mode absolute, min 40, floor 35, minScored 5, passNull true (inert)', () => {
+  it('defaults: mode absolute, min 70, floor 35, minScored 5, passNull true (inert)', () => {
     const c = loadBookGateConfig({});
     expect(c).toEqual({
       mode: 'absolute',
-      minRelevance: 40,
+      // default moved 40 → 70 in PR #1038 (src/config/book-gate.ts:48 — book targets 핵심+추천 only)
+      minRelevance: 70,
       floorRelevance: 35,
       minScoredForRelative: 5,
       passNull: true,

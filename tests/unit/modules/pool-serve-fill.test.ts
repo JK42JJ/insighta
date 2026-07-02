@@ -90,6 +90,15 @@ jest.mock('@/skills/plugins/video-discover/v5/executor', () => ({
     iso === 'PT45S' ? 45 : iso === 'PT10M' ? 600 : null,
 }));
 
+// Worktree/CI-agnostic DB URL: without a .env, DATABASE_URL falls back to the
+// 'file:' default (src/config/index.ts:21) and beforeAll's getJobQueue().start()
+// throws before ANY test runs (incl. the pure config-defaults test). pg-boss is
+// mocked above, so the manager only needs a postgres:// shaped string.
+jest.mock('../../../src/config', () => {
+  process.env['DATABASE_URL'] = 'postgresql://test:test@127.0.0.1:5432/test';
+  return jest.requireActual('../../../src/config');
+});
+
 jest.mock('@/utils/logger', () => ({
   logger: {
     child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),

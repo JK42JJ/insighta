@@ -70,6 +70,8 @@ describe('loadRichSummaryConfig', () => {
         maxDurationSeconds: 5400,
         transcriptMaxChars: 100000,
         maxOutputTokens: 8192,
+        // CP504 — v2 enrich model knob, default pinned Sonnet 4.6 (src/config/rich-summary.ts:88-93)
+        enrichModel: 'anthropic/claude-sonnet-4-6',
       });
     });
 
@@ -88,6 +90,8 @@ describe('loadRichSummaryConfig', () => {
         maxDurationSeconds: 5400,
         transcriptMaxChars: 100000,
         maxOutputTokens: 8192,
+        // CP504 — v2 enrich model knob, default pinned Sonnet 4.6 (src/config/rich-summary.ts:88-93)
+        enrichModel: 'anthropic/claude-sonnet-4-6',
       });
     });
   });

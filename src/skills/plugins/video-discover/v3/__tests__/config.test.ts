@@ -39,6 +39,10 @@ describe('loadV3Config', () => {
       tier1Sources: [...DEFAULT_TIER1_SOURCES], // CP457 default ['v2_promoted']
       semanticMinCosine: SEMANTIC_MIN_COSINE, // CP457 default 0.35 (mandala-filter.ts const)
       tier2Overfetch: true, // overfetch default — Tier 2 always runs a full per-cell budget
+      // CP488 code-path flags, default ON to preserve behavior (v3/config.ts:312-314)
+      enableSignalExclude: true,
+      enableZeroHitRetry: true,
+      enableUserCuratedIngest: true,
     });
   });
 
@@ -113,6 +117,10 @@ describe('loadV3Config', () => {
       tier1Sources: [...DEFAULT_TIER1_SOURCES], // CP457 default ['v2_promoted']
       semanticMinCosine: SEMANTIC_MIN_COSINE, // CP457 default 0.35 (mandala-filter.ts const)
       tier2Overfetch: true, // overfetch default — Tier 2 always runs a full per-cell budget
+      // CP488 code-path flags, default ON to preserve behavior (v3/config.ts:312-314)
+      enableSignalExclude: true,
+      enableZeroHitRetry: true,
+      enableUserCuratedIngest: true,
     });
   });
 
