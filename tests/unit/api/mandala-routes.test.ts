@@ -85,6 +85,15 @@ const mockEnqueueDeckBuild = jest.fn().mockResolvedValue('deck-job-1');
 jest.mock('../../../src/modules/queue/handlers/deck-build', () => ({
   enqueueDeckBuild: (...a: unknown[]) => mockEnqueueDeckBuild(...a),
 }));
+// ④ /quota daily-limit block reads prisma directly ($queryRaw super-admin
+// check + user_mandalas.count) — added after this suite was written.
+// The route imports getPrismaClient from modules/database/client (mandalas.ts:11).
+jest.mock('../../../src/modules/database/client', () => ({
+  getPrismaClient: () => ({
+    $queryRaw: jest.fn().mockResolvedValue([{ is_super_admin: false }]),
+    user_mandalas: { count: jest.fn().mockResolvedValue(0) },
+  }),
+}));
 
 import { mandalaRoutes } from '../../../src/api/routes/mandalas';
 
@@ -354,6 +363,8 @@ describe('Mandala API Routes', () => {
       const res = await app.inject({
         method: 'GET',
         url: `${PREFIX}/explore`,
+        // /explore requires auth since #666 (onRequest: [fastify.authenticate])
+        headers: authHeaders(),
       });
 
       expect(res.statusCode).toBe(200);
@@ -364,6 +375,7 @@ describe('Mandala API Routes', () => {
       const res = await app.inject({
         method: 'GET',
         url: `${PREFIX}/explore?page=0`,
+        headers: authHeaders(),
       });
 
       expect(res.statusCode).toBe(400);
@@ -380,6 +392,7 @@ describe('Mandala API Routes', () => {
       const res = await app.inject({
         method: 'GET',
         url: `${PREFIX}/explore?page=2&limit=5&domain=tech&sort=popular&source=template`,
+        headers: authHeaders(),
       });
 
       expect(res.statusCode).toBe(200);
