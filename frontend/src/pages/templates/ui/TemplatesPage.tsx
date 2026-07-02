@@ -90,7 +90,11 @@ export default function TemplatesPage() {
         const subs = levels
           .filter((l) => l.depth === 1)
           .sort((a, b) => a.position - b.position)
-          .map((l) => ({ centerGoal: l.centerGoal, subjects: l.subjects }));
+          .map((l) => ({
+            centerGoal: l.centerGoal,
+            subjects: l.subjects,
+            subjectLabels: l.subjectLabels,
+          }));
 
         setModal((prev) => ({
           ...prev,

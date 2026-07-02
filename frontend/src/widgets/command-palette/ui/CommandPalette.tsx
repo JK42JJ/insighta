@@ -35,6 +35,7 @@ import type {
   GlobalSearchSummaryHit,
 } from '@/shared/lib/api-client';
 import { useGlobalSearch } from '../model/useGlobalSearch';
+import { subscribePaletteOpen } from '../model/palette-controller';
 
 /** One flat keyboard-navigable row (quick action or search hit). */
 interface PaletteRow {
@@ -75,6 +76,9 @@ export function CommandPalette() {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [isLoggedIn]);
+
+  // External open requests (sidebar trigger / collapsed icon).
+  useEffect(() => subscribePaletteOpen(() => setOpen(true)), []);
 
   // Reset transient state whenever the palette closes.
   useEffect(() => {
@@ -148,7 +152,9 @@ export function CommandPalette() {
           title: t('palette.actionTemplates', '템플릿 찾기'),
           icon: <Compass className="w-4 h-4" />,
           run: () => {
-            navigate('/templates');
+            // Same destination as the sidebar 템플릿 찾기 menu (in-app explore,
+            // NOT the /templates marketing page) — user-reported mismatch.
+            navigate('/explore');
             close();
           },
         }
@@ -247,13 +253,17 @@ export function CommandPalette() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
-        className="max-w-xl p-0 gap-0 overflow-hidden top-[20%] translate-y-0"
+        // Palette chrome — elevated popover surface, larger radius, deep shadow,
+        // built-in dialog X hidden ([&>button]:hidden targets the direct child).
+        // Width matched to the claude.ai ⌘K reference (~768px measured).
+        className="max-w-3xl p-0 gap-0 overflow-hidden top-[18%] translate-y-0 rounded-xl border-border/40 bg-popover shadow-2xl [&>button]:hidden"
         aria-describedby={undefined}
       >
         <DialogTitle className="sr-only">{t('palette.title', '검색 및 빠른 작업')}</DialogTitle>
 
-        {/* Input row */}
-        <div className="flex items-center gap-2 px-4 h-12 border-b border-border/50">
+        {/* Input row — seamless (no inner box); the global input:focus-visible
+            ring (app/styles/index.css:328) is suppressed for the palette. */}
+        <div className="flex items-center gap-2.5 px-4 h-[52px] border-b border-border/40">
           <Search className="w-4 h-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             autoFocus
@@ -265,7 +275,7 @@ export function CommandPalette() {
             }}
             onKeyDown={handleKeyDown}
             placeholder={t('palette.placeholder', '카드, 만다라, 노트, 요약 검색…')}
-            className="flex-1 h-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+            className="flex-1 h-full bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
             role="combobox"
             aria-expanded={rows.length > 0}
             aria-haspopup="listbox"
@@ -274,7 +284,11 @@ export function CommandPalette() {
         </div>
 
         {/* Rows */}
-        <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1.5" role="listbox">
+        <div
+          ref={listRef}
+          className="max-h-[50vh] overflow-y-auto py-1.5 scrollbar-pro"
+          role="listbox"
+        >
           {rows.length === 0 && isActive && !isLoading && (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               {t('palette.empty', '결과가 없습니다')}
@@ -327,11 +341,29 @@ export function CommandPalette() {
           })}
         </div>
 
-        {/* Footer hints */}
-        <div className="flex items-center gap-3 px-4 h-9 border-t border-border/50 text-[11px] text-muted-foreground">
-          <span>↑↓ {t('palette.hintSelect', '선택')}</span>
-          <span>↵ {t('palette.hintOpen', '이동')}</span>
-          <span>esc {t('palette.hintClose', '닫기')}</span>
+        {/* Footer hints — keycap chips (claude.ai reference) */}
+        <div className="flex items-center gap-4 px-4 h-10 border-t border-border/40 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <kbd className="px-1 py-0.5 min-w-[18px] text-center rounded border border-border/50 bg-muted/40 text-[10px] font-mono leading-none">
+              ↑
+            </kbd>
+            <kbd className="px-1 py-0.5 min-w-[18px] text-center rounded border border-border/50 bg-muted/40 text-[10px] font-mono leading-none">
+              ↓
+            </kbd>
+            {t('palette.hintSelect', '선택')}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <kbd className="px-1 py-0.5 min-w-[18px] text-center rounded border border-border/50 bg-muted/40 text-[10px] font-mono leading-none">
+              ↵
+            </kbd>
+            {t('palette.hintOpen', '이동')}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 rounded border border-border/50 bg-muted/40 text-[10px] font-mono leading-none">
+              esc
+            </kbd>
+            {t('palette.hintClose', '닫기')}
+          </span>
         </div>
       </DialogContent>
     </Dialog>

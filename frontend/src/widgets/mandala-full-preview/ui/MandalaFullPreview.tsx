@@ -12,12 +12,15 @@
  */
 
 import { useState } from 'react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 import type { MandalaDomain } from '@/shared/config/domain-colors';
 import { DOMAIN_STYLES } from '@/shared/config/domain-colors';
 
 interface MandalaLevel {
   centerGoal: string;
   subjects: string[];
+  /** Short display labels for the 8 action items (depth-1 subject_labels). */
+  subjectLabels?: string[];
 }
 
 interface Props {
@@ -141,8 +144,10 @@ function buildCells(
           let fullBlockCells: string[];
 
           if (sub) {
-            blockCells = [...sub.subjects.slice(0, 4), subLabelName, ...sub.subjects.slice(4)];
-            // sub-center 자리 = subGoalName (full), ring 1+ = sub.subjects (이미 full)
+            // Action items: short labels when the level provides them, full text otherwise.
+            const subDisplay = sub.subjectLabels?.length === 8 ? sub.subjectLabels : sub.subjects;
+            blockCells = [...subDisplay.slice(0, 4), subLabelName, ...subDisplay.slice(4)];
+            // sub-center 자리 = subGoalName (full), ring 1+ = sub.subjects (원본 full)
             fullBlockCells = [...sub.subjects.slice(0, 4), subGoalName, ...sub.subjects.slice(4)];
           } else {
             blockCells = ['', '', '', '', subLabelName, '', '', '', ''];
@@ -421,7 +426,9 @@ export function MandalaFullPreview({
             ? { background: 'hsl(var(--muted) / 0.4)', opacity: 1, zIndex: 5, position: 'relative' }
             : {};
 
-          return (
+          // Custom Radix tooltip (NOT native title) showing the full original
+          // text whenever the displayed label differs from it.
+          const cellEl = (
             <div
               key={i}
               className={getCellClass(cell)}
@@ -432,7 +439,6 @@ export function MandalaFullPreview({
                 ...flyStyle,
                 ...hoverLinkStyle,
               }}
-              title={cell.goal}
               onClick={() => handleCellClick(cell)}
               onMouseEnter={() =>
                 cell.blockIdx !== -1 ? setHoveredBlock(cell.blockIdx) : undefined
@@ -442,6 +448,25 @@ export function MandalaFullPreview({
               {cell.text}
             </div>
           );
+          // Tooltip when the display differs from the original OR the original
+          // is long enough that the tiny cell clips it (labels for depth-1
+          // action items are absent fleet-wide today — 8/17,852 measured —
+          // so the length branch is what fires for ring cells until a label
+          // backfill lands).
+          const CLIP_LIKELY_LEN = 12;
+          if (cell.goal && (cell.goal !== cell.text || cell.goal.length >= CLIP_LIKELY_LEN)) {
+            return (
+              <Tooltip key={i}>
+                <TooltipTrigger asChild>{cellEl}</TooltipTrigger>
+                {/* z-[300]: the explore modal overlay sits at z-[200]; the shared
+                    TooltipContent default z-50 would render BEHIND it. */}
+                <TooltipContent side="top" className="z-[300] max-w-[280px] text-xs leading-snug">
+                  {cell.goal}
+                </TooltipContent>
+              </Tooltip>
+            );
+          }
+          return cellEl;
         })}
       </div>
     </div>
