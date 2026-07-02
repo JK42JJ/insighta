@@ -152,7 +152,9 @@ export function CommandPalette() {
           title: t('palette.actionTemplates', '템플릿 찾기'),
           icon: <Compass className="w-4 h-4" />,
           run: () => {
-            navigate('/templates');
+            // Same destination as the sidebar 템플릿 찾기 menu (in-app explore,
+            // NOT the /templates marketing page) — user-reported mismatch.
+            navigate('/explore');
             close();
           },
         }

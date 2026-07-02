@@ -1,5 +1,6 @@
 import { MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 import type { MandalaDomain } from '@/shared/config/domain-colors';
 import { DOMAIN_STYLES, domainCssVars, getDomainLabel } from '@/shared/config/domain-colors';
 
@@ -225,14 +226,22 @@ export function ExploreCard({
         ))}
       </div>
 
-      {/* Title (BOTTOM, line-clamp-2 강제 — `<h4>` 사용 (이전 `<span block>` 은 line-clamp 의 display:-webkit-box 를 덮어써서 영문 5줄 풀어짐)). title attribute = native browser tooltip showing full text on hover. */}
-      <h4
-        className="line-clamp-2 text-[14px] font-semibold leading-snug tracking-tight mb-3 break-keep"
-        style={{ color: 'hsl(var(--foreground))' }}
-        title={title}
-      >
-        {title}
-      </h4>
+      {/* Title (BOTTOM) — short display (centerLabel when present, else 1-line
+          clamp of the full goal); hover = custom Radix tooltip with the FULL
+          original text (user request: 짧은 레이블 + 원문 툴팁, native title 금지). */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <h4
+            className={`${centerLabel ? 'line-clamp-1' : 'line-clamp-2'} text-[14px] font-semibold leading-snug tracking-tight mb-3 break-keep`}
+            style={{ color: 'hsl(var(--foreground))' }}
+          >
+            {centerLabel ?? title}
+          </h4>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-[320px] text-xs leading-snug">
+          {title}
+        </TooltipContent>
+      </Tooltip>
 
       {/* Footer (mockup v6 — Heart/Copy meta retired; left = N people started, right = preview CTA). Owner-aware label branching is Step 2B. */}
       <div className="flex items-center justify-between text-[11.5px]">

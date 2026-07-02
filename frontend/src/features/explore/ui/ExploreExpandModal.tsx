@@ -8,6 +8,8 @@ import { DOMAIN_STYLES, domainCssVars, getDomainLabel } from '@/shared/config/do
 interface MandalaLevel {
   centerGoal: string;
   subjects: string[];
+  /** Short display labels for the 8 action items (depth-1 subject_labels). */
+  subjectLabels?: string[];
 }
 
 interface Props {
