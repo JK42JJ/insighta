@@ -126,7 +126,13 @@ export function PlayerChrome({ sections }: PlayerChromeProps) {
     head.style.top = `${(pt.y / CURVE_H) * H}px`;
   }, [progress, curve]);
 
-  if (!curve) return null;
+  // Coverage gate — segments must actually map the video. A 65-min video
+  // whose chapters cover only the first ~7 min would render as a squiggle
+  // crammed into the left edge + a long flat line (user bug report): worse
+  // than no curve. Hide unless the data spans ≥90% of the real duration.
+  const coverage =
+    duration > 0 && chapters.length ? chapters[chapters.length - 1]!.to_sec / duration : 0;
+  if (!curve || coverage < 0.9) return null;
 
   return (
     // z-20 — must sit above PanelVideoPlayer's poster facade (z-10).
