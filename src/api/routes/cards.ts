@@ -549,13 +549,9 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           }
           // Channel-level block (P0 scam-inflow): an impersonation channel is
           // barred from the shared pool even when its title looks innocent.
-          const { isChannelBlocked } = await import(
-            '@/modules/moderation/channel-blocklist'
-          );
+          const { isChannelBlocked } = await import('@/modules/moderation/channel-blocklist');
           if (await isChannelBlocked(ytFull.channel_id, ytFull.channel_title)) {
-            log.info(
-              `like → video_pool ingest SKIPPED (blocklisted channel): videoId=${videoId}`
-            );
+            log.info(`like → video_pool ingest SKIPPED (blocklisted channel): videoId=${videoId}`);
             return;
           }
           const lang = ytFull.title && /[가-힣]/.test(ytFull.title) ? 'ko' : 'en';
