@@ -18,6 +18,7 @@ import { quotaRoutes } from './routes/quota';
 import { mandalaRoutes } from './routes/mandalas';
 import { imageRoutes } from './routes/images';
 import { ontologyRoutes } from './routes/ontology';
+import { searchRoutes } from './routes/search';
 import { llmRoutes } from './routes/llm';
 import { adminRoutes } from './routes/admin';
 import { subscriptionRoutes } from './routes/subscriptions';
@@ -306,6 +307,9 @@ export async function buildServer() {
 
       // Register ontology routes (GraphRAG knowledge graph)
       await instance.register(ontologyRoutes, { prefix: '/ontology' });
+
+      // Register global search routes (⌘K palette — cards/mandalas/notes/summaries)
+      await instance.register(searchRoutes, { prefix: '/search' });
 
       // Register LLM provider routes (status, health)
       await instance.register(llmRoutes, { prefix: '/llm' });
