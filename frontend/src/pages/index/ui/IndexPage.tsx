@@ -31,7 +31,8 @@ import { useMandalaQuery, useMandalaList } from '@/features/mandala';
 import { useMandalaStore } from '@/stores/mandalaStore';
 import { youtubeSyncKeys } from '@/features/youtube-sync/model/useYouTubeSync';
 import { localCardsKeys } from '@/features/card-management/model/useLocalCards';
-import { useSearchCards, SearchBar } from '@/features/search';
+import { useSearchCards } from '@/features/search';
+import { CommandPaletteTrigger } from '@/widgets/command-palette';
 import { useMandalaNavigation } from '../model/useMandalaNavigation';
 import { useLayoutPreferences } from '../model/useLayoutPreferences';
 import { useCardOrchestrator } from '../model/useCardOrchestrator';
@@ -931,36 +932,9 @@ function AuthenticatedApp() {
     setNewlySyncedCountByMandala(cards.newlySyncedCountByMandala);
   }, [cards.newlySyncedCountByMandala, setNewlySyncedCountByMandala]);
 
-  // searchBar — useMemo with primitive deps only
-  const searchBarMemo = useMemo(
-    () => (
-      <SearchBar
-        value={search.searchTerm}
-        onChange={search.setSearchTerm}
-        onClear={search.clearSearch}
-        isLoading={search.isLoading}
-        resultCount={search.total}
-        filteredCount={search.filteredCount}
-        isSearchActive={search.isSearchActive}
-        sourceFilter={search.sourceFilter}
-        onSourceFilterChange={search.setSourceFilter}
-        onArrowDown={() => search.moveHighlight('down')}
-        onArrowUp={() => search.moveHighlight('up')}
-        onEnter={() => {
-          const card = search.getHighlightedCard();
-          if (card) handleCardClick(card);
-        }}
-      />
-    ),
-    [
-      search.searchTerm,
-      search.isLoading,
-      search.total,
-      search.filteredCount,
-      search.isSearchActive,
-      search.sourceFilter,
-    ] // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  // Sidebar search — a trigger that opens the global ⌘K palette (ONE search
+  // experience; the legacy inline SearchBar/ulc-only path is retired here).
+  const searchBarMemo = useMemo(() => <CommandPaletteTrigger />, []);
 
   useEffect(() => {
     setSearchBarElement(searchBarMemo);
@@ -1013,25 +987,9 @@ function AuthenticatedApp() {
                     : ''
                 }`}
               >
-                {/* Mobile search bar (hidden on md+, shown in header instead) */}
+                {/* Mobile search trigger (hidden on md+, shown in header instead) */}
                 <div className="md:hidden mb-3">
-                  <SearchBar
-                    value={search.searchTerm}
-                    onChange={search.setSearchTerm}
-                    onClear={search.clearSearch}
-                    isLoading={search.isLoading}
-                    resultCount={search.total}
-                    filteredCount={search.filteredCount}
-                    isSearchActive={search.isSearchActive}
-                    sourceFilter={search.sourceFilter}
-                    onSourceFilterChange={search.setSourceFilter}
-                    onArrowDown={() => search.moveHighlight('down')}
-                    onArrowUp={() => search.moveHighlight('up')}
-                    onEnter={() => {
-                      const card = search.getHighlightedCard();
-                      if (card) handleCardClick(card);
-                    }}
-                  />
+                  <CommandPaletteTrigger />
                 </div>
                 {layout.viewMode === 'insights' ? (
                   <InsightsView

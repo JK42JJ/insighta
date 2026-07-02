@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CirclePlus, ChevronDown, ChevronUp, Compass, PanelLeft, Search } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/shared/ui/popover';
-import { Dialog, DialogContent } from '@/shared/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
+import { openCommandPalette } from '@/widgets/command-palette';
 import { SidebarSkillPanel } from '@/widgets/sidebar-skill-panel';
 import { useMandalaStore } from '@/stores/mandalaStore';
 
@@ -24,8 +24,7 @@ export function SidebarTopSection({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const selectedMandalaId = useMandalaStore((s) => s.selectedMandalaId);
-  // CP441 — collapsed search opens a centered modal (ChatGPT pattern).
-  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  // Collapsed search icon opens the global ⌘K CommandPalette (one search UX).
   // CP446 — expanded "more" Popover uses controlled open state so the chevron
   // can toggle (ChevronDown ↔ ChevronUp).
   const [moreOpen, setMoreOpen] = useState(false);
@@ -98,26 +97,21 @@ export function SidebarTopSection({
         </Tooltip>
 
         {searchBarElement && (
-          <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setSearchDialogOpen(true)}
-                  aria-label={t('sidebar.searchPlaceholder', '검색 (⌘K)')}
-                  className={iconBtn}
-                >
-                  <Search className="w-5 h-5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                {t('sidebar.searchPlaceholder', '검색 (⌘K)')}
-              </TooltipContent>
-            </Tooltip>
-            <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
-              <DialogContent className="max-w-xl p-4">{searchBarElement}</DialogContent>
-            </Dialog>
-          </>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={openCommandPalette}
+                aria-label={t('sidebar.searchPlaceholder', '검색 (⌘K)')}
+                className={iconBtn}
+              >
+                <Search className="w-5 h-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {t('sidebar.searchPlaceholder', '검색 (⌘K)')}
+            </TooltipContent>
+          </Tooltip>
         )}
 
         <Popover>
