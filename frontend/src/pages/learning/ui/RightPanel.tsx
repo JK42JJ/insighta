@@ -1,12 +1,11 @@
 import { markOnboardingTask } from '@/features/onboarding';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NotebookPen, Bot, MoreHorizontal } from 'lucide-react';
+import { NotebookPen, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/utils';
 import { PanelNoteEditor } from '@/features/video-side-panel/ui/PanelNoteEditor';
 import { ChatAssistant } from './ChatAssistant';
-import { ViewModeToggle } from './CenterPanel';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useMandalaCards } from '../model/useMandalaCards';
 import { useLearningStore } from '../model/useLearningStore';
@@ -27,11 +26,9 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<RightTab>('chatbot');
   const setActiveRegion = useLearningStore((s) => s.setActiveRegion);
   const setNoteContext = useLearningStore((s) => s.setNoteContext);
-  const centerViewMode = useLearningStore((s) => s.centerViewMode);
-  const setCenterViewMode = useLearningStore((s) => s.setCenterViewMode);
   const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
   const { cards } = useMandalaCards(mandalaId);
-  const { book, isLoading: bookLoading } = useMandalaBook(mandalaId);
+  const { book } = useMandalaBook(mandalaId);
   // §redesign — "지금 읽는 구간" context for the chatbot header (시안 chat-ctx).
   const activeSectionTitle = (() => {
     if (!activeSectionRef || !book?.book?.chapters) return null;
@@ -111,31 +108,8 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
       className="flex w-[400px] shrink-0 flex-col border-l border-sidebar-border/40 pl-5 pr-5"
       onMouseEnter={() => setActiveRegion(activeTab === 'notes' ? 'notes' : 'chat')}
     >
-      {/* CP445 (사용자 directive) — ViewModeToggle + [⋯] 우측 사이드바 상단
-          고정. 영상/노트 모드 전환 시 위치 변동 없음 (toggle 의 단일 home). */}
-      <div className="flex shrink-0 items-center justify-between py-2 pr-3">
-        <ViewModeToggle
-          mode={centerViewMode}
-          noteDisabled={!bookLoading && !book}
-          onChange={(mode) => {
-            if (mode === 'note' && !bookLoading && !book) {
-              toast(t('learning.noteNotReady', '노트가 아직 생성되지 않았어요'));
-              return;
-            }
-            setCenterViewMode(mode);
-          }}
-        />
-        <button
-          type="button"
-          aria-label="More"
-          className="rounded p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          onClick={() => {
-            /* CP445 D8 — placeholder, no-op (별 PR) */
-          }}
-        >
-          <MoreHorizontal className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      {/* [VIDEO-VIEW] — ViewModeToggle moved to CenterPanel's top bar (mockup ①);
+          this panel starts directly with its own tabs. */}
       <div className="flex shrink-0">
         {tabs.map(({ id, labelKey, icon: Icon }) => (
           <button

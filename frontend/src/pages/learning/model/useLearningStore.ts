@@ -1,27 +1,6 @@
 import { create } from 'zustand';
 
-const LS_KEY_VIDEO_STRIP_ENABLED = 'insighta.learning.videoStripEnabled';
-
-function readVideoStripEnabled(): boolean {
-  if (typeof window === 'undefined') return true;
-  try {
-    const v = window.localStorage.getItem(LS_KEY_VIDEO_STRIP_ENABLED);
-    return v === null ? true : v === 'true';
-  } catch {
-    return true;
-  }
-}
-
-function writeVideoStripEnabled(enabled: boolean): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(LS_KEY_VIDEO_STRIP_ENABLED, enabled ? 'true' : 'false');
-  } catch {
-    /* localStorage disabled — silently degrade to in-memory only */
-  }
-}
-
-export type CenterTab = 'summary' | 'section';
+export type CenterTab = 'chapters' | 'summary' | 'section';
 
 export type CenterViewMode = 'player' | 'note';
 
@@ -57,11 +36,6 @@ interface LearningState {
    *  first VideoBlock click, false on note-mode exit / edit-mode enter /
    *  mandala change. Spec: "명시적 재생 액티비티 only". */
   noteAutoFollowEnabled: boolean;
-  /** Hover-slide video thumbnail strip on player wrapper. User can dismiss
-   *  via X on the strip; restore via icon in left sidebar header. Persisted
-   *  to localStorage so the choice survives reloads. */
-  videoStripEnabled: boolean;
-
   setCurrentVideo: (videoId: string) => void;
   setActiveTab: (tab: 'ai-summary' | 'notes') => void;
   setSelectedCell: (cellIndex: number | null) => void;
@@ -70,7 +44,6 @@ interface LearningState {
   setActiveSection: (ref: ActiveSectionRef | null) => void;
   setActiveNoteVideoKey: (key: number | null) => void;
   setNoteAutoFollow: (enabled: boolean) => void;
-  setVideoStripEnabled: (enabled: boolean) => void;
 
   setActiveRegion: (region: ActiveRegion) => void;
   setPlayerState: (time: number, state: PlayerState, duration: number) => void;
@@ -81,7 +54,7 @@ export const useLearningStore = create<LearningState>((set) => ({
   currentVideoId: null,
   activeTab: 'ai-summary',
   selectedCellIndex: null,
-  centerTab: 'summary',
+  centerTab: 'chapters',
   centerViewMode: 'player',
   activeSectionRef: null,
 
@@ -94,7 +67,6 @@ export const useLearningStore = create<LearningState>((set) => ({
   noteSelectionText: null,
   activeNoteVideoKey: null,
   noteAutoFollowEnabled: false,
-  videoStripEnabled: readVideoStripEnabled(),
 
   setCurrentVideo: (videoId) => set({ currentVideoId: videoId }),
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -104,10 +76,6 @@ export const useLearningStore = create<LearningState>((set) => ({
   setActiveSection: (ref) => set({ activeSectionRef: ref }),
   setActiveNoteVideoKey: (key) => set({ activeNoteVideoKey: key }),
   setNoteAutoFollow: (enabled) => set({ noteAutoFollowEnabled: enabled }),
-  setVideoStripEnabled: (enabled) => {
-    writeVideoStripEnabled(enabled);
-    set({ videoStripEnabled: enabled });
-  },
 
   setActiveRegion: (region) => set({ activeRegion: region, lastInteractionTs: Date.now() }),
   setPlayerState: (time, state, duration) =>

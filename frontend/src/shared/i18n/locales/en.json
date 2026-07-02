@@ -1910,7 +1910,15 @@
     "downloadHtml": "Download HTML",
     "restoreOriginal": "Restore original",
     "viewModePlayer": "Video",
-    "viewModeNote": "Note"
+    "viewModeNote": "Note",
+    "tabChapters": "Chapters",
+    "chaptersCount": "{{count}} chapters",
+    "chaptersEmpty": "Chapters are not ready yet. They will appear once the AI summary is generated.",
+    "relevanceLow": "Low",
+    "relevanceHigh": "High",
+    "playingNow": "Playing",
+    "topicGroup": "Group",
+    "videoFallbackTitle": "Video"
   },
   "addCards": {
     "triggerChip": "+ Add Cards",

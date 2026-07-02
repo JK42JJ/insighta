@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { DndContext } from '@dnd-kit/core';
 import { useTranslation } from 'react-i18next';
@@ -83,7 +83,36 @@ export function AppShell({ children }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialCollapsed);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
+  // [VIDEO-VIEW] responsive guard — on /learning, fixed sidebar(320) +
+  // RightPanel(400) crush the center column below ~1280px viewport. Auto-
+  // collapse the sidebar to the icon rail there; a manual toggle while
+  // narrow overrides for the session, and widening restores the persisted
+  // preference untouched.
+  const isLearningRoute = location.pathname.startsWith('/learning');
+  const [narrowLearning, setNarrowLearning] = useState(false);
+  const [narrowOverride, setNarrowOverride] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!isLearningRoute) {
+      setNarrowLearning(false);
+      return;
+    }
+    const mq = window.matchMedia('(max-width: 1279px)');
+    const sync = () => setNarrowLearning(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, [isLearningRoute]);
+  useEffect(() => {
+    if (!narrowLearning) setNarrowOverride(null);
+  }, [narrowLearning]);
+  const effectiveCollapsed = narrowLearning ? (narrowOverride ?? true) : sidebarCollapsed;
+
   const handleToggleCollapse = useCallback(() => {
+    if (narrowLearning) {
+      // Session-only override — don't persist an auto-collapse as preference.
+      setNarrowOverride((prev) => !(prev ?? true));
+      return;
+    }
     setSidebarCollapsed((prev) => {
       const next = !prev;
       try {
@@ -93,7 +122,7 @@ export function AppShell({ children }: AppShellProps) {
       }
       return next;
     });
-  }, []);
+  }, [narrowLearning]);
 
   // Public pages (landing, login, etc.) render their own header — skip AppShell chrome
   if (!isLoggedIn) {
@@ -122,7 +151,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex-1 flex overflow-hidden">
           {showSidebar && (
             <Sidebar
-              collapsed={isSettingsRoute ? false : sidebarCollapsed}
+              collapsed={isSettingsRoute ? false : effectiveCollapsed}
               onToggleCollapse={handleToggleCollapse}
               onNavigateHome={onNavigateHome ?? undefined}
               minimapData={minimapData ?? undefined}

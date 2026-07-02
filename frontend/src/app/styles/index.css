@@ -1277,6 +1277,38 @@ html.dark .lemonsqueezy-loader {
   --nm-callout-warning-border: rgba(210,160,90,0.30);
   --nm-callout-warning-accent: #d8a85f;
 
+  /* [VIDEO-VIEW] — center-column video view tokens (mockup video-view.html exact
+     values, CP510). Literals live here only; components reference var(--lp-*). */
+  --lp-bg-0: #08090b;
+  --lp-bg-1: #15171d;
+  --lp-accent: #c9a36a;
+  --lp-rel-high: #7fb69a;
+  --lp-rel-mid: #c9a36a;
+  --lp-rel-low: #76746e;
+  --lp-meter-off: rgba(255,255,255,0.13);
+  --lp-strong: #f3f1ec;
+  --lp-text: #cdcbc5;
+  --lp-body: #e8e6e1;
+  --lp-desc: #8d8b86;
+  --lp-dim: #86847f;
+  --lp-faint: #6f6d68;
+  --lp-mute: #56544f;
+  --lp-num: #4f4d49;
+  --lp-surface: #101216;
+  --lp-surface-2: #16181d;
+  --lp-line-8: rgba(255,255,255,0.08);
+  --lp-line-7: rgba(255,255,255,0.07);
+  --lp-line-6: rgba(255,255,255,0.06);
+  --lp-toggle-active-bg: #e8e6e1;
+  --lp-toggle-active-fg: #1a1b1e;
+  --lp-accent-tint: rgba(201,163,106,0.06);
+  --lp-accent-border: rgba(201,163,106,0.30);
+  --lp-hover-tint: rgba(255,255,255,0.025);
+  --lp-player-shadow: 0 30px 80px rgba(0,0,0,0.65), 0 0 90px rgba(201,163,106,0.06);
+  --lp-avatar-grad: linear-gradient(135deg,#6d3a8f,#2a1840);
+  --lp-avatar-fg: #e9d6f5;
+  --lp-tab-active-fg: #15171c;
+
   background: #0e0f10;
 }
 

@@ -6,6 +6,7 @@ import {
   Sparkles,
   Zap,
   BookText,
+  List,
   Play,
   BookOpen,
   Pencil,
@@ -22,13 +23,25 @@ import { LearningShareMenu } from '@/features/learning-share';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
 import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
+import { useMandalaCards } from '../model/useMandalaCards';
+import { FloatingVideoNavigator } from './FloatingVideoNavigator';
+import {
+  relevanceLevel,
+  relevanceCssVar,
+  relevanceBars,
+  type RelevanceLevel,
+} from '../lib/relevance-level';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import { useNoteDocument } from '@/pages/learning/model/useNoteDocument';
 import { useNoteAutoFollow } from '@/pages/learning/model/useNoteAutoFollow';
 import { exportToMarkdown, exportToHtml } from '@/pages/learning/lib/note-export';
 import { cn } from '@/shared/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
-import type { MandalaBookChapter, MandalaBookSection } from '@/shared/lib/api-client';
+import type {
+  MandalaBookChapter,
+  MandalaBookSection,
+  VideoRichSummarySection,
+} from '@/shared/lib/api-client';
 import type { Editor } from '@tiptap/react';
 import type { TiptapDoc } from '@/features/video-side-panel/lib/note-parser';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
@@ -41,11 +54,9 @@ interface CenterPanelProps {
   onUserPlayed?: () => void;
   onPlayStateChange?: (isPlaying: boolean) => void;
   startTime?: number;
-  onPlayerHoverIn?: () => void;
-  onPlayerHoverOut?: () => void;
 }
 
-type CenterTabId = 'summary' | 'section';
+type CenterTabId = 'chapters' | 'summary' | 'section';
 
 function formatMMSS(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
@@ -53,6 +64,14 @@ function formatMMSS(seconds: number): string {
   const ss = total % 60;
   return `${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`;
 }
+
+/** Mockup chapter time format — unpadded minutes ("0:00", "12:00"). */
+function fmtChapterTime(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+const YT_ID_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/;
 
 export function CenterPanel({
   mandalaId,
@@ -62,8 +81,6 @@ export function CenterPanel({
   onUserPlayed,
   onPlayStateChange,
   startTime,
-  onPlayerHoverIn,
-  onPlayerHoverOut,
 }: CenterPanelProps) {
   const { t } = useTranslation();
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -86,10 +103,17 @@ export function CenterPanel({
   // scroll-to effect below doesn't re-scroll (which would fight free scrolling).
   const scrollSpyRef = useRef<string | null>(null);
   const setPlayerState = useLearningStore((s) => s.setPlayerState);
-  const { book } = useMandalaBook(mandalaId);
+  const setCenterViewMode = useLearningStore((s) => s.setCenterViewMode);
+  const playerDurationSec = useLearningStore((s) => s.playerDurationSec);
+  const { book, isLoading: bookLoading } = useMandalaBook(mandalaId);
   const setActiveNoteVideoKey = useLearningStore((s) => s.setActiveNoteVideoKey);
   const noteAutoFollowEnabled = useLearningStore((s) => s.noteAutoFollowEnabled);
   const setNoteAutoFollow = useLearningStore((s) => s.setNoteAutoFollow);
+  // Video meta header (mockup ②) — title from the mandala card set.
+  const { cards } = useMandalaCards(mandalaId);
+  const currentCard = cards.find((c) => c.videoUrl.match(YT_ID_RE)?.[1] === videoId);
+  // Floating navigator expand state — breadcrumb hides while expanded.
+  const [navExpanded, setNavExpanded] = useState(false);
 
   // CP445.x — VideoBlock owns its click → inline YouTube iframe (autoplay)
   // via Zustand `activeNoteVideoKey`. No external player.seekTo needed.
@@ -252,66 +276,66 @@ export function CenterPanel({
     fallback: string;
     icon: typeof Sparkles;
   }> = [
+    { id: 'chapters', labelKey: 'learning.tabChapters', fallback: '챕터', icon: List },
     { id: 'summary', labelKey: 'learning.tabSummary', fallback: 'AI 요약', icon: Sparkles },
     { id: 'section', labelKey: 'learning.tabSection', fallback: '섹션 내용', icon: BookText },
   ];
 
-  return (
-    <div className="flex flex-1 min-w-0 flex-col overflow-hidden pl-4 pr-3 pt-[5px]">
-      <div
-        className={cn('mt-2 shrink-0', centerViewMode === 'note' && 'hidden')}
-        onMouseEnter={() => {
-          setActiveRegion('player');
-          onPlayerHoverIn?.();
-        }}
-        onMouseLeave={() => onPlayerHoverOut?.()}
-      >
-        <PanelVideoPlayer
-          videoUrl={videoUrl}
-          playerRef={playerRef}
-          shouldAutoplay={shouldAutoplay}
-          onUserPlayed={onUserPlayed}
-          onPlayStateChange={onPlayStateChange}
-          onTimeUpdate={setPlayerState}
-          startTime={startTime}
-        />
-      </div>
+  // Chapters = v2 segment sections (same source as the highlight reel).
+  const chapterSections = (highlightSections ?? [])
+    .filter((s) => s.to_sec > s.from_sec)
+    .slice()
+    .sort((a, b) => a.from_sec - b.from_sec);
 
-      {centerViewMode === 'player' && (
-        // CP445 B2 — ViewModeToggle moved to LearningPage toprow (tb-right).
-        // This row holds only the [AI 요약][섹션 내용] tabs and is hidden in
-        // note mode (toprow toggle covers the mode switch).
-        // CP445.x — tabs / 본문 wrapper 의 가로폭 = 영상 (49.5vh*16/9) 동일
-        // mx-auto. 영상 ↔ AI요약/섹션 좌우 시각 정렬 일치.
-        <div
-          className="mx-auto w-full shrink-0"
-          style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}
-          onMouseEnter={() => setActiveRegion('book-index')}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex">
-              {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setCenterTab(id)}
-                  className={cn(
-                    'flex items-center gap-1.5 py-2.5 px-3 text-[12px] transition-colors border-b-2',
-                    centerTab === id
-                      ? 'border-primary text-foreground font-semibold'
-                      : 'border-transparent text-muted-foreground font-normal hover:text-foreground'
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {t(labelKey, fallback)}
-                </button>
-              ))}
+  const handleModeChange = (mode: 'player' | 'note') => {
+    if (mode === 'note' && !bookLoading && !book) {
+      toast(t('learning.noteNotReady', '노트가 아직 생성되지 않았어요'));
+      return;
+    }
+    setCenterViewMode(mode);
+  };
+
+  return (
+    <div
+      className="flex min-w-0 flex-1 flex-col overflow-hidden"
+      // [VIDEO-VIEW] mockup center bg — subtle top glow over near-black.
+      style={{
+        background: 'radial-gradient(110% 60% at 50% 0%, var(--lp-bg-1) 0%, var(--lp-bg-0) 55%)',
+      }}
+    >
+      {/* Top bar (mockup ①) — navigator + breadcrumb left, ⚡/share/mode-toggle
+          right. Rendered in BOTH modes: single home of the mode toggle. */}
+      <div className="flex h-[60px] shrink-0 items-center justify-between gap-3 px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {centerViewMode === 'player' && (
+            <FloatingVideoNavigator
+              mandalaId={mandalaId}
+              currentVideoId={videoId}
+              expanded={navExpanded}
+              onExpandedChange={setNavExpanded}
+            />
+          )}
+          {!(navExpanded && centerViewMode === 'player') && activeSection && (
+            <div className="flex min-w-0 items-center gap-2.5 text-[12.5px] text-[var(--lp-faint)]">
+              <span className="shrink-0 font-semibold text-[var(--lp-accent)]">
+                {t('learning.topicGroup', '주제군')}{' '}
+                {String((activeSection.chapter.ch ?? 0) + 1).padStart(2, '0')}
+              </span>
+              <span aria-hidden>·</span>
+              <span className="truncate">{activeSection.chapter.title}</span>
             </div>
-            <div className="flex items-center gap-2">
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* While the navigator strip is expanded, yield width to it — hide the
+              secondary reel/share cluster (mode toggle stays). */}
+          {centerViewMode === 'player' && !navExpanded && (
+            <>
               {highlightReel.enabled && (
                 <span
                   className={cn(
                     'text-[11px] tabular-nums font-medium transition-colors',
-                    highlightReel.active ? 'text-white/90' : 'text-white/60'
+                    highlightReel.active ? 'text-[var(--lp-strong)]' : 'text-[var(--lp-dim)]'
                   )}
                   aria-live="polite"
                 >
@@ -328,14 +352,14 @@ export function CenterPanel({
                     disabled={!highlightReel.enabled}
                     aria-label={t('learning.highlightReel')}
                     className={cn(
-                      'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
+                      'inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors',
                       highlightReel.active
-                        ? 'text-white/90 hover:bg-white/10'
-                        : 'text-white hover:bg-white/10',
+                        ? 'text-[var(--lp-strong)] hover:bg-white/10'
+                        : 'text-[var(--lp-dim)] hover:bg-white/10 hover:text-[var(--lp-strong)]',
                       !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
                     )}
                   >
-                    <Zap className="h-5 w-5" aria-hidden="true" />
+                    <Zap className="h-[18px] w-[18px]" aria-hidden="true" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-[12px] max-w-[280px]">
@@ -350,16 +374,143 @@ export function CenterPanel({
                         })}
                 </TooltipContent>
               </Tooltip>
-              <LearningShareMenu mandalaId={mandalaId} videoId={videoId} />
-            </div>
-          </div>
+            </>
+          )}
+          {!navExpanded && <LearningShareMenu mandalaId={mandalaId} videoId={videoId} />}
+          <ViewModeToggle
+            mode={centerViewMode}
+            noteDisabled={!bookLoading && !book}
+            onChange={handleModeChange}
+          />
         </div>
-      )}
+      </div>
 
+      {/* Player — kept MOUNTED in note mode (CP442 mount-preserve), hidden via CSS.
+          The wrapper now lives inside the scrolling 880px column below, so in note
+          mode we render it here hidden to preserve the iframe instance. */}
       <div
         className="flex-1 overflow-y-auto scrollbar-pro"
         onMouseEnter={() => setActiveRegion('book-index')}
       >
+        <div
+          className={cn(
+            'mx-auto w-full max-w-[880px] px-10 pb-[120px] pt-[18px]',
+            centerViewMode === 'note' && 'hidden'
+          )}
+        >
+          {/* Video meta header (mockup ②) */}
+          <div className="mb-[18px] flex items-center gap-[13px]">
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] text-[var(--lp-avatar-fg)]"
+              style={{ background: 'var(--lp-avatar-grad)' }}
+              aria-hidden
+            >
+              {(currentCard?.title ?? 'Y').slice(0, 1)}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-[17px] font-semibold leading-[1.35] tracking-[-0.01em] text-[var(--lp-strong)]">
+                {currentCard?.title ?? t('learning.videoFallbackTitle', '영상')}
+              </div>
+              <div className="mt-0.5 text-[12.5px] text-[var(--lp-faint)]">
+                YouTube{playerDurationSec > 0 ? ` · ${fmtChapterTime(playerDurationSec)}` : ''}
+              </div>
+            </div>
+          </div>
+
+          {/* Player hero frame (mockup ③ outer frame; custom chrome = Phase 4) */}
+          <div
+            className="overflow-hidden rounded-2xl border border-[var(--lp-line-8)] bg-black"
+            style={{ boxShadow: 'var(--lp-player-shadow)' }}
+            onMouseEnter={() => setActiveRegion('player')}
+          >
+            <PanelVideoPlayer
+              videoUrl={videoUrl}
+              playerRef={playerRef}
+              shouldAutoplay={shouldAutoplay}
+              onUserPlayed={onUserPlayed}
+              onPlayStateChange={onPlayStateChange}
+              onTimeUpdate={setPlayerState}
+              startTime={startTime}
+              fill
+            />
+          </div>
+
+          {/* Tab switch row (mockup ④) — segment tabs + relevance legend */}
+          <div className="mb-1.5 mt-[30px] flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-1 rounded-[10px] border border-[var(--lp-line-7)] bg-[var(--lp-surface)] p-1">
+              {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setCenterTab(id)}
+                  className={cn(
+                    'flex items-center gap-[7px] rounded-[7px] px-4 py-2 text-[13.5px] font-semibold transition-colors',
+                    centerTab === id
+                      ? 'bg-[var(--lp-toggle-active-bg)] text-[var(--lp-tab-active-fg)]'
+                      : 'text-[var(--lp-dim)] hover:text-[var(--lp-strong)]'
+                  )}
+                >
+                  <Icon className="h-[15px] w-[15px]" />
+                  {t(labelKey, fallback)}
+                </button>
+              ))}
+            </div>
+            {chapterSections.length > 0 && (
+              <div className="flex items-center gap-[13px] text-[11.5px] text-[var(--lp-faint)]">
+                <div className="flex items-center gap-[9px]">
+                  <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--lp-mute)]">
+                    {t('learning.relevanceLabel', '관련도')}
+                  </span>
+                  <span className="text-[10.5px] text-[var(--lp-mute)]">
+                    {t('learning.relevanceLow', '낮음')}
+                  </span>
+                  <RelevanceMeter level="low" />
+                  <RelevanceMeter level="mid" />
+                  <RelevanceMeter level="high" />
+                  <span className="text-[10.5px] text-[var(--lp-mute)]">
+                    {t('learning.relevanceHigh', '높음')}
+                  </span>
+                </div>
+                <span className="h-[11px] w-px bg-white/10" aria-hidden />
+                <span>
+                  {t('learning.chaptersCount', '{{count}}개 챕터', {
+                    count: chapterSections.length,
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Panels */}
+          {centerTab === 'chapters' && (
+            <ChapterList
+              sections={chapterSections}
+              playerRef={playerRef}
+              onUserPlayed={onUserPlayed}
+              onGoSummary={() => setCenterTab('summary')}
+            />
+          )}
+          {centerTab === 'summary' && (
+            <div data-onboarding="ai-summary" className="mt-[18px]">
+              <PanelAISummary videoSummary={undefined} videoUrl={videoUrl} />
+            </div>
+          )}
+          {centerTab === 'section' && (
+            <div className="mt-[18px]">
+              {activeSection ? (
+                <SectionContentView
+                  chapter={activeSection.chapter}
+                  section={activeSection.section}
+                  mandalaId={mandalaId}
+                />
+              ) : (
+                <div className="text-[12px] text-muted-foreground">
+                  {t('learning.noActiveSection', '좌측 북인덱스에서 섹션을 선택하세요.')}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {centerViewMode === 'note' ? (
           <>
             {/* §1④ PR2 — "준비 중": when the book is still filling (v2 pending),
@@ -405,33 +556,160 @@ export function CenterPanel({
               hasBook={Boolean(book?.book?.chapters?.length)}
             />
           </>
-        ) : (
-          // CP445.x — 본문 영역 max-width = 영상 (49.5vh*16/9) 동일 + mx-auto
-          // 좌우 정렬. 영상 ↔ AI요약/섹션 시각 일관성.
-          <div
-            className="mx-auto w-full p-4"
-            style={{ maxWidth: 'min(calc(49.5vh * 16 / 9), 760px)' }}
-          >
-            {centerTab === 'summary' && (
-              <div data-onboarding="ai-summary">
-                <PanelAISummary videoSummary={undefined} videoUrl={videoUrl} />
-              </div>
-            )}
-            {centerTab === 'section' &&
-              (activeSection ? (
-                <SectionContentView
-                  chapter={activeSection.chapter}
-                  section={activeSection.section}
-                  mandalaId={mandalaId}
-                />
-              ) : (
-                <div className="text-[12px] text-muted-foreground">
-                  {t('learning.noActiveSection', '좌측 북인덱스에서 섹션을 선택하세요.')}
-                </div>
-              ))}
-          </div>
-        )}
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+/** 3-bar ascending signal meter — wordless relevance indicator (mockup ⑤). */
+function RelevanceMeter({ level }: { level: RelevanceLevel }) {
+  const lit = relevanceBars(level);
+  const color = relevanceCssVar(level);
+  return (
+    <span className="inline-flex h-[11px] items-end gap-[2.5px]" aria-hidden>
+      {[5, 8, 11].map((h, k) => (
+        <span
+          key={h}
+          className="w-[3px] rounded-[1px]"
+          style={{ height: h, background: k < lit ? color : 'var(--lp-meter-off)' }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** Chapter list (mockup ⑤) — v2 segment sections with time range, relevance
+ *  edge/meter, hover-expand description, click-to-seek. Subscribes to player
+ *  time HERE so the 1s tick re-renders only this list. */
+function ChapterList({
+  sections,
+  playerRef,
+  onUserPlayed,
+  onGoSummary,
+}: {
+  sections: VideoRichSummarySection[];
+  playerRef: React.MutableRefObject<YTPlayer | null>;
+  onUserPlayed?: () => void;
+  onGoSummary: () => void;
+}) {
+  const { t } = useTranslation();
+  const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
+  const playerState = useLearningStore((s) => s.playerState);
+
+  if (sections.length === 0) {
+    return (
+      <div className="mt-6 rounded-xl border border-[var(--lp-line-6)] bg-[var(--lp-surface)] px-5 py-6 text-center">
+        <p className="text-[13px] leading-[1.6] text-[var(--lp-dim)]">
+          {t(
+            'learning.chaptersEmpty',
+            '챕터 정보가 아직 준비되지 않았어요. AI 요약이 생성되면 챕터가 나타납니다.'
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={onGoSummary}
+          className="mt-3 rounded-md border border-[var(--lp-line-8)] px-3 py-1.5 text-[12px] text-[var(--lp-text)] transition-colors hover:bg-[var(--lp-hover-tint)]"
+        >
+          {t('learning.tabSummary', 'AI 요약')}
+        </button>
+      </div>
+    );
+  }
+
+  const activeIdx = sections.findIndex(
+    (s) => playerTimeSec >= s.from_sec && playerTimeSec < s.to_sec
+  );
+
+  return (
+    <div className="mt-3.5 flex flex-col">
+      {sections.map((s, i) => {
+        const level = typeof s.relevance_pct === 'number' ? relevanceLevel(s.relevance_pct) : null;
+        const color = level ? relevanceCssVar(level) : 'var(--lp-meter-off)';
+        const active = i === activeIdx;
+        const playing = active && playerState === 'playing';
+        return (
+          <button
+            key={`${s.from_sec}-${i}`}
+            type="button"
+            onClick={() => {
+              try {
+                playerRef.current?.seekTo(s.from_sec, true);
+                playerRef.current?.playVideo?.();
+                onUserPlayed?.();
+              } catch {
+                // player not ready
+              }
+            }}
+            className={cn(
+              'group relative flex w-full gap-4 rounded-xl border px-4 py-3.5 pl-[18px] text-left transition-colors',
+              active
+                ? 'border-[var(--lp-accent-border)] bg-[var(--lp-accent-tint)]'
+                : 'border-transparent hover:bg-[var(--lp-hover-tint)]'
+            )}
+          >
+            <span
+              className="absolute bottom-3.5 left-0 top-3.5 w-[3px] rounded-[3px] transition-opacity"
+              style={{ background: color, opacity: active ? 1 : 0.55 }}
+              aria-hidden
+            />
+            <span
+              className={cn(
+                'w-[88px] shrink-0 pt-px text-[13px] font-semibold tabular-nums tracking-[0.01em]',
+                active ? 'text-[var(--lp-accent)]' : 'text-[var(--lp-dim)]'
+              )}
+            >
+              {fmtChapterTime(s.from_sec)}–{fmtChapterTime(s.to_sec)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-[9px]">
+                <span
+                  className={cn(
+                    'text-[11px] font-bold tabular-nums',
+                    active ? 'text-[var(--lp-accent)]' : 'text-[var(--lp-num)]'
+                  )}
+                >
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span
+                  className={cn(
+                    'text-[15px] font-semibold leading-[1.4] tracking-[-0.01em]',
+                    active ? 'text-[var(--lp-strong)]' : 'text-[var(--lp-text)]'
+                  )}
+                >
+                  {s.title}
+                </span>
+                {playing && (
+                  <span className="flex shrink-0 items-center gap-[5px] whitespace-nowrap text-[10.5px] font-semibold text-[var(--lp-accent)]">
+                    <span
+                      className="h-[5px] w-[5px] rounded-full bg-[var(--lp-accent)]"
+                      aria-hidden
+                    />
+                    {t('learning.playingNow', '재생 중')}
+                  </span>
+                )}
+              </span>
+              {s.summary && (
+                <span
+                  className={cn(
+                    'block overflow-hidden text-[13.5px] leading-[1.65] text-[var(--lp-desc)] transition-all duration-300',
+                    active
+                      ? 'mt-[7px] max-h-[60px] opacity-100'
+                      : 'mt-0 max-h-0 opacity-0 group-hover:mt-[7px] group-hover:max-h-[60px] group-hover:opacity-100'
+                  )}
+                >
+                  {s.summary}
+                </span>
+              )}
+            </span>
+            {level && (
+              <span className="shrink-0 self-center pt-px">
+                <RelevanceMeter level={level} />
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -522,7 +800,9 @@ export function ViewModeToggle({
     { id: 'note', labelKey: 'learning.viewModeNote', Icon: BookOpen },
   ];
   return (
-    <div className="flex items-center gap-0.5 self-center rounded-md border border-border bg-secondary/30 p-0.5">
+    // [VIDEO-VIEW] mockup skin — dark pill container, active item flips to a
+    // light chip with dark text.
+    <div className="flex shrink-0 items-center rounded-[9px] border border-[var(--lp-line-8)] bg-[var(--lp-surface-2)] p-[3px]">
       {items.map(({ id, labelKey, Icon }) => {
         const dimmed = id === 'note' && noteDisabled;
         return (
@@ -530,10 +810,10 @@ export function ViewModeToggle({
             key={id}
             onClick={() => onChange(id)}
             className={cn(
-              'flex items-center gap-1 rounded px-2 py-1 text-[12px] transition-colors',
+              'flex items-center gap-1.5 rounded-[7px] px-[13px] py-1.5 text-[13px] transition-colors',
               mode === id
-                ? 'bg-background text-foreground font-semibold shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'bg-[var(--lp-toggle-active-bg)] font-semibold text-[var(--lp-toggle-active-fg)]'
+                : 'text-[var(--lp-dim)] hover:text-[var(--lp-strong)]',
               dimmed && 'opacity-50'
             )}
             aria-pressed={mode === id}

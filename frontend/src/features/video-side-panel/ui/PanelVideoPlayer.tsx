@@ -11,6 +11,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { getYouTubeVideoId, loadYouTubeAPI } from '@/widgets/video-player/model/youtube-api';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
+import { cn } from '@/shared/lib/utils';
 
 export type PanelPlayerState = 'playing' | 'paused' | 'buffering' | 'ended' | 'unstarted' | 'cued';
 
@@ -29,6 +30,9 @@ export interface PanelVideoPlayerProps {
   onPlayStateChange?: (isPlaying: boolean) => void;
   /** Called every ~1s with current player time/state/duration for chatbot context. */
   onTimeUpdate?: (time: number, state: PanelPlayerState, duration: number) => void;
+  /** Fill the parent width (16:9, no vh caps) — learning video-view column
+   *  owns the sizing. Default false keeps the legacy 49.5vh side-panel cap. */
+  fill?: boolean;
 }
 
 const YT_STATE_MAP: Record<number, PanelPlayerState> = {
@@ -49,6 +53,7 @@ export function PanelVideoPlayer({
   onUserPlayed,
   onPlayStateChange,
   onTimeUpdate,
+  fill = false,
 }: PanelVideoPlayerProps) {
   const youtubeId = getYouTubeVideoId(videoUrl);
   const internalPlayerRef = useRef<YTPlayer | null>(null);
@@ -230,15 +235,23 @@ export function PanelVideoPlayer({
 
   return (
     <div
-      className="relative mx-auto w-full shrink-0 overflow-hidden rounded-lg bg-black"
+      className={cn(
+        'relative mx-auto w-full shrink-0 overflow-hidden bg-black',
+        !fill && 'rounded-lg'
+      )}
       // CP445.x — max-height 49.5vh (55vh 에서 10% 축소, 사용자 spec). 하단
       // 탭 콘텐츠 영역 추가 확보. aspect-ratio 16:9 유지 + max-width 도 비례
-      // cap (16/9 보존 + 가운데).
-      style={{
-        aspectRatio: '16/9',
-        maxHeight: '49.5vh',
-        maxWidth: 'calc(49.5vh * 16 / 9)',
-      }}
+      // cap (16/9 보존 + 가운데). fill=true (learning video-view) 는 부모
+      // 880px 컬럼이 사이징 소유 — vh cap 없이 16:9 풀폭.
+      style={
+        fill
+          ? { aspectRatio: '16/9' }
+          : {
+              aspectRatio: '16/9',
+              maxHeight: '49.5vh',
+              maxWidth: 'calc(49.5vh * 16 / 9)',
+            }
+      }
     >
       <iframe
         ref={iframeRef}
@@ -266,7 +279,11 @@ export function PanelVideoPlayer({
           />
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60">
-              <svg viewBox="0 0 24 24" className="h-7 w-7 translate-x-0.5 fill-white" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-7 w-7 translate-x-0.5 fill-white"
+                aria-hidden="true"
+              >
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>

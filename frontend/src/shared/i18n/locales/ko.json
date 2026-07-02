@@ -1918,7 +1918,15 @@
     "downloadHtml": "HTML 다운로드",
     "restoreOriginal": "원본 복원",
     "viewModePlayer": "영상",
-    "viewModeNote": "노트"
+    "viewModeNote": "노트",
+    "tabChapters": "챕터",
+    "chaptersCount": "{{count}}개 챕터",
+    "chaptersEmpty": "챕터 정보가 아직 준비되지 않았어요. AI 요약이 생성되면 챕터가 나타납니다.",
+    "relevanceLow": "낮음",
+    "relevanceHigh": "높음",
+    "playingNow": "재생 중",
+    "topicGroup": "주제군",
+    "videoFallbackTitle": "영상"
   },
   "addCards": {
     "triggerChip": "+ 카드 추가",
