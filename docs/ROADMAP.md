@@ -25,6 +25,7 @@
 | M3 pool serving reactivation | GATED-on-James | CP509+1: v5 relevance gate implemented fail-closed; remaining = V5_POOL_SERVE canary flag decision | docs/handoffs/v5-relevance-gate-cp497.md:132 |
 | Non-smoke test debt | CLOSED (23→0 suites) | CP509+1: 7 test-only PRs (#1058–#1065), zero code regressions found | PR #1058 #1060 #1061 #1062 #1063 #1064 #1065 |
 | v2 cost bundle (attribution + pricing) | GATED-on-James | CP509+1: #963 instrumentation (PR #1066) + last pricing gap (PR #1068); leak already plugged | PR #1066, PR #1068 |
+| Mac Mini collector published_at stamping (external repo) | ACTIVE (follow-up) | CP509+1: bulk payload stamped collection-time published_at on 781 youtube_videos rows (2026-04-25 cluster); in-repo now-fallback removed in PR #1070 — the external collector must stop sending fabricated publish dates or new ingests keep re-contaminating | PR #1070 (in-repo half) |
 | v1 executor skills-route exposure | GATED-on-James | CP509+1: only live edge = POST /api/v1/skills/:skillId/execute, no version guard; close-vs-keep decision pending | src/api/routes/skills.ts:152 |
 
 ## §2 Refuted-decisions registry (DO NOT re-attempt without overturning the cited verdict)
