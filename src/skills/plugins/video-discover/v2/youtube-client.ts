@@ -10,6 +10,7 @@
  */
 
 import { recordTrace } from '@/modules/discover-tracing';
+import { notifyQuotaExhausted } from '@/modules/quota-alert';
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
@@ -345,6 +346,13 @@ export async function searchVideos(opts: SearchOpts): Promise<YouTubeSearchItem[
     // consumed nothing on YouTube's side (quota already 0), so units = 0;
     // we still log the call counter so cost view can see the attempt.
     costUnits: { youtube_calls: keys.length },
+  });
+  // G5 failure-time alert — fire-and-forget (never awaited: SMTP latency must
+  // not sit in the serving path; inert when OBSERVABILITY_ALERT_EMAIL unset).
+  void notifyQuotaExhausted({
+    api: 'search.list',
+    keysTried: keys.length,
+    lastError: lastErr instanceof Error ? lastErr.message : String(lastErr),
   });
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
