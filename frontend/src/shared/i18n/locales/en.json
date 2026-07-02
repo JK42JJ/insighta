@@ -1918,7 +1918,9 @@
     "chaptersEmpty": "Chapters are not ready yet. They will appear once the AI summary is generated.",
     "relevanceLow": "Low",
     "relevanceHigh": "High",
-    "playingNow": "Playing"
+    "playingNow": "Playing",
+    "nowWatchingVideo": "Now watching",
+    "nowReadingSection": "Now reading"
   },
   "addCards": {
     "triggerChip": "+ Add Cards",
