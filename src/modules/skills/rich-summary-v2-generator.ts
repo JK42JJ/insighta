@@ -196,6 +196,9 @@ export async function generateRichSummaryV2(
         format: 'json',
         temperature: TEMPERATURE,
         maxTokens: richConfig.maxOutputTokens,
+        // #963 — cost attribution onto llm_call_logs
+        videoId: input.videoId,
+        userId: input.userId ?? undefined,
       });
       let parsed: unknown;
       try {

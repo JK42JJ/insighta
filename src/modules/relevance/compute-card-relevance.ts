@@ -37,6 +37,8 @@ const MAX_TOKENS = 800;
 const TEMPERATURE = 0.2;
 
 export interface CardRelevanceInput {
+  /** #963 — optional cost attribution onto llm_call_logs (absent = NULL). */
+  videoId?: string;
   /** Card title (required — the minimal signal). */
   title: string;
   /** Card description / metadata_description (optional). */
@@ -122,6 +124,7 @@ export async function computeCardRelevance(
       format: 'json',
       temperature: TEMPERATURE,
       maxTokens: MAX_TOKENS,
+      videoId: input.videoId,
     });
   } catch (err) {
     return {

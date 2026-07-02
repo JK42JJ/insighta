@@ -135,6 +135,8 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
           // Distinguish "external cancel" from internal timeout for clearer logs.
           if (externalSignal?.aborted) {
             logLLMCall({
+              videoId: options?.videoId,
+              userId: options?.userId,
               module: 'openrouter',
               model: this.model,
               latencyMs,
@@ -144,6 +146,8 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
             throw new Error('OpenRouter request cancelled by external signal');
           }
           logLLMCall({
+            videoId: options?.videoId,
+            userId: options?.userId,
             module: 'openrouter',
             model: this.model,
             latencyMs,
@@ -153,6 +157,8 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
           throw new Error(`OpenRouter request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
         }
         logLLMCall({
+          videoId: options?.videoId,
+          userId: options?.userId,
           module: 'openrouter',
           model: this.model,
           latencyMs,
@@ -171,6 +177,8 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       if (!response.ok && isRetryableStatus(response.status) && attempt < OPENROUTER_MAX_RETRIES) {
         const delayMs = retryDelayMs(response.headers?.get?.('retry-after') ?? null, attempt);
         logLLMCall({
+          videoId: options?.videoId,
+          userId: options?.userId,
           module: 'openrouter',
           model: this.model,
           latencyMs: Date.now() - startTime,
@@ -186,6 +194,8 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       logLLMCall({
+        videoId: options?.videoId,
+        userId: options?.userId,
         module: 'openrouter',
         model: this.model,
         latencyMs: Date.now() - startTime,
@@ -212,6 +222,8 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     if (!content) {
       const hasReasoning = !!message?.reasoning;
       logLLMCall({
+        videoId: options?.videoId,
+        userId: options?.userId,
         module: 'openrouter',
         model: this.model,
         inputTokens: data.usage?.prompt_tokens,
@@ -229,6 +241,8 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
 
     // Fire-and-forget cost log — errors handled inside logLLMCall
     logLLMCall({
+      videoId: options?.videoId,
+      userId: options?.userId,
       module: 'openrouter',
       model: this.model,
       inputTokens: data.usage?.prompt_tokens,

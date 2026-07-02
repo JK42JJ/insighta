@@ -80,6 +80,8 @@ export class GeminiGenerationProvider implements GenerationProvider {
       });
     } catch (err) {
       logLLMCall({
+        videoId: options?.videoId,
+        userId: options?.userId,
         module: 'gemini',
         model: this.model,
         latencyMs: Date.now() - startTime,
@@ -92,6 +94,8 @@ export class GeminiGenerationProvider implements GenerationProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       logLLMCall({
+        videoId: options?.videoId,
+        userId: options?.userId,
         module: 'gemini',
         model: this.model,
         latencyMs: Date.now() - startTime,
@@ -109,6 +113,8 @@ export class GeminiGenerationProvider implements GenerationProvider {
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
       logLLMCall({
+        videoId: options?.videoId,
+        userId: options?.userId,
         module: 'gemini',
         model: this.model,
         inputTokens: data.usageMetadata?.promptTokenCount,
@@ -122,6 +128,8 @@ export class GeminiGenerationProvider implements GenerationProvider {
 
     // Fire-and-forget cost log
     logLLMCall({
+      videoId: options?.videoId,
+      userId: options?.userId,
       module: 'gemini',
       model: this.model,
       inputTokens: data.usageMetadata?.promptTokenCount,

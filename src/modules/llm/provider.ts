@@ -21,6 +21,13 @@ export interface GenerateOptions {
    * Used by race-fallback patterns to discard losers without waiting for them.
    */
   signal?: AbortSignal;
+  /**
+   * Cost-attribution passthrough (#963) — providers copy these onto the
+   * llm_call_logs row so per-video/per-user cost and cache-hit-rate become
+   * measurable. Purely additive: absent = NULL, logging behavior unchanged.
+   */
+  videoId?: string;
+  userId?: string;
 }
 
 export interface GenerationProvider {
