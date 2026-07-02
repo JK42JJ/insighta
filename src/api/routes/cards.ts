@@ -537,6 +537,19 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           if (!ytFull) return; // youtube_videos row 자체가 없으면 skip
           const v = ytFull.view_count != null ? Number(ytFull.view_count) : 0;
           const quality = v >= 100_000 ? 'gold' : v >= 10_000 ? 'silver' : 'bronze';
+          // P0 trust containment (scam-inflow, 2026-07-03): the Heart stays an
+          // explicit user signal (never rejected from the USER's own mandala),
+          // but a blocklisted title must not enter the shared pool where a
+          // future source expansion could serve it to other users.
+          const { titleHitsBlocklist } = await import(
+            '@/skills/plugins/video-discover/v2/youtube-client'
+          );
+          if (ytFull.title && titleHitsBlocklist(ytFull.title)) {
+            log.info(
+              `like → video_pool ingest SKIPPED (blocklisted title): videoId=${videoId}`
+            );
+            return;
+          }
           const lang = ytFull.title && /[가-힣]/.test(ytFull.title) ? 'ko' : 'en';
           // CP491 step 4 — short gate (demote Shorts at promote).
           const shortGate = await shortGateFields(videoId, ytFull.duration_seconds);
