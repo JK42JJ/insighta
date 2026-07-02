@@ -169,6 +169,7 @@ APPLY_FILES=(
   # EXTENSION/INDEX IF NOT EXISTS — fully idempotent. Perf-only (no schema
   # change); inert until /api/v1/search is called.
   "prisma/migrations/global-search/001_pg_trgm_indexes.sql"
+  "prisma/migrations/channel-blocklist/001_create_channel_blocklist.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

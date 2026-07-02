@@ -2482,3 +2482,19 @@ model video_figure_snapshots {
   @@index([expires_at], map: "idx_vfs_expires")
   @@schema("public")
 }
+
+/// P0 scam-inflow (2026-07-03): channels barred from every discovery surface
+/// (live search, pool recruit, user_curated ingest, placement chokepoint).
+/// Raw SQL DDL: prisma/migrations/channel-blocklist/001_create_channel_blocklist.sql
+model channel_blocklist {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  channel_id   String?  @db.VarChar(64)
+  channel_name String?  @db.VarChar(200)
+  reason       String
+  created_by   String?  @db.VarChar(100)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([channel_id])
+  @@index([channel_name])
+  @@schema("public")
+}
