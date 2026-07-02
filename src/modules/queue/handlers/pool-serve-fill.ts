@@ -33,7 +33,10 @@ import { computeCardRelevance } from '@/modules/relevance/compute-card-relevance
 import { getPrismaClient } from '@/modules/database/client';
 import { loadPoolServeConfig } from '@/config/pool-serve';
 import { loadRelevanceRubricConfig } from '@/config/relevance-rubric';
-import { tsvectorKeywordCandidatesPerCell } from '@/skills/plugins/video-discover/v3/hybrid-rerank';
+import {
+  tsvectorKeywordCandidatesPerCell,
+  cosinePoolCandidatesPerCell,
+} from '@/skills/plugins/video-discover/v3/hybrid-rerank';
 import {
   resolveSearchApiKeys,
   resolveVideosApiKeys,
@@ -308,12 +311,30 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
     };
 
     // ── 1차 POOL ──────────────────────────────────────────────────────────
-    const recruits = await tsvectorKeywordCandidatesPerCell(
+    const keywordRecruits = await tsvectorKeywordCandidatesPerCell(
       [{ cellIndex: p.cellIndex, query: p.cellQuery }],
       [...seen],
       cfg.candidatesLimit,
       POOL_SOURCES
     );
+    // Optional COSINE recruit pass (flag-gated): surfaces pool supply whose
+    // TITLE doesn't literally match the cell goal (keyword misses it). Broadens
+    // sources to include yt_promoted (direct-collected). Merged keyword-first,
+    // deduped; the gc-gate below still owns precision (cosine noise is rejected).
+    let recruits = keywordRecruits;
+    if (cfg.cosineRecruit) {
+      const kwIds = new Set(keywordRecruits.map((c) => c.videoId));
+      const cosineRecruits = await cosinePoolCandidatesPerCell(
+        p.mandalaId,
+        [p.cellIndex],
+        p.language,
+        [...seen, ...keywordRecruits.map((c) => c.videoId)],
+        cfg.cosineK,
+        [...POOL_SOURCES, 'yt_promoted'],
+        cfg.cosineDistMax
+      );
+      recruits = [...keywordRecruits, ...cosineRecruits.filter((c) => !kwIds.has(c.videoId))];
+    }
     result.recruited = recruits.length;
     const passed: PassedCandidate[] = [];
     await gate(

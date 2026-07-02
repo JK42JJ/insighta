@@ -44,6 +44,16 @@ export const poolServeEnvSchema = z.object({
    *  Default ON — same-bundle lever (James 2026-06-11: no partial-state
    *  exposure; per-cell ONE search.list call cap lives in the worker). */
   V5_POOL_SERVE_LIVE_FALLBACK: boolFlag.default(true as unknown as string),
+  /** Add a SECOND (cosine) recruit pass alongside keyword — surfaces pool
+   *  supply whose title doesn't literally match the cell goal. Also broadens
+   *  this handler's recruit sources to include yt_promoted (direct-collected
+   *  content). Precision still owned by the gc-gate. Default OFF. */
+  V5_POOL_SERVE_COSINE_RECRUIT: boolFlag.default(false as unknown as string),
+  /** Cosine DISTANCE cap for the cosine recruit (1 - similarity). Bounds
+   *  Haiku cost on abstract goals (noisy neighbours); NOT a precision knob. */
+  V5_POOL_SERVE_COSINE_DIST_MAX: z.coerce.number().min(0).max(1).default(0.45),
+  /** Max cosine candidates recruited per cell. */
+  V5_POOL_SERVE_COSINE_K: z.coerce.number().int().min(1).max(50).default(10),
 });
 
 export interface PoolServeConfig {
@@ -54,6 +64,9 @@ export interface PoolServeConfig {
   candidatesLimit: number;
   concurrency: number;
   liveFallback: boolean;
+  cosineRecruit: boolean;
+  cosineDistMax: number;
+  cosineK: number;
 }
 
 const DEFAULTS: PoolServeConfig = {
@@ -64,6 +77,9 @@ const DEFAULTS: PoolServeConfig = {
   candidatesLimit: 12,
   concurrency: 2,
   liveFallback: true,
+  cosineRecruit: false,
+  cosineDistMax: 0.45,
+  cosineK: 10,
 };
 
 export function loadPoolServeConfig(env: NodeJS.ProcessEnv = process.env): PoolServeConfig {
@@ -75,6 +91,9 @@ export function loadPoolServeConfig(env: NodeJS.ProcessEnv = process.env): PoolS
     V5_POOL_SERVE_CANDIDATES_LIMIT: env['V5_POOL_SERVE_CANDIDATES_LIMIT'],
     V5_POOL_SERVE_CONCURRENCY: env['V5_POOL_SERVE_CONCURRENCY'],
     V5_POOL_SERVE_LIVE_FALLBACK: env['V5_POOL_SERVE_LIVE_FALLBACK'],
+    V5_POOL_SERVE_COSINE_RECRUIT: env['V5_POOL_SERVE_COSINE_RECRUIT'],
+    V5_POOL_SERVE_COSINE_DIST_MAX: env['V5_POOL_SERVE_COSINE_DIST_MAX'],
+    V5_POOL_SERVE_COSINE_K: env['V5_POOL_SERVE_COSINE_K'],
   });
   if (!parsed.success) return DEFAULTS;
   return {
@@ -85,5 +104,8 @@ export function loadPoolServeConfig(env: NodeJS.ProcessEnv = process.env): PoolS
     candidatesLimit: parsed.data.V5_POOL_SERVE_CANDIDATES_LIMIT,
     concurrency: parsed.data.V5_POOL_SERVE_CONCURRENCY,
     liveFallback: parsed.data.V5_POOL_SERVE_LIVE_FALLBACK,
+    cosineRecruit: parsed.data.V5_POOL_SERVE_COSINE_RECRUIT,
+    cosineDistMax: parsed.data.V5_POOL_SERVE_COSINE_DIST_MAX,
+    cosineK: parsed.data.V5_POOL_SERVE_COSINE_K,
   };
 }
