@@ -30,6 +30,7 @@ export const TSQUERY_GENERIC_STOPWORDS = new Set<string>([
   '확보',
   '준비',
   '개선',
+  '심화',
   '설계',
   '설정',
   '문제',

@@ -1,5 +1,3 @@
-import { describe, it, expect } from 'vitest';
-
 import { buildTsqueryString } from '../v3/tsquery-builder';
 
 /**
@@ -24,6 +22,14 @@ describe('buildTsqueryString — W2 generic-filler stopwords', () => {
     const q = buildTsqueryString('학습 관리 전략 강화');
     expect(q.length).toBeGreaterThan(0);
     expect(q.split(' | ')).toContain('학습');
+  });
+
+  it("drops '심화' — matched cross-domain videos (알고리즘 심화/명상 심화) in a 대체투자 cell", () => {
+    const q = buildTsqueryString('대체투자(부동산·펀드·옵션) 심화 학습');
+    const toks = q.split(' | ');
+    expect(toks).toContain('대체투자');
+    expect(toks).not.toContain('심화');
+    expect(toks).not.toContain('학습');
   });
 
   it('still de-duplicates and returns OR-joined tokens', () => {
