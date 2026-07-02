@@ -24,7 +24,7 @@ import { cn } from '@/shared/lib/utils';
 import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 import { formatRelativeDate } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
-import { HoverFrameThumbnail } from '@/shared/ui/hover-frame-thumbnail';
+import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
 import type { AddCardCandidate } from '../model/useAddCards';
 import type { AddCardsRound } from '../lib/persistence';
 
@@ -201,9 +201,6 @@ function CardItem({
   onPick: (videoId: string, title: string) => void;
 }) {
   const { t } = useTranslation();
-  // Hover frame-cycle preview (YouTube-like feel, image-only — see
-  // shared/ui/hover-frame-thumbnail.tsx for the iframe-vs-frames decision).
-  const [hovered, setHovered] = useState(false);
   // CP480+ — picked cards are now clickable to unpick (idempotent
   // toggle). Only mid-flight requests are disabled.
   const disabled = isPickPending;
@@ -227,8 +224,6 @@ function CardItem({
           onPick(card.videoId, card.title);
         }
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       className={cn(
         'group relative rounded-md overflow-hidden border bg-card transition-colors',
         'border-transparent',
@@ -239,11 +234,15 @@ function CardItem({
     >
       <div className="relative aspect-video bg-muted">
         {card.thumbnail && (
-          <HoverFrameThumbnail
-            videoId={card.videoId}
-            thumbnail={card.thumbnail}
-            active={hovered}
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={card.thumbnail}
+            alt=""
             className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            onError={handleThumbnailError}
+            onLoad={handleThumbnailLoad}
           />
         )}
 
@@ -303,17 +302,20 @@ function CardItem({
           </>
         )}
       </div>
-      <div className="px-1.5 py-1 space-y-0">
+      {/* Meta block — James feedback 2026-07-02: the old 11px/9.5px cramped
+          stack read like scribbles. Match the dashboard card hierarchy:
+          semibold title, breathing room, one quiet meta line. */}
+      <div className="px-2.5 pt-2 pb-2.5 space-y-1">
         <h4
           className={cn(
-            'text-[11px] font-medium line-clamp-2 leading-snug',
+            'text-[13px] font-semibold leading-snug tracking-tight line-clamp-2',
             isPicked && 'text-muted-foreground'
           )}
         >
           {decodeHtmlEntities(card.title)}
         </h4>
         {card.channel && (
-          <p className="text-[9.5px] text-muted-foreground line-clamp-1">{card.channel}</p>
+          <p className="text-[11px] text-muted-foreground line-clamp-1">{card.channel}</p>
         )}
         <CardMeta
           viewCount={card.viewCount}
@@ -342,7 +344,5 @@ function CardMeta({
   const age = formatRelativeDate(publishedAt);
   const parts = [views, duration, age].filter((s): s is string => !!s);
   if (parts.length === 0) return null;
-  return (
-    <p className="text-[9.5px] text-muted-foreground line-clamp-1 mt-0.5">{parts.join(' · ')}</p>
-  );
+  return <p className="text-[11px] text-muted-foreground/80 line-clamp-1">{parts.join(' · ')}</p>;
 }
