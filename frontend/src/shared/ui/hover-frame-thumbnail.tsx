@@ -15,8 +15,13 @@ import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-ut
 const HOVER_START_DELAY_MS = 300;
 /** Per-frame dwell time. */
 const FRAME_INTERVAL_MS = 700;
-/** YouTube official still-frame indices (1=early, 2=mid, 3=late). */
-const FRAME_INDICES = [1, 2, 3] as const;
+/**
+ * YouTube official still-frame variants (1=early, 2=mid, 3=late).
+ * `hq` prefix = 480×360 (~10-22KB measured). The bare `1.jpg` variants are
+ * 120×90 — upscaled into a card they look like a blurry gray blob
+ * (prod-reported 2026-07-02, measured root cause).
+ */
+const FRAME_FILES = ['hq1.jpg', 'hq2.jpg', 'hq3.jpg'] as const;
 
 interface Props {
   videoId: string | null | undefined;
@@ -39,7 +44,7 @@ export function HoverFrameThumbnail({ videoId, thumbnail, active, className }: P
       setFrame(0);
       cursor = 0;
       intervalId = setInterval(() => {
-        cursor = (cursor + 1) % FRAME_INDICES.length;
+        cursor = (cursor + 1) % FRAME_FILES.length;
         setFrame(cursor);
       }, FRAME_INTERVAL_MS);
     }, HOVER_START_DELAY_MS);
@@ -52,9 +57,7 @@ export function HoverFrameThumbnail({ videoId, thumbnail, active, className }: P
   }, [active, videoId]);
 
   const src =
-    frame >= 0 && videoId
-      ? `https://i.ytimg.com/vi/${videoId}/${FRAME_INDICES[frame]}.jpg`
-      : thumbnail;
+    frame >= 0 && videoId ? `https://i.ytimg.com/vi/${videoId}/${FRAME_FILES[frame]}` : thumbnail;
 
   return (
     <img
