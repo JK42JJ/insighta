@@ -32,13 +32,13 @@ describe('HoverFrameThumbnail', () => {
     expect(getImg(container).src).toBe(THUMB);
     // After delay: frame 1.
     act(() => vi.advanceTimersByTime(150));
-    expect(getImg(container).src).toContain('/vi/abc123/1.jpg');
+    expect(getImg(container).src).toContain('/vi/abc123/hq1.jpg');
     // After one interval: frame 2.
     act(() => vi.advanceTimersByTime(700));
-    expect(getImg(container).src).toContain('/vi/abc123/2.jpg');
+    expect(getImg(container).src).toContain('/vi/abc123/hq2.jpg');
     // Wraps 3 → 1.
     act(() => vi.advanceTimersByTime(1400));
-    expect(getImg(container).src).toContain('/vi/abc123/1.jpg');
+    expect(getImg(container).src).toContain('/vi/abc123/hq1.jpg');
   });
 
   it('snaps back to the original thumbnail when deactivated', () => {
@@ -47,7 +47,7 @@ describe('HoverFrameThumbnail', () => {
       <HoverFrameThumbnail videoId="abc123" thumbnail={THUMB} active={true} />
     );
     act(() => vi.advanceTimersByTime(1100)); // 300 delay + 800 → one interval passed = frame 2
-    expect(getImg(container).src).toContain('/2.jpg');
+    expect(getImg(container).src).toContain('/hq2.jpg');
     rerender(<HoverFrameThumbnail videoId="abc123" thumbnail={THUMB} active={false} />);
     expect(getImg(container).src).toBe(THUMB);
   });
