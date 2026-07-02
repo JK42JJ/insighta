@@ -71,8 +71,10 @@ const YT_ID_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/;
 
 // [R1] Fixed-player layout: the whole fixed zone (meta/player/tabs) and the
 // scrolling panel zone share this width so everything stays edge-aligned with
-// the player, which is height-capped at 49.5vh (CP445 spec). +80px = px-10.
-const ALIGNED_MAX_WIDTH = 'min(880px, calc(49.5vh * 16 / 9 + 80px))';
+// the player, which keeps its own original cap (49.5vh, CP445 spec). +32px
+// = px-4 — matches the pre-redesign horizontal gutter so the player renders
+// at the exact same size as before (user report: unintended shrink).
+const ALIGNED_MAX_WIDTH = 'min(880px, calc(49.5vh * 16 / 9 + 32px))';
 
 export function CenterPanel({
   mandalaId,
@@ -390,7 +392,7 @@ export function CenterPanel({
           panel contents below scroll. Player kept MOUNTED in note mode
           (CP442 mount-preserve), hidden via CSS. */}
       <div
-        className={cn('mx-auto w-full shrink-0 px-10 pt-2', centerViewMode === 'note' && 'hidden')}
+        className={cn('mx-auto w-full shrink-0 px-4 pt-2', centerViewMode === 'note' && 'hidden')}
         style={{ maxWidth: ALIGNED_MAX_WIDTH }}
       >
         {/* Video meta header (mockup ②) */}
@@ -485,7 +487,7 @@ export function CenterPanel({
         onMouseEnter={() => setActiveRegion('book-index')}
       >
         <div
-          className={cn('mx-auto w-full px-10 pb-16 pt-1', centerViewMode === 'note' && 'hidden')}
+          className={cn('mx-auto w-full px-4 pb-16 pt-1', centerViewMode === 'note' && 'hidden')}
           style={{ maxWidth: ALIGNED_MAX_WIDTH }}
         >
           {/* Panels */}
