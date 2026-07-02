@@ -28,7 +28,8 @@ import { AddCardsFilters } from './AddCardsFilters';
 import { TargetLevelChips } from './TargetLevelChips';
 import { AddCardsList } from './AddCardsList';
 
-const PANEL_WIDTH_CLASS = 'w-full md:w-[58vw] md:max-w-[936px]';
+// 2026-07-02 James: wider panel so the candidate grid fits 3 columns.
+const PANEL_WIDTH_CLASS = 'w-full md:w-[66vw] md:max-w-[1120px]';
 const CLOSE_ANIMATION_MS = 200;
 const SCROLL_COLLAPSE_THRESHOLD_PX = 32;
 
@@ -66,6 +67,15 @@ export function AddCardsPanel() {
   // directive #785 "재검색 결과 1 - 재검색 결과 2 - …" cumulative model).
   const [rounds, setRounds] = useState<AddCardsRound[]>([]);
   const [surfacedVideoIds, setSurfacedVideoIds] = useState<string[]>([]);
+  // Active round tab — lifted here (was AddCardsList-local) so 초기화 can
+  // scope to the SELECTED round only (2026-07-02 James: 전체 삭제는 불합리).
+  const [activeRoundId, setActiveRoundId] = useState<string | null>(null);
+  const newestRoundId = rounds[0]?.id ?? null;
+  useEffect(() => {
+    setActiveRoundId(newestRoundId);
+  }, [newestRoundId]);
+  // Options snapshot for the in-flight search (attached to its round on success).
+  const lastSearchSnapshotRef = useRef<AddCardsRound['filters']>(undefined);
 
   useEffect(() => {
     if (!open || !mandalaId) return;
@@ -93,7 +103,12 @@ export function AddCardsPanel() {
     const freshIds = freshCards.map((c) => c.videoId);
     setRounds((prev) => {
       const next: AddCardsRound[] = [
-        { id: data.roundId, at: data.roundAt, cards: freshCards },
+        {
+          id: data.roundId,
+          at: data.roundAt,
+          cards: freshCards,
+          filters: lastSearchSnapshotRef.current,
+        },
         ...prev,
       ];
       const nextSurfaced = mergeSurfacedVideoIds(surfacedVideoIds, freshIds);
@@ -370,6 +385,16 @@ export function AddCardsPanel() {
     if (!mandalaId) return;
     const keywords =
       targetLevel && targetLevel !== 'standard' ? [...extraKeywords, targetLevel] : extraKeywords;
+    // Snapshot the options this search runs with — attached to the resulting
+    // round so its tab can show the applied filters (2026-07-02).
+    lastSearchSnapshotRef.current = {
+      language: searchLanguage,
+      keywords: extraKeywords.length > 0 ? [...extraKeywords] : undefined,
+      minViewCount: filters.minViewCount,
+      durationBucket: filters.durationBucket,
+      publishedAfter: filters.publishedAfter,
+      difficulty: targetLevel && targetLevel !== 'standard' ? targetLevel : undefined,
+    };
     mutation.mutate({
       mandalaId,
       extraKeywords: keywords,
@@ -391,23 +416,27 @@ export function AddCardsPanel() {
     surfaced: string[];
   } | null>(null);
 
-  // Toggle: results visible → click clears all rounds; empty → click searches.
-  // Surfaced history is preserved across the toggle.
+  // 초기화 scopes to the ACTIVE round tab only (2026-07-02 James: clearing
+  // every round was 불합리 — "선택된 칩만 초기화"). Picks are dropped only for
+  // cards that exist EXCLUSIVELY in the removed round. The undo snapshot
+  // still captures the full prior state.
   const resetResults = useCallback(() => {
-    if (rounds.length > 0) {
-      setResetHistory({ rounds, picks: Array.from(localPicks), surfaced: surfacedVideoIds });
+    if (rounds.length === 0) return;
+    setResetHistory({ rounds, picks: Array.from(localPicks), surfaced: surfacedVideoIds });
+    const target = rounds.find((r) => r.id === activeRoundId) ?? rounds[0];
+    const nextRounds = rounds.filter((r) => r.id !== target.id);
+    const remainingIds = new Set(nextRounds.flatMap((r) => r.cards.map((c) => c.videoId)));
+    setRounds(nextRounds);
+    setLocalPicks((prev) => new Set(Array.from(prev).filter((id) => remainingIds.has(id))));
+    if (mandalaId) saveAddCardsState(mandalaId, nextRounds, surfacedVideoIds);
+    if (nextRounds.length === 0) {
+      mutation.reset();
+      // Re-expand the input zone so the user can pick filters / type a new
+      // keyword (bug report 2026-05-21 — collapsed header left no way back).
+      setInputCollapsed(false);
+      if (mandalaId) clearSessionPicks(mandalaId);
     }
-    mutation.reset();
-    setRounds([]);
-    setLocalPicks(new Set());
-    // Re-expand the input zone so the user can pick filters / type a new
-    // keyword. Without this, if 초기화 was clicked while the auto-collapse
-    // (scroll-driven) was active, the header ChevronUp/Down toggle goes
-    // away with the results — leaving no way to expand the input again
-    // without closing the panel. (Bug report 2026-05-21.)
-    setInputCollapsed(false);
-    if (mandalaId) clearSessionPicks(mandalaId);
-  }, [mutation, mandalaId, rounds, localPicks, surfacedVideoIds]);
+  }, [mutation, mandalaId, rounds, localPicks, surfacedVideoIds, activeRoundId]);
 
   // Restore the snapshot captured at the most recent 초기화 click.
   const restorePrevious = useCallback(() => {
@@ -696,6 +725,8 @@ export function AddCardsPanel() {
               pickedSet={pickedSet}
               isPickPending={like.isPending || unlike.isPending}
               onPick={handlePick}
+              activeRoundId={activeRoundId}
+              onActiveRoundChange={setActiveRoundId}
             />
           </div>
         </div>

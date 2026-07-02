@@ -25,10 +25,25 @@ const MAX_SURFACED_VIDEO_IDS = 5000;
 const MAX_ROUNDS = 12;
 const SESSION_PICKS_PREFIX = 'addCards:sessionPicks:';
 
+/** Snapshot of the search options a round was created with — drives the
+ *  per-round filter summary under the round tabs (James request 2026-07-02:
+ *  "칩을 선택하면 적용된 필터옵션이 각 보여져야"). */
+export interface AddCardsRoundFilters {
+  language?: 'ko' | 'en';
+  keywords?: string[];
+  minViewCount?: number;
+  durationBucket?: string;
+  publishedAfter?: string;
+  difficulty?: string;
+}
+
 export interface AddCardsRound {
   id: string;
   at: string; // ISO
   cards: AddCardCandidate[];
+  /** Absent on rounds created before 2026-07-02 (no snapshot stored) —
+   *  the summary line simply doesn't render for those. */
+  filters?: AddCardsRoundFilters;
 }
 
 /** Persisted "this session" picks per mandala. Survives panel close/reopen
