@@ -85,6 +85,21 @@ export async function placeAutoAddedCards(
 ): Promise<PlaceResult> {
   if (candidates.length === 0) return { inserted: 0 };
 
+  // Channel blocklist (P0 scam-inflow 2026-07-03) — placement is the single
+  // chokepoint every auto-add path funnels through, so a blocked channel can
+  // never be placed regardless of which recruit path surfaced it.
+  const { filterBlockedChannels } = await import('@/modules/moderation/channel-blocklist');
+  const chGate = await filterBlockedChannels(candidates, (c) => ({
+    channelName: c.channelTitle,
+  }));
+  if (chGate.blockedCount > 0) {
+    logger.info(
+      `placeAutoAddedCards: ${chGate.blockedCount} candidate(s) dropped by channel blocklist (cell=${cellIndex})`
+    );
+  }
+  candidates = chGate.kept;
+  if (candidates.length === 0) return { inserted: 0 };
+
   // Dedup: skip videos already linked to this user's uvs — otherwise the
   // unique(user_id, videoId) constraint turns the insert into a silent UPDATE
   // (apparent-add without a fresh row). User-touched cards are filtered here so
