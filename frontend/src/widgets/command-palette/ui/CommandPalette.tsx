@@ -253,7 +253,8 @@ export function CommandPalette() {
       <DialogContent
         // Palette chrome — elevated popover surface, larger radius, deep shadow,
         // built-in dialog X hidden ([&>button]:hidden targets the direct child).
-        className="max-w-xl p-0 gap-0 overflow-hidden top-[18%] translate-y-0 rounded-xl border-border/40 bg-popover shadow-2xl [&>button]:hidden"
+        // Width matched to the claude.ai ⌘K reference (~768px measured).
+        className="max-w-3xl p-0 gap-0 overflow-hidden top-[18%] translate-y-0 rounded-xl border-border/40 bg-popover shadow-2xl [&>button]:hidden"
         aria-describedby={undefined}
       >
         <DialogTitle className="sr-only">{t('palette.title', '검색 및 빠른 작업')}</DialogTitle>
@@ -281,7 +282,11 @@ export function CommandPalette() {
         </div>
 
         {/* Rows */}
-        <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1.5" role="listbox">
+        <div
+          ref={listRef}
+          className="max-h-[50vh] overflow-y-auto py-1.5 scrollbar-pro"
+          role="listbox"
+        >
           {rows.length === 0 && isActive && !isLoading && (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               {t('palette.empty', '결과가 없습니다')}
