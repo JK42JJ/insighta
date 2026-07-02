@@ -32,3 +32,21 @@ export function formatRelativeDate(date: Date | string | null | undefined): stri
   if (years === 1) return '1 year ago';
   return `${years} years ago`;
 }
+
+/**
+ * Honest card date label (#published_at contamination fix).
+ * - publishedAt present  → "N months ago"        (actual YouTube publish date)
+ * - publishedAt missing  → "added N days ago"    (when the card was added —
+ *   NEVER disguised as a publish date; prior code fell back silently and a
+ *   contaminated/absent publish date rendered as a fake "2 months ago")
+ * - neither              → null (slot stays empty)
+ */
+export function formatCardDateLabel(
+  publishedAt: Date | string | null | undefined,
+  createdAt: Date | string | null | undefined
+): string | null {
+  const published = formatRelativeDate(publishedAt);
+  if (published) return published;
+  const added = formatRelativeDate(createdAt);
+  return added ? `added ${added}` : null;
+}
