@@ -1277,6 +1277,19 @@ html.dark .lemonsqueezy-loader {
   --nm-callout-warning-border: rgba(210,160,90,0.30);
   --nm-callout-warning-accent: #d8a85f;
 
+  /* [VIDEO-VIEW STEP1] — top bar + meta header tokens (mockup video-view.html
+     exact values). Literals live here only; components reference var(--lp-*). */
+  --lp-accent: #c9a36a;
+  --lp-strong: #f3f1ec;
+  --lp-dim: #86847f;
+  --lp-faint: #6f6d68;
+  --lp-surface-2: #16181d;
+  --lp-line-8: rgba(255,255,255,0.08);
+  --lp-toggle-active-bg: #e8e6e1;
+  --lp-toggle-active-fg: #1a1b1e;
+  --lp-avatar-grad: linear-gradient(135deg,#6d3a8f,#2a1840);
+  --lp-avatar-fg: #e9d6f5;
+
   background: #0e0f10;
 }
 

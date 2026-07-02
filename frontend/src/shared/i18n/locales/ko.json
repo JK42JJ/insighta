@@ -1918,7 +1918,9 @@
     "downloadHtml": "HTML 다운로드",
     "restoreOriginal": "원본 복원",
     "viewModePlayer": "영상",
-    "viewModeNote": "노트"
+    "viewModeNote": "노트",
+    "topicGroup": "주제군",
+    "videoFallbackTitle": "영상"
   },
   "addCards": {
     "triggerChip": "+ 카드 추가",

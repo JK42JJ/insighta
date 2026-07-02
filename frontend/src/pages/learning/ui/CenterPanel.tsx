@@ -22,6 +22,7 @@ import { LearningShareMenu } from '@/features/learning-share';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
 import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
+import { useMandalaCards } from '../model/useMandalaCards';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
 import { useNoteDocument } from '@/pages/learning/model/useNoteDocument';
 import { useNoteAutoFollow } from '@/pages/learning/model/useNoteAutoFollow';
@@ -53,6 +54,14 @@ function formatMMSS(seconds: number): string {
   const ss = total % 60;
   return `${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`;
 }
+
+/** Video-view duration format — unpadded minutes ("7:25", "65:22"). */
+function fmtDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+const YT_ID_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/;
 
 export function CenterPanel({
   mandalaId,
@@ -86,7 +95,12 @@ export function CenterPanel({
   // scroll-to effect below doesn't re-scroll (which would fight free scrolling).
   const scrollSpyRef = useRef<string | null>(null);
   const setPlayerState = useLearningStore((s) => s.setPlayerState);
-  const { book } = useMandalaBook(mandalaId);
+  const setCenterViewMode = useLearningStore((s) => s.setCenterViewMode);
+  const playerDurationSec = useLearningStore((s) => s.playerDurationSec);
+  const { book, isLoading: bookLoading } = useMandalaBook(mandalaId);
+  // [STEP1] video meta header — title from the mandala card set.
+  const { cards } = useMandalaCards(mandalaId);
+  const currentCard = cards.find((c) => c.videoUrl.match(YT_ID_RE)?.[1] === videoId);
   const setActiveNoteVideoKey = useLearningStore((s) => s.setActiveNoteVideoKey);
   const noteAutoFollowEnabled = useLearningStore((s) => s.noteAutoFollowEnabled);
   const setNoteAutoFollow = useLearningStore((s) => s.setNoteAutoFollow);
@@ -256,8 +270,115 @@ export function CenterPanel({
     { id: 'section', labelKey: 'learning.tabSection', fallback: '섹션 내용', icon: BookText },
   ];
 
+  // [STEP1] mode switch now lives in the center top bar (single home);
+  // the note-not-ready guard moves here with it (was RightPanel's).
+  const handleModeChange = (mode: 'player' | 'note') => {
+    if (mode === 'note' && !bookLoading && !book) {
+      toast(t('learning.noteNotReady', '노트가 아직 생성되지 않았어요'));
+      return;
+    }
+    setCenterViewMode(mode);
+  };
+
   return (
     <div className="flex flex-1 min-w-0 flex-col overflow-hidden pl-4 pr-3 pt-[5px]">
+      {/* [STEP1] Top bar (mockup ①) — breadcrumb left; highlight-reel/share +
+          [영상|노트] toggle right. Rendered in BOTH modes (toggle's single home). */}
+      <div className="flex h-[52px] shrink-0 items-center justify-between gap-3 px-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 text-[12.5px] text-[var(--lp-faint)]">
+          {activeSection && (
+            <>
+              <span className="shrink-0 font-semibold text-[var(--lp-accent)]">
+                {t('learning.topicGroup', '주제군')}{' '}
+                {String((activeSection.chapter.ch ?? 0) + 1).padStart(2, '0')}
+              </span>
+              <span aria-hidden>·</span>
+              <span className="truncate">{activeSection.chapter.title}</span>
+            </>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {centerViewMode === 'player' && (
+            <>
+              {highlightReel.enabled && (
+                <span
+                  className={cn(
+                    'text-[11px] tabular-nums font-medium transition-colors',
+                    highlightReel.active ? 'text-[var(--lp-strong)]' : 'text-[var(--lp-dim)]'
+                  )}
+                  aria-live="polite"
+                >
+                  {formatMMSS(
+                    highlightReel.active ? highlightReel.remainingSec : highlightReel.totalSec
+                  )}
+                </span>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={highlightReel.active ? highlightReel.stop : highlightReel.start}
+                    disabled={!highlightReel.enabled}
+                    aria-label={t('learning.highlightReel')}
+                    className={cn(
+                      'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
+                      highlightReel.active
+                        ? 'text-[var(--lp-strong)] hover:bg-white/10'
+                        : 'text-[var(--lp-dim)] hover:bg-white/10 hover:text-[var(--lp-strong)]',
+                      !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
+                    )}
+                  >
+                    <Zap className="h-[18px] w-[18px]" aria-hidden="true" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-[12px] max-w-[280px]">
+                  {!highlightReel.enabled
+                    ? t('learning.highlightReelDisabledTooltip', {
+                        threshold: HIGHLIGHT_RELEVANCE_THRESHOLD,
+                      })
+                    : highlightReel.active
+                      ? t('learning.highlightReelActiveTooltip')
+                      : t('learning.highlightReelReadyTooltip', {
+                          count: highlightReel.highlights.length,
+                        })}
+                </TooltipContent>
+              </Tooltip>
+            </>
+          )}
+          <LearningShareMenu mandalaId={mandalaId} videoId={videoId} />
+          <ViewModeToggle
+            mode={centerViewMode}
+            noteDisabled={!bookLoading && !book}
+            onChange={handleModeChange}
+          />
+        </div>
+      </div>
+
+      {/* [STEP1] Video meta header (mockup ②) — channel-initial avatar + title
+          + duration. Width-aligned with the player (CP445 pattern). */}
+      <div
+        className={cn('mx-auto w-full shrink-0', centerViewMode === 'note' && 'hidden')}
+        style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}
+      >
+        <div className="mb-1 flex items-center gap-[13px]">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] text-[var(--lp-avatar-fg)]"
+            style={{ background: 'var(--lp-avatar-grad)' }}
+            aria-hidden
+          >
+            {(currentCard?.title ?? 'Y').slice(0, 1)}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-[17px] font-semibold leading-[1.35] tracking-[-0.01em] text-[var(--lp-strong)]">
+              {currentCard?.title ?? t('learning.videoFallbackTitle', '영상')}
+            </div>
+            <div className="mt-0.5 text-[12.5px] text-[var(--lp-faint)]">
+              YouTube{playerDurationSec > 0 ? ` · ${fmtDuration(playerDurationSec)}` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div
         className={cn('mt-2 shrink-0', centerViewMode === 'note' && 'hidden')}
         onMouseEnter={() => {
@@ -288,70 +409,23 @@ export function CenterPanel({
           style={{ maxWidth: 'calc(49.5vh * 16 / 9)' }}
           onMouseEnter={() => setActiveRegion('book-index')}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex">
-              {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setCenterTab(id)}
-                  className={cn(
-                    'flex items-center gap-1.5 py-2.5 px-3 text-[12px] transition-colors border-b-2',
-                    centerTab === id
-                      ? 'border-primary text-foreground font-semibold'
-                      : 'border-transparent text-muted-foreground font-normal hover:text-foreground'
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {t(labelKey, fallback)}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              {highlightReel.enabled && (
-                <span
-                  className={cn(
-                    'text-[11px] tabular-nums font-medium transition-colors',
-                    highlightReel.active ? 'text-white/90' : 'text-white/60'
-                  )}
-                  aria-live="polite"
-                >
-                  {formatMMSS(
-                    highlightReel.active ? highlightReel.remainingSec : highlightReel.totalSec
-                  )}
-                </span>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={highlightReel.active ? highlightReel.stop : highlightReel.start}
-                    disabled={!highlightReel.enabled}
-                    aria-label={t('learning.highlightReel')}
-                    className={cn(
-                      'inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors',
-                      highlightReel.active
-                        ? 'text-white/90 hover:bg-white/10'
-                        : 'text-white hover:bg-white/10',
-                      !highlightReel.enabled && 'opacity-40 cursor-not-allowed'
-                    )}
-                  >
-                    <Zap className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-[12px] max-w-[280px]">
-                  {!highlightReel.enabled
-                    ? t('learning.highlightReelDisabledTooltip', {
-                        threshold: HIGHLIGHT_RELEVANCE_THRESHOLD,
-                      })
-                    : highlightReel.active
-                      ? t('learning.highlightReelActiveTooltip')
-                      : t('learning.highlightReelReadyTooltip', {
-                          count: highlightReel.highlights.length,
-                        })}
-                </TooltipContent>
-              </Tooltip>
-              <LearningShareMenu mandalaId={mandalaId} videoId={videoId} />
-            </div>
+          {/* [STEP1] highlight-reel/share cluster moved to the top bar. */}
+          <div className="flex items-center">
+            {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setCenterTab(id)}
+                className={cn(
+                  'flex items-center gap-1.5 py-2.5 px-3 text-[12px] transition-colors border-b-2',
+                  centerTab === id
+                    ? 'border-primary text-foreground font-semibold'
+                    : 'border-transparent text-muted-foreground font-normal hover:text-foreground'
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {t(labelKey, fallback)}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -522,7 +596,8 @@ export function ViewModeToggle({
     { id: 'note', labelKey: 'learning.viewModeNote', Icon: BookOpen },
   ];
   return (
-    <div className="flex items-center gap-0.5 self-center rounded-md border border-border bg-secondary/30 p-0.5">
+    // [STEP1] mockup skin — dark pill container, active item = light chip.
+    <div className="flex shrink-0 items-center rounded-[9px] border border-[var(--lp-line-8)] bg-[var(--lp-surface-2)] p-[3px]">
       {items.map(({ id, labelKey, Icon }) => {
         const dimmed = id === 'note' && noteDisabled;
         return (
@@ -530,10 +605,10 @@ export function ViewModeToggle({
             key={id}
             onClick={() => onChange(id)}
             className={cn(
-              'flex items-center gap-1 rounded px-2 py-1 text-[12px] transition-colors',
+              'flex items-center gap-1.5 rounded-[7px] px-[13px] py-1.5 text-[13px] transition-colors',
               mode === id
-                ? 'bg-background text-foreground font-semibold shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'bg-[var(--lp-toggle-active-bg)] font-semibold text-[var(--lp-toggle-active-fg)]'
+                : 'text-[var(--lp-dim)] hover:text-[var(--lp-strong)]',
               dimmed && 'opacity-50'
             )}
             aria-pressed={mode === id}
