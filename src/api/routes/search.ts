@@ -17,7 +17,7 @@ import { logger } from '../../utils/logger';
 
 function getUserId(request: FastifyRequest, reply: FastifyReply): string | null {
   if (!request.user || !('userId' in request.user)) {
-    reply.status(401).send({ error: 'Unauthorized' });
+    void reply.status(401).send({ error: 'Unauthorized' });
     return null;
   }
   return (request.user as { userId: string }).userId;
