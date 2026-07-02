@@ -24,7 +24,7 @@ import { cn } from '@/shared/lib/utils';
 import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 import { formatRelativeDate } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
-import { HoverFrameThumbnail } from '@/shared/ui/hover-frame-thumbnail';
+import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
 import type { AddCardCandidate } from '../model/useAddCards';
 import type { AddCardsRound } from '../lib/persistence';
 
@@ -201,9 +201,6 @@ function CardItem({
   onPick: (videoId: string, title: string) => void;
 }) {
   const { t } = useTranslation();
-  // Hover frame-cycle preview (YouTube-like feel, image-only — see
-  // shared/ui/hover-frame-thumbnail.tsx for the iframe-vs-frames decision).
-  const [hovered, setHovered] = useState(false);
   // CP480+ — picked cards are now clickable to unpick (idempotent
   // toggle). Only mid-flight requests are disabled.
   const disabled = isPickPending;
@@ -227,8 +224,6 @@ function CardItem({
           onPick(card.videoId, card.title);
         }
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       className={cn(
         'group relative rounded-md overflow-hidden border bg-card transition-colors',
         'border-transparent',
@@ -239,11 +234,15 @@ function CardItem({
     >
       <div className="relative aspect-video bg-muted">
         {card.thumbnail && (
-          <HoverFrameThumbnail
-            videoId={card.videoId}
-            thumbnail={card.thumbnail}
-            active={hovered}
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={card.thumbnail}
+            alt=""
             className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            onError={handleThumbnailError}
+            onLoad={handleThumbnailLoad}
           />
         )}
 
