@@ -1308,17 +1308,8 @@ html.dark .lemonsqueezy-loader {
   --lp-avatar-grad: linear-gradient(135deg,#6d3a8f,#2a1840);
   --lp-avatar-fg: #e9d6f5;
   --lp-tab-active-fg: #15171c;
-  /* player chrome (mockup ③ overlay) */
-  --lp-chrome-glass: rgba(15,12,18,0.5);
-  --lp-chrome-glass-shadow: 0 10px 36px rgba(0,0,0,0.55);
-  --lp-chip-bg: rgba(12,10,15,0.62);
-  --lp-chip-fg: #f3e8d4;
-  --lp-controls-grad: linear-gradient(transparent, rgba(8,6,10,0.82));
-  --lp-tip-bg: rgba(14,12,17,0.94);
-  --lp-tip-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  /* relevance-curve overlay (the only custom element on the native player) */
   --lp-head-glow: 0 0 8px rgba(201,163,106,0.85), 0 1px 3px rgba(0,0,0,0.6);
-  --lp-seg-track: rgba(255,255,255,0.18);
-  --lp-seg-track-high: rgba(127,182,154,0.30);
   --lp-curve-neutral: #ffffff;
 
   background: #0e0f10;

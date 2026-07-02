@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useLearningStore } from '../model/useLearningStore';
-import { relevanceLevel, relevanceCssVar, type RelevanceLevel } from '../lib/relevance-level';
+import { relevanceLevel, type RelevanceLevel } from '../lib/relevance-level';
 import type { VideoRichSummarySection } from '@/shared/lib/api-client';
 
 /**
- * Relevance overlay for the NATIVE YouTube player (user decision: keep the
- * YT navigator/menus; overlay only). Two pointer-events-none layers inside a
- * `group/player relative` frame around the iframe:
- *  - now-chip (top-left, current chapter) — hides on hover so it never
- *    clashes with YT's own hover title bar;
- *  - relevance curve — appears WITH the native controls on hover, sitting
- *    just above the YT progress bar so both read as one navigator. High/mid/
- *    low chapters are color-coded with a wide amplitude, played portion is
- *    tinted gold, and a playhead dot tracks the curve.
- * All interaction (seek/scrub/menus) stays native — nothing here is clickable.
+ * Relevance curve overlay for the NATIVE YouTube player (user decision: the
+ * curve is the ONLY custom element — every menu/control stays YouTube's).
+ * A single pointer-events-none layer inside a `group/player relative` frame:
+ * the curve appears WITH the native controls on hover, parked just above the
+ * YT progress bar so both read as one navigator. High/mid/low chapters are
+ * color-coded with a wide amplitude, the played portion is tinted gold, and
+ * a playhead dot tracks the curve. Nothing here is clickable.
  */
 
 interface PlayerChromeProps {
@@ -75,15 +72,6 @@ export function PlayerChrome({ sections }: PlayerChromeProps) {
     playerDurationSec > 0 ? playerDurationSec : (chapters[chapters.length - 1]?.to_sec ?? 0);
   const progress = duration > 0 ? Math.min(1, Math.max(0, playerTimeSec / duration)) : 0;
 
-  const activeIdx = (() => {
-    for (let i = 0; i < chapters.length; i++) {
-      const c = chapters[i]!;
-      if (playerTimeSec >= c.from_sec && playerTimeSec < c.to_sec) return i;
-    }
-    return chapters.length - 1;
-  })();
-  const activeChapter = chapters[activeIdx];
-
   // Curve geometry (mockup renderRelCurve): one smooth curve; chapter
   // boundaries punched out by a clip; per-level color-coded stroke.
   const curve = useMemo(() => {
@@ -143,27 +131,6 @@ export function PlayerChrome({ sections }: PlayerChromeProps) {
   return (
     // z-20 — must sit above PanelVideoPlayer's poster facade (z-10).
     <div className="pointer-events-none absolute inset-0 z-20" aria-hidden>
-      {/* Now-chip — current chapter; yields to YT's own hover title bar. */}
-      {activeChapter && (
-        <div
-          className="absolute left-[18px] top-4 z-[5] flex max-w-[62%] items-center gap-[9px] rounded-[10px] py-[7px] pl-[13px] pr-[9px] text-[12.5px] font-semibold transition-opacity duration-200 group-hover/player:opacity-0"
-          style={{
-            background: 'var(--lp-chip-bg)',
-            backdropFilter: 'blur(7px)',
-            color: 'var(--lp-chip-fg)',
-          }}
-        >
-          <span
-            className="h-[7px] w-[7px] shrink-0 rounded-full"
-            style={{ background: relevanceCssVar(levelOf(activeChapter)) }}
-          />
-          <span className="min-w-0 truncate">{activeChapter.title}</span>
-          <span className="shrink-0 border-l border-white/15 pl-[9px] text-[11px] font-semibold tabular-nums text-white/50">
-            {String(activeIdx + 1).padStart(2, '0')} / {String(chapters.length).padStart(2, '0')}
-          </span>
-        </div>
-      )}
-
       {/* Relevance curve — fades in WITH the native controls (hover), parked
           just above the YT progress bar so the two read as one navigator. */}
       <div className="absolute bottom-[52px] left-3 right-3 h-[56px] opacity-0 transition-opacity duration-200 group-hover/player:opacity-100">
