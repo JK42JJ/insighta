@@ -88,6 +88,8 @@ export class OllamaGenerationProvider implements GenerationProvider {
       });
     } catch (err) {
       logLLMCall({
+        videoId: options?.videoId,
+        userId: options?.userId,
         module: 'ollama',
         model: this.model,
         latencyMs: Date.now() - startTime,
@@ -100,6 +102,8 @@ export class OllamaGenerationProvider implements GenerationProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       logLLMCall({
+        videoId: options?.videoId,
+        userId: options?.userId,
         module: 'ollama',
         model: this.model,
         latencyMs: Date.now() - startTime,
@@ -119,6 +123,8 @@ export class OllamaGenerationProvider implements GenerationProvider {
 
     if (!content) {
       logLLMCall({
+        videoId: options?.videoId,
+        userId: options?.userId,
         module: 'ollama',
         model: this.model,
         inputTokens: data.prompt_eval_count,
@@ -132,6 +138,8 @@ export class OllamaGenerationProvider implements GenerationProvider {
 
     // Fire-and-forget cost log (Ollama = local inference, zero cost)
     logLLMCall({
+      videoId: options?.videoId,
+      userId: options?.userId,
       module: 'ollama',
       model: this.model,
       inputTokens: data.prompt_eval_count,
