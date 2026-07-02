@@ -188,6 +188,7 @@ export function SidebarTopSection({
       {/* CP446 — Menu rows: 36px height, gap-2, 13px text, 20px icon, rounded-md. */}
       <button
         type="button"
+        data-onboarding="new-mandala"
         onClick={() => navigate('/mandalas/new')}
         className="mt-2 flex items-center gap-2 h-9 px-1.5 rounded-md text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
       >

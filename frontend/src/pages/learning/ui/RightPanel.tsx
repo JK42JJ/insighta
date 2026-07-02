@@ -1,3 +1,4 @@
+import { markOnboardingTask } from '@/features/onboarding';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NotebookPen, Bot, MoreHorizontal } from 'lucide-react';
@@ -106,6 +107,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
       // §redesign — left divider EXACTLY matches the left sidebar's right divider
       // (Sidebar.tsx: border-sidebar-border/40) so both panel seams are identical.
       // Previous border-white/[0.06] read heavier/cruder than the left edge.
+      data-onboarding="learn-panel"
       className="flex w-[400px] shrink-0 flex-col border-l border-sidebar-border/40 pl-5 pr-5"
       onMouseEnter={() => setActiveRegion(activeTab === 'notes' ? 'notes' : 'chat')}
     >
@@ -139,6 +141,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           <button
             key={id}
             onClick={() => {
+              if (id === 'notes') markOnboardingTask('note');
               setActiveTab(id);
               setActiveRegion(id === 'notes' ? 'notes' : 'chat');
             }}
@@ -194,7 +197,12 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           </div>
         )}
         <div className="relative min-h-0 flex-1 overflow-hidden">
-          <ChatAssistant key={videoId} mandalaId={mandalaId} videoId={videoId} onSeek={handleSeek} />
+          <ChatAssistant
+            key={videoId}
+            mandalaId={mandalaId}
+            videoId={videoId}
+            onSeek={handleSeek}
+          />
         </div>
         <p className="shrink-0 w-full py-2 text-center text-[10px] text-muted-foreground/60">
           {t('learning.chatDisclaimer')}

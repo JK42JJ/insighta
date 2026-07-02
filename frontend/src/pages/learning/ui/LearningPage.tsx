@@ -1,3 +1,4 @@
+import { markOnboardingTask } from '@/features/onboarding';
 import { useRef, useCallback, useState, useLayoutEffect, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { VideoStrip } from './VideoStrip';
@@ -40,6 +41,11 @@ export default function LearningPage() {
   // the live player. The different-video case loads via startTime below.
   // CP446+ — 노트 모드에서는 playVideo + setIsPlaying skip (background
   // audio leak 방지). startTime 만 갱신해 영상 모드 복귀 시 그 위치 cue.
+  // Onboarding: opening any card = first "watch" task done.
+  useEffect(() => {
+    markOnboardingTask('watch');
+  }, []);
+
   useEffect(() => {
     if (targetSec === null || !Number.isFinite(targetSec)) return;
     if (!videoId) return;

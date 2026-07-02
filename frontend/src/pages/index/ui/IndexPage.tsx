@@ -1,3 +1,4 @@
+import { OnboardingChecklist } from '@/features/onboarding';
 import { useRef, useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -1103,6 +1104,7 @@ function AuthenticatedApp() {
                       newlySyncedCards={cards.newlySyncedCards}
                       trailingAction={
                         <>
+                          <OnboardingChecklist />
                           <AddCardsTriggerChip mandalaId={effectiveMandalaId} />
                           {ideaSpotTrigger}
                         </>

@@ -716,7 +716,8 @@
       "a5": "Yes. Your data is stored securely and only accessible to you. We use Supabase with row-level security to ensure data isolation between users.",
       "q6": "How do I report a bug?",
       "a6": "You can email us at support@insighta.one or create an issue on our GitHub repository. We appreciate your feedback."
-    }
+    },
+    "replayOnboarding": "Replay the getting-started guide"
   },
   "linkTypes": {
     "youtube": "YouTube Video",
@@ -1977,6 +1978,66 @@
       "foundCount": "{{count}} new",
       "tablist": "Search rounds",
       "activePanel": "Active round results"
+    }
+  },
+  "onboarding": {
+    "skip": "Skip",
+    "next": "Next",
+    "finish": "Got it",
+    "chip": "Getting started",
+    "chipHint": "Do each once and this guide disappears.",
+    "welcome": {
+      "title": "Welcome to Insighta",
+      "body": "Enter a goal and we break it into 8 action areas, each with a curated video curriculum.",
+      "cta": "Start with a goal",
+      "browse": "Browse templates"
+    },
+    "tasks": {
+      "wizard": "Create a mandala from a goal",
+      "watch": "Open a card and watch",
+      "summary": "Skim the AI summary",
+      "note": "Check notes and jot a memo",
+      "addcards": "Add cards yourself"
+    },
+    "dash": {
+      "sectors": {
+        "title": "Your goal, split into 8 action areas",
+        "body": "Tap a chip to filter videos by area."
+      },
+      "cards": {
+        "title": "Videos curated by goal relevance",
+        "body": "Click a card to open the video with its AI summary."
+      },
+      "guide": {
+        "title": "Getting started",
+        "body": "Track your remaining first steps here. It disappears when you finish."
+      }
+    },
+    "task": {
+      "wizard": {
+        "title": "Create a new mandala here",
+        "body": "Type a goal — we build 8 action areas with video curricula."
+      },
+      "watch": {
+        "title": "Click a card",
+        "body": "The learning view opens with a section-by-section AI summary."
+      },
+      "summary": {
+        "title": "Section-by-section AI summary",
+        "body": "Click a timestamp to jump right there. % is goal relevance."
+      },
+      "note": {
+        "title": "Notes & memos",
+        "body": "Jot memos while watching; the [Note] toggle opens the note view."
+      },
+      "addcards": {
+        "title": "Find more cards",
+        "body": "Filter by keyword, views and duration. ⌘K search works too."
+      },
+      "learnFallback": {
+        "title": "Open a card first",
+        "body": "Click any card to see the AI summary and notes in the learning view."
+      }
     }
   }
 }

@@ -12,6 +12,7 @@ export function CommandPaletteTrigger() {
   return (
     <button
       type="button"
+      data-onboarding="search"
       onClick={openCommandPalette}
       className="w-full h-9 flex items-center gap-2 pl-2 pr-2 rounded-md bg-sidebar-foreground/[0.06] text-[13px] text-muted-foreground hover:bg-sidebar-foreground/[0.1] transition-colors duration-150"
       aria-label={t('palette.title', '검색 및 빠른 작업')}

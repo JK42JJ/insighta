@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
 import { MobileDrawer } from './MobileDrawer';
 import { CommandPalette } from '@/widgets/command-palette';
+import { OnboardingController } from '@/features/onboarding';
 import { useShellStore, dndHandlersRef } from '@/stores/shellStore';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useDndSensors, pointerWithinThenClosest } from '@/shared/lib/dnd';
@@ -144,6 +145,9 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* ⌘K global search — works on every authenticated route (incl. no-sidebar ones) */}
         <CommandPalette />
+
+        {/* First-run onboarding (welcome modal + coachmark tours) */}
+        <OnboardingController />
       </div>
     </DndContext>
   );
