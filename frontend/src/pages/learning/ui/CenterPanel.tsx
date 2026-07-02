@@ -25,6 +25,8 @@ import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary
 import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
 import { useMandalaCards } from '../model/useMandalaCards';
 import { FloatingVideoNavigator } from './FloatingVideoNavigator';
+import { PlayerChrome } from './PlayerChrome';
+import { fmtChapterTime } from '../lib/time-format';
 import {
   relevanceLevel,
   relevanceCssVar,
@@ -65,13 +67,12 @@ function formatMMSS(seconds: number): string {
   return `${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')}`;
 }
 
-/** Mockup chapter time format — unpadded minutes ("0:00", "12:00"). */
-function fmtChapterTime(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
-}
-
 const YT_ID_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/;
+
+// [R1] Fixed-player layout: the whole fixed zone (meta/player/tabs) and the
+// scrolling panel zone share this width so everything stays edge-aligned with
+// the player, which is height-capped at 49.5vh (CP445 spec). +80px = px-10.
+const ALIGNED_MAX_WIDTH = 'min(880px, calc(49.5vh * 16 / 9 + 80px))';
 
 export function CenterPanel({
   mandalaId,
@@ -385,101 +386,106 @@ export function CenterPanel({
         </div>
       </div>
 
-      {/* Player — kept MOUNTED in note mode (CP442 mount-preserve), hidden via CSS.
-          The wrapper now lives inside the scrolling 880px column below, so in note
-          mode we render it here hidden to preserve the iframe instance. */}
+      {/* [R1] FIXED zone — meta header + player + tabs are pinned; only the
+          panel contents below scroll. Player kept MOUNTED in note mode
+          (CP442 mount-preserve), hidden via CSS. */}
+      <div
+        className={cn('mx-auto w-full shrink-0 px-10 pt-2', centerViewMode === 'note' && 'hidden')}
+        style={{ maxWidth: ALIGNED_MAX_WIDTH }}
+      >
+        {/* Video meta header (mockup ②) */}
+        <div className="mb-3 flex items-center gap-[13px]">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] text-[var(--lp-avatar-fg)]"
+            style={{ background: 'var(--lp-avatar-grad)' }}
+            aria-hidden
+          >
+            {(currentCard?.title ?? 'Y').slice(0, 1)}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-[17px] font-semibold leading-[1.35] tracking-[-0.01em] text-[var(--lp-strong)]">
+              {currentCard?.title ?? t('learning.videoFallbackTitle', '영상')}
+            </div>
+            <div className="mt-0.5 text-[12.5px] text-[var(--lp-faint)]">
+              YouTube{playerDurationSec > 0 ? ` · ${fmtChapterTime(playerDurationSec)}` : ''}
+            </div>
+          </div>
+        </div>
+
+        {/* Player hero frame (mockup ③) — group/player drives the hover chrome */}
+        <div
+          className="group/player relative overflow-hidden rounded-2xl border border-[var(--lp-line-8)] bg-black"
+          style={{ boxShadow: 'var(--lp-player-shadow)' }}
+          onMouseEnter={() => setActiveRegion('player')}
+        >
+          <PanelVideoPlayer
+            videoUrl={videoUrl}
+            playerRef={playerRef}
+            shouldAutoplay={shouldAutoplay}
+            onUserPlayed={onUserPlayed}
+            onPlayStateChange={onPlayStateChange}
+            onTimeUpdate={setPlayerState}
+            startTime={startTime}
+            fill
+          />
+          <PlayerChrome sections={chapterSections} />
+        </div>
+
+        {/* Tab switch row (mockup ④) — segment tabs + relevance legend */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 pt-4">
+          <div className="flex gap-1 rounded-[10px] border border-[var(--lp-line-7)] bg-[var(--lp-surface)] p-1">
+            {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setCenterTab(id)}
+                className={cn(
+                  'flex items-center gap-[7px] rounded-[7px] px-4 py-2 text-[13.5px] font-semibold transition-colors',
+                  centerTab === id
+                    ? 'bg-[var(--lp-toggle-active-bg)] text-[var(--lp-tab-active-fg)]'
+                    : 'text-[var(--lp-dim)] hover:text-[var(--lp-strong)]'
+                )}
+              >
+                <Icon className="h-[15px] w-[15px]" />
+                {t(labelKey, fallback)}
+              </button>
+            ))}
+          </div>
+          {chapterSections.length > 0 && (
+            <div className="flex items-center gap-[13px] text-[11.5px] text-[var(--lp-faint)]">
+              <div className="flex items-center gap-[9px]">
+                <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--lp-mute)]">
+                  {t('learning.relevanceLabel', '관련도')}
+                </span>
+                <span className="text-[10.5px] text-[var(--lp-mute)]">
+                  {t('learning.relevanceLow', '낮음')}
+                </span>
+                <RelevanceMeter level="low" />
+                <RelevanceMeter level="mid" />
+                <RelevanceMeter level="high" />
+                <span className="text-[10.5px] text-[var(--lp-mute)]">
+                  {t('learning.relevanceHigh', '높음')}
+                </span>
+              </div>
+              <span className="h-[11px] w-px bg-white/10" aria-hidden />
+              <span>
+                {t('learning.chaptersCount', '{{count}}개 챕터', {
+                  count: chapterSections.length,
+                })}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* [R1] SCROLL zone — only the tab-panel contents scroll (video fixed). */}
       <div
         className="flex-1 overflow-y-auto scrollbar-pro"
         onMouseEnter={() => setActiveRegion('book-index')}
       >
         <div
-          className={cn(
-            'mx-auto w-full max-w-[880px] px-10 pb-[120px] pt-[18px]',
-            centerViewMode === 'note' && 'hidden'
-          )}
+          className={cn('mx-auto w-full px-10 pb-16 pt-1', centerViewMode === 'note' && 'hidden')}
+          style={{ maxWidth: ALIGNED_MAX_WIDTH }}
         >
-          {/* Video meta header (mockup ②) */}
-          <div className="mb-[18px] flex items-center gap-[13px]">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] text-[var(--lp-avatar-fg)]"
-              style={{ background: 'var(--lp-avatar-grad)' }}
-              aria-hidden
-            >
-              {(currentCard?.title ?? 'Y').slice(0, 1)}
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-[17px] font-semibold leading-[1.35] tracking-[-0.01em] text-[var(--lp-strong)]">
-                {currentCard?.title ?? t('learning.videoFallbackTitle', '영상')}
-              </div>
-              <div className="mt-0.5 text-[12.5px] text-[var(--lp-faint)]">
-                YouTube{playerDurationSec > 0 ? ` · ${fmtChapterTime(playerDurationSec)}` : ''}
-              </div>
-            </div>
-          </div>
-
-          {/* Player hero frame (mockup ③ outer frame; custom chrome = Phase 4) */}
-          <div
-            className="overflow-hidden rounded-2xl border border-[var(--lp-line-8)] bg-black"
-            style={{ boxShadow: 'var(--lp-player-shadow)' }}
-            onMouseEnter={() => setActiveRegion('player')}
-          >
-            <PanelVideoPlayer
-              videoUrl={videoUrl}
-              playerRef={playerRef}
-              shouldAutoplay={shouldAutoplay}
-              onUserPlayed={onUserPlayed}
-              onPlayStateChange={onPlayStateChange}
-              onTimeUpdate={setPlayerState}
-              startTime={startTime}
-              fill
-            />
-          </div>
-
-          {/* Tab switch row (mockup ④) — segment tabs + relevance legend */}
-          <div className="mb-1.5 mt-[30px] flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-1 rounded-[10px] border border-[var(--lp-line-7)] bg-[var(--lp-surface)] p-1">
-              {tabs.map(({ id, labelKey, fallback, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setCenterTab(id)}
-                  className={cn(
-                    'flex items-center gap-[7px] rounded-[7px] px-4 py-2 text-[13.5px] font-semibold transition-colors',
-                    centerTab === id
-                      ? 'bg-[var(--lp-toggle-active-bg)] text-[var(--lp-tab-active-fg)]'
-                      : 'text-[var(--lp-dim)] hover:text-[var(--lp-strong)]'
-                  )}
-                >
-                  <Icon className="h-[15px] w-[15px]" />
-                  {t(labelKey, fallback)}
-                </button>
-              ))}
-            </div>
-            {chapterSections.length > 0 && (
-              <div className="flex items-center gap-[13px] text-[11.5px] text-[var(--lp-faint)]">
-                <div className="flex items-center gap-[9px]">
-                  <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--lp-mute)]">
-                    {t('learning.relevanceLabel', '관련도')}
-                  </span>
-                  <span className="text-[10.5px] text-[var(--lp-mute)]">
-                    {t('learning.relevanceLow', '낮음')}
-                  </span>
-                  <RelevanceMeter level="low" />
-                  <RelevanceMeter level="mid" />
-                  <RelevanceMeter level="high" />
-                  <span className="text-[10.5px] text-[var(--lp-mute)]">
-                    {t('learning.relevanceHigh', '높음')}
-                  </span>
-                </div>
-                <span className="h-[11px] w-px bg-white/10" aria-hidden />
-                <span>
-                  {t('learning.chaptersCount', '{{count}}개 챕터', {
-                    count: chapterSections.length,
-                  })}
-                </span>
-              </div>
-            )}
-          </div>
-
           {/* Panels */}
           {centerTab === 'chapters' && (
             <ChapterList

@@ -1926,7 +1926,9 @@
     "relevanceHigh": "높음",
     "playingNow": "재생 중",
     "topicGroup": "주제군",
-    "videoFallbackTitle": "영상"
+    "videoFallbackTitle": "영상",
+    "nowWatchingVideo": "지금 보는 영상",
+    "nowReadingSection": "지금 읽는 구간"
   },
   "addCards": {
     "triggerChip": "+ 카드 추가",

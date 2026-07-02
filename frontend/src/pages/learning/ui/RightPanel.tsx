@@ -26,6 +26,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<RightTab>('chatbot');
   const setActiveRegion = useLearningStore((s) => s.setActiveRegion);
   const setNoteContext = useLearningStore((s) => s.setNoteContext);
+  const centerViewMode = useLearningStore((s) => s.centerViewMode);
   const activeSectionRef = useLearningStore((s) => s.activeSectionRef);
   const { cards } = useMandalaCards(mandalaId);
   const { book } = useMandalaBook(mandalaId);
@@ -108,8 +109,27 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
       className="flex w-[400px] shrink-0 flex-col border-l border-sidebar-border/40 pl-5 pr-5"
       onMouseEnter={() => setActiveRegion(activeTab === 'notes' ? 'notes' : 'chat')}
     >
-      {/* [VIDEO-VIEW] — ViewModeToggle moved to CenterPanel's top bar (mockup ①);
-          this panel starts directly with its own tabs. */}
+      {/* [VIDEO-VIEW R2] Context zone — same 60px rhythm as the center top bar.
+          Names WHICH book-index scope the memo/chatbot below applies to:
+          player mode = the current video (영상용 book-index item), note mode =
+          the section being read (노트용 book-index 구간). */}
+      <div className="flex h-[60px] shrink-0 items-center border-b border-sidebar-border/40 px-1 text-[12px] text-muted-foreground/60">
+        <span className="shrink-0">
+          {centerViewMode === 'note'
+            ? t('learning.nowReadingSection', '지금 읽는 구간')
+            : t('learning.nowWatchingVideo', '지금 보는 영상')}
+        </span>
+        <span className="shrink-0 px-1.5" aria-hidden>
+          ·
+        </span>
+        <span className="min-w-0 truncate text-foreground/75">
+          {(centerViewMode === 'note'
+            ? (activeSectionTitle ?? currentCard?.title)
+            : currentCard?.title) ?? '—'}
+        </span>
+      </div>
+
+      {/* ViewModeToggle moved to CenterPanel's top bar (mockup ①). */}
       <div className="flex shrink-0">
         {tabs.map(({ id, labelKey, icon: Icon }) => (
           <button
@@ -164,12 +184,7 @@ export function RightPanel({ mandalaId, videoId, playerRef }: RightPanelProps) {
           activeTab !== 'chatbot' && 'hidden'
         )}
       >
-        {activeSectionTitle && (
-          // §redesign — chat context (시안 chat-ctx): "지금 읽는 구간 · {제목}".
-          <div className="shrink-0 border-b border-white/[0.06] px-1 pb-2.5 pt-0.5 text-[12px] text-muted-foreground/70">
-            지금 읽는 구간 · <span className="text-muted-foreground">{activeSectionTitle}</span>
-          </div>
-        )}
+        {/* [R2] chat-ctx line superseded by the top context zone above. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <ChatAssistant
             key={videoId}

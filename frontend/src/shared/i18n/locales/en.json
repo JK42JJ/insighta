@@ -1918,7 +1918,9 @@
     "relevanceHigh": "High",
     "playingNow": "Playing",
     "topicGroup": "Group",
-    "videoFallbackTitle": "Video"
+    "videoFallbackTitle": "Video",
+    "nowWatchingVideo": "Now watching",
+    "nowReadingSection": "Now reading"
   },
   "addCards": {
     "triggerChip": "+ Add Cards",

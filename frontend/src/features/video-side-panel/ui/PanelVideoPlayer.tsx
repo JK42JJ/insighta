@@ -68,6 +68,7 @@ export function PanelVideoPlayer({
   const initialAutoplayRef = useRef(shouldAutoplay);
   const initialStartTimeRef = useRef(startTime);
   const initialYoutubeIdRef = useRef(youtubeId);
+  const initialFillRef = useRef(fill);
 
   // Poster facade — the videoId whose sharp poster overlay is shown (null =
   // hidden). YouTube's NATIVE cued/paused iframe poster is low-res/blurry; we
@@ -229,6 +230,8 @@ export function PanelVideoPlayer({
   // can't reach the new iframe → second-card "stays paused" bug.
   const initialStart = initialStartTimeRef.current;
   const initialYoutubeId = initialYoutubeIdRef.current;
+  // fill (learning video-view) keeps the NATIVE YT chrome (user decision) —
+  // PlayerChrome only overlays the relevance curve above it.
   const embedSrc = initialYoutubeId
     ? `https://www.youtube.com/embed/${initialYoutubeId}?autoplay=${initialAutoplayRef.current ? 1 : 0}&rel=0&modestbranding=1&enablejsapi=1${initialStart ? `&start=${Math.floor(initialStart)}` : ''}`
     : '';
