@@ -17,7 +17,7 @@ export interface TrendingVideo {
   channelId: string;
   channelTitle: string;
   categoryId: string;
-  publishedAt: string;
+  publishedAt: string | null;
   /** parseInt(item.statistics.viewCount). 0 if statistics omitted. */
   viewCount: number;
   /** parseInt(item.statistics.likeCount). null if hidden. */
@@ -125,7 +125,10 @@ function normalizeItem(item: YouTubeVideoItem, fallbackCategory: string): Trendi
     channelId: item.snippet?.channelId ?? '',
     channelTitle: item.snippet?.channelTitle ?? '',
     categoryId: item.snippet?.categoryId ?? fallbackCategory,
-    publishedAt: item.snippet?.publishedAt ?? new Date().toISOString(),
+    // No publish date from the API ⇒ store nothing — a collection-time stamp
+    // masquerading as a publish date is exactly the contamination class found
+    // on 781 prod rows (2026-07-02 measurement).
+    publishedAt: item.snippet?.publishedAt ?? null,
     viewCount: viewCountStr ? parseInt(viewCountStr, 10) || 0 : 0,
     likeCount: likeCountStr ? parseInt(likeCountStr, 10) || 0 : null,
   };

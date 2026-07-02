@@ -19,7 +19,7 @@ import {
   handleThumbnailError,
   handleThumbnailLoad,
 } from '@/shared/lib/image-utils';
-import { formatRelativeDate } from '@/shared/lib/format-date';
+import { formatCardDateLabel } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
 import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 import { ScrollableChipRow } from '@/shared/ui/scrollable-chip-row';
@@ -387,8 +387,10 @@ export function InsightCardItemV2({
   // briefly and then a real date like "4 weeks ago" 1s later — a
   // jarring swap that erodes trust in the data. With `null`, the slot
   // simply stays empty until the next refetch lands the real value.
+  // Honest label: a missing publish date must not masquerade as one —
+  // the createdAt fallback is rendered as "added N days ago" instead.
   const relDate = metadataComplete
-    ? formatRelativeDate(ytMeta.publishedAt ?? card.createdAt?.toISOString())
+    ? formatCardDateLabel(ytMeta.publishedAt, card.createdAt)
     : null;
   const hasNote = !!card.userNote?.trim();
   // CP475+ blockquote source priority (user-confirmed 2026-05-20):
