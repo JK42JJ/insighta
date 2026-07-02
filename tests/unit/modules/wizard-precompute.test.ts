@@ -70,6 +70,24 @@ jest.mock('@/config/wizard-precompute', () => ({
   loadWizardPrecomputeConfig: mockLoadConfig,
 }));
 
+// #1037 added fire-and-forget observability calls (trail log + placed-not-in
+// reclassify) into startPrecompute/consume — unmocked they hit real config/DB
+// at module scope, flipping the happy path to status=failed.
+jest.mock('@/modules/search-trace', () => ({
+  writeSearchTrace: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('@/skills/plugins/video-discover/v5/trace-candidates', () => ({
+  reclassifyPlacedNotIn: jest.fn().mockResolvedValue(undefined),
+}));
+// discover-tracing is dynamically imported in the consume path; its real
+// recordTrace writes through the (mocked) prisma client's $executeRaw and
+// inflates the INSERT call count the tests assert on.
+jest.mock('@/modules/discover-tracing', () => ({
+  withTraceContext: (_ctx: unknown, fn: () => unknown) => fn(),
+  recordTrace: jest.fn(),
+  getTraceContext: jest.fn(() => null),
+}));
+
 jest.mock('@/utils/logger', () => ({
   logger: {
     child: () => ({
@@ -152,6 +170,9 @@ describe('wizard-precompute — startPrecompute', () => {
       tier2_matches: 2,
       duration_ms: 1234,
       debug: { timing: { totalMs: 1234 } },
+      // v5 contract: diagnostics is always present (wizard-adapter.ts:52 reads
+      // it unguarded); #1037 trail log reads optional fields off it.
+      diagnostics: {},
     };
     mockCreate.mockResolvedValueOnce({});
     mockUpdate.mockResolvedValue({});
@@ -348,12 +369,14 @@ describe('wizard-precompute — consumePrecompute', () => {
     const elapsed = Date.now() - t0;
     expect(r.consumed).toBe(false);
     expect(r.reason).toBe('not-done');
-    // Should give up within ~1s (POLL_BUDGET_MS=1000). Lower bound allows
-    // for the polling interval (250ms) to catch the budget-exhausted state
-    // on its next tick. Upper bound guards against budget creep.
-    expect(elapsed).toBeGreaterThanOrEqual(800);
-    expect(elapsed).toBeLessThan(1500);
-  }, 5_000);
+    // Should give up within ~6s (POLL_BUDGET_MS=6_000 since #666 — the CP436
+    // 1s budget was raised with the settle-window work). Lower bound allows
+    // for the polling interval (250ms); upper bound guards budget creep.
+    // NOTE: the jest timeout MUST exceed the budget — a timed-out test leaks
+    // its still-running poll loop into the next test's mocks (double INSERT).
+    expect(elapsed).toBeGreaterThanOrEqual(5800);
+    expect(elapsed).toBeLessThan(7500);
+  }, 10_000);
 
   test('status=running → done within budget → consume succeeds', async () => {
     // First read: running. Subsequent reads: done.

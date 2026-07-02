@@ -114,6 +114,9 @@ jest.mock('@/skills/plugins/video-discover/v2/youtube-client', () => ({
   titleIndicatesShorts: jest.fn().mockReturnValue(false),
   titleHitsBlocklist: jest.fn().mockReturnValue(false),
   resolveSearchApiKeys: jest.fn().mockReturnValue(['test-api-key']),
+  // Added after this mock was written (videos.list key split) — executor.ts:577
+  // calls it at execute time, so a missing mock fails all tests in the suite.
+  resolveVideosApiKeys: jest.fn().mockReturnValue(['test-videos-key']),
 }));
 
 // ─── LLM keyword builder — return one search query per cell ──────────────────
