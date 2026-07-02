@@ -31,6 +31,10 @@ const v5EnvSchema = z.object({
   // Hard wall-clock cap for the whole short-probe phase (shared deadline
   // across all probes). 0 disables the gate. Fail-open past this.
   V5_SHORT_PROBE_DEADLINE_MS: z.coerce.number().int().min(0).max(15000).default(8000),
+  // P0 trust gate (scam-inflow 2026-07-03): live-search candidates below this
+  // view floor — or with UNKNOWN view count — are dropped fail-closed.
+  // 0 (default) = gate off = today's behavior; enable via prod compose.
+  V5_LIVE_VIEW_FLOOR: z.coerce.number().int().min(0).default(0),
   // CP492 — picker mode. 'llm' (default, current behavior) runs the OpenRouter
   // batch picker. 'cell_binning' skips the LLM and round-robins fanout
   // candidates by query cellIndex (9-cell balance + ~1s discover, no garbage
@@ -100,6 +104,8 @@ export interface V5Config {
   dedupHardCap: number;
   shortOverpickFactor: number;
   shortProbeDeadlineMs: number;
+  /** P0 trust gate — live candidates need view_count >= floor (NULL = reject). 0 = off. */
+  liveViewFloor: number;
   pickerMode: 'llm' | 'cell_binning';
   queryGen: 'rule' | 'llm';
   /** CP494 — pool-first backfill gate enabled. */
@@ -137,6 +143,7 @@ export function getV5Config(env: NodeJS.ProcessEnv = process.env): V5Config {
     dedupHardCap: p.V5_DEDUP_HARDCAP,
     shortOverpickFactor: p.V5_SHORT_OVERPICK_FACTOR,
     shortProbeDeadlineMs: p.V5_SHORT_PROBE_DEADLINE_MS,
+    liveViewFloor: p.V5_LIVE_VIEW_FLOOR,
     pickerMode: p.V5_PICKER_MODE,
     queryGen: p.V5_QUERY_GEN,
     poolBackfill: p.V5_POOL_BACKFILL,

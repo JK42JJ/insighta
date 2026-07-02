@@ -121,6 +121,7 @@ export interface V5ExecuteResult {
     perQuery: FanoutPerQuery[];
     /** CP491 — Shorts dropped by the post-pick short gate. */
     shortsDropped: number;
+    trustDropped: number;
     /** CP492 Track-1 — query-gen telemetry (mode/model/latency/llmCells/fellBack). */
     queryGen: QueryGenMeta;
     /** CP492 2차 gate — candidates dropped by the off-language script filter. */
@@ -359,6 +360,18 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
   }
   stage.shortMs = Date.now() - tShort0;
 
+  // 6b. P0 trust gate (scam-inflow, 2026-07-03): a 5-view impersonation channel
+  // reached the add-cards candidate list because the live path had NO view
+  // floor. Fail-closed: unknown view count cannot prove trustworthiness.
+  let trustDropped = 0;
+  if (cfg.liveViewFloor > 0) {
+    const beforeTrust = gatedCards.length;
+    gatedCards = gatedCards.filter(
+      (c) => c.viewCount != null && c.viewCount >= cfg.liveViewFloor
+    );
+    trustDropped = beforeTrust - gatedCards.length;
+  }
+
   // 7. Final slice to targetPicks (cards are score-sorted; filter preserved order).
   const finalCards = gatedCards.slice(0, cfg.targetPicks);
 
@@ -404,6 +417,7 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       durationMs: Date.now() - t0,
       pickerModel: pickerModelStr,
       shortsDropped,
+      trustDropped,
       stageMs: stage,
       abortedBatches,
       pickerTimedOut,
@@ -454,6 +468,7 @@ function emptyResult(args: {
       durationMs: Date.now() - args.t0,
       pickerModel: args.pickerCfg.model,
       shortsDropped: 0,
+      trustDropped: 0,
       stageMs: args.stage,
       abortedBatches: args.abortedBatches,
       pickerTimedOut: args.pickerTimedOut,
