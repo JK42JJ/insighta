@@ -189,10 +189,18 @@ describe('scoreCompleteness', () => {
     expect(r.score).toBeLessThan(PASS_THRESHOLD);
   });
 
-  test('fails when one_liner exceeds 20 chars', () => {
+  // CP504 (#973 ada0294f): one_liner length cap relaxed in scoreCompleteness —
+  // scored on non-emptiness only (rich-summary-v2-prompt.ts:731); the short-label
+  // constraint moved to optional toc_label. Long one_liner no longer penalized.
+  test('one_liner over 20 chars no longer penalized; empty one_liner fails', () => {
     const s = validSummary();
     s.core.one_liner = '가'.repeat(ONE_LINER_MAX_LEN + 1);
-    const r = scoreCompleteness(s);
+    let r = scoreCompleteness(s);
+    expect(r.score).toBe(1);
+    expect(r.reasons.some((x) => x.includes('one_liner'))).toBe(false);
+
+    s.core.one_liner = '';
+    r = scoreCompleteness(s);
     expect(r.score).toBeLessThan(1);
     expect(r.reasons.some((x) => x.includes('one_liner'))).toBe(true);
   });

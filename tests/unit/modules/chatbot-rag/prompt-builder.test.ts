@@ -378,8 +378,11 @@ describe('LAYER_BLOCKS shape', () => {
   });
 
   it('LAYER_BLOCKS_FALLBACK substitutes T for A-D blocks', () => {
-    expect(LAYER_BLOCKS_FALLBACK.video).toEqual(['T', 'U', 'H']);
-    expect(LAYER_BLOCKS_FALLBACK['video-time']).toEqual(['T', 'F', 'U', 'H']);
+    // CP477+15 (#742 b1ce8350): fallback layers gained structural blocks E/I/J/N
+    // and block order is now U → mandala → book → cards → note → video
+    // (prompt-builder.ts:239 LAYER_BLOCKS_FALLBACK).
+    expect(LAYER_BLOCKS_FALLBACK.video).toEqual(['U', 'E', 'I', 'J', 'N', 'T', 'H']);
+    expect(LAYER_BLOCKS_FALLBACK['video-time']).toEqual(['U', 'E', 'I', 'J', 'N', 'T', 'F', 'H']);
     for (const blocks of Object.values(LAYER_BLOCKS_FALLBACK)) {
       // Fallback layers must never carry the v2-grounded A-D blocks.
       expect(blocks).not.toContain('A');
@@ -426,14 +429,15 @@ describe('buildQwenSystemPrompt — full stack assembly', () => {
     expect(idxPersona).toBe(0);
     expect(idxRole).toBeGreaterThan(idxPersona);
     expect(idxExtended).toBeGreaterThan(idxRole);
-    // Per LAYER_BLOCKS.note = ['A','B','C','D','F','G','U','H'], A precedes
-    // F, G, U, H — and E is NOT in the note layer (mandala block only attaches
-    // to mandala/cell layers).
-    expect(idxA).toBeGreaterThan(idxExtended);
-    expect(idxE).toBe(-1);
+    // CP477+15 (#742 b1ce8350): LAYER_BLOCKS.note =
+    // ['U','E','I','J','N','A','B','C','D','F','G','H'] (prompt-builder.ts:230)
+    // — E now attaches to every mandala-scoped layer, and blocks render in
+    // user → mandala → video → state → note → RAG order.
+    expect(idxU).toBeGreaterThan(idxExtended);
+    expect(idxE).toBeGreaterThan(idxU);
+    expect(idxA).toBeGreaterThan(idxE);
     expect(idxF).toBeGreaterThan(idxA);
     expect(idxG).toBeGreaterThan(idxF);
-    expect(idxU).toBeGreaterThan(idxG);
-    expect(idxH).toBeGreaterThan(idxU);
+    expect(idxH).toBeGreaterThan(idxG);
   });
 });
