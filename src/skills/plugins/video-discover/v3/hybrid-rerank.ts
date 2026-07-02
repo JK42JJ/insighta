@@ -41,6 +41,7 @@ import { config } from '@/config/index';
 import { getPrismaClient } from '@/modules/database/client';
 import { logger } from '@/utils/logger';
 import { recordTrace } from '@/modules/discover-tracing';
+import { buildTsqueryString } from './tsquery-builder';
 import {
   rerank,
   CohereRerankConfigError,
@@ -308,22 +309,9 @@ export async function tsvectorKeywordCandidates(
   }
 }
 
-/**
- * Build a Postgres `to_tsquery('simple', …)` OR-string from free text.
- * Mirrors the inline tokenization of tsvectorKeywordCandidates (lines ~172-178)
- * deliberately, so the legacy v3 path stays byte-identical (no shared-refactor
- * risk on that function). Returns '' when no usable token remains.
- */
-function buildTsqueryString(text: string): string {
-  const tokens = text
-    .split(/[\s,/.;()[\]{}!?"'`~&|<>:*+\-=]+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0)
-    .map((t) => t.replace(/[':!&|()<>*]/g, ''))
-    .filter((t) => t.length > 0)
-    .filter((t, i, arr) => arr.indexOf(t) === i);
-  return tokens.join(' | ');
-}
+// buildTsqueryString + the W2 generic-filler stopword set live in the pure
+// ./tsquery-builder module (unit-testable in isolation without this file's
+// `@/` import chain). Imported at the top of this module.
 
 /**
  * CP494 안 A (per-cell tsquery) — video_pool match WITHOUT the global top-N
