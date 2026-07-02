@@ -26,6 +26,7 @@ import { formatRelativeDate } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
 import { handleThumbnailError, handleThumbnailLoad } from '@/shared/lib/image-utils';
 import type { AddCardCandidate } from '../model/useAddCards';
+import { isoToPublishedBucket } from '../lib/published-bucket';
 import type { AddCardsRound } from '../lib/persistence';
 
 interface AddCardsListProps {
@@ -252,16 +253,18 @@ function formatRoundFilters(
     if (map[filters.durationBucket]) parts.push(map[filters.durationBucket]);
   }
   if (filters.publishedAfter) {
-    const days = Math.round((Date.now() - new Date(filters.publishedAfter).getTime()) / 86_400_000);
-    const label =
-      days <= 8
-        ? t('addCards.round.pubWeek', '지난 1주')
-        : days <= 32
-          ? t('addCards.round.pubMonth', '지난 1개월')
-          : days <= 190
-            ? t('addCards.round.pubHalf', '지난 6개월')
-            : t('addCards.round.pubYear', '지난 1년');
-    parts.push(label);
+    // 2026-07-03 — shared bucket mapping (was a divergent inline copy that
+    // topped out at 1yr, so a 2yr search DISPLAYED as "지난 1년").
+    const labelByBucket: Record<string, string> = {
+      '7': t('addCards.round.pubWeek', '지난 1주'),
+      '30': t('addCards.round.pubMonth', '지난 1개월'),
+      '180': t('addCards.round.pubHalf', '지난 6개월'),
+      '365': t('addCards.round.pubYear', '지난 1년'),
+      '730': t('addCards.round.pub2y', '지난 2년'),
+      '1095': t('addCards.round.pub3y', '지난 3년'),
+    };
+    const bucket = isoToPublishedBucket(filters.publishedAfter);
+    if (labelByBucket[bucket]) parts.push(labelByBucket[bucket]);
   }
   if (filters.difficulty) parts.push(filters.difficulty);
   if (filters.keywords?.length) parts.push(filters.keywords.map((k) => `"${k}"`).join(' '));
