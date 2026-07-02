@@ -31,6 +31,13 @@
 
 ## Hard Rules
 
+### 🚨 짧은 시간 반복 서버(API) 호출 절대 금지 — "닭질" 금지 (절대 규칙, LEVEL-3, 2026-07-03 YouTube embed 차단 사고)
+- **동일 외부 서버/API(YouTube, LLM, DB, 로그인, 서드파티 전부)에 짧은 간격 반복 호출·반복 로드 절대 금지.** 어뷰즈 감지 → 서킷/락/계정·세션 블락 유발. 블락은 코드 버그와 달리 **시간으로만 풀리는 손실**이라 비용이 비대칭적으로 크다.
+- **2-strike 룰**: 같은 대상에 같은 액션 2회 실패 시 3회째 금지 — 중단하고 접근법을 전환 (전환 시 "직전 방법 X N회 실패 → Y로 전환" 1줄 명시 의무).
+- 재시도가 꼭 필요하면 exponential backoff + 최대 2회 + **근본 원인 가설 변경 동반**. 무가설 재시도 = 위반.
+- **진단/검증 루프도 동일**: 브라우저 자동화로 외부 리소스(YouTube embed 등)를 반복 로드하는 것도 API 호출 반복과 같은 위반.
+- 근거: 2026-07-03 자동화 검증 중 localhost에서 YouTube embed 수십 회 반복 로드 → YouTube가 해당 파티션 embed 차단 → dev 영상 재생 불능(TTL 대기 외 해제 불가). 과거 동일 계열: OpenRouter 서킷, DB 락, 계정 블락. 상세: `memory/feedback_no_repeated_hammering.md`.
+
 ### 🚨 LLM API 호출 금지 (예외 없음, 2026-04-15 재정 손실 사고)
 - **Anthropic API 직접 호출 금지** (Messages, Batch 모두)
 - **OpenRouter API 호출 금지**

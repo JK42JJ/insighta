@@ -1920,7 +1920,15 @@
     "viewModePlayer": "영상",
     "viewModeNote": "노트",
     "topicGroup": "주제군",
-    "videoFallbackTitle": "영상"
+    "videoFallbackTitle": "영상",
+    "tabChapters": "챕터",
+    "chaptersCount": "{{count}}개 챕터",
+    "chaptersEmpty": "챕터 정보가 아직 준비되지 않았어요. AI 요약이 생성되면 챕터가 나타납니다.",
+    "relevanceLow": "낮음",
+    "relevanceHigh": "높음",
+    "playingNow": "재생 중",
+    "nowWatchingVideo": "지금 보는 영상",
+    "nowReadingSection": "지금 읽는 구간"
   },
   "addCards": {
     "triggerChip": "+ 카드 추가",

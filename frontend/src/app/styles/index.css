@@ -1289,6 +1289,25 @@ html.dark .lemonsqueezy-loader {
   --lp-toggle-active-fg: #1a1b1e;
   --lp-avatar-grad: linear-gradient(135deg,#6d3a8f,#2a1840);
   --lp-avatar-fg: #e9d6f5;
+  /* [VIDEO-VIEW STEP3] — chapters tab + relevance meter tokens */
+  --lp-rel-high: #7fb69a;
+  --lp-rel-mid: #c9a36a;
+  --lp-rel-low: #76746e;
+  --lp-meter-off: rgba(255,255,255,0.13);
+  --lp-surface: #101216;
+  --lp-line-7: rgba(255,255,255,0.07);
+  --lp-line-6: rgba(255,255,255,0.06);
+  --lp-tab-active-fg: #15171c;
+  --lp-text: #cdcbc5;
+  --lp-num: #4f4d49;
+  --lp-desc: #8d8b86;
+  --lp-mute: #56544f;
+  --lp-accent-tint: rgba(201,163,106,0.06);
+  --lp-accent-border: rgba(201,163,106,0.30);
+  --lp-hover-tint: rgba(255,255,255,0.025);
+  /* relevance-curve overlay (the only custom element on the native player) */
+  --lp-head-glow: 0 0 8px rgba(201,163,106,0.85), 0 1px 3px rgba(0,0,0,0.6);
+  --lp-curve-neutral: #ffffff;
 
   background: #0e0f10;
 }
