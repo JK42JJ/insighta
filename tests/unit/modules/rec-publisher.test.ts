@@ -26,6 +26,8 @@ function makePayload(overrides: Partial<CardPayload> = {}): CardPayload {
     keyword: 'daily routine',
     source: 'auto_recommend',
     recReason: 'tier:gold',
+    publishedAt: null,
+    startSec: null,
     ...overrides,
   };
 }

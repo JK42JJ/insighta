@@ -149,8 +149,8 @@ describe('buildBookJson skeleton mode (gate[2]: cross-cell, ch sequential, intro
     expect(ch.intro).toBe('기초를 다지고 실전으로'); // POPULATED (legacy cell mode = '')
     expect(ch.sections).toHaveLength(2); // both topics, across cells
     // global atom resolution: section 0 ← vidA (cell0), section 1 ← vidB (cell1)
-    expect(ch.sections[0]!.atoms[0]!.vid).toBe('vidA');
-    expect(ch.sections[1]!.atoms[0]!.vid).toBe('vidB');
+    expect(ch.sections[0]!.atoms![0]!.vid).toBe('vidA');
+    expect(ch.sections[1]!.atoms![0]!.vid).toBe('vidB');
   });
 
   it('drops a skeleton chapter whose topic_refs all fail to resolve', () => {

@@ -23,7 +23,6 @@ import {
   factcheckChapterBody,
   buildFactcheckPrompt,
   type FactSentence,
-  type CheckResult,
 } from '../../../src/modules/mandala-book/book-factcheck';
 
 // Minimal mock CSE client (never throws, returns controlled items).
