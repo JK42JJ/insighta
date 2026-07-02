@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { pageScroll } from '@/shared/lib/page-scroll';
 
 interface LabelFilterPillsV2Props {
   /** 8 sector names from currentLevel.subjects */
@@ -36,7 +37,6 @@ const PILL_BASE =
   'shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[13px] font-medium transition-colors duration-150';
 const PILL_ACTIVE = 'bg-foreground text-background';
 const PILL_INACTIVE = 'bg-muted/40 text-muted-foreground hover:bg-muted/60';
-const SCROLL_DELTA = 200;
 
 export function LabelFilterPillsV2({
   sectors,
@@ -62,8 +62,8 @@ export function LabelFilterPillsV2({
     if (!el) return;
 
     const update = () => {
-      setCanScrollLeft(el.scrollLeft > 0);
-      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+      setCanScrollLeft(el.scrollLeft > 8);
+      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
     };
 
     update();
@@ -77,9 +77,8 @@ export function LabelFilterPillsV2({
     };
   }, [sectors.length, showNewlySynced]);
 
-  const handleScrollBy = (delta: number) => {
-    scrollRef.current?.scrollBy({ left: delta, behavior: 'smooth' });
-  };
+  // One full visible page per click (2026-07-02 James: "찔끔" 금지, 시원시원하게).
+  const handleScrollBy = (dir: 1 | -1) => pageScroll(scrollRef.current, dir);
 
   return (
     <div data-card-chrome className="relative mb-1.5">
@@ -136,7 +135,7 @@ export function LabelFilterPillsV2({
         <div className="absolute left-0 inset-y-0 z-10 flex items-center pr-3 pl-1 bg-gradient-to-r from-background via-background/95 to-transparent pointer-events-none">
           <button
             type="button"
-            onClick={() => handleScrollBy(-SCROLL_DELTA)}
+            onClick={() => handleScrollBy(-1)}
             aria-label={t('labelFilter.scrollLeft', 'Scroll left')}
             className="pointer-events-auto inline-flex items-center justify-center w-7 h-6 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
           >
@@ -150,7 +149,7 @@ export function LabelFilterPillsV2({
         <div className="absolute right-0 inset-y-0 z-10 flex items-center pl-3 pr-1 bg-gradient-to-l from-background via-background/95 to-transparent pointer-events-none">
           <button
             type="button"
-            onClick={() => handleScrollBy(SCROLL_DELTA)}
+            onClick={() => handleScrollBy(1)}
             aria-label={t('labelFilter.scrollRight', 'Scroll right')}
             className="pointer-events-auto inline-flex items-center justify-center w-7 h-6 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
           >

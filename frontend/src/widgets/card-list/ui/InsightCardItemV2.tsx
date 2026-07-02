@@ -22,6 +22,7 @@ import {
 import { formatRelativeDate } from '@/shared/lib/format-date';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
 import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
+import { ScrollableChipRow } from '@/shared/ui/scrollable-chip-row';
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -53,9 +54,7 @@ const RELEVANCE_TIER_STYLES = {
  * the exact score available on hover. null/unscored ⇒ no badge; <70 (gate-passed
  * but low) ⇒ no badge either. Tune cuts via RELEVANCE_TIER_CORE/PICK.
  */
-export function getRelevanceBadge(
-  pct: number | null | undefined
-): {
+export function getRelevanceBadge(pct: number | null | undefined): {
   tier: 'core' | 'pick';
   label: string;
   className: string;
@@ -669,11 +668,11 @@ export function InsightCardItemV2({
         )}
 
         {/* keyword chips — SINGLE line (2026-07-02 James: 2줄 랩핑 금지);
-            overflow scrolls horizontally (hidden scrollbar) so the card
-            height stays uniform and the design doesn't break. */}
+            all tags render (3-cap removed) in a chevron-paged lane — same
+            affordance as the sector filter bar (edge fade + arrows only
+            when that side overflows). */}
         {tags && tags.length > 0 && (
-          <div className="mt-3 flex flex-nowrap items-center gap-1.5 overflow-x-auto scrollbar-none">
-            {/* 2026-07-02 James: 3-cap 제거 — 1줄 스크롤이 감당하므로 전체 태그 표기 */}
+          <ScrollableChipRow className="mt-3" laneClassName="gap-1.5" fadeFrom="from-card">
             {tags.map((tg) => (
               <span
                 key={tg}
@@ -682,7 +681,7 @@ export function InsightCardItemV2({
                 #{tg}
               </span>
             ))}
-          </div>
+          </ScrollableChipRow>
         )}
 
         {/* meta — sector · views · date + relevance % */}
