@@ -150,6 +150,128 @@ export interface KeywordCandidate {
 }
 
 /**
+ * Per-cell COSINE recruit from video_pool (pool-serve, flag-gated).
+ *
+ * Complements the keyword (tsvector) recruit: keyword matches a cell only when
+ * a pool video's TITLE literally shares the cell-goal tokens, so semantically-
+ * relevant supply whose title uses different words (measured: 문장구조 cell vs
+ * 구문독해 videos) is never recruited. This ranks pool videos by cosine to the
+ * cell's stored embedding (mandala_embeddings.sub_goal_index, no re-embed).
+ *
+ * Precision is NOT owned here — the caller's gc-gate still decides. `distMax`
+ * only bounds Haiku cost (abstract goals pull noisy neighbours; the gate rejects
+ * them). Reuses the matchFromVideoPool CTE shape (eligible-first for pgvector
+ * perf, CP458). rec_score = cosine similarity (1 - distance).
+ */
+export async function cosinePoolCandidatesPerCell(
+  mandalaId: string,
+  cellIndices: ReadonlyArray<number>,
+  language: string,
+  excludeVideoIds: ReadonlyArray<string>,
+  perCellLimit: number,
+  sources: ReadonlyArray<string>,
+  distMax: number
+): Promise<KeywordCandidate[]> {
+  if (cellIndices.length === 0) return [];
+  const t0 = Date.now();
+  try {
+    const prisma = getPrismaClient();
+    const exclude = excludeVideoIds.length > 0 ? excludeVideoIds : [''];
+    const rows = await prisma.$queryRaw<
+      Array<{
+        cell_index: number;
+        video_id: string;
+        title: string;
+        description: string | null;
+        channel_name: string | null;
+        channel_id: string | null;
+        thumbnail_url: string | null;
+        view_count: bigint | null;
+        like_count: bigint | null;
+        duration_seconds: number | null;
+        published_at: Date | null;
+        dist: number;
+      }>
+    >(Prisma.sql`
+      WITH eligible AS (
+        SELECT video_id, title, description, channel_name, channel_id,
+               thumbnail_url, view_count, like_count, duration_seconds, published_at
+        FROM public.video_pool
+        WHERE is_active = true
+          AND language = ${language}
+          AND quality_tier IN ('gold', 'silver')
+          AND source = ANY(${sources}::text[])
+          AND video_id <> ALL(${exclude}::text[])
+      ),
+      cell_embs AS (
+        SELECT sub_goal_index AS cell_index, embedding
+        FROM public.mandala_embeddings
+        WHERE mandala_id = ${mandalaId}
+          AND level = 1
+          AND sub_goal_index = ANY(${[...cellIndices]}::int[])
+          AND embedding IS NOT NULL
+      ),
+      scored AS (
+        SELECT e.video_id, e.title, e.description, e.channel_name, e.channel_id,
+               e.thumbnail_url, e.view_count, e.like_count, e.duration_seconds,
+               e.published_at, ce.cell_index,
+               (vpe.embedding <=> ce.embedding) AS dist
+        FROM eligible e
+        JOIN public.video_pool_embeddings vpe ON vpe.video_id = e.video_id
+        CROSS JOIN cell_embs ce
+      ),
+      ranked AS (
+        SELECT s.*, ROW_NUMBER() OVER (
+          PARTITION BY s.cell_index ORDER BY s.dist ASC
+        ) AS rn
+        FROM scored s
+        WHERE s.dist <= ${distMax}
+      )
+      SELECT cell_index, video_id, title, description, channel_name, channel_id,
+             thumbnail_url, view_count, like_count, duration_seconds, published_at, dist
+      FROM ranked
+      WHERE rn <= ${perCellLimit}
+    `);
+
+    const out: KeywordCandidate[] = rows.map((r) => ({
+      videoId: r.video_id,
+      title: r.title,
+      description: r.description,
+      channelName: r.channel_name,
+      channelId: r.channel_id,
+      thumbnail: r.thumbnail_url,
+      viewCount: r.view_count != null ? Number(r.view_count) : null,
+      likeCount: r.like_count != null ? Number(r.like_count) : null,
+      durationSec: r.duration_seconds,
+      publishedAt: r.published_at,
+      cellIndex: r.cell_index,
+      rec_score: 1 - Number(r.dist),
+    }));
+
+    recordTrace({
+      step: 'hybrid_rerank.cosine_per_cell',
+      status: 'ok',
+      request: {
+        mandalaId,
+        cells: [...cellIndices],
+        sources: [...sources],
+        perCellLimit,
+        distMax,
+        exclude_count: excludeVideoIds.length,
+      },
+      response: { sql_row_count: rows.length },
+      latencyMs: Date.now() - t0,
+    });
+    return out;
+  } catch (err) {
+    log.warn('per-cell cosine pool recruit failed (non-fatal)', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  }
+}
+
+/**
  * video_pool tsvector keyword search by centerGoal ONLY.
  * subGoals are used for cell-assignment (argmax token-overlap), never for
  * the tsquery itself — including subGoal tokens caused cross-domain noise
