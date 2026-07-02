@@ -1910,7 +1910,9 @@
     "downloadHtml": "Download HTML",
     "restoreOriginal": "Restore original",
     "viewModePlayer": "Video",
-    "viewModeNote": "Note"
+    "viewModeNote": "Note",
+    "topicGroup": "Group",
+    "videoFallbackTitle": "Video"
   },
   "addCards": {
     "triggerChip": "+ Add Cards",
