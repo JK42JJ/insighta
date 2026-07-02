@@ -1963,7 +1963,9 @@
         "7d": "Past week",
         "30d": "Past month",
         "180d": "Past 6 months",
-        "365d": "Past year"
+        "365d": "Past year",
+        "730d": "2yr",
+        "1095d": "3yr"
       },
       "language": {
         "label": "Language",

@@ -23,6 +23,7 @@ import {
   saveSessionPicks,
   type AddCardsRound,
 } from '../lib/persistence';
+import { shouldAppendRound } from '../lib/round-guard';
 import { KeywordChipInput } from './KeywordChipInput';
 import { AddCardsFilters } from './AddCardsFilters';
 import { TargetLevelChips } from './TargetLevelChips';
@@ -102,6 +103,21 @@ export function AddCardsPanel() {
     const freshCards = data.cards;
     const freshIds = freshCards.map((c) => c.videoId);
     setRounds((prev) => {
+      // [HOTFIX 2026-07-03] cross-mandala leak: this effect re-fires on
+      // mandalaId change while the PREVIOUS mandala's success result is
+      // still held → mandala A's cards were appended AND PERSISTED as a
+      // round of mandala B. Only append a result requested for the
+      // currently open mandala, exactly once.
+      if (
+        !shouldAppendRound(
+          mutation.variables?.mandalaId,
+          mandalaId,
+          prev.map((r) => r.id),
+          data.roundId
+        )
+      ) {
+        return prev;
+      }
       const next: AddCardsRound[] = [
         {
           id: data.roundId,
