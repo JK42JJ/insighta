@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Check, GraduationCap } from 'lucide-react';
+import { Check, GraduationCap, Lock } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { cn } from '@/shared/lib/utils';
@@ -76,34 +76,39 @@ export function OnboardingChecklist() {
           {t('onboarding.chipHint', '한 번씩 해보면 가이드가 자동으로 사라져요.')}
         </p>
         <ul className="flex flex-col">
-          {TASK_GUIDES.map((guide) => {
+          {/* SEQUENTIAL steps (James: 라디오 아님, 넘버로 — 만다라 생성이
+              선행돼야 이후 진행). Numbered 1..5; a row is clickable only
+              when every previous step is done; later rows stay locked. */}
+          {TASK_GUIDES.map((guide, idx) => {
             const done = tasks.includes(guide.task);
+            const locked = !done && TASK_GUIDES.slice(0, idx).some((g) => !tasks.includes(g.task));
             return (
               <li key={guide.task}>
                 <button
                   type="button"
-                  disabled={done}
+                  disabled={done || locked}
                   onClick={() => handleRowClick(guide)}
                   className={cn(
                     'w-full flex items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[13px] transition-colors',
-                    done
-                      ? 'text-muted-foreground/60 cursor-default'
-                      : 'text-foreground hover:bg-foreground/[0.05]'
+                    done && 'text-muted-foreground/60 cursor-default',
+                    locked && 'text-muted-foreground/40 cursor-default',
+                    !done && !locked && 'text-foreground hover:bg-foreground/[0.05]'
                   )}
                 >
                   <span
                     className={cn(
-                      'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
-                      done
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border/70'
+                      'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[10.5px] font-semibold',
+                      done && 'border-primary bg-primary text-primary-foreground',
+                      locked && 'border-border/40 text-muted-foreground/40',
+                      !done && !locked && 'border-primary/60 text-primary'
                     )}
                   >
-                    {done && <Check className="h-3 w-3" strokeWidth={3} />}
+                    {done ? <Check className="h-3 w-3" strokeWidth={3} /> : idx + 1}
                   </span>
                   <span className={cn(done && 'line-through')}>
                     {t(guide.labelKey, guide.labelDefault)}
                   </span>
+                  {locked && <Lock className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/40" />}
                 </button>
               </li>
             );

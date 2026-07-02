@@ -60,13 +60,14 @@ function HelpPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      {/* Standalone page (no sidebar) — always give a way back (James 2026-07-02). */}
+      {/* Standalone page (no sidebar) — same ghost back button as the
+          learning/settings screens (James: 일관성). */}
       <button
         type="button"
         onClick={() => navigate('/')}
-        className="mb-6 inline-flex items-center gap-1.5 rounded-md border border-border/50 px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:border-border hover:bg-accent/30 hover:text-foreground"
+        className="mb-6 flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-150"
       >
-        <ArrowLeft className="h-3.5 w-3.5" />
+        <ArrowLeft className="w-4 h-4" />
         {t('settings.backToApp', '앱으로 돌아가기')}
       </button>
       <h1 className="text-2xl font-bold text-foreground mb-2">
