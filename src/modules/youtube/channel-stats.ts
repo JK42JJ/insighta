@@ -12,10 +12,11 @@
  */
 
 import { logger } from '@/utils/logger';
+import { MS_PER_HOUR } from '@/utils/time-constants';
 
 const log = logger.child({ module: 'channel-stats' });
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_TTL_MS = MS_PER_HOUR;
 const BATCH_SIZE = 50;
 
 export interface ChannelStats {
