@@ -265,6 +265,25 @@ export function CenterPanel({
     return { chapter, section: sec };
   })();
 
+  // [STEP1 fix 2026-07-03] breadcrumb follows the CURRENT VIDEO. activeSectionRef
+  // only changes on book-index clicks (CP445: auto-set once), so navigating to
+  // another video left the top-bar chapter stale (user bug report). Player mode
+  // derives the chapter containing the playing video; note mode keeps the
+  // reading position (activeSection).
+  const videoSection = (() => {
+    if (!book?.book?.chapters) return null;
+    for (const chapter of book.book.chapters) {
+      for (const sec of chapter.sections ?? []) {
+        if ((sec.atoms ?? []).some((a) => a.vid === videoId)) {
+          return { chapter, section: sec };
+        }
+      }
+    }
+    return null;
+  })();
+  const crumbSection =
+    centerViewMode === 'player' ? (videoSection ?? activeSection) : (activeSection ?? videoSection);
+
   const tabs: Array<{
     id: CenterTabId;
     labelKey: string;
@@ -307,14 +326,14 @@ export function CenterPanel({
               onExpandedChange={setNavExpanded}
             />
           )}
-          {!(navExpanded && centerViewMode === 'player') && activeSection && (
+          {!(navExpanded && centerViewMode === 'player') && crumbSection && (
             <div className="flex min-w-0 items-center gap-2.5 text-[12.5px] text-[var(--lp-faint)]">
               <span className="shrink-0 font-semibold text-[var(--lp-accent)]">
                 {t('learning.topicGroup', '주제군')}{' '}
-                {String((activeSection.chapter.ch ?? 0) + 1).padStart(2, '0')}
+                {String((crumbSection.chapter.ch ?? 0) + 1).padStart(2, '0')}
               </span>
               <span aria-hidden>·</span>
-              <span className="truncate">{activeSection.chapter.title}</span>
+              <span className="truncate">{crumbSection.chapter.title}</span>
             </div>
           )}
         </div>
