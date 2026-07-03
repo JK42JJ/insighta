@@ -520,6 +520,11 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               v5_per_query: v5Result.diagnostics.perQuery,
               // CP491 — Shorts dropped by the post-pick short gate (before→after observability).
               v5_shorts_dropped: v5Result.diagnostics.shortsDropped,
+              // P0 trust gate (2026-07-03) — candidates dropped by the live view
+              // floor and the channel blocklist. The floor canary rollback was
+              // diagnosed blind because these two were missing from the trace.
+              v5_trust_dropped: v5Result.diagnostics.trustDropped,
+              v5_channel_blocked_dropped: v5Result.diagnostics.channelBlockedDropped,
               // CP489 Phase 6 — emit returned videoIds so the Search Journey
               // Ledger can join per-round trace rows ↔ card_interactions
               // deterministically (no timestamp-window fuzziness). Bounded
