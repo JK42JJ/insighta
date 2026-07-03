@@ -73,14 +73,26 @@ export interface LiveGateResult<T> {
 }
 
 /**
- * Audio-language mismatch: null passes (fail-open); primary subtag must be
- * the target language or English (en content is globally acceptable per the
- * CP492 off-language gate contract: ko ∪ en survives on ko mandalas).
+ * ISO 639 codes that denote NO determinate spoken language — not a language
+ * mismatch. YouTube frequently mis-tags Korean/English speech as `zxx` (T1
+ * 2026-07-03: 3/3 dropped ETF videos were Korean but tagged zxx). Treating
+ * these as a mismatch drops legit content, so they fail-open like null:
+ *   zxx = no linguistic content, und = undetermined, mul = multiple,
+ *   mis = uncoded. (Determinate mismatches like `ar` / `ja` still drop.)
+ */
+const NON_LINGUISTIC_AUDIO = new Set(['zxx', 'und', 'mul', 'mis']);
+
+/**
+ * Audio-language mismatch: null / non-linguistic codes pass (fail-open);
+ * a determinate primary subtag must be the target language or English (en
+ * content is globally acceptable per the CP492 off-language gate contract:
+ * ko ∪ en survives on ko mandalas).
  */
 export function audioLanguageMismatch(audioLanguage: string | null, target: 'ko' | 'en'): boolean {
   if (!audioLanguage) return false;
   const primary = audioLanguage.trim().toLowerCase().split(/[-_]/)[0];
   if (!primary) return false;
+  if (NON_LINGUISTIC_AUDIO.has(primary)) return false;
   if (primary === 'en') return false;
   if (target === 'ko' && primary === 'ko') return false;
   return true;
