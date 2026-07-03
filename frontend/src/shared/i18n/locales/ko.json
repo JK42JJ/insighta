@@ -1928,7 +1928,8 @@
     "relevanceHigh": "높음",
     "playingNow": "재생 중",
     "nowWatchingVideo": "지금 보는 영상",
-    "nowReadingSection": "지금 읽는 구간"
+    "nowReadingSection": "지금 읽는 구간",
+    "overviewGroup": "개요"
   },
   "addCards": {
     "triggerChip": "+ 카드 추가",
