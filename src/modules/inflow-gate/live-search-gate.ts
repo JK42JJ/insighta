@@ -87,6 +87,39 @@ export function audioLanguageMismatch(audioLanguage: string | null, target: 'ko'
 }
 
 /**
+ * ON전략 A (rank-demote, 2026-07-03) — order candidates by CACHED gc without
+ * scoring or hiding. First search of a mandala has no cache → pick order
+ * preserved (supply-first, +0ms). Re-search benefits from the cache the async
+ * shadow scoring populated. Nothing is hidden; below-min items sink, they do
+ * not disappear (floor-incident lesson: empty screen worse than low relevance).
+ * No-flicker by construction: each round is one response ordered at request
+ * time; the async scoring of THIS round only improves the NEXT round.
+ */
+export async function orderByCachedGc<T extends LiveGateCandidate>(
+  candidates: T[],
+  mandalaId: string
+): Promise<{ ordered: T[]; cacheOrderedCount: number }> {
+  if (candidates.length === 0) return { ordered: candidates, cacheOrderedCount: 0 };
+  const prisma = getPrismaClient();
+  const rows = await prisma.video_mandala_relevance
+    .findMany({
+      where: { mandala_id: mandalaId, video_id: { in: candidates.map((c) => c.videoId) } },
+      select: { video_id: true, relevance_pct: true },
+    })
+    .catch(() => [] as Array<{ video_id: string; relevance_pct: number }>);
+  const gcById = new Map(rows.map((r) => [r.video_id, r.relevance_pct]));
+  // Stable sort: cached-gc desc first, uncached keep original pick order (after).
+  const withIdx = candidates.map((c, i) => ({ c, i, gc: gcById.get(c.videoId) ?? null }));
+  withIdx.sort((a, b) => {
+    if (a.gc == null && b.gc == null) return a.i - b.i; // both uncached: pick order
+    if (a.gc == null) return 1; // uncached sinks below cached
+    if (b.gc == null) return -1;
+    return b.gc - a.gc; // both cached: gc desc
+  });
+  return { ordered: withIdx.map((x) => x.c), cacheOrderedCount: gcById.size };
+}
+
+/**
  * Gate the exposed slice: language check on ALL candidates (free), then gc
  * scoring on the top-N slice only (cache-first, one bounded Haiku wave).
  * Never throws; a total scorer outage demotes everything instead of hiding.

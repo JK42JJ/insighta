@@ -37,7 +37,7 @@ export const liveSearchGateEnvSchema = z.object({
   LIVE_SEARCH_GC_MIN: z.coerce.number().int().min(0).max(100).default(60),
 });
 
-export type LiveSearchGateMode = 'off' | 'shadow' | 'on';
+export type LiveSearchGateMode = 'off' | 'shadow' | 'rank' | 'on';
 
 export interface LiveSearchGateConfig {
   mode: LiveSearchGateMode;
