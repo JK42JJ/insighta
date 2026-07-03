@@ -75,6 +75,8 @@ export interface V5Card {
   publishedAt: string | null;
   /** D-01 — videos.list snippet.defaultAudioLanguage (free field on the existing 1u call). */
   audioLanguage: string | null;
+  /** D-06-b — videos.list contentDetails.definition (hd/sd, free field). */
+  definition: string | null;
   durationSec: number | null;
   viewCount: number | null;
   cellIndex: number | null;
@@ -597,6 +599,7 @@ function assembleCard(
     '';
   const publishedAt = meta?.snippet?.publishedAt ?? fan?.publishedAt ?? null;
   const audioLanguage = meta?.snippet?.defaultAudioLanguage ?? null;
+  const definition = meta?.contentDetails?.definition ?? null;
   const durationSec = parseIsoDurationSeconds(meta?.contentDetails?.duration);
   const viewCountStr = meta?.statistics?.viewCount;
   const viewCount = viewCountStr ? Number(viewCountStr) : null;
@@ -609,6 +612,7 @@ function assembleCard(
     thumbnailUrl,
     publishedAt,
     audioLanguage,
+    definition,
     durationSec,
     viewCount: Number.isFinite(viewCount) ? viewCount : null,
     cellIndex: fan?.cellIndex ?? null,

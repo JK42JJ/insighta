@@ -40,6 +40,8 @@ export interface LiveGateCandidate {
   audioLanguage: string | null;
   /** D-06 — for the subscriber trust-signal shadow (channels.list batch). */
   channelId?: string | null;
+  /** D-06-b — hd/sd from videos.list contentDetails (free field). */
+  definition?: string | null;
 }
 
 export interface LiveGateContext {

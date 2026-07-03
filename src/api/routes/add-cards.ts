@@ -388,6 +388,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             // D-04-보정 shadow: score async off the response path — trace-only
             // would_* counters, ZERO exposure impact, zero added latency. The
             // 24-48h distribution decides the real threshold (no gut cutoffs).
+            const defByVideoId = new Map(v5Filtered.map((c) => [c.videoId, c.definition]));
             void gateLiveSearchCards(v5Filtered, liveGateCtx)
               .then((g) => {
                 recordTrace({
@@ -404,7 +405,12 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                     would_drop_subscriber_1000: g.wouldDropSub1000,
                     gc_scores: Array.from(g.gcByVideoId.entries())
                       .filter(([, v]) => v != null)
-                      .map(([id, v]) => ({ id, gc: v, subs: g.subsByVideoId.get(id) ?? null })),
+                      .map(([id, v]) => ({
+                        id,
+                        gc: v,
+                        subs: g.subsByVideoId.get(id) ?? null,
+                        hd: defByVideoId.get(id) ?? null,
+                      })),
                   },
                 });
               })
