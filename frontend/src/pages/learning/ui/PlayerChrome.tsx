@@ -48,8 +48,10 @@ const FILL_OPACITY_VIVID: Record<RelevanceLevel, [number, number]> = {
   low: [0.68, 0.14],
 };
 const GAP = 4;
-/** Measured 2026 embed UI: bar top ≈74px above bottom, ≈28px side insets. */
-const STRIP_BOTTOM_PX = 74;
+/** Measured 2026 embed UI: bar top ≈74px above bottom, ≈28px side insets.
+ *  +8px breathing room — flush placement made the pointer-accepting strip
+ *  swallow clicks aimed at the native bar (James, 2026-07-03). */
+const STRIP_BOTTOM_PX = 82;
 const STRIP_INSET_PX = 28;
 /** Scrim above the strip so tier colors read over bright footage (mockup
  *  .shade). Stops AT the strip base — never dims the native controls. */
