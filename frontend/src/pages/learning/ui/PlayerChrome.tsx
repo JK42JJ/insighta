@@ -57,6 +57,8 @@ function plateauPath(x0: number, x1: number, y: number): string {
 
 export function PlayerChrome({ sections }: PlayerChromeProps) {
   const playerDurationSec = useLearningStore((s) => s.playerDurationSec);
+  const playerState = useLearningStore((s) => s.playerState);
+  const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
 
   const chapters = useMemo(
     () =>
@@ -86,7 +88,13 @@ export function PlayerChrome({ sections }: PlayerChromeProps) {
   // emptiness: worse than nothing). Hide below 90% real-duration coverage.
   const coverage =
     duration > 0 && chapters.length ? chapters[chapters.length - 1]!.to_sec / duration : 0;
-  if (!plateaus.length || coverage < 0.9) return null;
+
+  // Pre-play the poster facade has NO progress bar or controls — the strip
+  // floating alone on a thumbnail reads as noise (user report vs mockup).
+  // The heatmap belongs to the control cluster: render it only once
+  // playback has started, so it always appears WITH the native bar.
+  const started = playerState === 'playing' || playerTimeSec > 0;
+  if (!started || !plateaus.length || coverage < 0.9) return null;
 
   return (
     // z-20 — must sit above PanelVideoPlayer's poster facade (z-10).
