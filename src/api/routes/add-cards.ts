@@ -400,9 +400,11 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                     cache_hits: g.cacheHits,
                     scored: g.scored,
                     latency_ms: g.latencyMs,
+                    would_drop_subscriber_100: g.wouldDropSub100,
+                    would_drop_subscriber_1000: g.wouldDropSub1000,
                     gc_scores: Array.from(g.gcByVideoId.entries())
                       .filter(([, v]) => v != null)
-                      .map(([id, v]) => ({ id, gc: v })),
+                      .map(([id, v]) => ({ id, gc: v, subs: g.subsByVideoId.get(id) ?? null })),
                   },
                 });
               })
