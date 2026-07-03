@@ -99,6 +99,46 @@ export function audioLanguageMismatch(audioLanguage: string | null, target: 'ko'
 }
 
 /**
+ * 축3 (commercial-bias) promo-penalty signals — CP510 / 2026-07-03.
+ *
+ * gc measures topical relevance and passes promo/aggro/scam-adjacent videos
+ * that ARE on-topic ("거래소 홍보맨 레버리지" scored gc 75). blocklist only
+ * catches confirmed scams. This third axis demotes (NEVER blocks) the
+ * commercial-bias tail. HARD rule (5+ signals disproved by data): COMPOUND or
+ * SPECIFIC only — a bare word cut學살s legit content. Validated on 11,484 real
+ * candidates: this set hits 0.06% with 0 false positives on the trade-compound
+ * axis; naive "수익률"/"사기"/"위험" hit legit finance/ML/history at 10×.
+ */
+// (a) scam-adjacent phrases — 돈복사 = blocklisted scam pattern, 참여시/100$ = affiliate bait.
+const PROMO_SCAM_PHRASE = /돈\s?복사|참여\s?시|100\s?\$|상위\s?1\s?%\s?만|무료\s?에어드[랍랍]/;
+// (b) aggro/pump clickbait — pump/hodl/FOMO hooks.
+const PROMO_AGGRO_PUMP = /떡상|존버|한\s?번\s?더\s?털|인생을?\s?바[꾸꿔]|급등\s?각/;
+// (c) FUD — dismissive/fear imperatives ONLY (bare 사기/위험/폭락 disproved — fraud-detection ML, 史記, risk-mgmt).
+const PROMO_FUD_PHRASE = /쉿코인|절대\s?사지\s?마|사지\s?마세요|다\s?사기입니다/;
+// (d) trade-promo COMPOUND — channel-name signal AND title trade-mechanics signal (both required).
+const PROMO_TRADE_CHANNEL = /거래소|선물|레버리지|퓨처/;
+const PROMO_TRADE_TITLE = /배율|청산가|매매\s?비밀|진입\s?가|손절가|시드\s?/;
+
+/**
+ * Returns the matched promo-penalty signal key, or null if the video is clean.
+ * Title-based (a/b/c) fire alone; the trade axis (d) requires BOTH channel and
+ * title mechanics to avoid FP on legit finance channels ("우리투자증권" etc.).
+ * Demote-only signal — callers rank lower, never hide (floor lesson).
+ */
+export function promoPenaltyMatch(
+  title: string | null,
+  channelTitle: string | null
+): 'scam' | 'aggro' | 'fud' | 'trade' | null {
+  const t = title ?? '';
+  const ch = channelTitle ?? '';
+  if (PROMO_SCAM_PHRASE.test(t)) return 'scam';
+  if (PROMO_AGGRO_PUMP.test(t)) return 'aggro';
+  if (PROMO_FUD_PHRASE.test(t)) return 'fud';
+  if (PROMO_TRADE_CHANNEL.test(ch) && PROMO_TRADE_TITLE.test(t)) return 'trade';
+  return null;
+}
+
+/**
  * ON전략 A (rank-demote, 2026-07-03) — order candidates by CACHED gc without
  * scoring or hiding. First search of a mandala has no cache → pick order
  * preserved (supply-first, +0ms). Re-search benefits from the cache the async
