@@ -31,6 +31,8 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
+import { loadLiveSearchGateConfig } from '@/config/live-search-gate';
+import { gateLiveSearchCards } from '@/modules/inflow-gate/live-search-gate';
 import { getMandalaManager } from '@/modules/mandala/manager';
 import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { getExcludedVideoIds } from '@/modules/exclude/excluded-videos';
@@ -363,7 +365,55 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             return true;
           });
 
-          const cards: AddCardCandidate[] = v5Filtered.map((c) => ({
+          // D-01 (2026-07-03) — live-search exposure gate: relevance (shared
+          // Haiku scorer, cache-first) + audio-language on the exposed slice.
+          // Trust axis intentionally absent (floor-canary incident). Flag-off
+          // = legacy passthrough.
+          const liveGateCfg = loadLiveSearchGateConfig(process.env);
+          let liveGate: Awaited<
+            ReturnType<typeof gateLiveSearchCards<(typeof v5Filtered)[number]>>
+          > | null = null;
+          let v5Exposed = v5Filtered;
+          const liveGateCtx = {
+            mandalaId,
+            centerGoal,
+            subGoals,
+            language: (language === 'en' ? 'en' : 'ko') as 'ko' | 'en',
+            cfg: liveGateCfg,
+          };
+          if (liveGateCfg.mode === 'on' && v5Filtered.length > 0) {
+            liveGate = await gateLiveSearchCards(v5Filtered, liveGateCtx);
+            v5Exposed = liveGate.exposed;
+          } else if (liveGateCfg.mode === 'shadow' && v5Filtered.length > 0) {
+            // D-04-보정 shadow: score async off the response path — trace-only
+            // would_* counters, ZERO exposure impact, zero added latency. The
+            // 24-48h distribution decides the real threshold (no gut cutoffs).
+            void gateLiveSearchCards(v5Filtered, liveGateCtx)
+              .then((g) => {
+                recordTrace({
+                  step: 'live_gate.shadow',
+                  status: 'ok',
+                  response: {
+                    would_gc_dropped: g.gcDropped,
+                    would_lang_dropped: g.langDropped,
+                    would_demoted: g.demoted,
+                    cache_hits: g.cacheHits,
+                    scored: g.scored,
+                    latency_ms: g.latencyMs,
+                    gc_scores: Array.from(g.gcByVideoId.entries())
+                      .filter(([, v]) => v != null)
+                      .map(([id, v]) => ({ id, gc: v })),
+                  },
+                });
+              })
+              .catch((err) => {
+                log.warn(
+                  `live_gate shadow failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+                );
+              });
+          }
+
+          const cards: AddCardCandidate[] = v5Exposed.map((c) => ({
             videoId: c.videoId,
             title: c.title,
             channel: c.channelTitle,
@@ -520,6 +570,17 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               v5_per_query: v5Result.diagnostics.perQuery,
               // CP491 — Shorts dropped by the post-pick short gate (before→after observability).
               v5_shorts_dropped: v5Result.diagnostics.shortsDropped,
+              // P0 trust gate (2026-07-03) — candidates dropped by the live view
+              // floor and the channel blocklist. The floor canary rollback was
+              // diagnosed blind because these two were missing from the trace.
+              v5_trust_dropped: v5Result.diagnostics.trustDropped,
+              v5_channel_blocked_dropped: v5Result.diagnostics.channelBlockedDropped,
+              // D-01 — live exposure gate counters (gc = shared Haiku scorer).
+              live_gate_gc_dropped: liveGate?.gcDropped ?? null,
+              live_gate_lang_dropped: liveGate?.langDropped ?? null,
+              live_gate_cache_hits: liveGate?.cacheHits ?? null,
+              live_gate_scored: liveGate?.scored ?? null,
+              live_gate_latency_ms: liveGate?.latencyMs ?? null,
               // CP489 Phase 6 — emit returned videoIds so the Search Journey
               // Ledger can join per-round trace rows ↔ card_interactions
               // deterministically (no timestamp-window fuzziness). Bounded
