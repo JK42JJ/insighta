@@ -44,6 +44,7 @@ describe('loadV3Config', () => {
       enableZeroHitRetry: true,
       enableUserCuratedIngest: true,
       emptyTitleGateShadow: false, // R4 shadow guard default (2026-07-04, BL-17)
+      emptyTitleGate: false, // R4 enforce default (2026-07-04, BL-17)
     });
   });
 
@@ -123,6 +124,7 @@ describe('loadV3Config', () => {
       enableZeroHitRetry: true,
       enableUserCuratedIngest: true,
       emptyTitleGateShadow: false, // R4 shadow guard default (2026-07-04, BL-17)
+      emptyTitleGate: false, // R4 enforce default (2026-07-04, BL-17)
     });
   });
 
@@ -287,5 +289,25 @@ describe('loadV3Config', () => {
     // Explicit false / empty / unset all collapse to default false.
     expect(loadV3Config({ V3_EMPTY_TITLE_GATE_SHADOW: 'false' }).emptyTitleGateShadow).toBe(false);
     expect(loadV3Config({ V3_EMPTY_TITLE_GATE_SHADOW: '' }).emptyTitleGateShadow).toBe(false);
+  });
+
+  test('V3_EMPTY_TITLE_GATE (enforce) defaults false (unset = no-op); explicit true opts in (R4, BL-17)', () => {
+    // Default: enforce OFF — mandala-filter.ts never actually drops.
+    expect(loadV3Config({}).emptyTitleGate).toBe(false);
+    // Explicit opt-in.
+    expect(loadV3Config({ V3_EMPTY_TITLE_GATE: 'true' }).emptyTitleGate).toBe(true);
+    expect(loadV3Config({ V3_EMPTY_TITLE_GATE: '  TRUE  ' }).emptyTitleGate).toBe(true);
+    // Explicit false / empty / unset all collapse to default false.
+    expect(loadV3Config({ V3_EMPTY_TITLE_GATE: 'false' }).emptyTitleGate).toBe(false);
+    expect(loadV3Config({ V3_EMPTY_TITLE_GATE: '' }).emptyTitleGate).toBe(false);
+    // Independent from the shadow flag — enabling one does not flip the other.
+    expect(
+      loadV3Config({ V3_EMPTY_TITLE_GATE: 'true', V3_EMPTY_TITLE_GATE_SHADOW: 'false' })
+        .emptyTitleGate
+    ).toBe(true);
+    expect(
+      loadV3Config({ V3_EMPTY_TITLE_GATE: 'true', V3_EMPTY_TITLE_GATE_SHADOW: 'false' })
+        .emptyTitleGateShadow
+    ).toBe(false);
   });
 });

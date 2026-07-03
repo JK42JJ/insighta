@@ -166,6 +166,18 @@ export interface MandalaFilterInput {
    * pre-R4 behavior. Gated by `V3_EMPTY_TITLE_GATE_SHADOW` (see v3/config.ts).
    */
   emptyTitleGateShadow?: boolean;
+  /**
+   * R4 enforce (2026-07-04, BL-17) — actually REJECT blank/whitespace-only
+   * title candidates (real `continue`/drop), independent of
+   * `emptyTitleGateShadow` above. See that field's JSDoc for the root-cause
+   * writeup (stale Tier 1 embeddings surviving a title SCRUB).
+   *
+   * Defaults to `false` (unset = no-op): pre-R4 behavior is bit-identical
+   * when omitted. Gated by `V3_EMPTY_TITLE_GATE` (see v3/config.ts) — a
+   * separate kill switch from the shadow-instrumentation flag so shadow-only
+   * measurement runs stay non-invasive even after this code path ships.
+   */
+  emptyTitleGate?: boolean;
 }
 
 export interface ScoreWeights {
@@ -235,6 +247,12 @@ export interface MandalaFilterStats {
    * `input.emptyTitleGateShadow` is false/omitted (default).
    */
   wouldRejectEmptyTitle: number;
+  /**
+   * R4 enforce (2026-07-04, BL-17) — count of candidates ACTUALLY dropped
+   * because their `title` was blank/whitespace-only. Only non-zero when
+   * `input.emptyTitleGate` is true; always 0 otherwise (default — no-op).
+   */
+  droppedByEmptyTitle: number;
 }
 
 export function applyMandalaFilter<T extends FilterCandidate>(
@@ -303,6 +321,7 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     droppedByJaccardBelowThreshold: 0,
     droppedByCellScoreBelowThreshold: 0,
     wouldRejectEmptyTitle: 0,
+    droppedByEmptyTitle: 0,
     centerTokens: [...centerTokens],
     subGoalTokenCounts: subGoalTokens.map((s) => s.size),
     passedByFocusTag: 0,
@@ -321,6 +340,14 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     // below, so byCell output is byte-identical regardless of the flag.
     if (input.emptyTitleGateShadow && isBlankTitle(c.title)) {
       stats.wouldRejectEmptyTitle++;
+    }
+
+    // R4 enforce (2026-07-04, BL-17) — real reject. Independent kill switch
+    // from the shadow flag above; a candidate the gate cannot evaluate
+    // (blank title = no text signal) should be dropped, not admitted.
+    if (input.emptyTitleGate && isBlankTitle(c.title)) {
+      stats.droppedByEmptyTitle++;
+      continue;
     }
 
     const titleTokens = tokenize(c.title, input.language);

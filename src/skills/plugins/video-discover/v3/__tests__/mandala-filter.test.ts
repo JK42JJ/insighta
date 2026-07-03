@@ -912,3 +912,134 @@ describe('applyMandalaFilterWithStats — empty-title shadow guard (R4, enforce=
     expect(on.stats.wouldRejectEmptyTitle).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// R4 empty-title ENFORCE (2026-07-04, BL-17) — real reject, code-path-only.
+// V3_EMPTY_TITLE_GATE stays OFF in prod until a separate flip decision; this
+// suite proves the drop path is correct while the flag defaults false.
+// ---------------------------------------------------------------------------
+
+describe('applyMandalaFilterWithStats — empty-title ENFORCE gate (R4, code-path only)', () => {
+  const input = {
+    centerGoal: '1달 일일 루틴으로 전문가되기',
+    subGoals: [
+      '전문 분야 선정 및 학습 계획 수립',
+      '매일 집중 학습 시간 확보 및 루틴화',
+      '실무 프로젝트 진행 및 포트폴리오 구축',
+      '전문 커뮤니티 참여 및 네트워킹',
+      '월간 집중 전문화',
+      '지식 체계화 및 아웃풋 생산',
+      '피드백 수집 및 개선 사이클',
+      '일일 진도 추적 및 동기 유지',
+    ],
+    language: 'ko' as const,
+    centerGateMode: 'semantic' as const,
+    centerEmbedding: [1, 0.2, 0, 0, 0, 0, 0, 0],
+    subGoalEmbeddings: [
+      [1, 0.2, 0, 0, 0, 0, 0, 0],
+      [0, 0, 1, 0, 0, 0, 0, 0],
+      [0, 0, 0, 1, 0, 0, 0, 0],
+      [0, 0, 0, 0, 1, 0, 0, 0],
+      [0, 0, 0, 0, 0, 1, 0, 0],
+      [0, 0, 0, 0, 0, 0, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 1],
+      [0, 0, 1, 1, 0, 0, 0, 0],
+    ],
+  };
+  const staleVec = [0.95, 0.25, 0, 0, 0, 0, 0, 0];
+  const blankTitleCandidate = cand('zombie1', '', 'stale description', null);
+  const whitespaceTitleCandidate = cand('zombie2', '   ', '', null);
+  const normalCandidate = cand('p1', '하루 습관 형성하는 법', '', null);
+  const embeddings = new Map([
+    ['zombie1', staleVec],
+    ['zombie2', staleVec],
+    ['p1', staleVec],
+  ]);
+
+  test('both flags OFF (default) — byte-identical to pre-R4 baseline', () => {
+    const withoutFlags = applyMandalaFilterWithStats(
+      [blankTitleCandidate, whitespaceTitleCandidate, normalCandidate],
+      { ...input, candidateEmbeddings: embeddings }
+    );
+    const withExplicitFalse = applyMandalaFilterWithStats(
+      [blankTitleCandidate, whitespaceTitleCandidate, normalCandidate],
+      {
+        ...input,
+        candidateEmbeddings: embeddings,
+        emptyTitleGateShadow: false,
+        emptyTitleGate: false,
+      }
+    );
+    const flatten = (m: ReturnType<typeof applyMandalaFilterWithStats>['byCell']) =>
+      Array.from(m.values())
+        .flat()
+        .map((a) => ({ id: a.candidate.videoId, score: a.score, cellIndex: a.cellIndex }));
+    expect(flatten(withoutFlags.byCell)).toEqual(flatten(withExplicitFalse.byCell));
+    expect(withoutFlags.stats.wouldRejectEmptyTitle).toBe(0);
+    expect(withoutFlags.stats.droppedByEmptyTitle).toBe(0);
+    // Both zombies still admitted — gate never fires without the flags.
+    const allIds = flatten(withoutFlags.byCell).map((a) => a.id);
+    expect(allIds).toEqual(expect.arrayContaining(['zombie1', 'zombie2', 'p1']));
+  });
+
+  test('SHADOW ON only, ENFORCE OFF — count only, batch unchanged (regression guard)', () => {
+    const shadowOnly = applyMandalaFilterWithStats(
+      [blankTitleCandidate, whitespaceTitleCandidate, normalCandidate],
+      { ...input, candidateEmbeddings: embeddings, emptyTitleGateShadow: true }
+    );
+    expect(shadowOnly.stats.wouldRejectEmptyTitle).toBe(2);
+    expect(shadowOnly.stats.droppedByEmptyTitle).toBe(0);
+    const flat = Array.from(shadowOnly.byCell.values()).flat();
+    const ids = flat.map((a) => a.candidate.videoId);
+    // No enforcement — all three candidates still present.
+    expect(ids).toEqual(expect.arrayContaining(['zombie1', 'zombie2', 'p1']));
+    expect(ids).toHaveLength(3);
+  });
+
+  test("ENFORCE ON — blank title ('') actually dropped", () => {
+    const { byCell, stats } = applyMandalaFilterWithStats([blankTitleCandidate], {
+      ...input,
+      candidateEmbeddings: embeddings,
+      emptyTitleGate: true,
+    });
+    expect(stats.droppedByEmptyTitle).toBe(1);
+    const flat = Array.from(byCell.values()).flat();
+    expect(flat.some((a) => a.candidate.videoId === 'zombie1')).toBe(false);
+  });
+
+  test('ENFORCE ON — whitespace-only title also actually dropped', () => {
+    const { byCell, stats } = applyMandalaFilterWithStats([whitespaceTitleCandidate], {
+      ...input,
+      candidateEmbeddings: embeddings,
+      emptyTitleGate: true,
+    });
+    expect(stats.droppedByEmptyTitle).toBe(1);
+    const flat = Array.from(byCell.values()).flat();
+    expect(flat.some((a) => a.candidate.videoId === 'zombie2')).toBe(false);
+  });
+
+  test('ENFORCE ON — normal title survives (0 over-rejection) + drop count exact', () => {
+    const { byCell, stats } = applyMandalaFilterWithStats(
+      [blankTitleCandidate, whitespaceTitleCandidate, normalCandidate],
+      { ...input, candidateEmbeddings: embeddings, emptyTitleGate: true }
+    );
+    expect(stats.droppedByEmptyTitle).toBe(2);
+    const flat = Array.from(byCell.values()).flat();
+    const ids = flat.map((a) => a.candidate.videoId);
+    expect(ids).toEqual(['p1']);
+    expect(stats.output).toBe(1);
+  });
+
+  test('ENFORCE ON with SHADOW also ON — both counters fire consistently, still 1 real drop', () => {
+    const { byCell, stats } = applyMandalaFilterWithStats([blankTitleCandidate, normalCandidate], {
+      ...input,
+      candidateEmbeddings: embeddings,
+      emptyTitleGate: true,
+      emptyTitleGateShadow: true,
+    });
+    expect(stats.wouldRejectEmptyTitle).toBe(1);
+    expect(stats.droppedByEmptyTitle).toBe(1);
+    const flat = Array.from(byCell.values()).flat();
+    expect(flat.map((a) => a.candidate.videoId)).toEqual(['p1']);
+  });
+});
