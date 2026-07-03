@@ -780,3 +780,135 @@ describe('applyMandalaFilter — semantic cell assignment via subGoalEmbeddings'
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// R4 empty-title shadow guard (2026-07-04, BL-17) — classify only, enforce = 0
+// ---------------------------------------------------------------------------
+
+describe('applyMandalaFilterWithStats — empty-title shadow guard (R4, enforce=0)', () => {
+  // Mirrors the prod bug: a Tier 1 candidate whose video_pool row title was
+  // SCRUBbed to '' but whose stale embedding still clears the semantic
+  // cosine gate (candidateEmbeddings keyed by videoId, independent of the
+  // current title text).
+  const input = {
+    centerGoal: '1달 일일 루틴으로 전문가되기',
+    subGoals: [
+      '전문 분야 선정 및 학습 계획 수립',
+      '매일 집중 학습 시간 확보 및 루틴화',
+      '실무 프로젝트 진행 및 포트폴리오 구축',
+      '전문 커뮤니티 참여 및 네트워킹',
+      '월간 집중 전문화',
+      '지식 체계화 및 아웃풋 생산',
+      '피드백 수집 및 개선 사이클',
+      '일일 진도 추적 및 동기 유지',
+    ],
+    language: 'ko' as const,
+    centerGateMode: 'semantic' as const,
+    centerEmbedding: [1, 0.2, 0, 0, 0, 0, 0, 0],
+    // Semantic cell assignment too (mirrors prod Tier 1: cell routing also
+    // runs on embeddings, not title text) — cell 0 axis-aligned with the
+    // stale embedding below so the candidate clears BOTH gates on cosine
+    // alone, exactly like the prod zombie row.
+    subGoalEmbeddings: [
+      [1, 0.2, 0, 0, 0, 0, 0, 0],
+      [0, 0, 1, 0, 0, 0, 0, 0],
+      [0, 0, 0, 1, 0, 0, 0, 0],
+      [0, 0, 0, 0, 1, 0, 0, 0],
+      [0, 0, 0, 0, 0, 1, 0, 0],
+      [0, 0, 0, 0, 0, 0, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 1],
+      [0, 0, 1, 1, 0, 0, 0, 0],
+    ],
+  };
+  // High-cosine stale embedding — mirrors the prod cosine-recruit that let
+  // a blank-title zombie row through the semantic gate.
+  const staleVec = [0.95, 0.25, 0, 0, 0, 0, 0, 0];
+  const blankTitleCandidate = cand('zombie1', '', 'stale description', null);
+  const whitespaceTitleCandidate = cand('zombie2', '   ', '', null);
+  const normalCandidate = cand('p1', '하루 습관 형성하는 법', '', null);
+
+  test('flag OFF (default/unset) — wouldRejectEmptyTitle stays 0 even with a blank-title candidate', () => {
+    const { stats } = applyMandalaFilterWithStats([blankTitleCandidate], {
+      ...input,
+      candidateEmbeddings: new Map([['zombie1', staleVec]]),
+      // emptyTitleGateShadow intentionally omitted
+    });
+    expect(stats.wouldRejectEmptyTitle).toBe(0);
+  });
+
+  test("flag ON — blank title ('') classified as would-reject, but still admitted (enforce=0)", () => {
+    const { byCell, stats } = applyMandalaFilterWithStats([blankTitleCandidate], {
+      ...input,
+      candidateEmbeddings: new Map([['zombie1', staleVec]]),
+      emptyTitleGateShadow: true,
+    });
+    expect(stats.wouldRejectEmptyTitle).toBe(1);
+    // Classification only — the candidate must still be admitted exactly
+    // as it would be without the flag (stale embedding clears the gate).
+    const flat = Array.from(byCell.values()).flat();
+    expect(flat.some((a) => a.candidate.videoId === 'zombie1')).toBe(true);
+  });
+
+  test('flag ON — whitespace-only title also classified as would-reject', () => {
+    const { stats } = applyMandalaFilterWithStats([whitespaceTitleCandidate], {
+      ...input,
+      candidateEmbeddings: new Map([['zombie2', staleVec]]),
+      emptyTitleGateShadow: true,
+    });
+    expect(stats.wouldRejectEmptyTitle).toBe(1);
+  });
+
+  test('flag ON — normal non-empty title never counted (no over-flagging)', () => {
+    const { stats } = applyMandalaFilterWithStats([normalCandidate], {
+      ...input,
+      candidateEmbeddings: new Map([['p1', staleVec]]),
+      emptyTitleGateShadow: true,
+    });
+    expect(stats.wouldRejectEmptyTitle).toBe(0);
+  });
+
+  test('flag ON — mixed batch counts only the blank-title candidates', () => {
+    const { stats } = applyMandalaFilterWithStats(
+      [blankTitleCandidate, whitespaceTitleCandidate, normalCandidate],
+      {
+        ...input,
+        candidateEmbeddings: new Map([
+          ['zombie1', staleVec],
+          ['zombie2', staleVec],
+          ['p1', staleVec],
+        ]),
+        emptyTitleGateShadow: true,
+      }
+    );
+    expect(stats.wouldRejectEmptyTitle).toBe(2);
+  });
+
+  test('enforce=0 invariant — byCell output is byte-identical whether the flag is on or off', () => {
+    const candidates = [blankTitleCandidate, normalCandidate];
+    const embeddings = new Map([
+      ['zombie1', staleVec],
+      ['p1', staleVec],
+    ]);
+    const off = applyMandalaFilterWithStats(candidates, {
+      ...input,
+      candidateEmbeddings: embeddings,
+      emptyTitleGateShadow: false,
+    });
+    const on = applyMandalaFilterWithStats(candidates, {
+      ...input,
+      candidateEmbeddings: embeddings,
+      emptyTitleGateShadow: true,
+    });
+    const flatOff = Array.from(off.byCell.values())
+      .flat()
+      .map((a) => ({ id: a.candidate.videoId, score: a.score, cellIndex: a.cellIndex }));
+    const flatOn = Array.from(on.byCell.values())
+      .flat()
+      .map((a) => ({ id: a.candidate.videoId, score: a.score, cellIndex: a.cellIndex }));
+    expect(flatOn).toEqual(flatOff);
+    expect(off.stats.output).toBe(on.stats.output);
+    // Only the instrumentation counter differs.
+    expect(off.stats.wouldRejectEmptyTitle).toBe(0);
+    expect(on.stats.wouldRejectEmptyTitle).toBe(1);
+  });
+});

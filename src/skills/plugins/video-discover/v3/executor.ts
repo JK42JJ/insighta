@@ -479,6 +479,7 @@ async function executeImpl(
             candidateEmbeddings,
             semanticMinCosine: v3Config.semanticMinCosine,
             subGoalEmbeddings: state.subGoalEmbeddings,
+            emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
           });
           const keptIds = new Set<string>();
           for (const assignments of byCell.values()) {
@@ -1219,6 +1220,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       candidateEmbeddings,
       semanticMinCosine: v3Config.semanticMinCosine,
       subGoalEmbeddings: input.state.subGoalEmbeddings,
+      emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
     });
     debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
 
@@ -2043,6 +2045,7 @@ async function runDiscoverEphemeralImpl(
           centerEmbedding,
           candidateEmbeddings,
           semanticMinCosine: v3Config.semanticMinCosine,
+          emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
         });
         const slotById = new Map(allSlots.map((s) => [s.videoId, s]));
         const flattened: AssembledSlot[] = [];

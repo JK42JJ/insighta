@@ -43,6 +43,7 @@ describe('loadV3Config', () => {
       enableSignalExclude: true,
       enableZeroHitRetry: true,
       enableUserCuratedIngest: true,
+      emptyTitleGateShadow: false, // R4 shadow guard default (2026-07-04, BL-17)
     });
   });
 
@@ -121,6 +122,7 @@ describe('loadV3Config', () => {
       enableSignalExclude: true,
       enableZeroHitRetry: true,
       enableUserCuratedIngest: true,
+      emptyTitleGateShadow: false, // R4 shadow guard default (2026-07-04, BL-17)
     });
   });
 
@@ -272,5 +274,18 @@ describe('loadV3Config', () => {
     expect(loadV3Config({ V3_TIER2_OVERFETCH: 'false' }).tier2Overfetch).toBe(false);
     // Empty string → booleanFlag treats as false (matches other flags' contract)
     expect(loadV3Config({ V3_TIER2_OVERFETCH: '' }).tier2Overfetch).toBe(false);
+  });
+
+  test('V3_EMPTY_TITLE_GATE_SHADOW defaults false (unset = no-op); explicit true opts in (R4, BL-17)', () => {
+    // Default: shadow guard OFF — mandala-filter.ts never classifies.
+    expect(loadV3Config({}).emptyTitleGateShadow).toBe(false);
+    // Explicit opt-in.
+    expect(loadV3Config({ V3_EMPTY_TITLE_GATE_SHADOW: 'true' }).emptyTitleGateShadow).toBe(true);
+    expect(loadV3Config({ V3_EMPTY_TITLE_GATE_SHADOW: '  TRUE  ' }).emptyTitleGateShadow).toBe(
+      true
+    );
+    // Explicit false / empty / unset all collapse to default false.
+    expect(loadV3Config({ V3_EMPTY_TITLE_GATE_SHADOW: 'false' }).emptyTitleGateShadow).toBe(false);
+    expect(loadV3Config({ V3_EMPTY_TITLE_GATE_SHADOW: '' }).emptyTitleGateShadow).toBe(false);
   });
 });

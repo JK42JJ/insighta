@@ -138,6 +138,7 @@ function materialize(id: string, parametersJson: unknown): ResolvedAlgorithm {
     V3_ENABLE_SIGNAL_EXCLUDE: asStr(j['enableSignalExclude']),
     V3_ENABLE_ZERO_HIT_RETRY: asStr(j['enableZeroHitRetry']),
     V3_ENABLE_USER_CURATED_INGEST: asStr(j['enableUserCuratedIngest']),
+    V3_EMPTY_TITLE_GATE_SHADOW: asStr(j['emptyTitleGateShadow']),
   };
 
   const parsed = v3EnvSchema.safeParse(envLike);
@@ -172,6 +173,7 @@ function materialize(id: string, parametersJson: unknown): ResolvedAlgorithm {
     enableSignalExclude: d['V3_ENABLE_SIGNAL_EXCLUDE'] as boolean,
     enableZeroHitRetry: d['V3_ENABLE_ZERO_HIT_RETRY'] as boolean,
     enableUserCuratedIngest: d['V3_ENABLE_USER_CURATED_INGEST'] as boolean,
+    emptyTitleGateShadow: d['V3_EMPTY_TITLE_GATE_SHADOW'] as boolean,
   };
 
   return { id, parameters: cfg };
