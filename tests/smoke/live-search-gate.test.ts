@@ -52,6 +52,19 @@ describe('audioLanguageMismatch', () => {
     expect(audioLanguageMismatch('ko-KR', 'en')).toBe(true);
     expect(audioLanguageMismatch('th', 'ko')).toBe(true);
   });
+  test('non-linguistic ISO 639 codes fail-open — zxx/und/mul/mis are not a language mismatch (T1 2026-07-03)', () => {
+    // YouTube mis-tags Korean ETF videos as zxx; must not drop them.
+    expect(audioLanguageMismatch('zxx', 'ko')).toBe(false);
+    expect(audioLanguageMismatch('zxx', 'en')).toBe(false);
+    expect(audioLanguageMismatch('und', 'ko')).toBe(false);
+    expect(audioLanguageMismatch('mul', 'ko')).toBe(false);
+    expect(audioLanguageMismatch('mis', 'en')).toBe(false);
+  });
+  test('regression: zxx pass does NOT open determinate mismatches — ar still drops', () => {
+    expect(audioLanguageMismatch('ar', 'ko')).toBe(true);
+    expect(audioLanguageMismatch('ja', 'ko')).toBe(true);
+    expect(audioLanguageMismatch('ja', 'en')).toBe(true);
+  });
 });
 
 describe('gateLiveSearchCards', () => {
