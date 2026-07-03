@@ -64,6 +64,8 @@ export interface LiveGateResult<T> {
   wouldDropSub1000: number;
   gcDropped: number;
   langDropped: number;
+  /** L2 canary blocker — per-item audio labels of the language-dropped candidates. */
+  langDroppedItems: Array<{ videoId: string; audioLang: string | null; target: 'ko' | 'en' }>;
   cacheHits: number;
   scored: number;
   demoted: number;
@@ -100,9 +102,22 @@ export async function gateLiveSearchCards<T extends LiveGateCandidate>(
 
   // 1. Audio-language gate — free, applies to every candidate.
   let langDropped = 0;
+  const langDroppedItems: Array<{
+    videoId: string;
+    audioLang: string | null;
+    target: 'ko' | 'en';
+  }> = [];
   const langOk = candidates.filter((c) => {
     if (audioLanguageMismatch(c.audioLanguage, ctx.language)) {
       langDropped += 1;
+      // L2 canary blocker (2026-07-03): log the dropped item's audio label so
+      // "correctly dropped (真 off-lang)" vs "false positive (legit en mislabeled)"
+      // can be eyeballed before the lang axis is armed. count alone is not enough.
+      langDroppedItems.push({
+        videoId: c.videoId,
+        audioLang: c.audioLanguage,
+        target: ctx.language,
+      });
       return false;
     }
     return true;
@@ -246,6 +261,7 @@ export async function gateLiveSearchCards<T extends LiveGateCandidate>(
     wouldDropSub1000,
     gcDropped,
     langDropped,
+    langDroppedItems,
     cacheHits,
     scored,
     demoted: demotedScored.length + tail.length,
