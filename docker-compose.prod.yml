@@ -110,6 +110,10 @@ services:
       # distribution collection (would_drop keys), zero exposure impact.
       # Blocking mode requires supervisor-verified thresholds first.
       - LIVE_SEARCH_GC_GATE=shadow
+      # D-04 §4-2 wizard shadow (supervisor-approved after CUT=false zero-
+      # impact proof, wizard-precompute.ts:179): judge scores + traces
+      # would_cut, slots untouched. CUT stays off until the canary gate.
+      - INFLOW_GATE_ENABLED=true
       # CP494 canary — pool-first backfill gate. Fill cells from the quota-FREE +
       # embedding-FREE video_pool (tsvector, v2_promoted ~1.1k) BEFORE live search;
       # a cell with ≥3 pool candidates drops its live search.list query → quota
