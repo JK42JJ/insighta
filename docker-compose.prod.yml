@@ -519,6 +519,15 @@ services:
       # Rollback: append ,batch_trend — but expect 45-100s Tier 1.
       - V3_TIER1_SOURCES=v2_promoted
       - V3_SEMANTIC_MIN_COSINE=0.5
+      # BL-17 (2026-07-04) — fail-closed empty-title guard. SCRUB (YouTube ToS
+      # 30d metadata wipe, is_active-agnostic) + /like zombie upsert leave ~691
+      # live v2_promoted rows with title=''; their empty-string embedding
+      # silently passes the semantic center-gate. ON → mandala-filter drops
+      # blank/whitespace-title candidates before scoring (fail-closed: a gate
+      # can't evaluate a blank title, so reject not admit). Measured blast:
+      # 14/88 cells touched, 2 newly-sparse (7→2, 4→2), 0 newly-empty.
+      # Rollback: remove line → code default off (DEFAULT_EMPTY_TITLE_GATE=false).
+      - V3_EMPTY_TITLE_GATE=on
       # CP457+ — per-step request/response capture for video-discovery
       # (LLM prompts, YouTube search, Cohere rerank, embeddings, results).
       # Writes to public.video_discover_traces (TTL 7d). Fire-and-forget;
