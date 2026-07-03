@@ -1,64 +1,93 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { useLearningStore } from '../model/useLearningStore';
 import { relevanceLevel, type RelevanceLevel } from '../lib/relevance-level';
+import { cn } from '@/shared/lib/utils';
 import type { VideoRichSummarySection } from '@/shared/lib/api-client';
+import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
 /**
- * Relevance curve overlay for the NATIVE YouTube player (user decision: the
- * curve is the ONLY custom element — every menu/control stays YouTube's).
- * A single pointer-events-none layer inside a `group/player relative` frame:
- * the curve appears WITH the native controls on hover, parked just above the
- * YT progress bar so both read as one navigator. High/mid/low chapters are
- * color-coded with a wide amplitude, the played portion is tinted gold, and
- * a playhead dot tracks the curve. Nothing here is clickable.
+ * Relevance heatmap for the NATIVE YouTube player — mockup B안, ported
+ * verbatim (James, 2026-07-03, artifact b679917f): organic asymmetric
+ * mounds whose tier-colored area encodes relevance, a soft dark scrim
+ * behind them (the mockup's shade — without it the fills wash out over
+ * bright footage), parked directly above the native progress bar.
+ *
+ * Geometry measured from the live 2026 embed UI (screenshot-calibrated):
+ * progress bar top ≈ 74px above the player's bottom edge, side insets
+ * ≈ 28px. Renders only after playback starts (pre-play the facade has no
+ * bar for the strip to belong to). pointer-events-none throughout.
  */
 
 interface PlayerChromeProps {
   sections: VideoRichSummarySection[];
+  /** Playback engaged (facade dismissed / autoplay intent). Store telemetry
+   *  alone breaks when the embed can't play (e.g. localhost YT block) —
+   *  the strip would then never appear with zero diagnosis. */
+  engaged?: boolean;
+  /** For strip click → seek to the hovered chapter (the strip band accepts
+   *  the pointer for per-segment hover, so its clicks must do something). */
+  playerRef?: React.MutableRefObject<YTPlayer | null>;
+  onUserPlayed?: () => void;
 }
 
-const CURVE_W = 1000;
-const CURVE_H = 100;
-const BASE_Y = 92;
-const GAP = 7;
-// Wide amplitude (user directive: mockup's 26/48/66 read as a wobbly line).
-const Y_FOR: Record<RelevanceLevel, number> = { high: 14, mid: 52, low: 84 };
-
-interface Pt {
-  x: number;
-  y: number;
-}
-
-/** Catmull-Rom → cubic bézier path (mockup buildPath, verbatim math). */
-function buildPath(pts: Pt[]): string {
-  if (pts.length < 2) return '';
-  const d = [`M${pts[0]!.x.toFixed(1)},${pts[0]!.y.toFixed(1)}`];
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] ?? pts[i]!;
-    const p1 = pts[i]!;
-    const p2 = pts[i + 1]!;
-    const p3 = pts[i + 2] ?? pts[i + 1]!;
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d.push(
-      `C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`
-    );
-  }
-  return d.join(' ');
-}
+const STRIP_W = 1000;
+const STRIP_H = 26;
+/** Plateau top y per tier → mound heights 22 / 17 / 12 (mockup spec). */
+const Y_FOR: Record<RelevanceLevel, number> = { high: 4, mid: 9, low: 14 };
+/** Mockup B fill gradients: [top, bottom] opacity per tier. */
+const FILL_OPACITY: Record<RelevanceLevel, [number, number]> = {
+  high: [0.55, 0.08],
+  mid: [0.5, 0.07],
+  low: [0.38, 0.05],
+};
+/** Vivid variant — the segment under the cursor (좌/우 이동 시 해당 구간만
+ *  선명, James 2026-07-03). */
+const FILL_OPACITY_VIVID: Record<RelevanceLevel, [number, number]> = {
+  high: [0.92, 0.22],
+  mid: [0.88, 0.2],
+  low: [0.68, 0.14],
+};
+const GAP = 4;
+/** Measured 2026 embed UI: bar top ≈74px above bottom, ≈28px side insets.
+ *  +8px breathing room — flush placement made the pointer-accepting strip
+ *  swallow clicks aimed at the native bar (James, 2026-07-03). */
+const STRIP_BOTTOM_PX = 82;
+const STRIP_INSET_PX = 28;
+/** Scrim above the strip so tier colors read over bright footage (mockup
+ *  .shade). Stops AT the strip base — never dims the native controls. */
+const SCRIM_EXTRA_PX = 82;
 
 function levelOf(s: VideoRichSummarySection): RelevanceLevel {
   return typeof s.relevance_pct === 'number' ? relevanceLevel(s.relevance_pct) : 'low';
 }
 
-export function PlayerChrome({ sections }: PlayerChromeProps) {
-  const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
-  const playerDurationSec = useLearningStore((s) => s.playerDurationSec);
+/** Organic mound path (mockup B language): soft rise from the left edge,
+ *  plateau near the right, slight settle at the exit edge. */
+function moundPath(x0: number, x1: number, y: number): string {
+  const w = x1 - x0;
+  const edgeInY = Math.min(STRIP_H - 4, y + 6);
+  const edgeOutY = Math.min(STRIP_H - 4, y + 2);
+  const c = (f: number) => (x0 + w * f).toFixed(1);
+  return [
+    `M${x0.toFixed(1)},${STRIP_H}`,
+    `L${x0.toFixed(1)},${edgeInY}`,
+    `C${c(0.25)},${y + 2} ${c(0.5)},${y} ${c(0.72)},${y}`,
+    `C${c(0.88)},${y} ${x1.toFixed(1)},${y + 1} ${x1.toFixed(1)},${edgeOutY}`,
+    `L${x1.toFixed(1)},${STRIP_H}`,
+    'Z',
+  ].join(' ');
+}
 
-  const basePathRef = useRef<SVGPathElement>(null);
-  const headRef = useRef<HTMLDivElement>(null);
+export function PlayerChrome({
+  sections,
+  engaged = false,
+  playerRef,
+  onUserPlayed,
+}: PlayerChromeProps) {
+  const playerDurationSec = useLearningStore((s) => s.playerDurationSec);
+  const playerState = useLearningStore((s) => s.playerState);
+  const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const chapters = useMemo(
     () =>
@@ -70,136 +99,157 @@ export function PlayerChrome({ sections }: PlayerChromeProps) {
   );
   const duration =
     playerDurationSec > 0 ? playerDurationSec : (chapters[chapters.length - 1]?.to_sec ?? 0);
-  const progress = duration > 0 ? Math.min(1, Math.max(0, playerTimeSec / duration)) : 0;
 
-  // Curve geometry (mockup renderRelCurve): one smooth curve; chapter
-  // boundaries punched out by a clip; per-level color-coded stroke.
-  const curve = useMemo(() => {
-    if (!chapters.length || duration <= 0) return null;
-    const pts: Pt[] = [{ x: 0, y: BASE_Y }];
-    for (const c of chapters) {
-      pts.push({ x: ((c.from_sec + c.to_sec) / 2 / duration) * CURVE_W, y: Y_FOR[levelOf(c)] });
-    }
-    pts.push({ x: CURVE_W, y: BASE_Y });
-    const lineD = buildPath(pts);
-    const gapRects = chapters.map((c, i) => {
-      const x0 = i === 0 ? 0 : (c.from_sec / duration) * CURVE_W + GAP / 2;
-      const x1 = i === chapters.length - 1 ? CURVE_W : (c.to_sec / duration) * CURVE_W - GAP / 2;
-      return { x: x0, w: Math.max(0, x1 - x0) };
-    });
-    // Per-level color coding — high green / mid gold / low dim (user directive:
-    // relevance must be identifiable from the curve alone).
-    const gradStops = chapters.flatMap((c) => {
+  const mounds = useMemo(() => {
+    if (!chapters.length || duration <= 0) return [];
+    const last = chapters.length - 1;
+    return chapters.flatMap((c, i) => {
+      const x0 = (c.from_sec / duration) * STRIP_W + (i === 0 ? 0 : GAP / 2);
+      const x1 = (c.to_sec / duration) * STRIP_W - (i === last ? 0 : GAP / 2);
+      if (x1 - x0 < 3) return [];
       const level = levelOf(c);
-      const color = level === 'low' ? 'var(--lp-curve-neutral)' : `var(--lp-rel-${level})`;
-      const op = level === 'high' ? 0.95 : level === 'mid' ? 0.75 : 0.35;
       return [
-        { off: (c.from_sec / duration) * 100, color, op },
-        { off: (c.to_sec / duration) * 100, color, op },
+        {
+          d: moundPath(x0, x1, Y_FOR[level]),
+          level,
+          key: `${c.from_sec}-${i}`,
+          idx: i,
+          fromSec: c.from_sec,
+        },
       ];
     });
-    return { lineD, gapRects, gradStops };
   }, [chapters, duration]);
 
-  // Playhead — walk the base path to the x of current progress (mockup paint).
-  useEffect(() => {
-    const base = basePathRef.current;
-    const head = headRef.current;
-    if (!base || !head || !curve) return;
-    const svg = base.ownerSVGElement;
-    if (!svg || typeof base.getTotalLength !== 'function') return;
-    const W = svg.clientWidth;
-    const H = svg.clientHeight;
-    if (!W || !H) return;
-    const targetX = progress * CURVE_W;
-    const total = base.getTotalLength();
-    let lo = 0;
-    let hi = total;
-    let pt = base.getPointAtLength(0);
-    for (let k = 0; k < 20; k++) {
-      const mid = (lo + hi) / 2;
-      pt = base.getPointAtLength(mid);
-      if (pt.x < targetX) lo = mid;
-      else hi = mid;
-    }
-    head.style.left = `${progress * W}px`;
-    head.style.top = `${(pt.y / CURVE_H) * H}px`;
-  }, [progress, curve]);
+  // Pointer x (0..1 of strip width) → chapter index under the cursor.
+  const chapterIdxAtRatio = (ratio: number): number | null => {
+    if (duration <= 0) return null;
+    const t = ratio * duration;
+    const i = chapters.findIndex((c) => t >= c.from_sec && t < c.to_sec);
+    return i >= 0 ? i : null;
+  };
 
-  // Coverage gate — segments must actually map the video. A 65-min video
-  // whose chapters cover only the first ~7 min would render as a squiggle
-  // crammed into the left edge + a long flat line (user bug report): worse
-  // than no curve. Hide unless the data spans ≥90% of the real duration.
+  // Coverage gate — hide when segments don't actually map the video.
   const coverage =
     duration > 0 && chapters.length ? chapters[chapters.length - 1]!.to_sec / duration : 0;
-  if (!curve || coverage < 0.9) return null;
+
+  // Pre-play there is no native bar for the strip to belong to (user report:
+  // mounds floating alone on the poster read as noise).
+  const started = engaged || playerState === 'playing' || playerTimeSec > 0;
+  if (!started || !mounds.length || coverage < 0.9) return null;
 
   return (
     // z-20 — must sit above PanelVideoPlayer's poster facade (z-10).
     <div className="pointer-events-none absolute inset-0 z-20" aria-hidden>
-      {/* Relevance curve — fades in WITH the native controls (hover), parked
-          just above the YT progress bar so the two read as one navigator. */}
-      <div className="absolute bottom-[52px] left-3 right-3 h-[56px] opacity-0 transition-opacity duration-200 group-hover/player:opacity-100">
-        <svg
-          width="100%"
-          height="56"
-          viewBox={`0 0 ${CURVE_W} ${CURVE_H}`}
-          preserveAspectRatio="none"
-          className="block h-full w-full overflow-visible"
-        >
-          <defs>
-            <clipPath id="lpRelProgClip">
-              <rect x="0" y="0" width={progress * CURVE_W} height={CURVE_H} />
-            </clipPath>
-            <clipPath id="lpGapClip">
-              {curve.gapRects.map((g, i) => (
-                <rect key={i} x={g.x} y="0" width={g.w} height={CURVE_H} />
-              ))}
-            </clipPath>
-            <linearGradient
-              id="lpRelStroke"
-              gradientUnits="userSpaceOnUse"
-              x1="0"
-              y1="0"
-              x2={CURVE_W}
-              y2="0"
-            >
-              {curve.gradStops.map((s, i) => (
-                <stop
-                  key={i}
-                  offset={`${s.off.toFixed(2)}%`}
-                  style={{ stopColor: s.color, stopOpacity: s.op }}
-                />
-              ))}
-            </linearGradient>
-          </defs>
-          <g clipPath="url(#lpGapClip)">
-            <path
-              ref={basePathRef}
-              d={curve.lineD}
-              fill="none"
-              stroke="url(#lpRelStroke)"
-              strokeWidth={3}
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-            {/* var() doesn't resolve in SVG presentation attributes — style it. */}
-            <path
-              d={curve.lineD}
-              fill="none"
-              style={{ stroke: 'var(--lp-accent)' }}
-              strokeWidth={3.5}
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-              clipPath="url(#lpRelProgClip)"
-            />
-          </g>
-        </svg>
+      <div className="opacity-0 transition-opacity duration-200 group-hover/player:opacity-100">
+        {/* Scrim (mockup .shade) — fades from the strip's base upward; the
+            native control zone below stays untouched. */}
         <div
-          ref={headRef}
-          className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
-          style={{ boxShadow: 'var(--lp-head-glow)' }}
+          className="absolute left-0 right-0"
+          style={{
+            bottom: STRIP_BOTTOM_PX,
+            height: STRIP_H + SCRIM_EXTRA_PX,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))',
+          }}
         />
+        {/* Heatmap strip — same width as the native progress bar. This band
+            (and ONLY this band) accepts the pointer: 좌/우 이동 시 커서 아래
+            구간이 선명해지고, 클릭하면 그 구간으로 시킹. */}
+        <div
+          className="pointer-events-auto absolute cursor-pointer"
+          style={{
+            bottom: STRIP_BOTTOM_PX,
+            left: STRIP_INSET_PX,
+            right: STRIP_INSET_PX,
+            height: STRIP_H,
+          }}
+          onMouseMove={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setHoverIdx(chapterIdxAtRatio((e.clientX - r.left) / r.width));
+          }}
+          onMouseLeave={() => setHoverIdx(null)}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const i = chapterIdxAtRatio((e.clientX - r.left) / r.width);
+            if (i == null) return;
+            try {
+              playerRef?.current?.seekTo(chapters[i]!.from_sec, true);
+              playerRef?.current?.playVideo?.();
+              onUserPlayed?.();
+            } catch {
+              // player not ready
+            }
+          }}
+        >
+          <svg
+            width="100%"
+            height={STRIP_H}
+            viewBox={`0 0 ${STRIP_W} ${STRIP_H}`}
+            preserveAspectRatio="none"
+            className="block h-full w-full"
+          >
+            <defs>
+              {(['high', 'mid', 'low'] as const).map((level) => (
+                <linearGradient key={level} id={`lpRelFill-${level}`} x1="0" y1="0" x2="0" y2="1">
+                  {/* var() doesn't resolve in SVG presentation attrs — style it. */}
+                  <stop
+                    offset="0"
+                    style={{
+                      stopColor: `var(--lp-rel-${level})`,
+                      stopOpacity: FILL_OPACITY[level][0],
+                    }}
+                  />
+                  <stop
+                    offset="1"
+                    style={{
+                      stopColor: `var(--lp-rel-${level})`,
+                      stopOpacity: FILL_OPACITY[level][1],
+                    }}
+                  />
+                </linearGradient>
+              ))}
+              {(['high', 'mid', 'low'] as const).map((level) => (
+                <linearGradient
+                  key={`v-${level}`}
+                  id={`lpRelFillVivid-${level}`}
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="0"
+                    style={{
+                      stopColor: `var(--lp-rel-${level})`,
+                      stopOpacity: FILL_OPACITY_VIVID[level][0],
+                    }}
+                  />
+                  <stop
+                    offset="1"
+                    style={{
+                      stopColor: `var(--lp-rel-${level})`,
+                      stopOpacity: FILL_OPACITY_VIVID[level][1],
+                    }}
+                  />
+                </linearGradient>
+              ))}
+            </defs>
+            {mounds.map((p) => (
+              <g key={p.key}>
+                <path d={p.d} fill={`url(#lpRelFill-${p.level})`} />
+                {/* vivid twin — cross-fades in while the cursor is on this
+                    segment (gradient swaps aren't animatable; opacity is). */}
+                <path
+                  d={p.d}
+                  fill={`url(#lpRelFillVivid-${p.level})`}
+                  className={cn(
+                    'transition-opacity duration-150',
+                    hoverIdx === p.idx ? 'opacity-100' : 'opacity-0'
+                  )}
+                />
+              </g>
+            ))}
+          </svg>
+        </div>
       </div>
     </div>
   );
