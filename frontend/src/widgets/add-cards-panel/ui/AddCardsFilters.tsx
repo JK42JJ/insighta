@@ -12,9 +12,8 @@
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/shared/lib/utils';
 import { useAddCardsPanelStore } from '../model/useAddCardsPanelStore';
+import { isoToPublishedBucket, MS_PER_DAY } from '../lib/published-bucket';
 import type { DurationBucket } from '../model/useAddCards';
-
-const MS_PER_DAY = 86_400_000;
 
 type FacetPreset<V extends string> = {
   value: V;
@@ -50,18 +49,6 @@ const PUBLISHED_PRESETS: ReadonlyArray<FacetPreset<string>> = [
 
 function daysAgoIso(days: number): string {
   return new Date(Date.now() - days * MS_PER_DAY).toISOString();
-}
-
-function isoToDaysBucket(iso: string): string {
-  const ts = Date.parse(iso);
-  if (!Number.isFinite(ts)) return '';
-  const days = Math.round((Date.now() - ts) / MS_PER_DAY);
-  if (days <= 8) return '7';
-  if (days <= 31) return '30';
-  if (days <= 181) return '180';
-  if (days <= 366) return '365';
-  if (days <= 731) return '730';
-  return '1095';
 }
 
 interface ChipRowProps<V extends string> {
@@ -122,7 +109,9 @@ export function AddCardsFilters({
 
   const minViewsValue = filters.minViewCount != null ? String(filters.minViewCount) : '';
   const durationValue: '' | DurationBucket = filters.durationBucket ?? '';
-  const publishedDaysValue = filters.publishedAfter ? isoToDaysBucket(filters.publishedAfter) : '';
+  const publishedDaysValue = filters.publishedAfter
+    ? isoToPublishedBucket(filters.publishedAfter)
+    : '';
 
   // i18n wrapper around defaultLabel — translation falls back to defaultLabel.
   const tr = (preset: FacetPreset<string>): string =>

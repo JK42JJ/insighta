@@ -1989,7 +1989,9 @@
       "nth": "Round {{n}} (more)",
       "foundCount": "{{count}} new",
       "tablist": "Search rounds",
-      "activePanel": "Active round results"
+      "activePanel": "Active round results",
+      "pub2y": "Past 2 years",
+      "pub3y": "Past 3 years"
     }
   },
   "onboarding": {

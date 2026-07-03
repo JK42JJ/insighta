@@ -1997,7 +1997,9 @@
       "nth": "{{n}}차 추가 검색",
       "foundCount": "{{count}}개 발견",
       "tablist": "검색 라운드",
-      "activePanel": "선택한 라운드 결과"
+      "activePanel": "선택한 라운드 결과",
+      "pub2y": "지난 2년",
+      "pub3y": "지난 3년"
     }
   },
   "onboarding": {
