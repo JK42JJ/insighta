@@ -374,15 +374,43 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             ReturnType<typeof gateLiveSearchCards<(typeof v5Filtered)[number]>>
           > | null = null;
           let v5Exposed = v5Filtered;
-          if (liveGateCfg.enabled && v5Filtered.length > 0) {
-            liveGate = await gateLiveSearchCards(v5Filtered, {
-              mandalaId,
-              centerGoal,
-              subGoals,
-              language: language === 'en' ? 'en' : 'ko',
-              cfg: liveGateCfg,
-            });
+          const liveGateCtx = {
+            mandalaId,
+            centerGoal,
+            subGoals,
+            language: (language === 'en' ? 'en' : 'ko') as 'ko' | 'en',
+            cfg: liveGateCfg,
+          };
+          if (liveGateCfg.mode === 'on' && v5Filtered.length > 0) {
+            liveGate = await gateLiveSearchCards(v5Filtered, liveGateCtx);
             v5Exposed = liveGate.exposed;
+          } else if (liveGateCfg.mode === 'shadow' && v5Filtered.length > 0) {
+            // D-04-보정 shadow: score async off the response path — trace-only
+            // would_* counters, ZERO exposure impact, zero added latency. The
+            // 24-48h distribution decides the real threshold (no gut cutoffs).
+            void gateLiveSearchCards(v5Filtered, liveGateCtx)
+              .then((g) => {
+                recordTrace({
+                  step: 'live_gate.shadow',
+                  status: 'ok',
+                  response: {
+                    would_gc_dropped: g.gcDropped,
+                    would_lang_dropped: g.langDropped,
+                    would_demoted: g.demoted,
+                    cache_hits: g.cacheHits,
+                    scored: g.scored,
+                    latency_ms: g.latencyMs,
+                    gc_scores: Array.from(g.gcByVideoId.entries())
+                      .filter(([, v]) => v != null)
+                      .map(([id, v]) => ({ id, gc: v })),
+                  },
+                });
+              })
+              .catch((err) => {
+                log.warn(
+                  `live_gate shadow failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+                );
+              });
           }
 
           const cards: AddCardCandidate[] = v5Exposed.map((c) => ({

@@ -106,9 +106,10 @@ services:
       # P0 trust canary ROLLED BACK 2026-07-03 morning: floor=1000 gutted niche
       # relevance (user-verified regression). Channel blocklist still guards scam.
       - V5_LIVE_VIEW_FLOOR=0
-      # D-01 (2026-07-03): live-search exposure gate — relevance (Haiku,
-      # cache-first, top-20 slice) + audio-language. Rollback = delete lines.
-      - LIVE_SEARCH_GC_GATE=true
+      # D-04-보정 (2026-07-03): live-search gate SHADOW — async trace-only
+      # distribution collection (would_drop keys), zero exposure impact.
+      # Blocking mode requires supervisor-verified thresholds first.
+      - LIVE_SEARCH_GC_GATE=shadow
       # CP494 canary — pool-first backfill gate. Fill cells from the quota-FREE +
       # embedding-FREE video_pool (tsvector, v2_promoted ~1.1k) BEFORE live search;
       # a cell with ≥3 pool candidates drops its live search.list query → quota

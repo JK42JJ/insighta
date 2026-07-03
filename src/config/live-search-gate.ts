@@ -14,14 +14,21 @@
 
 import { z } from 'zod';
 
-const boolFlag = z.preprocess((v) => {
-  if (v == null || v === '') return false;
-  const s = String(v).trim().toLowerCase();
-  return s === 'true' || s === '1' || s === 'yes';
-}, z.boolean());
+// D-04-보정 tri-state: off (legacy) / shadow (score async, trace-only, zero
+// exposure impact) / on (blocking gate). Legacy "true" maps to on.
+const gateMode = z.preprocess(
+  (v) => {
+    if (v == null || v === '') return 'off';
+    const s = String(v).trim().toLowerCase();
+    if (s === 'shadow') return 'shadow';
+    if (s === 'on' || s === 'true' || s === '1' || s === 'yes') return 'on';
+    return 'off';
+  },
+  z.enum(['off', 'shadow', 'on'])
+);
 
 export const liveSearchGateEnvSchema = z.object({
-  LIVE_SEARCH_GC_GATE: boolFlag.default(false as unknown as string),
+  LIVE_SEARCH_GC_GATE: gateMode.default('off' as never),
   /** Exposed slice scored per round; tail beyond this is demoted, not scored. */
   LIVE_SEARCH_GC_TOP_N: z.coerce.number().int().min(1).max(100).default(20),
   /** Haiku scoring concurrency (single wave when >= TOP_N keeps p95 low). */
@@ -30,8 +37,10 @@ export const liveSearchGateEnvSchema = z.object({
   LIVE_SEARCH_GC_MIN: z.coerce.number().int().min(0).max(100).default(60),
 });
 
+export type LiveSearchGateMode = 'off' | 'shadow' | 'on';
+
 export interface LiveSearchGateConfig {
-  enabled: boolean;
+  mode: LiveSearchGateMode;
   topN: number;
   burst: number;
   relevanceMin: number;
@@ -47,10 +56,10 @@ export function loadLiveSearchGateConfig(
     LIVE_SEARCH_GC_MIN: env['LIVE_SEARCH_GC_MIN'],
   });
   if (!parsed.success) {
-    return { enabled: false, topN: 20, burst: 20, relevanceMin: 60 };
+    return { mode: 'off', topN: 20, burst: 20, relevanceMin: 60 };
   }
   return {
-    enabled: parsed.data.LIVE_SEARCH_GC_GATE,
+    mode: parsed.data.LIVE_SEARCH_GC_GATE,
     topN: parsed.data.LIVE_SEARCH_GC_TOP_N,
     burst: parsed.data.LIVE_SEARCH_GC_BURST,
     relevanceMin: parsed.data.LIVE_SEARCH_GC_MIN,

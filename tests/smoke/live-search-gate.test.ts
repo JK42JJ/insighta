@@ -26,7 +26,7 @@ import {
   audioLanguageMismatch,
 } from '../../src/modules/inflow-gate/live-search-gate';
 
-const CFG = { enabled: true, topN: 3, burst: 3, relevanceMin: 60 };
+const CFG = { mode: 'on' as const, topN: 3, burst: 3, relevanceMin: 60 };
 const CTX = {
   mandalaId: '00000000-0000-0000-0000-000000000000',
   centerGoal: '머신러닝 마스터',
