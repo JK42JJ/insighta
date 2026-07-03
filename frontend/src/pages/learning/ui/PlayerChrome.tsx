@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useLearningStore } from '../model/useLearningStore';
 import { relevanceLevel, type RelevanceLevel } from '../lib/relevance-level';
+import { cn } from '@/shared/lib/utils';
 import type { VideoRichSummarySection } from '@/shared/lib/api-client';
+import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
 /**
  * Relevance heatmap for the NATIVE YouTube player — mockup B안, ported
@@ -22,6 +24,10 @@ interface PlayerChromeProps {
    *  alone breaks when the embed can't play (e.g. localhost YT block) —
    *  the strip would then never appear with zero diagnosis. */
   engaged?: boolean;
+  /** For strip click → seek to the hovered chapter (the strip band accepts
+   *  the pointer for per-segment hover, so its clicks must do something). */
+  playerRef?: React.MutableRefObject<YTPlayer | null>;
+  onUserPlayed?: () => void;
 }
 
 const STRIP_W = 1000;
@@ -33,6 +39,13 @@ const FILL_OPACITY: Record<RelevanceLevel, [number, number]> = {
   high: [0.55, 0.08],
   mid: [0.5, 0.07],
   low: [0.38, 0.05],
+};
+/** Vivid variant — the segment under the cursor (좌/우 이동 시 해당 구간만
+ *  선명, James 2026-07-03). */
+const FILL_OPACITY_VIVID: Record<RelevanceLevel, [number, number]> = {
+  high: [0.92, 0.22],
+  mid: [0.88, 0.2],
+  low: [0.68, 0.14],
 };
 const GAP = 4;
 /** Measured 2026 embed UI: bar top ≈74px above bottom, ≈28px side insets. */
@@ -63,10 +76,16 @@ function moundPath(x0: number, x1: number, y: number): string {
   ].join(' ');
 }
 
-export function PlayerChrome({ sections, engaged = false }: PlayerChromeProps) {
+export function PlayerChrome({
+  sections,
+  engaged = false,
+  playerRef,
+  onUserPlayed,
+}: PlayerChromeProps) {
   const playerDurationSec = useLearningStore((s) => s.playerDurationSec);
   const playerState = useLearningStore((s) => s.playerState);
   const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const chapters = useMemo(
     () =>
@@ -87,9 +106,25 @@ export function PlayerChrome({ sections, engaged = false }: PlayerChromeProps) {
       const x1 = (c.to_sec / duration) * STRIP_W - (i === last ? 0 : GAP / 2);
       if (x1 - x0 < 3) return [];
       const level = levelOf(c);
-      return [{ d: moundPath(x0, x1, Y_FOR[level]), level, key: `${c.from_sec}-${i}` }];
+      return [
+        {
+          d: moundPath(x0, x1, Y_FOR[level]),
+          level,
+          key: `${c.from_sec}-${i}`,
+          idx: i,
+          fromSec: c.from_sec,
+        },
+      ];
     });
   }, [chapters, duration]);
+
+  // Pointer x (0..1 of strip width) → chapter index under the cursor.
+  const chapterIdxAtRatio = (ratio: number): number | null => {
+    if (duration <= 0) return null;
+    const t = ratio * duration;
+    const i = chapters.findIndex((c) => t >= c.from_sec && t < c.to_sec);
+    return i >= 0 ? i : null;
+  };
 
   // Coverage gate — hide when segments don't actually map the video.
   const coverage =
@@ -114,14 +149,33 @@ export function PlayerChrome({ sections, engaged = false }: PlayerChromeProps) {
             background: 'linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))',
           }}
         />
-        {/* Heatmap strip — same width as the native progress bar. */}
+        {/* Heatmap strip — same width as the native progress bar. This band
+            (and ONLY this band) accepts the pointer: 좌/우 이동 시 커서 아래
+            구간이 선명해지고, 클릭하면 그 구간으로 시킹. */}
         <div
-          className="absolute"
+          className="pointer-events-auto absolute cursor-pointer"
           style={{
             bottom: STRIP_BOTTOM_PX,
             left: STRIP_INSET_PX,
             right: STRIP_INSET_PX,
             height: STRIP_H,
+          }}
+          onMouseMove={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setHoverIdx(chapterIdxAtRatio((e.clientX - r.left) / r.width));
+          }}
+          onMouseLeave={() => setHoverIdx(null)}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const i = chapterIdxAtRatio((e.clientX - r.left) / r.width);
+            if (i == null) return;
+            try {
+              playerRef?.current?.seekTo(chapters[i]!.from_sec, true);
+              playerRef?.current?.playVideo?.();
+              onUserPlayed?.();
+            } catch {
+              // player not ready
+            }
           }}
         >
           <svg
@@ -151,9 +205,46 @@ export function PlayerChrome({ sections, engaged = false }: PlayerChromeProps) {
                   />
                 </linearGradient>
               ))}
+              {(['high', 'mid', 'low'] as const).map((level) => (
+                <linearGradient
+                  key={`v-${level}`}
+                  id={`lpRelFillVivid-${level}`}
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="0"
+                    style={{
+                      stopColor: `var(--lp-rel-${level})`,
+                      stopOpacity: FILL_OPACITY_VIVID[level][0],
+                    }}
+                  />
+                  <stop
+                    offset="1"
+                    style={{
+                      stopColor: `var(--lp-rel-${level})`,
+                      stopOpacity: FILL_OPACITY_VIVID[level][1],
+                    }}
+                  />
+                </linearGradient>
+              ))}
             </defs>
             {mounds.map((p) => (
-              <path key={p.key} d={p.d} fill={`url(#lpRelFill-${p.level})`} />
+              <g key={p.key}>
+                <path d={p.d} fill={`url(#lpRelFill-${p.level})`} />
+                {/* vivid twin — cross-fades in while the cursor is on this
+                    segment (gradient swaps aren't animatable; opacity is). */}
+                <path
+                  d={p.d}
+                  fill={`url(#lpRelFillVivid-${p.level})`}
+                  className={cn(
+                    'transition-opacity duration-150',
+                    hoverIdx === p.idx ? 'opacity-100' : 'opacity-0'
+                  )}
+                />
+              </g>
             ))}
           </svg>
         </div>
