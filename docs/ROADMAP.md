@@ -27,6 +27,7 @@
 | v2 cost bundle (attribution + pricing) | GATED-on-James | CP509+1: #963 instrumentation (PR #1066) + last pricing gap (PR #1068); leak already plugged | PR #1066, PR #1068 |
 | Mac Mini collector published_at stamping (external repo) | ACTIVE (follow-up) | CP509+1: bulk payload stamped collection-time published_at on 781 youtube_videos rows (2026-04-25 cluster); in-repo now-fallback removed in PR #1070 — the external collector must stop sending fabricated publish dates or new ingests keep re-contaminating | PR #1070 (in-repo half) |
 | v1 executor skills-route exposure | GATED-on-James | CP509+1: only live edge = POST /api/v1/skills/:skillId/execute, no version guard; close-vs-keep decision pending | src/api/routes/skills.ts:152 |
+| Diversity re-injection / exclude-set saturation | DEFERRED (out of D-04 scope) | 2026-07-03: exclude_set 7.7K (whole uvs) starves live-search candidates into the tail — secondary cause of the floor-incident perception; explicitly excluded from the quality-gate surgery to prevent scope erosion | scratchpad d04-gate-design.md §1-⑤ · add_cards.end trace exclude_set_size |
 
 ## §2 Refuted-decisions registry (DO NOT re-attempt without overturning the cited verdict)
 
@@ -36,6 +37,7 @@
 | centerGoal anchor restoration in pool recruit queries | CP492 §27/§82: the original disease was center EXCESS (9-word concat → unsearchable), not absence; the fix is LLM-melted short queries | docs/handoffs/v5-relevance-gate-cp497.md:28 |
 | Ungated pool serving (batch_trend or any source without a relevance judge) | "Unjudged pool serving IS the incident definition. No gate → no pool" (CP494+1 quality-destruction incident) | docs/handoffs/v5-relevance-gate-cp497.md:68 |
 | Re-fixing the enrich forceRegen "leak" | Core path already short-circuits complete v2 rows since #961; residual exposure is the intended upgrade path (pass-but-not-complete rows) | src/modules/queue/handlers/enrich-rich-summary.ts:123 (#961 guard) |
+| Standalone view-count floor gate (V5_LIVE_VIEW_FLOOR alone) | 2026-07-03 canary: user-verified relevance regression — 84% of a niche mandala's relevant candidates sat under 1000 views (incl. official Microsoft/AWS lectures); floor rolled back same morning. Trust axis may only return COMBINED with relevance (gate-form), never alone | PR #1076 (arm) → PR #1080 (rollback) · trace: raw 305→13 vs floor-off 60 |
 
 ## §3 Maintenance contract
 
