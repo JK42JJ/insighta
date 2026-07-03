@@ -12,7 +12,7 @@
  *
  * Design tokens: insighta-side-editor-mockup-v3.html
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -27,8 +27,6 @@ import {
   type VideoRichSummaryLora,
   type VideoRichSummarySegments,
 } from '@/shared/lib/api-client';
-import { Info, Quote, Lightbulb, Dot } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { useRichSummary } from '../model/useRichSummary';
 import { useEnrichStream } from '@/features/card-management/model/useEnrichStream';
 
@@ -463,13 +461,13 @@ function RichSummaryV2NewBlock({
   const coreArg = analysis?.core_argument ?? null;
   const actionables = analysis?.actionables ?? [];
   const keyConcepts = analysis?.key_concepts ?? [];
-  // entities feed the KG bridge; absent on rows authored before they shipped.
-  const entities = analysis?.entities ?? [];
-  const sections = segments?.sections ?? [];
   const atoms = segments?.atoms ?? [];
   const qaPairs = lora?.qa_pairs ?? [];
   const subjectivity = analysis?.bias_signals?.subjectivity_level ?? null;
   const hasAd = analysis?.bias_signals?.has_ad === true;
+  // Briefing-local UI state — takeaway cap + non-persistent action checks (v1).
+  const [showAllTakes, setShowAllTakes] = useState(false);
+  const [doneActions, setDoneActions] = useState<Set<number>>(() => new Set());
 
   // CP438+1: in-page seek via ?t=N param (LearningPage useEffect picks it up
   // and calls playerRef.current.seekTo). Falls back to null if mandalaId
@@ -479,235 +477,276 @@ function RichSummaryV2NewBlock({
       ? `/learning/${mandalaId}/${youtubeId}?t=${Math.floor(sec ?? 0)}`
       : null;
 
+  // [BRIEFING 2026-07-03, James-approved mockup 69f71c04] — the summary tab
+  // is a LEARNING BRIEFING, ordered by user value: essence → my-goal fit →
+  // takeaways → actions → glossary → self-check. The segment timeline that
+  // used to fill half this tab is GONE — the chapters tab owns the time axis.
+  const mandalaFit = analysis?.mandala_fit ?? null;
+  const fitPct = mandalaFit?.mandala_relevance_pct;
+  const fitWhy = mandalaFit?.relevance_rationale ?? null;
+  const prerequisites = analysis?.prerequisites ?? null;
+  const depthLevel = core?.depth_level ?? null;
+  const targetAudience = core?.target_audience ?? null;
+
+  // Takeaways: atoms re-ordered by value (tips → arguments → facts), capped.
+  const TAKE_CAP = 6;
+  const orderedAtoms = [
+    ...atoms.filter((a) => a.type === 'tip'),
+    ...atoms.filter((a) => a.type === 'argument'),
+    ...atoms.filter((a) => a.type !== 'tip' && a.type !== 'argument'),
+  ];
+  const visibleAtoms = showAllTakes ? orderedAtoms : orderedAtoms.slice(0, TAKE_CAP);
+
   return (
-    <div className="space-y-4">
-      {/* coreArgument in the headline slot. */}
-      {coreArg && (
-        <section>
-          <p className="rounded-[6px] bg-primary/[0.06] px-[14px] py-[10px] text-[13px] leading-[1.65] text-[#ededf0]">
-            {coreArg}
-          </p>
+    <div className="space-y-7">
+      {/* ① Essence — one-liner headline + core argument. */}
+      {(oneLiner || coreArg) && (
+        <section className="border-l-[3px] border-[var(--lp-accent)] pl-4">
+          {oneLiner && (
+            <p className="text-[17px] font-bold leading-[1.5] tracking-[-0.015em] text-[var(--lp-strong)] [text-wrap:balance]">
+              {oneLiner}
+            </p>
+          )}
+          {coreArg && (
+            <p className="mt-2 max-w-[62ch] text-[13px] leading-[1.65] text-[var(--lp-dim)]">
+              {coreArg}
+            </p>
+          )}
         </section>
       )}
 
-      {sections.length > 0 && (
-        <section>
-          <div className="space-y-1">
-            {sections.map((sec, idx) => {
-              const jump = tsUrl(sec.from_sec);
-              const inner = (
-                <>
-                  <div className="flex items-baseline gap-3">
-                    <span className="font-mono text-[10px] text-primary shrink-0">
-                      {formatSeconds(sec.from_sec)} — {formatSeconds(sec.to_sec)}
-                    </span>
-                    <p className="flex-1 text-[14px] font-semibold leading-[1.35] text-[rgba(237,237,240,0.92)]">
-                      {sec.title}
-                    </p>
-                    {typeof sec.relevance_pct === 'number' && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span
-                            className={[
-                              'shrink-0 font-mono text-[11px] font-bold tabular-nums cursor-default',
-                              sec.relevance_pct >= 75
-                                ? 'text-[#2dd4bf]'
-                                : sec.relevance_pct >= 50
-                                  ? 'text-[#f59e0b]'
-                                  : 'text-[#94a3b8]',
-                            ].join(' ')}
-                          >
-                            {sec.relevance_pct}%
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="left" className="text-[12px]">
-                          {t('learning.relevanceLabel')}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                  {sec.summary && (
-                    <p className="mt-[3px] pl-[88px] text-[13px] text-[rgba(237,237,240,0.66)]">
-                      {sec.summary}
-                    </p>
-                  )}
-                </>
-              );
-              const baseCls =
-                'block rounded-[6px] px-3 py-[10px] transition-colors hover:bg-primary/[0.06]';
-              return jump ? (
-                <Link key={idx} to={jump} className={`${baseCls} cursor-pointer`}>
-                  {inner}
-                </Link>
-              ) : (
-                <div key={idx} className={baseCls}>
-                  {inner}
-                </div>
-              );
-            })}
-          </div>
+      {/* ② My-goal fit — the personalization this product uniquely has. */}
+      {(typeof fitPct === 'number' || fitWhy) && (
+        <section className="flex items-center gap-3 rounded-[10px] border border-[var(--lp-accent-border)] bg-[var(--lp-accent-tint)] px-3.5 py-2.5">
+          {typeof fitPct === 'number' && (
+            <span className="shrink-0 rounded-md bg-[var(--lp-accent)] px-2 py-[3px] text-[12px] font-extrabold text-[#15171c]">
+              {t('learning.briefFit', '내 목표 적합')} {fitPct}%
+            </span>
+          )}
+          {fitWhy && (
+            <span className="text-[12.5px] leading-[1.55] text-[var(--lp-text)]">{fitWhy}</span>
+          )}
         </section>
       )}
 
-      {entities.length > 0 && (
+      {/* ③ Takeaways — typed atoms by value order, timestamp chip = scene jump. */}
+      {orderedAtoms.length > 0 && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            {t('learning.tags')}
-          </h3>
-          <div className="flex flex-wrap gap-x-1 gap-y-[3px]">
-            {entities.map((ent) => (
-              <Tooltip key={`${ent.type}:${ent.name}`}>
-                <TooltipTrigger asChild>
-                  <span className="inline-block rounded-[4px] bg-primary/[0.08] px-[7px] py-[2px] text-[10px] font-semibold text-primary cursor-default">
-                    {ent.name}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-[12px]">
-                  {ent.type}
-                </TooltipContent>
-              </Tooltip>
+          <BriefHead en="Takeaways" ko={t('learning.briefTakeaways', '핵심 정리')} />
+          <ul className="flex flex-col gap-2">
+            {visibleAtoms.map((atom, idx) => (
+              <TakeRow key={idx} atom={atom} jumpUrl={tsUrl(atom.timestamp_sec)} />
             ))}
-          </div>
+          </ul>
+          {orderedAtoms.length > TAKE_CAP && (
+            <button
+              type="button"
+              onClick={() => setShowAllTakes((v) => !v)}
+              className="mt-2 text-[12px] text-[var(--lp-faint)] transition-colors hover:text-[var(--lp-strong)]"
+            >
+              {showAllTakes
+                ? t('learning.briefLess', '접기')
+                : t('learning.briefMore', '{{count}}개 더 보기', {
+                    count: orderedAtoms.length - TAKE_CAP,
+                  })}
+            </button>
+          )}
         </section>
       )}
 
-      {(subjectivity === 'high' || hasAd) && (
-        <div className="flex flex-wrap gap-1.5">
-          {hasAd && (
-            <span className="rounded-[4px] bg-[rgba(248,113,113,0.12)] px-[7px] py-[2px] text-[10px] font-semibold text-[#f87171]">
-              {t('learning.containsAds')}
-            </span>
-          )}
-          {subjectivity === 'high' && (
-            <span className="rounded-[4px] bg-[rgba(245,158,11,0.12)] px-[7px] py-[2px] text-[10px] font-semibold text-[#f59e0b]">
-              {t('learning.highSubjectivity')}
-            </span>
-          )}
-        </div>
-      )}
-
+      {/* ④ Actions — try-today checklist (session-local, non-persistent v1). */}
       {actionables.length > 0 && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-primary">
-            {t('learning.actionables')}
-          </h3>
-          <ul className="space-y-1.5 text-[13px] leading-[1.55] text-[rgba(237,237,240,0.84)]">
+          <BriefHead en="Action" ko={t('learning.briefAction', '오늘 해볼 것')} />
+          <ul className="flex flex-col gap-1.5">
             {actionables.map((item, idx) => (
-              <li key={idx} className="flex gap-2">
-                <span
-                  aria-hidden
-                  className="mt-[2px] flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-[3px] border border-primary text-[10px] text-primary"
-                >
-                  →
-                </span>
-                <span>{item}</span>
+              <li key={idx}>
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[var(--lp-line-6)] bg-[var(--lp-surface)] px-3 py-2.5 transition-colors hover:bg-[var(--lp-surface-2)]">
+                  <input
+                    type="checkbox"
+                    checked={doneActions.has(idx)}
+                    onChange={() =>
+                      setDoneActions((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(idx)) next.delete(idx);
+                        else next.add(idx);
+                        return next;
+                      })
+                    }
+                    className="mt-[3px] accent-[var(--lp-accent)]"
+                  />
+                  <span
+                    className={
+                      doneActions.has(idx)
+                        ? 'text-[13px] text-[var(--lp-mute)] line-through'
+                        : 'text-[13px] text-[var(--lp-text)]'
+                    }
+                  >
+                    {item}
+                  </span>
+                </label>
               </li>
             ))}
           </ul>
         </section>
       )}
 
+      {/* ⑤ Glossary — key concepts, click to expand. */}
       {keyConcepts.length > 0 && (
         <section>
-          <h3 className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            {t('learning.keyConcepts')}
-          </h3>
-          <ul className="space-y-2 text-[13px] leading-[1.5]">
+          <BriefHead
+            en="Glossary"
+            ko={t('learning.briefGlossary', '핵심 개념')}
+            hint={t('learning.briefGlossaryHint', '클릭해서 펼치기')}
+          />
+          <div className="flex flex-wrap gap-2">
             {keyConcepts.map((kc, idx) => (
-              <li key={idx} className="rounded-[6px] bg-[rgba(255,255,255,0.02)] px-3 py-2">
-                <p className="text-[14px] font-semibold text-primary">{kc.term}</p>
-                <p className="mt-[2px] text-[13px] text-[rgba(237,237,240,0.74)]">
-                  {kc.definition}
-                </p>
-              </li>
+              <TermChip key={idx} term={kc.term} definition={kc.definition} />
             ))}
-          </ul>
+          </div>
         </section>
       )}
 
-      {atoms.length > 0 && (
-        <section>
-          <h3 className="mb-[8px] text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-            핵심 atoms
-          </h3>
-          <ul className="space-y-[6px]">
-            {atoms.map((atom, idx) => (
-              <AtomRow key={idx} atom={atom} jumpUrl={tsUrl(atom.timestamp_sec)} />
-            ))}
-          </ul>
+      {/* ⑥ Reference line — level / prerequisites / audience / bias flags. */}
+      {(depthLevel || prerequisites || targetAudience || hasAd || subjectivity === 'high') && (
+        <section className="flex flex-wrap gap-x-4 gap-y-1.5 border-t border-[var(--lp-line-6)] pt-3 text-[12px] text-[var(--lp-faint)]">
+          {depthLevel && (
+            <span>
+              <b className="font-semibold text-[var(--lp-dim)]">
+                {t('learning.briefDepth', '난이도')}
+              </b>{' '}
+              {depthLevel}
+            </span>
+          )}
+          {prerequisites && (
+            <span>
+              <b className="font-semibold text-[var(--lp-dim)]">
+                {t('learning.briefPrereq', '선수지식')}
+              </b>{' '}
+              {prerequisites}
+            </span>
+          )}
+          {targetAudience && (
+            <span>
+              <b className="font-semibold text-[var(--lp-dim)]">
+                {t('learning.briefAudience', '대상')}
+              </b>{' '}
+              {targetAudience}
+            </span>
+          )}
+          {hasAd && <span className="text-[#d9a2a2]">⚠ {t('learning.containsAds')}</span>}
+          {subjectivity === 'high' && (
+            <span className="text-[#d9a2a2]">⚠ {t('learning.highSubjectivity')}</span>
+          )}
         </section>
       )}
 
+      {/* ⑦ Self-check — Q first, click reveals A. */}
       {qaPairs.length > 0 && (
         <section>
-          <details className="rounded-[6px] bg-[rgba(255,255,255,0.02)] px-3 py-2">
-            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-[0.7px] text-[#4e4f5c]">
-              자가점검 ({qaPairs.length})
-            </summary>
-            <ul className="mt-[8px] space-y-2 text-[12px]">
-              {qaPairs.map((qa, idx) => (
-                <li key={idx} className="border-l-2 border-primary/[0.4] pl-3">
-                  <p className="font-semibold text-[#ededf0]">Q. {qa.q}</p>
-                  <p className="mt-[2px] text-[rgba(237,237,240,0.66)]">A. {qa.a}</p>
-                </li>
-              ))}
-            </ul>
-          </details>
+          <BriefHead
+            en="Check"
+            ko={t('learning.briefCheck', '이해했는지 점검')}
+            hint={t('learning.briefCheckHint', '질문 클릭 → 답 확인')}
+          />
+          <div className="flex flex-col gap-2">
+            {qaPairs.map((qa, idx) => (
+              <QuizItem key={idx} q={qa.q} a={qa.a} />
+            ))}
+          </div>
         </section>
       )}
     </div>
   );
 }
 
-function AtomRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: string | null }) {
-  const { t } = useTranslation();
-  // Lucide icon per atom type. Meaning conveyed via hover tooltip (i18n).
-  //   fact     → Info       (i in circle — neutral information / verifiable)
-  //   argument → Quote      (quotation marks — speaker's claim / opinion)
-  //   tip      → Lightbulb  (universal idea / actionable suggestion)
-  //   other    → Dot        (subtle bullet)
-  const TypeIcon =
-    atom.type === 'fact'
-      ? Info
-      : atom.type === 'argument'
-        ? Quote
-        : atom.type === 'tip'
-          ? Lightbulb
-          : Dot;
-  const tooltipKey =
-    atom.type === 'fact'
-      ? 'learning.atomFact'
-      : atom.type === 'argument'
-        ? 'learning.atomArgument'
-        : atom.type === 'tip'
-          ? 'learning.atomTip'
-          : 'learning.atomOther';
-  const tooltip = t(tooltipKey);
-
+/** Briefing section header — small caps label + Korean title (+hint). */
+function BriefHead({ en, ko, hint }: { en: string; ko: string; hint?: string }) {
   return (
-    <li className="flex items-start gap-2 text-[13px] leading-[1.5] text-[rgba(237,237,240,0.65)]">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="mt-[2px] inline-flex shrink-0 cursor-default">
-            <TypeIcon aria-label={tooltip} className="h-3.5 w-3.5 text-white" />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-[12px]">
-          {tooltip}
-        </TooltipContent>
-      </Tooltip>
-      <span className="flex-1">
+    <div className="mb-2.5 flex items-baseline gap-2.5">
+      <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--lp-mute)]">
+        {en}
+      </h3>
+      <span className="text-[13.5px] font-bold text-[var(--lp-strong)]">{ko}</span>
+      {hint && <span className="text-[11px] text-[var(--lp-faint)]">{hint}</span>}
+    </div>
+  );
+}
+
+const TAKE_TAG: Record<string, { labelKey: string; fallback: string; cls: string }> = {
+  tip: { labelKey: 'learning.atomTip', fallback: '팁', cls: 'bg-[var(--lp-rel-mid)]' },
+  argument: { labelKey: 'learning.atomArgument', fallback: '주장', cls: 'bg-[#b48ead]' },
+  fact: { labelKey: 'learning.atomFact', fallback: '사실', cls: 'bg-[#8fa8c9]' },
+};
+
+function TakeRow({ atom, jumpUrl }: { atom: VideoRichSummaryAtom; jumpUrl: string | null }) {
+  const { t } = useTranslation();
+  const tag = TAKE_TAG[atom.type ?? ''] ?? TAKE_TAG['fact']!;
+  return (
+    <li className="flex items-start gap-3 rounded-[11px] border border-[var(--lp-line-6)] bg-[var(--lp-surface)] px-3.5 py-2.5">
+      <span
+        className={`mt-[2px] shrink-0 rounded-[5px] px-1.5 py-[2px] text-[10px] font-extrabold tracking-[0.05em] text-[#15171c] ${tag.cls}`}
+      >
+        {t(tag.labelKey, tag.fallback)}
+      </span>
+      <span className="flex-1 text-[13px] leading-[1.6] text-[var(--lp-text)]">
         {atom.text}
         {jumpUrl && Number.isFinite(atom.timestamp_sec) && (
           <Link
             to={jumpUrl}
-            className="ml-2 inline-flex items-center gap-0.5 rounded-[3px] bg-primary/[0.1] px-[5px] py-[1px] font-mono text-[10px] text-primary hover:bg-primary/[0.2]"
+            className="ml-2 inline-block whitespace-nowrap rounded-[5px] border border-[var(--lp-accent-border)] px-1.5 text-[11px] tabular-nums text-[var(--lp-accent)] transition-colors hover:bg-[var(--lp-accent-tint)]"
           >
-            ▶ {formatSeconds(atom.timestamp_sec ?? 0)}
+            {formatSeconds(atom.timestamp_sec ?? 0)}
           </Link>
         )}
       </span>
     </li>
+  );
+}
+
+function TermChip({ term, definition }: { term: string; definition: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="max-w-full rounded-[9px] border border-[var(--lp-line-8)] bg-[var(--lp-surface)] px-3 py-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 text-[12.5px] font-bold text-[var(--lp-strong)]"
+      >
+        {term}
+        <span aria-hidden className="font-normal text-[var(--lp-faint)]">
+          {open ? '–' : '+'}
+        </span>
+      </button>
+      {open && (
+        <p className="mt-1.5 max-w-[58ch] text-[12.5px] leading-[1.6] text-[var(--lp-dim)]">
+          {definition}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function QuizItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen((v) => !v)}
+      className="rounded-[11px] border border-[var(--lp-line-6)] bg-[var(--lp-surface)] px-4 py-3 text-left"
+    >
+      <span className="flex gap-2.5 text-[13px] font-semibold text-[var(--lp-strong)]">
+        <span aria-hidden className="font-extrabold text-[var(--lp-accent)]">
+          Q
+        </span>
+        {q}
+      </span>
+      {open && (
+        <span className="ml-[21px] mt-2 block border-l-2 border-[var(--lp-accent-border)] pl-2.5 text-[13px] leading-[1.6] text-[var(--lp-dim)]">
+          {a}
+        </span>
+      )}
+    </button>
   );
 }
 

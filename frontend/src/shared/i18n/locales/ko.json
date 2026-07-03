@@ -1929,7 +1929,19 @@
     "playingNow": "재생 중",
     "nowWatchingVideo": "지금 보는 영상",
     "nowReadingSection": "지금 읽는 구간",
-    "overviewGroup": "개요"
+    "overviewGroup": "개요",
+    "briefFit": "내 목표 적합",
+    "briefTakeaways": "핵심 정리",
+    "briefMore": "{{count}}개 더 보기",
+    "briefLess": "접기",
+    "briefAction": "오늘 해볼 것",
+    "briefGlossary": "핵심 개념",
+    "briefGlossaryHint": "클릭해서 펼치기",
+    "briefDepth": "난이도",
+    "briefPrereq": "선수지식",
+    "briefAudience": "대상",
+    "briefCheck": "이해했는지 점검",
+    "briefCheckHint": "질문 클릭 → 답 확인"
   },
   "addCards": {
     "triggerChip": "+ 카드 추가",
