@@ -1920,7 +1920,8 @@
     "relevanceHigh": "High",
     "playingNow": "Playing",
     "nowWatchingVideo": "Now watching",
-    "nowReadingSection": "Now reading"
+    "nowReadingSection": "Now reading",
+    "overviewGroup": "Overview"
   },
   "addCards": {
     "triggerChip": "+ Add Cards",

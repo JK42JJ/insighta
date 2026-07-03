@@ -23,6 +23,8 @@ import { LearningShareMenu } from '@/features/learning-share';
 import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
 import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
+import { useMandalaCards } from '../model/useMandalaCards';
+import { useMandalaQuery } from '@/features/mandala';
 import { FloatingVideoNavigator } from './FloatingVideoNavigator';
 import { PlayerChrome } from './PlayerChrome';
 import {
@@ -71,6 +73,8 @@ function fmtDuration(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+const YT_ID_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/;
+
 export function CenterPanel({
   mandalaId,
   videoId,
@@ -106,6 +110,14 @@ export function CenterPanel({
   // [STEP5] floating navigator expand state — breadcrumb/secondary controls
   // yield the top-bar width while the strip is expanded.
   const [navExpanded, setNavExpanded] = useState(false);
+  // Breadcrumb fallback for videos absent from the book (개요 cell / unsummarized).
+  const { cards } = useMandalaCards(mandalaId);
+  const currentCard = cards.find((c) => c.videoUrl.match(YT_ID_RE)?.[1] === videoId);
+  // Group titles for the fallback — SAME source as the sidebar TOC's numbered
+  // rows (subjectLabels/subjects), which exist even when the book doesn't.
+  const { mandalaLevels } = useMandalaQuery(mandalaId);
+  const crumbSubjects = mandalaLevels?.root?.subjects ?? [];
+  const crumbSubjectLabels = mandalaLevels?.root?.subjectLabels ?? [];
   const setActiveNoteVideoKey = useLearningStore((s) => s.setActiveNoteVideoKey);
   const noteAutoFollowEnabled = useLearningStore((s) => s.noteAutoFollowEnabled);
   const setNoteAutoFollow = useLearningStore((s) => s.setNoteAutoFollow);
@@ -265,6 +277,50 @@ export function CenterPanel({
     return { chapter, section: sec };
   })();
 
+  // [STEP1 fix 2026-07-03] breadcrumb follows the CURRENT VIDEO. activeSectionRef
+  // only changes on book-index clicks (CP445: auto-set once), so navigating to
+  // another video left the top-bar chapter stale (user bug report). Player mode
+  // derives the chapter containing the playing video; note mode keeps the
+  // reading position. Videos absent from the book (개요/cell-0 group, or not
+  // yet summarized) fall back to the card's cell index — the breadcrumb must
+  // never just vanish (2nd report: overview videos showed nothing).
+  const videoSection = (() => {
+    if (!book?.book?.chapters) return null;
+    for (const chapter of book.book.chapters) {
+      for (const sec of chapter.sections ?? []) {
+        if ((sec.atoms ?? []).some((a) => a.vid === videoId)) {
+          return { chapter, section: sec };
+        }
+      }
+    }
+    return null;
+  })();
+  const crumb = ((): { label: string; title: string | null } | null => {
+    const fromSection = (s: NonNullable<typeof activeSection>) => ({
+      label: `${t('learning.topicGroup', '주제군')} ${String((s.chapter.ch ?? 0) + 1).padStart(2, '0')}`,
+      title: s.chapter.title,
+    });
+    if (centerViewMode === 'note') {
+      if (activeSection) return fromSection(activeSection);
+      return videoSection ? fromSection(videoSection) : null;
+    }
+    if (videoSection) return fromSection(videoSection);
+    const cell = currentCard?.cellIndex;
+    if (cell === 0) return { label: t('learning.overviewGroup', '개요'), title: null };
+    if (typeof cell === 'number' && cell >= 1) {
+      const groupTitle =
+        crumbSubjectLabels[cell - 1]?.trim() ||
+        crumbSubjects[cell - 1] ||
+        book?.book?.chapters?.find((c) => c.ch === cell - 1)?.title ||
+        null;
+      return {
+        label: `${t('learning.topicGroup', '주제군')} ${String(cell).padStart(2, '0')}`,
+        title: groupTitle,
+      };
+    }
+    return activeSection ? fromSection(activeSection) : null;
+  })();
+
   const tabs: Array<{
     id: CenterTabId;
     labelKey: string;
@@ -307,14 +363,15 @@ export function CenterPanel({
               onExpandedChange={setNavExpanded}
             />
           )}
-          {!(navExpanded && centerViewMode === 'player') && activeSection && (
+          {!(navExpanded && centerViewMode === 'player') && crumb && (
             <div className="flex min-w-0 items-center gap-2.5 text-[12.5px] text-[var(--lp-faint)]">
-              <span className="shrink-0 font-semibold text-[var(--lp-accent)]">
-                {t('learning.topicGroup', '주제군')}{' '}
-                {String((activeSection.chapter.ch ?? 0) + 1).padStart(2, '0')}
-              </span>
-              <span aria-hidden>·</span>
-              <span className="truncate">{activeSection.chapter.title}</span>
+              <span className="shrink-0 font-semibold text-[var(--lp-accent)]">{crumb.label}</span>
+              {crumb.title && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span className="truncate">{crumb.title}</span>
+                </>
+              )}
             </div>
           )}
         </div>
