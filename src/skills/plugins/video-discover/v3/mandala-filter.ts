@@ -146,6 +146,38 @@ export interface MandalaFilterInput {
    * get bit-identical lexical behavior (backward compatible).
    */
   subGoalEmbeddings?: ReadonlyArray<ReadonlyArray<number>>;
+  /**
+   * R4 shadow guard (2026-07-04, BL-17) — classify blank/whitespace-only
+   * title candidates as "would-reject: empty_title" in `MandalaFilterStats`
+   * WITHOUT dropping them (enforce = 0, byte-identical output either way).
+   *
+   * Root cause: Tier 1 (video_pool cache) matches candidates by stored
+   * `video_pool_embeddings`, which stay populated even after the pool row's
+   * `title` is scrubbed to '' by the SCRUB path (pool-maintenance.ts) or
+   * left unrepaired by the `/like` upsert (cards.ts). The stale embedding
+   * still clears the semantic cosine gate because that gate never inspects
+   * `title` text directly in `'semantic'` mode — it compares
+   * `candidateEmbeddings` vectors, so an empty-title candidate can pass
+   * with a high score. A gate that cannot evaluate a candidate (blank
+   * title = nothing to admit on) should reject, not admit.
+   *
+   * Defaults to `false` (unset = no-op): when omitted, `stats.wouldRejectEmptyTitle`
+   * stays 0 and no candidate is inspected for this — bit-identical to
+   * pre-R4 behavior. Gated by `V3_EMPTY_TITLE_GATE_SHADOW` (see v3/config.ts).
+   */
+  emptyTitleGateShadow?: boolean;
+  /**
+   * R4 enforce (2026-07-04, BL-17) — actually REJECT blank/whitespace-only
+   * title candidates (real `continue`/drop), independent of
+   * `emptyTitleGateShadow` above. See that field's JSDoc for the root-cause
+   * writeup (stale Tier 1 embeddings surviving a title SCRUB).
+   *
+   * Defaults to `false` (unset = no-op): pre-R4 behavior is bit-identical
+   * when omitted. Gated by `V3_EMPTY_TITLE_GATE` (see v3/config.ts) — a
+   * separate kill switch from the shadow-instrumentation flag so shadow-only
+   * measurement runs stay non-invasive even after this code path ships.
+   */
+  emptyTitleGate?: boolean;
 }
 
 export interface ScoreWeights {
@@ -207,6 +239,20 @@ export interface MandalaFilterStats {
   };
   /** Which mode was applied this run. Useful for prod A/B logs. */
   centerGateMode?: CenterGateMode;
+  /**
+   * R4 shadow guard (2026-07-04, BL-17) — count of candidates with a
+   * blank/whitespace-only `title` that WOULD be rejected if the empty-title
+   * gate were enforced. Classification only — these candidates are still
+   * scored and admitted exactly as before. Always 0 when
+   * `input.emptyTitleGateShadow` is false/omitted (default).
+   */
+  wouldRejectEmptyTitle: number;
+  /**
+   * R4 enforce (2026-07-04, BL-17) — count of candidates ACTUALLY dropped
+   * because their `title` was blank/whitespace-only. Only non-zero when
+   * `input.emptyTitleGate` is true; always 0 otherwise (default — no-op).
+   */
+  droppedByEmptyTitle: number;
 }
 
 export function applyMandalaFilter<T extends FilterCandidate>(
@@ -274,6 +320,8 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     droppedByCenterGate: 0,
     droppedByJaccardBelowThreshold: 0,
     droppedByCellScoreBelowThreshold: 0,
+    wouldRejectEmptyTitle: 0,
+    droppedByEmptyTitle: 0,
     centerTokens: [...centerTokens],
     subGoalTokenCounts: subGoalTokens.map((s) => s.size),
     passedByFocusTag: 0,
@@ -287,6 +335,21 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
   };
 
   for (const c of candidates) {
+    // R4 shadow guard (2026-07-04, BL-17) — classify only, never drop.
+    // enforce = 0: this branch never affects `continue`/gate decisions
+    // below, so byCell output is byte-identical regardless of the flag.
+    if (input.emptyTitleGateShadow && isBlankTitle(c.title)) {
+      stats.wouldRejectEmptyTitle++;
+    }
+
+    // R4 enforce (2026-07-04, BL-17) — real reject. Independent kill switch
+    // from the shadow flag above; a candidate the gate cannot evaluate
+    // (blank title = no text signal) should be dropped, not admitted.
+    if (input.emptyTitleGate && isBlankTitle(c.title)) {
+      stats.droppedByEmptyTitle++;
+      continue;
+    }
+
     const titleTokens = tokenize(c.title, input.language);
     // Center score per mode:
     //   substring — legacy, token-level substring overlap
@@ -409,6 +472,17 @@ export function applyMandalaFilterWithStats<T extends FilterCandidate>(
     list.sort((a, b) => b.score - a.score);
   }
   return { byCell, stats };
+}
+
+/**
+ * R4 shadow guard (2026-07-04, BL-17) — true when `title` is missing, empty,
+ * or contains only whitespace. Such a candidate carries no evaluable text
+ * signal for the lexical gates and, in `'semantic'` mode, may still clear
+ * the cosine gate on a stale pre-scrub embedding (see
+ * `MandalaFilterInput.emptyTitleGateShadow` JSDoc for the full root cause).
+ */
+function isBlankTitle(title: string | null | undefined): boolean {
+  return !title || title.trim().length === 0;
 }
 
 /**
