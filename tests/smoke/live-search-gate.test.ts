@@ -97,10 +97,12 @@ describe('gateLiveSearchCards', () => {
     expect(r.gcDropped).toBe(1);
   });
 
-  test('audio mismatch hides before scoring', async () => {
+  test('audio mismatch hides before scoring + logs the dropped item detail', async () => {
     mockCompute.mockResolvedValue({ ok: true, relevancePct: 99 });
     const r = await gateLiveSearchCards([card('a', 'ar'), card('b', 'ko')], CTX);
     expect(r.langDropped).toBe(1);
     expect(r.exposed.map((c) => c.videoId)).toEqual(['b']);
+    // L2 canary blocker — dropped-item audio label logged for false-positive eyeball
+    expect(r.langDroppedItems).toEqual([{ videoId: 'a', audioLang: 'ar', target: 'ko' }]);
   });
 });

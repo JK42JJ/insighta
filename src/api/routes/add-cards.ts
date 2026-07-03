@@ -397,6 +397,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                   response: {
                     would_gc_dropped: g.gcDropped,
                     would_lang_dropped: g.langDropped,
+                    lang_dropped_items: g.langDroppedItems,
                     would_demoted: g.demoted,
                     cache_hits: g.cacheHits,
                     scored: g.scored,
