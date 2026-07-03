@@ -28,6 +28,7 @@
 | Mac Mini collector published_at stamping (external repo) | ACTIVE (follow-up) | CP509+1: bulk payload stamped collection-time published_at on 781 youtube_videos rows (2026-04-25 cluster); in-repo now-fallback removed in PR #1070 — the external collector must stop sending fabricated publish dates or new ingests keep re-contaminating | PR #1070 (in-repo half) |
 | v1 executor skills-route exposure | GATED-on-James | CP509+1: only live edge = POST /api/v1/skills/:skillId/execute, no version guard; close-vs-keep decision pending | src/api/routes/skills.ts:152 |
 | Diversity re-injection / exclude-set saturation | DEFERRED (out of D-04 scope) | 2026-07-03: exclude_set 7.7K (whole uvs) starves live-search candidates into the tail — secondary cause of the floor-incident perception; explicitly excluded from the quality-gate surgery to prevent scope erosion | scratchpad d04-gate-design.md §1-⑤ · add_cards.end trace exclude_set_size |
+| Stale-comment cleanup: useMandalaQuery.ts:81 | NOTED (chore) | 2026-07-03: comment references a non-existent MigrationPrompt component (misled a G3 risk assessment); code path is fine (404→EMPTY_ROOT_LEVELS). Fix = delete/correct the comment, out of G3 scope | frontend/src/features/mandala/model/useMandalaQuery.ts:81 |
 
 ## §2 Refuted-decisions registry (DO NOT re-attempt without overturning the cited verdict)
 
