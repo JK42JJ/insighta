@@ -396,7 +396,7 @@ export function CenterPanel({
           onTimeUpdate={setPlayerState}
           startTime={startTime}
         />
-        <PlayerChrome sections={chapterSections} />
+        <PlayerChrome sections={chapterSections} engaged={shouldAutoplay} />
       </div>
 
       {centerViewMode === 'player' && (
