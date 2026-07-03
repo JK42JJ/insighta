@@ -9,6 +9,7 @@ import {
 } from '@copilotkit/runtime';
 import OpenAI from 'openai';
 import { config } from '@/config/index';
+import { logger } from '@/utils/logger';
 import { QwenRunpodAdapter } from '@/modules/chatbot-rag';
 import { getChatbotSettings } from '@/modules/chatbot-settings/service';
 import { extractTokenFromHeader } from '@/api/plugins/auth';
@@ -175,6 +176,27 @@ async function getYoga(): Promise<YogaHandler> {
 }
 
 export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
+  // BL-10 fix (2026-07-03) — WARM-UP the yoga runtime at boot, BEFORE the
+  // server accepts connections, so the very first /api/v1/chat/info request
+  // never hits the cold-start (lazyYoga === null) window. That window is the
+  // root cause of the intermittent 400 "Invalid JSON payload" that hangs the
+  // chatbot until refresh (PR #732/#737 partially mitigated it twice and it
+  // still recurred — this eliminates the boot window rather than racing it).
+  // onReady runs after all plugins load and BEFORE fastify.listen() starts
+  // accepting requests = the readiness gate. A warm-up failure (DB not ready,
+  // adapter env missing) is logged and swallowed: the lazy path + the FE retry
+  // remain as the safety net for the rare admin-settings-change rebuild.
+  fastify.addHook('onReady', async () => {
+    try {
+      await getYoga();
+      logger.info('[copilotkit] yoga runtime warmed up at boot (cold-start window closed)');
+    } catch (err) {
+      logger.warn(
+        `[copilotkit] boot warm-up failed (lazy path will retry): ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  });
+
   // yoga is a graphql-yoga instance — register on raw HTTP server to bypass
   // Fastify body parsing entirely. CP475+3: build lazily on first request so
   // we can read admin DB settings async.
