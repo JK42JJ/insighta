@@ -31,6 +31,8 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
+import { loadLiveSearchGateConfig } from '@/config/live-search-gate';
+import { gateLiveSearchCards } from '@/modules/inflow-gate/live-search-gate';
 import { getMandalaManager } from '@/modules/mandala/manager';
 import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { getExcludedVideoIds } from '@/modules/exclude/excluded-videos';
@@ -363,7 +365,27 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             return true;
           });
 
-          const cards: AddCardCandidate[] = v5Filtered.map((c) => ({
+          // D-01 (2026-07-03) — live-search exposure gate: relevance (shared
+          // Haiku scorer, cache-first) + audio-language on the exposed slice.
+          // Trust axis intentionally absent (floor-canary incident). Flag-off
+          // = legacy passthrough.
+          const liveGateCfg = loadLiveSearchGateConfig(process.env);
+          let liveGate: Awaited<
+            ReturnType<typeof gateLiveSearchCards<(typeof v5Filtered)[number]>>
+          > | null = null;
+          let v5Exposed = v5Filtered;
+          if (liveGateCfg.enabled && v5Filtered.length > 0) {
+            liveGate = await gateLiveSearchCards(v5Filtered, {
+              mandalaId,
+              centerGoal,
+              subGoals,
+              language: language === 'en' ? 'en' : 'ko',
+              cfg: liveGateCfg,
+            });
+            v5Exposed = liveGate.exposed;
+          }
+
+          const cards: AddCardCandidate[] = v5Exposed.map((c) => ({
             videoId: c.videoId,
             title: c.title,
             channel: c.channelTitle,
@@ -525,6 +547,12 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
               // diagnosed blind because these two were missing from the trace.
               v5_trust_dropped: v5Result.diagnostics.trustDropped,
               v5_channel_blocked_dropped: v5Result.diagnostics.channelBlockedDropped,
+              // D-01 — live exposure gate counters (gc = shared Haiku scorer).
+              live_gate_gc_dropped: liveGate?.gcDropped ?? null,
+              live_gate_lang_dropped: liveGate?.langDropped ?? null,
+              live_gate_cache_hits: liveGate?.cacheHits ?? null,
+              live_gate_scored: liveGate?.scored ?? null,
+              live_gate_latency_ms: liveGate?.latencyMs ?? null,
               // CP489 Phase 6 — emit returned videoIds so the Search Journey
               // Ledger can join per-round trace rows ↔ card_interactions
               // deterministically (no timestamp-window fuzziness). Bounded
