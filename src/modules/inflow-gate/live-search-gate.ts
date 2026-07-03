@@ -38,6 +38,10 @@ export interface LiveGateCandidate {
   title: string;
   cellIndex: number | null;
   audioLanguage: string | null;
+  /** D-06 — for the subscriber trust-signal shadow (channels.list batch). */
+  channelId?: string | null;
+  /** D-06-b — hd/sd from videos.list contentDetails (free field). */
+  definition?: string | null;
 }
 
 export interface LiveGateContext {
@@ -54,6 +58,10 @@ export interface LiveGateResult<T> {
   exposed: T[];
   /** gc attached per exposed videoId (null = unscored/demoted). */
   gcByVideoId: Map<string, number | null>;
+  /** D-06 subscriber shadow — measurement only, never gates in this module. */
+  subsByVideoId: Map<string, number | null>;
+  wouldDropSub100: number;
+  wouldDropSub1000: number;
   gcDropped: number;
   langDropped: number;
   cacheHits: number;
@@ -204,10 +212,38 @@ export async function gateLiveSearchCards<T extends LiveGateCandidate>(
   pass.sort((a, b) => b.gc - a.gc);
   for (const t of tail) gcByVideoId.set(t.videoId, null);
 
+  // D-06 subscriber shadow — measure-only (channels.list, cached 1h). A
+  // fetch failure leaves the map empty; gaps must never gate.
+  const subsByVideoId = new Map<string, number | null>();
+  let wouldDropSub100 = 0;
+  let wouldDropSub1000 = 0;
+  try {
+    const { fetchChannelStats } = await import('@/modules/youtube/channel-stats');
+    const { resolveVideosApiKeys } =
+      await import('@/skills/plugins/video-discover/v2/youtube-client');
+    const chIds = head.map((c) => c.channelId).filter((x): x is string => !!x);
+    if (chIds.length > 0) {
+      const stats = await fetchChannelStats(chIds, resolveVideosApiKeys(process.env));
+      for (const c of head) {
+        const subs = c.channelId ? (stats.get(c.channelId)?.subscriberCount ?? null) : null;
+        subsByVideoId.set(c.videoId, subs);
+        if (subs != null && subs < 100) wouldDropSub100 += 1;
+        if (subs != null && subs < 1000) wouldDropSub1000 += 1;
+      }
+    }
+  } catch (err) {
+    log.warn(
+      `subscriber shadow failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
   const exposed = [...pass.map((p) => p.c), ...demotedScored, ...tail];
   return {
     exposed,
     gcByVideoId,
+    subsByVideoId,
+    wouldDropSub100,
+    wouldDropSub1000,
     gcDropped,
     langDropped,
     cacheHits,
