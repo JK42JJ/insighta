@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
-export type CenterTab = 'chapters' | 'summary' | 'section';
+// '섹션 내용' tab retired 2026-07-03 — reading lives in note mode.
+export type CenterTab = 'chapters' | 'summary';
 
 export type CenterViewMode = 'player' | 'note';
 

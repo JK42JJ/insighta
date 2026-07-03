@@ -1921,7 +1921,19 @@
     "playingNow": "Playing",
     "nowWatchingVideo": "Now watching",
     "nowReadingSection": "Now reading",
-    "overviewGroup": "Overview"
+    "overviewGroup": "Overview",
+    "briefFit": "Goal fit",
+    "briefTakeaways": "Takeaways",
+    "briefMore": "Show {{count}} more",
+    "briefLess": "Show less",
+    "briefAction": "Try today",
+    "briefGlossary": "Key concepts",
+    "briefGlossaryHint": "Click to expand",
+    "briefDepth": "Level",
+    "briefPrereq": "Prerequisites",
+    "briefAudience": "For",
+    "briefCheck": "Check yourself",
+    "briefCheckHint": "Click a question to reveal the answer"
   },
   "addCards": {
     "triggerChip": "+ Add Cards",
