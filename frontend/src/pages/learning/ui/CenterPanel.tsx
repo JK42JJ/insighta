@@ -24,6 +24,7 @@ import { useMandalaBook } from '@/features/mandala/model/useMandalaBook';
 import { useRichSummary } from '@/features/video-side-panel/model/useRichSummary';
 import { useHighlightReel, HIGHLIGHT_RELEVANCE_THRESHOLD } from '../model/useHighlightReel';
 import { useMandalaCards } from '../model/useMandalaCards';
+import { useMandalaQuery } from '@/features/mandala';
 import { FloatingVideoNavigator } from './FloatingVideoNavigator';
 import { PlayerChrome } from './PlayerChrome';
 import {
@@ -112,6 +113,11 @@ export function CenterPanel({
   // Breadcrumb fallback for videos absent from the book (개요 cell / unsummarized).
   const { cards } = useMandalaCards(mandalaId);
   const currentCard = cards.find((c) => c.videoUrl.match(YT_ID_RE)?.[1] === videoId);
+  // Group titles for the fallback — SAME source as the sidebar TOC's numbered
+  // rows (subjectLabels/subjects), which exist even when the book doesn't.
+  const { mandalaLevels } = useMandalaQuery(mandalaId);
+  const crumbSubjects = mandalaLevels?.root?.subjects ?? [];
+  const crumbSubjectLabels = mandalaLevels?.root?.subjectLabels ?? [];
   const setActiveNoteVideoKey = useLearningStore((s) => s.setActiveNoteVideoKey);
   const noteAutoFollowEnabled = useLearningStore((s) => s.noteAutoFollowEnabled);
   const setNoteAutoFollow = useLearningStore((s) => s.setNoteAutoFollow);
@@ -302,10 +308,14 @@ export function CenterPanel({
     const cell = currentCard?.cellIndex;
     if (cell === 0) return { label: t('learning.overviewGroup', '개요'), title: null };
     if (typeof cell === 'number' && cell >= 1) {
-      const chapter = book?.book?.chapters?.find((c) => c.ch === cell - 1);
+      const groupTitle =
+        crumbSubjectLabels[cell - 1]?.trim() ||
+        crumbSubjects[cell - 1] ||
+        book?.book?.chapters?.find((c) => c.ch === cell - 1)?.title ||
+        null;
       return {
         label: `${t('learning.topicGroup', '주제군')} ${String(cell).padStart(2, '0')}`,
-        title: chapter?.title ?? null,
+        title: groupTitle,
       };
     }
     return activeSection ? fromSection(activeSection) : null;
