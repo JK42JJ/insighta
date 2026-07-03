@@ -1,6 +1,6 @@
 /**
- * Domain-fit shadow config (R13-1 — search redesign, per-cell domain-fit
- * shadow classifier).
+ * Domain-fit shadow config (R13-1 — search redesign, domain-fit shadow
+ * classifier; R14-1 rescoped goal-level).
  *
  * Runs the FROZEN T3 local-Ollama binary classifier (docs/qa/domain-fit-probe-T3.md,
  * R12-validated) against the v3 recruited candidate set (post keyword/embedding
@@ -10,6 +10,12 @@
  * (`src/modules/discover-tracing`). enforce-0: no rerank multiplier is ever
  * applied to the serve order — this flag only turns on ASYNC, POST-SERVE
  * logging calls to a local Mac Mini Ollama instance.
+ *
+ * R14-1: classification target is the mandala's `centerGoal` (goal-level),
+ * not the per-cell subgoal — R13-2's offline sim found per-cell subgoal
+ * scoring produced a 25.8% false-not-fit rate on a known-clean mandala
+ * (docs/qa/domain-fit-r13-2-sim-results.md §a), well above the <10% bar;
+ * goal-level scoring measured 6.5% on the same style of real data.
  *
  * Compliance: inference is local-only (Mac Mini via Tailscale). No Anthropic /
  * OpenRouter / YouTube API calls are made by this module.
@@ -53,6 +59,15 @@ export const domainFitShadowEnvSchema = z.object({
    * shadow coverage, never a serve-path effect).
    */
   DOMAIN_FIT_SHADOW_MAX_CANDIDATES: z.coerce.number().int().positive().max(200).default(40),
+  /**
+   * R14-1 — additive scalar-capture pass (T3_SCALAR, a SEPARATE Ollama call
+   * per candidate). Default false: the binary-only call stays the default
+   * (half the load). When true, the shadow log also carries a 0.0-1.0
+   * confidence per candidate, giving a real gradient for a future rerank
+   * simulation (see docs/qa/domain-fit-r13-2-sim-results.md §c — the binary
+   * label + a synthetic proxy score could not differentiate multipliers).
+   */
+  DOMAIN_FIT_SHADOW_SCALAR: boolFlag.default(false as unknown as string),
 });
 
 export interface DomainFitShadowConfig {
@@ -62,6 +77,7 @@ export interface DomainFitShadowConfig {
   timeoutMs: number;
   concurrency: number;
   maxCandidates: number;
+  scalarEnabled: boolean;
 }
 
 const DEFAULTS: DomainFitShadowConfig = {
@@ -71,6 +87,7 @@ const DEFAULTS: DomainFitShadowConfig = {
   timeoutMs: 5000,
   concurrency: 4,
   maxCandidates: 40,
+  scalarEnabled: false,
 };
 
 export function loadDomainFitShadowConfig(
@@ -83,6 +100,7 @@ export function loadDomainFitShadowConfig(
     DOMAIN_FIT_SHADOW_TIMEOUT_MS: env['DOMAIN_FIT_SHADOW_TIMEOUT_MS'],
     DOMAIN_FIT_SHADOW_CONCURRENCY: env['DOMAIN_FIT_SHADOW_CONCURRENCY'],
     DOMAIN_FIT_SHADOW_MAX_CANDIDATES: env['DOMAIN_FIT_SHADOW_MAX_CANDIDATES'],
+    DOMAIN_FIT_SHADOW_SCALAR: env['DOMAIN_FIT_SHADOW_SCALAR'],
   });
   if (!parsed.success) return { ...DEFAULTS };
   return {
@@ -92,5 +110,6 @@ export function loadDomainFitShadowConfig(
     timeoutMs: parsed.data.DOMAIN_FIT_SHADOW_TIMEOUT_MS,
     concurrency: parsed.data.DOMAIN_FIT_SHADOW_CONCURRENCY,
     maxCandidates: parsed.data.DOMAIN_FIT_SHADOW_MAX_CANDIDATES,
+    scalarEnabled: parsed.data.DOMAIN_FIT_SHADOW_SCALAR,
   };
 }

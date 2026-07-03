@@ -1,5 +1,5 @@
 /**
- * domain-fit-shadow/shadow — R13-1 enforce-0 invariant tests.
+ * domain-fit-shadow/shadow — R13-1 enforce-0 invariant tests, R14-1 rescope.
  *
  * Pins:
  *   - flag off (enabled:false) → zero classifyDomainFit calls, zero recordTrace
@@ -10,13 +10,20 @@
  *   - recordTrace is called with the expected step name + shape (fit/not_fit/
  *     failed counts + per-candidate rank/cellIndex preserved).
  *   - runDomainFitShadow never throws even when classifyDomainFit rejects.
+ *   - R14-1: classification is ALWAYS against centerGoal (goal-level), never
+ *     subGoals[cellIndex] — cellIndex is still logged, just not used to pick
+ *     the comparison text.
+ *   - R14-1: scalar capture is additive, off by default, never replaces the
+ *     binary call.
  */
 
 const mockClassify = jest.fn();
+const mockClassifyScalar = jest.fn();
 const mockRecordTrace = jest.fn();
 
 jest.mock('@/modules/domain-fit-shadow/client', () => ({
   classifyDomainFit: (...args: unknown[]) => mockClassify(...args),
+  classifyDomainFitScalar: (...args: unknown[]) => mockClassifyScalar(...args),
 }));
 jest.mock('@/modules/discover-tracing', () => ({
   recordTrace: (...args: unknown[]) => mockRecordTrace(...args),
@@ -36,6 +43,7 @@ const CFG: DomainFitShadowConfig = {
   timeoutMs: 5000,
   concurrency: 2,
   maxCandidates: 3,
+  scalarEnabled: false,
 };
 
 function baseInput(n: number): ScheduleDomainFitShadowInput {
@@ -55,8 +63,10 @@ function baseInput(n: number): ScheduleDomainFitShadowInput {
 
 beforeEach(() => {
   mockClassify.mockReset();
+  mockClassifyScalar.mockReset();
   mockRecordTrace.mockReset();
   mockClassify.mockResolvedValue({ fit: '적합', ms: 5, ok: true });
+  mockClassifyScalar.mockResolvedValue({ fit: '적합', score: 0.9, ms: 5, ok: true });
 });
 
 describe('scheduleDomainFitShadow — flag gating', () => {
@@ -93,18 +103,55 @@ describe('runDomainFitShadow — enforce-0 + logging shape', () => {
     expect(mockClassify).toHaveBeenCalledTimes(2);
   });
 
-  it('resolves each candidate goal from subGoals[cellIndex]', async () => {
+  it('R14-1: always classifies against centerGoal, regardless of cellIndex (goal-level, not per-cell)', async () => {
     const input = baseInput(1);
-    input.candidates[0]!.cellIndex = 1;
+    input.candidates[0]!.cellIndex = 1; // subGoals[1] = '문법' — must NOT be used
     await runDomainFitShadow(input, CFG);
-    expect(mockClassify).toHaveBeenCalledWith('문법', 'title 0', CFG);
+    expect(mockClassify).toHaveBeenCalledWith('영어 프리토킹 달성', 'title 0', CFG);
   });
 
-  it('falls back to centerGoal when cellIndex has no matching subGoal', async () => {
+  it('R14-1: still uses centerGoal even when cellIndex is out of subGoals range', async () => {
     const input = baseInput(1);
     input.candidates[0]!.cellIndex = 99;
     await runDomainFitShadow(input, CFG);
     expect(mockClassify).toHaveBeenCalledWith('영어 프리토킹 달성', 'title 0', CFG);
+  });
+
+  it('R14-1: does not call classifyDomainFitScalar when scalarEnabled is false (default)', async () => {
+    const input = baseInput(2);
+    await runDomainFitShadow(input, CFG);
+    expect(mockClassifyScalar).not.toHaveBeenCalled();
+  });
+
+  it('R14-1: calls classifyDomainFitScalar per candidate when scalarEnabled is true, additive not substitutive', async () => {
+    const input = baseInput(2);
+    await runDomainFitShadow(input, { ...CFG, scalarEnabled: true });
+    expect(mockClassify).toHaveBeenCalledTimes(2);
+    expect(mockClassifyScalar).toHaveBeenCalledTimes(2);
+    expect(mockClassifyScalar).toHaveBeenCalledWith('영어 프리토킹 달성', 'title 0', {
+      ...CFG,
+      scalarEnabled: true,
+    });
+  });
+
+  it('R14-1: logs scalarScore per candidate + scalar_mean in the trace response when scalarEnabled', async () => {
+    mockClassifyScalar
+      .mockResolvedValueOnce({ fit: '적합', score: 0.9, ms: 5, ok: true })
+      .mockResolvedValueOnce({ fit: '적합', score: 0.7, ms: 5, ok: true });
+    const input = baseInput(2);
+    await runDomainFitShadow(input, { ...CFG, scalarEnabled: true });
+    const call = mockRecordTrace.mock.calls[0]![0];
+    expect(call.response.scalar_mean).toBeCloseTo(0.8);
+    expect(call.response.candidates[0].scalarScore).toBe(0.9);
+    expect(call.response.candidates[1].scalarScore).toBe(0.7);
+  });
+
+  it('R14-1: trace request payload marks goal_level:true and scalar_enabled', async () => {
+    const input = baseInput(1);
+    await runDomainFitShadow(input, CFG);
+    const call = mockRecordTrace.mock.calls[0]![0];
+    expect(call.request.goal_level).toBe(true);
+    expect(call.request.scalar_enabled).toBe(false);
   });
 
   it('writes one recordTrace call with step domain_fit_shadow.<stage> and count/candidate shape', async () => {

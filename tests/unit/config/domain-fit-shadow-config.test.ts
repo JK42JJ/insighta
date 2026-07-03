@@ -15,6 +15,7 @@ describe('loadDomainFitShadowConfig', () => {
     expect(cfg.timeoutMs).toBe(5000);
     expect(cfg.concurrency).toBe(4);
     expect(cfg.maxCandidates).toBe(40);
+    expect(cfg.scalarEnabled).toBe(false);
   });
 
   it('parses DOMAIN_FIT_SHADOW=true and overrides', () => {
@@ -26,6 +27,19 @@ describe('loadDomainFitShadowConfig', () => {
     expect(cfg.enabled).toBe(true);
     expect(cfg.maxCandidates).toBe(10);
     expect(cfg.concurrency).toBe(2);
+  });
+
+  it('R14-1: parses DOMAIN_FIT_SHADOW_SCALAR=true independently of the master flag', () => {
+    const cfg = loadDomainFitShadowConfig({
+      DOMAIN_FIT_SHADOW: 'true',
+      DOMAIN_FIT_SHADOW_SCALAR: 'true',
+    } as NodeJS.ProcessEnv);
+    expect(cfg.scalarEnabled).toBe(true);
+  });
+
+  it('R14-1: DOMAIN_FIT_SHADOW_SCALAR defaults false even when master flag is on', () => {
+    const cfg = loadDomainFitShadowConfig({ DOMAIN_FIT_SHADOW: 'true' } as NodeJS.ProcessEnv);
+    expect(cfg.scalarEnabled).toBe(false);
   });
 
   it('treats DOMAIN_FIT_SHADOW=false explicitly as disabled (not truthy-coerced)', () => {
