@@ -384,6 +384,46 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           if (liveGateCfg.mode === 'on' && v5Filtered.length > 0) {
             liveGate = await gateLiveSearchCards(v5Filtered, liveGateCtx);
             v5Exposed = liveGate.exposed;
+          } else if (liveGateCfg.mode === 'rank' && v5Filtered.length > 0) {
+            // ON전략 A: order by CACHED gc (no blocking, nothing hidden), then
+            // fire the shadow scoring async to populate the cache for the next
+            // round. First search = pick order (+0ms); re-search = gc-ordered.
+            const { orderByCachedGc } = await import('@/modules/inflow-gate/live-search-gate');
+            const ranked = await orderByCachedGc(v5Filtered, mandalaId).catch(() => null);
+            if (ranked) v5Exposed = ranked.ordered;
+            const defByVideoId = new Map(v5Filtered.map((c) => [c.videoId, c.definition]));
+            void gateLiveSearchCards(v5Filtered, liveGateCtx)
+              .then((g) => {
+                recordTrace({
+                  step: 'live_gate.shadow',
+                  status: 'ok',
+                  response: {
+                    mode: 'rank',
+                    would_gc_dropped: g.gcDropped,
+                    would_lang_dropped: g.langDropped,
+                    lang_dropped_items: g.langDroppedItems,
+                    would_demoted: g.demoted,
+                    cache_hits: g.cacheHits,
+                    scored: g.scored,
+                    latency_ms: g.latencyMs,
+                    would_drop_subscriber_100: g.wouldDropSub100,
+                    would_drop_subscriber_1000: g.wouldDropSub1000,
+                    gc_scores: Array.from(g.gcByVideoId.entries())
+                      .filter(([, v]) => v != null)
+                      .map(([id, v]) => ({
+                        id,
+                        gc: v,
+                        subs: g.subsByVideoId.get(id) ?? null,
+                        hd: defByVideoId.get(id) ?? null,
+                      })),
+                  },
+                });
+              })
+              .catch((err) => {
+                log.warn(
+                  `live_gate rank-shadow failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+                );
+              });
           } else if (liveGateCfg.mode === 'shadow' && v5Filtered.length > 0) {
             // D-04-보정 shadow: score async off the response path — trace-only
             // would_* counters, ZERO exposure impact, zero added latency. The
