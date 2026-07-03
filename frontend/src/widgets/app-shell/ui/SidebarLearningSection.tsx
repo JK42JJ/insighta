@@ -505,7 +505,9 @@ function BookChapterPreview({
             key={sIdx}
             onClick={() => {
               setActiveSection({ chapterIdx: chapter.ch, sectionIdx: sIdx });
-              setCenterTab('section');
+              // 섹션 내용 tab retired (2026-07-03) — the jump lands on the
+              // chapters tab; long-form reading lives in note mode.
+              setCenterTab('chapters');
               if (firstAtom?.vid && Number.isFinite(firstAtom.ts)) {
                 const ts = Math.floor(firstAtom.ts ?? 0);
                 if (firstAtom.vid !== currentVideoId) {

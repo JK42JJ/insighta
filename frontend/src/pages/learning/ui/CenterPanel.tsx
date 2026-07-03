@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom';
 import {
   Sparkles,
   Zap,
-  BookText,
   List,
   Play,
   BookOpen,
@@ -58,7 +57,10 @@ interface CenterPanelProps {
   startTime?: number;
 }
 
-type CenterTabId = 'chapters' | 'summary' | 'section';
+// '섹션 내용' tab retired 2026-07-03 (James) — it duplicated note mode (the
+// book section prose), a pre-note-view legacy bridge. Video mode = watch +
+// time axis + briefing; reading lives in note mode.
+type CenterTabId = 'chapters' | 'summary';
 
 function formatMMSS(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
@@ -329,7 +331,6 @@ export function CenterPanel({
   }> = [
     { id: 'chapters', labelKey: 'learning.tabChapters', fallback: '챕터', icon: List },
     { id: 'summary', labelKey: 'learning.tabSummary', fallback: 'AI 요약', icon: Sparkles },
-    { id: 'section', labelKey: 'learning.tabSection', fallback: '섹션 내용', icon: BookText },
   ];
 
   // [STEP3] Chapters = v2 segment sections (same data the highlight reel uses).
@@ -589,18 +590,6 @@ export function CenterPanel({
                 <PanelAISummary videoSummary={undefined} videoUrl={videoUrl} />
               </div>
             )}
-            {centerTab === 'section' &&
-              (activeSection ? (
-                <SectionContentView
-                  chapter={activeSection.chapter}
-                  section={activeSection.section}
-                  mandalaId={mandalaId}
-                />
-              ) : (
-                <div className="text-[12px] text-muted-foreground">
-                  {t('learning.noActiveSection', '좌측 북인덱스에서 섹션을 선택하세요.')}
-                </div>
-              ))}
           </div>
         )}
       </div>
@@ -760,7 +749,9 @@ function ChapterList({
   );
 }
 
-function SectionContentView({
+/** @deprecated '섹션 내용' tab retired 2026-07-03 (duplicated note mode).
+ *  Kept per the no-component-deletion rule; unused-prefix satisfies lint. */
+function _SectionContentView({
   chapter,
   section,
   mandalaId,
