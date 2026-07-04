@@ -55,6 +55,9 @@ import { logger } from '@/utils/logger';
 import { enqueueEnrichRichSummary } from '@/modules/queue';
 import { config } from '../../config';
 import { shortGateFields } from '@/modules/video-pool/is-short';
+import { loadDomainFitShadowConfig } from '@/config/domain-fit-shadow';
+import { scheduleDomainFitWriteShadow } from '@/modules/domain-fit-shadow/write-shadow';
+import { getMandalaManager } from '@/modules/mandala/manager';
 
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const VIDEO_ID_LOG_TRIM = 60;
@@ -553,6 +556,40 @@ export const cardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           if (await isChannelBlocked(ytFull.channel_id, ytFull.channel_title)) {
             log.info(`like → video_pool ingest SKIPPED (blocklisted channel): videoId=${videoId}`);
             return;
+          }
+          // R19 — domain-fit WRITE-edge shadow (measure-only, enforce-0).
+          // Same signal + fire-and-forget shape as the serve-side shadow
+          // hook (docs/qa/domain-fit-r14-write-gate-and-goal-level.md
+          // §R14-2 #2). Guarded by the flag BEFORE the extra mandala
+          // lookup so writeShadowEnabled=false (default) costs zero extra
+          // DB queries, not just zero extra Ollama calls. Never gates the
+          // upsert below — schedule call is fire-and-forget internally.
+          if (body.mandalaId) {
+            const shadowCfg = loadDomainFitShadowConfig();
+            if (shadowCfg.writeShadowEnabled) {
+              try {
+                const mandala = await getMandalaManager().getMandalaById(userId, body.mandalaId);
+                const root = mandala?.levels.find((l) => l.depth === 0);
+                if (root?.centerGoal) {
+                  scheduleDomainFitWriteShadow(
+                    {
+                      stage: 'like',
+                      centerGoal: root.centerGoal,
+                      videoId,
+                      title: ytFull.title ?? '',
+                      source: 'user_curated',
+                      mandalaId: body.mandalaId,
+                      userId,
+                    },
+                    shadowCfg
+                  );
+                }
+              } catch (shadowErr) {
+                log.debug(
+                  `like → domain-fit write-shadow resolve failed (swallowed): ${shadowErr instanceof Error ? shadowErr.message : String(shadowErr)}`
+                );
+              }
+            }
           }
           const lang = ytFull.title && /[가-힣]/.test(ytFull.title) ? 'ko' : 'en';
           // CP491 step 4 — short gate (demote Shorts at promote).

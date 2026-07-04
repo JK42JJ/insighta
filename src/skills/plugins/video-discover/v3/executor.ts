@@ -51,6 +51,7 @@ import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 import { resolveLanguage } from '@/utils/detect-language';
+import { scheduleDomainFitShadow } from '@/modules/domain-fit-shadow/shadow';
 
 import {
   buildRuleBasedQueriesSync,
@@ -509,6 +510,23 @@ async function executeImpl(
               byCell_counts: Array.from({ length: 8 }, (_, i) => byCell.get(i)?.length ?? 0),
             },
             latencyMs: Date.now() - mfT0,
+          });
+
+          // R13-1 — domain-fit shadow (Tier 1). Fire-and-forget; enforce-0:
+          // reads byCell for logging only, never mutates it or filteredTier1.
+          scheduleDomainFitShadow({
+            stage: 'tier1',
+            centerGoal: state.centerGoal,
+            subGoals: state.subGoals,
+            candidates: Array.from(byCell.entries()).flatMap(([cellIndex, assignments]) =>
+              assignments.map((a, rank) => ({
+                videoId: a.candidate.videoId,
+                title: a.candidate.title,
+                cellIndex,
+                rank,
+                score: a.score,
+              }))
+            ),
           });
         } else {
           log.warn(
@@ -1178,6 +1196,10 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   const tMandalaFilterStart = Date.now();
   const deficitCellSet = new Set(input.deficitCells.map((c) => c.cellIndex));
   const scored: ScoredCandidate[] = [];
+  // R13-1 domain-fit shadow — true only when applyMandalaFilterWithStats ran
+  // (the useYoutubeRankingOnly bypass branch below skips the mandala filter
+  // entirely, so there is no domain-fit-relevant filter output to shadow).
+  let mandalaFilterRanTier2 = false;
 
   if (v3Config.useYoutubeRankingOnly) {
     // CP436 PR-Y0d (Issue #543) — bypass mandala-filter, trust YouTube's
@@ -1260,6 +1282,7 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
         scored.push({ video: enrichedVideo, cellIndex, score: a.score });
       }
     }
+    mandalaFilterRanTier2 = true;
   }
   const tScoringStart = Date.now();
   debug.scoredCandidates = scored.length;
@@ -1269,6 +1292,25 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   const pickedVideoIds = new Set<string>();
   const channelPerCell = new Map<number, Map<string, number>>();
   scored.sort((a, b) => b.score - a.score);
+
+  // R13-1 — domain-fit shadow (Tier 2). Fire-and-forget; enforce-0: reads
+  // `scored` (already sorted, unmodified below) for logging only. The
+  // in-array index IS the candidate's current serve rank for this run.
+  if (mandalaFilterRanTier2) {
+    scheduleDomainFitShadow({
+      stage: 'tier2',
+      centerGoal: input.state.centerGoal,
+      subGoals: input.state.subGoals,
+      candidates: scored.map((sc, rank) => ({
+        videoId: sc.video.videoId,
+        title: sc.video.title,
+        cellIndex: sc.cellIndex,
+        rank,
+        score: sc.score,
+      })),
+    });
+  }
+
   const slots: AssembledSlot[] = [];
   for (const sc of scored) {
     const need = input.deficitCells.find((c) => c.cellIndex === sc.cellIndex)?.need ?? 0;

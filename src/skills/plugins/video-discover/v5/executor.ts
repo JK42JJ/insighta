@@ -399,6 +399,11 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
       fanoutById,
       metaById,
       language: input.language,
+      // R19 — centerGoal already in scope (used at lines 166/265/266);
+      // forwarded so reusePickedToPool can schedule a domain-fit WRITE-edge
+      // shadow judgment per card (write-shadow.ts). enforce-0: reuse-loop
+      // behavior itself is unchanged by this addition.
+      centerGoal: input.centerGoal,
     }).catch((e) => log.warn(`reuse-loop failed: ${e instanceof Error ? e.message : String(e)}`));
   }
 
