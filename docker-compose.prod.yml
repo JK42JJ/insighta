@@ -166,6 +166,15 @@ services:
       # Rollback = flip BOTH back (false / delete line) + redeploy, no revert.
       - V5_KO_EN_TITLE_DROP=true
       - V5_POOL_SERVE=true
+      # CP511 R23 ① serve-shadow canary (James-authorized supply activation,
+      # supervisor-GO 2026-07-04). Pure would-serve logging on pool-serve-fill:
+      # logs what the domain-fit gate WOULD flag at serve-time, WITHOUT changing
+      # serving order/results (async, enforce-0). Zero behavior risk. Purpose:
+      # verify (a) new R23 code runs in prod (b) prod→local Ollama reachable
+      # (c) per-cell would-serve L2 data before any enforce. Rollback = delete
+      # line → code default false (DOMAIN_FIT_SERVE_SHADOW off).
+      # NOTE: this config's boolFlag accepts only true/1/yes (NOT "on") — use =true.
+      - DOMAIN_FIT_SERVE_SHADOW=true
       # G3 W1③ supply bridge — serve the backfilled yt_promoted rows.
       # W1① backfill embedded 7,015 yt_promoted (gold/silver, classifyQuality —
       # same gate as v2_promoted, NOT batch_trend). Measured: cohort cos>=0.5
