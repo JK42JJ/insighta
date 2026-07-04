@@ -5,11 +5,18 @@
  *
  * R19 addition — reusePickedToPool's domain-fit WRITE-edge shadow wiring
  * (enforce-0: the shadow schedule call never gates or alters the upsert).
+ *
+ * R23 addition — the enforce-capable gate (write-gate.ts), gated by
+ * DOMAIN_FIT_WRITE_ENFORCE (mocked via loadDomainFitShadowConfig below):
+ * off (default) → runDomainFitWriteEnforce is never called, upsert unaffected
+ * (R19-A1 unchanged); on → a block verdict skips the upsert.
  */
 
 const mockUpsert = jest.fn().mockResolvedValue({});
 const mockShortGateFields = jest.fn().mockResolvedValue({ is_short: false });
 const mockScheduleWriteShadow = jest.fn();
+const mockLoadDomainFitShadowConfig = jest.fn();
+const mockRunWriteEnforce = jest.fn();
 
 jest.mock('@/modules/database/client', () => ({
   getPrismaClient: () => ({ video_pool: { upsert: (...args: unknown[]) => mockUpsert(...args) } }),
@@ -19,6 +26,12 @@ jest.mock('@/modules/video-pool/is-short', () => ({
 }));
 jest.mock('@/modules/domain-fit-shadow/write-shadow', () => ({
   scheduleDomainFitWriteShadow: (...args: unknown[]) => mockScheduleWriteShadow(...args),
+}));
+jest.mock('@/config/domain-fit-shadow', () => ({
+  loadDomainFitShadowConfig: (...args: unknown[]) => mockLoadDomainFitShadowConfig(...args),
+}));
+jest.mock('@/modules/domain-fit-shadow/write-gate', () => ({
+  runDomainFitWriteEnforce: (...args: unknown[]) => mockRunWriteEnforce(...args),
 }));
 
 import {
@@ -94,6 +107,10 @@ describe('reusePickedToPool — R19 domain-fit WRITE-edge shadow wiring (enforce
     mockUpsert.mockClear();
     mockShortGateFields.mockClear();
     mockScheduleWriteShadow.mockClear();
+    mockRunWriteEnforce.mockClear();
+    // R23 default: enforce OFF (matches loadDomainFitShadowConfig's real
+    // default), so pre-R23 tests below stay byte-identical without edits.
+    mockLoadDomainFitShadowConfig.mockReturnValue({ writeEnforceEnabled: false });
   });
 
   const baseInput = (over: Partial<ReuseInput> = {}): ReuseInput => ({
@@ -153,5 +170,78 @@ describe('reusePickedToPool — R19 domain-fit WRITE-edge shadow wiring (enforce
     // call site does not await it.
     mockScheduleWriteShadow.mockReturnValue(new Promise(() => {}) as unknown as void);
     await expect(reusePickedToPool(baseInput())).resolves.toEqual({ reused: 1, skipped: 0 });
+  });
+});
+
+describe('reusePickedToPool — R23 domain-fit WRITE-edge ENFORCE gate', () => {
+  beforeEach(() => {
+    mockUpsert.mockClear();
+    mockShortGateFields.mockClear();
+    mockScheduleWriteShadow.mockClear();
+    mockRunWriteEnforce.mockClear();
+  });
+
+  const baseInput = (over: Partial<ReuseInput> = {}): ReuseInput => ({
+    cards: [card()],
+    fanoutById: fanout(),
+    metaById: meta(),
+    language: 'ko',
+    centerGoal: '도커 입문',
+    ...over,
+  });
+
+  test('enforce OFF (default): runDomainFitWriteEnforce is never called, upsert unaffected', async () => {
+    mockLoadDomainFitShadowConfig.mockReturnValue({ writeEnforceEnabled: false });
+    const result = await reusePickedToPool(baseInput());
+    expect(mockRunWriteEnforce).not.toHaveBeenCalled();
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ reused: 1, skipped: 0 });
+  });
+
+  test('enforce ON + PASS verdict → upsert proceeds', async () => {
+    mockLoadDomainFitShadowConfig.mockReturnValue({ writeEnforceEnabled: true });
+    mockRunWriteEnforce.mockResolvedValue({ passed: true, fit: '적합', reason: 'fit' });
+    const result = await reusePickedToPool(baseInput());
+    expect(mockRunWriteEnforce).toHaveBeenCalledTimes(1);
+    expect(mockRunWriteEnforce).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: 'reuse',
+        centerGoal: '도커 입문',
+        videoId: 'vid12345678',
+        source: REUSE_SOURCE,
+      }),
+      expect.objectContaining({ writeEnforceEnabled: true })
+    );
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ reused: 1, skipped: 0 });
+  });
+
+  test('enforce ON + BLOCK verdict → upsert skipped, counted as skipped (not reused)', async () => {
+    mockLoadDomainFitShadowConfig.mockReturnValue({ writeEnforceEnabled: true });
+    mockRunWriteEnforce.mockResolvedValue({ passed: false, fit: '비적합', reason: 'not_fit' });
+    const result = await reusePickedToPool(baseInput());
+    expect(mockRunWriteEnforce).toHaveBeenCalledTimes(1);
+    expect(mockUpsert).not.toHaveBeenCalled();
+    expect(result).toEqual({ reused: 0, skipped: 1 });
+  });
+
+  test('enforce ON but centerGoal omitted → gate never called (mirrors shadow enforce-0 no-op), upsert proceeds', async () => {
+    mockLoadDomainFitShadowConfig.mockReturnValue({ writeEnforceEnabled: true });
+    const result = await reusePickedToPool(baseInput({ centerGoal: undefined }));
+    expect(mockRunWriteEnforce).not.toHaveBeenCalled();
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ reused: 1, skipped: 0 });
+  });
+
+  test('enforce ON + BLOCK on one card among two → only the blocked card is skipped', async () => {
+    mockLoadDomainFitShadowConfig.mockReturnValue({ writeEnforceEnabled: true });
+    mockRunWriteEnforce
+      .mockResolvedValueOnce({ passed: true, fit: '적합', reason: 'fit' })
+      .mockResolvedValueOnce({ passed: false, fit: '비적합', reason: 'not_fit' });
+    const cardB = card({ videoId: 'vid87654321' });
+    const result = await reusePickedToPool(baseInput({ cards: [card(), cardB] }));
+    expect(mockRunWriteEnforce).toHaveBeenCalledTimes(2);
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ reused: 1, skipped: 1 });
   });
 });

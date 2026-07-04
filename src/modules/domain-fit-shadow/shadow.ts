@@ -32,7 +32,10 @@ import { classifyDomainFit, classifyDomainFitScalar, type DomainFitLabel } from 
 
 const log = logger.child({ module: 'domain-fit-shadow' });
 
-export type DomainFitShadowStage = 'tier1' | 'tier2';
+/** 'pool_serve' — R23 addition: pool-serve-fill.ts's SERVE-edge would-serve
+ *  shadow (gated by DOMAIN_FIT_SERVE_SHADOW via a cfgOverride, not the master
+ *  DOMAIN_FIT_SHADOW flag). Same `domain_fit_shadow.<stage>` trace step shape. */
+export type DomainFitShadowStage = 'tier1' | 'tier2' | 'pool_serve';
 
 /** One recruited candidate as it stands AFTER applyMandalaFilterWithStats. */
 export interface ShadowCandidateInput {

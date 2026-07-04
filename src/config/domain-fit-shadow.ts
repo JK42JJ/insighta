@@ -79,6 +79,27 @@ export const domainFitShadowEnvSchema = z.object({
    * extra DB lookups at either WRITE-edge call site.
    */
   DOMAIN_FIT_WRITE_SHADOW: boolFlag.default(false as unknown as string),
+  /**
+   * R23 — WRITE-edge ENFORCE capability (blast-0 code, deploy = James-gated).
+   * SEPARATE from `DOMAIN_FIT_WRITE_SHADOW` (measure-only, never branches):
+   * this flag lets `src/modules/video-pool/reuse-from-v5.ts` AWAIT the
+   * composite T3+lexical judgment (`./write-gate.ts`) and SKIP the upsert on
+   * a block verdict. Default false = the existing write-shadow call is the
+   * only thing that runs (R19-A1 unchanged, zero extra Ollama calls, zero
+   * write-decision impact). Independent of `V5_REUSE_LOOP` (reuse dispatch
+   * has its own flag) — enforce only matters once reuse is already ON.
+   */
+  DOMAIN_FIT_WRITE_ENFORCE: boolFlag.default(false as unknown as string),
+  /**
+   * R23 — pool-serve SERVE-edge shadow (`src/modules/queue/handlers/pool-serve-fill.ts`).
+   * SEPARATE from the master `DOMAIN_FIT_SHADOW` (which gates the v3/executor.ts
+   * wizard read-path hooks) so pool-serve's would-serve logging can be toggled
+   * without touching the wizard's shadow coverage. enforce-0: only turns on an
+   * ASYNC, POST-gate `scheduleDomainFitShadow` call (shadow.ts, unmodified) —
+   * never reorders or drops a candidate the relevance gate already passed.
+   * Default false = zero extra Ollama calls at this call site.
+   */
+  DOMAIN_FIT_SERVE_SHADOW: boolFlag.default(false as unknown as string),
 });
 
 export interface DomainFitShadowConfig {
@@ -91,6 +112,10 @@ export interface DomainFitShadowConfig {
   scalarEnabled: boolean;
   /** R19 — independent flag for the two WRITE-edge shadow hooks (reuse-loop + /like). */
   writeShadowEnabled: boolean;
+  /** R23 — independent flag: enforce-capable WRITE gate (reuse-loop only today). */
+  writeEnforceEnabled: boolean;
+  /** R23 — independent flag: pool-serve SERVE-edge would-serve shadow log. */
+  serveShadowEnabled: boolean;
 }
 
 const DEFAULTS: DomainFitShadowConfig = {
@@ -102,6 +127,8 @@ const DEFAULTS: DomainFitShadowConfig = {
   maxCandidates: 40,
   scalarEnabled: false,
   writeShadowEnabled: false,
+  writeEnforceEnabled: false,
+  serveShadowEnabled: false,
 };
 
 export function loadDomainFitShadowConfig(
@@ -116,6 +143,8 @@ export function loadDomainFitShadowConfig(
     DOMAIN_FIT_SHADOW_MAX_CANDIDATES: env['DOMAIN_FIT_SHADOW_MAX_CANDIDATES'],
     DOMAIN_FIT_SHADOW_SCALAR: env['DOMAIN_FIT_SHADOW_SCALAR'],
     DOMAIN_FIT_WRITE_SHADOW: env['DOMAIN_FIT_WRITE_SHADOW'],
+    DOMAIN_FIT_WRITE_ENFORCE: env['DOMAIN_FIT_WRITE_ENFORCE'],
+    DOMAIN_FIT_SERVE_SHADOW: env['DOMAIN_FIT_SERVE_SHADOW'],
   });
   if (!parsed.success) return { ...DEFAULTS };
   return {
@@ -127,5 +156,7 @@ export function loadDomainFitShadowConfig(
     maxCandidates: parsed.data.DOMAIN_FIT_SHADOW_MAX_CANDIDATES,
     scalarEnabled: parsed.data.DOMAIN_FIT_SHADOW_SCALAR,
     writeShadowEnabled: parsed.data.DOMAIN_FIT_WRITE_SHADOW,
+    writeEnforceEnabled: parsed.data.DOMAIN_FIT_WRITE_ENFORCE,
+    serveShadowEnabled: parsed.data.DOMAIN_FIT_SERVE_SHADOW,
   };
 }

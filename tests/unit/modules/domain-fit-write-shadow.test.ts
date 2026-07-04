@@ -47,6 +47,8 @@ const CFG_OFF: DomainFitShadowConfig = {
   maxCandidates: 40,
   scalarEnabled: false,
   writeShadowEnabled: false,
+  writeEnforceEnabled: false,
+  serveShadowEnabled: false,
 };
 const CFG_ON: DomainFitShadowConfig = { ...CFG_OFF, writeShadowEnabled: true };
 
