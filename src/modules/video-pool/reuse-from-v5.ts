@@ -27,6 +27,7 @@ import { shortGateFields } from '@/modules/video-pool/is-short';
 import { getPrismaClient } from '@/modules/database/client';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { logger } from '@/utils/logger';
+import { scheduleDomainFitWriteShadow } from '@/modules/domain-fit-shadow/write-shadow';
 
 const log = logger.child({ module: 'video-pool/reuse-from-v5' });
 
@@ -53,6 +54,13 @@ export interface ReuseInput {
   /** videos.list full metadata (carries like_count that V5Card drops). */
   metaById: Map<string, { statistics?: { likeCount?: string } }>;
   language: 'ko' | 'en';
+  /**
+   * R19 — mandala centerGoal, forwarded so `reusePickedToPool` can schedule a
+   * domain-fit WRITE-edge shadow judgment per card (see write-shadow.ts).
+   * Optional: undefined/empty ⇒ the shadow call is skipped for that card
+   * (never blocks or alters the upsert either way — enforce-0).
+   */
+  centerGoal?: string;
 }
 
 interface ShortGate {
@@ -170,6 +178,18 @@ export async function reusePickedToPool(
       if (!row) {
         skipped += 1;
         continue;
+      }
+      // R19 — domain-fit WRITE-edge shadow (measure-only, enforce-0). Same
+      // fire-and-forget shape as the serve-side shadow hook; never awaited,
+      // never gates the upsert below (docs/qa/domain-fit-r14-write-gate-and-goal-level.md §R14-2 #1).
+      if (input.centerGoal) {
+        scheduleDomainFitWriteShadow({
+          stage: 'reuse',
+          centerGoal: input.centerGoal,
+          videoId: card.videoId,
+          title: card.title,
+          source: REUSE_SOURCE,
+        });
       }
       await prisma.video_pool.upsert({
         where: { video_id: card.videoId },

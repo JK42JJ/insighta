@@ -44,6 +44,7 @@ const CFG: DomainFitShadowConfig = {
   concurrency: 2,
   maxCandidates: 3,
   scalarEnabled: false,
+  writeShadowEnabled: false, // R19 — unrelated to this read-path suite
 };
 
 function baseInput(n: number): ScheduleDomainFitShadowInput {

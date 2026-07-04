@@ -16,6 +16,7 @@ describe('loadDomainFitShadowConfig', () => {
     expect(cfg.concurrency).toBe(4);
     expect(cfg.maxCandidates).toBe(40);
     expect(cfg.scalarEnabled).toBe(false);
+    expect(cfg.writeShadowEnabled).toBe(false);
   });
 
   it('parses DOMAIN_FIT_SHADOW=true and overrides', () => {
@@ -53,5 +54,26 @@ describe('loadDomainFitShadowConfig', () => {
     } as NodeJS.ProcessEnv);
     expect(cfg.enabled).toBe(false);
     expect(cfg.maxCandidates).toBe(40);
+  });
+
+  it('R19: parses DOMAIN_FIT_WRITE_SHADOW=true independently of the master flag', () => {
+    const cfg = loadDomainFitShadowConfig({
+      DOMAIN_FIT_WRITE_SHADOW: 'true',
+    } as NodeJS.ProcessEnv);
+    expect(cfg.writeShadowEnabled).toBe(true);
+    expect(cfg.enabled).toBe(false); // master read-path flag untouched
+  });
+
+  it('R19: DOMAIN_FIT_SHADOW=true does not turn on writeShadowEnabled (separate flags)', () => {
+    const cfg = loadDomainFitShadowConfig({ DOMAIN_FIT_SHADOW: 'true' } as NodeJS.ProcessEnv);
+    expect(cfg.enabled).toBe(true);
+    expect(cfg.writeShadowEnabled).toBe(false);
+  });
+
+  it('R19: treats DOMAIN_FIT_WRITE_SHADOW=false explicitly as disabled (not truthy-coerced)', () => {
+    const cfg = loadDomainFitShadowConfig({
+      DOMAIN_FIT_WRITE_SHADOW: 'false',
+    } as NodeJS.ProcessEnv);
+    expect(cfg.writeShadowEnabled).toBe(false);
   });
 });

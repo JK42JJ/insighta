@@ -68,6 +68,17 @@ export const domainFitShadowEnvSchema = z.object({
    * label + a synthetic proxy score could not differentiate multipliers).
    */
   DOMAIN_FIT_SHADOW_SCALAR: boolFlag.default(false as unknown as string),
+  /**
+   * R19 — WRITE-edge shadow (docs/qa/domain-fit-r14-write-gate-and-goal-level.md
+   * §R14-2 file:line). SEPARATE flag from the master `DOMAIN_FIT_SHADOW`
+   * (which only gates the serve-side read-path hooks in v3/executor.ts) so
+   * the two observability surfaces — "what got served" vs "what got
+   * written to video_pool" — can be toggled independently. Same frozen T3
+   * classifier + connection config as the master flag; only the on/off
+   * switch is distinct. Default false = zero extra Ollama calls, zero
+   * extra DB lookups at either WRITE-edge call site.
+   */
+  DOMAIN_FIT_WRITE_SHADOW: boolFlag.default(false as unknown as string),
 });
 
 export interface DomainFitShadowConfig {
@@ -78,6 +89,8 @@ export interface DomainFitShadowConfig {
   concurrency: number;
   maxCandidates: number;
   scalarEnabled: boolean;
+  /** R19 — independent flag for the two WRITE-edge shadow hooks (reuse-loop + /like). */
+  writeShadowEnabled: boolean;
 }
 
 const DEFAULTS: DomainFitShadowConfig = {
@@ -88,6 +101,7 @@ const DEFAULTS: DomainFitShadowConfig = {
   concurrency: 4,
   maxCandidates: 40,
   scalarEnabled: false,
+  writeShadowEnabled: false,
 };
 
 export function loadDomainFitShadowConfig(
@@ -101,6 +115,7 @@ export function loadDomainFitShadowConfig(
     DOMAIN_FIT_SHADOW_CONCURRENCY: env['DOMAIN_FIT_SHADOW_CONCURRENCY'],
     DOMAIN_FIT_SHADOW_MAX_CANDIDATES: env['DOMAIN_FIT_SHADOW_MAX_CANDIDATES'],
     DOMAIN_FIT_SHADOW_SCALAR: env['DOMAIN_FIT_SHADOW_SCALAR'],
+    DOMAIN_FIT_WRITE_SHADOW: env['DOMAIN_FIT_WRITE_SHADOW'],
   });
   if (!parsed.success) return { ...DEFAULTS };
   return {
@@ -111,5 +126,6 @@ export function loadDomainFitShadowConfig(
     concurrency: parsed.data.DOMAIN_FIT_SHADOW_CONCURRENCY,
     maxCandidates: parsed.data.DOMAIN_FIT_SHADOW_MAX_CANDIDATES,
     scalarEnabled: parsed.data.DOMAIN_FIT_SHADOW_SCALAR,
+    writeShadowEnabled: parsed.data.DOMAIN_FIT_WRITE_SHADOW,
   };
 }
