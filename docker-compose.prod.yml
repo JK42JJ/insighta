@@ -545,7 +545,12 @@ services:
       # cross-domain noise). Restructured query (eligible CTE first) makes the
       # source filter actually shrink the cosine scan.
       # Rollback: append ,batch_trend — but expect 45-100s Tier 1.
-      - V3_TIER1_SOURCES=v2_promoted
+      # 2026-07-07 (supervisor GO, veto-by-exception) — admit yt_promoted into the
+      # live tier1 path (add-cards/wizard v3) so the Phase 1+2 supply repair
+      # (yt_promoted 84→7,084 active, title-restored) reaches the wizard sync path,
+      # not just pool-serve. Test-condition setup for the 0707 wizard verification.
+      # Rollback: delete yt_promoted → code default ['v2_promoted'] (env one-liner).
+      - V3_TIER1_SOURCES=v2_promoted,yt_promoted
       - V3_SEMANTIC_MIN_COSINE=0.5
       # BL-17 (2026-07-04) — fail-closed empty-title guard. SCRUB (YouTube ToS
       # 30d metadata wipe, is_active-agnostic) + /like zombie upsert leave ~691
