@@ -192,6 +192,14 @@ services:
       # V5_SERIES_DEDUP_SIM (0.8) / V5_CHANNEL_SOFT_CAP (2 = demote from 3rd).
       # Revert: delete this line + redeploy → code default false (기존 동작).
       - V5_DIVERSITY_GUARD=true
+      # 2026-07-06 (James [GO], supervisor canary) — global channel HARD cap.
+      # The per-cell soft cap (2/cell) can't see a channel spread 2 across N cells
+      # (measured: 말트영어 10/49 in a 5-cell 영어 add_cards trace, zero per-cell
+      # violations). This adds a cross-cell hard cap: 4th+ from one channel demoted
+      # (demote-only, count-neutral — measured 10→3 primary, 49→49 total). Fires
+      # only when candidates ≥ V5_CHANNEL_HARD_CAP_MIN_CANDIDATES (30) so thin
+      # cells keep soft-demote. Rollback = set to 0 + redeploy (code default off).
+      - V5_CHANNEL_HARD_CAP=3
       # CP500++ (2026-06-18, James [GO]) — restore the min-view floor on the
       # wizard/auto-add path. #804 (2026-05-30) switched the wizard v3→v5; the v3
       # quality gate (filterByQualityGate, MIN_VIEW 1000) was NOT carried into v5,

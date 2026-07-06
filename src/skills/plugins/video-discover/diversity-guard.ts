@@ -288,6 +288,120 @@ export function softChannelCap<T extends DiversityCandidate>(candidates: T[], ca
   return out;
 }
 
+// ── hard channel cap (global, demote-only) ──────────────────────────────────
+
+export interface HardChannelCapResult<T extends DiversityCandidate> {
+  /** Same length as input — DEMOTE only, never drop (card-floor 50~70 불변). */
+  reordered: T[];
+  demoted: number;
+}
+
+/**
+ * Global (cross-cell) channel cap — closes the gap softChannelCap cannot: a
+ * channel under the per-cell cap in EVERY individual cell can still monopolize
+ * the aggregate list (e.g. 2/cell × 5 cells = 10 cards, one channel, zero
+ * per-cell violations). Counted across the WHOLE candidate list regardless of
+ * cellIndex; the cap-th+ occurrence of one channel is DEMOTED to the tail,
+ * preserving relative order — never dropped, so downstream card-count floor
+ * (50~70) is never at risk from this transform alone.
+ *
+ * `minCandidates` gate: below this pool size the cap does not fire at all
+ * (thin-supply protection — same principle as softChannelCap's single-channel
+ * bucket passthrough, applied globally instead of per-cell).
+ */
+export function hardChannelCap<T extends DiversityCandidate>(
+  candidates: T[],
+  cap: number,
+  minCandidates: number
+): HardChannelCapResult<T> {
+  if (cap <= 0 || candidates.length < minCandidates) {
+    return { reordered: candidates, demoted: 0 };
+  }
+  const counts = new Map<string, number>();
+  const primary: T[] = [];
+  const demoted: T[] = [];
+  candidates.forEach((c) => {
+    const ch = channelKey(c);
+    if (!ch) {
+      primary.push(c);
+      return;
+    }
+    const n = (counts.get(ch) ?? 0) + 1;
+    counts.set(ch, n);
+    (n <= cap ? primary : demoted).push(c);
+  });
+  return { reordered: [...primary, ...demoted], demoted: demoted.length };
+}
+
+// ── cross-channel title dedup (demote-only) ─────────────────────────────────
+
+export interface CrossChannelDedupResult<T extends DiversityCandidate> {
+  /** Same length as input — DEMOTE only, never drop. */
+  reordered: T[];
+  demoted: number;
+}
+
+/**
+ * Groups near-identical titles ACROSS channels (unlike dedupeSeries, which is
+ * same-channel-only and requires an episode token) — catches the "동일 문구
+ * 반복 재업로드" pattern (e.g. "왕초보 영어회화 100문장 | 생활영어 …" reposted
+ * with cosmetic wording changes by many small channels). Token-Jaccard over
+ * stripEpisodeTokens output (reused — brackets/lowercase/punctuation strip is
+ * useful here even without an episode marker). Union-find groups transitively
+ * similar titles; representative = first occurrence in input order, the rest
+ * DEMOTED to the tail (never dropped — card-floor invariant).
+ */
+export function crossChannelTitleDedup<T extends DiversityCandidate>(
+  candidates: T[],
+  simThreshold: number
+): CrossChannelDedupResult<T> {
+  const n = candidates.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (x: number): number => {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]!]!;
+      x = parent[x]!;
+    }
+    return x;
+  };
+  const union = (a: number, b: number): void => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[Math.max(ra, rb)] = Math.min(ra, rb);
+  };
+
+  const normed = candidates.map((c) => stripEpisodeTokens(c.title || ''));
+  for (let i = 0; i < n; i += 1) {
+    if (!normed[i]) continue; // no title text — never grouped (no fabrication)
+    for (let j = i + 1; j < n; j += 1) {
+      if (!normed[j]) continue;
+      if (strippedTitleSimilarity(candidates[i]!.title, candidates[j]!.title) >= simThreshold) {
+        union(i, j);
+      }
+    }
+  }
+
+  const repOf = new Map<number, number>(); // root → representative (first occurrence)
+  const membersOf = new Map<number, number[]>();
+  for (let i = 0; i < n; i += 1) {
+    const r = find(i);
+    if (!repOf.has(r)) repOf.set(r, i);
+    const arr = membersOf.get(r) ?? [];
+    arr.push(i);
+    membersOf.set(r, arr);
+  }
+  const demotedIdx = new Set<number>();
+  for (const [root, members] of membersOf) {
+    if (members.length <= 1) continue;
+    const rep = repOf.get(root)!;
+    for (const m of members) if (m !== rep) demotedIdx.add(m);
+  }
+  const primary: T[] = [];
+  const demoted: T[] = [];
+  candidates.forEach((c, i) => (demotedIdx.has(i) ? demoted : primary).push(c));
+  return { reordered: [...primary, ...demoted], demoted: demoted.length };
+}
+
 // ── observability (③ raw 모집 채널 분포 1줄) ────────────────────────────────
 
 export interface ChannelDistribution {

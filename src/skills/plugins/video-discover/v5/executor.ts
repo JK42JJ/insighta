@@ -25,7 +25,12 @@ import {
 } from './youtube-fanout';
 import type { QueryGenMeta } from './llm-query-gen';
 import { getV5Config } from './config';
-import { dedupeSeries, softChannelCap } from '../diversity-guard';
+import {
+  dedupeSeries,
+  softChannelCap,
+  hardChannelCap,
+  crossChannelTitleDedup,
+} from '../diversity-guard';
 import { loadDiversityGuardConfig } from '@/config/diversity-guard';
 import { getVideoPicker } from '@/modules/llm-picker/registry';
 import { getLlmPickerConfig } from '@/config/llm-picker';
@@ -200,6 +205,37 @@ export async function runV5Executor(input: V5ExecuteInput): Promise<V5ExecuteRes
     survivors = softChannelCap(d.kept, diversity.channelSoftCap);
     if (d.dropped > 0) {
       log.info(`v5 diversity guard: series-dedup dropped ${d.dropped}/${afterExcludeFilter}`);
+    }
+
+    // CP511+1 — global channel hard cap + cross-channel title dedup, BOTH
+    // demote-only (never drop — 카드수 50~70 floor 불변). Closes the gap
+    // softChannelCap cannot: a channel under-cap in EVERY individual cell can
+    // still monopolize the aggregate list (measured: mandala 7d5d759e add_cards
+    // trace 42da98a6, 2026-07-06 — 말트영어 10/49 PLACED, soft-cap=2/cell
+    // already active, zero per-cell violations). Flag-gated; unset/0 = 기존
+    // 동작 (byte-identical — hardCap/crossChannelDedup are no-ops when
+    // channelHardCap<=0 / crossChannelDedupEnabled=false).
+    if (diversity.channelHardCap > 0) {
+      const capped = hardChannelCap(
+        survivors,
+        diversity.channelHardCap,
+        diversity.channelHardCapMinCandidates
+      );
+      survivors = capped.reordered;
+      if (capped.demoted > 0) {
+        log.info(
+          `v5 diversity guard: hard channel cap demoted ${capped.demoted}/${survivors.length}`
+        );
+      }
+    }
+    if (diversity.crossChannelDedupEnabled) {
+      const deduped = crossChannelTitleDedup(survivors, diversity.crossChannelDedupSim);
+      survivors = deduped.reordered;
+      if (deduped.demoted > 0) {
+        log.info(
+          `v5 diversity guard: cross-channel title dedup demoted ${deduped.demoted}/${survivors.length}`
+        );
+      }
     }
   }
 
