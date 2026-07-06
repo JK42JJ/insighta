@@ -197,6 +197,12 @@ services:
       # V5_SERIES_DEDUP_SIM (0.8) / V5_CHANNEL_SOFT_CAP (2 = demote from 3rd).
       # Revert: delete this line + redeploy → code default false (기존 동작).
       - V5_DIVERSITY_GUARD=true
+      # P3 supply flip (2026-07-06, supervisor green-light + James durable delegation).
+      # Admit yt_promoted (7,064 direct-collected, currently unused) into pool-serve
+      # sources alongside v2_promoted (1,365 active). Probe pattern — measure niche
+      # (기타/DA) re-serve poolPassed/livePassed then decide retain vs revert.
+      # Revert: delete this line + redeploy → code default POOL_SOURCES_BASE=['v2_promoted'].
+      - POOL_SERVE_SOURCES_EXTRA=yt_promoted
       # 2026-07-06 (James [GO], supervisor canary) — global channel HARD cap.
       # The per-cell soft cap (2/cell) can't see a channel spread 2 across N cells
       # (measured: 말트영어 10/49 in a 5-cell 영어 add_cards trace, zero per-cell
