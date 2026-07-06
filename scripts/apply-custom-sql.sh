@@ -170,6 +170,11 @@ APPLY_FILES=(
   # change); inert until /api/v1/search is called.
   "prisma/migrations/global-search/001_pg_trgm_indexes.sql"
   "prisma/migrations/channel-blocklist/001_create_channel_blocklist.sql"
+  # Search redesign R24 — video_domain_fit_cache (per-mandala domain-fit
+  # verdict cache for SERVE-edge enforce). CREATE TABLE/INDEX IF NOT EXISTS —
+  # fully idempotent. Inert (never read or written) until
+  # DOMAIN_FIT_SERVE_ENFORCE flips on.
+  "prisma/migrations/domain-fit-serve-cache/001_create_video_domain_fit_cache.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
