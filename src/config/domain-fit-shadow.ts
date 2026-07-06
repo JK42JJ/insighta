@@ -113,6 +113,20 @@ export const domainFitShadowEnvSchema = z.object({
    * runs (R23 invariant unchanged, zero extra Ollama calls, zero reorder).
    */
   DOMAIN_FIT_SERVE_ENFORCE: boolFlag.default(false as unknown as string),
+  /**
+   * R24+1 — SYNC-path cache-consume (supervisor spec). SEPARATE from
+   * `DOMAIN_FIT_SERVE_ENFORCE` (which AWAITS a classifier call, safe only
+   * inside the already-async pool-serve-fill job): this flag lets the
+   * synchronous add-cards/v5 HTTP response path
+   * (`src/api/routes/add-cards.ts`) apply a CACHE-ONLY demote-only reorder
+   * (`src/modules/domain-fit-shadow/sync-consume.ts`) — zero synchronous
+   * Ollama calls, ever. Cache misses schedule a fire-and-forget async
+   * classify+persist (`setImmediate`) so the cache warms for the next
+   * request; the current request sees multiplier=1 (untouched) for those.
+   * Default false = zero extra DB reads/writes at this call site, zero
+   * timing change (byte-identical to pre-existing behavior).
+   */
+  DOMAIN_FIT_SYNC_CONSUME: boolFlag.default(false as unknown as string),
 });
 
 export interface DomainFitShadowConfig {
@@ -131,6 +145,8 @@ export interface DomainFitShadowConfig {
   serveShadowEnabled: boolean;
   /** R24 — independent flag: pool-serve SERVE-edge ENFORCE (real reorder). */
   serveEnforceEnabled: boolean;
+  /** R24+1 — independent flag: sync add-cards/v5 path CACHE-ONLY reorder (no sync Ollama call). */
+  syncConsumeEnabled: boolean;
 }
 
 const DEFAULTS: DomainFitShadowConfig = {
@@ -145,6 +161,7 @@ const DEFAULTS: DomainFitShadowConfig = {
   writeEnforceEnabled: false,
   serveShadowEnabled: false,
   serveEnforceEnabled: false,
+  syncConsumeEnabled: false,
 };
 
 export function loadDomainFitShadowConfig(
@@ -162,6 +179,7 @@ export function loadDomainFitShadowConfig(
     DOMAIN_FIT_WRITE_ENFORCE: env['DOMAIN_FIT_WRITE_ENFORCE'],
     DOMAIN_FIT_SERVE_SHADOW: env['DOMAIN_FIT_SERVE_SHADOW'],
     DOMAIN_FIT_SERVE_ENFORCE: env['DOMAIN_FIT_SERVE_ENFORCE'],
+    DOMAIN_FIT_SYNC_CONSUME: env['DOMAIN_FIT_SYNC_CONSUME'],
   });
   if (!parsed.success) return { ...DEFAULTS };
   return {
@@ -176,5 +194,6 @@ export function loadDomainFitShadowConfig(
     writeEnforceEnabled: parsed.data.DOMAIN_FIT_WRITE_ENFORCE,
     serveShadowEnabled: parsed.data.DOMAIN_FIT_SERVE_SHADOW,
     serveEnforceEnabled: parsed.data.DOMAIN_FIT_SERVE_ENFORCE,
+    syncConsumeEnabled: parsed.data.DOMAIN_FIT_SYNC_CONSUME,
   };
 }
