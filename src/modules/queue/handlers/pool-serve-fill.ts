@@ -49,8 +49,12 @@ import { isShortCached, SHORT_MAX_DURATION_SEC } from '@/modules/video-pool/is-s
 import { getV5Config } from '@/skills/plugins/video-discover/v5/config';
 import { parseIsoDurationSeconds } from '@/skills/plugins/video-discover/v5/executor';
 import { isOffLanguageTitleToggled } from '@/skills/plugins/video-discover/v5/youtube-fanout';
-import { dedupeSeries, softChannelCap } from '@/skills/plugins/video-discover/diversity-guard';
-import { loadDiversityGuardConfig } from '@/config/diversity-guard';
+import {
+  dedupeSeries,
+  softChannelCap,
+  hardChannelCap,
+} from '@/skills/plugins/video-discover/diversity-guard';
+import { loadDiversityGuardConfig, type DiversityGuardConfig } from '@/config/diversity-guard';
 import { logger } from '@/utils/logger';
 import { config } from '@/config/index';
 import { writeSearchTrace, type SearchTraceCandidateInput } from '@/modules/search-trace';
@@ -115,6 +119,30 @@ interface PassedCandidate extends GateCandidate {
   relevancePct: number;
   /** Observability — the gate axis value (gc / goalContribution or composite). */
   gatePct: number;
+}
+
+/**
+ * Pool-serve diversity transform — series-dedup + soft channel cap (existing
+ * behavior) PLUS the global channel hard cap (measured gap — hardChannelCap
+ * was wired only in v5/executor.ts, never here; see diversity-guard.ts's
+ * V5_CHANNEL_HARD_CAP doc comment for the rationale/measurement). Same
+ * demote-only semantics as the v5 executor usage: cap<=0 is a no-op
+ * (byte-identical to pre-existing behavior). Exported as a pure function so
+ * the wiring is directly unit-testable without spinning the full pg-boss job
+ * handler.
+ */
+export function applyPoolServeDiversity<T extends GateCandidate>(
+  cands: T[],
+  against: T[],
+  cfg: DiversityGuardConfig
+): T[] {
+  if (!cfg.enabled) return cands;
+  const d = dedupeSeries(cands, { simThreshold: cfg.seriesSim, against });
+  let out = softChannelCap(d.kept, cfg.channelSoftCap);
+  if (cfg.channelHardCap > 0) {
+    out = hardChannelCap(out, cfg.channelHardCap, cfg.channelHardCapMinCandidates).reordered;
+  }
+  return out;
 }
 
 export interface PoolServeCellResult {
@@ -198,11 +226,8 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
     // limit: already-OWNED cards' titles are not loaded (id-only exclude), so
     // cross-run series dups are out of scope here (backlog).
     const diversity = loadDiversityGuardConfig();
-    const applyDiversity = (cands: GateCandidate[], against: GateCandidate[]): GateCandidate[] => {
-      if (!diversity.enabled) return cands;
-      const d = dedupeSeries(cands, { simThreshold: diversity.seriesSim, against });
-      return softChannelCap(d.kept, diversity.channelSoftCap);
-    };
+    const applyDiversity = (cands: GateCandidate[], against: GateCandidate[]): GateCandidate[] =>
+      applyPoolServeDiversity(cands, against, diversity);
 
     // CP500+ shorts gate — EXACT replica of the v5 placement gate
     // (v5/executor.ts step 6): duration>=180 short-circuits with no HTTP;
