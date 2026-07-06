@@ -14,6 +14,8 @@ import {
   hasEpisodeToken,
   seriesMarker,
   softChannelCap,
+  hardChannelCap,
+  crossChannelTitleDedup,
   strippedTitleSimilarity,
   type DiversityCandidate,
 } from '@/skills/plugins/video-discover/diversity-guard';
@@ -166,12 +168,113 @@ describe('softChannelCap', () => {
   });
 });
 
+describe('hardChannelCap (CP511+1 — global, demote-only)', () => {
+  const mk = (ch: string, n: number, cell: number | null = null): DiversityCandidate[] =>
+    Array.from({ length: n }, (_, i) => ({
+      title: `${ch} video ${i + 1}`,
+      channelId: ch,
+      channelTitle: ch,
+      cellIndex: cell,
+    }));
+
+  it('REGRESSION-MEASURED — one channel at soft-cap=2/cell across 5 cells (10 total, 0 per-cell violations) still gets globally capped', () => {
+    // Mirrors the measured prod pattern (mandala 7d5d759e add_cards, 2026-07-06):
+    // softChannelCap alone never fires here (exactly 2/cell everywhere).
+    const oneChannelAcross5Cells = [0, 1, 2, 3, 4].flatMap((cell) => mk('MALT', 2, cell));
+    const other = Array.from({ length: 39 }, (_, i) => mk(`OTHER-${i}`, 1)[0]!); // 39 distinct single-appearance channels
+    const list = [...oneChannelAcross5Cells, ...other];
+    expect(list).toHaveLength(49);
+
+    const afterSoft = softChannelCap(list, 2);
+    // soft cap never demotes anything — every cell bucket already at exactly 2.
+    expect(afterSoft).toEqual(list);
+
+    const { reordered, demoted } = hardChannelCap(afterSoft, 3, 30);
+    expect(reordered).toHaveLength(49); // count preserved — demote only
+    expect(demoted).toBe(7); // MALT: 10 total, cap=3 → 7 demoted
+    const primary = reordered.slice(0, reordered.length - demoted);
+    expect(primary.filter((c) => c.channelId === 'MALT')).toHaveLength(3);
+  });
+
+  it('below minCandidates — skip entirely (thin-supply protection)', () => {
+    const list = mk('A', 10); // one channel, 10 cards, cap would fire without the gate
+    const { reordered, demoted } = hardChannelCap(list, 3, 30); // 10 < 30 → no-op
+    expect(reordered).toEqual(list);
+    expect(demoted).toBe(0);
+  });
+
+  it('cap<=0 — no-op (flag-off byte-identical)', () => {
+    const list = mk('A', 40);
+    const { reordered, demoted } = hardChannelCap(list, 0, 30);
+    expect(reordered).toEqual(list);
+    expect(demoted).toBe(0);
+  });
+
+  it('preserves relative order within primary + within demoted tail', () => {
+    const list = mk('A', 5);
+    const { reordered, demoted } = hardChannelCap(list, 2, 3);
+    expect(reordered.map((c) => c.title)).toEqual([
+      'A video 1',
+      'A video 2',
+      'A video 3',
+      'A video 4',
+      'A video 5',
+    ]);
+    expect(demoted).toBe(3);
+  });
+});
+
+describe('crossChannelTitleDedup (CP511+1 — cross-channel, demote-only)', () => {
+  const cand = (title: string, channelId: string): DiversityCandidate => ({
+    title,
+    channelId,
+    channelTitle: channelId,
+  });
+
+  it('groups near-identical titles ACROSS different channels (no episode token needed)', () => {
+    const a = cand('도커 완전 정복 강의 — 초보자를 위한 컨테이너 입문', 'UC-1');
+    const b = cand('도커 완전 정복 강의 초보자를 위한 컨테이너 입문 총정리', 'UC-2');
+    const c = cand('전혀 다른 주제의 파이썬 데이터분석 강의', 'UC-3');
+    const { reordered, demoted } = crossChannelTitleDedup([a, b, c], 0.6);
+    expect(reordered).toHaveLength(3); // count preserved — demote only
+    expect(demoted).toBe(1);
+    expect(reordered[0]).toBe(a); // representative = first occurrence
+    expect(reordered[reordered.length - 1]).toBe(b); // duplicate demoted to tail
+  });
+
+  it('MEASURED LIMITATION (real prod titles, 2026-07-06) — SEO-padded 100문장 titles score far below the 0.6-0.7 conservative range', () => {
+    // 3 known near-duplicate titles from one prod channel (mandala 7d5d759e,
+    // trace 42da98a6) — measured token-Jaccard 0.12-0.17, i.e. this transform
+    // as specified does NOT catch this specific spam pattern on real data.
+    const titles = [
+      '기초영어 100문장｜왕초보도 말문 트이는 생활영어 회화 매일 듣기 반복학습',
+      '왕초보 영어회화 100문장 듣기 루틴｜매일 1시간만 틀어두면 자동으로 익혀집니다 (한글발음 포함)',
+      '왕초보 기초 영어회화 100문장 | 생활영어 첫걸음 이것부터 외우세요(흘려듣기)',
+    ].map((t, i) => cand(t, `UC-malt-${i}`));
+    const { reordered, demoted } = crossChannelTitleDedup(titles, 0.65);
+    expect(reordered).toHaveLength(3);
+    expect(demoted).toBe(0); // documents the measured gap — not a false claim of success
+  });
+
+  it('missing title text never groups (no fabrication) — count preserved', () => {
+    const a: DiversityCandidate = { title: '', channelId: 'UC-1' };
+    const b: DiversityCandidate = { title: '', channelId: 'UC-2' };
+    const { reordered, demoted } = crossChannelTitleDedup([a, b], 0.1);
+    expect(reordered).toHaveLength(2);
+    expect(demoted).toBe(0);
+  });
+});
+
 describe('config + observability', () => {
   it('flag default OFF (unset = 기존 동작, hard rule) + provisional knobs', () => {
     const cfg = loadDiversityGuardConfig({} as NodeJS.ProcessEnv);
     expect(cfg.enabled).toBe(false);
     expect(cfg.seriesSim).toBe(0.8);
     expect(cfg.channelSoftCap).toBe(2);
+    expect(cfg.channelHardCap).toBe(0);
+    expect(cfg.channelHardCapMinCandidates).toBe(30);
+    expect(cfg.crossChannelDedupEnabled).toBe(false);
+    expect(cfg.crossChannelDedupSim).toBe(0.65);
   });
 
   it('env overrides parse', () => {
@@ -179,8 +282,20 @@ describe('config + observability', () => {
       V5_DIVERSITY_GUARD: 'true',
       V5_SERIES_DEDUP_SIM: '0.7',
       V5_CHANNEL_SOFT_CAP: '3',
+      V5_CHANNEL_HARD_CAP: '3',
+      V5_CHANNEL_HARD_CAP_MIN_CANDIDATES: '25',
+      V5_CROSS_CHANNEL_TITLE_DEDUP: 'true',
+      V5_CROSS_CHANNEL_DEDUP_SIM: '0.6',
     } as unknown as NodeJS.ProcessEnv);
-    expect(cfg).toEqual({ enabled: true, seriesSim: 0.7, channelSoftCap: 3 });
+    expect(cfg).toEqual({
+      enabled: true,
+      seriesSim: 0.7,
+      channelSoftCap: 3,
+      channelHardCap: 3,
+      channelHardCapMinCandidates: 25,
+      crossChannelDedupEnabled: true,
+      crossChannelDedupSim: 0.6,
+    });
   });
 
   it('channelDistribution computes total/distinct/top3 share', () => {
