@@ -454,6 +454,7 @@ model user_mandalas {
   levels           user_mandala_levels[]
   videoRelevance   video_mandala_relevance[]
   segmentRelevance video_mandala_segment_relevance[]
+  domainFitCache   video_domain_fit_cache[]
   videoStates      UserVideoState[]
   localCards       user_local_cards[]
   subscriptions    mandala_subscriptions[]
@@ -2434,6 +2435,38 @@ model video_mandala_relevance {
 
   @@id([video_id, mandala_id])
   @@index([mandala_id], map: "idx_vmr_mandala")
+  @@schema("public")
+}
+
+/// R24 — SERVE-edge domain-fit ENFORCE cache (search redesign, blast-0).
+/// video-intrinsic per-mandala cache, SAME PK shape as video_mandala_relevance
+/// (deliberately a SEPARATE table — never shares a write path with the
+/// relevance cache above, so this ENFORCE addition carries zero risk to the
+/// existing relevance-gate cache read/write semantics). Avoids a repeat
+/// Ollama T3 classification call for the same (video, mandala) pair across
+/// pool-serve-fill's pool + live stages and across separate fill dispatches
+/// for the same mandala — domain-fit classification is goal-level (R14-1),
+/// i.e. mandala-wide, not per-cell, so one score serves every cell.
+/// Flag-gated by DOMAIN_FIT_SERVE_ENFORCE (default false) — this table is
+/// inert (never read or written) until the flag is on. See
+/// src/modules/domain-fit-shadow/serve-enforce.ts + serve-cache.ts.
+model video_domain_fit_cache {
+  video_id         String        @db.VarChar(11)
+  mandala_id       String        @db.Uuid
+  /// '적합' | '비적합' — NULL is never persisted (classifier-unavailable
+  /// results fail-open with multiplier=1 and are NOT cached, so a transient
+  /// Mac Mini outage self-heals on the next call instead of being pinned).
+  fit              String?       @db.VarChar(10)
+  lexical_conflict Boolean       @default(false)
+  /// Composite deboost multiplier applied at serve time (1.0 = no-op,
+  /// DOMAIN_FIT_SERVE_ENFORCE_DEBOOST_MULTIPLIER on a 비적합 verdict).
+  multiplier       Float
+  model            String        @db.VarChar(64)
+  scored_at        DateTime      @default(now()) @db.Timestamptz(6)
+  mandala          user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([video_id, mandala_id])
+  @@index([mandala_id], map: "idx_video_domain_fit_cache_mandala")
   @@schema("public")
 }
 

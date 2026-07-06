@@ -56,6 +56,8 @@ import { config } from '@/config/index';
 import { writeSearchTrace, type SearchTraceCandidateInput } from '@/modules/search-trace';
 import { loadDomainFitShadowConfig } from '@/config/domain-fit-shadow';
 import { scheduleDomainFitShadow } from '@/modules/domain-fit-shadow/shadow';
+import { runDomainFitServeEnforce } from '@/modules/domain-fit-shadow/serve-enforce';
+import { createPrismaDomainFitServeCache } from '@/modules/domain-fit-shadow/serve-cache';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, POOL_SERVE_FILL_RETRY_OPTIONS, type PoolServeFillPayload } from '../types';
 import { richSummaryWorkOptions } from './rich-summary-work-options';
@@ -140,6 +142,11 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
   const poolSourceTier: string | null = poolSources.length === 1 ? (poolSources[0] ?? null) : null;
   const domainFitCfg = loadDomainFitShadowConfig();
   const prisma = getPrismaClient();
+  // R24 — ENFORCE cache scoped to this mandala (video-intrinsic per-mandala,
+  // table video_domain_fit_cache). Construction itself is zero-I/O; get/set
+  // only fire when DOMAIN_FIT_SERVE_ENFORCE is actually on (see
+  // runDomainFitServeEnforce's flag-gated short-circuit).
+  const domainFitServeCache = createPrismaDomainFitServeCache(prisma, p.mandalaId);
   const result: PoolServeCellResult = {
     recruited: 0,
     scored: 0,
@@ -349,25 +356,43 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
     }
     result.recruited = recruits.length;
     const passed: PassedCandidate[] = [];
+    const poolPreGate = await dropShorts(
+      applyDiversity(
+        hygienic(
+          recruits.map((c) => ({
+            youtubeVideoId: c.videoId,
+            title: c.title,
+            description: c.description,
+            channelTitle: c.channelName,
+            thumbnail: c.thumbnail,
+            publishedAt: c.publishedAt,
+            durationSec: c.durationSec,
+            tsRank: c.rec_score,
+            sourceKind: 'pool' as const,
+            sourceTier: poolSourceTier,
+          }))
+        ),
+        []
+      )
+    );
+    // R24 — SERVE-edge domain-fit ENFORCE (real reorder, demote-only, never
+    // drop — see serve-enforce.ts). Runs BEFORE the relevance gate's per-cell
+    // budget cutoff so a low domain-fit candidate can genuinely lose a
+    // limited slot to a better-fit candidate further down the recruit-rank
+    // order. Gated by `DOMAIN_FIT_SERVE_ENFORCE` (default false ⇒ zero-cost
+    // no-op, same array reference returned — byte-identical to pre-R24).
     await gate(
-      await dropShorts(
-        applyDiversity(
-          hygienic(
-            recruits.map((c) => ({
-              youtubeVideoId: c.videoId,
-              title: c.title,
-              description: c.description,
-              channelTitle: c.channelName,
-              thumbnail: c.thumbnail,
-              publishedAt: c.publishedAt,
-              durationSec: c.durationSec,
-              tsRank: c.rec_score,
-              sourceKind: 'pool' as const,
-              sourceTier: poolSourceTier,
-            }))
-          ),
-          []
-        )
+      await runDomainFitServeEnforce(
+        {
+          stage: 'pool',
+          centerGoal: p.centerGoal,
+          cellIndex: p.cellIndex,
+          mandalaId: p.mandalaId,
+          userId: p.userId,
+          candidates: poolPreGate,
+        },
+        domainFitCfg,
+        domainFitServeCache
       ),
       passed
     );
@@ -422,7 +447,24 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
           }
         }
         const before = passed.length;
-        await gate(await dropShorts(applyDiversity(liveCands, passed)), passed);
+        const livePreGate = await dropShorts(applyDiversity(liveCands, passed));
+        // R24 — same ENFORCE reorder as the pool stage above (demote-only,
+        // flag-gated no-op by default).
+        await gate(
+          await runDomainFitServeEnforce(
+            {
+              stage: 'live',
+              centerGoal: p.centerGoal,
+              cellIndex: p.cellIndex,
+              mandalaId: p.mandalaId,
+              userId: p.userId,
+              candidates: livePreGate,
+            },
+            domainFitCfg,
+            domainFitServeCache
+          ),
+          passed
+        );
         result.livePassed = passed.length - before;
       } catch (err) {
         // Live failure never fails the job — pool passes still insert.

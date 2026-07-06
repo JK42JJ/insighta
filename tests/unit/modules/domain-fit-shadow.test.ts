@@ -47,6 +47,7 @@ const CFG: DomainFitShadowConfig = {
   writeShadowEnabled: false, // R19 — unrelated to this read-path suite
   writeEnforceEnabled: false, // R23 — unrelated to this read-path suite
   serveShadowEnabled: false, // R23 — unrelated to this read-path suite
+  serveEnforceEnabled: false, // R24 — unrelated to this read-path suite
 };
 
 function baseInput(n: number): ScheduleDomainFitShadowInput {

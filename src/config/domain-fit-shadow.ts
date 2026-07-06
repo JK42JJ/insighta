@@ -100,6 +100,19 @@ export const domainFitShadowEnvSchema = z.object({
    * Default false = zero extra Ollama calls at this call site.
    */
   DOMAIN_FIT_SERVE_SHADOW: boolFlag.default(false as unknown as string),
+  /**
+   * R24 — pool-serve SERVE-edge ENFORCE (search redesign, blast-0; deploy /
+   * flag-flip is James-gated, NOT part of this module's scope). SEPARATE
+   * from `DOMAIN_FIT_SERVE_SHADOW` (would-serve LOGGING only, never
+   * reorders): this flag lets `src/modules/queue/handlers/pool-serve-fill.ts`
+   * AWAIT the composite T3+lexical DEBOOST score
+   * (`src/modules/domain-fit-shadow/serve-enforce.ts`) and REORDER (never
+   * drop) the pre-gate candidate list so low domain-fit candidates are
+   * demoted to the tail before the relevance gate's per-cell budget cutoff.
+   * Default false = the existing serve-shadow call is the only thing that
+   * runs (R23 invariant unchanged, zero extra Ollama calls, zero reorder).
+   */
+  DOMAIN_FIT_SERVE_ENFORCE: boolFlag.default(false as unknown as string),
 });
 
 export interface DomainFitShadowConfig {
@@ -116,6 +129,8 @@ export interface DomainFitShadowConfig {
   writeEnforceEnabled: boolean;
   /** R23 — independent flag: pool-serve SERVE-edge would-serve shadow log. */
   serveShadowEnabled: boolean;
+  /** R24 — independent flag: pool-serve SERVE-edge ENFORCE (real reorder). */
+  serveEnforceEnabled: boolean;
 }
 
 const DEFAULTS: DomainFitShadowConfig = {
@@ -129,6 +144,7 @@ const DEFAULTS: DomainFitShadowConfig = {
   writeShadowEnabled: false,
   writeEnforceEnabled: false,
   serveShadowEnabled: false,
+  serveEnforceEnabled: false,
 };
 
 export function loadDomainFitShadowConfig(
@@ -145,6 +161,7 @@ export function loadDomainFitShadowConfig(
     DOMAIN_FIT_WRITE_SHADOW: env['DOMAIN_FIT_WRITE_SHADOW'],
     DOMAIN_FIT_WRITE_ENFORCE: env['DOMAIN_FIT_WRITE_ENFORCE'],
     DOMAIN_FIT_SERVE_SHADOW: env['DOMAIN_FIT_SERVE_SHADOW'],
+    DOMAIN_FIT_SERVE_ENFORCE: env['DOMAIN_FIT_SERVE_ENFORCE'],
   });
   if (!parsed.success) return { ...DEFAULTS };
   return {
@@ -158,5 +175,6 @@ export function loadDomainFitShadowConfig(
     writeShadowEnabled: parsed.data.DOMAIN_FIT_WRITE_SHADOW,
     writeEnforceEnabled: parsed.data.DOMAIN_FIT_WRITE_ENFORCE,
     serveShadowEnabled: parsed.data.DOMAIN_FIT_SERVE_SHADOW,
+    serveEnforceEnabled: parsed.data.DOMAIN_FIT_SERVE_ENFORCE,
   };
 }
