@@ -175,6 +175,11 @@ services:
       # line → code default false (DOMAIN_FIT_SERVE_SHADOW off).
       # NOTE: this config's boolFlag accepts only true/1/yes (NOT "on") — use =true.
       - DOMAIN_FIT_SERVE_SHADOW=true
+      # R24 SERVE-edge enforce flip (supervisor [GO] 2026-07-06, PR #1104 code).
+      # Demote-only composite deboost on pool-serve-fill pool + live-fallback
+      # branches; card count preserved; classifier-unavailable = fail-open
+      # (multiplier 1, not cached). Rollback = delete line → code default false.
+      - DOMAIN_FIT_SERVE_ENFORCE=true
       # G3 W1③ supply bridge — serve the backfilled yt_promoted rows.
       # W1① backfill embedded 7,015 yt_promoted (gold/silver, classifyQuality —
       # same gate as v2_promoted, NOT batch_trend). Measured: cohort cos>=0.5
