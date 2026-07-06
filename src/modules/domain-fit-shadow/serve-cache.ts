@@ -18,6 +18,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { DomainFitLabel } from './client';
 import type { DomainFitServeCache, DomainFitServeCacheEntry } from './serve-enforce';
+import type { DomainFitSyncConsumeCache } from './sync-consume';
 
 /** Minimal Prisma surface this adapter needs (matches the raw-query style
  *  already used elsewhere in pool-serve-fill.ts for video_mandala_relevance). */
@@ -29,6 +30,10 @@ interface CacheRow {
   multiplier: number;
   model: string;
   scored_at: Date;
+}
+
+interface BatchCacheRow extends CacheRow {
+  video_id: string;
 }
 
 function isFitLabel(v: string | null): v is DomainFitLabel {
@@ -74,6 +79,44 @@ export function createPrismaDomainFitServeCache(
           multiplier = EXCLUDED.multiplier,
           model = EXCLUDED.model,
           scored_at = EXCLUDED.scored_at`;
+    },
+  };
+}
+
+/**
+ * Sync-consume variant — ONE batched `= ANY(...)` read for the whole
+ * candidate set (hot-path latency budget, see `./sync-consume.ts`) instead of
+ * N sequential single-video reads. `set` is the SAME write path as
+ * `createPrismaDomainFitServeCache` (composed, not duplicated).
+ */
+export function createPrismaDomainFitSyncConsumeCache(
+  prisma: DomainFitServeCachePrisma,
+  mandalaId: string
+): DomainFitSyncConsumeCache {
+  const base = createPrismaDomainFitServeCache(prisma, mandalaId);
+  return {
+    // Arrow-wrapped (not `base.set` directly) — avoids the unbound-method
+    // lint rule while still delegating to the same write path.
+    set: (youtubeVideoId, entry) => base.set(youtubeVideoId, entry),
+    async getMany(youtubeVideoIds: string[]): Promise<Map<string, DomainFitServeCacheEntry>> {
+      const map = new Map<string, DomainFitServeCacheEntry>();
+      if (youtubeVideoIds.length === 0) return map;
+      const rows = await prisma.$queryRaw<BatchCacheRow[]>`
+        SELECT video_id, fit, lexical_conflict, multiplier, model, scored_at
+        FROM video_domain_fit_cache
+        WHERE mandala_id = ${mandalaId}::uuid
+          AND video_id = ANY(${youtubeVideoIds}::text[])`;
+      for (const row of rows) {
+        if (!isFitLabel(row.fit)) continue;
+        map.set(row.video_id, {
+          fit: row.fit,
+          lexicalConflict: row.lexical_conflict,
+          multiplier: row.multiplier,
+          model: row.model,
+          scoredAt: row.scored_at.toISOString(),
+        });
+      }
+      return map;
     },
   };
 }
