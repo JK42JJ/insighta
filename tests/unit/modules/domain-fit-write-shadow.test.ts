@@ -49,6 +49,7 @@ const CFG_OFF: DomainFitShadowConfig = {
   writeShadowEnabled: false,
   writeEnforceEnabled: false,
   serveShadowEnabled: false,
+  serveEnforceEnabled: false,
 };
 const CFG_ON: DomainFitShadowConfig = { ...CFG_OFF, writeShadowEnabled: true };
 
