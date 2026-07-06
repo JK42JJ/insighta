@@ -122,12 +122,78 @@ export interface ApplyDomainFitServeEnforceResult<T> {
 }
 
 /**
+ * STABLE demote-only sort by multiplier (descending; ties preserve original
+ * order — `Array.prototype.sort` is stable since ES2019 / all supported Node
+ * runtimes). Shared by `applyDomainFitServeEnforce` (async serve-enforce
+ * reorder) and the sync-consume cache-only reorder (`./sync-consume.ts`) so
+ * the reorder semantics never drift between the two call sites.
+ */
+export function reorderByMultiplier<T>(items: { c: T; multiplier: number }[]): T[] {
+  const indexed = items.map((r, idx) => ({ ...r, idx }));
+  indexed.sort((a, b) => b.multiplier - a.multiplier || a.idx - b.idx);
+  return indexed.map((r) => r.c);
+}
+
+export interface ScoreAndCacheDomainFitResult {
+  /** false = classifier timeout/error/unparsable (fail-open, never cached). */
+  ok: boolean;
+  /** 1 when !ok (fail-open contract — never demotes on classifier failure). */
+  multiplier: number;
+}
+
+/**
+ * Shared classify + lexical-deboost + cache-write core — the ONE place a
+ * candidate is actually scored against Ollama. Used both by the AWAITED
+ * serve-enforce miss-branch below and by the sync-consume fire-and-forget
+ * cache-warm path (`./sync-consume.ts`), so the composite scoring logic
+ * never duplicates between the two call sites. Fail-open: a classifier
+ * failure never demotes and is deliberately NOT cached (self-heals on the
+ * next call instead of pinning a false failure).
+ */
+export async function scoreAndCacheDomainFit<T extends DomainFitServeCandidate>(
+  c: T,
+  centerGoal: string,
+  cfg: DomainFitShadowConfig,
+  cache: Pick<DomainFitServeCache, 'set'>
+): Promise<ScoreAndCacheDomainFitResult> {
+  const r = await classifyDomainFit(centerGoal, c.title, cfg);
+  if (!r.ok || r.fit === null) {
+    return { ok: false, multiplier: 1 };
+  }
+  const { hasConflict, multiplier: lexicalMultiplier } = detectQualifierConflicts(
+    centerGoal,
+    c.title
+  );
+  const multiplier =
+    r.fit === '비적합'
+      ? DOMAIN_FIT_SERVE_ENFORCE_DEBOOST_MULTIPLIER * (hasConflict ? lexicalMultiplier : 1)
+      : hasConflict
+        ? lexicalMultiplier
+        : 1;
+
+  await cache
+    .set(c.youtubeVideoId, {
+      fit: r.fit,
+      lexicalConflict: hasConflict,
+      multiplier,
+      model: cfg.model,
+      scoredAt: new Date().toISOString(),
+    })
+    .catch((err: unknown) => {
+      // Cache-write failure never blocks the reorder/warm this call is doing.
+      log.debug(
+        `domain-fit score-and-cache write failed (swallowed): ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
+  return { ok: true, multiplier };
+}
+
+/**
  * Pure reorder — classify + lexical-deboost combined into one composite
  * multiplier per candidate (cache-first), then a STABLE demote-only sort
- * (multiplier descending; ties preserve original recruit-rank order —
- * `Array.prototype.sort` is stable since ES2019 / all supported Node
- * runtimes). No trace/logging side effect; see `runDomainFitServeEnforce`
- * for the logged wrapper used at the actual call site.
+ * (see `reorderByMultiplier`). No trace/logging side effect; see
+ * `runDomainFitServeEnforce` for the logged wrapper used at the actual call
+ * site.
  *
  * `cfg.serveEnforceEnabled` gates everything: off (default) is a synchronous
  * zero-cost no-op — same array reference returned, zero cache/classifier
@@ -169,50 +235,20 @@ export async function applyDomainFitServeEnforce<T extends DomainFitServeCandida
           return { c, multiplier: cached.multiplier };
         }
 
-        const r = await classifyDomainFit(centerGoal, c.title, cfg);
-        if (!r.ok || r.fit === null) {
-          // Fail-open — a classifier outage must never demote a candidate,
-          // and is deliberately NOT cached (self-heals on the next call).
+        const res = await scoreAndCacheDomainFit(c, centerGoal, cfg, cache);
+        if (!res.ok) {
           classifierFailed += 1;
           return { c, multiplier: 1 };
         }
         scored += 1;
-
-        const { hasConflict, multiplier: lexicalMultiplier } = detectQualifierConflicts(
-          centerGoal,
-          c.title
-        );
-        const multiplier =
-          r.fit === '비적합'
-            ? DOMAIN_FIT_SERVE_ENFORCE_DEBOOST_MULTIPLIER * (hasConflict ? lexicalMultiplier : 1)
-            : hasConflict
-              ? lexicalMultiplier
-              : 1;
-
-        await cache
-          .set(c.youtubeVideoId, {
-            fit: r.fit,
-            lexicalConflict: hasConflict,
-            multiplier,
-            model: cfg.model,
-            scoredAt: new Date().toISOString(),
-          })
-          .catch((err: unknown) => {
-            // Cache-write failure never blocks the reorder this request is doing.
-            log.debug(
-              `domain-fit serve-enforce cache write failed (swallowed): ${err instanceof Error ? err.message : String(err)}`
-            );
-          });
-        return { c, multiplier };
+        return { c, multiplier: res.multiplier };
       })
     );
     withMultiplier.push(...results);
   }
 
-  const indexed = withMultiplier.map((r, idx) => ({ ...r, idx }));
-  indexed.sort((a, b) => b.multiplier - a.multiplier || a.idx - b.idx);
-  const demoted = indexed.filter((r) => r.multiplier < 1).length;
-  const reordered: T[] = [...indexed.map((r) => r.c), ...overflow];
+  const demoted = withMultiplier.filter((r) => r.multiplier < 1).length;
+  const reordered: T[] = [...reorderByMultiplier(withMultiplier), ...overflow];
 
   return { reordered, demoted, scored, cacheHits, classifierFailed };
 }

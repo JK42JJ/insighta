@@ -49,6 +49,7 @@ const CFG: DomainFitShadowConfig = {
   writeEnforceEnabled: true,
   serveShadowEnabled: false,
   serveEnforceEnabled: false,
+  syncConsumeEnabled: false,
 };
 
 beforeEach(() => {

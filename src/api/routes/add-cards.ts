@@ -42,6 +42,9 @@ import { getV5Config } from '@/skills/plugins/video-discover/v5/config';
 import { getFullCellIndices } from '@/modules/mandala/cell-fill';
 import { writeSearchTrace, type DropReason } from '@/modules/search-trace';
 import { randomUUID } from 'node:crypto';
+import { loadDomainFitShadowConfig } from '@/config/domain-fit-shadow';
+import { applyDomainFitSyncConsume } from '@/modules/domain-fit-shadow/sync-consume';
+import { createPrismaDomainFitSyncConsumeCache } from '@/modules/domain-fit-shadow/serve-cache';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -460,6 +463,30 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                   `live_gate shadow failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
                 );
               });
+          }
+
+          // R24+1 — sync-path domain-fit cache-consume (supervisor spec):
+          // CACHE-ONLY demote-only reorder, ZERO synchronous Ollama calls
+          // (hot path — a 1-2s classifier round trip per candidate is
+          // forbidden here). Cache misses schedule a fire-and-forget async
+          // classify+persist (never awaited) so the cache warms for the next
+          // request. Flag-gated; default off = zero reads/writes/timing
+          // change at this call site.
+          const domainFitCfg = loadDomainFitShadowConfig(process.env);
+          if (domainFitCfg.syncConsumeEnabled && v5Exposed.length > 0) {
+            const domainFitSyncCache = createPrismaDomainFitSyncConsumeCache(prisma, mandalaId);
+            const wrapped = v5Exposed.map((c) => ({
+              youtubeVideoId: c.videoId,
+              title: c.title,
+              orig: c,
+            }));
+            const syncResult = await applyDomainFitSyncConsume(
+              wrapped,
+              centerGoal,
+              domainFitCfg,
+              domainFitSyncCache
+            );
+            v5Exposed = syncResult.reordered.map((w) => w.orig);
           }
 
           const cards: AddCardCandidate[] = v5Exposed.map((c) => ({
