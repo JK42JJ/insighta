@@ -11,16 +11,7 @@ import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { GraphView } from '@/components/graph/GraphView';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
-import {
-  LayoutGrid,
-  Grid3X3,
-  Plus,
-  GripVertical,
-  ArrowDownWideNarrow,
-  ArrowUpWideNarrow,
-  ArrowDownAZ,
-  ArrowDownZA,
-} from 'lucide-react';
+import { LayoutGrid, Grid3X3, Plus, GripVertical, ArrowDownWideNarrow, Eye } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -29,8 +20,13 @@ import {
   DropdownMenuRadioItem,
 } from '@/shared/ui/dropdown-menu';
 import { Slider } from '@/shared/ui/slider';
+import { toast } from '@/shared/lib/use-toast';
 import { ContextHeader, SORT_OPTIONS, type SortMode } from './ContextHeader';
 import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
+
+// P3 Stage 1 (CP513) — global (cross-mandala) sort persistence keys.
+const GLOBAL_SORT_KEY = 'insighta:cardSortMode';
+const GLOBAL_SORT_TOAST_KEY = 'insighta:cardSortMode:toastShown';
 
 /**
  * CP498 PR3c — A-stage relevance comparator: DESC, NULLS LAST. `?? -1` sinks
@@ -48,11 +44,9 @@ export const compareByRelevanceDesc = (a: InsightCard, b: InsightCard): number =
 
 const SORT_ICON_BY_VALUE: Record<SortMode, typeof ArrowDownWideNarrow> = {
   latest: ArrowDownWideNarrow,
-  oldest: ArrowUpWideNarrow,
-  'title-asc': ArrowDownAZ,
-  'title-desc': ArrowDownZA,
-  // CP498 PR3c — reuse the descending icon; a dedicated relevance glyph /
-  // numeric badge is deferred (visual signal = later per spec).
+  views: Eye,
+  // relevance-desc stays in the type (hidden from SORT_OPTIONS until coverage
+  // ≥60%); reuse the descending icon for when it is re-exposed.
   'relevance-desc': ArrowDownWideNarrow,
 };
 
@@ -228,29 +222,30 @@ export function CardListView({
   // change → re-snapshot with the latest scores on re-pick.
   const [relevanceRank, setRelevanceRank] = useState<Map<string, number> | null>(null);
 
-  // CP499 #1 — persist sort PER-MANDALA (was ephemeral useState → reset to
-  // 'latest' on every refresh). Each mandala keeps its own fit (new w/ scores →
-  // relevance, old → latest).
-  const sortStorageKey = mandalaId ? `insighta:cardSortMode:${mandalaId}` : null;
+  // P3 Stage 1 (CP513, 2026-07-07 supervisor) — sort is now a GLOBAL setting:
+  // one key applies to ALL mandalas (James's original "글로벌 일괄 적용" order).
+  // Supersedes the CP499 per-mandala key. Old `insighta:cardSortMode:<id>` keys
+  // are ignored (no migration — dead-option values are meaningless to carry;
+  // global default resets to 'latest'). First change fires a one-time toast.
   useEffect(() => {
-    if (!sortStorageKey) {
-      setSortMode('latest');
-      setRelevanceRank(null);
-      return;
-    }
-    const saved = localStorage.getItem(sortStorageKey);
+    const saved = localStorage.getItem(GLOBAL_SORT_KEY);
     const valid = SORT_OPTIONS.some((o) => o.value === saved);
     setSortMode(valid ? (saved as SortMode) : 'latest');
     setRelevanceRank(null); // freeze effect re-snapshots below if relevance
-  }, [sortStorageKey]);
+  }, [mandalaId]);
 
   const handleSortChange = useCallback(
     (v: SortMode) => {
       setSortMode(v);
       setRelevanceRank(null); // clear → freeze effect re-snapshots if relevance
-      if (sortStorageKey) localStorage.setItem(sortStorageKey, v);
+      localStorage.setItem(GLOBAL_SORT_KEY, v);
+      // First-ever global sort change → one-time notice that it applies everywhere.
+      if (!localStorage.getItem(GLOBAL_SORT_TOAST_KEY)) {
+        localStorage.setItem(GLOBAL_SORT_TOAST_KEY, '1');
+        toast({ title: t('contextHeader.sortGlobalNotice', '정렬이 모든 만다라에 적용됩니다') });
+      }
     },
-    [sortStorageKey]
+    [t]
   );
 
   const [isExternalDragOver, setIsExternalDragOver] = useState(false);
@@ -403,21 +398,15 @@ export function CardListView({
           if (!aHas && !bHas) return 0;
           return mb - ma;
         });
-      case 'oldest':
+      case 'views':
+        // P3 Stage 1 (CP513) — YouTube view_count DESC, NULLS LAST. Honest
+        // "조회수" (global popularity), NOT "많이 본" (user watch — that axis has
+        // no data yet, behavioural-signal backlog). Stable tiebreak by id.
         return arr.sort((a, b) => {
-          const ma = getPublishedMs(a);
-          const mb = getPublishedMs(b);
-          const aHas = Number.isFinite(ma);
-          const bHas = Number.isFinite(mb);
-          if (aHas && !bHas) return -1;
-          if (!aHas && bHas) return 1;
-          if (!aHas && !bHas) return 0;
-          return ma - mb;
+          const va = a.viewCount ?? -1;
+          const vb = b.viewCount ?? -1;
+          return vb !== va ? vb - va : a.id.localeCompare(b.id);
         });
-      case 'title-asc':
-        return arr.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-      case 'title-desc':
-        return arr.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
       case 'relevance-desc':
         // CP499 — render in the FROZEN snapshot order (relevanceRank) so the
         // ~17s of background relevance_pct updates don't reorder cards under the

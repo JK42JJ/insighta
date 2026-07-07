@@ -3,17 +3,17 @@ import { Trash2 } from 'lucide-react';
 import type { ViewMode } from '@/entities/user/model/types';
 import { ViewSwitcher } from '@/features/view-mode';
 
-export type SortMode = 'latest' | 'oldest' | 'title-asc' | 'title-desc' | 'relevance-desc';
+// P3 Stage 1 (CP513, 2026-07-07 supervisor) — visible sort reduced to
+// [latest (default), views (조회수)]. 'oldest' + title sorts removed.
+// 'relevance-desc' stays in the TYPE + comparator (logic preserved) but is NOT
+// exposed here until user-scoped relevance coverage ≥60% (currently 5.7%, so a
+// relevance default would silently degrade to createdAt mislabelled as 관련도).
+// Re-exposing later = one line back into SORT_OPTIONS.
+export type SortMode = 'latest' | 'views' | 'relevance-desc';
 
 export const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
   { value: 'latest', labelKey: 'contextHeader.sortLatest' },
-  // CP498 PR3c — A-stage relevance placed 2nd (right after the familiar default
-  // 최신순, above title sorts): "핵심이지만 명시 선택" signal. Default selection
-  // stays 'latest' (CardListView sortMode default) — position only, not default.
-  { value: 'relevance-desc', labelKey: 'contextHeader.sortRelevance' },
-  { value: 'oldest', labelKey: 'contextHeader.sortOldest' },
-  { value: 'title-asc', labelKey: 'contextHeader.sortTitleAZ' },
-  { value: 'title-desc', labelKey: 'contextHeader.sortTitleZA' },
+  { value: 'views', labelKey: 'contextHeader.sortViews' },
 ];
 
 interface ContextHeaderProps {

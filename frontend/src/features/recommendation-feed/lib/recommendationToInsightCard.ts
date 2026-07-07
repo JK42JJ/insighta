@@ -35,6 +35,14 @@ export function recommendationToInsightCard(
     publishedAt: (rec as Record<string, unknown>).publishedAt
       ? new Date((rec as Record<string, unknown>).publishedAt as string)
       : null,
+    // P3 Stage 1 (CP513) — 조회수 sort key. rec_cache HAS view_count, but the
+    // recommendations API does not yet surface it (BE read-additive pending) —
+    // read either casing when present, else NULL (sorts NULLS LAST).
+    viewCount: ((): number | null => {
+      const r = rec as unknown as Record<string, unknown>;
+      const v = typeof r.viewCount === 'number' ? r.viewCount : r.view_count;
+      return typeof v === 'number' && Number.isFinite(v) ? v : null;
+    })(),
     cellIndex: rec.cellIndex ?? -1,
     levelId: 'root',
     mandalaId,
