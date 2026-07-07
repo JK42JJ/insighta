@@ -651,6 +651,9 @@
     "retryEnrichmentTooltip": "Retry caption fetch",
     "enrichingAria": "Analyzing"
   },
+  "gridView": {
+    "badgeNew": "NEW"
+  },
   "contextHeader": {
     "home": "Home",
     "mandala": "Mandala",
@@ -661,9 +664,8 @@
     "clearAll": "Clear all",
     "noFilterResults": "No cards match the selected filters",
     "sortLatest": "Latest",
-    "sortOldest": "Oldest",
-    "sortTitleAZ": "Title A-Z",
-    "sortTitleZA": "Title Z-A",
+    "sortViews": "Views",
+    "sortGlobalNotice": "Sort applies to all mandalas",
     "sortRelevance": "By relevance",
     "selectSectorFirst": "Select a sector",
     "selectSectorDesc": "Choose a sector from the pills above to assign cards."

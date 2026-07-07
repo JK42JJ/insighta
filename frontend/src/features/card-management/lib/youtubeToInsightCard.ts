@@ -44,6 +44,8 @@ export function convertToInsightCard(data: UserVideoStateWithVideo): InsightCard
     autoAdded: data.auto_added ?? false,
     // CP498 PR3c — user-scoped A-stage relevance score (uvs.relevance_pct).
     relevancePct: data.relevance_pct ?? null,
+    // P3 Stage 1 (CP513) — 조회수 sort key (YouTube view_count).
+    viewCount: video.view_count ?? null,
   };
 }
 

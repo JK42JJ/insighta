@@ -2067,6 +2067,9 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       source: row.weight_version === 0 ? ('manual' as const) : ('auto_recommend' as const),
       recReason: row.rec_reason,
       publishedAt: row.published_at?.toISOString() ?? null,
+      // P3 Stage 1 (CP513) — pure additive field for the FE 조회수 sort. Does NOT
+      // touch ranking/filter/write (rec_score ordering + selection unchanged).
+      viewCount: row.view_count ?? null,
       startSec: anchors.get(row.video_id) ?? null,
       pinnedAt: pinnedAtByVideoId.get(row.video_id)?.toISOString() ?? null,
     }));

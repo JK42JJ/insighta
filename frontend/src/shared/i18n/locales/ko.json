@@ -659,6 +659,9 @@
     "retryEnrichmentTooltip": "자막을 다시 가져옵니다",
     "enrichingAria": "분석 중"
   },
+  "gridView": {
+    "badgeNew": "NEW"
+  },
   "contextHeader": {
     "home": "홈",
     "mandala": "만다라",
@@ -669,9 +672,8 @@
     "clearAll": "모두 해제",
     "noFilterResults": "선택한 필터에 맞는 카드가 없습니다",
     "sortLatest": "최신순",
-    "sortOldest": "오래된순",
-    "sortTitleAZ": "제목 A-Z",
-    "sortTitleZA": "제목 Z-A",
+    "sortViews": "조회수",
+    "sortGlobalNotice": "정렬이 모든 만다라에 적용됩니다",
     "sortRelevance": "관련도순",
     "selectSectorFirst": "섹터를 선택하세요",
     "selectSectorDesc": "카드를 배치할 섹터를 먼저 선택해주세요."

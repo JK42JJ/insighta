@@ -31,6 +31,10 @@ import { ScrollableChipRow } from '@/shared/ui/scrollable-chip-row';
 // never shown to the user, so these are display-only thresholds).
 const RELEVANCE_TIER_CORE = 80; // ≥80 → "핵심"
 const RELEVANCE_TIER_PICK = 70; // 70–79 → "추천" ; <70 → no badge (number never shown)
+
+// P3 Stage 1 (CP513) — "NEW" corner badge shows while a card is younger than this.
+const NEW_BADGE_HOURS = 48;
+const NEW_BADGE_MS = NEW_BADGE_HOURS * 60 * 60 * 1000;
 const RELEVANCE_DIM_MAX = 30; // ≤30 relevance → toned down (unless bookmarked)
 
 // Tier badge styles — complete class strings (RING_STYLES pattern, NO dynamic
@@ -389,9 +393,7 @@ export function InsightCardItemV2({
   // simply stays empty until the next refetch lands the real value.
   // Honest label: a missing publish date must not masquerade as one —
   // the createdAt fallback is rendered as "added N days ago" instead.
-  const relDate = metadataComplete
-    ? formatCardDateLabel(ytMeta.publishedAt, card.createdAt)
-    : null;
+  const relDate = metadataComplete ? formatCardDateLabel(ytMeta.publishedAt, card.createdAt) : null;
   const hasNote = !!card.userNote?.trim();
   // CP475+ blockquote source priority (user-confirmed 2026-05-20):
   // The v2 quick path's `core_argument` is a heavily-simplified Korean
@@ -451,6 +453,10 @@ export function InsightCardItemV2({
   const dimLowRelevance =
     card.relevancePct != null && card.relevancePct <= RELEVANCE_DIM_MAX && !liked;
 
+  // P3 Stage 1 (CP513) — "NEW" badge while the card is < NEW_BADGE_HOURS old.
+  const isNew =
+    card.createdAt != null && Date.now() - new Date(card.createdAt).getTime() < NEW_BADGE_MS;
+
   return (
     <Card
       ref={setNodeRef}
@@ -507,6 +513,21 @@ export function InsightCardItemV2({
             aria-hidden="true"
           />
         </div>
+      )}
+
+      {/* P3 Stage 1 (CP513) — "NEW" corner badge at the card-frame level (not on
+          the thumbnail overlay, so it stays put before the image loads). Reuses
+          the explore card-badge grammar: pill, primary(indigo) bg, no new color. */}
+      {isNew && (
+        <span
+          className={cn(
+            'absolute top-2 right-2 z-10 rounded-[4px] px-2 py-[3px]',
+            'text-[10px] font-semibold leading-none tracking-[0.2px]',
+            'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'
+          )}
+        >
+          {t('gridView.badgeNew', 'NEW')}
+        </span>
       )}
 
       {/* ── Thumbnail ── */}

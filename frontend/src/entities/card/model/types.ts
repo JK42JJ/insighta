@@ -37,6 +37,8 @@ export interface InsightCard {
   updatedAt?: Date;
   /** Source-material publish date (YouTube upload, article date), NOT createdAt. */
   publishedAt?: Date | null;
+  /** P3 Stage 1 (CP513) — YouTube view_count for the 조회수 sort. NULL when absent. */
+  viewCount?: number | null;
   cellIndex: number;
   levelId: string; // Which mandala level this card belongs to
   mandalaId?: string | null; // Which mandala this card belongs to
