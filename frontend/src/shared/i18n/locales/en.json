@@ -1338,7 +1338,10 @@
     "ctaUrgency": "This pioneer discount will soon switch to a monthly subscription.",
     "footerDesc": "Capture ideas from any source, structure them with the Mandala framework, and let AI connect the dots.",
     "footerProduct": "Product",
-    "footerLegal": "Legal"
+    "footerLegal": "Legal",
+    "betaBanner": "The Insighta closed beta is open — free Pro during the beta · Lifetime for two outstanding members.",
+    "betaBannerShort": "Closed beta — applications open",
+    "betaBannerCta": "Request invite"
   },
   "pricing": {
     "title": "Pioneer Lifetime Deal",
