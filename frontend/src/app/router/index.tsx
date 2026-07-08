@@ -25,6 +25,7 @@ import { AdminV2QualityAudit } from '@/pages/admin/ui/AdminV2QualityAudit';
 import { AdminV4ArbiterRuns } from '@/pages/admin/ui/AdminV4ArbiterRuns';
 import { AdminPoolHealth } from '@/pages/admin/ui/AdminPoolHealth';
 import { AdminSearchTraceExplorer } from '@/pages/admin/ui/AdminSearchTraceExplorer';
+import { AdminBetaCampaign } from '@/pages/admin/ui/AdminBetaCampaign';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -184,6 +185,8 @@ export function AppRouter() {
           <Route path="pool-health" element={<AdminPoolHealth />} />
           {/* Observability G2 — Search-Trace Explorer (Card Journey debug view). */}
           <Route path="search-trace" element={<AdminSearchTraceExplorer />} />
+          {/* Closed-beta campaign — signup gate + application inbox. */}
+          <Route path="beta-campaign" element={<AdminBetaCampaign />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
