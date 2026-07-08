@@ -1591,6 +1591,25 @@ class ApiClient {
     });
   }
 
+  /** Public beta config — drives the /beta countdown and the signup gate. */
+  async getBetaConfig(): Promise<{
+    signupMode: 'open' | 'invite_only' | 'closed';
+    phase: 'pre_launch' | 'running' | 'ended';
+    window: { start: string; end: string };
+  }> {
+    return this.request('/beta/config', { method: 'GET' });
+  }
+
+  /** Whether an email may sign up under the current beta signup mode. */
+  async checkBetaInvite(
+    email: string
+  ): Promise<{ allowed: boolean; mode: 'open' | 'invite_only' | 'closed' }> {
+    return this.request('/beta/check-invite', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
   // Mandala List & Multi-Mandala CRUD
   // ========================================
 
