@@ -3,6 +3,12 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { PageLoader } from '@/shared/ui/PageLoader';
 import { ProtectedRoute } from './ProtectedRoute';
 import { AdminRoute } from './AdminRoute';
+import { MobileGateNotice } from './MobileGateNotice';
+import {
+  isMobileDevice,
+  isPathAllowedOnMobile,
+  MOBILE_GATE_FLAG_KEY,
+} from '@/shared/lib/mobile-gate';
 import { AdminLayout } from '@/pages/admin/ui/AdminLayout';
 import { AdminDashboard } from '@/pages/admin/ui/AdminDashboard';
 import { AdminUsers } from '@/pages/admin/ui/AdminUsers';
@@ -52,9 +58,23 @@ function ScrollToTop() {
 }
 
 export function AppRouter() {
+  const { pathname } = useLocation();
+
+  // Closed-beta mobile gate: app routes are desktop-only until the mobile
+  // redesign — mobile devices land on the marketing pages instead.
+  if (isMobileDevice() && !isPathAllowedOnMobile(pathname)) {
+    try {
+      sessionStorage.setItem(MOBILE_GATE_FLAG_KEY, '1');
+    } catch {
+      /* noop */
+    }
+    return <Navigate to="/landing" replace />;
+  }
+
   return (
     <Suspense fallback={<PageLoader />}>
       <ScrollToTop />
+      <MobileGateNotice />
       <Routes>
         <Route path="/" element={<IndexPage />} />
         <Route path="/login" element={<LoginPage />} />
