@@ -15,6 +15,7 @@ import {
   Activity,
   Gauge,
   Footprints,
+  Rocket,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
@@ -24,6 +25,8 @@ const NAV_ITEMS = [
   { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/admin/moderation', icon: Shield, label: 'Moderation' },
   { to: '/admin/promotions', icon: Gift, label: 'Promotions' },
+  // Closed-beta campaign — signup gate + application inbox.
+  { to: '/admin/beta-campaign', icon: Rocket, label: 'Beta Campaign' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/billing', icon: ToggleRight, label: 'Billing Flag' },
   { to: '/admin/health', icon: HeartPulse, label: 'Health' },

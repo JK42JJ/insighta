@@ -1610,6 +1610,31 @@ class ApiClient {
     });
   }
 
+  // ── Admin: Beta campaign ──────────────────────────────
+
+  /** Admin — list beta applications (optionally filtered by status). */
+  async getBetaApplications(status?: string): Promise<{
+    applications: Array<{
+      id: string;
+      email: string;
+      goal: string | null;
+      status: string;
+      created_at: string;
+      invited_at: string | null;
+    }>;
+    total: number;
+  }> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+    return this.request(`/admin/beta-applications${qs}`, { method: 'GET' });
+  }
+
+  /** Admin — mark a beta application as invited (unlocks signup for that email). */
+  async markBetaInvited(id: string): Promise<{ application: { id: string; status: string } }> {
+    return this.request(`/admin/beta-applications/${encodeURIComponent(id)}/mark-invited`, {
+      method: 'POST',
+    });
+  }
+
   // Mandala List & Multi-Mandala CRUD
   // ========================================
 
