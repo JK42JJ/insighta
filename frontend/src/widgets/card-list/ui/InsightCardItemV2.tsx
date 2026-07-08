@@ -453,9 +453,14 @@ export function InsightCardItemV2({
   const dimLowRelevance =
     card.relevancePct != null && card.relevancePct <= RELEVANCE_DIM_MAX && !liked;
 
-  // P3 Stage 1 (CP513) — "NEW" badge while the card is < NEW_BADGE_HOURS old.
+  // P3 Stage 2 (CP513, James) — "추가됨" badge only on GENUINELY-ADDED cards
+  // (real added_to_ideation_at) within 48h. Live recommendation-feed cards carry
+  // a spurious createdAt=now (recommendationToInsightCard, id `stream-…`) — those
+  // are suggestions, not adds, so exclude them. Only persisted DB cards badge.
   const isNew =
-    card.createdAt != null && Date.now() - new Date(card.createdAt).getTime() < NEW_BADGE_MS;
+    !card.id.startsWith('stream-') &&
+    card.createdAt != null &&
+    Date.now() - new Date(card.createdAt).getTime() < NEW_BADGE_MS;
 
   return (
     <Card
@@ -544,21 +549,20 @@ export function InsightCardItemV2({
         {/* CP463 — TL relevance badge moved to the new footer row
             (sector ◀ ▶ relevance %). The thumbnail TL slot is now free. */}
 
-        {/* Top-right chip stack (P3 Stage 2, CP513 James finalize): a horizontal
-            flex row [추가됨 badge][duration]. Duration keeps the rightmost corner;
-            the "추가됨" badge sits inline to its left, sized to match the duration
-            chip (same height/radius). With no duration the badge auto-takes the
-            corner — no separate branch (flex). */}
+        {/* Top-right chip stack (P3 Stage 2, CP513 James): a VERTICAL stack —
+            duration keeps the top-right corner, the "추가됨" badge sits BELOW it
+            (James: 하단이 적합, not left). Right-aligned; badge sized to the
+            duration chip. With no duration the badge simply takes the corner. */}
         {(isNew || duration) && (
-          <div className="absolute top-1.5 right-1.5 z-10 flex flex-row items-center justify-end gap-1">
-            {isNew && (
-              <span className="text-[10px] font-medium leading-none tracking-[0.2px] px-[5px] py-[2px] rounded bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
-                {t('gridView.badgeNew', '추가됨')}
-              </span>
-            )}
+          <div className="absolute top-1.5 right-1.5 z-10 flex flex-col items-end gap-1">
             {duration && (
               <span className="text-[10px] font-mono font-medium leading-none px-[5px] py-[2px] rounded bg-black/75 text-white/85">
                 {duration}
+              </span>
+            )}
+            {isNew && (
+              <span className="text-[10px] font-medium leading-none tracking-[0.2px] px-[5px] py-[2px] rounded bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+                {t('gridView.badgeNew', '추가됨')}
               </span>
             )}
           </div>
