@@ -1,22 +1,21 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { apiClient } from '@/shared/lib/api-client';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-// Real YouTube thumbnails (i.ytimg.com — same source the app uses); IDs verified live.
+// Curriculum mockup — real 3Blue1Brown "Essence of Linear Algebra" thumbnails,
+// visually verified to match each topic (Vectors / Linear transformations /
+// Eigenvectors Av=λv / SVD). Same i.ytimg.com source the app itself uses.
 const yt = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 const CURRICULUM_THUMBS = ['fNk_zzaMoSs', 'kYB8IZa5AuE', 'PFDu9oVAE-g', 'mBcLRGuAFUk'];
-const FEED_THUMBS = [
-  '9bZkp7q19f0',
-  'kJQP7kiw5Fk',
-  'jNQXAC9IVRw',
-  'RgKAFK5djSk',
-  'dQw4w9WgXcQ',
-  'e-ORhEE9VVg',
-];
 const SEATS_LEFT = 40;
 const INVITE_SENT = 160;
 const INVITE_TOTAL = 200;
+
+// Closed-beta window (James 2026-07-08): starts next Monday, runs 6 weeks (KST).
+const BETA_START_MS = Date.parse('2026-07-13T00:00:00+09:00');
+const BETA_END_MS = Date.parse('2026-08-24T00:00:00+09:00');
 
 /**
  * Closed-beta landing (/beta) — faithful implementation of the Claude Design
@@ -32,6 +31,67 @@ function SectionLabel({ no, label }: { no: string; label: string }) {
       <span>{no}</span>
       <span className="w-8 h-px bg-zinc-700" />
       <span>{label}</span>
+    </div>
+  );
+}
+
+/** Live D/H/M/S countdown for the 6-week closed-beta window. */
+function BetaCountdown() {
+  const { t } = useTranslation();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const beforeStart = now < BETA_START_MS;
+  const ended = now >= BETA_END_MS;
+  const target = beforeStart ? BETA_START_MS : BETA_END_MS;
+  const remain = Math.max(0, target - now);
+
+  const days = Math.floor(remain / 86_400_000);
+  const hours = Math.floor((remain % 86_400_000) / 3_600_000);
+  const mins = Math.floor((remain % 3_600_000) / 60_000);
+  const secs = Math.floor((remain % 60_000) / 1000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  const label = ended
+    ? t('beta.countdown.ended')
+    : beforeStart
+      ? t('beta.countdown.toStart')
+      : t('beta.countdown.toEnd');
+
+  const units: Array<[number | string, string]> = [
+    [days, t('beta.countdown.days')],
+    [pad(hours), t('beta.countdown.hours')],
+    [pad(mins), t('beta.countdown.mins')],
+    [pad(secs), t('beta.countdown.secs')],
+  ];
+
+  return (
+    <div className="inline-flex flex-col items-start gap-2.5">
+      <span className="text-[12px] tracking-[0.15em] font-semibold text-indigo-300/90 uppercase">
+        {label}
+      </span>
+      {ended ? (
+        <span className="text-2xl font-extrabold text-zinc-300">{t('beta.countdown.ended')}</span>
+      ) : (
+        <div className="flex items-center gap-2" role="timer" aria-label={label}>
+          {units.map(([v, u], i) => (
+            <div key={u} className="flex items-center gap-2">
+              <div className="flex flex-col items-center">
+                <span className="tabular-nums text-3xl font-extrabold text-zinc-50 leading-none">
+                  {v}
+                </span>
+                <span className="mt-1 text-[10px] tracking-wider text-zinc-500 uppercase">{u}</span>
+              </div>
+              {i < units.length - 1 && (
+                <span className="text-2xl font-bold text-zinc-600 -mt-2">:</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -192,13 +252,30 @@ function AlgorithmFeedMockup() {
       <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
         {vids.map((v, i) => (
           <div key={v.title}>
-            <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-800">
-              <img
-                src={yt(FEED_THUMBS[i])}
-                alt=""
-                loading="lazy"
-                className="absolute inset-0 w-full h-full object-cover blur-[2px] brightness-[0.55] saturate-[0.65] scale-105"
+            {/* Abstract "junk feed" cards — deliberately anonymous noise you scroll
+                past, not real videos (a recognizable clip would clash with the
+                fictional clickbait title). */}
+            <div
+              className={`relative aspect-video rounded-lg overflow-hidden bg-gradient-to-br ${
+                [
+                  'from-slate-700 to-slate-900',
+                  'from-zinc-700 to-neutral-900',
+                  'from-stone-700 to-zinc-900',
+                  'from-neutral-700 to-slate-900',
+                  'from-zinc-600 to-stone-900',
+                  'from-slate-800 to-neutral-900',
+                ][i]
+              }`}
+            >
+              <span
+                className="absolute inset-0 opacity-[0.12] [background-image:repeating-linear-gradient(45deg,#fff_0,#fff_1px,transparent_1px,transparent_9px)]"
+                aria-hidden
               />
+              <span className="absolute inset-0 flex items-center justify-center">
+                <span className="w-8 h-8 rounded-full bg-black/30 border border-white/15 flex items-center justify-center">
+                  <span className="ml-0.5 border-y-[6px] border-y-transparent border-l-[10px] border-l-white/50" />
+                </span>
+              </span>
               <span className="absolute bottom-1 right-1.5 text-[10px] text-zinc-200 bg-black/60 rounded px-1">
                 {v.time}
               </span>
@@ -315,12 +392,16 @@ export default function BetaApplyPage() {
       <div className="relative">
         {/* header */}
         <header className="max-w-6xl mx-auto px-6 pt-8 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 font-extrabold text-lg">
+          <Link
+            to="/"
+            aria-label={t('beta.logoHome')}
+            className="flex items-center gap-2.5 font-extrabold text-lg hover:opacity-80 transition-opacity"
+          >
             <span className="w-8 h-8 rounded-lg bg-indigo-500/15 border border-indigo-400/50 flex items-center justify-center">
               <i className="w-3 h-3 rounded-full border-2 border-indigo-300 inline-block" />
             </span>
             Insighta
-          </div>
+          </Link>
           <span className="text-[11px] tracking-[0.25em] text-indigo-300/90 border border-indigo-400/40 bg-indigo-500/10 rounded-full px-4 py-1.5 font-bold">
             CLOSED BETA
           </span>
@@ -350,6 +431,9 @@ export default function BetaApplyPage() {
                 {t('beta.hero.cta')} →
               </button>
               <span className="text-sm text-zinc-500">{t('beta.hero.ctaNote')}</span>
+            </div>
+            <div className="mt-10 pt-8 border-t border-white/10">
+              <BetaCountdown />
             </div>
           </div>
           <div className="flex justify-center lg:justify-end">
