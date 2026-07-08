@@ -29,6 +29,7 @@ import { getPrismaClient } from '@/modules/database/client';
 import { logger } from '@/utils/logger';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, POOL_MAINTENANCE_RUN_OPTIONS, type PoolMaintenanceRunPayload } from '../types';
+import { runPoolMetadataRefresh } from '@/modules/video-pool/refresh-metadata';
 
 const log = logger.child({ module: 'queue/pool-maintenance' });
 
@@ -118,9 +119,17 @@ async function handlePoolMaintenanceRun(job: PgBoss.Job<PoolMaintenanceRunPayloa
 
   try {
     const result = await runPoolMaintenance(getPrismaClient(), { enabled });
+    // Op3 (CP512) — refresh active rows' metadata before it ages past the TTL,
+    // so served rows stay ToS-compliant AND keep their titles (the correct
+    // "refresh" branch of the 30-day rule, vs the scrub "delete" branch).
+    let refresh = { candidates: 0, refreshed: 0, retired: 0 };
+    if (enabled && config.poolMaintenance.refreshEnabled) {
+      refresh = await runPoolMetadataRefresh();
+    }
     log.info('pool-maintenance: completed', {
       jobId: job.id,
       ...result,
+      refresh,
       durationMs: Date.now() - startedAt,
     });
   } catch (err) {
