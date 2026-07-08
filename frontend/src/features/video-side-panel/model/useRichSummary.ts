@@ -18,7 +18,7 @@
  * path. This hook is read-only.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { apiClient, type VideoRichSummaryResponse } from '@/shared/lib/api-client';
 import { queryKeys } from '@/shared/config/query-client';
 
@@ -48,6 +48,11 @@ export function useRichSummary(videoId: string | null | undefined): UseRichSumma
     enabled: Boolean(videoId),
     staleTime: RICH_SUMMARY_STALE_MS,
     refetchOnMount: 'always',
+    // CP512 — keep the previous video's summary visible while the next one
+    // loads on book-index navigation. Without this the chapter list flashed
+    // its empty "not ready" state on every video switch (data → undefined
+    // mid-fetch). Refetch still runs for freshness; the swap is now invisible.
+    placeholderData: keepPreviousData,
     retry: false,
   });
 
