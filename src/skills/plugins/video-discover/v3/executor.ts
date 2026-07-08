@@ -47,7 +47,7 @@ import { v3Config, type V3Config } from './config';
 import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
-import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
+import { embedBatch, cosineToRelevance } from '@/skills/plugins/iks-scorer/embedding';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 import { resolveLanguage } from '@/utils/detect-language';
@@ -122,6 +122,12 @@ export interface AssembledSlot {
   publishedAt: Date | null;
   cellIndex: number;
   score: number;
+  /**
+   * P3 Stage 2 (CP513) — display-only A-stage relevance (0-100) for the 관련도순
+   * sort. Set on the Tier-1 semantic path from the mandala-filter score; null on
+   * paths that don't compute it (backfill covers those). NEVER feeds rec_score.
+   */
+  relevancePct?: number | null;
   /** 'cache' = Tier 1 (video_pool), 'realtime' = Tier 2 (YouTube fresh). */
   tier: 'cache' | 'realtime';
 }
@@ -441,6 +447,10 @@ async function executeImpl(
     // Without this, cross-domain noise (e.g. cell 6 "모의고사" sub_goal
     // matching 28 토익스피킹 videos at cosine 0.55+) surfaces unfiltered.
     let filteredTier1: typeof fresh = fresh;
+    // P3 Stage 2 (CP513) — capture the mandala-filter per-candidate relevance
+    // (0.5·center + 0.5·bestCell) so the placement write can persist relevance_pct.
+    // Display-only; does NOT affect the gate or rec_score. Empty on unfiltered paths.
+    const relevanceByVideoId = new Map<string, number>();
     if (fresh.length > 0 && v3Config.centerGateMode === 'semantic') {
       try {
         const cap = v3Config.semanticMaxCandidates;
@@ -485,7 +495,10 @@ async function executeImpl(
           });
           const keptIds = new Set<string>();
           for (const assignments of byCell.values()) {
-            for (const a of assignments) keptIds.add(a.candidate.videoId);
+            for (const a of assignments) {
+              keptIds.add(a.candidate.videoId);
+              relevanceByVideoId.set(a.candidate.videoId, a.score);
+            }
           }
           filteredTier1 = capped.filter((m) => keptIds.has(m.videoId));
           log.info(
@@ -555,6 +568,9 @@ async function executeImpl(
         publishedAt: m.publishedAt,
         cellIndex: m.cellIndex,
         score: m.score,
+        relevancePct: relevanceByVideoId.has(m.videoId)
+          ? Math.round(cosineToRelevance(relevanceByVideoId.get(m.videoId)!) * 100)
+          : null,
         tier: 'cache',
       });
       existingVideoIds.add(m.videoId);
@@ -1584,6 +1600,9 @@ async function upsertSlots(
         ? Math.min(slot.likeCount / slot.viewCount, 1)
         : null,
     recScore: Math.max(0, Math.min(1, slot.score)),
+    // P3 Stage 2 (CP513) — display-only relevance_pct write. null → COALESCE keeps
+    // any backfilled value on re-serve. Never part of rec_score.
+    relevancePct: slot.relevancePct ?? null,
   }));
 
   // ------------------------------------------------------------------
@@ -1593,7 +1612,7 @@ async function upsertSlots(
   try {
     // Build a VALUES list: one Prisma.sql fragment per row, then join.
     const valueFragments = prepared.map(
-      ({ slot, keyword, likeRatio, recScore }) =>
+      ({ slot, keyword, likeRatio, recScore, relevancePct }) =>
         Prisma.sql`(
         ${userId}::uuid,
         ${mandalaId}::uuid,
@@ -1607,6 +1626,7 @@ async function upsertSlots(
         ${likeRatio}::float8,
         ${slot.durationSec}::int,
         ${recScore}::float8,
+        ${relevancePct}::int,
         ${slot.tier},
         ${RECOMMENDATION_STATUS_PENDING}::varchar(20),
         ${WEIGHT_VERSION}::int,
@@ -1619,11 +1639,12 @@ async function upsertSlots(
       INSERT INTO recommendation_cache (
         user_id, mandala_id, cell_index, keyword, video_id,
         title, thumbnail, channel, view_count, like_ratio,
-        duration_sec, rec_score, rec_reason, status, weight_version,
+        duration_sec, rec_score, relevance_pct, rec_reason, status, weight_version,
         expires_at, published_at
       )
       VALUES ${Prisma.join(valueFragments)}
       ON CONFLICT (user_id, mandala_id, video_id) DO UPDATE SET
+        relevance_pct  = COALESCE(EXCLUDED.relevance_pct, recommendation_cache.relevance_pct),
         cell_index     = EXCLUDED.cell_index,
         keyword        = EXCLUDED.keyword,
         title          = EXCLUDED.title,
@@ -1655,7 +1676,7 @@ async function upsertSlots(
   // ------------------------------------------------------------------
   if (upsertedRows === null) {
     let count = 0;
-    for (const { slot, keyword, likeRatio, recScore } of prepared) {
+    for (const { slot, keyword, likeRatio, recScore, relevancePct } of prepared) {
       try {
         const row = await db.recommendation_cache.upsert({
           where: {
@@ -1678,6 +1699,8 @@ async function upsertSlots(
             like_ratio: likeRatio,
             duration_sec: slot.durationSec,
             rec_score: recScore,
+            // P3 Stage 2 (CP513) — display-only relevance_pct (null if uncomputed).
+            relevance_pct: relevancePct,
             rec_reason: slot.tier,
             status: RECOMMENDATION_STATUS_PENDING,
             weight_version: WEIGHT_VERSION,
@@ -1694,6 +1717,8 @@ async function upsertSlots(
             like_ratio: likeRatio,
             duration_sec: slot.durationSec,
             rec_score: recScore,
+            // Only overwrite when computed — preserves any backfilled value (COALESCE parity).
+            ...(relevancePct != null ? { relevance_pct: relevancePct } : {}),
             rec_reason: slot.tier,
             weight_version: WEIGHT_VERSION,
             expires_at: expiresAt,

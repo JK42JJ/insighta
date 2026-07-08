@@ -3,15 +3,15 @@ import { Trash2 } from 'lucide-react';
 import type { ViewMode } from '@/entities/user/model/types';
 import { ViewSwitcher } from '@/features/view-mode';
 
-// P3 Stage 1 (CP513, 2026-07-07 supervisor) — visible sort reduced to
-// [latest (default), views (조회수)]. 'oldest' + title sorts removed.
-// 'relevance-desc' stays in the TYPE + comparator (logic preserved) but is NOT
-// exposed here until user-scoped relevance coverage ≥60% (currently 5.7%, so a
-// relevance default would silently degrade to createdAt mislabelled as 관련도).
-// Re-exposing later = one line back into SORT_OPTIONS.
+// P3 Stage 2 (CP513, 2026-07-07 James finalize) — restored to the approved
+// 3-filter design: [relevance (default) | latest | most-viewed]. relevance is
+// re-exposed AND made the default now that the pgvector relevance backfill
+// populates coverage (P3 Stage 1 hid it at 5.7% to avoid a NULL-default fraud).
+// 'views' keeps its view_count DESC backing and the honest "조회수" label.
 export type SortMode = 'latest' | 'views' | 'relevance-desc';
 
 export const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
+  { value: 'relevance-desc', labelKey: 'contextHeader.sortRelevance' },
   { value: 'latest', labelKey: 'contextHeader.sortLatest' },
   { value: 'views', labelKey: 'contextHeader.sortViews' },
 ];

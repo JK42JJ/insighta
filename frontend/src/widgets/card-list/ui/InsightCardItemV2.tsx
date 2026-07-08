@@ -515,21 +515,6 @@ export function InsightCardItemV2({
         </div>
       )}
 
-      {/* P3 Stage 1 (CP513) — "NEW" corner badge at the card-frame level (not on
-          the thumbnail overlay, so it stays put before the image loads). Reuses
-          the explore card-badge grammar: pill, primary(indigo) bg, no new color. */}
-      {isNew && (
-        <span
-          className={cn(
-            'absolute top-2 right-2 z-10 rounded-[4px] px-2 py-[3px]',
-            'text-[10px] font-semibold leading-none tracking-[0.2px]',
-            'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'
-          )}
-        >
-          {t('gridView.badgeNew', 'NEW')}
-        </span>
-      )}
-
       {/* ── Thumbnail ── */}
       <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-[#1a1c28] to-[#13141c] transition-[filter] duration-300 group-hover:brightness-[0.96] group-hover:contrast-[1.04]">
         <img
@@ -559,11 +544,24 @@ export function InsightCardItemV2({
         {/* CP463 — TL relevance badge moved to the new footer row
             (sector ◀ ▶ relevance %). The thumbnail TL slot is now free. */}
 
-        {/* Top-right: Duration (moved from BR — Pin slot retired) */}
-        {duration && (
-          <span className="absolute top-1.5 right-1.5 text-[10px] font-mono font-medium px-[5px] py-[2px] rounded bg-black/75 text-white/85">
-            {duration}
-          </span>
+        {/* Top-right chip stack (P3 Stage 2, CP513 James finalize): a horizontal
+            flex row [추가됨 badge][duration]. Duration keeps the rightmost corner;
+            the "추가됨" badge sits inline to its left, sized to match the duration
+            chip (same height/radius). With no duration the badge auto-takes the
+            corner — no separate branch (flex). */}
+        {(isNew || duration) && (
+          <div className="absolute top-1.5 right-1.5 z-10 flex flex-row items-center justify-end gap-1">
+            {isNew && (
+              <span className="text-[10px] font-medium leading-none tracking-[0.2px] px-[5px] py-[2px] rounded bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+                {t('gridView.badgeNew', '추가됨')}
+              </span>
+            )}
+            {duration && (
+              <span className="text-[10px] font-mono font-medium leading-none px-[5px] py-[2px] rounded bg-black/75 text-white/85">
+                {duration}
+              </span>
+            )}
+          </div>
         )}
 
         {/* CP463 — top-center 3-phase chip removed per user directive

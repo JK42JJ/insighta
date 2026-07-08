@@ -46,6 +46,8 @@ export interface CardPayload {
   source: 'auto_recommend' | 'manual';
   recReason: string | null;
   publishedAt: string | null;
+  /** P3 Stage 2 (CP513) — display-only A-stage relevance (0-100) for 관련도순. */
+  relevancePct?: number | null;
   /**
    * Best-matching transcript chunk start time, in seconds.
    * When non-null, the FE may build a YouTube URL like
