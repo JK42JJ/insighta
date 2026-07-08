@@ -233,6 +233,13 @@ const envSchema = z.object({
     .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
     .default(true),
 
+  // CP512 — metadata REFRESH for active rows (videos.list re-fetch, keeps served
+  // rows ToS-compliant AND titled). Default true; set 'false' to pause refresh
+  // (scrub still only touches inactive rows, so active rows just stop aging-out).
+  POOL_METADATA_REFRESH_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
+    .default(true),
+
   // CP494 ② — supply bridge: promote youtube_videos (Mac Mini quota-0 sink)
   // into video_pool (source='yt_promoted'). ONE flag controls the write↔read
   // pair: off = promote endpoint no-ops AND v5 poolSources omits 'yt_promoted'
@@ -423,6 +430,7 @@ export const config = {
   // video_pool ToS hygiene cron (CP494).
   poolMaintenance: {
     enabled: env.POOL_MAINTENANCE_ENABLED,
+    refreshEnabled: env.POOL_METADATA_REFRESH_ENABLED,
   },
 
   // Supply bridge: youtube_videos → video_pool promotion (CP494 ②).
