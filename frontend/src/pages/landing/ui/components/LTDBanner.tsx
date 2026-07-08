@@ -3,6 +3,10 @@ import { X, Flame } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
+/**
+ * Top announcement banner — closed-beta entry point (James 2026-07-08).
+ * Replaced the retired Pioneer LTD promo; links to the /beta landing.
+ */
 export function LTDBanner() {
   const { t } = useTranslation();
   const [dismissed, setDismissed] = useState(false);
@@ -14,14 +18,14 @@ export function LTDBanner() {
       <div className="mx-auto max-w-7xl px-4 py-2.5 flex items-center justify-center gap-3 text-sm">
         <Flame className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
         <p className="font-medium">
-          <span className="hidden sm:inline">{t('landing.ltdBanner')}</span>
-          <span className="sm:hidden">{t('landing.ltdBannerShort')}</span>
+          <span className="hidden sm:inline">{t('landing.betaBanner')}</span>
+          <span className="sm:hidden">{t('landing.betaBannerShort')}</span>
         </p>
         <Link
-          to="/pricing"
+          to="/beta"
           className="inline-flex items-center px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors whitespace-nowrap"
         >
-          {t('landing.ltdBannerCta')}
+          {t('landing.betaBannerCta')}
         </Link>
         <button
           onClick={() => setDismissed(true)}

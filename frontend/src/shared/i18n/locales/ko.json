@@ -1346,7 +1346,10 @@
     "ctaUrgency": "이번 Pioneer 할인은 곧 월 구독으로 전환됩니다.",
     "footerDesc": "모든 소스에서 아이디어를 캡처하고, 만다라트 프레임워크로 구조화하고, AI가 연결합니다.",
     "footerProduct": "제품",
-    "footerLegal": "법적 고지"
+    "footerLegal": "법적 고지",
+    "betaBanner": "Insighta 클로즈드 베타 사전 신청이 열렸습니다 — 베타 기간 Pro 무료 · 우수 활동 멤버 2명 Lifetime 증정.",
+    "betaBannerShort": "클로즈드 베타 사전 신청 오픈",
+    "betaBannerCta": "베타 신청하기"
   },
   "pricing": {
     "title": "Pioneer 평생 이용권",
