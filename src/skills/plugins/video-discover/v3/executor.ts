@@ -373,7 +373,12 @@ async function executeImpl(
               { is_watched: true },
               { is_in_ideation: true },
               { user_note: { not: null } },
-              { watch_position_seconds: { gt: 0 } },
+              // CP512 — `watch_position_seconds > 0` dropped here to match the
+              // CP490 exclude SSOT (getExcludedVideoIds, "Explicit > Inferred").
+              // Since /learning now persists watch position (for the grid bar +
+              // resume), keeping it would make merely *watching* a video block it
+              // from future auto-discovery — an unwanted re-recommendation block
+              // (James, CP512). Watch position stays display + eviction-preserve only.
               { pinned_at: { not: null } },
               { auto_added: false },
             ],
