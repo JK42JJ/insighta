@@ -179,6 +179,8 @@ APPLY_FILES=(
   # fully idempotent. Inert (never read or written) until
   # DOMAIN_FIT_SERVE_ENFORCE flips on.
   "prisma/migrations/domain-fit-serve-cache/001_create_video_domain_fit_cache.sql"
+  # Closed-beta application inbox (2026-07-08) — CREATE TABLE IF NOT EXISTS, idempotent.
+  "prisma/migrations/beta/001_beta_applications.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

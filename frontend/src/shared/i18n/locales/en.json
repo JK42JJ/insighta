@@ -35,6 +35,17 @@
     "notice": "The mobile experience is still in the works. Please use Insighta on desktop.",
     "dismiss": "Dismiss"
   },
+  "beta": {
+    "title": "Turn YouTube into your curriculum.",
+    "subtitle": "You already watch world-class lectures every day — they are just scattered. The Insighta closed beta runs on a small number of invites.",
+    "emailPlaceholder": "Email address",
+    "submit": "Request an invite",
+    "submitting": "Submitting...",
+    "doneTitle": "Your request is in",
+    "doneDesc": "We will email an invite to this address as seats open up.",
+    "error": "Please check the email address.",
+    "note": "6-week beta · Pro membership included · two outstanding members receive Lifetime."
+  },
   "sources": {
     "youtube": {
       "name": "YouTube",

@@ -4,6 +4,7 @@ import { isPathAllowedOnMobile } from '@/shared/lib/mobile-gate';
 describe('mobile gate allowlist', () => {
   it.each([
     '/landing',
+    '/beta',
     '/pricing',
     '/templates',
     '/templates/study-abroad',
