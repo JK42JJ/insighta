@@ -1584,10 +1584,10 @@ class ApiClient {
   // ========================================
 
   /** Public closed-beta application (idempotent on duplicate emails). */
-  async applyForBeta(email: string): Promise<{ ok: boolean }> {
+  async applyForBeta(email: string, goal?: string): Promise<{ ok: boolean }> {
     return this.request<{ ok: boolean }>('/beta/apply', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, goal }),
     });
   }
 

@@ -18,7 +18,7 @@ export function normalizeBetaEmail(raw: unknown): string | null {
  * and never leaks whether an email was already registered.
  */
 export const betaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
-  fastify.post<{ Body: { email?: string } }>(
+  fastify.post<{ Body: { email?: string; goal?: string } }>(
     '/apply',
     { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
     async (request, reply) => {
@@ -29,11 +29,16 @@ export const betaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           .send({ status: 400, code: 'INVALID_EMAIL', message: 'A valid email is required' });
       }
 
+      const goal =
+        typeof request.body?.goal === 'string'
+          ? request.body.goal.trim().slice(0, 500) || null
+          : null;
+
       const prisma = getPrismaClient();
       await prisma.beta_applications.upsert({
         where: { email },
-        create: { email },
-        update: {}, // duplicate application is a no-op
+        create: { email, goal },
+        update: goal ? { goal } : {}, // re-apply may refine the goal; otherwise no-op
       });
 
       return reply.send({ ok: true });
