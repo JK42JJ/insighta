@@ -2537,3 +2537,17 @@ model channel_blocklist {
   @@index([channel_name])
   @@schema("public")
 }
+
+/// Closed-beta application inbox (2026-07-08): the public /beta form stores
+/// applicant emails; invitations are sent manually by the operator (James).
+/// Raw SQL DDL: prisma/migrations/beta/001_beta_applications.sql
+model beta_applications {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String    @unique @db.VarChar(255)
+  status     String    @default("pending") @db.VarChar(16)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  invited_at DateTime? @db.Timestamptz(6)
+
+  @@index([status])
+  @@schema("public")
+}

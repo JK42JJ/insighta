@@ -48,6 +48,7 @@ const LearningPage = lazy(() => import('@/pages/learning'));
 const HelpPage = lazy(() => import('@/pages/help'));
 const NotFoundPage = lazy(() => import('@/pages/not-found'));
 const LandingPage = lazy(() => import('@/pages/landing'));
+const BetaApplyPage = lazy(() => import('@/pages/beta'));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -79,6 +80,7 @@ export function AppRouter() {
         <Route path="/" element={<IndexPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/landing" element={<LandingPage />} />
+        <Route path="/beta" element={<BetaApplyPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/templates/:slug" element={<TemplatesPage />} />

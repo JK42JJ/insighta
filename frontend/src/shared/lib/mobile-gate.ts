@@ -11,6 +11,7 @@ export const MOBILE_GATE_MAX_WIDTH = 767;
 /** Marketing/legal surfaces that stay reachable on mobile. */
 const ALLOWED_MOBILE_PATH_PREFIXES = [
   '/landing',
+  '/beta',
   '/pricing',
   '/templates',
   '/privacy',

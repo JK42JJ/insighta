@@ -1579,6 +1579,18 @@ class ApiClient {
   }
 
   // ========================================
+  // ========================================
+  // Closed Beta
+  // ========================================
+
+  /** Public closed-beta application (idempotent on duplicate emails). */
+  async applyForBeta(email: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>('/beta/apply', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
   // Mandala List & Multi-Mandala CRUD
   // ========================================
 

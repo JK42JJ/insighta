@@ -25,6 +25,7 @@ import { subscriptionRoutes } from './routes/subscriptions';
 import { snapshotRoutes } from './routes/snapshots';
 import { botRoutes } from './routes/bot';
 import { settingsRoutes } from './routes/settings';
+import { betaRoutes } from './routes/beta';
 import { youtubeRoutes } from './routes/youtube';
 import { sharingRoutes } from './routes/sharing';
 import { cardsRoutes } from './routes/cards';
@@ -325,6 +326,7 @@ export async function buildServer() {
 
       // Register settings routes (LLM keys management)
       await instance.register(settingsRoutes, { prefix: '/settings' });
+      await instance.register(betaRoutes, { prefix: '/beta' });
 
       // Register YouTube library routes (subscriptions, playlists)
       await instance.register(youtubeRoutes, { prefix: '/youtube' });
