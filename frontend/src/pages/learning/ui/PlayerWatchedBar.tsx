@@ -1,14 +1,15 @@
 import { useLearningStore } from '../model/useLearningStore';
-import { STRIP_BOTTOM_PX, STRIP_INSET_PX } from './PlayerChrome';
 
 /**
- * Watched-progress line on the /learning native player — the "내가 본 구간"
- * indicator, in the chapter GOLD (James, CP512). Sibling of PlayerChrome so it
- * is independent of the relevance-heatmap gate (renders even when a video has no
- * relevance segments). Always visible (not hover-only) so progress is readable
- * at a glance. Reads the live player position the player already streams into the
- * store via onTimeUpdate — no extra wiring. pointer-events-none (never steals a
- * click from the native bar / the heatmap strip).
+ * Watched-progress bar on the /learning player — the "내가 본 구간" indicator.
+ * Same concept as the note-mode video blocks (`.video-block-progress`, James
+ * CP512): a thin bar flush along the video's BOTTOM edge — subtle track + a gold
+ * (`--nm-accent`) fill that grows with playback. This reads cleaner than floating
+ * it at the heatmap baseline (which crowded the native controls).
+ *
+ * Sibling of PlayerChrome → independent of the relevance-heatmap gate (shows even
+ * with no relevance segments). Always visible. `pointer-events-none` (never steals
+ * a click). Uses the live position the player already streams to the store.
  */
 export function PlayerWatchedBar() {
   const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
@@ -21,14 +22,14 @@ export function PlayerWatchedBar() {
 
   return (
     <div
-      className="pointer-events-none absolute z-30"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-[3px] overflow-hidden rounded-b-lg bg-white/[0.12]"
       aria-hidden
-      style={{ bottom: STRIP_BOTTOM_PX, left: STRIP_INSET_PX, right: STRIP_INSET_PX, height: 3 }}
     >
-      <div className="h-full w-full rounded-full bg-black/30">
-        {/* Gold = the learning chapter accent (--nm-accent #c2a878). */}
-        <div className="h-full rounded-full bg-[var(--nm-accent)]" style={{ width: `${pct}%` }} />
-      </div>
+      {/* Gold fill = the learning chapter accent (--nm-accent #c2a878). */}
+      <div
+        className="h-full bg-[var(--nm-accent)] transition-[width] duration-500 ease-linear"
+        style={{ width: `${pct}%` }}
+      />
     </div>
   );
 }
