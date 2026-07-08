@@ -20,3 +20,20 @@ describe('normalizeBetaEmail', () => {
     expect(normalizeBetaEmail(`${'a'.repeat(250)}@example.com`)).toBeNull();
   });
 });
+
+// Gate config defaults must preserve current behavior (open signup = no-op).
+import { BETA_DEFAULTS } from '../../src/modules/system-settings';
+
+describe('beta gate defaults (regression: unset store = open, no-op)', () => {
+  it('defaults signup to open so an unconfigured store never blocks signup', () => {
+    expect(BETA_DEFAULTS.signupMode).toBe('open');
+  });
+  it('defaults phase to pre_launch', () => {
+    expect(BETA_DEFAULTS.phase).toBe('pre_launch');
+  });
+  it('has a valid 6-week window (start Mon 2026-07-13, end 2026-08-24)', () => {
+    const start = Date.parse(BETA_DEFAULTS.window.start);
+    const end = Date.parse(BETA_DEFAULTS.window.end);
+    expect(end - start).toBe(42 * 24 * 60 * 60 * 1000);
+  });
+});
