@@ -2544,6 +2544,7 @@ model channel_blocklist {
 model beta_applications {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email      String    @unique @db.VarChar(255)
+  goal       String?   @db.VarChar(500)
   status     String    @default("pending") @db.VarChar(16)
   created_at DateTime  @default(now()) @db.Timestamptz(6)
   invited_at DateTime? @db.Timestamptz(6)
