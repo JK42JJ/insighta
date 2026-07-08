@@ -95,6 +95,10 @@ APPLY_FILES=(
   # (PK video_id+mandala_id+segment_idx). CREATE TABLE IF NOT EXISTS + CHECK
   # constraints — idempotent. Inert until the slidegen gate / fill job consume it.
   "prisma/migrations/bookindex/001_video_mandala_segment_relevance.sql"
+  # P3 Stage 2 (CP513) — display-only relevance_pct on recommendation_cache for
+  # the "관련도순" grid sort. ADD COLUMN IF NOT EXISTS — idempotent. Must apply
+  # before the new Prisma client selects the column (CP499+ LEVEL-3).
+  "prisma/migrations/rec-cache-relevance/001_add_columns.sql"
   # CP466 — Add Cards Phase 1 (surfacing). `surfaced_at` column + partial
   # index on user_video_states for Layer 1 Coverage dedup. ADD COLUMN IF
   # NOT EXISTS / CREATE INDEX IF NOT EXISTS — idempotent.

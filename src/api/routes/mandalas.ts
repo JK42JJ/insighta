@@ -2070,6 +2070,9 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // P3 Stage 1 (CP513) — pure additive field for the FE 조회수 sort. Does NOT
       // touch ranking/filter/write (rec_score ordering + selection unchanged).
       viewCount: row.view_count ?? null,
+      // P3 Stage 2 (CP513) — display-only A-stage relevance (0-100) for the
+      // 관련도순 sort. Additive; NEVER summed into rec_score.
+      relevancePct: row.relevance_pct ?? null,
       startSec: anchors.get(row.video_id) ?? null,
       pinnedAt: pinnedAtByVideoId.get(row.video_id)?.toISOString() ?? null,
     }));
@@ -2872,6 +2875,8 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
           recReason: row.rec_reason,
           publishedAt: row.published_at?.toISOString() ?? null,
+          // P3 Stage 2 (CP513) — display-only relevance for 관련도순 (additive).
+          relevancePct: row.relevance_pct ?? null,
           startSec: backlogAnchors.get(row.video_id) ?? null,
           pinnedAt: backlogPinnedAtByVideoId.get(row.video_id)?.toISOString() ?? null,
         };

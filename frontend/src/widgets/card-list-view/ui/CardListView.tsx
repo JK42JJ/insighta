@@ -28,19 +28,39 @@ import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
 const GLOBAL_SORT_KEY = 'insighta:cardSortMode';
 const GLOBAL_SORT_TOAST_KEY = 'insighta:cardSortMode:toastShown';
 
-/**
- * CP498 PR3c — A-stage relevance comparator: DESC, NULLS LAST. `?? -1` sinks
- * null/undefined relevancePct below any real 0-100 score. Pure + exported so
- * the ordering contract (highest-first, unscored-last) is unit-tested against a
- * sign-flip regression. NEVER reads the video-keyed v2MandalaRelevancePct.
- */
-export const compareByRelevanceDesc = (a: InsightCard, b: InsightCard): number => {
-  // DESC by relevancePct (NULLS LAST via ?? -1) + stable tiebreak by id so the
-  // large equal-score band (title-only "70s cluster") does NOT reshuffle on
-  // refetch — e.g. after a Heart/like invalidates the cards query. CP498 PR3c.
-  const d = (b.relevancePct ?? -1) - (a.relevancePct ?? -1);
-  return d !== 0 ? d : a.id.localeCompare(b.id);
+// P3 Stage 2 (CP513, James finalize) — NULL-relevance cards must NOT be dumped
+// to the bottom ("createdAt 혼합 폴백, 최하단 강등 금지"). An unscored card falls
+// back to a recency proxy: createdAt mapped onto a [0, NULL_RECENCY_CAP] band so
+// a brand-new card interleaves near the mid tier instead of sinking below every
+// scored card. Capped below the 추천(70)/핵심(80) tiers so a real high-relevance
+// hit still outranks a fresh unscored card. Post-backfill NULLs are rare.
+const NULL_RECENCY_CAP = 60;
+const NULL_RECENCY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000; // 90d linear fade to 0
+
+/** Relevance sort value: real 0-100 score, or a recency proxy when unscored. */
+export const relevanceSortValue = (c: InsightCard, nowMs: number): number => {
+  if (c.relevancePct != null) return c.relevancePct;
+  const created = c.createdAt ? new Date(c.createdAt).getTime() : 0;
+  const frac = Math.max(0, 1 - (nowMs - created) / NULL_RECENCY_WINDOW_MS);
+  return frac * NULL_RECENCY_CAP;
 };
+
+/**
+ * A-stage relevance comparator: DESC by relevance, NULL cards interleaved by
+ * recency (see relevanceSortValue). `nowMs` is threaded so the comparator stays
+ * pure/testable. Stable id tiebreak keeps the equal-score band from reshuffling
+ * on refetch. NEVER reads the video-keyed v2MandalaRelevancePct.
+ */
+export const makeRelevanceComparator =
+  (nowMs: number) =>
+  (a: InsightCard, b: InsightCard): number => {
+    const d = relevanceSortValue(b, nowMs) - relevanceSortValue(a, nowMs);
+    return d !== 0 ? d : a.id.localeCompare(b.id);
+  };
+
+/** Back-compat default comparator (uses current time). */
+export const compareByRelevanceDesc = (a: InsightCard, b: InsightCard): number =>
+  makeRelevanceComparator(Date.now())(a, b);
 
 const SORT_ICON_BY_VALUE: Record<SortMode, typeof ArrowDownWideNarrow> = {
   latest: ArrowDownWideNarrow,
@@ -215,7 +235,7 @@ export function CardListView({
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
-  const [sortMode, setSortMode] = useState<SortMode>('latest');
+  const [sortMode, setSortMode] = useState<SortMode>('relevance-desc');
   // CP499 freeze — snapshot of the relevance order (id→rank), captured when
   // relevance-sort is (re)selected, so background scoring (~17s of relevance_pct
   // updates) does NOT live-reorder cards under the user. Cleared on sort/mandala
@@ -226,11 +246,13 @@ export function CardListView({
   // one key applies to ALL mandalas (James's original "글로벌 일괄 적용" order).
   // Supersedes the CP499 per-mandala key. Old `insighta:cardSortMode:<id>` keys
   // are ignored (no migration — dead-option values are meaningless to carry;
-  // global default resets to 'latest'). First change fires a one-time toast.
+  // global default is now 'relevance-desc' — P3 Stage 2 (James finalize) makes
+  // relevance the default once the pgvector backfill populates coverage). First
+  // change fires a one-time toast.
   useEffect(() => {
     const saved = localStorage.getItem(GLOBAL_SORT_KEY);
     const valid = SORT_OPTIONS.some((o) => o.value === saved);
-    setSortMode(valid ? (saved as SortMode) : 'latest');
+    setSortMode(valid ? (saved as SortMode) : 'relevance-desc');
     setRelevanceRank(null); // freeze effect re-snapshots below if relevance
   }, [mandalaId]);
 

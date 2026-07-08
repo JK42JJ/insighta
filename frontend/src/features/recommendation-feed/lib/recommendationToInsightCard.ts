@@ -43,6 +43,13 @@ export function recommendationToInsightCard(
       const v = typeof r.viewCount === 'number' ? r.viewCount : r.view_count;
       return typeof v === 'number' && Number.isFinite(v) ? v : null;
     })(),
+    // P3 Stage 2 (CP513) — 관련도순 sort key. rec_cache.relevance_pct surfaced via
+    // the recommendations API (relevancePct). NULL until the pgvector backfill runs.
+    relevancePct: ((): number | null => {
+      const r = rec as unknown as Record<string, unknown>;
+      const v = typeof r.relevancePct === 'number' ? r.relevancePct : r.relevance_pct;
+      return typeof v === 'number' && Number.isFinite(v) ? v : null;
+    })(),
     cellIndex: rec.cellIndex ?? -1,
     levelId: 'root',
     mandalaId,
