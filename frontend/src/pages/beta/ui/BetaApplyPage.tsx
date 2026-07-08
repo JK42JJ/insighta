@@ -409,8 +409,8 @@ export default function BetaApplyPage() {
 
         {/* hero */}
         <section className="max-w-6xl mx-auto px-6 pt-16 pb-24 grid lg:grid-cols-2 gap-14 items-center">
-          <div>
-            <h1 className="text-5xl sm:text-6xl font-extrabold leading-[1.15] tracking-tight">
+          <div className="min-w-0">
+            <h1 className="text-4xl sm:text-6xl font-extrabold leading-[1.15] tracking-tight break-keep">
               {t('beta.hero.line1')}
               <br />
               {t('beta.hero.line2pre')}
@@ -419,14 +419,14 @@ export default function BetaApplyPage() {
               </span>
               {t('beta.hero.line2post')}
             </h1>
-            <p className="mt-8 text-lg leading-relaxed text-zinc-400 whitespace-pre-line">
+            <p className="mt-8 text-base sm:text-lg leading-relaxed text-zinc-400 whitespace-pre-line break-keep">
               {t('beta.hero.desc')}
             </p>
-            <div className="mt-9 flex items-center gap-5">
+            <div className="mt-9 flex flex-col sm:flex-row sm:items-center items-start gap-4 sm:gap-5">
               <button
                 type="button"
                 onClick={scrollToApply}
-                className="rounded-xl bg-indigo-500 hover:bg-indigo-400 transition-colors px-7 py-4 text-[15px] font-bold text-white shadow-[0_0_40px_rgba(108,99,255,0.35)]"
+                className="w-full sm:w-auto rounded-xl bg-indigo-500 hover:bg-indigo-400 transition-colors px-7 py-4 text-[15px] font-bold text-white shadow-[0_0_40px_rgba(108,99,255,0.35)] whitespace-nowrap"
               >
                 {t('beta.hero.cta')} →
               </button>
