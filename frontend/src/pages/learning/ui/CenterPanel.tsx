@@ -26,6 +26,7 @@ import { useMandalaCards } from '../model/useMandalaCards';
 import { useMandalaQuery } from '@/features/mandala';
 import { FloatingVideoNavigator } from './FloatingVideoNavigator';
 import { PlayerChrome } from './PlayerChrome';
+import { PlayerWatchedBar } from './PlayerWatchedBar';
 import {
   relevanceLevel,
   relevanceCssVar,
@@ -460,6 +461,8 @@ export function CenterPanel({
           playerRef={playerRef}
           onUserPlayed={onUserPlayed}
         />
+        {/* "내가 본 구간" — gold watched-progress line (CP512, James). */}
+        <PlayerWatchedBar />
       </div>
 
       {centerViewMode === 'player' && (
