@@ -31,6 +31,10 @@
     "comingSoon": "Coming soon",
     "all": "All"
   },
+  "mobileGate": {
+    "notice": "The mobile experience is still in the works. Please use Insighta on desktop.",
+    "dismiss": "Dismiss"
+  },
   "sources": {
     "youtube": {
       "name": "YouTube",

@@ -31,6 +31,10 @@
     "comingSoon": "준비 중입니다",
     "all": "전체"
   },
+  "mobileGate": {
+    "notice": "모바일 화면은 준비 중입니다. 인사이타는 데스크톱에서 이용해 주세요.",
+    "dismiss": "닫기"
+  },
   "sources": {
     "youtube": {
       "name": "YouTube",
