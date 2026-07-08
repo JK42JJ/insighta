@@ -49,18 +49,24 @@ export const EXPIRE_SQL = `
 `;
 
 /**
- * Op2 — scrub regulated YouTube metadata from rows whose metadata is older than
- * the TTL. NULL where the column is nullable; '' / 0 where NOT NULL (title,
- * view_count, like_count). video_id / language / quality_tier / embeddings /
- * domain_tags are preserved. Idempotency guard `title <> ''`: already-scrubbed
- * rows (title='') are skipped, so re-runs scrub 0 rows.
+ * Op2 — scrub regulated YouTube metadata from RETIRED rows whose metadata is
+ * older than the TTL. NULL where nullable; '' / 0 where NOT NULL. video_id /
+ * language / quality_tier / embeddings / domain_tags preserved. Idempotency
+ * guard `title <> ''`: already-scrubbed rows are skipped.
+ *
+ * CP512 — **`is_active = false` guard added**: scrubbing a still-SERVED (active)
+ * row emptied its title mid-serve, so users got title-less cards (the P0 defect).
+ * Active rows must instead be kept ToS-compliant by REFRESH (videos.list re-fetch
+ * + refreshed_at reset — see refresh-pool-metadata), NOT by scrub-to-empty.
+ * Scrub-to-delete is only correct for rows already retired from serving.
  */
 export const SCRUB_SQL = `
   UPDATE public.video_pool
      SET title = '', description = NULL, channel_name = NULL, channel_id = NULL,
          view_count = 0, like_count = 0, duration_seconds = NULL,
          published_at = NULL, thumbnail_url = NULL
-   WHERE refreshed_at < now() - interval '${METADATA_TTL_DAYS} days' AND title <> ''
+   WHERE is_active = false
+     AND refreshed_at < now() - interval '${METADATA_TTL_DAYS} days' AND title <> ''
 `;
 
 export interface PoolMaintenanceResult {
