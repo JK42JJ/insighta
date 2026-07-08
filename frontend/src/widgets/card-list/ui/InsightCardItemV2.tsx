@@ -465,6 +465,19 @@ export function InsightCardItemV2({
     card.createdAt != null &&
     Date.now() - new Date(card.createdAt).getTime() < NEW_BADGE_MS;
 
+  // Watched-progress bar (YouTube-style). Only for user_video_states-sourced
+  // YouTube cards that carry BOTH a saved position and a known duration — so
+  // recommendation/stream cards (no position) and content-entity cards (whose
+  // lastWatchPosition is mis-typed as duration) never render a bogus bar.
+  const watchPct =
+    card.sourceTable === 'user_video_states' &&
+    typeof card.lastWatchPosition === 'number' &&
+    card.lastWatchPosition > 0 &&
+    typeof ytMeta.durationSec === 'number' &&
+    ytMeta.durationSec > 0
+      ? Math.min(100, Math.round((card.lastWatchPosition / ytMeta.durationSec) * 100))
+      : null;
+
   return (
     <Card
       ref={setNodeRef}
@@ -666,6 +679,18 @@ export function InsightCardItemV2({
             (right slot, where the % normally sits) per user directive
             2026-05-17. The BL thumbnail slot is reserved for the
             in-progress chip and the Archive icon. */}
+
+        {/* Watched-progress bar — pinned to the thumbnail's bottom edge (3px),
+            YouTube-style. Always visible (not hover-only) so "have I watched
+            this, and how far?" is answerable at a glance. */}
+        {watchPct != null && (
+          <div className="absolute inset-x-0 bottom-0 z-10 h-[3px] bg-black/30 pointer-events-none">
+            <div
+              className="h-full bg-[hsl(var(--watch-progress))]"
+              style={{ width: `${watchPct}%` }}
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Body: title → meta row → summary ──

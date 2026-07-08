@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { CenterPanel } from './CenterPanel';
 import { RightPanel } from './RightPanel';
 import { useLearningStore } from '@/pages/learning/model/useLearningStore';
+import { useSaveWatchPosition } from '@/pages/learning/model/useSaveWatchPosition';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
 export default function LearningPage() {
@@ -67,6 +68,10 @@ export default function LearningPage() {
   const handlePlayStateChange = useCallback((playing: boolean) => {
     setIsPlaying(playing);
   }, []);
+
+  // Persist watch position to user_video_states (dashboard bar + reload-resume).
+  // Additive: reads playerRef, writes via the shared updateVideoState mutation.
+  useSaveWatchPosition(videoId, playerRef, isPlaying);
 
   const startTime = playbackMapRef.current.get(videoId!) ?? 0;
 
