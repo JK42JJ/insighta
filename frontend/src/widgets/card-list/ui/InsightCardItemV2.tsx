@@ -453,12 +453,15 @@ export function InsightCardItemV2({
   const dimLowRelevance =
     card.relevancePct != null && card.relevancePct <= RELEVANCE_DIM_MAX && !liked;
 
-  // P3 Stage 2 (CP513, James) — "추가됨" badge only on GENUINELY-ADDED cards
-  // (real added_to_ideation_at) within 48h. Live recommendation-feed cards carry
-  // a spurious createdAt=now (recommendationToInsightCard, id `stream-…`) — those
-  // are suggestions, not adds, so exclude them. Only persisted DB cards badge.
+  // P3 Stage 2 (CP513, James) — "추가됨" badge only on USER-ADDED cards within 48h.
+  // The signal is `auto_added=false` = an explicit user action (like/pin/panel-pick;
+  // place-auto-added-cards.ts:13 "User-action placements = auto_added:false"). Cards
+  // that flowed in automatically — mandala generation, auto-serve, recommendation
+  // discovery — are `auto_added=true` and must NOT badge (James: 생성 배치는 추가 아님).
+  // Recommendation-feed stream cards carry no autoAdded (undefined) → also excluded.
+  // createdAt = added_to_ideation_at (the add moment) so the 48h window is real.
   const isNew =
-    !card.id.startsWith('stream-') &&
+    card.autoAdded === false &&
     card.createdAt != null &&
     Date.now() - new Date(card.createdAt).getTime() < NEW_BADGE_MS;
 
