@@ -128,6 +128,16 @@
       "goalPlaceholder": "예) 선형대수를 처음부터 제대로, 3D 모션그래픽스, 온디바이스 LLM 파인튜닝...",
       "submit": "베타 신청",
       "privacy": "스팸은 보내지 않습니다. 초대 안내에만 사용합니다."
+    },
+    "logoHome": "홈으로",
+    "countdown": {
+      "toStart": "베타 시작까지",
+      "toEnd": "베타 마감까지",
+      "ended": "베타가 종료되었습니다",
+      "days": "일",
+      "hours": "시",
+      "mins": "분",
+      "secs": "초"
     }
   },
   "sources": {

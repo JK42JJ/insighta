@@ -128,6 +128,16 @@
       "goalPlaceholder": "e.g. Linear algebra from scratch, 3D motion graphics, on-device LLM fine-tuning...",
       "submit": "Request invite",
       "privacy": "No spam. Used only for invite notifications."
+    },
+    "logoHome": "Go to home",
+    "countdown": {
+      "toStart": "Beta starts in",
+      "toEnd": "Beta closes in",
+      "ended": "The beta has ended",
+      "days": "days",
+      "hours": "hrs",
+      "mins": "min",
+      "secs": "sec"
     }
   },
   "sources": {
