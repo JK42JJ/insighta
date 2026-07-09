@@ -220,6 +220,7 @@ async function verifyClaims(claims: FactSentence[], cseClient: CseClient): Promi
         format: 'json',
         temperature: TEMPERATURE,
         maxTokens: MAX_TOKENS,
+        purpose: 'book_factcheck', // CP504 §3 per-stage cost attribution
       });
     } catch (err) {
       lastReason = `provider_error: ${err instanceof Error ? err.message : String(err)}`;

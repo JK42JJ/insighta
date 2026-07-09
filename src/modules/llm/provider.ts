@@ -28,6 +28,15 @@ export interface GenerateOptions {
    */
   videoId?: string;
   userId?: string;
+  /**
+   * Cost-attribution STAGE tag (CP504 §3) — the logical caller/purpose of this
+   * generation (e.g. 'cell_synthesis', 'book_skeleton', 'chapter_weave',
+   * 'book_research', 'book_factcheck', 'mandala_gen'). Written to the existing
+   * llm_call_logs.module column so per-stage cost is a plain GROUP BY module —
+   * no schema change. Absent = 'openrouter' (prior behavior; audit revealed
+   * every call collapsed to that single label, hiding which stage spends).
+   */
+  purpose?: string;
 }
 
 export interface GenerationProvider {

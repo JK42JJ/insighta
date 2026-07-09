@@ -10,11 +10,13 @@
 // Deliberately ISOLATED from build-book (which stays a PURE function). This is
 // the ONLY non-deterministic step; build-book consumes its output.
 //
-// Service module — OpenRouter Haiku is a production LLM call (the deployed
+// Service module — OpenRouter Sonnet is a production LLM call (the deployed
 // pipeline / a James-run prototype invokes it; CC must not call it for tests).
+// (Header said "Haiku" pre-CP504; the model is Sonnet — see the §1⑤ note below.)
 
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
 import { logger } from '@/utils/logger';
+import { parseJsonLenient } from '@/utils/lenient-json';
 
 const log = logger.child({ module: 'mandala-book/topic-synthesis' });
 
@@ -140,13 +142,20 @@ export async function synthesizeCellTopics(
       return r;
     }
     lastReason = r.reason;
-    if (attempt < SYNTHESIS_ATTEMPTS) {
-      log.warn('topic-synthesis attempt failed — retrying', {
+    // CP504 §11 — SYNTHESIS_ATTEMPTS is now for PROVIDER faults only. Parse
+    // failures are salvaged in-attempt (parseJsonLenient: unescaped-newline +
+    // truncation), so a re-call to Sonnet no longer buys anything and just burns
+    // cost — measured 4 of 13 calls per book were these parse retries.
+    const retryable = r.reason.startsWith('provider_error');
+    if (retryable && attempt < SYNTHESIS_ATTEMPTS) {
+      log.warn('topic-synthesis provider error — retrying', {
         cellTitle,
         attempt,
         reason: r.reason,
       });
+      continue;
     }
+    break; // non-retryable (parse/structural) → stop; do not waste an LLM call
   }
   log.error('topic-synthesis HARD FAIL after retries (NOT a silent legacy revert)', {
     cellTitle,
@@ -180,6 +189,7 @@ async function attemptSynthesis(
       format: 'json',
       temperature: TEMPERATURE,
       maxTokens: MAX_TOKENS,
+      purpose: 'cell_synthesis', // CP504 §3 per-stage cost attribution
     });
   } catch (err) {
     return {
@@ -194,11 +204,15 @@ async function attemptSynthesis(
     .replace(/\n?\s*```\s*$/i, '')
     .trim();
 
-  let json: { sections?: unknown };
-  try {
-    json = JSON.parse(stripped) as { sections?: unknown };
-  } catch (err) {
-    return { ok: false, reason: `json_parse: ${err instanceof Error ? err.message : String(err)}` };
+  // CP504 §11 — lenient parse: salvage the unescaped-newline / truncation cases
+  // in-attempt (no LLM retry). `via` is the parse-recovery counter — logged so we
+  // can confirm retries dropped to 0 while salvages absorb the model's stray
+  // newlines (the prompt-side "개행 금지" defense is not reliably obeyed).
+  const json = parseJsonLenient<{ sections?: unknown }>(stripped, (via) => {
+    log.info('topic-synthesis json salvaged in-attempt (no LLM retry)', { cellTitle, via });
+  });
+  if (json === null) {
+    return { ok: false, reason: 'json_parse: unparseable after lenient salvage' };
   }
   if (!Array.isArray(json.sections)) return { ok: false, reason: 'no_sections_array' };
 
