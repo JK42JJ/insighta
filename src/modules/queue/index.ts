@@ -40,6 +40,7 @@ import { registerDeckBuildWorker } from './handlers/deck-build';
 import { registerNoteCvEnrichWorker } from './handlers/note-cv-enrich';
 import { registerKeyAlarmWorker } from './handlers/key-alarm';
 import { registerSearchMetricsRollupWorker } from './handlers/search-metrics-rollup';
+import { registerErrorLogCheckWorker } from './handlers/error-log-check';
 import { logger } from '../../utils/logger';
 
 /**
@@ -69,6 +70,7 @@ export async function initJobQueue(): Promise<void> {
   await registerNoteCvEnrichWorker();
   await registerKeyAlarmWorker();
   await registerSearchMetricsRollupWorker();
+  await registerErrorLogCheckWorker();
 
   logger.info('Job queue fully initialized (pg-boss + 15 workers)');
 }

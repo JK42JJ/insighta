@@ -24,6 +24,7 @@ import {
   loadNoteMaxSections,
 } from '@/config/book-gate';
 import { synthesizeCellTopics } from './topic-synthesis';
+import { recordErrorEvent } from '@/modules/observability/error-events';
 import { synthesizeBookSkeleton, type BookSkeleton } from './book-skeleton';
 import { weaveChapterBody } from './book-body';
 import { researchBookGaps } from './book-research';
@@ -402,6 +403,17 @@ export async function fillMandalaBook(params: {
         atomsCompressed,
         compressionPct,
       });
+      // Persist to error_events — this hard-fail falls back to legacy rather than
+      // throwing, so it is invisible to pgboss.job AND llm_call_logs. Without this
+      // the daily error-log-check job cannot see book-fill degradation (the exact
+      // blind spot that hid the Sonnet cost incident).
+      recordErrorEvent({
+        subsystem: 'book_fill',
+        stage: 'topic_synthesis_hardfail',
+        message: `${failedCells.length} cell(s) fell back to legacy per-video`,
+        context: { failedCells, cellsSynthesized: synthOk, atomsIn },
+        mandalaId,
+      });
     } else {
       log.info('topic synthesis (compression)', {
         mandalaId,
@@ -444,6 +456,14 @@ export async function fillMandalaBook(params: {
         log.error('book narrative skeleton HARD-FAILED → legacy cell=chapter (NOT silent)', {
           mandalaId,
           reason: sk.reason,
+        });
+        // error_events: skeleton hard-fail also falls back (no throw) → log-only
+        // blind spot. Surface it to the daily job.
+        recordErrorEvent({
+          subsystem: 'book_fill',
+          stage: 'skeleton_hardfail',
+          message: sk.reason,
+          mandalaId,
         });
       }
     }
