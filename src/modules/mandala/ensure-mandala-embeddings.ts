@@ -179,14 +179,19 @@ export async function ensureMandalaEmbeddings(mandalaId: string): Promise<Ensure
   }
   const embedMs = Date.now() - t0;
 
+  // CP512 — partial success. Previously a length mismatch (some chunks returned
+  // null) discarded ALL vectors → one cell's embed failure killed the whole
+  // mandala's embeddings (P0). embedBatch already returns per-slot null
+  // (per-chunk isolation) and the INSERT loop below skips null slots
+  // (`if (!vec) continue`). So we align the arrays by index and insert whatever
+  // succeeded; the failed indexes simply stay missing and get picked up on the
+  // next ensure call (idempotent backfill). All-or-nothing is removed.
   if (vectors.length !== indexesToGenerate.length) {
-    return {
-      ok: false,
-      alreadyPresent: false,
-      finalCount: okCount,
-      embedMs,
-      reason: `embedBatch returned ${vectors.length}/${indexesToGenerate.length} vectors`,
-    };
+    log.warn(
+      `embedBatch returned ${vectors.length}/${indexesToGenerate.length} vectors for mandala=${mandalaId} — inserting the successful subset, missing indexes will backfill on next call`
+    );
+    // Pad to the expected length so index alignment holds in the loop below.
+    while (vectors.length < indexesToGenerate.length) vectors.push(null);
   }
 
   // ── Step 5: DELETE stale/missing rows at those indexes, then INSERT ─

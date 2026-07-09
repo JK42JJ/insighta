@@ -170,12 +170,22 @@ export async function executePipelineRun(runId: string): Promise<void> {
     }
   }
 
-  if (!embeddingsReady) {
+  // CP512 (EMBED_ASYNC_SERVE) — embeddings are NOT a hard precondition for
+  // serving. They drive semantic cell-assignment/ordering; search.list finds the
+  // cards regardless. Blocking steps 2-3 on step1 made an embedding timeout
+  // produce 0 cards (P0). Now: step1 failure/timeout does NOT skip discovery —
+  // video_discover runs in degraded (lexical) mode; embeddings backfill later.
+  // Flag off = legacy hard-skip (exact rollback).
+  const asyncServe = process.env['EMBED_ASYNC_SERVE'] !== 'false';
+  if (!embeddingsReady && !asyncServe) {
     await updateStep(runId, 2, 'skipped', null, 'embeddings not ready');
     await updateStep(runId, 3, 'skipped', null, 'embeddings not ready');
     await markRunStatus(runId, 'partial');
     log.info(`[${runId}] pipeline partial — step1 failed, steps 2-3 skipped`);
     return;
+  }
+  if (!embeddingsReady) {
+    log.info(`[${runId}] step1 not ready — proceeding to discover in degraded (lexical) mode`);
   }
 
   // ── Step 2: Video Discover (opt-in gated) ───────────────────

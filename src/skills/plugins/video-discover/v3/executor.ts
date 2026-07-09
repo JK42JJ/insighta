@@ -166,44 +166,54 @@ export const executor: SkillExecutor = {
       return { ok: false, reason: `Mandala ${ctx.mandalaId} not found or not owned` };
     }
 
-    // Level=1 embeddings must exist for Tier 1 matching.
-    const embedCountRows = await db.$queryRaw<{ cnt: bigint }[]>(
-      Prisma.sql`SELECT COUNT(*)::bigint AS cnt FROM public.mandala_embeddings
-                 WHERE mandala_id = ${ctx.mandalaId} AND level = 1 AND embedding IS NOT NULL`
+    // CP512 (EMBED_ASYNC_SERVE) — embeddings are NO LONGER a hard precondition.
+    // They drive semantic cell-assignment; their absence only degrades ordering,
+    // it must not block card serving (search.list finds cards; embeddings sort
+    // them). So load the sub_goal TEXT from its own source (user_mandala_levels,
+    // independent of the embedding rows) and attach embeddings when present. With
+    // the flag off, keep the legacy hard-gate for an exact behavioral rollback.
+    const asyncServe = (ctx.env ?? {})['EMBED_ASYNC_SERVE'] !== 'false';
+
+    // Embeddings (level=1), keyed by sub_goal_index — may be partial or empty.
+    const embRows = await db.$queryRaw<{ sub_goal_index: number; embedding: string | null }[]>(
+      Prisma.sql`SELECT sub_goal_index, embedding::text AS embedding
+                 FROM public.mandala_embeddings
+                 WHERE mandala_id = ${ctx.mandalaId} AND level = 1 AND embedding IS NOT NULL
+                 ORDER BY sub_goal_index ASC`
     );
-    const cnt = Number(embedCountRows[0]?.cnt ?? 0n);
-    if (cnt < V3_NUM_CELLS) {
+    const embByIdx = new Map<number, number[]>();
+    for (const r of embRows) {
+      if (r.embedding) embByIdx.set(r.sub_goal_index, parseVectorLiteral(r.embedding));
+    }
+    const cnt = embByIdx.size;
+
+    if (!asyncServe && cnt < V3_NUM_CELLS) {
+      // Legacy hard-gate — only when the flag is explicitly disabled (rollback).
       return {
         ok: false,
         reason: `Only ${cnt}/${V3_NUM_CELLS} sub_goal embeddings available — wait for embeddings step`,
       };
     }
 
-    // Load sub_goal text AND embeddings. Embeddings are used for semantic
-    // cell assignment in applyMandalaFilterWithStats (replaces lexical
-    // jaccard+bigram path — see mandala-filter.ts SEMANTIC_MIN_CELL_COSINE).
-    const subGoalRows = await db.$queryRaw<
-      {
-        sub_goal_index: number;
-        sub_goal: string | null;
-        center_goal: string | null;
-        embedding: string | null;
-      }[]
-    >(
-      Prisma.sql`SELECT sub_goal_index, sub_goal, center_goal, embedding::text AS embedding
-                 FROM public.mandala_embeddings
-                 WHERE mandala_id = ${ctx.mandalaId} AND level = 1
-                 ORDER BY sub_goal_index ASC`
-    );
+    // Sub_goal TEXT + center_goal from user_mandala_levels (depth=0) — the source
+    // of record for cell subjects, populated at mandala creation regardless of
+    // embedding status. This is what makes degraded (embedding-less) serve work.
+    const root = await db.user_mandala_levels.findFirst({
+      where: { mandala_id: ctx.mandalaId, depth: 0 },
+      select: { center_goal: true, subjects: true },
+    });
+    const subjects = (root?.subjects ?? []).filter((s): s is string => typeof s === 'string');
     const subGoals: string[] = new Array(V3_NUM_CELLS).fill('');
     const subGoalEmbeddings: number[][] = new Array(V3_NUM_CELLS).fill([]);
-    let centerGoal = mandala.title ?? '';
-    for (const r of subGoalRows) {
-      const idx = r.sub_goal_index;
-      if (idx < 0 || idx >= V3_NUM_CELLS) continue;
-      subGoals[idx] = r.sub_goal ?? '';
-      if (r.embedding) subGoalEmbeddings[idx] = parseVectorLiteral(r.embedding);
-      if (r.center_goal && !centerGoal) centerGoal = r.center_goal;
+    const centerGoal = mandala.title ?? root?.center_goal ?? '';
+    for (let idx = 0; idx < V3_NUM_CELLS; idx++) {
+      subGoals[idx] = subjects[idx] ?? '';
+      const emb = embByIdx.get(idx);
+      if (emb) subGoalEmbeddings[idx] = emb;
+    }
+    // No subjects at all → nothing to search for. (mandala misconfigured.)
+    if (subGoals.every((s) => !s.trim())) {
+      return { ok: false, reason: 'no sub_goal subjects on user_mandala_levels (depth=0)' };
     }
 
     // CP458: a stored 'ko'/'en' wins; otherwise detect from the goal text
