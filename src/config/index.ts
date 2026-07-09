@@ -240,6 +240,14 @@ const envSchema = z.object({
     .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
     .default(true),
 
+  // CP512 — embeddings decoupled from card serving. Default true: a mandala's
+  // cards serve even when embeddings fail/timeout (degraded lexical), embeddings
+  // backfill later. Set 'false' for the legacy hard-gate (embeddings required
+  // before serving) — exact rollback.
+  EMBED_ASYNC_SERVE: z
+    .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
+    .default(true),
+
   // CP494 ② — supply bridge: promote youtube_videos (Mac Mini quota-0 sink)
   // into video_pool (source='yt_promoted'). ONE flag controls the write↔read
   // pair: off = promote endpoint no-ops AND v5 poolSources omits 'yt_promoted'
@@ -432,6 +440,9 @@ export const config = {
     enabled: env.POOL_MAINTENANCE_ENABLED,
     refreshEnabled: env.POOL_METADATA_REFRESH_ENABLED,
   },
+
+  // CP512 — embeddings decoupled from serving (degraded lexical serve on fail).
+  embedAsyncServe: env.EMBED_ASYNC_SERVE,
 
   // Supply bridge: youtube_videos → video_pool promotion (CP494 ②).
   supplyYtBridge: {

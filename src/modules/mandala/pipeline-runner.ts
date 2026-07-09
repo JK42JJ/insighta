@@ -17,6 +17,7 @@ import { skillRegistry } from '@/modules/skills';
 import { getPrismaClient } from '@/modules/database';
 import { createGenerationProvider } from '@/modules/llm';
 import type { Tier } from '@/config/quota';
+import { config } from '@/config/index';
 import { logger } from '@/utils/logger';
 import { ensureMandalaEmbeddings } from './ensure-mandala-embeddings';
 import { maybeAutoAddRecommendations } from './auto-add-recommendations';
@@ -176,7 +177,7 @@ export async function executePipelineRun(runId: string): Promise<void> {
   // produce 0 cards (P0). Now: step1 failure/timeout does NOT skip discovery —
   // video_discover runs in degraded (lexical) mode; embeddings backfill later.
   // Flag off = legacy hard-skip (exact rollback).
-  const asyncServe = process.env['EMBED_ASYNC_SERVE'] !== 'false';
+  const asyncServe = config.embedAsyncServe;
   if (!embeddingsReady && !asyncServe) {
     await updateStep(runId, 2, 'skipped', null, 'embeddings not ready');
     await updateStep(runId, 3, 'skipped', null, 'embeddings not ready');
