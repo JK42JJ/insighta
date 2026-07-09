@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Home } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
@@ -55,45 +55,29 @@ function LostMascots() {
 }
 
 /**
- * Public 404 — a clean standalone page (no app header/footer). Shown to any
- * visitor who hits an unknown URL, including logged-out ones, so it must not
- * render the logged-in app chrome (the old widgets/header Header/Footer were
- * the last consumer here and were otherwise unused).
+ * 404 — content only, NO header/footer. `App.tsx` already wraps every route
+ * in `<AppShell>`, which supplies context-appropriate chrome: the sidebar for
+ * logged-in app routes, nothing for marketing/auth routes. Adding a header or
+ * footer here would double up with the shell (a mini "Insighta" header + a
+ * "© 2026" footer stacked on top of the app sidebar). Just render the centered
+ * content and let the shell decide the surroundings.
  */
 export default function NotFoundPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <header className="px-6 py-5">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 font-bold text-lg hover:opacity-80 transition-opacity"
-        >
-          <span className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/40 flex items-center justify-center">
-            <span className="w-3 h-3 rounded-full border-2 border-primary inline-block" />
-          </span>
-          Insighta
-        </Link>
-      </header>
-
-      <main id="main-content" className="flex-1 flex items-center justify-center px-4">
-        <div className="text-center space-y-7">
-          <LostMascots />
-          <h1 className="text-6xl font-bold text-primary">404</h1>
-          <h2 className="text-2xl font-semibold text-foreground">{t('notFound.title')}</h2>
-          <p className="text-muted-foreground max-w-md mx-auto">{t('notFound.description')}</p>
-          <Button size="lg" className="gap-2 rounded-xl" onClick={() => navigate('/')}>
-            <Home className="w-4 h-4" aria-hidden="true" />
-            {t('notFound.goHome')}
-          </Button>
-        </div>
-      </main>
-
-      <footer className="px-6 py-6 text-center text-xs text-muted-foreground">
-        © 2026 Insighta
-      </footer>
+    <div id="main-content" className="min-h-[70vh] flex items-center justify-center px-4 py-16">
+      <div className="text-center space-y-7">
+        <LostMascots />
+        <h1 className="text-6xl font-bold text-primary">404</h1>
+        <h2 className="text-2xl font-semibold text-foreground">{t('notFound.title')}</h2>
+        <p className="text-muted-foreground max-w-md mx-auto">{t('notFound.description')}</p>
+        <Button size="lg" className="gap-2 rounded-xl" onClick={() => navigate('/')}>
+          <Home className="w-4 h-4" aria-hidden="true" />
+          {t('notFound.goHome')}
+        </Button>
+      </div>
     </div>
   );
 }
