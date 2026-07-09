@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPrismaClient } from '../../../modules/database/client';
+import { sendWelcomeEmail } from '../../../modules/email/transactional';
 
 /**
  * Admin — closed-beta application inbox (invitations are sent manually).
@@ -33,6 +34,8 @@ export async function adminBetaApplicationRoutes(fastify: FastifyInstance) {
         where: { id: request.params.id },
         data: { status: 'invited', invited_at: new Date() },
       });
+      // Fire the welcome+onboarding invite email (internally flag-gated + non-fatal).
+      await sendWelcomeEmail(updated.email, { ctaUrl: 'https://insighta.one/login' });
       return reply.send({ application: updated });
     }
   );
