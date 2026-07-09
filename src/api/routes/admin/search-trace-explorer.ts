@@ -25,6 +25,7 @@ function viewToNumber(v: bigint | null): number | null {
 
 /** Summary row shape shared by the list endpoints (no candidates). */
 function toTraceSummary(r: {
+  id: string;
   trace_id: string;
   mandala_id: string | null;
   user_id: string | null;
@@ -42,6 +43,10 @@ function toTraceSummary(r: {
   created_at: Date;
 }) {
   return {
+    // Row PK — unique even when several rows share one trace_id (pool_serve
+    // writes a row per cell/round). The list keys/highlights on this, not
+    // trace_id, so duplicate-trace_id rows don't all select at once.
+    id: r.id,
     trace_id: r.trace_id,
     mandala_id: r.mandala_id,
     user_id: r.user_id,
@@ -142,6 +147,25 @@ export const adminSearchTraceExplorerRoutes: FastifyPluginCallback = (fastify, _
         take: CANDIDATE_CAP,
       });
 
+      // Raw request/response timeline for the SAME flow. search_trace.trace_id
+      // === video_discover_traces.run_id (add-cards.ts:574 writeSearchTrace uses
+      // the discover runId as traceId; every recordTrace row shares that runId).
+      // Surfaces the actual external-API req/rep per step so the operator can
+      // read the full flow start→end (James: "실제 내용을 확인해야 개선 가능").
+      const rawSteps = await prisma.video_discover_traces.findMany({
+        where: { run_id: traceId },
+        orderBy: { created_at: 'asc' },
+        select: {
+          step: true,
+          status: true,
+          request: true,
+          response: true,
+          error_message: true,
+          latency_ms: true,
+          created_at: true,
+        },
+      });
+
       // Funnel: decision × drop_reason attrition (drives the §4 funnel chart).
       const funnelMap = new Map<string, number>();
       // Placed cards grouped by cell — the "what the user actually got" view.
@@ -195,6 +219,15 @@ export const adminSearchTraceExplorerRoutes: FastifyPluginCallback = (fastify, _
           .sort((a, b) => a[0] - b[0])
           .map(([cell, cards]) => ({ cell, cards })),
         candidates: cand,
+        raw_steps: rawSteps.map((s) => ({
+          step: s.step,
+          status: s.status,
+          request: s.request,
+          response: s.response,
+          error_message: s.error_message,
+          latency_ms: s.latency_ms,
+          at: s.created_at.toISOString(),
+        })),
       });
     }
   );
