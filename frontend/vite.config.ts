@@ -73,6 +73,13 @@ export default defineConfig(({ mode }) => {
         workbox: {
           maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+          // Static-asset URLs (anything ending in a file extension, e.g.
+          // /beta-notice.gif) must NOT fall back to index.html. Without this,
+          // typing an asset URL in the address bar is treated as a navigation
+          // and the SPA serves its 404 route instead of the real file
+          // (a PWA-registered browser returned 404 for /beta-notice.gif while
+          // the server served the GIF fine). Let these hit the network.
+          navigateFallbackDenylist: [/^\/api\//, /\.[^/]+$/],
           // 2026-04-22 (Phase 2 re-scoped): removed the `/api/*`
           // StaleWhileRevalidate runtime cache. Serving stale API
           // responses is incorrect for mandala-create / wizard-stream
