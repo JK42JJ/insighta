@@ -2393,6 +2393,27 @@ model llm_call_logs {
   @@schema("public")
 }
 
+/// Queryable record of subsystem failures that otherwise reach ONLY ephemeral
+/// winston logs (book-fill hard-fails that fall back instead of throwing →
+/// invisible to pgboss.job; embedding failures that only log.warn). The daily
+/// error-log-check job aggregates this alongside the per-domain error columns.
+/// DDL: prisma/migrations/error-events/001_create_error_events.sql
+model error_events {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subsystem  String   @db.VarChar(50)
+  stage      String   @db.VarChar(80)
+  severity   String   @default("error") @db.VarChar(20)
+  message    String?
+  context    Json?
+  mandala_id String?  @db.Uuid
+  video_id   String?  @db.VarChar(50)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at])
+  @@index([subsystem, created_at])
+  @@schema("public")
+}
+
 /// Per-event quality measurement (CP437 paper §6.2).
 /// payload shape (rich_summary_v2 stage): { M1, M3_class, M3_score, S, round }
 model pipeline_events {
