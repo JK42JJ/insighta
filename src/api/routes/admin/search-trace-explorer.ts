@@ -25,6 +25,7 @@ function viewToNumber(v: bigint | null): number | null {
 
 /** Summary row shape shared by the list endpoints (no candidates). */
 function toTraceSummary(r: {
+  id: string;
   trace_id: string;
   mandala_id: string | null;
   user_id: string | null;
@@ -42,6 +43,10 @@ function toTraceSummary(r: {
   created_at: Date;
 }) {
   return {
+    // Row PK — unique even when several rows share one trace_id (pool_serve
+    // writes a row per cell/round). The list keys/highlights on this, not
+    // trace_id, so duplicate-trace_id rows don't all select at once.
+    id: r.id,
     trace_id: r.trace_id,
     mandala_id: r.mandala_id,
     user_id: r.user_id,

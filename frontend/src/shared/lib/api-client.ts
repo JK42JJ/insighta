@@ -3218,6 +3218,7 @@ class ApiClient {
   }): Promise<{
     count: number;
     traces: Array<{
+      id: string;
       trace_id: string;
       mandala_id: string | null;
       user_id: string | null;

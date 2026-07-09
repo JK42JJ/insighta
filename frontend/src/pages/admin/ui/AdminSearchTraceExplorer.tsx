@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '@/shared/lib/api-client';
 
 interface TraceSummary {
+  id: string;
   trace_id: string;
   mandala_id: string | null;
   user_id: string | null;
@@ -93,6 +94,10 @@ export function AdminSearchTraceExplorer() {
   const [journeyLoading, setJourneyLoading] = useState(false);
   // Raw req/rep popup — full flow start→end (James request).
   const [rawOpen, setRawOpen] = useState(false);
+  // Which list row is selected — the row PK, NOT trace_id (several rows can
+  // share one trace_id, e.g. pool_serve per-cell writes; keying on trace_id
+  // highlighted them all at once).
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   const reloadRecent = useCallback(async () => {
     setLoading(true);
@@ -161,13 +166,14 @@ export function AdminSearchTraceExplorer() {
           {loading && <div className="px-4 py-3 text-sm text-muted-foreground">로딩…</div>}
           {recent.map((t) => (
             <button
-              key={t.trace_id}
+              key={t.id}
               onClick={() => {
+                setSelectedRowId(t.id);
                 setIdInput(t.trace_id);
                 void openJourney(t.trace_id);
               }}
               className={`w-full border-b border-border px-4 py-2 text-left hover:bg-accent ${
-                journey?.trace.trace_id === t.trace_id ? 'bg-accent' : ''
+                selectedRowId === t.id ? 'bg-accent' : ''
               }`}
             >
               <div className="flex items-center justify-between">
