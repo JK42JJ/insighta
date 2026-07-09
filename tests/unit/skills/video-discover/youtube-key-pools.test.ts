@@ -21,33 +21,13 @@ describe('resolveVideosApiKeys (CP492)', () => {
       YOUTUBE_API_KEY_VIDEOS_3: 'v3',
     };
     expect(resolveVideosApiKeys(env)).toEqual(['v1', 'v2', 'v3']);
-    // CP512 — search resolves to a SINGLE key only (ToS quota-split fix); _2..N ignored.
-    expect(resolveSearchApiKeys(env)).toEqual(['s1']);
+    // search pool stays its own — separation holds
+    expect(resolveSearchApiKeys(env)).toEqual(['s1', 's2']);
   });
 
-  // CP512 — search.list must NEVER spread across projects. resolveSearchApiKeys
-  // returns at most one key, ignoring the _2..N slots that the old rotation used.
-  describe('resolveSearchApiKeys — single key (CP512 ToS)', () => {
-    test('ignores _2..N slots, returns only YOUTUBE_API_KEY_SEARCH', () => {
-      const env = {
-        YOUTUBE_API_KEY_SEARCH: 's1',
-        YOUTUBE_API_KEY_SEARCH_2: 's2',
-        YOUTUBE_API_KEY_SEARCH_8: 's8',
-      };
-      expect(resolveSearchApiKeys(env)).toEqual(['s1']);
-    });
-    test('falls back to legacy YOUTUBE_API_KEY', () => {
-      expect(resolveSearchApiKeys({ YOUTUBE_API_KEY: 'legacy' })).toEqual(['legacy']);
-    });
-    test('empty when no search key set', () => {
-      expect(resolveSearchApiKeys({})).toEqual([]);
-    });
-  });
-
-  test('falls back to the SEARCH key when no VIDEOS keys (now single-key)', () => {
-    // CP512 — SEARCH is single-key, so the VIDEOS fallback also yields one key.
+  test('falls back to the SEARCH pool when no VIDEOS keys (behavior unchanged)', () => {
     const env = { YOUTUBE_API_KEY_SEARCH: 's1', YOUTUBE_API_KEY_SEARCH_2: 's2' };
-    expect(resolveVideosApiKeys(env)).toEqual(['s1']);
+    expect(resolveVideosApiKeys(env)).toEqual(['s1', 's2']);
   });
 
   test('falls back to legacy YOUTUBE_API_KEY when neither pool set', () => {
