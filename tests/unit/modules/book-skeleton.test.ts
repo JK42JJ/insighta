@@ -69,6 +69,27 @@ describe('parseSkeletonResponse (pure — no LLM)', () => {
     }
   });
 
+  // CP504 §11 — a RAW (unescaped) newline inside intro/title is what actually
+  // trips JSON.parse in prod. parseJsonLenient escapes it in-place, so the parse
+  // succeeds WITHOUT the caller paying an LLM retry.
+  it('salvages a RAW unescaped newline inside a string value (lenient parse)', () => {
+    const raw = '{"chapters":[{"title":"도입","intro":"첫 줄\n둘째 줄","topic_idx":[0]}]}';
+    const r = parseSkeletonResponse(raw, 1, 12);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.skeleton.chapters).toHaveLength(1);
+      expect(r.skeleton.chapters[0]!.intro).toBe('첫 줄 둘째 줄'); // restored then collapsed (no loss)
+    }
+  });
+
+  // A maxTokens truncation is salvaged too (close the open brackets) — no retry.
+  it('salvages a truncated skeleton response (bracket-close)', () => {
+    const raw = '{"chapters":[{"title":"도입","intro":"i","topic_idx":[0';
+    const r = parseSkeletonResponse(raw, 2, 12);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.skeleton.chapters[0]!.topic_refs).toEqual([0]);
+  });
+
   it('fails on non-array / invalid JSON / no-valid-refs', () => {
     expect(parseSkeletonResponse('{"chapters":"x"}', 1, 12).ok).toBe(false);
     expect(parseSkeletonResponse('not json', 1, 12).ok).toBe(false);
@@ -86,7 +107,9 @@ describe('synthesizeBookSkeleton (OpenRouter mocked)', () => {
   ];
 
   it('returns skeleton + computes unplaced topics (transparency)', async () => {
-    mockGenerate.mockResolvedValueOnce('{"chapters":[{"title":"도입","intro":"i","topic_idx":[0,2]}]}');
+    mockGenerate.mockResolvedValueOnce(
+      '{"chapters":[{"title":"도입","intro":"i","topic_idx":[0,2]}]}'
+    );
     const r = await synthesizeBookSkeleton(topics, 'goal');
     expect(r.ok).toBe(true);
     if (r.ok) {
@@ -113,7 +136,12 @@ describe('buildBookJson skeleton mode (gate[2]: cross-cell, ch sequential, intro
   const seg = (atoms: Array<{ text: string; timestamp_sec: number }>): RichSummarySegments =>
     ({
       sections: [],
-      atoms: atoms.map((a, i) => ({ idx: i, type: 'fact', text: a.text, timestamp_sec: a.timestamp_sec })),
+      atoms: atoms.map((a, i) => ({
+        idx: i,
+        type: 'fact',
+        text: a.text,
+        timestamp_sec: a.timestamp_sec,
+      })),
     }) as unknown as RichSummarySegments;
 
   // Two cells, one topic each; the skeleton MERGES both into a single chapter.
@@ -125,14 +153,34 @@ describe('buildBookJson skeleton mode (gate[2]: cross-cell, ch sequential, intro
       {
         cellIndex: 0,
         title: '기초',
-        videos: [{ videoId: 'vidA', title: 'A', analysis: null, segments: seg([{ text: '인사 표현', timestamp_sec: 10 }]), lora: null }],
-        topics: [{ topic_title: '인사', summary: '인사 표현', atom_refs: [{ vid: 'vidA', ts: 10 }] }],
+        videos: [
+          {
+            videoId: 'vidA',
+            title: 'A',
+            analysis: null,
+            segments: seg([{ text: '인사 표현', timestamp_sec: 10 }]),
+            lora: null,
+          },
+        ],
+        topics: [
+          { topic_title: '인사', summary: '인사 표현', atom_refs: [{ vid: 'vidA', ts: 10 }] },
+        ],
       },
       {
         cellIndex: 1,
         title: '실전',
-        videos: [{ videoId: 'vidB', title: 'B', analysis: null, segments: seg([{ text: '주문 표현', timestamp_sec: 20 }]), lora: null }],
-        topics: [{ topic_title: '주문', summary: '주문 표현', atom_refs: [{ vid: 'vidB', ts: 20 }] }],
+        videos: [
+          {
+            videoId: 'vidB',
+            title: 'B',
+            analysis: null,
+            segments: seg([{ text: '주문 표현', timestamp_sec: 20 }]),
+            lora: null,
+          },
+        ],
+        topics: [
+          { topic_title: '주문', summary: '주문 표현', atom_refs: [{ vid: 'vidB', ts: 20 }] },
+        ],
       },
     ],
     skeleton,
@@ -141,7 +189,11 @@ describe('buildBookJson skeleton mode (gate[2]: cross-cell, ch sequential, intro
   it('builds chapters FROM the skeleton — cross-cell merge, ch sequential, intro populated', () => {
     // flat topics: [0]=인사(cell0), [1]=주문(cell1). One chapter merges both.
     const { book } = buildBookJson(
-      input({ chapters: [{ title: '한 권의 책: 기초→실전', intro: '기초를 다지고 실전으로', topic_refs: [0, 1] }] })
+      input({
+        chapters: [
+          { title: '한 권의 책: 기초→실전', intro: '기초를 다지고 실전으로', topic_refs: [0, 1] },
+        ],
+      })
     );
     expect(book.chapters).toHaveLength(1); // NOT 2 cells → reconstruction (gate 2a)
     const ch = book.chapters[0]!;

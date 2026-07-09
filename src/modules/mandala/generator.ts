@@ -11,6 +11,7 @@ import type { Prisma } from '@prisma/client';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { MemoryCache } from '../../utils/memory-cache';
+import { escapeUnescapedJsonNewlines, closeUnclosedJsonBrackets } from '../../utils/lenient-json';
 import { getPrismaClient } from '../database/client';
 import { searchMandalasByGoal, formatMandalasForFewShot, type MandalaSearchResult } from './search';
 import { loadWizardMergedGenConfig } from '@/config/wizard-merged-gen';
@@ -186,36 +187,6 @@ function removeOutputField(text: string): string {
   return text;
 }
 
-/** Escape unescaped newlines inside JSON string values (tracks string context) */
-function escapeInnerNewlines(text: string): string {
-  let result = '';
-  let inStr = false;
-  let esc = false;
-  for (const ch of text) {
-    if (esc) {
-      result += ch;
-      esc = false;
-      continue;
-    }
-    if (ch === '\\' && inStr) {
-      result += ch;
-      esc = true;
-      continue;
-    }
-    if (ch === '"') {
-      inStr = !inStr;
-      result += ch;
-      continue;
-    }
-    if (inStr && (ch === '\n' || ch === '\r')) {
-      result += ch === '\n' ? '\\n' : '\\r';
-      continue;
-    }
-    result += ch;
-  }
-  return result;
-}
-
 /** Remove bare trailing arrays (e.g., `] ["label1", ...]` without key) — string-aware */
 function removeBareTrailingArrays(text: string): string {
   // Find the last top-level `}` and truncate anything after it if it starts with `[`
@@ -255,36 +226,6 @@ function removeBareTrailingArrays(text: string): string {
   return text;
 }
 
-/** Count unclosed brackets in a prefix (string-aware) */
-function closeBrackets(truncated: string): string {
-  const stack: string[] = [];
-  let inStr = false;
-  let esc = false;
-  for (const ch of truncated) {
-    if (esc) {
-      esc = false;
-      continue;
-    }
-    if (ch === '\\' && inStr) {
-      esc = true;
-      continue;
-    }
-    if (ch === '"') {
-      inStr = !inStr;
-      continue;
-    }
-    if (inStr) continue;
-    if (ch === '{') stack.push('}');
-    else if (ch === '[') stack.push(']');
-    else if ((ch === '}' || ch === ']') && stack.length > 0 && stack[stack.length - 1] === ch) {
-      stack.pop();
-    }
-  }
-  let result = truncated;
-  while (stack.length > 0) result += stack.pop();
-  return result;
-}
-
 function extractJsonRobust(text: string): GeneratedMandala | null {
   const start = text.indexOf('{');
   if (start === -1) return null;
@@ -303,7 +244,7 @@ function extractJsonRobust(text: string): GeneratedMandala | null {
   // v4.1 preprocessing pipeline
   fragment = fixBracketTypos(fragment);
   fragment = removeOutputField(fragment);
-  fragment = escapeInnerNewlines(fragment);
+  fragment = escapeUnescapedJsonNewlines(fragment);
   fragment = removeBareTrailingArrays(fragment);
 
   // Method 1: Direct parse
@@ -335,7 +276,7 @@ function extractJsonRobust(text: string): GeneratedMandala | null {
   if (bestCut > 0) {
     let truncated = fragment.slice(0, bestCut).trimEnd();
     if (truncated.endsWith(',')) truncated = truncated.slice(0, -1);
-    truncated = closeBrackets(truncated);
+    truncated = closeUnclosedJsonBrackets(truncated);
 
     try {
       return JSON.parse(truncated) as GeneratedMandala;

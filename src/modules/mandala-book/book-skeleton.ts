@@ -22,6 +22,7 @@
 
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
 import { logger } from '@/utils/logger';
+import { parseJsonLenient } from '@/utils/lenient-json';
 
 const log = logger.child({ module: 'mandala-book/book-skeleton' });
 
@@ -129,9 +130,15 @@ export async function synthesizeBookSkeleton(
       return r;
     }
     lastReason = r.reason;
-    if (attempt < SKELETON_ATTEMPTS) {
-      log.warn('book-skeleton attempt failed — retrying', { attempt, reason: r.reason });
+    // CP504 §11 — retry PROVIDER faults only. Parse failures are salvaged
+    // in-attempt (parseSkeletonResponse → parseJsonLenient), so re-calling Sonnet
+    // for a parse error just burns cost.
+    const retryable = r.reason.startsWith('provider_error');
+    if (retryable && attempt < SKELETON_ATTEMPTS) {
+      log.warn('book-skeleton provider error — retrying', { attempt, reason: r.reason });
+      continue;
     }
+    break; // non-retryable (parse/structural) → stop; do not waste an LLM call
   }
   log.error('book-skeleton HARD FAIL after retries (NOT a silent legacy revert)', {
     topics: topics.length,
@@ -153,6 +160,7 @@ async function attemptSkeleton(
       format: 'json',
       temperature: TEMPERATURE,
       maxTokens: MAX_TOKENS,
+      purpose: 'book_skeleton', // CP504 §3 per-stage cost attribution
     });
   } catch (err) {
     return {
@@ -194,11 +202,13 @@ export function parseSkeletonResponse(
     .replace(/\n?\s*```\s*$/i, '')
     .trim();
 
-  let json: { chapters?: unknown };
-  try {
-    json = JSON.parse(stripped) as { chapters?: unknown };
-  } catch (err) {
-    return { ok: false, reason: `json_parse: ${err instanceof Error ? err.message : String(err)}` };
+  // CP504 §11 — lenient parse: salvage unescaped-newline / truncation in-place
+  // (no LLM retry). `via` is the parse-recovery counter (logged for verification).
+  const json = parseJsonLenient<{ chapters?: unknown }>(stripped, (via) => {
+    log.info('book-skeleton json salvaged in-attempt (no LLM retry)', { via });
+  });
+  if (json === null) {
+    return { ok: false, reason: 'json_parse: unparseable after lenient salvage' };
   }
   if (!Array.isArray(json.chapters)) return { ok: false, reason: 'no_chapters_array' };
 
