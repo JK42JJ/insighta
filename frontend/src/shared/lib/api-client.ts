@@ -3249,6 +3249,16 @@ class ApiClient {
     funnel: Array<{ decision: string; drop_reason: string | null; count: number }>;
     placed_by_cell: Array<{ cell: number; cards: SearchTraceCandidateDTO[] }>;
     candidates: SearchTraceCandidateDTO[];
+    // Raw external-API request/response per step (full flow start→end).
+    raw_steps: Array<{
+      step: string;
+      status: string;
+      request: unknown;
+      response: unknown;
+      error_message: string | null;
+      latency_ms: number | null;
+      at: string;
+    }>;
   }> {
     return this.request(`/admin/search-trace/journey/${encodeURIComponent(traceId)}`);
   }
