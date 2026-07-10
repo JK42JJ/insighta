@@ -25,6 +25,7 @@ import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
 import { config } from '@/config/index';
+import { isEmbedActiveActiveEnabled, getEmbedHedgeMs } from '@/config/embed-active-active';
 import { logLLMCall } from '@/modules/llm/call-logger';
 import { recordTrace } from '@/modules/discover-tracing';
 
@@ -256,10 +257,119 @@ function raceExternalAbort(shared: Promise<number[][]>, signal: AbortSignal): Pr
   });
 }
 
+// Hedge-trigger counter (module-level) — how often the OpenRouter leg was
+// fired because Ollama rejected fast or ran slow. Logged per fire so ops can
+// watch the rate after enabling active-active and tune EMBED_HEDGE_MS down.
+let embedHedgeFires = 0;
+export function getEmbedHedgeFireCount(): number {
+  return embedHedgeFires;
+}
+
+/**
+ * Active-active hedge: Ollama primary; OpenRouter fired in parallel ONLY when
+ * Ollama (a) rejects before the hedge window (fast fail — e.g. 500 "Compute
+ * error", the 0-card incident) or (b) exceeds EMBED_HEDGE_MS (slow). A healthy
+ * Ollama (p50 ~1.9s) settles first and OpenRouter is never called, so this
+ * removes the Mac Mini SPOF without the always-2× cost of a blind race. First
+ * success wins; the loser is AbortController-cancelled (real cancel). Both
+ * dead → throw (downstream lexical path). Both legs emit the same 4096-d space.
+ */
+async function embedOneChunkHedged(
+  texts: string[],
+  opts: EmbeddingClientOptions
+): Promise<number[][]> {
+  const hedgeMs = getEmbedHedgeMs();
+  const ollamaCtrl = new AbortController();
+  const openrouterCtrl = new AbortController();
+  const onExternalAbort = () => {
+    ollamaCtrl.abort();
+    openrouterCtrl.abort();
+  };
+  if (opts.signal?.aborted) onExternalAbort();
+  else opts.signal?.addEventListener('abort', onExternalAbort, { once: true });
+
+  return new Promise<number[][]>((resolve, reject) => {
+    let settled = false;
+    let openrouterStarted = false;
+    let ollamaFailed = false;
+    let openrouterFailed = false;
+    let ollamaErr: unknown;
+    let openrouterErr: unknown;
+    let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const cleanup = () => {
+      if (hedgeTimer) clearTimeout(hedgeTimer);
+      ollamaCtrl.abort();
+      openrouterCtrl.abort();
+      opts.signal?.removeEventListener('abort', onExternalAbort);
+    };
+    const settleResolve = (v: number[][]) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(v);
+    };
+    const rejectBothDead = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(
+        new EmbeddingError(
+          `active-active embed failed: ollama=${
+            ollamaErr instanceof Error ? ollamaErr.message : String(ollamaErr)
+          } | openrouter=${
+            openrouterErr instanceof Error ? openrouterErr.message : String(openrouterErr)
+          }`
+        )
+      );
+    };
+
+    const startOpenRouter = (reason: string) => {
+      if (openrouterStarted || settled) return;
+      openrouterStarted = true;
+      if (hedgeTimer) {
+        clearTimeout(hedgeTimer);
+        hedgeTimer = undefined;
+      }
+      embedHedgeFires += 1;
+      log.warn(
+        `embed hedge fired (${reason}) — OpenRouter leg starting (chunk=${texts.length}, fires=${embedHedgeFires})`
+      );
+      embedOneChunkViaOpenRouterRetrying(texts, { ...opts, signal: openrouterCtrl.signal }).then(
+        (v) => settleResolve(v),
+        (e) => {
+          openrouterFailed = true;
+          openrouterErr = e;
+          if (ollamaFailed) rejectBothDead();
+        }
+      );
+    };
+
+    // Ollama primary.
+    embedOneChunkViaOllama(texts, { ...opts, signal: ollamaCtrl.signal }).then(
+      (v) => settleResolve(v),
+      (e) => {
+        ollamaFailed = true;
+        ollamaErr = e;
+        if (!openrouterStarted) startOpenRouter('ollama-reject');
+        else if (openrouterFailed) rejectBothDead();
+      }
+    );
+
+    // Slow-path hedge.
+    hedgeTimer = setTimeout(() => startOpenRouter('ollama-slow'), hedgeMs);
+  });
+}
+
 async function embedOneChunkRouted(
   texts: string[],
   opts: EmbeddingClientOptions
 ): Promise<number[][]> {
+  // Active-active hedge (flag-gated) — removes the single-provider SPOF for
+  // ALL embedBatch callers. Unset flag = the sequential-fallback behavior below.
+  if (isEmbedActiveActiveEnabled()) {
+    return embedOneChunkHedged(texts, opts);
+  }
   const provider = config.iksEmbed.provider;
   if (provider === 'openrouter') {
     // OpenRouter primary (retry on transient errors) → Ollama fallback once
