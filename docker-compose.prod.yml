@@ -403,6 +403,12 @@ services:
       # Table: mandala_wizard_precompute (10min TTL, pg_cron sweep */5 min).
       # Revert: delete this line → feature no-ops.
       - WIZARD_PRECOMPUTE_ENABLED=true
+      # P0 (2026-07-10) — durable video pipeline via pg-boss. Routes the
+      # post-creation pipeline (embeddings->discover->auto-add) through a
+      # pg-boss job so a container restart mid-run redelivers+retries
+      # instead of orphaning the run at 0 cards. Revert: delete this line
+      # (unset => legacy setImmediate). Handler: mandala-pipeline.ts.
+      - PIPELINE_DURABLE_ENABLED=true
       # CP493 (2026-06-03) — merged structure+queries generation (canary). ONE
       # Haiku call yields the mandala structure AND a searchable per-cell query
       # in a single continuous context, replacing the two disconnected calls
