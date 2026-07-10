@@ -48,6 +48,7 @@ import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch, cosineToRelevance } from '@/skills/plugins/iks-scorer/embedding';
+import { servingEmbedOptions } from '@/config/embed-serving-timeout';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 import { resolveLanguage } from '@/utils/detect-language';
@@ -475,7 +476,7 @@ async function executeImpl(
         const titles = capped.map((m) => m.title);
         const [centerVec, titleVecs] = await Promise.all([
           getCenterGoalEmbedding(mandalaId, state.centerGoal),
-          embedBatch(titles),
+          embedBatch(titles, servingEmbedOptions()),
         ]);
         const vectorsOk = centerVec != null && titleVecs.length === titles.length;
         if (vectorsOk) {
@@ -1194,10 +1195,10 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
         input.mandalaId
           ? getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
           : (async () => {
-              const [v] = await embedBatch([input.state.centerGoal]);
+              const [v] = await embedBatch([input.state.centerGoal], servingEmbedOptions());
               return v ?? null;
             })(),
-        embedBatch(titles),
+        embedBatch(titles, servingEmbedOptions()),
       ]);
       if (centerVec != null && titleVecs.length === titles.length) {
         centerEmbedding = centerVec;
@@ -2001,7 +2002,7 @@ async function runDiscoverEphemeralImpl(
   const existingVideoIds = new Set(redisSlots.map((s) => s.videoId));
   if (v3Config.enableTier1Cache) {
     try {
-      const [centerVec] = await embedBatch([input.centerGoal]);
+      const [centerVec] = await embedBatch([input.centerGoal], servingEmbedOptions());
       if (centerVec && centerVec.length > 0) {
         const tier1Matches = await matchFromVideoPoolByCenterGoal({
           centerEmbedding: centerVec,
@@ -2101,7 +2102,7 @@ async function runDiscoverEphemeralImpl(
       const cappedSlots = allSlots.slice(0, cap);
       const texts = [input.centerGoal, ...cappedSlots.map((s) => s.title)];
       const embedT0 = Date.now();
-      const vectors = await embedBatch(texts);
+      const vectors = await embedBatch(texts, servingEmbedOptions());
       const embedMs = Date.now() - embedT0;
       if (vectors.length === texts.length) {
         const centerEmbedding = vectors[0] ?? undefined;

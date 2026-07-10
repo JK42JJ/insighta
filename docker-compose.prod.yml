@@ -249,6 +249,19 @@ services:
       # Revert: delete this line → falls back to ollama-first behaviour.
       # See docs/design/mac-mini-deprecation-2026-05-13.md §4 Phase D1.
       - IKS_EMBED_PROVIDER=openrouter
+      # P0 2026-07-10 — serving-path embed fast-timeout. OpenRouter
+      # qwen3-embedding latency degraded to a 30-42s p90 tail (traces:
+      # embed.batch p50 1.5s->8.4s, p90 2.9s->36s), overrunning the wizard
+      # precompute/post-creation discover window -> 0 cards until manual
+      # refresh (~2min). ON caps the SERVING discover embeds at 12s / 0 retry
+      # so a slow chunk fails fast to lexical (never 0 cards) instead of
+      # hanging the window. Bulk collector/backfill keep the 20s default.
+      # 12s is between measured batch p50 (~8.4s, keep) and p90 (~36s, cut).
+      # Watch getEmbedServingDowngradeCount after enabling; tune the two
+      # values via env. Unset = existing 20s x 2 behaviour (flag rolls back).
+      # - EMBED_SERVING_FAST_TIMEOUT_ENABLED=true
+      # - EMBED_SERVING_TIMEOUT_MS=12000
+      # - EMBED_SERVING_MAX_RETRIES=0
       # CP416 (2026-04-22) — restore the LoRA action-fill path. Without
       # this, generateMandala() called config.mandalaGen.model=undefined,
       # Ollama /api/generate returned 400, LoRA threw, and the Haiku
