@@ -88,6 +88,14 @@ export const JOB_NAMES = {
    * + funnel from the Phase 1 trail log into search_metrics_daily (one row/day).
    */
   SEARCH_METRICS_ROLLUP: 'search-metrics-rollup',
+  /**
+   * P0 (2026-07-10) — durable mandala post-creation VIDEO pipeline (embeddings
+   * → discover → auto-add). Replaces the fire-and-forget setImmediate path that
+   * died on container restart (deploy/redeploy/crash) → 0-card orphan runs.
+   */
+  MANDALA_PIPELINE: 'mandala-pipeline',
+  /** Re-enqueues pipeline runs stuck at status=running (orphaned by restart). */
+  MANDALA_PIPELINE_WATCHDOG: 'mandala-pipeline-watchdog',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -324,6 +332,28 @@ export interface MandalaActionsFillPayload {
 }
 
 /**
+ * Mandala post-creation VIDEO pipeline — embeddings → discover → auto-add
+ * (drives recommendation_cache). ~55s observed worst case (embeddings on Mac
+ * Mini + discover + Haiku keyword gen). 2 retries with backoff so a transient
+ * embedding/discover failure OR a container restart mid-run does not leave the
+ * mandala at 0 cards — the exact durability guarantee the fire-and-forget
+ * setImmediate path lacked (P0 incident 2026-07-10: restart 12s into a run →
+ * orphaned status=running, no retry, 0 cards).
+ */
+export const MANDALA_PIPELINE_OPTIONS = {
+  retryLimit: 2,
+  retryDelay: 60,
+  retryBackoff: true,
+  expireInMinutes: 10,
+} as const;
+
+export interface MandalaPipelinePayload {
+  mandalaId: string;
+  userId: string;
+  trigger?: string;
+}
+
+/**
  * Book-index fill — pure DB+assembly, no LLM. Retry on transient DB errors so a
  * triggered fill is not lost; the work is idempotent (version bump + overwrite).
  */
@@ -399,6 +429,10 @@ export const QUEUE_CONFIG = {
   KEY_ALARM_CRON: '7 8 * * *',
   /** Observability Phase 2-B daily metrics rollup: daily at 08:13 (off-hour). */
   SEARCH_METRICS_ROLLUP_CRON: '13 8 * * *',
+  /** Orphaned-pipeline-run watchdog: every 10 minutes. */
+  MANDALA_PIPELINE_WATCHDOG_CRON: '*/10 * * * *',
+  /** A pipeline run stuck at status=running past this age is treated orphaned. */
+  MANDALA_PIPELINE_STALE_MINUTES: 10,
   /** Max concurrent enrichment workers */
   ENRICH_CONCURRENCY: 1,
   /**
