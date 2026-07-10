@@ -258,10 +258,11 @@ services:
       # hanging the window. Bulk collector/backfill keep the 20s default.
       # 12s is between measured batch p50 (~8.4s, keep) and p90 (~36s, cut).
       # Watch getEmbedServingDowngradeCount after enabling; tune the two
-      # values via env. Unset = existing 20s x 2 behaviour (flag rolls back).
-      # - EMBED_SERVING_FAST_TIMEOUT_ENABLED=true
-      # - EMBED_SERVING_TIMEOUT_MS=12000
-      # - EMBED_SERVING_MAX_RETRIES=0
+      # values via env. Set false / re-comment = existing 20s x 2 rollback.
+      # ENABLED 2026-07-10 (P0 hemostasis, James "배포 진행"):
+      - EMBED_SERVING_FAST_TIMEOUT_ENABLED=true
+      - EMBED_SERVING_TIMEOUT_MS=12000
+      - EMBED_SERVING_MAX_RETRIES=0
       # CP416 (2026-04-22) — restore the LoRA action-fill path. Without
       # this, generateMandala() called config.mandalaGen.model=undefined,
       # Ollama /api/generate returned 400, LoRA threw, and the Haiku
