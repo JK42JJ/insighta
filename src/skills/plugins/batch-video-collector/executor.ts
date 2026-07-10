@@ -56,11 +56,11 @@ import {
   QWEN3_EMBED_MODEL,
   vectorToLiteral,
 } from '../iks-scorer/embedding';
+import { buildVideoEmbedText } from '../iks-scorer/embed-text';
 import { shortGateFields } from '@/modules/video-pool/is-short';
 
 const log = logger.child({ module: 'batch-video-collector' });
 
-const DESC_SNIPPET_LEN = 200;
 const DEFAULT_RUN_TYPE = 'daily_trend';
 /** W3 — goal-driven run type: keywords come from user mandala cell sub-goals
  *  (goal-source) instead of trend_signals. Set BATCH_COLLECTOR_RUN_TYPE to this
@@ -381,9 +381,10 @@ function normalizeLimit(raw: unknown): number {
   return Math.min(parsed, 500);
 }
 
+// Delegates to the shared SSOT so the pool this collector writes stays
+// byte-identical to the v3 gate's title_desc embed (iv-A cache co-comparability).
 function buildEmbedText(v: EnrichedVideo): string {
-  const desc = (v.description ?? '').slice(0, DESC_SNIPPET_LEN);
-  return desc ? `${v.title}\n${desc}` : v.title;
+  return buildVideoEmbedText(v.title, v.description);
 }
 
 async function searchAllKeywords(
