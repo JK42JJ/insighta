@@ -160,20 +160,26 @@ export interface SearchOpts {
 const MAX_SEARCH_KEY_SLOTS = 10;
 
 /**
- * Resolve the search.list API key. SINGLE key only (CP512, ToS quota-split fix).
- *
- * Previously this returned an array (YOUTUBE_API_KEY_SEARCH + _2..N) and the
- * caller rotated to the next project's key on quota-exhaustion — that is exactly
- * the YouTube ToS "spread requests across projects to exceed quota" violation.
- * Now a single key: `YOUTUBE_API_KEY_SEARCH` (legacy `YOUTUBE_API_KEY` fallback).
- * The `_2..N` slots are intentionally ignored — no cross-project spillover.
- *
- * Return type stays `string[]` (length 0 or 1) so the callers' shape is
- * unchanged; the rotation loop in searchVideos is removed separately.
+ * Resolve API keys from env, preserving insertion order:
+ *   YOUTUBE_API_KEY_SEARCH    (slot 1)
+ *   YOUTUBE_API_KEY_SEARCH_2  (slot 2)
+ *   …
+ *   YOUTUBE_API_KEY_SEARCH_N  (up to MAX_SEARCH_KEY_SLOTS)
+ * Falls back to YOUTUBE_API_KEY when no SEARCH_ keys are present (legacy).
  */
 export function resolveSearchApiKeys(env: Readonly<Record<string, string | undefined>>): string[] {
-  const primary = env['YOUTUBE_API_KEY_SEARCH']?.trim() || env['YOUTUBE_API_KEY']?.trim();
-  return primary ? [primary] : [];
+  const keys: string[] = [];
+  const primary = env['YOUTUBE_API_KEY_SEARCH']?.trim();
+  if (primary) keys.push(primary);
+  for (let i = 2; i <= MAX_SEARCH_KEY_SLOTS; i++) {
+    const k = env[`YOUTUBE_API_KEY_SEARCH_${i}`]?.trim();
+    if (k) keys.push(k);
+  }
+  if (keys.length === 0) {
+    const legacy = env['YOUTUBE_API_KEY']?.trim();
+    if (legacy) keys.push(legacy);
+  }
+  return keys;
 }
 
 /**
@@ -277,6 +283,7 @@ export async function searchVideos(opts: SearchOpts): Promise<YouTubeSearchItem[
   if (keys.length === 0 || keys.every((k) => !k)) {
     throw new Error('searchVideos: server API key is required (v2 does not accept OAuth)');
   }
+  let lastErr: unknown = null;
   // CP457+ trace — capture the search query that BE sent + the items
   // returned. apiKey deliberately NOT logged. Fire-and-forget.
   const traceReq = {
@@ -288,63 +295,66 @@ export async function searchVideos(opts: SearchOpts): Promise<YouTubeSearchItem[
     publishedAfter: opts.publishedAfter,
   };
   const t0 = Date.now();
-  // CP512 — SINGLE-KEY only. No cross-project rotation on quota exhaustion (that
-  // was the ToS "spread requests to exceed quota" violation). resolveSearchApiKeys
-  // now returns at most one key; even if a multi-element array is passed, we use
-  // only the first and NEVER fall through to the next on 403/429.
-  const key = keys.find((k) => !!k);
-  if (!key) {
-    throw new Error('searchVideos: server API key is required (v2 does not accept OAuth)');
-  }
-  try {
-    const items = await searchVideosOne(key, opts);
-    recordTrace({
-      step: 'tier2.search.list',
-      status: 'ok',
-      request: traceReq,
-      response: {
-        item_count: items.length,
-        items: items.map((it) => ({
-          videoId: it.id?.videoId,
-          title: it.snippet?.title,
-          channelTitle: it.snippet?.channelTitle,
-          publishedAt: it.snippet?.publishedAt,
-        })),
-      },
-      latencyMs: Date.now() - t0,
-      // CP488 — YouTube Data API v3 search.list quota cost = 100 units/call.
-      // 1 call billed regardless of items returned (even 0-hit consumes quota).
-      costUnits: { youtube_search_units: 100, youtube_calls: 1 },
-    });
-    return items;
-  } catch (err) {
-    const quota = isQuotaError(err);
-    recordTrace({
-      step: 'tier2.search.list',
-      status: 'error',
-      request: traceReq,
-      errorMessage: quota
-        ? 'quota_exhausted (single key, no rotation): ' +
-          (err instanceof Error ? err.message : String(err))
-        : err instanceof Error
-          ? err.message
-          : String(err),
-      latencyMs: Date.now() - t0,
-      costUnits: { youtube_calls: 1 },
-    });
-    if (quota) {
-      // G5 failure-time alert — fire-and-forget (SMTP latency must not sit in the
-      // serving path; inert when OBSERVABILITY_ALERT_EMAIL unset). Single key: on
-      // quota exhaustion we surface the error rather than spilling to another
-      // project. Callers (trend-collector defer / wizard error+cache) handle it.
-      void notifyQuotaExhausted({
-        api: 'search.list',
-        keysTried: 1,
-        lastError: err instanceof Error ? err.message : String(err),
+  for (const key of keys) {
+    if (!key) continue;
+    try {
+      const items = await searchVideosOne(key, opts);
+      recordTrace({
+        step: 'tier2.search.list',
+        status: 'ok',
+        request: traceReq,
+        response: {
+          item_count: items.length,
+          items: items.map((it) => ({
+            videoId: it.id?.videoId,
+            title: it.snippet?.title,
+            channelTitle: it.snippet?.channelTitle,
+            publishedAt: it.snippet?.publishedAt,
+          })),
+        },
+        latencyMs: Date.now() - t0,
+        // CP488 — YouTube Data API v3 search.list quota cost = 100 units/call.
+        // 1 call billed regardless of items returned (even 0-hit consumes quota).
+        costUnits: { youtube_search_units: 100, youtube_calls: 1 },
       });
+      return items;
+    } catch (err) {
+      lastErr = err;
+      if (!isQuotaError(err)) {
+        recordTrace({
+          step: 'tier2.search.list',
+          status: 'error',
+          request: traceReq,
+          errorMessage: err instanceof Error ? err.message : String(err),
+          latencyMs: Date.now() - t0,
+          // Non-quota error: call attempted but failed mid-RPC. Still counts.
+          costUnits: { youtube_calls: 1 },
+        });
+        throw err; // non-quota errors are terminal
+      }
+      // quota: try next key
     }
-    throw err instanceof Error ? err : new Error(String(err));
   }
+  recordTrace({
+    step: 'tier2.search.list',
+    status: 'error',
+    request: traceReq,
+    errorMessage:
+      'all_keys_quota_exhausted: ' + (lastErr instanceof Error ? lastErr.message : String(lastErr)),
+    latencyMs: Date.now() - t0,
+    // All keys exhausted — N calls all rejected with 403. Each tried call
+    // consumed nothing on YouTube's side (quota already 0), so units = 0;
+    // we still log the call counter so cost view can see the attempt.
+    costUnits: { youtube_calls: keys.length },
+  });
+  // G5 failure-time alert — fire-and-forget (never awaited: SMTP latency must
+  // not sit in the serving path; inert when OBSERVABILITY_ALERT_EMAIL unset).
+  void notifyQuotaExhausted({
+    api: 'search.list',
+    keysTried: keys.length,
+    lastError: lastErr instanceof Error ? lastErr.message : String(lastErr),
+  });
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 export interface VideosBatchOpts {
