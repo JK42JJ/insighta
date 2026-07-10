@@ -33,6 +33,7 @@ import { registerPoolMaintenanceWorker } from './handlers/pool-maintenance';
 import { registerEnrichRelevanceQuickWorker } from './handlers/enrich-relevance-quick';
 import { registerPoolServeFillWorker } from './handlers/pool-serve-fill';
 import { registerMandalaActionsFillWorker } from './handlers/mandala-actions-fill';
+import { registerMandalaPipelineWorker } from './handlers/mandala-pipeline';
 import { registerMandalaBookFillWorker } from './handlers/mandala-book-fill';
 import { registerTranslateMandalaBulkWorker } from './handlers/translate-mandala-bulk';
 import { registerSegmentRelevanceFillWorker } from './handlers/segment-relevance-fill';
@@ -62,6 +63,7 @@ export async function initJobQueue(): Promise<void> {
   await registerEnrichRelevanceQuickWorker();
   await registerPoolServeFillWorker();
   await registerMandalaActionsFillWorker();
+  await registerMandalaPipelineWorker();
   await registerMandalaBookFillWorker();
   await registerTranslateMandalaBulkWorker();
   await registerSegmentRelevanceFillWorker();
@@ -70,5 +72,5 @@ export async function initJobQueue(): Promise<void> {
   await registerKeyAlarmWorker();
   await registerSearchMetricsRollupWorker();
 
-  logger.info('Job queue fully initialized (pg-boss + 15 workers)');
+  logger.info('Job queue fully initialized (pg-boss + 16 workers)');
 }
