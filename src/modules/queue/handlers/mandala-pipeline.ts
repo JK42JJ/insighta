@@ -106,9 +106,9 @@ export async function handleMandalaPipelineWatchdog(): Promise<void> {
   }
   const prisma = getPrismaClient();
   const stale = await prisma.$queryRawUnsafe<
-    Array<{ mandala_id: string; user_id: string; trigger: string | null }>
+    Array<{ id: string; mandala_id: string; user_id: string; trigger: string | null }>
   >(
-    `SELECT DISTINCT ON (mandala_id) mandala_id, user_id, trigger
+    `SELECT DISTINCT ON (mandala_id) id, mandala_id, user_id, trigger
        FROM mandala_pipeline_runs
       WHERE status = 'running'
         AND created_at < now() - ($1 || ' minutes')::interval
@@ -118,7 +118,14 @@ export async function handleMandalaPipelineWatchdog(): Promise<void> {
 
   if (stale.length === 0) return;
 
+  // Runs we hand a fresh replacement job. Marking these 'superseded' below is
+  // what closes the CP512-incident loop: a stale run left at status='running'
+  // is re-found by every 10-min tick → re-enqueued forever (12 runs/hr
+  // observed 2026-07-10). This keys purely on status+age, so it also
+  // terminates pre-flag-on fire-and-forget orphans that never had a pg-boss
+  // job (e.g. the run stuck at step1 since before the durable flag was on).
   let reEnqueued = 0;
+  const supersededIds: string[] = [];
   for (const r of stale) {
     try {
       const jobId = await enqueueMandalaPipeline({
@@ -126,7 +133,10 @@ export async function handleMandalaPipelineWatchdog(): Promise<void> {
         userId: r.user_id,
         trigger: r.trigger ?? 'watchdog',
       });
-      if (jobId) reEnqueued++;
+      if (jobId) {
+        reEnqueued++;
+        supersededIds.push(r.id);
+      }
     } catch (err) {
       log.warn('mandala-pipeline-watchdog: re-enqueue failed', {
         mandalaId: r.mandala_id,
@@ -134,9 +144,24 @@ export async function handleMandalaPipelineWatchdog(): Promise<void> {
       });
     }
   }
+
+  // Terminate the stale runs we replaced so the next tick can't re-enqueue
+  // them again. Only runs that actually got a fresh job are superseded; a
+  // freshly-created run (< stale window) is never in this set. Each stuck run
+  // therefore gets exactly one watchdog retry, not an unbounded loop.
+  let superseded = 0;
+  if (supersededIds.length > 0) {
+    const res = await prisma.mandala_pipeline_runs.updateMany({
+      where: { id: { in: supersededIds }, status: 'running' },
+      data: { status: 'superseded', updated_at: new Date() },
+    });
+    superseded = res.count;
+  }
+
   log.info('mandala-pipeline-watchdog: re-enqueued orphaned runs', {
     stale: stale.length,
     reEnqueued,
+    superseded,
   });
 }
 
