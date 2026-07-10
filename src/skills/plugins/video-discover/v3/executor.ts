@@ -48,7 +48,9 @@ import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch, cosineToRelevance } from '@/skills/plugins/iks-scorer/embedding';
+import { candidateEmbedText } from '@/skills/plugins/iks-scorer/embed-text';
 import { servingEmbedOptions } from '@/config/embed-serving-timeout';
+import { getGateEmbedTextMode } from '@/config/gate-embed-text';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 import { resolveLanguage } from '@/utils/detect-language';
@@ -473,7 +475,8 @@ async function executeImpl(
         const capped = fresh.slice(0, cap);
         // CP489 — center_goal embed via cache; candidate title embeddings
         // remain fresh (per-call YouTube candidates change every run).
-        const titles = capped.map((m) => m.title);
+        const gateMode = getGateEmbedTextMode();
+        const titles = capped.map((m) => candidateEmbedText(gateMode, m.title, m.description));
         const [centerVec, titleVecs] = await Promise.all([
           getCenterGoalEmbedding(mandalaId, state.centerGoal),
           embedBatch(titles, servingEmbedOptions()),
@@ -1189,7 +1192,10 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     // CP489 — center_goal via cache when mandalaId known; titles always fresh.
     // Ephemeral path (input.mandalaId undefined) falls back to embedBatch
     // for the center as well via plain embedBatch call.
-    const titles = cappedFilterInputs.map((f) => f.title);
+    const gateMode = getGateEmbedTextMode();
+    const titles = cappedFilterInputs.map((f) =>
+      candidateEmbedText(gateMode, f.title, f.description)
+    );
     try {
       const [centerVec, titleVecs] = await Promise.all([
         input.mandalaId
@@ -2100,7 +2106,11 @@ async function runDiscoverEphemeralImpl(
     try {
       const cap = v3Config.semanticMaxCandidates;
       const cappedSlots = allSlots.slice(0, cap);
-      const texts = [input.centerGoal, ...cappedSlots.map((s) => s.title)];
+      const gateMode = getGateEmbedTextMode();
+      const texts = [
+        input.centerGoal,
+        ...cappedSlots.map((s) => candidateEmbedText(gateMode, s.title, s.description)),
+      ];
       const embedT0 = Date.now();
       const vectors = await embedBatch(texts, servingEmbedOptions());
       const embedMs = Date.now() - embedT0;
