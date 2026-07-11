@@ -441,13 +441,6 @@ services:
       # instead of orphaning the run at 0 cards. Revert: delete this line
       # (unset => legacy setImmediate). Handler: mandala-pipeline.ts.
       - PIPELINE_DURABLE_ENABLED=true
-      # P2 (2026-07-11) — two-stage pool matching: hnsw shortlist on the MRL
-      # 1024d GENERATED column, exact 4096d re-rank of K x cells pairs.
-      # Replaces the 50,840-op brute-force scan (22.8s cold / 4.9s warm) on
-      # the wizard's synchronous path. Prod recall measured 64/64 at K=32.
-      # DDL pre-applied (prisma/migrations/pool-embeddings-1024/). Revert:
-      # delete this line (unset => brute-force path, no code revert).
-      - V3_POOL_MATCH_TWO_STAGE=true
       # CP493 (2026-06-03) — merged structure+queries generation (canary). ONE
       # Haiku call yields the mandala structure AND a searchable per-cell query
       # in a single continuous context, replacing the two disconnected calls

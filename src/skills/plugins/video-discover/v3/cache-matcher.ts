@@ -16,7 +16,6 @@ import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/utils/logger';
 import { recordTrace } from '@/modules/discover-tracing';
-import { v3Config } from './config';
 
 const log = logger.child({ module: 'video-discover/v3/cache-matcher' });
 
@@ -72,23 +71,6 @@ interface MatchRow {
 }
 
 /**
- * Run a two-stage shortlist query with `hnsw.ef_search` pinned for the
- * transaction. pgvector's default ef_search=40 silently caps an hnsw scan's
- * result set below our OVERFETCH LIMIT (prod-measured recall collapse
- * 51/64); SET LOCAL inside the same transaction is the documented way to
- * raise it per-query without touching the instance default.
- */
-function runWithEfSearch<T>(
-  db: ReturnType<typeof getPrismaClient>,
-  run: (tx: Prisma.TransactionClient) => Promise<T>
-): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = ${v3Config.poolMatchEfSearch}`);
-    return run(tx);
-  });
-}
-
-/**
  * Pull the top `perCell` videos per cell from video_pool whose cosine
  * similarity to the corresponding sub_goal embedding meets `threshold`.
  *
@@ -110,67 +92,7 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
   // prod: pre-CP458 the planner hash-joined (mandala × Seq Scan ALL 11,123
   // embeddings) → 89k cosine ops → 65-100s. With the eligible CTE first +
   // sources=['v2_promoted'] (1,156 ko rows): ~9k cosine → ~2.9s.
-  //
-  // P2 (2026-07-11): #1107 admitted yt_promoted (7,083 rows) → eligible ~6.3k
-  // × 8 cells = 50,840 brute-force 4096d cosines → 22.8s cold / 4.9s warm.
-  // V3_POOL_MATCH_TWO_STAGE routes through an hnsw shortlist on the MRL
-  // GENERATED column embedding_1024 (stage 1), then exact 4096d re-rank of
-  // only K×cells pairs (stage 2). Measured recall on prod: true top-8/cell
-  // fully inside the 1024d top-32 shortlist (64/64) — exact at default K=32.
-  const rows = v3Config.poolMatchTwoStage
-    ? await runWithEfSearch(db, (tx) =>
-        tx.$queryRaw<MatchRow[]>(Prisma.sql`
-    WITH mandala_embs AS (
-      SELECT sub_goal_index AS cell_index,
-             embedding,
-             l2_normalize(subvector(embedding, 1, 1024)) AS emb1024
-        FROM public.mandala_embeddings
-       WHERE mandala_id = ${opts.mandalaId}
-         AND level = 1
-         AND embedding IS NOT NULL
-    ),
-    shortlist AS (
-      SELECT me.cell_index, me.embedding AS m_emb, c.video_id, c.emb_full
-      FROM mandala_embs me
-      CROSS JOIN LATERAL (
-        -- pure index top-N first (guaranteed hnsw scan), THEN filter to the
-        -- eligible pool subset and keep K. Overfetch absorbs the ineligible
-        -- fraction; both knobs are env-tunable.
-        SELECT cand.video_id, cand.emb_full
-        FROM (
-          SELECT vpe.video_id, vpe.embedding AS emb_full
-          FROM public.video_pool_embeddings vpe
-          ORDER BY vpe.embedding_1024 <=> me.emb1024
-          LIMIT ${v3Config.poolMatchOverfetch}
-        ) cand
-        JOIN public.video_pool p ON p.video_id = cand.video_id
-        WHERE p.is_active = true
-          AND p.language = ${opts.language}
-          AND p.quality_tier IN ('gold', 'silver')
-          AND p.source = ANY(${sources}::text[])
-        LIMIT ${v3Config.poolMatchShortlistK}
-      ) c
-    ),
-    scored AS (
-      SELECT
-        p.video_id, p.title, p.description, p.channel_name, p.channel_id,
-        p.thumbnail_url, p.view_count, p.like_count, p.duration_seconds, p.published_at,
-        s.cell_index,
-        1 - (s.emb_full <=> s.m_emb) AS score
-      FROM shortlist s
-      JOIN public.video_pool p ON p.video_id = s.video_id
-    ),
-    ranked AS (
-      SELECT s.*,
-        ROW_NUMBER() OVER (PARTITION BY s.cell_index ORDER BY s.score DESC) AS rn
-      FROM scored s
-      WHERE s.score >= ${threshold}
-    )
-    SELECT * FROM ranked WHERE rn <= ${perCell}
-    ORDER BY cell_index ASC, score DESC
-  `)
-      )
-    : await db.$queryRaw<MatchRow[]>(Prisma.sql`
+  const rows = await db.$queryRaw<MatchRow[]>(Prisma.sql`
     WITH eligible AS (
       SELECT
         video_id, title, description, channel_name, channel_id,
@@ -235,7 +157,6 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
       sources,
       threshold,
       perCell,
-      two_stage: v3Config.poolMatchTwoStage,
     },
     response: {
       row_count: rows.length,
@@ -345,40 +266,7 @@ export async function matchFromVideoPoolByCenterGoal(
   // planner choose the embedding index when beneficial. The eligible
   // CTE is still materialised first so only the gold|silver|active
   // subset enters the cosine path.
-  //
-  // P2 (2026-07-11): flag-gated two-stage variant — hnsw shortlist on the MRL
-  // GENERATED column embedding_1024, exact 4096d re-rank of the shortlist.
-  // Single query vector here, so cost is 1/8th of matchFromVideoPool, but the
-  // same brute-force scan shape — kept consistent per the no-partial-patch rule.
-  const rows = v3Config.poolMatchTwoStage
-    ? await runWithEfSearch(db, (tx) =>
-        tx.$queryRaw<CenterMatchRow[]>(Prisma.sql`
-    WITH shortlist AS (
-      SELECT cand.video_id, cand.emb_full
-      FROM (
-        SELECT vpe.video_id, vpe.embedding AS emb_full
-        FROM public.video_pool_embeddings vpe
-        ORDER BY vpe.embedding_1024 <=> l2_normalize(subvector(${vectorLiteral}::vector, 1, 1024))
-        LIMIT ${v3Config.poolMatchOverfetch}
-      ) cand
-      JOIN public.video_pool p ON p.video_id = cand.video_id
-      WHERE p.is_active = true
-        AND p.language = ${opts.language}
-        AND p.quality_tier IN ('gold', 'silver')
-        AND p.source = ANY(${sources}::text[])
-      LIMIT ${limit}
-    )
-    SELECT
-      p.video_id, p.title, p.description, p.channel_name, p.channel_id,
-      p.thumbnail_url, p.view_count, p.like_count, p.duration_seconds, p.published_at,
-      1 - (s.emb_full <=> ${vectorLiteral}::vector) AS score
-    FROM shortlist s
-    JOIN public.video_pool p ON p.video_id = s.video_id
-    ORDER BY s.emb_full <=> ${vectorLiteral}::vector ASC
-    LIMIT ${limit}
-  `)
-      )
-    : await db.$queryRaw<CenterMatchRow[]>(Prisma.sql`
+  const rows = await db.$queryRaw<CenterMatchRow[]>(Prisma.sql`
     WITH eligible AS (
       SELECT
         video_id, title, description, channel_name, channel_id,
@@ -455,7 +343,6 @@ export async function matchFromVideoPoolByCenterGoal(
       limit,
       centerEmbedding_dim: opts.centerEmbedding.length,
       subGoals_count: opts.subGoals.length,
-      two_stage: v3Config.poolMatchTwoStage,
     },
     response: {
       row_count: matches.length,
