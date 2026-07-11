@@ -140,11 +140,6 @@ function materialize(id: string, parametersJson: unknown): ResolvedAlgorithm {
     V3_ENABLE_USER_CURATED_INGEST: asStr(j['enableUserCuratedIngest']),
     V3_EMPTY_TITLE_GATE_SHADOW: asStr(j['emptyTitleGateShadow']),
     V3_EMPTY_TITLE_GATE: asStr(j['emptyTitleGate']),
-    V3_POOL_MATCH_TWO_STAGE: asStr(j['poolMatchTwoStage']),
-    V3_POOL_MATCH_SHORTLIST_K: asStr(j['poolMatchShortlistK']),
-    V3_POOL_MATCH_OVERFETCH: asStr(j['poolMatchOverfetch']),
-    V3_POOL_MATCH_EF_SEARCH: asStr(j['poolMatchEfSearch']),
-    V3_POOL_MATCH_TX_TIMEOUT_MS: asStr(j['poolMatchTxTimeoutMs']),
   };
 
   const parsed = v3EnvSchema.safeParse(envLike);
@@ -181,11 +176,6 @@ function materialize(id: string, parametersJson: unknown): ResolvedAlgorithm {
     enableUserCuratedIngest: d['V3_ENABLE_USER_CURATED_INGEST'] as boolean,
     emptyTitleGateShadow: d['V3_EMPTY_TITLE_GATE_SHADOW'] as boolean,
     emptyTitleGate: d['V3_EMPTY_TITLE_GATE'] as boolean,
-    poolMatchTwoStage: d['V3_POOL_MATCH_TWO_STAGE'] as boolean,
-    poolMatchShortlistK: d['V3_POOL_MATCH_SHORTLIST_K'] as number,
-    poolMatchOverfetch: d['V3_POOL_MATCH_OVERFETCH'] as number,
-    poolMatchEfSearch: d['V3_POOL_MATCH_EF_SEARCH'] as number,
-    poolMatchTxTimeoutMs: d['V3_POOL_MATCH_TX_TIMEOUT_MS'] as number,
   };
 
   return { id, parameters: cfg };
