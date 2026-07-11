@@ -34,8 +34,12 @@ jest.mock('@/config/pipeline-durable', () => ({
 }));
 
 const mockQueryRaw = jest.fn();
+const mockUpdateMany = jest.fn();
 jest.mock('@/modules/database/client', () => ({
-  getPrismaClient: () => ({ $queryRawUnsafe: (...args: unknown[]) => mockQueryRaw(...args) }),
+  getPrismaClient: () => ({
+    $queryRawUnsafe: (...args: unknown[]) => mockQueryRaw(...args),
+    mandala_pipeline_runs: { updateMany: (...args: unknown[]) => mockUpdateMany(...args) },
+  }),
 }));
 
 jest.mock('@/config/index', () => ({
@@ -61,7 +65,7 @@ import {
   handleMandalaPipelineWatchdog,
   enqueueMandalaPipeline,
 } from '@/modules/queue/handlers/mandala-pipeline';
-import { JOB_NAMES, MANDALA_PIPELINE_OPTIONS } from '@/modules/queue/types';
+import { JOB_NAMES, MANDALA_PIPELINE_OPTIONS, QUEUE_CONFIG } from '@/modules/queue/types';
 import type { MandalaPipelinePayload } from '@/modules/queue/types';
 
 beforeAll(async () => {
@@ -77,6 +81,7 @@ const job = (data: Partial<MandalaPipelinePayload>): PgBoss.Job<MandalaPipelineP
 beforeEach(() => {
   mockCreateRun.mockResolvedValue('run-1');
   mockExecuteRun.mockResolvedValue(undefined);
+  mockUpdateMany.mockResolvedValue({ count: 1 });
 });
 afterEach(() => jest.clearAllMocks());
 
@@ -122,19 +127,52 @@ describe('handleMandalaPipelineWatchdog', () => {
     expect(mockBossInstance.send).not.toHaveBeenCalled();
   });
 
-  it('durable flag ON → re-enqueues each stale running run', async () => {
+  it('durable flag ON → re-enqueues each stale running run + supersedes the rows', async () => {
     mockIsDurable.mockReturnValue(true);
-    mockQueryRaw.mockResolvedValue([
-      { mandala_id: 'm-a', user_id: 'u-a', trigger: 'wizard' },
-      { mandala_id: 'm-b', user_id: 'u-b', trigger: null },
-    ]);
+    // 1st raw call = stale select; subsequent = per-mandala watchdog-attempt counts.
+    mockQueryRaw
+      .mockResolvedValueOnce([
+        { id: 'r-a', mandala_id: 'm-a', user_id: 'u-a', trigger: 'wizard' },
+        { id: 'r-b', mandala_id: 'm-b', user_id: 'u-b', trigger: null },
+      ])
+      .mockResolvedValue([{ n: 0 }]);
     await handleMandalaPipelineWatchdog();
     expect(mockBossInstance.send).toHaveBeenCalledTimes(2);
+    // Re-enqueues are ALWAYS labeled trigger='watchdog' so the retry cap can count them.
     expect(mockBossInstance.send).toHaveBeenCalledWith(
       JOB_NAMES.MANDALA_PIPELINE,
-      { mandalaId: 'm-b', userId: 'u-b', trigger: 'watchdog' },
-      expect.objectContaining({ singletonKey: 'mandala-pipeline-m-b' })
+      { mandalaId: 'm-a', userId: 'u-a', trigger: 'watchdog' },
+      expect.objectContaining({ singletonKey: 'mandala-pipeline-m-a' })
     );
+    // Replaced rows are closed out so the next tick can't re-fire them.
+    expect(mockUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: ['r-a', 'r-b'] } }),
+        data: expect.objectContaining({ status: 'superseded' }),
+      })
+    );
+  });
+
+  it('retry cap reached → row closed WITHOUT re-enqueue (kills the per-mandala chain loop)', async () => {
+    mockIsDurable.mockReturnValue(true);
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'r-x', mandala_id: 'm-x', user_id: 'u-x', trigger: null }])
+      .mockResolvedValue([{ n: QUEUE_CONFIG.MANDALA_PIPELINE_WATCHDOG_MAX_RETRIES }]);
+    await handleMandalaPipelineWatchdog();
+    expect(mockBossInstance.send).not.toHaveBeenCalled();
+    // Capped row is still superseded — it must stop matching future ticks.
+    expect(mockUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { in: ['r-x'] } }) })
+    );
+  });
+
+  it('under the cap → re-enqueue proceeds', async () => {
+    mockIsDurable.mockReturnValue(true);
+    mockQueryRaw
+      .mockResolvedValueOnce([{ id: 'r-y', mandala_id: 'm-y', user_id: 'u-y', trigger: null }])
+      .mockResolvedValue([{ n: QUEUE_CONFIG.MANDALA_PIPELINE_WATCHDOG_MAX_RETRIES - 1 }]);
+    await handleMandalaPipelineWatchdog();
+    expect(mockBossInstance.send).toHaveBeenCalledTimes(1);
   });
 
   it('durable flag ON, no stale runs → nothing re-enqueued', async () => {

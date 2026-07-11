@@ -433,6 +433,16 @@ export const QUEUE_CONFIG = {
   MANDALA_PIPELINE_WATCHDOG_CRON: '*/10 * * * *',
   /** A pipeline run stuck at status=running past this age is treated orphaned. */
   MANDALA_PIPELINE_STALE_MINUTES: 10,
+  /**
+   * Watchdog re-enqueue cap per mandala per 24h. #1149's supersede closes the
+   * SAME-row loop, but a re-run that itself orphans (crash/restart mid-run)
+   * creates a fresh 'running' row each cycle — an unbounded per-MANDALA chain
+   * at one re-run per tick (the 7/10 dawn shape: new run every ~10min while
+   * search.list 429'd). Watchdog re-enqueues carry trigger='watchdog'; once
+   * that count reaches this cap in 24h the stale row is still closed out but
+   * no new job is sent.
+   */
+  MANDALA_PIPELINE_WATCHDOG_MAX_RETRIES: 2,
   /** Max concurrent enrichment workers */
   ENRICH_CONCURRENCY: 1,
   /**
