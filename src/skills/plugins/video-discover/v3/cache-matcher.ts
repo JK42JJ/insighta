@@ -82,10 +82,35 @@ function runWithEfSearch<T>(
   db: ReturnType<typeof getPrismaClient>,
   run: (tx: Prisma.TransactionClient) => Promise<T>
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = ${v3Config.poolMatchEfSearch}`);
-    return run(tx);
-  });
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = ${v3Config.poolMatchEfSearch}`);
+      return run(tx);
+    },
+    // Prisma's 5s default expired on cold-cache runs (15.6s measured,
+    // 2026-07-11) and zeroed out step2 — see DEFAULT_POOL_MATCH_TX_TIMEOUT_MS.
+    { timeout: v3Config.poolMatchTxTimeoutMs }
+  );
+}
+
+/**
+ * Two-stage must never be able to fail a discover step the brute path would
+ * have survived (0-card incident 2026-07-11): any two-stage error logs and
+ * degrades to the pre-two-stage brute query.
+ */
+async function twoStageWithFallback<T>(
+  label: string,
+  twoStage: () => Promise<T>,
+  brute: () => Promise<T>
+): Promise<{ rows: T; fellBack: boolean }> {
+  try {
+    return { rows: await twoStage(), fellBack: false };
+  } catch (err) {
+    log.warn(
+      `two-stage ${label} failed — falling back to brute-force: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return { rows: await brute(), fellBack: true };
+  }
 }
 
 /**
@@ -117,60 +142,8 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
   // GENERATED column embedding_1024 (stage 1), then exact 4096d re-rank of
   // only K×cells pairs (stage 2). Measured recall on prod: true top-8/cell
   // fully inside the 1024d top-32 shortlist (64/64) — exact at default K=32.
-  const rows = v3Config.poolMatchTwoStage
-    ? await runWithEfSearch(db, (tx) =>
-        tx.$queryRaw<MatchRow[]>(Prisma.sql`
-    WITH mandala_embs AS (
-      SELECT sub_goal_index AS cell_index,
-             embedding,
-             l2_normalize(subvector(embedding, 1, 1024)) AS emb1024
-        FROM public.mandala_embeddings
-       WHERE mandala_id = ${opts.mandalaId}
-         AND level = 1
-         AND embedding IS NOT NULL
-    ),
-    shortlist AS (
-      SELECT me.cell_index, me.embedding AS m_emb, c.video_id, c.emb_full
-      FROM mandala_embs me
-      CROSS JOIN LATERAL (
-        -- pure index top-N first (guaranteed hnsw scan), THEN filter to the
-        -- eligible pool subset and keep K. Overfetch absorbs the ineligible
-        -- fraction; both knobs are env-tunable.
-        SELECT cand.video_id, cand.emb_full
-        FROM (
-          SELECT vpe.video_id, vpe.embedding AS emb_full
-          FROM public.video_pool_embeddings vpe
-          ORDER BY vpe.embedding_1024 <=> me.emb1024
-          LIMIT ${v3Config.poolMatchOverfetch}
-        ) cand
-        JOIN public.video_pool p ON p.video_id = cand.video_id
-        WHERE p.is_active = true
-          AND p.language = ${opts.language}
-          AND p.quality_tier IN ('gold', 'silver')
-          AND p.source = ANY(${sources}::text[])
-        LIMIT ${v3Config.poolMatchShortlistK}
-      ) c
-    ),
-    scored AS (
-      SELECT
-        p.video_id, p.title, p.description, p.channel_name, p.channel_id,
-        p.thumbnail_url, p.view_count, p.like_count, p.duration_seconds, p.published_at,
-        s.cell_index,
-        1 - (s.emb_full <=> s.m_emb) AS score
-      FROM shortlist s
-      JOIN public.video_pool p ON p.video_id = s.video_id
-    ),
-    ranked AS (
-      SELECT s.*,
-        ROW_NUMBER() OVER (PARTITION BY s.cell_index ORDER BY s.score DESC) AS rn
-      FROM scored s
-      WHERE s.score >= ${threshold}
-    )
-    SELECT * FROM ranked WHERE rn <= ${perCell}
-    ORDER BY cell_index ASC, score DESC
-  `)
-      )
-    : await db.$queryRaw<MatchRow[]>(Prisma.sql`
+  const bruteQuery = () =>
+    db.$queryRaw<MatchRow[]>(Prisma.sql`
     WITH eligible AS (
       SELECT
         video_id, title, description, channel_name, channel_id,
@@ -221,6 +194,64 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
     ORDER BY cell_index ASC, score DESC
   `);
 
+  const twoStageQuery = () =>
+    runWithEfSearch(db, (tx) =>
+      tx.$queryRaw<MatchRow[]>(Prisma.sql`
+    WITH mandala_embs AS (
+      SELECT sub_goal_index AS cell_index,
+             embedding,
+             l2_normalize(subvector(embedding, 1, 1024)) AS emb1024
+        FROM public.mandala_embeddings
+       WHERE mandala_id = ${opts.mandalaId}
+         AND level = 1
+         AND embedding IS NOT NULL
+    ),
+    shortlist AS (
+      SELECT me.cell_index, me.embedding AS m_emb, c.video_id, c.emb_full
+      FROM mandala_embs me
+      CROSS JOIN LATERAL (
+        -- pure index top-N first (guaranteed hnsw scan), THEN filter to the
+        -- eligible pool subset and keep K. Overfetch absorbs the ineligible
+        -- fraction; both knobs are env-tunable.
+        SELECT cand.video_id, cand.emb_full
+        FROM (
+          SELECT vpe.video_id, vpe.embedding AS emb_full
+          FROM public.video_pool_embeddings vpe
+          ORDER BY vpe.embedding_1024 <=> me.emb1024
+          LIMIT ${v3Config.poolMatchOverfetch}
+        ) cand
+        JOIN public.video_pool p ON p.video_id = cand.video_id
+        WHERE p.is_active = true
+          AND p.language = ${opts.language}
+          AND p.quality_tier IN ('gold', 'silver')
+          AND p.source = ANY(${sources}::text[])
+        LIMIT ${v3Config.poolMatchShortlistK}
+      ) c
+    ),
+    scored AS (
+      SELECT
+        p.video_id, p.title, p.description, p.channel_name, p.channel_id,
+        p.thumbnail_url, p.view_count, p.like_count, p.duration_seconds, p.published_at,
+        s.cell_index,
+        1 - (s.emb_full <=> s.m_emb) AS score
+      FROM shortlist s
+      JOIN public.video_pool p ON p.video_id = s.video_id
+    ),
+    ranked AS (
+      SELECT s.*,
+        ROW_NUMBER() OVER (PARTITION BY s.cell_index ORDER BY s.score DESC) AS rn
+      FROM scored s
+      WHERE s.score >= ${threshold}
+    )
+    SELECT * FROM ranked WHERE rn <= ${perCell}
+    ORDER BY cell_index ASC, score DESC
+  `)
+    );
+
+  const { rows, fellBack: twoStageFellBack } = v3Config.poolMatchTwoStage
+    ? await twoStageWithFallback('match_from_video_pool', twoStageQuery, bruteQuery)
+    : { rows: await bruteQuery(), fellBack: false };
+
   log.info(
     `cache match: mandala=${opts.mandalaId} lang=${opts.language} matches=${rows.length} threshold=${threshold}`
   );
@@ -236,6 +267,7 @@ export async function matchFromVideoPool(opts: MatchFromVideoPoolOpts): Promise<
       threshold,
       perCell,
       two_stage: v3Config.poolMatchTwoStage,
+      two_stage_fallback: twoStageFellBack,
     },
     response: {
       row_count: rows.length,
@@ -350,35 +382,8 @@ export async function matchFromVideoPoolByCenterGoal(
   // GENERATED column embedding_1024, exact 4096d re-rank of the shortlist.
   // Single query vector here, so cost is 1/8th of matchFromVideoPool, but the
   // same brute-force scan shape — kept consistent per the no-partial-patch rule.
-  const rows = v3Config.poolMatchTwoStage
-    ? await runWithEfSearch(db, (tx) =>
-        tx.$queryRaw<CenterMatchRow[]>(Prisma.sql`
-    WITH shortlist AS (
-      SELECT cand.video_id, cand.emb_full
-      FROM (
-        SELECT vpe.video_id, vpe.embedding AS emb_full
-        FROM public.video_pool_embeddings vpe
-        ORDER BY vpe.embedding_1024 <=> l2_normalize(subvector(${vectorLiteral}::vector, 1, 1024))
-        LIMIT ${v3Config.poolMatchOverfetch}
-      ) cand
-      JOIN public.video_pool p ON p.video_id = cand.video_id
-      WHERE p.is_active = true
-        AND p.language = ${opts.language}
-        AND p.quality_tier IN ('gold', 'silver')
-        AND p.source = ANY(${sources}::text[])
-      LIMIT ${limit}
-    )
-    SELECT
-      p.video_id, p.title, p.description, p.channel_name, p.channel_id,
-      p.thumbnail_url, p.view_count, p.like_count, p.duration_seconds, p.published_at,
-      1 - (s.emb_full <=> ${vectorLiteral}::vector) AS score
-    FROM shortlist s
-    JOIN public.video_pool p ON p.video_id = s.video_id
-    ORDER BY s.emb_full <=> ${vectorLiteral}::vector ASC
-    LIMIT ${limit}
-  `)
-      )
-    : await db.$queryRaw<CenterMatchRow[]>(Prisma.sql`
+  const bruteQuery = () =>
+    db.$queryRaw<CenterMatchRow[]>(Prisma.sql`
     WITH eligible AS (
       SELECT
         video_id, title, description, channel_name, channel_id,
@@ -407,6 +412,39 @@ export async function matchFromVideoPoolByCenterGoal(
     ORDER BY vpe.embedding <=> ${vectorLiteral}::vector ASC
     LIMIT ${limit}
   `);
+
+  const twoStageQuery = () =>
+    runWithEfSearch(db, (tx) =>
+      tx.$queryRaw<CenterMatchRow[]>(Prisma.sql`
+    WITH shortlist AS (
+      SELECT cand.video_id, cand.emb_full
+      FROM (
+        SELECT vpe.video_id, vpe.embedding AS emb_full
+        FROM public.video_pool_embeddings vpe
+        ORDER BY vpe.embedding_1024 <=> l2_normalize(subvector(${vectorLiteral}::vector, 1, 1024))
+        LIMIT ${v3Config.poolMatchOverfetch}
+      ) cand
+      JOIN public.video_pool p ON p.video_id = cand.video_id
+      WHERE p.is_active = true
+        AND p.language = ${opts.language}
+        AND p.quality_tier IN ('gold', 'silver')
+        AND p.source = ANY(${sources}::text[])
+      LIMIT ${limit}
+    )
+    SELECT
+      p.video_id, p.title, p.description, p.channel_name, p.channel_id,
+      p.thumbnail_url, p.view_count, p.like_count, p.duration_seconds, p.published_at,
+      1 - (s.emb_full <=> ${vectorLiteral}::vector) AS score
+    FROM shortlist s
+    JOIN public.video_pool p ON p.video_id = s.video_id
+    ORDER BY s.emb_full <=> ${vectorLiteral}::vector ASC
+    LIMIT ${limit}
+  `)
+    );
+
+  const { rows, fellBack: twoStageFellBack } = v3Config.poolMatchTwoStage
+    ? await twoStageWithFallback('match_by_center_goal', twoStageQuery, bruteQuery)
+    : { rows: await bruteQuery(), fellBack: false };
 
   // Post-fetch threshold gate — preserves semantic floor without
   // poisoning the SQL planner.
@@ -456,6 +494,7 @@ export async function matchFromVideoPoolByCenterGoal(
       centerEmbedding_dim: opts.centerEmbedding.length,
       subGoals_count: opts.subGoals.length,
       two_stage: v3Config.poolMatchTwoStage,
+      two_stage_fallback: twoStageFellBack,
     },
     response: {
       row_count: matches.length,

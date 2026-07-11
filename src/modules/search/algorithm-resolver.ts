@@ -144,6 +144,7 @@ function materialize(id: string, parametersJson: unknown): ResolvedAlgorithm {
     V3_POOL_MATCH_SHORTLIST_K: asStr(j['poolMatchShortlistK']),
     V3_POOL_MATCH_OVERFETCH: asStr(j['poolMatchOverfetch']),
     V3_POOL_MATCH_EF_SEARCH: asStr(j['poolMatchEfSearch']),
+    V3_POOL_MATCH_TX_TIMEOUT_MS: asStr(j['poolMatchTxTimeoutMs']),
   };
 
   const parsed = v3EnvSchema.safeParse(envLike);
@@ -184,6 +185,7 @@ function materialize(id: string, parametersJson: unknown): ResolvedAlgorithm {
     poolMatchShortlistK: d['V3_POOL_MATCH_SHORTLIST_K'] as number,
     poolMatchOverfetch: d['V3_POOL_MATCH_OVERFETCH'] as number,
     poolMatchEfSearch: d['V3_POOL_MATCH_EF_SEARCH'] as number,
+    poolMatchTxTimeoutMs: d['V3_POOL_MATCH_TX_TIMEOUT_MS'] as number,
   };
 
   return { id, parameters: cfg };
