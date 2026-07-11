@@ -281,10 +281,6 @@ services:
       # 0.49-2.4s, zero hangs vs 3-4/10 at 29.6-30s before) — supervisor
       # staged-flip order FIX-1 -> FIX-3 honored.
       - DISCOVER_NEVER_ZERO_FLOOR=true
-      # FLIPPED 2026-07-11 (James "해바"): progressive fill — first cards 3-5s,
-      # rest stream via SSE; embed calls (Nebius 4-14s) off the first-paint
-      # path, cell placement preserved. Rollback = remove this line.
-      - DISCOVER_PROGRESSIVE_FILL=true
       # CP416 (2026-04-22) — restore the LoRA action-fill path. Without
       # this, generateMandala() called config.mandalaGen.model=undefined,
       # Ollama /api/generate returned 400, LoRA threw, and the Haiku
@@ -592,7 +588,12 @@ services:
       # (yt_promoted 84→7,084 active, title-restored) reaches the wizard sync path,
       # not just pool-serve. Test-condition setup for the 0707 wizard verification.
       # Rollback: delete yt_promoted → code default ['v2_promoted'] (env one-liner).
-      - V3_TIER1_SOURCES=v2_promoted,yt_promoted
+      # RESTORED 2026-07-12 to the pre-7/6 value (James: "7/6과 동일해야해").
+      # #1108 (7/7) admitted yt_promoted here, growing the tier1 pool scan
+      # 1.1k -> 6.3k rows -> pool query 2.9s -> 5.1s (22.8s cold) -> precompute
+      # no longer finishes inside wizard review time -> MISS -> blank landing.
+      # Re-admit only with an indexed pool-match design (P2 track, post-beta).
+      - V3_TIER1_SOURCES=v2_promoted
       - V3_SEMANTIC_MIN_COSINE=0.5
       # BL-17 (2026-07-04) — fail-closed empty-title guard. SCRUB (YouTube ToS
       # 30d metadata wipe, is_active-agnostic) + /like zombie upsert leave ~691
