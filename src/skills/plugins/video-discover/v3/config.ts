@@ -165,6 +165,13 @@ export const DEFAULT_POOL_MATCH_OVERFETCH = 256;
  * recall collapse 51/64). Prod-measured at 400: recall 64/64, warm 105ms.
  */
 export const DEFAULT_POOL_MATCH_EF_SEARCH = 400;
+/**
+ * Interactive-transaction timeout for the SET LOCAL + shortlist query.
+ * Prisma's default 5s expired on a cold-cache run (15.6s measured,
+ * 2026-07-11 08:08Z) and killed step2 entirely → 0-card mandala. 30s covers
+ * the measured cold worst case ×2; failures past it fall back to brute-force.
+ */
+export const DEFAULT_POOL_MATCH_TX_TIMEOUT_MS = 30_000;
 
 /**
  * Semantic-mode embedding candidate cap (Issue #543, CP436 PR-Y0b2).
@@ -338,6 +345,13 @@ const poolMatchEfSearch = z
   )
   .transform((v) => v ?? DEFAULT_POOL_MATCH_EF_SEARCH);
 
+const poolMatchTxTimeoutMs = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().int().min(5_000).max(120_000).optional()
+  )
+  .transform((v) => v ?? DEFAULT_POOL_MATCH_TX_TIMEOUT_MS);
+
 /**
  * R4 shadow guard kill switch (2026-07-04, BL-17).
  *
@@ -403,6 +417,7 @@ export const v3EnvSchema = z.object({
   V3_POOL_MATCH_SHORTLIST_K: poolMatchShortlistK,
   V3_POOL_MATCH_OVERFETCH: poolMatchOverfetch,
   V3_POOL_MATCH_EF_SEARCH: poolMatchEfSearch,
+  V3_POOL_MATCH_TX_TIMEOUT_MS: poolMatchTxTimeoutMs,
 });
 
 export interface V3Config {
@@ -470,6 +485,7 @@ export interface V3Config {
   poolMatchShortlistK: number;
   poolMatchOverfetch: number;
   poolMatchEfSearch: number;
+  poolMatchTxTimeoutMs: number;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -503,6 +519,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_POOL_MATCH_SHORTLIST_K: env['V3_POOL_MATCH_SHORTLIST_K'],
     V3_POOL_MATCH_OVERFETCH: env['V3_POOL_MATCH_OVERFETCH'],
     V3_POOL_MATCH_EF_SEARCH: env['V3_POOL_MATCH_EF_SEARCH'],
+    V3_POOL_MATCH_TX_TIMEOUT_MS: env['V3_POOL_MATCH_TX_TIMEOUT_MS'],
   });
   if (!parsed.success) {
     return {
@@ -535,6 +552,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       poolMatchShortlistK: DEFAULT_POOL_MATCH_SHORTLIST_K,
       poolMatchOverfetch: DEFAULT_POOL_MATCH_OVERFETCH,
       poolMatchEfSearch: DEFAULT_POOL_MATCH_EF_SEARCH,
+      poolMatchTxTimeoutMs: DEFAULT_POOL_MATCH_TX_TIMEOUT_MS,
     };
   }
   return {
@@ -567,6 +585,7 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     poolMatchShortlistK: parsed.data.V3_POOL_MATCH_SHORTLIST_K,
     poolMatchOverfetch: parsed.data.V3_POOL_MATCH_OVERFETCH,
     poolMatchEfSearch: parsed.data.V3_POOL_MATCH_EF_SEARCH,
+    poolMatchTxTimeoutMs: parsed.data.V3_POOL_MATCH_TX_TIMEOUT_MS,
   };
 }
 
