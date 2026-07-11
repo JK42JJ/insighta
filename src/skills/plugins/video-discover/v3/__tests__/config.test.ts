@@ -45,6 +45,11 @@ describe('loadV3Config', () => {
       enableUserCuratedIngest: true,
       emptyTitleGateShadow: false, // R4 shadow guard default (2026-07-04, BL-17)
       emptyTitleGate: false, // R4 enforce default (2026-07-04, BL-17)
+      // P2 two-stage pool matching (2026-07-11) — default OFF (brute-force path)
+      poolMatchTwoStage: false,
+      poolMatchShortlistK: 32,
+      poolMatchOverfetch: 256,
+      poolMatchEfSearch: 400,
     });
   });
 
@@ -125,6 +130,11 @@ describe('loadV3Config', () => {
       enableUserCuratedIngest: true,
       emptyTitleGateShadow: false, // R4 shadow guard default (2026-07-04, BL-17)
       emptyTitleGate: false, // R4 enforce default (2026-07-04, BL-17)
+      // P2 two-stage pool matching (2026-07-11) — default OFF (brute-force path)
+      poolMatchTwoStage: false,
+      poolMatchShortlistK: 32,
+      poolMatchOverfetch: 256,
+      poolMatchEfSearch: 400,
     });
   });
 
@@ -309,5 +319,28 @@ describe('loadV3Config', () => {
       loadV3Config({ V3_EMPTY_TITLE_GATE: 'true', V3_EMPTY_TITLE_GATE_SHADOW: 'false' })
         .emptyTitleGateShadow
     ).toBe(false);
+  });
+});
+
+describe('V3_POOL_MATCH_* (P2 two-stage pool matching, 2026-07-11)', () => {
+  test('defaults: OFF + K=32 / overfetch=256 / ef_search=400', () => {
+    const c = loadV3Config({});
+    expect(c.poolMatchTwoStage).toBe(false);
+    expect(c.poolMatchShortlistK).toBe(32);
+    expect(c.poolMatchOverfetch).toBe(256);
+    expect(c.poolMatchEfSearch).toBe(400);
+  });
+
+  test('env overrides parse', () => {
+    const c = loadV3Config({
+      V3_POOL_MATCH_TWO_STAGE: 'true',
+      V3_POOL_MATCH_SHORTLIST_K: '48',
+      V3_POOL_MATCH_OVERFETCH: '512',
+      V3_POOL_MATCH_EF_SEARCH: '600',
+    });
+    expect(c.poolMatchTwoStage).toBe(true);
+    expect(c.poolMatchShortlistK).toBe(48);
+    expect(c.poolMatchOverfetch).toBe(512);
+    expect(c.poolMatchEfSearch).toBe(600);
   });
 });
