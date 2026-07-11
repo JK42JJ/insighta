@@ -125,13 +125,37 @@ export async function handleMandalaPipelineWatchdog(): Promise<void> {
   // terminates pre-flag-on fire-and-forget orphans that never had a pg-boss
   // job (e.g. the run stuck at step1 since before the durable flag was on).
   let reEnqueued = 0;
+  let capped = 0;
   const supersededIds: string[] = [];
   for (const r of stale) {
     try {
+      // Per-mandala retry cap. Supersede (below) bounds each ROW to one retry,
+      // but a re-run that orphans again mints a fresh 'running' row every
+      // cycle — an unbounded chain per mandala. Watchdog re-enqueues always
+      // carry trigger='watchdog' (trigger is log/analytics-only downstream),
+      // so counting them bounds the chain regardless of failure mode.
+      const attempts = await prisma.$queryRawUnsafe<Array<{ n: number }>>(
+        `SELECT count(*)::int AS n
+           FROM mandala_pipeline_runs
+          WHERE mandala_id = $1::uuid
+            AND trigger = 'watchdog'
+            AND created_at > now() - interval '24 hours'`,
+        r.mandala_id
+      );
+      if ((attempts[0]?.n ?? 0) >= QUEUE_CONFIG.MANDALA_PIPELINE_WATCHDOG_MAX_RETRIES) {
+        capped++;
+        supersededIds.push(r.id); // still close the row — a capped mandala must stop matching
+        log.warn('mandala-pipeline-watchdog: retry cap reached — closing without re-enqueue', {
+          mandalaId: r.mandala_id,
+          attempts24h: attempts[0]?.n,
+        });
+        continue;
+      }
+
       const jobId = await enqueueMandalaPipeline({
         mandalaId: r.mandala_id,
         userId: r.user_id,
-        trigger: r.trigger ?? 'watchdog',
+        trigger: 'watchdog',
       });
       if (jobId) {
         reEnqueued++;
@@ -162,6 +186,7 @@ export async function handleMandalaPipelineWatchdog(): Promise<void> {
     stale: stale.length,
     reEnqueued,
     superseded,
+    capped,
   });
 }
 
