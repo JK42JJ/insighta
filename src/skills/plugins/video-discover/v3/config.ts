@@ -135,6 +135,38 @@ export const DEFAULT_MIN_VIEW_COUNT = 1000;
 export const DEFAULT_MIN_VIEWS_PER_DAY = 10;
 
 /**
+ * Two-stage pool matching (P2 fix, 2026-07-11).
+ *
+ * matchFromVideoPool brute-forces eligible(~6.3k) × 8 cells = 50,840 cosine
+ * ops on vector(4096) per wizard call — EXPLAIN-measured 22.8s cold / 4.9s
+ * warm, sitting on the wizard's synchronous precompute-consume path. pgvector
+ * hnsw/ivfflat cap at 2,000 dims, so the 4096d column cannot be indexed.
+ *
+ * Fix: qwen3-embedding is MRL, so the stored 4096d vectors truncate+renorm to
+ * 1024d without re-embedding (GENERATED column `embedding_1024` + hnsw index,
+ * DDL prisma/migrations/pool-embeddings-1024/). Stage 1 = hnsw shortlist on
+ * 1024d (OVERFETCH raw ordered rows per cell, filtered to eligibility, keep
+ * SHORTLIST_K); stage 2 = exact 4096d re-rank of K×cells pairs.
+ *
+ * Measured on prod (mandala 9c50861b, 2026-07-11): true 4096d top-8/cell is
+ * FULLY contained in the 1024d top-32 shortlist (recall 64/64) — two-stage is
+ * exact at K=32. view_count pre-capping was tested and REJECTED (overlap
+ * 7/64 = 11%; non-semantic pre-filters destroy semantic top-k).
+ *
+ * Default OFF (unset = brute-force path unchanged). Enable via compose
+ * V3_POOL_MATCH_TWO_STAGE=true; rollback = remove the line, no code revert.
+ */
+export const DEFAULT_POOL_MATCH_TWO_STAGE = false;
+export const DEFAULT_POOL_MATCH_SHORTLIST_K = 32;
+export const DEFAULT_POOL_MATCH_OVERFETCH = 256;
+/**
+ * hnsw.ef_search for the shortlist scan. MUST exceed OVERFETCH or the index
+ * silently returns fewer rows than LIMIT asks (pgvector default 40 → measured
+ * recall collapse 51/64). Prod-measured at 400: recall 64/64, warm 105ms.
+ */
+export const DEFAULT_POOL_MATCH_EF_SEARCH = 400;
+
+/**
  * Semantic-mode embedding candidate cap (Issue #543, CP436 PR-Y0b2).
  *
  * When `V3_CENTER_GATE_MODE=semantic`, the executor calls
@@ -285,6 +317,27 @@ const semanticMaxCandidates = z
   )
   .transform((v) => v ?? DEFAULT_SEMANTIC_MAX_CANDIDATES);
 
+const poolMatchShortlistK = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().int().min(8).max(200).optional()
+  )
+  .transform((v) => v ?? DEFAULT_POOL_MATCH_SHORTLIST_K);
+
+const poolMatchOverfetch = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().int().min(32).max(2000).optional()
+  )
+  .transform((v) => v ?? DEFAULT_POOL_MATCH_OVERFETCH);
+
+const poolMatchEfSearch = z
+  .preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().finite().int().min(40).max(1000).optional()
+  )
+  .transform((v) => v ?? DEFAULT_POOL_MATCH_EF_SEARCH);
+
 /**
  * R4 shadow guard kill switch (2026-07-04, BL-17).
  *
@@ -346,6 +399,10 @@ export const v3EnvSchema = z.object({
   V3_ENABLE_USER_CURATED_INGEST: booleanFlag.optional().default(true as unknown as string),
   V3_EMPTY_TITLE_GATE_SHADOW: booleanFlag.optional().default(false as unknown as string),
   V3_EMPTY_TITLE_GATE: booleanFlag.optional().default(false as unknown as string),
+  V3_POOL_MATCH_TWO_STAGE: booleanFlag.optional().default(false as unknown as string),
+  V3_POOL_MATCH_SHORTLIST_K: poolMatchShortlistK,
+  V3_POOL_MATCH_OVERFETCH: poolMatchOverfetch,
+  V3_POOL_MATCH_EF_SEARCH: poolMatchEfSearch,
 });
 
 export interface V3Config {
@@ -408,6 +465,11 @@ export interface V3Config {
    * switch from `emptyTitleGateShadow` above.
    */
   emptyTitleGate: boolean;
+  /** Two-stage pool matching — see DEFAULT_POOL_MATCH_TWO_STAGE writeup. */
+  poolMatchTwoStage: boolean;
+  poolMatchShortlistK: number;
+  poolMatchOverfetch: number;
+  poolMatchEfSearch: number;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -437,6 +499,10 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_ENABLE_USER_CURATED_INGEST: env['V3_ENABLE_USER_CURATED_INGEST'],
     V3_EMPTY_TITLE_GATE_SHADOW: env['V3_EMPTY_TITLE_GATE_SHADOW'],
     V3_EMPTY_TITLE_GATE: env['V3_EMPTY_TITLE_GATE'],
+    V3_POOL_MATCH_TWO_STAGE: env['V3_POOL_MATCH_TWO_STAGE'],
+    V3_POOL_MATCH_SHORTLIST_K: env['V3_POOL_MATCH_SHORTLIST_K'],
+    V3_POOL_MATCH_OVERFETCH: env['V3_POOL_MATCH_OVERFETCH'],
+    V3_POOL_MATCH_EF_SEARCH: env['V3_POOL_MATCH_EF_SEARCH'],
   });
   if (!parsed.success) {
     return {
@@ -465,6 +531,10 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       enableUserCuratedIngest: true,
       emptyTitleGateShadow: DEFAULT_EMPTY_TITLE_GATE_SHADOW,
       emptyTitleGate: DEFAULT_EMPTY_TITLE_GATE,
+      poolMatchTwoStage: DEFAULT_POOL_MATCH_TWO_STAGE,
+      poolMatchShortlistK: DEFAULT_POOL_MATCH_SHORTLIST_K,
+      poolMatchOverfetch: DEFAULT_POOL_MATCH_OVERFETCH,
+      poolMatchEfSearch: DEFAULT_POOL_MATCH_EF_SEARCH,
     };
   }
   return {
@@ -493,6 +563,10 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     enableUserCuratedIngest: parsed.data.V3_ENABLE_USER_CURATED_INGEST,
     emptyTitleGateShadow: parsed.data.V3_EMPTY_TITLE_GATE_SHADOW,
     emptyTitleGate: parsed.data.V3_EMPTY_TITLE_GATE,
+    poolMatchTwoStage: parsed.data.V3_POOL_MATCH_TWO_STAGE,
+    poolMatchShortlistK: parsed.data.V3_POOL_MATCH_SHORTLIST_K,
+    poolMatchOverfetch: parsed.data.V3_POOL_MATCH_OVERFETCH,
+    poolMatchEfSearch: parsed.data.V3_POOL_MATCH_EF_SEARCH,
   };
 }
 

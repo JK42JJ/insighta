@@ -2296,6 +2296,13 @@ model video_pool_embeddings {
   id            String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   video_id      String                      @db.VarChar(20)
   embedding     Unsupported("vector(4096)")
+  /// P2 (2026-07-11) — MRL truncation of `embedding` (first 1024 dims,
+  /// l2-normalized) as a Postgres GENERATED ALWAYS STORED column + hnsw index
+  /// (4096d exceeds pgvector's 2,000-dim index cap). Writers never touch this
+  /// column — the DB derives it. Raw SQL DDL (incl. the hnsw index + the dead
+  /// 4096d ivfflat drop): prisma/migrations/pool-embeddings-1024/001_*.sql.
+  /// Listed here so `prisma db push` treats it as known and never drops it.
+  embedding_1024 Unsupported("vector(1024)")?
   text_input    String?
   model_version String                      @default("qwen3-embedding-8b") @db.VarChar(50)
   created_at    DateTime                    @default(now()) @db.Timestamptz(6)
