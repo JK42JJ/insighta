@@ -49,6 +49,11 @@ import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch, cosineToRelevance } from '@/skills/plugins/iks-scorer/embedding';
 import { servingEmbedOptions } from '@/config/embed-serving-timeout';
+import {
+  isProgressiveFillEnabled,
+  getProgressiveFillConfig,
+  planProgressiveChunks,
+} from '@/config/discover-progressive-fill';
 import { isDiscoverNeverZeroFloorEnabled, getZeroFloorMax } from '@/config/discover-zero-floor';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
@@ -633,6 +638,14 @@ async function executeImpl(
       existingVideoIds,
       // CP489 — enable center_goal cache for mandala-bound runs.
       mandalaId,
+      // Progressive fill: each gated chunk upserts immediately (SSE fires per
+      // row) so the grid fills over seconds. Final full-set upsert below still
+      // runs and refreshes rec_score (idempotent upsert). Flag default OFF.
+      onPartialSlots: isProgressiveFillEnabled()
+        ? async (partial) => {
+            await upsertSlots(ctx.userId, mandalaId, partial, state.subGoals);
+          }
+        : undefined,
     });
     slots.push(...tier2Fill.slots);
     tier2Count = tier2Fill.slots.length;
@@ -864,6 +877,14 @@ interface Tier2Input {
    * to fresh embed.
    */
   mandalaId?: string;
+  /**
+   * Progressive fill (2026-07-11) — when set AND DISCOVER_PROGRESSIVE_FILL is
+   * on, each embedded+gated candidate CHUNK is handed out immediately so the
+   * caller can upsert it (cardPublisher SSE fires per row → grid fills over
+   * seconds). Cards never move or vanish: the final full-set gate pass still
+   * runs and converges to the same placement (deterministic argmax).
+   */
+  onPartialSlots?: (slots: AssembledSlot[]) => Promise<void>;
 }
 
 interface Tier2Debug {
@@ -1194,39 +1215,146 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     // Ephemeral path (input.mandalaId undefined) falls back to embedBatch
     // for the center as well via plain embedBatch call.
     const titles = cappedFilterInputs.map((f) => f.title);
-    try {
-      const [centerVec, titleVecs] = await Promise.all([
-        input.mandalaId
-          ? getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
-          : (async () => {
-              const [v] = await embedBatch([input.state.centerGoal], servingEmbedOptions());
-              return v ?? null;
-            })(),
-        embedBatch(titles, servingEmbedOptions()),
-      ]);
-      if (centerVec != null && titleVecs.length === titles.length) {
-        centerEmbedding = centerVec;
-        candidateEmbeddings = new Map<string, number[]>();
-        for (let i = 0; i < cappedFilterInputs.length; i++) {
-          const vec = titleVecs[i];
-          const id = cappedFilterInputs[i]?.videoId;
-          if (vec && id) candidateEmbeddings.set(id, vec);
+    const progressive = isProgressiveFillEnabled() && input.onPartialSlots != null;
+    if (progressive) {
+      // Progressive fill (supervisor-approved 2026-07-11): embed+gate per
+      // CHUNK and hand each gated chunk out for immediate upsert (early
+      // visibility only). The full-set gate below still runs over the
+      // accumulated embeddings and remains the authoritative placement.
+      const pfCfg = getProgressiveFillConfig();
+      const deficitSet = new Set(input.deficitCells.map((c) => c.cellIndex));
+      try {
+        const centerVec = input.mandalaId
+          ? await getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
+          : ((await embedBatch([input.state.centerGoal], servingEmbedOptions()))[0] ?? null);
+        if (centerVec != null) {
+          centerEmbedding = centerVec;
+          candidateEmbeddings = new Map<string, number[]>();
+          const streamedIds = new Set<string>();
+          const chunks = planProgressiveChunks(
+            cappedFilterInputs,
+            pfCfg,
+            (f) => enrichedById.get(f.videoId)?.cellIndexHint ?? null
+          );
+          for (const chunk of chunks) {
+            try {
+              const vecs = await embedBatch(
+                chunk.map((f) => f.title),
+                servingEmbedOptions()
+              );
+              for (let i = 0; i < chunk.length; i++) {
+                const vec = vecs[i];
+                const id = chunk[i]?.videoId;
+                if (vec && id) candidateEmbeddings.set(id, vec);
+              }
+              const { byCell: chunkByCell } = applyMandalaFilterWithStats(chunk, {
+                centerGoal: input.state.centerGoal,
+                subGoals: input.state.subGoals,
+                language: input.state.language,
+                focusTags: input.state.focusTags,
+                recencyWeight: v3Config.recencyWeight,
+                recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
+                centerGateMode: v3Config.centerGateMode,
+                centerEmbedding,
+                candidateEmbeddings,
+                semanticMinCosine: v3Config.semanticMinCosine,
+                subGoalEmbeddings: input.state.subGoalEmbeddings,
+                emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
+                emptyTitleGate: v3Config.emptyTitleGate,
+              });
+              const partial: AssembledSlot[] = [];
+              const perCell = new Map<number, number>();
+              for (const [cellIndex, list] of chunkByCell) {
+                if (!deficitSet.has(cellIndex)) continue;
+                for (const a of [...list].sort((x, y) => y.score - x.score)) {
+                  if (streamedIds.has(a.candidate.videoId)) continue;
+                  if ((perCell.get(cellIndex) ?? 0) >= pfCfg.perChunkCellCap) break;
+                  const ev = enrichedById.get(a.candidate.videoId);
+                  if (!ev) continue;
+                  partial.push({
+                    videoId: ev.videoId,
+                    title: ev.title,
+                    description: ev.description,
+                    channelName: ev.channelTitle,
+                    channelId: ev.channelId,
+                    thumbnail: ev.thumbnail,
+                    viewCount: ev.viewCount,
+                    likeCount: ev.likeCount,
+                    durationSec: ev.durationSec,
+                    publishedAt: ev.publishedDate,
+                    cellIndex,
+                    score: a.score,
+                    tier: 'realtime',
+                  });
+                  perCell.set(cellIndex, (perCell.get(cellIndex) ?? 0) + 1);
+                  streamedIds.add(a.candidate.videoId);
+                }
+              }
+              if (partial.length > 0) {
+                try {
+                  await input.onPartialSlots!(partial);
+                  log.info(
+                    `[progressive] streamed chunk: ${partial.length} slots (chunk size ${chunk.length})`
+                  );
+                } catch (err) {
+                  log.warn(
+                    `[progressive] partial upsert failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+                  );
+                }
+              }
+            } catch (err) {
+              log.warn(
+                `[progressive] chunk embed failed — continuing without it: ${err instanceof Error ? err.message : String(err)}`
+              );
+            }
+          }
+        } else {
+          log.warn('[progressive] center embed unavailable — substring fallback');
         }
-      } else {
+      } catch (err) {
         log.warn(
-          `semantic gate embed vector mismatch: center=${centerVec != null} titles=${titleVecs.length}/${titles.length} — falling back to substring`
+          `[progressive] setup failed — substring fallback: ${err instanceof Error ? err.message : String(err)}`
         );
       }
-    } catch (err) {
-      log.warn(
-        `semantic gate embed failed: ${err instanceof Error ? err.message : String(err)} — falling back to substring`
+      debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
+      log.info(
+        `semantic gate (progressive): candidates=${filterInputs.length} capped=${cappedFilterInputs.length} embedMs=${debug.timing.semanticGateEmbedMs}`
+      );
+    } else {
+      try {
+        const [centerVec, titleVecs] = await Promise.all([
+          input.mandalaId
+            ? getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
+            : (async () => {
+                const [v] = await embedBatch([input.state.centerGoal], servingEmbedOptions());
+                return v ?? null;
+              })(),
+          embedBatch(titles, servingEmbedOptions()),
+        ]);
+        if (centerVec != null && titleVecs.length === titles.length) {
+          centerEmbedding = centerVec;
+          candidateEmbeddings = new Map<string, number[]>();
+          for (let i = 0; i < cappedFilterInputs.length; i++) {
+            const vec = titleVecs[i];
+            const id = cappedFilterInputs[i]?.videoId;
+            if (vec && id) candidateEmbeddings.set(id, vec);
+          }
+        } else {
+          log.warn(
+            `semantic gate embed vector mismatch: center=${centerVec != null} titles=${titleVecs.length}/${titles.length} — falling back to substring`
+          );
+        }
+      } catch (err) {
+        log.warn(
+          `semantic gate embed failed: ${err instanceof Error ? err.message : String(err)} — falling back to substring`
+        );
+      }
+      debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
+      log.info(
+        `semantic gate: candidates=${filterInputs.length} capped=${cappedFilterInputs.length} ` +
+          `overflow=${overflow} cap=${cap} embedMs=${debug.timing.semanticGateEmbedMs}`
       );
     }
-    debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
-    log.info(
-      `semantic gate: candidates=${filterInputs.length} capped=${cappedFilterInputs.length} ` +
-        `overflow=${overflow} cap=${cap} embedMs=${debug.timing.semanticGateEmbedMs}`
-    );
   }
 
   const tMandalaFilterStart = Date.now();
