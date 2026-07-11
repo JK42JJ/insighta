@@ -1,12 +1,18 @@
--- IVFFlat cosine index for video_pool_embeddings (4096d, qwen3-embedding-8b).
--- Row count 11,123 (2026-05-14, prod) — exceeds 5K threshold in 001_create_tables.sql:49.
--- lists = ceil(N/1000) = 12 per pgvector docs (N < 1M).
--- Used by src/skills/plugins/video-discover/v3/cache-matcher.ts matchFromVideoPool +
--- matchFromVideoPoolByCenterGoal (CP457 carryover T1-2).
--- CONCURRENTLY to avoid blocking inserts during build (5-10 min @ 11K rows x 4096d).
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vpool_emb_cosine
-  ON public.video_pool_embeddings
-  USING ivfflat (embedding vector_cosine_ops)
-  WITH (lists = 12);
-
-ANALYZE public.video_pool_embeddings;
+-- NEUTRALIZED 2026-07-11 (was: CREATE ivfflat on the 4096d embedding column).
+--
+-- The original index (idx_vpool_emb_cosine) was created under an older
+-- pgvector before the 2,000-dim index cap. It physically could not serve
+-- 4096d queries — the planner always avoided it (CP467-family mystery) —
+-- and it hard-failed any table rewrite. It was dropped on prod 2026-07-11
+-- as part of the two-stage pool-matching fix (P2, PR #1156):
+-- prisma/migrations/pool-embeddings-1024/001_add_1024_generated_hnsw.sql
+-- provides the replacement (MRL 1024d GENERATED column + hnsw).
+--
+-- Deploy replay landmine (why this file cannot keep its old content): the
+-- Database Schema Sync step re-applies every migration file. While the dead
+-- index existed, CREATE INDEX IF NOT EXISTS no-op'd; the moment it was
+-- dropped, the replay actually executed and pgvector 0.8 rejected it
+-- ("column cannot have more than 2000 dimensions for ivfflat index"),
+-- failing the whole deploy (run 2026-07-11T05:27Z). This DROP converges all
+-- environments to the dead-index-free state and stays idempotent.
+DROP INDEX IF EXISTS public.idx_vpool_emb_cosine;
