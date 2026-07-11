@@ -33,6 +33,7 @@ import {
   vectorToLiteral,
   QWEN3_EMBED_DIMENSION,
 } from '@/skills/plugins/iks-scorer/embedding';
+import { servingEmbedOptions } from '@/config/embed-serving-timeout';
 
 const log = logger.child({ module: 'center-goal-embedding' });
 
@@ -78,7 +79,9 @@ export async function getCenterGoalEmbedding(
   }
 
   // 2. Cache miss → embed via provider chain (Ollama → OpenRouter fallback).
-  const [vec] = await embedBatch([trimmed]);
+  // P0 2026-07-11 — miss path runs inside the wizard discover critical path;
+  // serving budget caps a hung provider (12s/0-retry when flag on).
+  const [vec] = await embedBatch([trimmed], servingEmbedOptions());
   if (!vec || vec.length !== QWEN3_EMBED_DIMENSION) return null;
 
   // 3. Fire-and-forget UPSERT — race-safe via partial unique index.

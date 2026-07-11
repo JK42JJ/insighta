@@ -25,6 +25,7 @@ import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
 import { config } from '@/config/index';
+import { getEmbedIgnoreProviders } from '@/config/embed-provider-prefs';
 import { logLLMCall } from '@/modules/llm/call-logger';
 import { recordTrace } from '@/modules/discover-tracing';
 
@@ -443,13 +444,21 @@ async function embedOneChunkViaOpenRouter(
   try {
     let res: Response;
     try {
+      // P0 2026-07-11 — skip hung providers (DeepInfra: 25s+ hang 3/3 pinned
+      // probe; ~1/3 of default-routed calls stalled 20-30s -> 40s with retry).
+      // Empty list = no provider field, byte-identical legacy request.
+      const ignoreProviders = getEmbedIgnoreProviders();
       res = await fetchFn(`${baseUrl}/embeddings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({ model, input: texts }),
+        body: JSON.stringify({
+          model,
+          input: texts,
+          ...(ignoreProviders.length > 0 ? { provider: { ignore: ignoreProviders } } : {}),
+        }),
         signal: controller.signal,
       });
     } catch (err) {

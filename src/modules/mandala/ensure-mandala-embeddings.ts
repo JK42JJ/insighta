@@ -23,6 +23,7 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { embedBatch, vectorToLiteral } from '@/skills/plugins/iks-scorer/embedding';
+import { servingEmbedOptions } from '@/config/embed-serving-timeout';
 
 const log = logger.child({ module: 'ensure-mandala-embeddings' });
 
@@ -167,7 +168,10 @@ export async function ensureMandalaEmbeddings(mandalaId: string): Promise<Ensure
   const t0 = Date.now();
   let vectors: (number[] | null)[];
   try {
-    vectors = await embedBatch(subjectsToEmbed);
+    // P0 2026-07-11 — step1 sits on the wizard critical path (30s race in
+    // pipeline-runner). Serving budget (12s/0-retry when flag on) keeps a hung
+    // provider from eating the whole race; missing cells backfill next call.
+    vectors = await embedBatch(subjectsToEmbed, servingEmbedOptions());
   } catch (err) {
     return {
       ok: false,
