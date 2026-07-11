@@ -49,6 +49,7 @@ import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch, cosineToRelevance } from '@/skills/plugins/iks-scorer/embedding';
 import { servingEmbedOptions } from '@/config/embed-serving-timeout';
+import { isDiscoverNeverZeroFloorEnabled, getZeroFloorMax } from '@/config/discover-zero-floor';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 import { resolveLanguage } from '@/utils/detect-language';
@@ -897,6 +898,8 @@ interface Tier2Debug {
   mandalaFilterSubGoalTokenCounts: number[];
   perCellAssigned: Record<number, number>;
   scoredCandidates: number;
+  /** P0 2026-07-11 — candidates admitted by the never-zero floor (gate emptied). */
+  floorAdmitted: number;
   finalSlots: number;
   centerGoal: string;
   subGoalsSample: string[];
@@ -948,6 +951,7 @@ function makeEmptyDebug(input: Tier2Input): Tier2Debug {
     mandalaFilterSubGoalTokenCounts: [],
     perCellAssigned: {},
     scoredCandidates: 0,
+    floorAdmitted: 0,
     finalSlots: 0,
     centerGoal: input.state.centerGoal,
     subGoalsSample: [...input.state.subGoals],
@@ -1316,6 +1320,37 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     }
     mandalaFilterRanTier2 = true;
   }
+
+  // P0 2026-07-11 — never-zero floor. When the RANKING gate (center cosine /
+  // jaccard) drops every candidate, the run used to return "No recommendations"
+  // → 0 cards, even though search found candidates and the SAFETY gates
+  // (shorts / lang / blocklist / quality) already passed them (kapasi
+  // 87960287: 108 found → gate input 10 → center-gate -8 → 0). Principle:
+  // "덜 정렬된 카드 > 카드 0장" — admit the top-N in search-rank order into
+  // deficit cells; async relevance backfill re-ranks them later. Flag off =
+  // legacy fail-closed. See config/discover-zero-floor.ts.
+  if (scored.length === 0 && filterable.length > 0 && isDiscoverNeverZeroFloorEnabled()) {
+    const deficitCellList = input.deficitCells.map((c) => c.cellIndex);
+    const cap = Math.min(getZeroFloorMax(), filterable.length);
+    let floorScore = 0.05;
+    for (let i = 0; i < cap; i++) {
+      const v = filterable[i]!;
+      const hinted = v.cellIndexHint;
+      const cellIndex =
+        hinted != null && deficitCellSet.has(hinted)
+          ? hinted
+          : deficitCellList[i % deficitCellList.length]!;
+      scored.push({ video: enrichedById.get(v.videoId)!, cellIndex, score: floorScore });
+      floorScore = Math.max(0.01, floorScore - 0.001);
+    }
+    debug.floorAdmitted = scored.length;
+    // Per-fire mandala id (supervisor): floor-served mandalas bypass the
+    // ranking gate — stratified quality checks must identify them.
+    log.warn(
+      `[zero-floor] mandala=${input.mandalaId ?? 'ephemeral'} ranking gate emptied ${filterable.length} candidates — floor-admitted ${scored.length} (cap ${cap})`
+    );
+  }
+
   const tScoringStart = Date.now();
   debug.scoredCandidates = scored.length;
 

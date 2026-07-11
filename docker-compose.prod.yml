@@ -263,6 +263,22 @@ services:
       - EMBED_SERVING_FAST_TIMEOUT_ENABLED=true
       - EMBED_SERVING_TIMEOUT_MS=12000
       - EMBED_SERVING_MAX_RETRIES=0
+      # P0 2026-07-11 — ROOT CAUSE of the 7/6+ wizard 27-96s serving: OpenRouter
+      # routes qwen3-embedding-8b across Nebius/DeepInfra/SiliconFlow, and
+      # DeepInfra started hanging 25s+ (pinned probe 3/3; ~1/3 of default-routed
+      # calls stalled -> 20s timeout x retries = 40s per call on the wizard
+      # critical path). Skip it at request level. Remove name(s) / unset = no
+      # provider field (exact legacy request). Re-check monthly whether
+      # DeepInfra recovered (it is one of 3 capacity legs).
+      # Full record: docs/qa/wizard-0card-investigation-2026-07-11.md
+      - OPENROUTER_EMBED_IGNORE_PROVIDERS=DeepInfra
+      # P0 2026-07-11 — never-zero floor: when the RANKING gate (center cosine/
+      # jaccard) drops every candidate, admit top-N (search-rank, safety gates
+      # already applied) into deficit cells instead of "No recommendations" ->
+      # 0 cards (kapasi mode: 108 found -> 0 served). "덜 정렬된 카드 > 0장".
+      # Unset/false = legacy fail-closed rollback.
+      # Staged flip (supervisor): verify FIX-1 hang removal first, THEN enable:
+      # - DISCOVER_NEVER_ZERO_FLOOR=true
       # CP416 (2026-04-22) — restore the LoRA action-fill path. Without
       # this, generateMandala() called config.mandalaGen.model=undefined,
       # Ollama /api/generate returned 400, LoRA threw, and the Haiku
