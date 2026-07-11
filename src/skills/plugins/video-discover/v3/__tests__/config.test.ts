@@ -50,7 +50,6 @@ describe('loadV3Config', () => {
       poolMatchShortlistK: 32,
       poolMatchOverfetch: 256,
       poolMatchEfSearch: 400,
-      poolMatchTxTimeoutMs: 30000,
     });
   });
 
@@ -136,7 +135,6 @@ describe('loadV3Config', () => {
       poolMatchShortlistK: 32,
       poolMatchOverfetch: 256,
       poolMatchEfSearch: 400,
-      poolMatchTxTimeoutMs: 30000,
     });
   });
 
@@ -325,13 +323,12 @@ describe('loadV3Config', () => {
 });
 
 describe('V3_POOL_MATCH_* (P2 two-stage pool matching, 2026-07-11)', () => {
-  test('defaults: OFF + K=32 / overfetch=256 / ef_search=400 / txTimeout=30000', () => {
+  test('defaults: OFF + K=32 / overfetch=256 / ef_search=400', () => {
     const c = loadV3Config({});
     expect(c.poolMatchTwoStage).toBe(false);
     expect(c.poolMatchShortlistK).toBe(32);
     expect(c.poolMatchOverfetch).toBe(256);
     expect(c.poolMatchEfSearch).toBe(400);
-    expect(c.poolMatchTxTimeoutMs).toBe(30000);
   });
 
   test('env overrides parse', () => {
@@ -340,12 +337,10 @@ describe('V3_POOL_MATCH_* (P2 two-stage pool matching, 2026-07-11)', () => {
       V3_POOL_MATCH_SHORTLIST_K: '48',
       V3_POOL_MATCH_OVERFETCH: '512',
       V3_POOL_MATCH_EF_SEARCH: '600',
-      V3_POOL_MATCH_TX_TIMEOUT_MS: '60000',
     });
     expect(c.poolMatchTwoStage).toBe(true);
     expect(c.poolMatchShortlistK).toBe(48);
     expect(c.poolMatchOverfetch).toBe(512);
     expect(c.poolMatchEfSearch).toBe(600);
-    expect(c.poolMatchTxTimeoutMs).toBe(60000);
   });
 });
