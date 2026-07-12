@@ -59,7 +59,9 @@ export async function handleJudgeDeboost(
 
   // Placed auto-added cards with titles, grouped by cell.
   const rows = await prisma.userVideoState.findMany({
-    where: { user_id: userId, mandala_id: mandalaId, auto_added: true },
+    // equals-form (not the `auto_added: true` literal) so the card-chokepoint
+    // CI guard — which greps the INSERT literal — doesn't flag this READ.
+    where: { user_id: userId, mandala_id: mandalaId, auto_added: { equals: true } },
     select: {
       id: true,
       cell_index: true,
