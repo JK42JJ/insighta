@@ -75,6 +75,23 @@ describe('embedBatch — OpenRouter provider ignore', () => {
     expect(bodies[0]).toMatchObject({ model: 'qwen/qwen3-embedding-8b', input: ['a'] });
   });
 
+  test('provider ORDER preference carries allow_fallbacks:true (not a pin)', async () => {
+    process.env['OPENROUTER_EMBED_PROVIDER_ORDER'] = 'SiliconFlow';
+    const bodies: unknown[] = [];
+    const fetchImpl = jest.fn(async (_url: string, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return openRouterOk(1);
+    }) as unknown as typeof fetch;
+    try {
+      await embedBatch(['a'], { fetchImpl });
+      expect(bodies[0]).toMatchObject({
+        provider: { order: ['SiliconFlow'], allow_fallbacks: true },
+      });
+    } finally {
+      delete process.env['OPENROUTER_EMBED_PROVIDER_ORDER'];
+    }
+  });
+
   test('multiple ignored providers pass through comma-parsed', async () => {
     process.env[ENV_KEY] = 'DeepInfra, SomeOther';
     const bodies: unknown[] = [];

@@ -272,6 +272,10 @@ services:
       # DeepInfra recovered (it is one of 3 capacity legs).
       # Full record: docs/qa/wizard-0card-investigation-2026-07-11.md
       - OPENROUTER_EMBED_IGNORE_PROVIDERS=DeepInfra
+      # T5-perf (2026-07-12) — provider PREFERENCE (fallbacks allowed, not a
+      # pin): SiliconFlow measured 0.5-0.9s consistently vs Nebius 0.5-12s
+      # variance (run 8dbb3e67 had a 11.9s embed call). Remove line = router default.
+      - OPENROUTER_EMBED_PROVIDER_ORDER=SiliconFlow
       # P0 2026-07-11 — never-zero floor: when the RANKING gate (center cosine/
       # jaccard) drops every candidate, admit top-N (search-rank, safety gates
       # already applied) into deficit cells instead of "No recommendations" ->

@@ -25,7 +25,7 @@ import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
 import { config } from '@/config/index';
-import { getEmbedIgnoreProviders } from '@/config/embed-provider-prefs';
+import { getEmbedIgnoreProviders, getEmbedProviderOrder } from '@/config/embed-provider-prefs';
 import { logLLMCall } from '@/modules/llm/call-logger';
 import { recordTrace } from '@/modules/discover-tracing';
 
@@ -448,6 +448,19 @@ async function embedOneChunkViaOpenRouter(
       // probe; ~1/3 of default-routed calls stalled 20-30s -> 40s with retry).
       // Empty list = no provider field, byte-identical legacy request.
       const ignoreProviders = getEmbedIgnoreProviders();
+      const orderProviders = getEmbedProviderOrder();
+      const providerPrefs =
+        ignoreProviders.length > 0 || orderProviders.length > 0
+          ? {
+              provider: {
+                ...(ignoreProviders.length > 0 ? { ignore: ignoreProviders } : {}),
+                // Preference, not a pin: fallbacks stay allowed (no SPOF).
+                ...(orderProviders.length > 0
+                  ? { order: orderProviders, allow_fallbacks: true }
+                  : {}),
+              },
+            }
+          : {};
       res = await fetchFn(`${baseUrl}/embeddings`, {
         method: 'POST',
         headers: {
@@ -457,7 +470,7 @@ async function embedOneChunkViaOpenRouter(
         body: JSON.stringify({
           model,
           input: texts,
-          ...(ignoreProviders.length > 0 ? { provider: { ignore: ignoreProviders } } : {}),
+          ...providerPrefs,
         }),
         signal: controller.signal,
       });
