@@ -118,9 +118,9 @@ services:
       # since 7/3 (#1085). CUT was never on; judge-deboost (post-placement)
       # owns precision now. Rollback: flip back to true.
       - INFLOW_GATE_ENABLED=false
-      # T6 test window cost gate — pause wizard v2 burst + book fill (judge
-      # stays on). REVERT to true (or delete) after the 3-field E2E round.
-      - V2_AUTO_ENRICH_ENABLED=false
+      # V2 auto-enrich cost gate (T6 tooling). true = normal service chain
+      # (wizard v2 burst + book fill). Set false only for test windows.
+      - V2_AUTO_ENRICH_ENABLED=true
       # T7 (matrix §11-b): consume miss → attach to in-flight precompute
       # instead of re-running discover (quota x2, 21-43s). Rollback: delete.
       - PRECOMPUTE_ATTACH_ENABLED=true
