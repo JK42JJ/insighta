@@ -121,6 +121,9 @@ services:
       # T6 test window cost gate — pause wizard v2 burst + book fill (judge
       # stays on). REVERT to true (or delete) after the 3-field E2E round.
       - V2_AUTO_ENRICH_ENABLED=false
+      # T7 (matrix §11-b): consume miss → attach to in-flight precompute
+      # instead of re-running discover (quota x2, 21-43s). Rollback: delete.
+      - PRECOMPUTE_ATTACH_ENABLED=true
       # CP494 canary — pool-first backfill gate. Fill cells from the quota-FREE +
       # embedding-FREE video_pool (tsvector, v2_promoted ~1.1k) BEFORE live search;
       # a cell with ≥3 pool candidates drops its live search.list query → quota

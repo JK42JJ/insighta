@@ -22,6 +22,7 @@ import { logger } from '@/utils/logger';
 import { ensureMandalaEmbeddings } from './ensure-mandala-embeddings';
 import { maybeAutoAddRecommendations } from './auto-add-recommendations';
 import { withTraceContext } from '@/modules/discover-tracing';
+import { isPrecomputeAttachEnabled, ATTACH_INFLIGHT_MAX_AGE_MS } from '@/config/precompute-attach';
 
 const log = logger.child({ module: 'pipeline-runner' });
 
@@ -334,6 +335,24 @@ async function checkDiscoverPreconditions(
     select: { id: true },
   });
   if (recent) return 'recent discover within 5min window';
+
+  // T7 attach — a YOUNG in-flight wizard precompute owns placement: its
+  // watcher re-consumes on done (or re-triggers this pipeline on failure/
+  // timeout), so running discover here would double the YouTube quota for
+  // the same goal. Age-capped so an anomalous hung precompute can never
+  // starve discover: past ATTACH_INFLIGHT_MAX_AGE_MS this gate opens again.
+  if (isPrecomputeAttachEnabled()) {
+    const inflightCutoff = new Date(Date.now() - ATTACH_INFLIGHT_MAX_AGE_MS);
+    const inflight = await db.mandala_wizard_precompute.findFirst({
+      where: {
+        user_id: userId,
+        status: { in: ['pending', 'running'] },
+        created_at: { gt: inflightCutoff },
+      },
+      select: { session_id: true },
+    });
+    if (inflight) return 'wizard precompute in flight (attach owns placement)';
+  }
 
   // Opt-in gate
   const config = await db.user_skill_config.findFirst({
