@@ -55,6 +55,7 @@ import {
   planProgressiveChunks,
 } from '@/config/discover-progressive-fill';
 import { getSearchVideoDuration, isSkipRuleQueriesEnabled } from '@/config/discover-t5';
+import { isSubgoalAnchorEnabled, buildAnchoredSubgoalQuery } from '@/config/subgoal-anchor';
 import { placeAutoAddedCards } from '@/modules/mandala/place-auto-added-cards';
 import { isDiscoverNeverZeroFloorEnabled, getZeroFloorMax } from '@/config/discover-zero-floor';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
@@ -1104,7 +1105,13 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   if (isSkipRuleQueriesEnabled()) {
     for (const { cellIndex } of input.deficitCells) {
       const sg = (input.state.subGoals[cellIndex] ?? '').trim();
-      if (sg) subGoalQueries.push({ query: sg, source: 'subgoal', cellIndex });
+      if (!sg) continue;
+      // T9 (matrix F6): raw subgoals like "청취 회화" harvest English-learning
+      // junk on Korean YouTube. Prefix a domain anchor from the center goal.
+      const q = isSubgoalAnchorEnabled()
+        ? buildAnchoredSubgoalQuery(input.state.centerGoal, sg)
+        : sg;
+      subGoalQueries.push({ query: q, source: 'subgoal', cellIndex });
     }
   }
   const usedQueryTexts = new Set(ruleQueries.map((q) => q.query.toLowerCase()));
