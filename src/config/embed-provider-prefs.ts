@@ -20,6 +20,21 @@
  * Tuning knob, not a secret (CP392). Full incident record:
  * docs/qa/wizard-0card-investigation-2026-07-11.md
  */
+/**
+ * Preferred provider ORDER with fallbacks allowed (NOT a pin: allow_fallbacks
+ * stays true, so a down provider falls through — no new SPOF). Measured
+ * 2026-07-12: SiliconFlow 0.5-0.9s consistently vs Nebius 0.5-12s variance.
+ * Unset = no order field (router default).
+ */
+export function getEmbedProviderOrder(env: NodeJS.ProcessEnv = process.env): string[] {
+  const raw = String(env['OPENROUTER_EMBED_PROVIDER_ORDER'] ?? '').trim();
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 export function getEmbedIgnoreProviders(env: NodeJS.ProcessEnv = process.env): string[] {
   const raw = String(env['OPENROUTER_EMBED_IGNORE_PROVIDERS'] ?? '').trim();
   if (!raw) return [];

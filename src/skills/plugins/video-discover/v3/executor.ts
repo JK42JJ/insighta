@@ -1275,85 +1275,92 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
           : ((await embedBatch([input.state.centerGoal], servingEmbedOptions()))[0] ?? null);
         if (centerVec != null) {
           centerEmbedding = centerVec;
-          candidateEmbeddings = new Map<string, number[]>();
+          const embMap = new Map<string, number[]>();
+          candidateEmbeddings = embMap;
           const streamedIds = new Set<string>();
           const chunks = planProgressiveChunks(
             cappedFilterInputs,
             pfCfg,
             (f) => enrichedById.get(f.videoId)?.cellIndexHint ?? null
           );
-          for (const chunk of chunks) {
-            try {
-              const vecs = await embedBatch(
-                chunk.map((f) => f.title),
-                servingEmbedOptions()
-              );
-              for (let i = 0; i < chunk.length; i++) {
-                const vec = vecs[i];
-                const id = chunk[i]?.videoId;
-                if (vec && id) candidateEmbeddings.set(id, vec);
-              }
-              const { byCell: chunkByCell } = applyMandalaFilterWithStats(chunk, {
-                centerGoal: input.state.centerGoal,
-                subGoals: input.state.subGoals,
-                language: input.state.language,
-                focusTags: input.state.focusTags,
-                recencyWeight: v3Config.recencyWeight,
-                recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
-                centerGateMode: v3Config.centerGateMode,
-                centerEmbedding,
-                candidateEmbeddings,
-                semanticMinCosine: v3Config.semanticMinCosine,
-                subGoalEmbeddings: input.state.subGoalEmbeddings,
-                emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
-                emptyTitleGate: v3Config.emptyTitleGate,
-              });
-              const partial: AssembledSlot[] = [];
-              const perCell = new Map<number, number>();
-              for (const [cellIndex, list] of chunkByCell) {
-                if (!deficitSet.has(cellIndex)) continue;
-                for (const a of [...list].sort((x, y) => y.score - x.score)) {
-                  if (streamedIds.has(a.candidate.videoId)) continue;
-                  if ((perCell.get(cellIndex) ?? 0) >= pfCfg.perChunkCellCap) break;
-                  const ev = enrichedById.get(a.candidate.videoId);
-                  if (!ev) continue;
-                  partial.push({
-                    videoId: ev.videoId,
-                    title: ev.title,
-                    description: ev.description,
-                    channelName: ev.channelTitle,
-                    channelId: ev.channelId,
-                    thumbnail: ev.thumbnail,
-                    viewCount: ev.viewCount,
-                    likeCount: ev.likeCount,
-                    durationSec: ev.durationSec,
-                    publishedAt: ev.publishedDate,
-                    cellIndex,
-                    score: a.score,
-                    tier: 'realtime',
-                  });
-                  perCell.set(cellIndex, (perCell.get(cellIndex) ?? 0) + 1);
-                  streamedIds.add(a.candidate.videoId);
+          // T5-perf (2026-07-12): chunks run CONCURRENTLY — the sequential
+          // loop serialized embed calls (measured 23.1s gate_embed on run
+          // 8dbb3e67: 5.3+5.8+5.1+1.9+11.9+2.7s). Wall-clock is now
+          // max(chunk) while early chunks still paint the grid first.
+          await Promise.allSettled(
+            chunks.map(async (chunk) => {
+              try {
+                const vecs = await embedBatch(
+                  chunk.map((f) => f.title),
+                  servingEmbedOptions()
+                );
+                for (let i = 0; i < chunk.length; i++) {
+                  const vec = vecs[i];
+                  const id = chunk[i]?.videoId;
+                  if (vec && id) embMap.set(id, vec);
                 }
-              }
-              if (partial.length > 0) {
-                try {
-                  await input.onPartialSlots!(partial);
-                  log.info(
-                    `[progressive] streamed chunk: ${partial.length} slots (chunk size ${chunk.length})`
-                  );
-                } catch (err) {
-                  log.warn(
-                    `[progressive] partial upsert failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
-                  );
+                const { byCell: chunkByCell } = applyMandalaFilterWithStats(chunk, {
+                  centerGoal: input.state.centerGoal,
+                  subGoals: input.state.subGoals,
+                  language: input.state.language,
+                  focusTags: input.state.focusTags,
+                  recencyWeight: v3Config.recencyWeight,
+                  recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
+                  centerGateMode: v3Config.centerGateMode,
+                  centerEmbedding: centerVec,
+                  candidateEmbeddings: embMap,
+                  semanticMinCosine: v3Config.semanticMinCosine,
+                  subGoalEmbeddings: input.state.subGoalEmbeddings,
+                  emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
+                  emptyTitleGate: v3Config.emptyTitleGate,
+                });
+                const partial: AssembledSlot[] = [];
+                const perCell = new Map<number, number>();
+                for (const [cellIndex, list] of chunkByCell) {
+                  if (!deficitSet.has(cellIndex)) continue;
+                  for (const a of [...list].sort((x, y) => y.score - x.score)) {
+                    if (streamedIds.has(a.candidate.videoId)) continue;
+                    if ((perCell.get(cellIndex) ?? 0) >= pfCfg.perChunkCellCap) break;
+                    const ev = enrichedById.get(a.candidate.videoId);
+                    if (!ev) continue;
+                    partial.push({
+                      videoId: ev.videoId,
+                      title: ev.title,
+                      description: ev.description,
+                      channelName: ev.channelTitle,
+                      channelId: ev.channelId,
+                      thumbnail: ev.thumbnail,
+                      viewCount: ev.viewCount,
+                      likeCount: ev.likeCount,
+                      durationSec: ev.durationSec,
+                      publishedAt: ev.publishedDate,
+                      cellIndex,
+                      score: a.score,
+                      tier: 'realtime',
+                    });
+                    perCell.set(cellIndex, (perCell.get(cellIndex) ?? 0) + 1);
+                    streamedIds.add(a.candidate.videoId);
+                  }
                 }
+                if (partial.length > 0) {
+                  try {
+                    await input.onPartialSlots!(partial);
+                    log.info(
+                      `[progressive] streamed chunk: ${partial.length} slots (chunk size ${chunk.length})`
+                    );
+                  } catch (err) {
+                    log.warn(
+                      `[progressive] partial upsert failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+                    );
+                  }
+                }
+              } catch (err) {
+                log.warn(
+                  `[progressive] chunk embed failed — continuing without it: ${err instanceof Error ? err.message : String(err)}`
+                );
               }
-            } catch (err) {
-              log.warn(
-                `[progressive] chunk embed failed — continuing without it: ${err instanceof Error ? err.message : String(err)}`
-              );
-            }
-          }
+            })
+          );
         } else {
           log.warn('[progressive] center embed unavailable — substring fallback');
         }
