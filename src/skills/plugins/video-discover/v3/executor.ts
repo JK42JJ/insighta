@@ -54,6 +54,8 @@ import {
   getProgressiveFillConfig,
   planProgressiveChunks,
 } from '@/config/discover-progressive-fill';
+import { getSearchVideoDuration, isSkipRuleQueriesEnabled } from '@/config/discover-t5';
+import { placeAutoAddedCards } from '@/modules/mandala/place-auto-added-cards';
 import { isDiscoverNeverZeroFloorEnabled, getZeroFloorMax } from '@/config/discover-zero-floor';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
@@ -643,7 +645,44 @@ async function executeImpl(
       // runs and refreshes rec_score (idempotent upsert). Flag default OFF.
       onPartialSlots: isProgressiveFillEnabled()
         ? async (partial) => {
+            // rec_cache first (SSE card_added fires per row)...
             await upsertSlots(ctx.userId, mandalaId, partial, state.subGoals);
+            // ...then straight into user_video_states so the DASHBOARD GRID
+            // (which renders uvs, not rec_cache) paints within seconds on the
+            // precompute-MISS path. Step3 auto-add later delete-and-replaces
+            // the cell from rec_cache — the same videos are in rec_cache by
+            // then, so the final set converges (brief re-insert, no card loss).
+            const byCell = new Map<number, typeof partial>();
+            for (const s of partial) {
+              if (!byCell.has(s.cellIndex)) byCell.set(s.cellIndex, []);
+              byCell.get(s.cellIndex)!.push(s);
+            }
+            for (const [cellIndex, slots] of byCell) {
+              try {
+                await placeAutoAddedCards(
+                  getPrismaClient(),
+                  ctx.userId,
+                  mandalaId,
+                  cellIndex,
+                  slots.map((sl) => ({
+                    videoId: sl.videoId,
+                    title: sl.title,
+                    description: sl.description,
+                    thumbnail: sl.thumbnail,
+                    channelTitle: sl.channelName,
+                    durationSec: sl.durationSec,
+                    viewCount: sl.viewCount,
+                    publishedAt: sl.publishedAt,
+                    recScore: sl.score,
+                  })),
+                  { notify: true }
+                );
+              } catch (err) {
+                log.warn(
+                  `[progressive] partial uvs place failed (non-fatal, cell=${cellIndex}): ${err instanceof Error ? err.message : String(err)}`
+                );
+              }
+            }
           }
         : undefined,
     });
@@ -998,16 +1037,23 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   }
 
   const tKwRuleStart = Date.now();
-  const ruleQueries = buildRuleBasedQueriesSync(
-    {
-      centerGoal: input.state.centerGoal,
-      subGoals: deficitSubGoals,
-      focusTags: input.state.focusTags,
-      targetLevel: input.state.targetLevel,
-      language: input.state.language,
-    },
-    v3Config.maxQueries
-  );
+  // T5 — measured: concat rule queries returned 0-7 items each (mostly 0)
+  // while LLM queries returned 50 each (run 1710a7c8). Skipping the rule
+  // round saves ~10 search units and shortens discover (raising precompute
+  // HIT rate); the zero-hit fallback + LLM queries carry cell targeting.
+  const skipRuleQueries = isSkipRuleQueriesEnabled();
+  const ruleQueries = skipRuleQueries
+    ? []
+    : buildRuleBasedQueriesSync(
+        {
+          centerGoal: input.state.centerGoal,
+          subGoals: deficitSubGoals,
+          focusTags: input.state.focusTags,
+          targetLevel: input.state.targetLevel,
+          language: input.state.language,
+        },
+        v3Config.maxQueries
+      );
   debug.timing.keywordRuleMs = Date.now() - tKwRuleStart;
 
   const tKwLlmStart = Date.now();
@@ -1611,6 +1657,10 @@ async function runSearchTraced(
           timeoutMs: v3Config.youtubeSearchTimeoutMs,
           ...(publishedAfter ? { publishedAfter } : {}),
           ...(opts?.videoCategoryId ? { videoCategoryId: opts.videoCategoryId } : {}),
+          // T5 — long-form-only harvest (v1 always sent medium; the v2/v3
+          // rewrite dropped it → 53% of supply arrived as Shorts and was
+          // discarded post-hoc). Unset env = legacy (no param).
+          ...(getSearchVideoDuration() ? { videoDuration: getSearchVideoDuration()! } : {}),
         });
         return { q, items, error: undefined as string | undefined };
       } catch (err) {
