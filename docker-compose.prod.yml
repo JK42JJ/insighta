@@ -174,12 +174,12 @@ services:
       # (c) per-cell would-serve L2 data before any enforce. Rollback = delete
       # line → code default false (DOMAIN_FIT_SERVE_SHADOW off).
       # NOTE: this config's boolFlag accepts only true/1/yes (NOT "on") — use =true.
-      - DOMAIN_FIT_SERVE_SHADOW=true
+      - DOMAIN_FIT_SERVE_SHADOW=false  # T4: 7/3 value
       # R24 SERVE-edge enforce flip (supervisor [GO] 2026-07-06, PR #1104 code).
       # Demote-only composite deboost on pool-serve-fill pool + live-fallback
       # branches; card count preserved; classifier-unavailable = fail-open
       # (multiplier 1, not cached). Rollback = delete line → code default false.
-      - DOMAIN_FIT_SERVE_ENFORCE=true
+      - DOMAIN_FIT_SERVE_ENFORCE=false  # T4: 7/3 value
       # G3 W1③ supply bridge — serve the backfilled yt_promoted rows.
       # W1① backfill embedded 7,015 yt_promoted (gold/silver, classifyQuality —
       # same gate as v2_promoted, NOT batch_trend). Measured: cohort cos>=0.5
@@ -202,7 +202,7 @@ services:
       # sources alongside v2_promoted (1,365 active). Probe pattern — measure niche
       # (기타/DA) re-serve poolPassed/livePassed then decide retain vs revert.
       # Revert: delete this line + redeploy → code default POOL_SOURCES_BASE=['v2_promoted'].
-      - POOL_SERVE_SOURCES_EXTRA=yt_promoted
+      # - POOL_SERVE_SOURCES_EXTRA=yt_promoted  # T4: absent on 7/3 (re-admit in T5 with supply track)
       # 2026-07-06 (James [GO], supervisor canary) — global channel HARD cap.
       # The per-cell soft cap (2/cell) can't see a channel spread 2 across N cells
       # (measured: 말트영어 10/49 in a 5-cell 영어 add_cards trace, zero per-cell
@@ -210,7 +210,7 @@ services:
       # (demote-only, count-neutral — measured 10→3 primary, 49→49 total). Fires
       # only when candidates ≥ V5_CHANNEL_HARD_CAP_MIN_CANDIDATES (30) so thin
       # cells keep soft-demote. Rollback = set to 0 + redeploy (code default off).
-      - V5_CHANNEL_HARD_CAP=3
+      # - V5_CHANNEL_HARD_CAP=3  # T4: absent on 7/3
       # CP500++ (2026-06-18, James [GO]) — restore the min-view floor on the
       # wizard/auto-add path. #804 (2026-05-30) switched the wizard v3→v5; the v3
       # quality gate (filterByQualityGate, MIN_VIEW 1000) was NOT carried into v5,
@@ -440,7 +440,7 @@ services:
       # pg-boss job so a container restart mid-run redelivers+retries
       # instead of orphaning the run at 0 cards. Revert: delete this line
       # (unset => legacy setImmediate). Handler: mandala-pipeline.ts.
-      - PIPELINE_DURABLE_ENABLED=true
+      - PIPELINE_DURABLE_ENABLED=false  # T4: 7/3 dispatch (setImmediate)
       # CP493 (2026-06-03) — merged structure+queries generation (canary). ONE
       # Haiku call yields the mandala structure AND a searchable per-cell query
       # in a single continuous context, replacing the two disconnected calls
@@ -603,7 +603,7 @@ services:
       # can't evaluate a blank title, so reject not admit). Measured blast:
       # 14/88 cells touched, 2 newly-sparse (7→2, 4→2), 0 newly-empty.
       # Rollback: remove line → code default off (DEFAULT_EMPTY_TITLE_GATE=false).
-      - V3_EMPTY_TITLE_GATE=on
+      - V3_EMPTY_TITLE_GATE=off  # T4: 7/3 value (hard-cut era gate; PDF principle 1: hard-cut -> deboost)
       # CP457+ — per-step request/response capture for video-discovery
       # (LLM prompts, YouTube search, Cohere rerank, embeddings, results).
       # Writes to public.video_discover_traces (TTL 7d). Fire-and-forget;
