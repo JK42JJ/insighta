@@ -1093,8 +1093,24 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   const llmQueries = await llmPromise;
   debug.timing.keywordLlmMs = Date.now() - tKwLlmStart;
   debug.llmQuotaHit = llmQueries.length === 0 && Boolean(input.openRouterApiKey);
+  // T5 cell-coverage (2026-07-12): LLM queries carry no cellIndex, so cells
+  // the LLM didn't happen to cover get NO targeted supply and end up empty
+  // (measured: 3 empty cells on run 8dbb3e67 with only 5 LLM queries). Add
+  // one query PER deficit cell using the sub-goal text itself — natural
+  // phrases ("장거리 러닝", "부상 예방"), not the junk centerGoal-concat that
+  // DISCOVER_SKIP_RULE_QUERIES removed — tagged with cellIndex so results
+  // land in their cell via cellIndexHint.
+  const subGoalQueries: SearchQuery[] = [];
+  if (isSkipRuleQueriesEnabled()) {
+    for (const { cellIndex } of input.deficitCells) {
+      const sg = (input.state.subGoals[cellIndex] ?? '').trim();
+      if (sg) subGoalQueries.push({ query: sg, source: 'subgoal', cellIndex });
+    }
+  }
   const usedQueryTexts = new Set(ruleQueries.map((q) => q.query.toLowerCase()));
-  const extraLLM = llmQueries.filter((q) => !usedQueryTexts.has(q.query.toLowerCase()));
+  const extraLLM = [...llmQueries, ...subGoalQueries].filter(
+    (q) => !usedQueryTexts.has(q.query.toLowerCase())
+  );
   for (const q of extraLLM) {
     debug.queries.push({ query: q.query, source: 'llm', cellIndex: q.cellIndex ?? null });
   }
