@@ -96,6 +96,7 @@ export async function enqueueRichSummaryForMandalaCards(params: {
         source: 'user',
         withRichSummary: true,
         userId: params.userId,
+        mandalaId: params.mandalaId,
       });
       enqueued += 1;
     } catch (err) {
