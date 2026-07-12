@@ -34,6 +34,11 @@ import { writeSearchTrace, type SearchTraceCandidateInput } from '@/modules/sear
 import { loadInflowGateConfig } from '@/config/inflow-gate';
 import { notifyCardAdded, type CardPayload } from '@/modules/recommendations/publisher';
 import { MS_PER_DAY } from '@/utils/time-constants';
+import {
+  isPrecomputeAttachEnabled,
+  ATTACH_BUDGET_MS,
+  ATTACH_POLL_INTERVAL_MS,
+} from '@/config/precompute-attach';
 import { randomUUID } from 'crypto';
 
 const log = logger.child({ module: 'wizard-precompute' });
@@ -396,7 +401,10 @@ export async function consumePrecompute(
     );
   }
 
-  if (row.status !== 'done') return { consumed: false, reason: 'not-done' };
+  if (row.status !== 'done') {
+    scheduleAttachWatcher(input, row.status);
+    return { consumed: false, reason: 'not-done' };
+  }
   if (row.expires_at.getTime() < Date.now()) return { consumed: false, reason: 'expired' };
 
   // Goal match: allow minor whitespace / case variance but reject substantive
@@ -639,6 +647,69 @@ export async function consumePrecompute(
   }
 
   return { consumed: true, cardsInserted: inserted, slotsCount: slots.length };
+}
+
+// ---------------------------------------------------------------------------
+// T7 — attach watcher (matrix §11-b): consume missed while the precompute was
+// still running. Instead of letting the full pipeline re-run discover, wait
+// for the row to turn done (≤ATTACH_BUDGET_MS) and re-consume it. On failure
+// or timeout, re-trigger the pipeline; checkDiscoverPreconditions only skips
+// for YOUNG in-flight rows, so this fallback cannot dead-end on its own skip.
+// ---------------------------------------------------------------------------
+
+const activeAttachSessions = new Set<string>();
+
+function scheduleAttachWatcher(input: ConsumePrecomputeInput, statusAtMiss: string): void {
+  if (!isPrecomputeAttachEnabled()) return;
+  if (statusAtMiss !== 'pending' && statusAtMiss !== 'running') return; // failed/consumed: nothing to wait for
+  if (activeAttachSessions.has(input.sessionId)) return;
+  activeAttachSessions.add(input.sessionId);
+
+  setImmediate(() => {
+    void (async () => {
+      const db = getPrismaClient();
+      const t0 = Date.now();
+      try {
+        while (Date.now() - t0 < ATTACH_BUDGET_MS) {
+          await new Promise<void>((resolve) => setTimeout(resolve, ATTACH_POLL_INTERVAL_MS));
+          const row = await db.mandala_wizard_precompute.findUnique({
+            where: { session_id: input.sessionId },
+            select: { status: true },
+          });
+          if (!row || row.status === 'failed' || row.status === 'consumed') break;
+          if (row.status === 'done') {
+            // Re-enter consume: status=done skips the poll, inserts slots and
+            // runs the same inline auto-add path as a first-try hit.
+            const outcome = await consumePrecompute(input);
+            log.info(
+              `attach consumed after miss: session=${input.sessionId} waited_ms=${Date.now() - t0} ` +
+                `consumed=${outcome.consumed} inserted=${outcome.cardsInserted ?? 0}`
+            );
+            if (outcome.consumed) return;
+            break; // consume miss on a done row (expired/goal-mismatch) → fallback
+          }
+        }
+        // Failed, vanished, timed out, or post-done consume miss → pipeline owns it.
+        log.info(
+          `attach fallback → pipeline re-trigger: session=${input.sessionId} waited_ms=${Date.now() - t0}`
+        );
+        const { triggerMandalaPostCreationAsync } = await import('./mandala-post-creation');
+        triggerMandalaPostCreationAsync(
+          input.userId,
+          input.mandalaId,
+          'precompute-attach-fallback'
+        );
+      } catch (err) {
+        log.warn(
+          `attach watcher threw (non-fatal): session=${input.sessionId} error=${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      } finally {
+        activeAttachSessions.delete(input.sessionId);
+      }
+    })();
+  });
 }
 
 /**
