@@ -124,6 +124,9 @@ services:
       # T7 (matrix §11-b): consume miss → attach to in-flight precompute
       # instead of re-running discover (quota x2, 21-43s). Rollback: delete.
       - PRECOMPUTE_ATTACH_ENABLED=true
+      # T9 (matrix F6): deficit-cell subgoal queries carry a domain anchor
+      # from the center goal ("일본어 JLPT N3" + "청취 회화"). Rollback: delete.
+      - DISCOVER_SUBGOAL_ANCHOR_ENABLED=true
       # CP494 canary — pool-first backfill gate. Fill cells from the quota-FREE +
       # embedding-FREE video_pool (tsvector, v2_promoted ~1.1k) BEFORE live search;
       # a cell with ≥3 pool candidates drops its live search.list query → quota
