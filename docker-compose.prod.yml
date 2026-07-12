@@ -113,7 +113,14 @@ services:
       # D-04 §4-2 wizard shadow (supervisor-approved after CUT=false zero-
       # impact proof, wizard-precompute.ts:179): judge scores + traces
       # would_cut, slots untouched. CUT stays off until the canary gate.
-      - INFLOW_GATE_ENABLED=true
+      # T6 (2026-07-12, matrix F12): inflow-gate shadow judge added 15-50s to
+      # wizard precompute (v5 discover itself is <1s) — killed done-by-click
+      # since 7/3 (#1085). CUT was never on; judge-deboost (post-placement)
+      # owns precision now. Rollback: flip back to true.
+      - INFLOW_GATE_ENABLED=false
+      # T6 test window cost gate — pause wizard v2 burst + book fill (judge
+      # stays on). REVERT to true (or delete) after the 3-field E2E round.
+      - V2_AUTO_ENRICH_ENABLED=false
       # CP494 canary — pool-first backfill gate. Fill cells from the quota-FREE +
       # embedding-FREE video_pool (tsvector, v2_promoted ~1.1k) BEFORE live search;
       # a cell with ≥3 pool candidates drops its live search.list query → quota
