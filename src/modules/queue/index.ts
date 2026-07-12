@@ -35,6 +35,7 @@ import { registerPoolServeFillWorker } from './handlers/pool-serve-fill';
 import { registerMandalaActionsFillWorker } from './handlers/mandala-actions-fill';
 import { registerMandalaPipelineWorker } from './handlers/mandala-pipeline';
 import { registerMandalaBookFillWorker } from './handlers/mandala-book-fill';
+import { registerJudgeDeboostWorker } from './handlers/judge-deboost';
 import { registerTranslateMandalaBulkWorker } from './handlers/translate-mandala-bulk';
 import { registerSegmentRelevanceFillWorker } from './handlers/segment-relevance-fill';
 import { registerDeckBuildWorker } from './handlers/deck-build';
@@ -65,6 +66,7 @@ export async function initJobQueue(): Promise<void> {
   await registerMandalaActionsFillWorker();
   await registerMandalaPipelineWorker();
   await registerMandalaBookFillWorker();
+  await registerJudgeDeboostWorker();
   await registerTranslateMandalaBulkWorker();
   await registerSegmentRelevanceFillWorker();
   await registerDeckBuildWorker();

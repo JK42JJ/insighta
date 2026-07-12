@@ -14,6 +14,8 @@ import { getPrismaClient } from '@/modules/database/client';
 import { enqueueEnrichVideo } from '@/modules/queue/handlers/enrich-video';
 import { enqueueMandalaBookFill } from '@/modules/queue/handlers/mandala-book-fill';
 import { bookRefillEnqueueOptions } from '@/modules/queue/handlers/book-refill-debounce';
+import { enqueueJudgeDeboost } from '@/modules/queue/handlers/judge-deboost';
+import { isJudgeDeboostEnabled } from '@/config/judge-deboost';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'RichSummaryTrigger' });
@@ -125,6 +127,17 @@ export async function enqueueRichSummaryForMandalaCards(params: {
   // early-return before it, so an all-cached mandala would never get its note.
   // Enqueue ONE debounced book fill here unconditionally (singletonKey per
   // mandala; 120s startAfter lets the enrich burst land first). Non-fatal.
+  if (uniqueByVideo.size > 0 && isJudgeDeboostEnabled()) {
+    // gA judge deboost — one shot per mandala (singleton, 240s). Fail-open.
+    await enqueueJudgeDeboost({ userId: params.userId, mandalaId: params.mandalaId }).catch(
+      (err) => {
+        log.warn('judge-deboost enqueue failed (non-fatal)', {
+          mandalaId: params.mandalaId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    );
+  }
   if (uniqueByVideo.size > 0) {
     await enqueueMandalaBookFill(
       { userId: params.userId, mandalaId: params.mandalaId, trigger: 'enrich-complete' },
