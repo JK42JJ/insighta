@@ -72,15 +72,20 @@ export function ContextHeader({
           {t('contextHeader.cardCount', '{{count}} cards', { count: totalCardCount })}
           {isFilling && (
             <span
-              className="inline-flex items-center gap-1 text-primary animate-fade-in"
+              className="relative inline-block h-3.5 w-3.5 animate-fade-in"
               role="status"
-              aria-live="polite"
+              aria-label={t('contextHeader.filling', '채우는 중')}
             >
+              {/* Dimensional spinner (James 2026-07-12): two counter-rotating
+                  arcs at different depths — subtle 3D feel, no text. */}
               <span
-                className="h-3 w-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin"
+                className="absolute inset-0 rounded-full border-[1.5px] border-primary/70 border-t-transparent border-l-transparent animate-spin [animation-duration:0.9s]"
                 aria-hidden="true"
               />
-              {t('contextHeader.filling', '채우는 중')}
+              <span
+                className="absolute inset-[3px] rounded-full border-[1.5px] border-primary/30 border-b-transparent border-r-transparent animate-spin [animation-direction:reverse] [animation-duration:1.5s]"
+                aria-hidden="true"
+              />
             </span>
           )}
         </span>
