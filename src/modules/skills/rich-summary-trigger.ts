@@ -16,6 +16,7 @@ import { enqueueMandalaBookFill } from '@/modules/queue/handlers/mandala-book-fi
 import { bookRefillEnqueueOptions } from '@/modules/queue/handlers/book-refill-debounce';
 import { enqueueJudgeDeboost } from '@/modules/queue/handlers/judge-deboost';
 import { isJudgeDeboostEnabled } from '@/config/judge-deboost';
+import { isV2AutoEnrichEnabled } from '@/config/v2-auto-enrich';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'RichSummaryTrigger' });
@@ -91,7 +92,12 @@ export async function enqueueRichSummaryForMandalaCards(params: {
 
   let enqueued = 0;
   let skipped = 0;
-  for (const [videoId, meta] of uniqueByVideo) {
+  // T6 cost gate — enrich burst + trigger book fill pause together; judge
+  // deboost (below) keeps firing so 품질 판정 stays testable while paused.
+  const v2Enabled = isV2AutoEnrichEnabled();
+  for (const [videoId, meta] of v2Enabled
+    ? uniqueByVideo
+    : new Map<string, { title: string | null; url: string }>()) {
     try {
       await enqueueEnrichVideo({
         videoId,
@@ -118,6 +124,7 @@ export async function enqueueRichSummaryForMandalaCards(params: {
     userId: params.userId,
     mandalaId: params.mandalaId,
     uniqueVideos: uniqueByVideo.size,
+    v2Enabled,
     enqueued,
     skipped,
   });
@@ -138,7 +145,7 @@ export async function enqueueRichSummaryForMandalaCards(params: {
       }
     );
   }
-  if (uniqueByVideo.size > 0) {
+  if (uniqueByVideo.size > 0 && v2Enabled) {
     await enqueueMandalaBookFill(
       { userId: params.userId, mandalaId: params.mandalaId, trigger: 'enrich-complete' },
       bookRefillEnqueueOptions(params.mandalaId)
