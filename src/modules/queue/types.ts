@@ -117,6 +117,14 @@ export interface EnrichVideoPayload {
    */
   withRichSummary?: boolean;
   userId?: string;
+  /**
+   * Book-chain relink (2026-07-12): the wizard trigger routes v2 through
+   * enrich-video (inline enrichRichSummary), which never carried mandalaId —
+   * so the book/note fill (enqueued on v2 completion) was orphaned once the
+   * standalone enrich-rich-summary job path fell out of use. Threading the
+   * id restores 카드 → v2 → 노트.
+   */
+  mandalaId?: string;
 }
 
 export interface BatchScanPayload {
