@@ -1030,6 +1030,7 @@ function AuthenticatedApp() {
                       <CardDiscoveryProgress mandalaId={effectiveMandalaId} isComplete={false} />
                     )}
                     <CardListView
+                      isFilling={isNewMandalaActive}
                       cards={search.isSearchActive ? search.results : cards.displayCards}
                       isLoading={
                         search.isSearchActive
