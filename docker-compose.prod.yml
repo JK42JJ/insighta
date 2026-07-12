@@ -515,7 +515,10 @@ services:
       # exceeded — embedding.ts will chunk into 2-3 batches, adding ~1-2s
       # latency. Acceptable for the candidate-pool expansion gain.
       # Rollback: set back to 30.
-      - V3_SEMANTIC_MAX_CANDIDATES=100
+      # T8b (matrix F5): 100-cap left 95/195 of the marathon harvest with NO
+      # embedding -> auto-dropped by the center gate (silent slaughter). 250
+      # covers the full post-dedup harvest (hardcap 180 + margin).
+      - V3_SEMANTIC_MAX_CANDIDATES=250
       # CP436 PR-Y0d (Issue #543) — bypass mandala-filter and trust YouTube's
       # search.list ranking. User feedback (2026-04-28): the 9-axis filter
       # actively degraded card quality vs the original YouTube-only path
@@ -620,7 +623,10 @@ services:
       # no longer finishes inside wizard review time -> MISS -> blank landing.
       # Re-admit only with an indexed pool-match design (P2 track, post-beta).
       - V3_TIER1_SOURCES=v2_promoted
-      - V3_SEMANTIC_MIN_COSINE=0.5
+      # T8b recall: 0.5 passed only 31/100 embedded on-topic marathon titles.
+      # Precision backstop = judge-deboost (post-placement). Next step 0.42
+      # only with judge deboost-rate evidence.
+      - V3_SEMANTIC_MIN_COSINE=0.45
       # BL-17 (2026-07-04) — fail-closed empty-title guard. SCRUB (YouTube ToS
       # 30d metadata wipe, is_active-agnostic) + /like zombie upsert leave ~691
       # live v2_promoted rows with title=''; their empty-string embedding
