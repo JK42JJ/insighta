@@ -21,6 +21,8 @@ interface ContextHeaderProps {
   /** Render title + initial badge as shimmer while mandala detail query is loading. */
   titleLoading?: boolean;
   totalCardCount: number;
+  /** Cards are still streaming in (wizard fill) — show a subtle spinner. */
+  isFilling?: boolean;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   selectedCardIds: string[];
@@ -34,6 +36,7 @@ export function ContextHeader({
   title,
   titleLoading,
   totalCardCount,
+  isFilling,
   viewMode,
   onViewModeChange,
   selectedCardIds,
@@ -65,8 +68,21 @@ export function ContextHeader({
           <h3 className="text-lg font-semibold leading-tight truncate">{title}</h3>
         )}
 
-        <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+        <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 flex items-center gap-1">
           {t('contextHeader.cardCount', '{{count}} cards', { count: totalCardCount })}
+          {isFilling && (
+            <span
+              className="inline-flex items-center gap-1 text-primary animate-fade-in"
+              role="status"
+              aria-live="polite"
+            >
+              <span
+                className="h-3 w-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin"
+                aria-hidden="true"
+              />
+              {t('contextHeader.filling', '채우는 중')}
+            </span>
+          )}
         </span>
 
         {selectedCardIds.length > 0 && (

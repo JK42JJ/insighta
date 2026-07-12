@@ -125,6 +125,8 @@ function useContainerColumns(ref: React.RefObject<HTMLElement>): number {
 interface CardListViewProps {
   cards: InsightCard[];
   isLoading?: boolean;
+  /** Wizard fill in progress — ContextHeader shows the streaming spinner. */
+  isFilling?: boolean;
   title: string;
   /** Render title as a shimmer placeholder while mandala detail query is loading. */
   titleLoading?: boolean;
@@ -185,6 +187,7 @@ interface CardListViewProps {
 export function CardListView({
   cards,
   isLoading,
+  isFilling,
   title,
   titleLoading,
   viewMode,
@@ -509,6 +512,7 @@ export function CardListView({
     <ContextHeader
       title={title}
       titleLoading={titleLoading}
+      isFilling={isFilling}
       totalCardCount={effectiveCards.length}
       viewMode={effectiveViewMode}
       onViewModeChange={onViewModeChange}
