@@ -12,6 +12,8 @@
 
 import { getPrismaClient } from '@/modules/database/client';
 import { enqueueEnrichVideo } from '@/modules/queue/handlers/enrich-video';
+import { enqueueMandalaBookFill } from '@/modules/queue/handlers/mandala-book-fill';
+import { bookRefillEnqueueOptions } from '@/modules/queue/handlers/book-refill-debounce';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'RichSummaryTrigger' });
@@ -117,6 +119,23 @@ export async function enqueueRichSummaryForMandalaCards(params: {
     enqueued,
     skipped,
   });
+
+  // Book-chain guarantee (2026-07-12): the per-v2 book enqueue (enrichment.ts)
+  // only fires when a video takes the FULL inline v2 path — cache-hit videos
+  // early-return before it, so an all-cached mandala would never get its note.
+  // Enqueue ONE debounced book fill here unconditionally (singletonKey per
+  // mandala; 120s startAfter lets the enrich burst land first). Non-fatal.
+  if (uniqueByVideo.size > 0) {
+    await enqueueMandalaBookFill(
+      { userId: params.userId, mandalaId: params.mandalaId, trigger: 'enrich-complete' },
+      bookRefillEnqueueOptions(params.mandalaId)
+    ).catch((err) => {
+      log.warn('trigger-level book fill enqueue failed (non-fatal)', {
+        mandalaId: params.mandalaId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
 
   return { enqueued, skipped };
 }
