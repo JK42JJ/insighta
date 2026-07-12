@@ -292,6 +292,11 @@ services:
       - V3_SEARCH_VIDEO_DURATION=medium
       - DISCOVER_SKIP_RULE_QUERIES=true
       - DISCOVER_PROGRESSIVE_FILL=true
+      # gA judge deboost (2026-07-12, James GO): Gemini Flash via gateway
+      # judges title-vs-cell-topic per cell, 240s after creation; unfit cards
+      # sink (relevance_pct=2), NEVER deleted (single-judge removal unsafe:
+      # 150-label benchmark false-blocks 19-22%). Remove line = off.
+      - JUDGE_DEBOOST_ENABLED=true
       # CP416 (2026-04-22) — restore the LoRA action-fill path. Without
       # this, generateMandala() called config.mandalaGen.model=undefined,
       # Ollama /api/generate returned 400, LoRA threw, and the Haiku

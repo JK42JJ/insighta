@@ -51,6 +51,7 @@ export const JOB_NAMES = {
    * overwrites book_json + bumps version. Worker = fillMandalaBook.
    */
   MANDALA_BOOK_FILL: 'mandala-book-fill',
+  JUDGE_DEBOOST: 'judge-deboost',
   /**
    * v2 translations (PR-T1) — bulk-translate a mandala's off-language v2 atoms
    * into the mandala language. Triggered on card-add panel CLOSE (one job per
@@ -103,6 +104,17 @@ export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
 // ============================================================================
 // Job Payloads
 // ============================================================================
+
+export interface JudgeDeboostPayload {
+  userId: string;
+  mandalaId: string;
+}
+
+/** judge-deboost: 1 retry, fail-open (deboost is an enhancement). */
+export const JUDGE_DEBOOST_RETRY_OPTIONS = {
+  retryLimit: 1,
+  retryDelay: 60,
+} as const;
 
 export interface EnrichVideoPayload {
   videoId: string;
