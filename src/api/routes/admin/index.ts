@@ -7,6 +7,7 @@ import { adminPromotionRoutes } from './promotions';
 import { adminAuditRoutes } from './audit';
 import { adminChannelBlocklistRoutes } from './channel-blocklist';
 import { adminBetaApplicationRoutes } from './beta-applications';
+import { adminPerformanceRoutes } from './performance';
 import { adminRedemptionRoutes, adminBulkRoutes } from './redemption';
 // Stripe scaffold moved to payments.legacy.ts on 2026-05-13 (superseded by
 // Lemon Squeezy under /api/v1/billing/*). See payments.legacy.ts header.
@@ -66,6 +67,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminQualityMetricsRoutes, { prefix: '/quality-metrics' });
   await fastify.register(adminSystemSettingsRoutes, { prefix: '/settings' });
   await fastify.register(adminDiscoverTracesRoutes, { prefix: '/discover-traces' });
+  await fastify.register(adminPerformanceRoutes, { prefix: '/performance' });
   // CP488 — Search Quality Overhaul: algorithm catalog + per-mandala override
   // + A/B comparison view (D11 measurement oracle).
   await fastify.register(adminSearchAlgorithmsRoutes, { prefix: '/search-algorithms' });
