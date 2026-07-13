@@ -1,12 +1,13 @@
 /**
- * judge-deboost worker — gA fitness deboost per mandala (2026-07-12).
+ * judge worker — unanimous 2-model card-fitness verdicts, LOG-ONLY (T10-R).
  *
- * Runs ONCE per mandala creation (singletonKey, startAfter 240s so the
- * quick-relevance backfill mostly lands first). For each cell it batches the
- * placed card TITLES through the gA judge (card-cell-judge.ts); unfit cards
- * are DEBOOSTED — relevance_pct forced low on user_video_states +
- * recommendation_cache — never deleted (single-judge removal is unsafe:
- * report benchmark false-blocks 19-22%). 관련도순 default sort sinks them.
+ * History: T10 wrote verdicts into relevance_pct (sentinel 2) — that field is
+ * the INPUT of tone-down/sorting/serving, so the write destroyed original
+ * scores with no history (13 mandalas / 141 rows, 2026-07-13 incident;
+ * restored via snapshot + re-score). Supervisor-mandated contract since:
+ * this worker performs NO WRITES. Verdicts are logged for calibration only.
+ * T11 re-use: judge output goes to a DEDICATED column (e.g. uvs.judge_unfit
+ * boolean) — never relevance_pct.
  *
  * Fail-open everywhere: judge/provider errors leave cards untouched.
  */
@@ -20,8 +21,6 @@ import { JOB_NAMES, JUDGE_DEBOOST_RETRY_OPTIONS, type JudgeDeboostPayload } from
 
 const log = logger.child({ module: 'judge-deboost' });
 
-/** Deboosted rank value — far below 추천(70)/핵심(80) and the NULL-recency band (≤60). */
-const UNFIT_RELEVANCE_PCT = 2;
 const JUDGE_DELAY_SEC = 240;
 
 export async function enqueueJudgeDeboost(payload: JudgeDeboostPayload): Promise<string | null> {
@@ -49,11 +48,9 @@ export async function handleJudgeDeboost(
 }
 
 /**
- * Judge core — reusable by the queue worker AND the admin re-judge endpoint
- * (2026-07-13 반려견 inversion: verdicts must be re-appliable after prompt/
- * stack changes). Idempotent both ways: unfit sinks to UNFIT_RELEVANCE_PCT;
- * a card judged FIT that is currently sunk RESTORES to NULL and the quick
- * relevance backfill re-scores it (its IS NULL filter makes this safe).
+ * Judge core — reusable by the queue worker AND the admin re-judge endpoint.
+ * LOG-ONLY (see module header): computes unanimous verdicts per cell and logs
+ * them; no persistence until the T11 dedicated-column design.
  */
 export async function judgeMandala(userId: string, mandalaId: string): Promise<void> {
   const prisma = getPrismaClient();
@@ -96,7 +93,6 @@ export async function judgeMandala(userId: string, mandalaId: string): Promise<v
 
   let judged = 0;
   let deboosted = 0;
-  let restored = 0;
   await Promise.allSettled(
     [...byCell.entries()].map(async ([cellIndex, cards]) => {
       const cellTopic = subjects[cellIndex]?.trim();
@@ -109,54 +105,18 @@ export async function judgeMandala(userId: string, mandalaId: string): Promise<v
       judged += verdicts.length;
       const unfitIds = new Set(verdicts.filter((v) => !v.fit).map((v) => v.videoId));
       const unfitRows = cards.filter((c) => unfitIds.has(c.videoId));
-      // Restore: judged FIT but currently sunk (earlier verdict) → NULL, so
-      // the quick relevance backfill (IS NULL filter) re-scores it.
-      const restoreRows = cards.filter(
-        (c) => !unfitIds.has(c.videoId) && c.relevancePct === UNFIT_RELEVANCE_PCT
-      );
-      if (unfitRows.length > 0) {
-        deboosted += unfitRows.length;
-        await prisma.userVideoState.updateMany({
-          where: { id: { in: unfitRows.map((c) => c.rowId) } },
-          data: { relevance_pct: UNFIT_RELEVANCE_PCT },
-        });
-        // Mirror on recommendation_cache so re-serves keep the sink.
-        await prisma.recommendation_cache
-          .updateMany({
-            where: { mandala_id: mandalaId, video_id: { in: unfitRows.map((c) => c.videoId) } },
-            data: { relevance_pct: UNFIT_RELEVANCE_PCT },
-          })
-          .catch(() => undefined);
-      }
-      if (restoreRows.length > 0) {
-        restored += restoreRows.length;
-        await prisma.userVideoState.updateMany({
-          where: { id: { in: restoreRows.map((c) => c.rowId) } },
-          data: { relevance_pct: null },
-        });
-        await prisma.recommendation_cache
-          .updateMany({
-            where: { mandala_id: mandalaId, video_id: { in: restoreRows.map((c) => c.videoId) } },
-            data: { relevance_pct: null },
-          })
-          .catch(() => undefined);
-      }
+      deboosted += unfitRows.length;
+      // T10-R (2026-07-13, supervisor-mandated landmine removal): NO WRITES.
+      // The T10 incident root: this handler OVERWROTE relevance_pct — a field
+      // that is the INPUT of tone-down, sorting and serving — destroying the
+      // original scores with no history (13 mandalas, 141 rows). Verdicts are
+      // now log-only. T11 re-use contract: judge output goes to a DEDICATED
+      // column (e.g. uvs.judge_unfit boolean); it must never write
+      // relevance_pct again.
       log.info(
-        `[judge] mandala=${mandalaId} cell=${cellIndex} unfit=${unfitRows.length} restored=${restoreRows.length} of=${cards.length}`
+        `[judge] mandala=${mandalaId} cell=${cellIndex} unfit=${unfitRows.length} of=${cards.length}`
       );
     })
   );
-  if (restored > 0) {
-    // Re-score restored cards (fire-and-forget; IS NULL filter = idempotent).
-    setImmediate(() => {
-      void import('@/modules/relevance/relevance-backfill-trigger')
-        .then(({ enqueueRelevanceBackfillForMandala }) =>
-          enqueueRelevanceBackfillForMandala({ userId, mandalaId, applyCutoff: false })
-        )
-        .catch(() => undefined);
-    });
-  }
-  log.info(
-    `[judge] mandala=${mandalaId} judged=${judged} deboosted=${deboosted} restored=${restored}`
-  );
+  log.info(`[judge] mandala=${mandalaId} judged=${judged} deboosted=${deboosted}`);
 }
