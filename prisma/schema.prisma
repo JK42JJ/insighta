@@ -458,6 +458,7 @@ model user_mandalas {
   videoStates      UserVideoState[]
   localCards       user_local_cards[]
   subscriptions    mandala_subscriptions[]
+  episodeAudio     mandala_episode_audio?
   activity_logs    mandala_activity_log[]
   contentEntities  content_entities[]
   sourceMappings   source_mandala_mappings[]
@@ -664,6 +665,26 @@ model mandala_books {
   v2_done       Int           @default(0)
   v2_pending    Int           @default(0)
   generated_at  DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  mandala       user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// Episode narration audio (ElevenLabs pre-produce, 2026-07-13) — one row per
+/// mandala. manifest_json maps player beat indices (index + text hash) to
+/// cached mp3 URLs + sentence timings. Re-rendered when book version moves;
+/// beat-incremental so retries never double-bill.
+model mandala_episode_audio {
+  mandala_id    String        @id @db.Uuid
+  /// pending | rendering | ready | failed
+  status        String        @default("pending") @db.VarChar(12)
+  /// House host: jun (기술·금융·실무) | seah (인문·언어·습관·라이프)
+  host          String        @default("jun") @db.VarChar(8)
+  book_version  Int           @default(0)
+  manifest_json Json?         @db.JsonB
+  error         String?
+  created_at    DateTime      @default(now()) @db.Timestamptz(6)
   updated_at    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
   mandala       user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
