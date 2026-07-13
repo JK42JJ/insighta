@@ -70,6 +70,7 @@
   }
   .device::after{content:""; position:absolute; inset:0; border-radius:42px; pointer-events:none;
     box-shadow:inset 0 0 0 1.5px var(--rim), inset 0 0 0 3px rgba(var(--shade),.06)}
+  @media (pointer:coarse){ .device{max-height:none} } /* 세로 여백 금지 — 스크린이 흡수 */
   body.standalone{padding:0}
   body.standalone .device{max-width:none; max-height:none; border-radius:0;
     padding:calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px)}
@@ -257,9 +258,13 @@
   /* 터치 추종 음영 — 눈금 폐기, 잉크 7% 스팟이 손가락과 1:1로 돎 */
   .wheel .shade{position:absolute; inset:0; border-radius:50%; pointer-events:none; opacity:0;
     transition:opacity .3s var(--soft); will-change:transform}
-  .wheel .shade::before{content:""; position:absolute; left:50%; top:6%; width:40%; height:32%;
+  .wheel .shade::before{content:""; position:absolute; left:50%; top:4%; width:46%; height:36%;
     transform:translateX(-50%); border-radius:50%;
-    background:radial-gradient(ellipse at center, rgba(var(--shade),.10), rgba(var(--shade),.045) 55%, transparent 75%)}
+    background:radial-gradient(ellipse at center, rgba(var(--shade),.16), rgba(var(--shade),.07) 55%, transparent 78%)}
+  /* 반대편 보조 하이라이트 — 회전 인지 보강 */
+  .wheel .shade::after{content:""; position:absolute; left:50%; bottom:4%; width:40%; height:30%;
+    transform:translateX(-50%); border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(255,255,255,.5), rgba(255,255,255,.18) 55%, transparent 78%)}
   .wheel.touching .shade,.wheel.demo .shade{opacity:1}
   /* 파인 센터 웰 + 평평한 허브 (볼록·광택점 금지) */
   .wheel .well{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
@@ -309,9 +314,10 @@
   body.stage .batt .tip{background:rgba(255,255,255,.45)}
   /* 클립 = 커버 전체화면, 더블탭 = 컨테인 (G1) */
   body.stage .clipbox{position:absolute; inset:0; margin:0; aspect-ratio:auto; border-radius:0; box-shadow:none; background:#000}
+  /* G1 (실기기 판정): 기본 = 컨테인(전체 보임), 더블탭 = 커버(꽉 채움) */
   body.stage .clipwrap{position:absolute; inset:auto; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:100vw; height:calc(100vw * 9 / 16)}
-  body.stage .clipbox.contain .clipwrap{height:100dvh; width:calc(100dvh * 16 / 9)}
+    height:100dvh; width:calc(100dvh * 16 / 9); max-width:100vw; max-height:100dvh}
+  body.stage .clipbox.cover .clipwrap{width:100vw; height:calc(100vw * 9 / 16); max-width:none; max-height:none}
   /* 메타 캡슐 — 4초 후 페이드 (A metaAway) */
   body.stage .credit{position:absolute; z-index:5; left:16px; bottom:calc(var(--sab) + 18px); margin:0; max-width:60vw;
     background:rgba(8,9,14,.55); color:#F2F3F8; border-radius:8px; padding:8px 12px;
@@ -337,16 +343,18 @@
   body.stage .player-state{position:absolute; inset:0}
 
   /* ---- 게임핸들 — §2.4 A 기록 원형 ---- */
-  #stick{display:none; position:fixed; left:12vw; bottom:22px; width:84px; height:84px; border-radius:50%;
+  #stick{display:none; position:fixed; right:12vw; left:auto; bottom:22px; width:84px; height:84px; border-radius:50%;
     background:radial-gradient(circle, rgba(255,255,255,.16) 55%, rgba(255,255,255,.04) 78%, transparent 100%);
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
     z-index:40; touch-action:none; user-select:none; -webkit-user-select:none;
-    opacity:0; transition:opacity .3s var(--soft)} /* 라벨·외곽선 없음 */
+    opacity:.18; transition:opacity .3s var(--soft)} /* 옅게 상시 존재 — 완전 투명은 발견성 실패 (실기기 판정) */
   body.stage #stick{display:block}
   #stick.on,#stick.hint{opacity:1}
+  /* 노브 = 조그 중앙 버튼과 동일한 감귤 폼팩터 (James) */
   #stick .knob{position:absolute; left:50%; top:50%; width:44px; height:44px; border-radius:50%;
-    transform:translate(-50%,-50%); background:rgba(255,255,255,.55);
-    box-shadow:inset 0 1px 2px rgba(255,255,255,.8), 0 2px 6px rgba(0,0,0,.3);
+    transform:translate(-50%,-50%);
+    background:linear-gradient(178deg, #E87B4C 0%, #E0703F 42%, #CE5F30 100%);
+    box-shadow:inset 0 1px 1.5px rgba(255,255,255,.3), inset 0 -1.5px 3px rgba(0,0,0,.2), 0 2px 6px rgba(0,0,0,.35);
     transition:transform .18s var(--soft)}
   #stick.rot{box-shadow:0 0 18px rgba(224,112,63,.5)} /* 회전모드 = 소프트 글로우 */
 
@@ -1041,7 +1049,7 @@
     return function(){
       var now=Date.now();
       if(document.body.classList.contains('stage')&&now-lastTap<300){ // G1 더블탭
-        clipbox.classList.toggle('contain'); lastTap=0; return;
+        clipbox.classList.toggle('cover'); lastTap=0; return;
       }
       lastTap=now;
       setTimeout(function(){ if(lastTap&&Date.now()-lastTap>=290){ lastTap=0;
