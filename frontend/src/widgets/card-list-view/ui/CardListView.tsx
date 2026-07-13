@@ -11,7 +11,15 @@ import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { GraphView } from '@/components/graph/GraphView';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
-import { LayoutGrid, Grid3X3, Plus, GripVertical, ArrowDownWideNarrow, Eye } from 'lucide-react';
+import {
+  LayoutGrid,
+  Grid3X3,
+  Plus,
+  GripVertical,
+  ArrowDownWideNarrow,
+  Eye,
+  ChevronDown,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -25,6 +33,10 @@ import { ContextHeader, SORT_OPTIONS, type SortMode } from './ContextHeader';
 import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
 
 // P3 Stage 1 (CP513) — global (cross-mandala) sort persistence keys.
+
+/** uvs.relevance_pct value the judge writes when it sinks a card (judge-deboost.ts UNFIT_RELEVANCE_PCT). */
+const DEBOOSTED_RELEVANCE_PCT = 2;
+
 const GLOBAL_SORT_KEY = 'insighta:cardSortMode';
 const GLOBAL_SORT_TOAST_KEY = 'insighta:cardSortMode:toastShown';
 
@@ -450,6 +462,21 @@ export function CardListView({
     }
   }, [effectiveCards, sortMode, relevanceRank]);
 
+  // Deboost fold (James-approved 2026-07-13, YouTube-fold as reference only):
+  // judge-sunk cards (relevancePct === DEBOOSTED_RELEVANCE_PCT) leave the main
+  // grid and collapse behind a centered pill — inflow stays visible on demand,
+  // felt garbage goes to zero. Grid mode only (list modes already sink them
+  // via the relevance sort).
+  const [showDeboosted, setShowDeboosted] = useState(false);
+  const mainCards = useMemo(
+    () => sortedCards.filter((c) => c.relevancePct !== DEBOOSTED_RELEVANCE_PCT),
+    [sortedCards]
+  );
+  const deboostedCards = useMemo(
+    () => sortedCards.filter((c) => c.relevancePct === DEBOOSTED_RELEVANCE_PCT),
+    [sortedCards]
+  );
+
   // Sector card counts (0-7)
   const sectorCounts = useMemo(() => {
     if (!sectorSubjects || !cardsByCell) return [];
@@ -708,7 +735,7 @@ export function CardListView({
             {sectorPillsElement}
           </div>
           <CardList
-            cards={sortedCards}
+            cards={mainCards}
             isLoading={isLoading}
             title={title}
             gridColumns={gridColumns}
@@ -726,6 +753,50 @@ export function CardListView({
             failedEnrichCardIds={failedEnrichCardIds}
             onRetryEnrich={onRetryEnrich}
           />
+          {deboostedCards.length > 0 && (
+            <div className="pb-6">
+              <div className="flex justify-center py-3">
+                <button
+                  onClick={() => setShowDeboosted((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-border bg-card text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                >
+                  {showDeboosted
+                    ? t('cards.deboostedHide', '간략히')
+                    : t('cards.deboostedShow', '관련성 낮음 {{count}}장 보기', {
+                        count: deboostedCards.length,
+                      })}
+                  <ChevronDown
+                    className={cn(
+                      'h-3.5 w-3.5 transition-transform',
+                      showDeboosted && 'rotate-180'
+                    )}
+                  />
+                </button>
+              </div>
+              {showDeboosted && (
+                <div className="opacity-60 animate-fade-in">
+                  <CardList
+                    cards={deboostedCards}
+                    isLoading={false}
+                    title={title}
+                    gridColumns={gridColumns}
+                    compact={gridColumns >= COMPACT_THRESHOLD}
+                    sectorSubjects={sectorSubjects}
+                    showChannel={selectedCellIndex != null && selectedCellIndex >= 0}
+                    onCardClick={onCardClick ? (card) => onCardClick(card, sortedCards) : undefined}
+                    onCardDragStart={onCardDragStart}
+                    onMultiCardDragStart={onMultiCardDragStart}
+                    onSaveNote={onSaveNote}
+                    onDeleteCards={onDeleteCards}
+                    onSelectionChange={handleSelectionChange}
+                    enrichingCardIds={enrichingCardIds}
+                    failedEnrichCardIds={failedEnrichCardIds}
+                    onRetryEnrich={onRetryEnrich}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );

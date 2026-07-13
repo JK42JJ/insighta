@@ -48,69 +48,71 @@ export function ContextHeader({
   const titleInitial = title.charAt(0).toUpperCase();
 
   return (
-    <div data-card-chrome className="flex items-center justify-between mb-1 pr-2">
-      {/* Left: sector badge + title + count + selection */}
-      <div className="flex items-center gap-2 min-w-0">
-        {titleLoading ? (
-          <div
-            className="w-6 h-6 rounded bg-foreground/[0.06] animate-pulse shrink-0"
+    <div data-card-chrome className="mb-1">
+      {/* Fill indicator (James 2026-07-13): thin indeterminate bar under the
+          title row — replaces the arc spinner ("아마추어" feedback). Sits in
+          normal flow so nothing overlaps; collapses when idle. */}
+      {isFilling && (
+        <div
+          className="relative h-[2px] w-full overflow-hidden rounded-full bg-primary/10 mb-1 animate-fade-in"
+          role="progressbar"
+          aria-label={t('contextHeader.filling', '채우는 중')}
+        >
+          <span
+            className="absolute inset-y-0 left-0 w-1/4 rounded-full bg-primary/70 animate-progress-slide motion-reduce:animate-pulse motion-reduce:w-full"
             aria-hidden="true"
           />
-        ) : (
-          <div className="flex items-center justify-center w-6 h-6 rounded bg-primary/10 text-primary text-[11px] font-semibold shrink-0">
-            {titleInitial}
-          </div>
-        )}
-
-        {titleLoading ? (
-          <div className="h-5 w-32 rounded bg-foreground/[0.06] animate-pulse" aria-hidden="true" />
-        ) : (
-          <h3 className="text-lg font-semibold leading-tight truncate">{title}</h3>
-        )}
-
-        <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 flex items-center gap-1">
-          {t('contextHeader.cardCount', '{{count}} cards', { count: totalCardCount })}
-          {isFilling && (
-            <span
-              className="relative inline-block h-3.5 w-3.5 animate-fade-in"
-              role="status"
-              aria-label={t('contextHeader.filling', '채우는 중')}
-            >
-              {/* Dimensional spinner (James 2026-07-12): two counter-rotating
-                  arcs at different depths — subtle 3D feel, no text. */}
-              <span
-                className="absolute inset-0 rounded-full border-[1.5px] border-primary/70 border-t-transparent border-l-transparent animate-spin [animation-duration:0.9s]"
-                aria-hidden="true"
-              />
-              <span
-                className="absolute inset-[3px] rounded-full border-[1.5px] border-primary/30 border-b-transparent border-r-transparent animate-spin [animation-direction:reverse] [animation-duration:1.5s]"
-                aria-hidden="true"
-              />
-            </span>
+        </div>
+      )}
+      <div className="flex items-center justify-between pr-2">
+        {/* Left: sector badge + title + count + selection */}
+        <div className="flex items-center gap-2 min-w-0">
+          {titleLoading ? (
+            <div
+              className="w-6 h-6 rounded bg-foreground/[0.06] animate-pulse shrink-0"
+              aria-hidden="true"
+            />
+          ) : (
+            <div className="flex items-center justify-center w-6 h-6 rounded bg-primary/10 text-primary text-[11px] font-semibold shrink-0">
+              {titleInitial}
+            </div>
           )}
-        </span>
 
-        {selectedCardIds.length > 0 && (
-          <div className="flex items-center gap-1 animate-fade-in shrink-0">
-            <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">
-              {t('cards.selected', { count: selectedCardIds.length })}
-            </span>
-            <button
-              onClick={onDeleteSelected}
-              className="p-0.5 rounded text-destructive hover:bg-destructive/10 transition-colors"
-              title={t('cards.deleteSelected')}
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
-        )}
-      </div>
+          {titleLoading ? (
+            <div
+              className="h-5 w-32 rounded bg-foreground/[0.06] animate-pulse"
+              aria-hidden="true"
+            />
+          ) : (
+            <h3 className="text-lg font-semibold leading-tight truncate">{title}</h3>
+          )}
 
-      {/* Right: slider + drag hint + sort + view */}
-      <div className="flex items-center gap-1.5 shrink-0">
-        {sliderElement}
-        {trailingAction}
-        <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
+          <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+            {t('contextHeader.cardCount', '{{count}} cards', { count: totalCardCount })}
+          </span>
+
+          {selectedCardIds.length > 0 && (
+            <div className="flex items-center gap-1 animate-fade-in shrink-0">
+              <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">
+                {t('cards.selected', { count: selectedCardIds.length })}
+              </span>
+              <button
+                onClick={onDeleteSelected}
+                className="p-0.5 rounded text-destructive hover:bg-destructive/10 transition-colors"
+                title={t('cards.deleteSelected')}
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right: slider + drag hint + sort + view */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {sliderElement}
+          {trailingAction}
+          <ViewSwitcher value={viewMode} onChange={onViewModeChange} />
+        </div>
       </div>
     </div>
   );
