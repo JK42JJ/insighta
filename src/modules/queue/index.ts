@@ -75,4 +75,13 @@ export async function initJobQueue(): Promise<void> {
   await registerSearchMetricsRollupWorker();
 
   logger.info('Job queue fully initialized (pg-boss + 16 workers)');
+
+  // Performance-monitor PR1 — boot self-report (fire-and-forget, flag-gated
+  // no-op when CONFIG_CHANGE_EVENTS_ENABLED is unset). Records git_sha + flag
+  // fingerprint diff as a timeline event; covers deploys, pin swaps, flag flips.
+  setImmediate(() => {
+    void import('@/modules/observability/config-change-events')
+      .then(({ reportBootConfigEvent }) => reportBootConfigEvent())
+      .catch(() => undefined);
+  });
 }
