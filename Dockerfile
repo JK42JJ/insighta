@@ -91,6 +91,11 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${API_PORT:-3000}/health || exit 1
 
+# Performance-monitor PR1 — bake the build SHA so the API can self-report
+# config-change events even when the image is pin-swapped outside deploy.yml.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
+
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Default command (API server)
