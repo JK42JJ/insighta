@@ -14,13 +14,16 @@
 <link rel="apple-touch-icon" href="/mobile/icon-180.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/mobile/icon-192.png">
 <style>
-  /* ============ Insighta Player — Paper Edition v3 (실재생) ============
-     풀-앱 레이아웃(페이지 크롬 제거) · 컬러웨이=MENU · 노트 실재생
-     (내레이션=브라우저 TTS 임시, 클립=YouTube 구간) · 휠 드래그=구간 조그 */
+  /* ============ Insighta Player — 설계 명세 v1/v2 구현 ============
+     SSOT: docs/design/mobile-player-spec-2026-07-13.md
+     §1.1 휠 재제작 · §1.1a 조그 물성(J1~J8) · §1.1b 타이포 · §1.2 홈 상태머신
+     §2 가로 무대(커버 크롭·헤어라인·A기록 게임핸들) · §6 G1~G4/C1~C7 · §7 M1~M4 · §8 S1~S4 */
   :root{
     --studio-hi:#F5F2EC; --studio-lo:#E6E1D6; --ink:#2C2925; --ink-2:#837D72; --hair:#DCD6CA;
     --paper:#F6F2E7; --paper-ink:#3B372F; --paper-sub:#8F887A;
-    --soft:cubic-bezier(.22,.9,.3,1); --spring:cubic-bezier(.34,1.4,.64,1);
+    --butter:#F5D48A; --green:#34C759; --red:#FF3B30;
+    /* S3: 물성 공통 토큰 — 전 표면 동일 계열 */
+    --soft:cubic-bezier(.22,.9,.3,1); --spring:cubic-bezier(.34,1.4,.64,1); --snap:120ms;
     --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
   }
   *{box-sizing:border-box}
@@ -32,28 +35,28 @@
     font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif; line-height:1.6;
     display:flex; align-items:center; justify-content:center;
     padding:calc(var(--sat) + 8px) 10px calc(var(--sab) + 8px);
-    -webkit-tap-highlight-color:transparent; user-select:none;
+    -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none;
   }
   .num{font-variant-numeric:tabular-nums}
 
   /* ---- 컬러웨이 ---- */
   .th-cream{
     --body-hi:#FBFAF6; --body-mid:#F1EEE6; --body-lo:#DDD7C9; --rim:#FFFFFF;
-    --wheel-hi:#FDFCF9; --wheel-mid:#F2EFE7; --wheel-lo:#D9D3C4;
-    --acc:#E0703F; --acc-hi:#EC8B5C; --acc-lo:#C6552A; --acc-ink:#7A2A0C; --shade:44,41,37;
+    --wheel-a:#F7F5EF; --wheel-b:#EFECE4; --wheel-c:#E4E0D5;
+    --acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --shade:44,41,37;
   }
   .th-sage{
     --body-hi:#DCE4D5; --body-mid:#BECBB3; --body-lo:#93A788; --rim:#EFF4EA;
-    --wheel-hi:#EAF0E4; --wheel-mid:#CFDBC5; --wheel-lo:#A3B797;
-    --acc:#F0EBDD; --acc-hi:#FBF8EF; --acc-lo:#CFC8B4; --acc-ink:#6B6450; --shade:52,66,46;
+    --wheel-a:#EDF2E8; --wheel-b:#DDE6D5; --wheel-c:#C8D5BC;
+    --acc:#F0EBDD; --acc-hi:#F6F2E7; --acc-lo:#DCD5C2; --acc-ink:#6B6450; --shade:52,66,46;
   }
   .th-mist{
     --body-hi:#DCE6EE; --body-mid:#BECDD9; --body-lo:#90A7B8; --rim:#EFF4F8;
-    --wheel-hi:#E9F0F5; --wheel-mid:#CBD9E2; --wheel-lo:#9FB5C4;
-    --acc:#ECBD6B; --acc-hi:#F5D9A8; --acc-lo:#C8963C; --acc-ink:#6E4E14; --shade:44,60,72;
+    --wheel-a:#ECF1F5; --wheel-b:#DAE3EA; --wheel-c:#C3D1DB;
+    --acc:#ECBD6B; --acc-hi:#F1C87F; --acc-lo:#D9A551; --acc-ink:#6E4E14; --shade:44,60,72;
   }
 
-  /* ---- 디바이스: 뷰포트를 채우는 풀-앱 ---- */
+  /* ---- 디바이스 ---- */
   .device{
     width:100%; max-width:420px; height:100%; max-height:900px;
     border-radius:42px; padding:16px 15px 18px; position:relative;
@@ -63,19 +66,20 @@
     box-shadow:
       inset 0 2.5px 2px rgba(255,255,255,.95),
       inset 0 -5px 10px rgba(var(--shade),.30),
-      inset 2.5px 0 5px rgba(255,255,255,.45),
-      inset -2.5px 0 6px rgba(var(--shade),.14),
       0 24px 50px -22px rgba(var(--shade),.5);
   }
   .device::after{content:""; position:absolute; inset:0; border-radius:42px; pointer-events:none;
     box-shadow:inset 0 0 0 1.5px var(--rim), inset 0 0 0 3px rgba(var(--shade),.06)}
+  body.standalone{padding:0}
+  body.standalone .device{max-width:none; max-height:none; border-radius:0;
+    padding:calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px)}
+  body.standalone .device::after{border-radius:0}
 
   .epaper{
     border-radius:24px; overflow:hidden; position:relative; flex:1; min-height:0;
     background:linear-gradient(175deg,#FAF6EC 0%,var(--paper) 60%,#EDE8DA 100%);
     box-shadow:
       inset 0 4px 9px rgba(94,86,72,.30),
-      inset 0 -1px 2px rgba(255,255,255,.6),
       inset 0 0 0 1.5px rgba(94,86,72,.18),
       0 1.5px 0 rgba(255,255,255,.9);
     color:var(--paper-ink);
@@ -83,15 +87,18 @@
   .scr{position:absolute; inset:0; display:flex; flex-direction:column; padding:15px 16px 14px;
     opacity:0; transform:translateX(14px); transition:opacity .32s var(--soft), transform .32s var(--soft); pointer-events:none}
   .scr.active{opacity:1; transform:none; pointer-events:auto}
+
+  /* 상태줄 — §1.1b: 10px / .14em */
   .top{display:flex; justify-content:space-between; align-items:center; gap:8px;
-    font-size:9.5px; letter-spacing:.14em; color:var(--paper-sub); font-weight:700; flex:none}
+    font-size:10px; letter-spacing:.14em; color:var(--paper-sub); font-weight:700; flex:none}
   .top .tt{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
-  .batt{display:inline-flex; align-items:center; gap:2.5px; flex:none}
-  .batt .case{width:20px; height:10px; border-radius:3px; border:1px solid #A99F8C; padding:1.5px; position:relative; overflow:visible}
-  .batt .case i{display:block; height:100%; border-radius:1.5px; background:#34C759; transition:width .8s var(--soft), background .6s; width:20%}
-  .batt .tip{width:1.8px; height:4px; border-radius:1px; background:#A99F8C}
-  /* A rule: charging bolt shows only while actually streaming */
-  .batt .bolt{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); opacity:0; transition:opacity .35s; z-index:2}
+  /* 배터리 — §0-5: 케이스 28×13 + 볼트 6×9 (비례 고정) */
+  .batt{display:inline-flex; align-items:center; gap:3px; flex:none}
+  .batt .case{width:28px; height:13px; border-radius:3.5px; border:1.2px solid #A99F8C; padding:2px; position:relative}
+  .batt .case i{display:block; height:100%; border-radius:1.5px; background:var(--green);
+    transition:width .8s var(--soft), background .6s; width:20%}
+  .batt .tip{width:2px; height:5px; border-radius:1px; background:#A99F8C}
+  .batt .bolt{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); opacity:0; transition:opacity .35s}
   .batt.chg .bolt{opacity:1}
 
   /* ---- 로그인 ---- */
@@ -103,16 +110,21 @@
     margin-top:18px; display:flex; align-items:center; gap:9px; border:none; cursor:pointer; font-family:inherit;
     background:#fff; border-radius:99px; padding:12px 19px; font-size:13px; font-weight:750; color:#3B372F;
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.18), 0 3px 8px -3px rgba(94,86,72,.45);
-    transition:transform .2s var(--spring); touch-action:manipulation;
+    transition:transform var(--snap) var(--spring); touch-action:manipulation;
   }
   .gbtn:active{transform:scale(.95)}
+  /* M1: 샘플 진입 */
+  .sample-btn{margin-top:12px; border:none; background:none; font-family:inherit; cursor:pointer;
+    font-size:11.5px; font-weight:700; color:var(--paper-sub); text-decoration:underline; text-underline-offset:3px;
+    padding:6px 10px; touch-action:manipulation; transition:transform var(--snap) var(--spring)}
+  .sample-btn:active{transform:scale(.95)}
 
-  /* ---- 홈 ---- */
+  /* ---- 홈 — §1.2 ---- */
   .goal-pill{
     margin-top:11px; display:flex; align-items:center; justify-content:center; gap:8px;
     border:none; cursor:pointer; font-family:inherit; width:100%; flex:none;
     background:rgba(255,255,255,.6); border-radius:12px; padding:11px; font-size:12px; font-weight:750; color:var(--paper-ink);
-    box-shadow:inset 0 0 0 1.5px var(--acc); transition:transform .2s var(--spring); touch-action:manipulation;
+    box-shadow:inset 0 0 0 1.5px var(--acc); transition:transform var(--snap) var(--spring); touch-action:manipulation;
   }
   .goal-pill:active{transform:scale(.97)}
   .gp-plus{width:13px; height:13px; border-radius:50%; background:var(--acc); position:relative; flex:none}
@@ -120,22 +132,33 @@
   .gp-plus::before{width:7px; height:1.7px} .gp-plus::after{width:1.7px; height:7px}
   .rows{margin-top:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; min-height:0; padding-bottom:4px}
   .row{display:flex; gap:10px; align-items:center; background:rgba(255,255,255,.55); flex:none;
-    box-shadow:inset 0 0 0 1px rgba(94,86,72,.10), 0 2px 5px -3px rgba(94,86,72,.35); border-radius:12px; padding:9px 10px;
-    transition:transform .2s var(--spring), box-shadow .2s; cursor:pointer; touch-action:manipulation}
+    box-shadow:inset 0 0 0 1px rgba(94,86,72,.10); border-radius:12px; padding:9px 10px;
+    transition:transform var(--snap) var(--spring), box-shadow var(--snap) var(--soft); cursor:pointer; touch-action:manipulation}
   .row.sel{box-shadow:inset 0 0 0 1.5px var(--acc), 0 3px 8px -3px rgba(94,86,72,.4)}
   .row:active{transform:scale(.98)}
-  .row .thumb{width:36px; height:36px; border-radius:9px; flex:none; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06), 0 2px 4px -2px rgba(0,0,0,.4)}
+  .row.making{opacity:.55; cursor:default; filter:saturate(.15)}
+  .row.making:active{transform:none}
+  /* M2: 타이포 자켓 — 듀오톤 + 대형 이니셜 */
+  .jk{width:44px; height:44px; border-radius:10px; flex:none; position:relative; overflow:hidden;
+    display:grid; place-items:center;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.06), 0 2px 5px -2px rgba(0,0,0,.4)}
+  .jk b{font-size:21px; font-weight:800; color:rgba(255,255,255,.9); letter-spacing:-.02em;
+    text-shadow:0 1px 3px rgba(0,0,0,.22); line-height:1}
+  .jk .prog{position:absolute; left:0; right:0; bottom:0; height:3px; background:rgba(0,0,0,.18)}
+  .jk .prog i{display:block; height:100%; background:rgba(255,255,255,.85)}
+  .jk .prog.full i{background:var(--green)}
   .row .m{min-width:0; flex:1}
-  .row .a{font-size:11.5px; font-weight:750; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block}
-  .row .b{font-size:8.5px; color:var(--paper-sub); font-weight:600}
-  .row-empty{font-size:10px; color:var(--paper-sub); font-weight:600; text-align:center; padding:22px 0}
+  .row .a{font-size:13px; font-weight:750; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; letter-spacing:-.01em}
+  .row .b{font-size:10px; color:var(--paper-sub); font-weight:600; display:flex; align-items:center; gap:5px; margin-top:2px}
+  .dotnew{width:6px; height:6px; border-radius:50%; background:var(--acc); flex:none}
+  .row-empty{font-size:11px; color:var(--paper-sub); font-weight:600; text-align:center; padding:22px 8px; line-height:1.8}
 
-  /* ---- MENU 화면 (컬러웨이·공유·설치·로그아웃) ---- */
+  /* ---- MENU ---- */
   .menu-list{margin-top:12px; display:flex; flex-direction:column; gap:8px}
   .mrow{display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.55); border:none; width:100%;
     font-family:inherit; text-align:left; cursor:pointer; color:var(--paper-ink);
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.10); border-radius:12px; padding:11px 12px; font-size:12px; font-weight:750;
-    transition:transform .2s var(--spring); touch-action:manipulation}
+    transition:transform var(--snap) var(--spring); touch-action:manipulation}
   .mrow:active{transform:scale(.98)}
   .mrow .sub{margin-left:auto; font-size:9px; color:var(--paper-sub); font-weight:600}
   .ways{display:flex; gap:8px; margin-left:auto}
@@ -147,40 +170,58 @@
   .way-mist{background:radial-gradient(circle at 50% 32%, #D7E2EA 30%, #90A7B8)}
   .menu-note{font-size:9px; color:var(--paper-sub); font-weight:600; text-align:center; margin-top:auto; padding-top:8px}
 
-  /* ---- 플레이어 ---- */
+  /* ---- 플레이어 (세로) ---- */
   .clipbox{border-radius:12px; overflow:hidden; position:relative; aspect-ratio:16/9; flex:none; margin-top:10px;
-    background:linear-gradient(150deg,#8A93C4,#4E5B95 62%,#39406B);
-    box-shadow:0 1px 0 rgba(255,255,255,.7), inset 0 0 0 1px rgba(94,86,72,.12), 0 5px 12px -6px rgba(94,86,72,.45)}
-  .clipbox iframe,.clipbox #yt{position:absolute; inset:0; width:100%; height:100%; border:0}
-  .clipbox .guard{position:absolute; inset:0; z-index:2}
-  .clipbox .chip{position:absolute; top:8px; left:8px; z-index:3; font-size:7.5px; font-weight:700; letter-spacing:.08em;
-    color:#fff; background:rgba(0,0,0,.35); border-radius:99px; padding:2.5px 8px; pointer-events:none}
-  .clipbox.narr .chip{display:none}
-  .clipbox.narr::after{content:"내레이션"; position:absolute; inset:auto 8px 8px auto; font-size:7.5px; font-weight:700;
-    letter-spacing:.08em; color:#fff; background:rgba(0,0,0,.25); border-radius:99px; padding:2.5px 8px}
-  .readbox{flex:1; min-height:0; overflow-y:auto; margin-top:11px; font-size:12.5px; line-height:1.85; padding-right:2px;
-    -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 12px,#000 calc(100% - 18px),transparent 100%);
-            mask-image:linear-gradient(180deg,transparent 0,#000 12px,#000 calc(100% - 18px),transparent 100%)}
-  .readbox p{margin:0 0 8px}
-  .readbox .sent{border-radius:7px; padding:1px 3px; margin:0 -1px; transition:background .35s var(--soft), color .35s}
-  /* Highlight = fixed butter marker + ink text (A-rule): must stay readable
-     in every colorway — accent-colored highlight broke sage/mist. */
-  .readbox .sent.on{background:#F5D48A; color:#3B372F; font-weight:700}
-  .readbox .sec-title{font-size:9.5px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:2px 0 6px}
+    background:#20242E;
+    box-shadow:inset 0 0 0 1px rgba(94,86,72,.12), 0 5px 12px -6px rgba(94,86,72,.45)}
+  .clipwrap{position:absolute; inset:0}
+  .clipwrap iframe,#yt{position:absolute; inset:0; width:100%; height:100%; border:0}
+  .clipbox .guard{position:absolute; inset:0; z-index:3}
+  /* S1: 원본 크레딧 — 상시 표기 */
+  .credit{flex:none; margin-top:8px; font-size:10px; color:var(--paper-sub); font-weight:600;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .credit b{color:var(--paper-ink); font-weight:700}
+  /* read-along — §1.1b: 세로 17px/1.85 고정 */
+  .readbox{flex:1; min-height:0; overflow-y:auto; margin-top:10px; font-size:17px; line-height:1.85;
+    letter-spacing:-.005em; padding-right:2px;
+    -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14px,#000 calc(100% - 22px),transparent 100%);
+            mask-image:linear-gradient(180deg,transparent 0,#000 14px,#000 calc(100% - 22px),transparent 100%)}
+  .readbox p{margin:0 0 10px}
+  .readbox .sent{border-radius:7px; padding:1px 4px; margin:0 -2px;
+    transition:background-color .35s var(--soft), color .35s var(--soft)}
+  .readbox .sent.on{background:var(--butter); color:#3B372F}
+  .readbox .sec-title{font-size:11px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:2px 0 8px}
+  /* M3: 챕터 타이틀 카드 */
+  .chcard{position:absolute; inset:0; z-index:6; display:none; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; background:linear-gradient(175deg,#FAF6EC,#F0EBDD); gap:8px}
+  .chcard.show{display:flex}
+  .chcard .n{font-size:11px; letter-spacing:.3em; font-weight:800; color:var(--acc-lo)}
+  .chcard .t{font-size:19px; font-weight:750; letter-spacing:-.01em; padding:0 24px; line-height:1.5}
   .ptrack{flex:none; margin-top:10px}
   .chapters{display:flex; gap:4px}
   .chapters i{flex:1; height:4px; border-radius:2.5px; background:#DED7C6; transition:background .4s}
   .chapters i.done{background:var(--acc-lo)}
   .chapters i.now{background:var(--acc)}
-  .ptimes{display:flex; justify-content:space-between; font-size:8.5px; color:var(--paper-sub); margin-top:6px; font-weight:600}
-  .player-state{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:8px}
-  .player-state .big{font-size:13.5px; font-weight:750}
-  .player-state .sm{font-size:9.5px; color:var(--paper-sub); font-weight:600; line-height:1.7}
+  .ptimes{display:flex; justify-content:space-between; gap:10px; font-size:10px; color:var(--paper-sub); margin-top:6px; font-weight:600}
+  .ptimes #pCh{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .player-state{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:9px; padding:0 14px}
+  .player-state .big{font-size:14px; font-weight:750}
+  .player-state .sm{font-size:11px; color:var(--paper-sub); font-weight:600; line-height:1.8}
   .pulse{width:13px; height:13px; border-radius:50%; background:var(--acc); animation:pu 1.1s var(--soft) infinite}
   @keyframes pu{0%,100%{transform:scale(.7); opacity:.5}50%{transform:scale(1.15); opacity:1}}
+  /* C3: 완결 — 대형 그린 배터리 */
+  .finbatt{width:64px; height:30px; border:2.5px solid var(--green); border-radius:7px; padding:4px; position:relative; display:block}
+  .finbatt::after{content:""; position:absolute; right:-7px; top:9px; width:4.5px; height:12px; background:var(--green); border-radius:0 2px 2px 0}
+  .finbatt i{display:block; height:100%; width:100%; background:var(--green); border-radius:2.5px}
+  .fin-next{margin-top:14px; border:none; background:rgba(255,255,255,.6); font-family:inherit; cursor:pointer;
+    border-radius:11px; padding:10px 14px; font-size:11.5px; font-weight:700; color:var(--paper-ink);
+    box-shadow:inset 0 0 0 1px rgba(94,86,72,.14); touch-action:manipulation; max-width:100%;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:transform var(--snap) var(--spring)}
+  .fin-next:active{transform:scale(.96)}
+  .fin-next b{font-weight:750}
 
-  /* ---- 목표 입력 오버레이 ---- */
-  .goal-ov{position:absolute; inset:0; z-index:6; display:none; flex-direction:column; justify-content:center;
+  /* ---- 목표 입력 ---- */
+  .goal-ov{position:absolute; inset:0; z-index:7; display:none; flex-direction:column; justify-content:center;
     background:linear-gradient(175deg,#FAF6ECf2,#F6F2E7f5); padding:20px}
   .goal-ov.show{display:flex}
   .go-title{font-size:14px; font-weight:750; text-align:center}
@@ -191,7 +232,7 @@
   #goalInput:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
   .go-actions{display:flex; gap:10px; margin-top:12px}
   .go-cancel,.go-make{flex:1; border:none; cursor:pointer; font-family:inherit; border-radius:12px; padding:12px;
-    font-size:12.5px; font-weight:750; transition:transform .2s var(--spring); touch-action:manipulation}
+    font-size:12.5px; font-weight:750; transition:transform var(--snap) var(--spring); touch-action:manipulation}
   .go-cancel{background:rgba(255,255,255,.7); color:var(--paper-sub); box-shadow:inset 0 0 0 1px rgba(94,86,72,.16)}
   .go-make{background:var(--acc); color:#fff; box-shadow:0 4px 10px -4px rgba(0,0,0,.35)}
   .go-cancel:active,.go-make:active{transform:scale(.95)}
@@ -199,147 +240,121 @@
   .go-msg{font-size:11.5px; font-weight:700; text-align:center; line-height:1.7}
   .go-msg small{display:block; font-size:9px; color:var(--paper-sub); font-weight:600}
 
-  /* ---- 클릭휠 ---- */
+  /* ================= 클릭휠 — §1.1 + §1.1a ================= */
   .wheelzone{display:grid; place-items:center; padding-top:12px; flex:none}
-  /* iPod click-wheel form: FLAT touch ring (not a dome) + recessed center well.
-     Depth comes from rim bevels and the well, not from a bulging gradient. */
   .wheel{
-    width:min(70vw, 292px); aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center;
-    background:
-      radial-gradient(circle at 50% 42%, var(--wheel-hi) 0%, var(--wheel-mid) 62%, var(--wheel-lo) 96%);
+    width:min(72vw, 300px); aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center;
+    /* 평평한 매트 도넛 — 명암 ±4%, 돔 금지 */
+    background:radial-gradient(circle at 50% 38%, var(--wheel-a) 0%, var(--wheel-b) 60%, var(--wheel-c) 100%);
     transition:background .6s; touch-action:none;
     box-shadow:
-      inset 0 2px 2px rgba(255,255,255,.85),
-      inset 0 -3px 6px rgba(var(--shade),.22),
-      0 1.5px 2px rgba(255,255,255,.8),
-      0 14px 24px -10px rgba(var(--shade),.38);
+      inset 0 1px 1.5px rgba(255,255,255,.8),
+      inset 0 -1.5px 3px rgba(var(--shade),.12),
+      0 1px 1.5px rgba(255,255,255,.75),
+      0 10px 22px -12px rgba(var(--shade),.4);
+    border:1px solid rgba(var(--shade),.10);
   }
-  .wheel::before{content:""; position:absolute; inset:0; border-radius:50%;
-    box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55), inset 0 0 0 3px rgba(var(--shade),.10)}
-  /* recessed center well the button sits in (iPod detail) */
+  /* 터치 추종 음영 — 눈금 폐기, 잉크 7% 스팟이 손가락과 1:1로 돎 */
+  .wheel .shade{position:absolute; inset:0; border-radius:50%; pointer-events:none; opacity:0;
+    transition:opacity .3s var(--soft); will-change:transform}
+  .wheel .shade::before{content:""; position:absolute; left:50%; top:6%; width:40%; height:32%;
+    transform:translateX(-50%); border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(var(--shade),.10), rgba(var(--shade),.045) 55%, transparent 75%)}
+  .wheel.touching .shade,.wheel.demo .shade{opacity:1}
+  /* 파인 센터 웰 + 평평한 허브 (볼록·광택점 금지) */
   .wheel .well{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:42%; aspect-ratio:1; border-radius:50%; pointer-events:none;
-    box-shadow:inset 0 3px 6px rgba(var(--shade),.30), inset 0 -1px 1.5px rgba(255,255,255,.75)}
-  /* rotation feedback: soft anisotropic sheen + fine detent ticks, ring-only,
-     rotates 1:1 with the finger. Barely-there idle, clearer while touching. */
-  .wheel .tex{position:absolute; inset:3%; border-radius:50%; pointer-events:none; will-change:transform;
-    background:
-      repeating-conic-gradient(rgba(var(--shade),.055) 0deg .7deg, transparent .7deg 6deg),
-      conic-gradient(from 0deg,
-        transparent 0deg, rgba(255,255,255,.32) 34deg, transparent 78deg,
-        rgba(var(--shade),.05) 130deg, transparent 172deg,
-        rgba(255,255,255,.24) 214deg, transparent 258deg,
-        rgba(var(--shade),.05) 310deg, transparent 360deg);
-    -webkit-mask:radial-gradient(circle, transparent 46%, #000 52%, #000 97%, transparent 100%);
-            mask:radial-gradient(circle, transparent 46%, #000 52%, #000 97%, transparent 100%);
-    opacity:.28; transition:opacity .3s;
-  }
-  .wheel.touching .tex{opacity:.75}
-  .wbtn{position:absolute; border:none; background:none; cursor:pointer; padding:9px 11px; border-radius:12px;
-    font-size:9.5px; font-weight:700; letter-spacing:.24em; color:#9C9585; font-family:inherit;
-    transition:transform .2s var(--spring), color .2s; touch-action:manipulation; z-index:2}
-  .wbtn:active{transform:scale(.86); color:#6E6758}
-  .wbtn.menu{top:5%; left:50%; transform:translateX(-50%)} .wbtn.menu:active{transform:translateX(-50%) scale(.86)}
-  .wbtn.prev{left:4%; top:50%; transform:translateY(-50%)} .wbtn.prev:active{transform:translateY(-50%) scale(.84)}
-  .wbtn.next{right:4%; top:50%; transform:translateY(-50%)} .wbtn.next:active{transform:translateY(-50%) scale(.84)}
-  .wbtn.play{bottom:4%; left:50%; transform:translateX(-50%)} .wbtn.play:active{transform:translateX(-50%) scale(.86)}
-  /* center button: flatter, sits INSIDE the well (iPod feel) — soft sheen
-     instead of a glossy dome, no big drop shadow */
+    width:43%; aspect-ratio:1; border-radius:50%; pointer-events:none;
+    box-shadow:inset 0 2px 4px rgba(var(--shade),.22), inset 0 -1px 1.5px rgba(255,255,255,.7)}
   .core{
-    width:35%; aspect-ratio:1; border-radius:50%; border:none; cursor:pointer; position:relative; z-index:2;
-    background:radial-gradient(circle at 50% 44%, var(--acc-hi) 0%, var(--acc) 68%, var(--acc-lo) 100%);
-    transition:transform .25s var(--spring), background .6s, box-shadow .6s; touch-action:manipulation;
-    box-shadow:
-      inset 0 1.5px 2px rgba(255,255,255,.45),
-      inset 0 -2.5px 5px rgba(0,0,0,.22),
-      0 1px 2px rgba(var(--shade),.25);
+    width:39%; aspect-ratio:1; border-radius:50%; border:none; cursor:pointer; position:relative; z-index:2;
+    background:linear-gradient(178deg, var(--acc-hi) 0%, var(--acc) 42%, var(--acc-lo) 100%);
+    transition:transform var(--snap) var(--spring), background .6s, filter var(--snap); touch-action:manipulation;
+    box-shadow:inset 0 1px 1.5px rgba(255,255,255,.28), inset 0 -1.5px 3px rgba(0,0,0,.16);
   }
-  .core::after{content:""; position:absolute; left:22%; top:12%; width:38%; height:22%; border-radius:50%;
-    background:radial-gradient(ellipse at center, rgba(255,255,255,.5), transparent 72%)}
-  .core:active{transform:scale(.95); box-shadow:inset 0 3px 7px rgba(0,0,0,.3)}
+  .core:active{transform:scale(.965); filter:brightness(.96)}
+  .wbtn{position:absolute; border:none; background:none; cursor:pointer; padding:9px 11px; border-radius:12px;
+    font-size:9px; font-weight:700; letter-spacing:.16em; color:rgba(var(--shade),.42); font-family:inherit;
+    transition:transform var(--snap) var(--spring), color .2s; touch-action:manipulation; z-index:2}
+  .wbtn svg{display:block; fill:currentColor}
+  .wbtn:active{transform:scale(.86); color:rgba(var(--shade),.7)}
+  .wbtn.menu{top:5.5%; left:50%; transform:translateX(-50%)} .wbtn.menu:active{transform:translateX(-50%) scale(.86)}
+  .wbtn.prev{left:4.5%; top:50%; transform:translateY(-50%)} .wbtn.prev:active{transform:translateY(-50%) scale(.84)}
+  .wbtn.next{right:4.5%; top:50%; transform:translateY(-50%)} .wbtn.next:active{transform:translateY(-50%) scale(.84)}
+  .wbtn.play{bottom:4.5%; left:50%; transform:translateX(-50%)} .wbtn.play:active{transform:translateX(-50%) scale(.86)}
   .engrave{margin-top:11px; text-align:center; font-size:8px; font-weight:700; letter-spacing:.5em; flex:none;
     color:rgba(var(--shade),.34); text-shadow:0 1px 0 rgba(255,255,255,.8)}
 
-  .toast{position:fixed; left:50%; bottom:calc(var(--sab) + 26px); transform:translateX(-50%) translateY(20px);
-    background:var(--ink); color:#F5F2EC; font-size:11.5px; font-weight:700; border-radius:99px; padding:9px 16px;
-    opacity:0; transition:opacity .3s, transform .3s var(--spring); pointer-events:none; z-index:9; white-space:nowrap}
-  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
-
-  /* ---- 가로 보기 (홈/메뉴/로그인): 화면=좌측 전체, 휠=우측 축소 ---- */
+  /* ================= 가로 ================= */
   @media (orientation: landscape) and (max-height: 560px){
     body{padding:calc(var(--sat) + 6px) 10px calc(var(--sab) + 6px)}
     .device{max-width:none; max-height:none; flex-direction:row; align-items:stretch; gap:14px; padding:14px 16px}
     .epaper{flex:1}
     .wheelzone{padding:0; width:34%; align-self:center}
-    .wheel{width:min(88%, 34vh)}
+    .wheel{width:min(88%, 36vh)}
     .engrave{display:none}
   }
 
-  /* ---- 가로 + 재생 = A안 무대: 엣지투엣지 전체화면 + 투명 게임핸들 ---- */
+  /* 재생 + 가로 = 무대 (§2) */
   body.stage{padding:0}
-  body.stage .device{max-width:none; max-height:none; border-radius:0; padding:0; gap:0;
-    background:#161311; box-shadow:none}
+  body.stage .device{max-width:none; max-height:none; border-radius:0; padding:0; gap:0; background:#0D0D10; box-shadow:none}
   body.stage .device::after{display:none}
   body.stage .wheelzone,body.stage .engrave{display:none}
-  body.stage .epaper{flex:1; border-radius:0; box-shadow:none;
-    background:#161311; color:#EDE7DC}
-  body.stage .epaper::after{display:none}
+  body.stage .epaper{flex:1; border-radius:0; box-shadow:none; background:#0D0D10; color:#EDE7DC; overflow:hidden}
   body.stage .scr[data-s="player"]{padding:0}
-  body.stage #scrPlayer .top{position:absolute; z-index:5; left:16px; right:16px; top:calc(var(--sat) + 10px); color:#B8AE9E}
-  body.stage .clipbox{position:absolute; inset:0; margin:0; aspect-ratio:auto; border-radius:0; box-shadow:none}
-  body.stage .clipbox .chip{top:auto; bottom:calc(var(--sab) + 34px); left:16px}
-  body.stage .readbox{position:absolute; left:max(17%, 168px); right:9%; top:18%; bottom:16%; margin:0;
-    font-size:16.5px; line-height:2.05}
+  body.stage #scrPlayer .top{position:absolute; z-index:5; left:16px; right:16px; top:calc(var(--sat) + 10px); color:#B8AE9E;
+    transition:opacity .5s}
+  body.stage.clipmode #scrPlayer .top{opacity:0}
+  body.stage.clipmode.hud #scrPlayer .top{opacity:1}
   body.stage .batt .case{border-color:rgba(255,255,255,.45)}
   body.stage .batt .tip{background:rgba(255,255,255,.45)}
+  /* 클립 = 커버 전체화면, 더블탭 = 컨테인 (G1) */
+  body.stage .clipbox{position:absolute; inset:0; margin:0; aspect-ratio:auto; border-radius:0; box-shadow:none; background:#000}
+  body.stage .clipwrap{position:absolute; inset:auto; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:100vw; height:calc(100vw * 9 / 16)}
+  body.stage .clipbox.contain .clipwrap{height:100dvh; width:calc(100dvh * 16 / 9)}
+  /* 메타 캡슐 — 4초 후 페이드 (A metaAway) */
+  body.stage .credit{position:absolute; z-index:5; left:16px; bottom:calc(var(--sab) + 18px); margin:0; max-width:60vw;
+    background:rgba(8,9,14,.55); color:#F2F3F8; border-radius:8px; padding:8px 12px;
+    animation:metaAway 4s var(--soft) forwards}
+  body.stage .credit b{color:#fff}
+  @keyframes metaAway{0%,70%{opacity:1}100%{opacity:0}}
+  /* 내레이션: 와이드 에디토리얼 — 21px/1.8 max 32em */
+  body.stage .readbox{position:absolute; left:max(16%, 150px); right:8%; top:16%; bottom:calc(var(--sab) + 40px); margin:0;
+    font-size:21px; line-height:1.8}
+  body.stage .readbox p{max-width:32em; margin:0 auto 12px}
+  body.stage .readbox .sec-title{color:#8F877A; max-width:32em; margin:2px auto 10px}
   body.stage .clipbox:not([hidden]) ~ .readbox{display:none}
-  body.stage .readbox .sec-title{color:#8F877A}
-  body.stage .ptrack{position:absolute; z-index:5; left:16px; right:16px; bottom:calc(var(--sab) + 10px)}
-  body.stage .chapters i{background:rgba(255,255,255,.16)}
-  body.stage .chapters i.done{background:rgba(224,112,63,.55)}
-  body.stage .chapters i.now{background:var(--acc)}
-  body.stage .ptimes{color:rgba(237,231,220,.5)}
+  body.stage .chcard{background:#0D0D10; color:#EDE7DC}
+  body.stage .chcard .t{color:#EDE7DC}
+  /* 진행 = 최하단 2px 헤어라인 (G2: 클립 중엔 HUD 활성 시만) */
+  .hairline{display:none}
+  body.stage .hairline{display:block; position:absolute; z-index:5; left:0; right:0; bottom:0; height:2px;
+    background:rgba(255,255,255,.12)}
+  body.stage .hairline i{display:block; height:100%; background:var(--acc); transition:width .3s var(--soft)}
+  body.stage.clipmode .hairline{opacity:0; transition:opacity .3s}
+  body.stage.clipmode.hud .hairline{opacity:1}
+  body.stage .ptrack{display:none}
   body.stage .player-state{position:absolute; inset:0}
 
-  /* 투명 게임핸들 — 터치 시에만 또렷, 외곽 실선 없음 (A 결정) */
-  .handle{display:none}
-  body.stage .handle{
-    display:block; position:fixed; z-index:7; left:14px; top:50%; transform:translateY(-50%);
-    width:132px; height:132px; border-radius:50%; touch-action:none;
-    background:radial-gradient(circle at 50% 42%, rgba(255,255,255,.10), rgba(255,255,255,.04) 70%, transparent 100%);
-    opacity:.22; transition:opacity .35s var(--soft);
-  }
-  body.stage .handle.awake{opacity:1;
-    background:radial-gradient(circle at 50% 42%, rgba(255,255,255,.16), rgba(255,255,255,.06) 70%, transparent 100%)}
-  .handle .h-core{
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:52px; height:52px; border-radius:50%; border:none; cursor:pointer; touch-action:manipulation;
-    /* fixed tangerine — the handle sits outside the themed device, and on the
-       dark stage the accent must stay visible in every colorway */
-    background:radial-gradient(circle at 50% 32%, #EC8B5C, #E0703F 55%, #C6552A);
-    box-shadow:inset 0 2px 3px rgba(255,255,255,.4), inset 0 -3px 5px rgba(0,0,0,.3);
-    transition:transform .2s var(--spring);
-  }
-  .handle .h-core:active{transform:translate(-50%,-50%) scale(.9)}
-  .handle .h-btn{position:absolute; border:none; background:none; cursor:pointer; color:rgba(255,255,255,.75);
-    padding:8px; touch-action:manipulation; transition:transform .2s var(--spring)}
-  .handle .h-btn:active{transform:scale(.85)}
-  .handle .h-prev{left:-4px; top:50%; transform:translateY(-50%)}
-  .handle .h-prev:active{transform:translateY(-50%) scale(.85)}
-  .handle .h-next{right:-4px; top:50%; transform:translateY(-50%)}
-  .handle .h-next:active{transform:translateY(-50%) scale(.85)}
-  .handle .h-menu{top:-4px; left:50%; transform:translateX(-50%); font-size:8.5px; font-weight:700; letter-spacing:.2em; font-family:inherit}
-  .handle .h-menu:active{transform:translateX(-50%) scale(.85)}
+  /* ---- 게임핸들 — §2.4 A 기록 원형 ---- */
+  #stick{display:none; position:fixed; left:12vw; bottom:22px; width:84px; height:84px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,255,255,.16) 55%, rgba(255,255,255,.04) 78%, transparent 100%);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    z-index:40; touch-action:none; user-select:none; -webkit-user-select:none;
+    opacity:0; transition:opacity .3s var(--soft)} /* 라벨·외곽선 없음 */
+  body.stage #stick{display:block}
+  #stick.on,#stick.hint{opacity:1}
+  #stick .knob{position:absolute; left:50%; top:50%; width:44px; height:44px; border-radius:50%;
+    transform:translate(-50%,-50%); background:rgba(255,255,255,.55);
+    box-shadow:inset 0 1px 2px rgba(255,255,255,.8), 0 2px 6px rgba(0,0,0,.3);
+    transition:transform .18s var(--soft)}
+  #stick.rot{box-shadow:0 0 18px rgba(224,112,63,.5)} /* 회전모드 = 소프트 글로우 */
 
-  /* ---- 설치형(standalone): 폰 자체가 기기 — 프레임 여백 제거, 엣지투엣지 ---- */
-  @media (display-mode: standalone){
-    body{padding:0}
-    .device{max-width:none; max-height:none; border-radius:0; padding:calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px)}
-    .device::after{border-radius:0}
-  }
-  body.standalone{padding:0}
-  body.standalone .device{max-width:none; max-height:none; border-radius:0; padding:calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px)}
-  body.standalone .device::after{border-radius:0}
+  .toast{position:fixed; left:50%; bottom:calc(var(--sab) + 26px); transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:#F5F2EC; font-size:11.5px; font-weight:700; border-radius:99px; padding:9px 16px;
+    opacity:0; transition:opacity .3s, transform .3s var(--spring); pointer-events:none; z-index:50; white-space:nowrap;
+    max-width:86vw; overflow:hidden; text-overflow:ellipsis}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.001s !important; transition-duration:.001s !important}
@@ -360,19 +375,20 @@
             <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.5 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.6a14.5 14.5 0 0 1 0-9.2l-7.9-6.2a24 24 0 0 0 0 21.6l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.6-5.8l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-4-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>
             Google로 계속하기
           </button>
+          <button class="sample-btn" id="bSample">샘플 에피소드 들어보기</button>
         </div>
       </div>
 
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
-        <div class="top"><span class="tt">내 만다라</span><span class="batt"><span class="case"><i id="battHome"></i><svg class="bolt" width="7" height="10" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
+        <div class="top"><span class="tt">내 만다라</span><span class="batt"><span class="case"><i id="battHome"></i><svg class="bolt" width="6" height="9" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
         <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
-        <div class="rows" id="rows"><div class="row-empty" id="rowsEmpty">불러오는 중…</div></div>
+        <div class="rows" id="rows"><div class="row-empty">불러오는 중…</div></div>
       </div>
 
       <!-- MENU -->
       <div class="scr" data-s="menu" id="scrMenu">
-        <div class="top"><span class="tt">MENU</span><span class="batt"><span class="case"><i id="battMenu"></i><svg class="bolt" width="7" height="10" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
+        <div class="top"><span class="tt">MENU</span><span class="batt"><span class="case"><i id="battMenu"></i><svg class="bolt" width="6" height="9" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
         <div class="menu-list">
           <div class="mrow" style="cursor:default">
             컬러웨이
@@ -391,22 +407,24 @@
 
       <!-- 플레이어 -->
       <div class="scr" data-s="player" id="scrPlayer">
-        <div class="top"><span class="tt" id="pTitle">노트</span><span class="batt"><span class="case"><i id="battPlay"></i><svg class="bolt" width="7" height="10" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
+        <div class="top"><span class="tt" id="pTitle">노트</span><span class="batt"><span class="case"><i id="battPlay"></i><svg class="bolt" width="6" height="9" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
         <div class="player-state" id="pState">
           <div class="pulse"></div>
           <div class="big" id="pStateBig">노트를 여는 중…</div>
           <div class="sm" id="pStateSm"></div>
         </div>
         <div class="clipbox" id="clipbox" hidden>
-          <span class="chip">원본 · 핵심구간</span>
-          <div id="yt"></div>
+          <div class="clipwrap" id="clipwrap"><div id="yt"></div></div>
           <div class="guard" id="clipGuard" aria-hidden="true"></div>
         </div>
+        <div class="credit" id="credit" hidden></div>
         <div class="readbox" id="readbox" hidden></div>
+        <div class="chcard" id="chcard"><div class="n" id="chNum"></div><div class="t" id="chTitle"></div></div>
         <div class="ptrack" id="ptrack" hidden>
           <div class="chapters" id="pchap"></div>
-          <div class="ptimes"><span id="pPos" class="num">1 / 1</span><span id="pHint">휠을 돌리면 구간 이동</span></div>
+          <div class="ptimes"><span id="pPos" class="num">1 / 1</span><span id="pCh"></span></div>
         </div>
+        <div class="hairline" id="hairline"><i id="hairFill" style="width:0%"></i></div>
       </div>
 
       <!-- 목표 입력 -->
@@ -428,30 +446,23 @@
 
     <div class="wheelzone">
       <div class="wheel" id="wheel">
-        <span class="tex" id="wheelTex" aria-hidden="true"></span>
+        <span class="shade" id="wheelShade" aria-hidden="true"></span>
         <span class="well" aria-hidden="true"></span>
         <button class="wbtn menu" id="bMenu">MENU</button>
         <button class="wbtn prev" id="bPrev" aria-label="이전">
-          <svg width="16" height="11" viewBox="0 0 15 10"><path d="M7.5 1 2 5l5.5 4V1Zm5.5 0L7.5 5 13 9V1Z" fill="currentColor"/></svg></button>
+          <svg width="16" height="11" viewBox="0 0 15 10"><path d="M7.5 1 2 5l5.5 4V1Zm5.5 0L7.5 5 13 9V1Z"/></svg></button>
         <button class="wbtn next" id="bNext" aria-label="다음">
-          <svg width="16" height="11" viewBox="0 0 15 10"><path d="M7.5 1 13 5l-5.5 4V1Zm-5.5 0L7.5 5 2 9V1Z" fill="currentColor"/></svg></button>
+          <svg width="16" height="11" viewBox="0 0 15 10"><path d="M7.5 1 13 5l-5.5 4V1Zm-5.5 0L7.5 5 2 9V1Z"/></svg></button>
         <button class="wbtn play" id="bPlay" aria-label="재생/일시정지">
-          <svg width="17" height="10" viewBox="0 0 16 9"><path d="M1 .8 7 4.5 1 8.2V.8Z" fill="currentColor"/><path d="M10 1h2v7h-2zM14 1h2v7h-2z" fill="currentColor" transform="scale(.9)"/></svg></button>
+          <svg width="17" height="10" viewBox="0 0 16 9"><path d="M1 .8 7 4.5 1 8.2V.8Z"/><path d="M10 1h2v7h-2zM14 1h2v7h-2z" transform="scale(.9)"/></svg></button>
         <button class="core" id="bCore" aria-label="선택/재생"></button>
       </div>
     </div>
     <div class="engrave">INSIGHTA</div>
   </div>
 
-  <!-- 가로 무대용 투명 게임핸들 (A안: 터치 시 활성, 그 외 투명) -->
-  <div class="handle" id="handle">
-    <button class="h-btn h-menu" id="hMenu">MENU</button>
-    <button class="h-btn h-prev" id="hPrev" aria-label="이전 구간">
-      <svg width="16" height="11" viewBox="0 0 15 10"><path d="M7.5 1 2 5l5.5 4V1Zm5.5 0L7.5 5 13 9V1Z" fill="currentColor"/></svg></button>
-    <button class="h-btn h-next" id="hNext" aria-label="다음 구간">
-      <svg width="16" height="11" viewBox="0 0 15 10"><path d="M7.5 1 13 5l-5.5 4V1Zm-5.5 0L7.5 5 2 9V1Z" fill="currentColor"/></svg></button>
-    <button class="h-core" id="hCore" aria-label="재생/일시정지"></button>
-  </div>
+  <!-- 게임핸들 (가로 무대) — A 기록: 무표시 글래스 + 물리 노브 -->
+  <div id="stick"><div class="knob"></div></div>
 
   <div class="toast" id="toast"></div>
 
@@ -460,10 +471,11 @@
   var dev=document.getElementById('dev');
   function toast(msg){
     var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
-    clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show')},2200);
+    clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show')},2400);
   }
+  function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]}) }
 
-  /* ================= 인증 (Supabase implicit + 같은 오리진 /api) ================= */
+  /* ================= 인증 ================= */
   var SUPA='https://rckkhhjanqgaopynhfgd.supabase.co';
   var SUPA_KEY='sb_publishable_4qmeVEdSP70SEK3Ct_xHdA_Kp9aBfJK';
   var OWN_KEY='insighta-mobile-auth';
@@ -511,59 +523,60 @@
     return r;
   }
 
-  /* ================= 화면 상태 머신 ================= */
+  /* ================= 화면 상태 ================= */
   var SCREENS=['login','home','menu','player'];
   var scr={}; SCREENS.forEach(function(n){scr[n]=document.querySelector('.scr[data-s="'+n+'"]')});
-  var cur='login', lastMain='home';
+  var cur='login';
   function show(n){
     if(n===cur) return;
     scr[cur].classList.remove('active');
     cur=n; scr[cur].classList.add('active');
-    if(n==='home'||n==='player') lastMain=n;
     syncStage();
   }
-  /* A-rule: landscape + player = edge-to-edge stage with the ghost handle. */
   function syncStage(){
     var land=matchMedia('(orientation: landscape)').matches;
-    document.body.classList.toggle('stage', land && cur==='player');
+    var on=land && cur==='player';
+    var was=document.body.classList.contains('stage');
+    document.body.classList.toggle('stage', on);
+    if(on&&!was){ stickHint(); }
   }
   addEventListener('resize', syncStage);
   addEventListener('orientationchange', syncStage);
 
-  /* ================= 배터리 = 지식 충전 (실청취만) ================= */
+  /* ================= 배터리 (§0-5) ================= */
   var charge=20;
   function renderBatt(){
-    var col=charge<=20?'#FF3B30':'#34C759'; // Apple semantics (A rule)
+    var col=charge<=20?'#FF3B30':'#34C759';
     ['battHome','battMenu','battPlay'].forEach(function(id){
       var el=document.getElementById(id); if(!el) return;
       el.style.width=Math.min(charge,100)+'%'; el.style.background=col;
     });
   }
   function addCharge(v){ charge=Math.min(charge+v,100); renderBatt(); }
-  function setCharging(on){ // bolt only while actually streaming (A rule)
+  function setCharging(on){
     document.querySelectorAll('.batt').forEach(function(b){b.classList.toggle('chg',on)});
   }
   renderBatt();
 
-  /* 시작/종료 차임 — 부드러운 2음 사인 스팅 (A rule) */
+  /* 차임 (§0-8) — pre-produce에서 정식 사운드로 대체 예정 */
   var actx=null;
   function chime(kind){
     try{
       actx=actx||new (window.AudioContext||window.webkitAudioContext)();
-      var notes=kind==='start'?[523.25,783.99]:[783.99,523.25];
+      var notes=kind==='start'?[523.25,783.99]:kind==='ch'?[659.25]:[783.99,523.25];
       notes.forEach(function(f,i){
         var o=actx.createOscillator(), g=actx.createGain();
         o.type='sine'; o.frequency.value=f; o.connect(g); g.connect(actx.destination);
         var st=actx.currentTime+i*0.16;
         g.gain.setValueAtTime(0.0001,st);
-        g.gain.exponentialRampToValueAtTime(0.09,st+0.02);
+        g.gain.exponentialRampToValueAtTime(kind==='ch'?0.05:0.09,st+0.02);
         g.gain.exponentialRampToValueAtTime(0.0001,st+0.5);
         o.start(st); o.stop(st+0.55);
       });
     }catch(e){}
   }
 
-  /* ================= 컬러웨이 (MENU 내) ================= */
+  /* ================= 컬러웨이 ================= */
   document.querySelectorAll('.way').forEach(function(w){
     w.addEventListener('click',function(){
       document.querySelectorAll('.way').forEach(function(x){x.classList.remove('on')});
@@ -581,39 +594,102 @@
     }
   }catch(e){}
 
-  /* ================= 홈: 실데이터 목록 ================= */
-  var PALETTE=[['#E8A177','#C1633B'],['#8C9BD1','#4D5C99'],['#8FBBA4','#4A7B60'],['#D9BC7E','#9A7A38'],['#C79BC0','#7C5077'],['#9BBFC7','#4E7A85']];
-  var mandalas=[], selIdx=0;
+  /* ================= 이어 듣기 (C1) ================= */
+  function resumeKey(id){ return 'insighta-resume-'+id }
+  function saveResume(id,pos,total,done){
+    try{localStorage.setItem(resumeKey(id),JSON.stringify({bi:pos,total:total,done:!!done}))}catch(e){}
+  }
+  function loadResume(id){ return readJSON(localStorage.getItem(resumeKey(id))) }
+
+  /* ================= M1: 샘플 에피소드 (A 원형 — 실제 노트 atom·실측 구간·크레딧) ================= */
+  var SAMPLE={
+    id:'__sample__', title:'지정학으로 국제 정세 읽기', sample:true, sourceVideos:19,
+    book:{ source_videos:19, chapters:[
+      {ch:1, title:'세계 질서의 뼈대', intro:'',
+       sections:[
+        {title:'돈의 언어, 기축통화', narrative:'국제 정세를 읽는 첫 열쇠는 돈의 언어다. 서울의 수출업체가 하노이에 대금을 보낼 때 원화와 동화를 직접 바꾸지 않는다. 달러로 계산하고 달러로 보낸다. 이렇게 거래의 공통 척도가 되는 화폐가 기축통화이고, 그 본질은 안정성에 대한 신뢰다.',
+         atoms:[{vid:'G67K0nKNaNE', ts:26, seg_ref:{from_sec:26,to_sec:46}, text:'기축통화 = 외환·무역 거래의 기준 통화', src:'김지윤의 지식Play · 달러, 기축통화, 역사'},
+                {vid:'G67K0nKNaNE', ts:176, seg_ref:{from_sec:176,to_sec:210}, text:'금본위제의 붕괴, 그리고 브레튼우즈', src:'김지윤의 지식Play · 달러, 기축통화, 역사'}]}
+       ]},
+      {ch:2, title:'자원의 동맥', intro:'',
+       sections:[
+        {title:'해협 하나가 식탁을 정한다', narrative:'자원이 권력이라면, 그것이 지나는 통로는 동맥이다. 호르무즈 해협 하나로 전 세계 해상 비료 무역의 삼분의 일이 지나간다. 분쟁이 길어지면 사천오백만 명이 추가로 기아에 직면한다는 경고가 있었다. 해협 하나가 수천만 명의 식탁을 정한다.',
+         atoms:[{vid:'jpNc3XdQp_4', ts:18, seg_ref:{from_sec:18,to_sec:48}, text:'비료가 끊기면 40억 명이 흔들린다', src:'이 세대의 교양수업 · 석유보다 무서운 자원'},
+                {vid:'a6-PaZXtj-s', ts:336, seg_ref:{from_sec:336,to_sec:370}, text:'셰일혁명이 바꾼 미국의 위치', src:'별별TV · 원자재 게임'}]}
+       ]}
+    ]}
+  };
+
+  /* ================= 홈 — §1.2 상태 머신 ================= */
+  var PALETTE=[['#C1633B','#8A3A1B'],['#4D5C99','#2C3763'],['#4A7B60','#2C4E3A'],['#9A7A38','#6B5220'],['#7C5077','#4E2F4A'],['#4E7A85','#2E4C54']];
+  function jkColor(title){
+    var h=0; for(var i=0;i<title.length;i++){ h=(h*31+title.charCodeAt(i))>>>0; }
+    return PALETTE[h%PALETTE.length];
+  }
+  var mandalas=[], selIdx=0, bookCache={};
+  function rowState(m){
+    if(m.sample) return {kind:'ready', line:'샘플 에피소드'};
+    var cache=bookCache[m.id];
+    var res=loadResume(m.id);
+    if(!cache) return {kind:'loading', line:'확인 중…'};
+    if(cache.making) return {kind:'making', line:'노트 만드는 중 · 카드 모으는 중'};
+    if(res&&res.done) return {kind:'done', line:'다 들었어요', pct:100};
+    if(res&&res.bi>0) return {kind:'resume', line:'이어 듣기 · '+(res.bi+1)+' / '+res.total, pct:Math.round(res.bi/Math.max(res.total-1,1)*100)};
+    return {kind:'new', line:'새 노트', dot:true};
+  }
+  function homeItems(){ return mandalas }
   function renderRows(){
     var rows=document.getElementById('rows');
-    if(!mandalas.length){ rows.innerHTML='<div class="row-empty">아직 만다라가 없어요 — 첫 목표를 적어보세요</div>'; return; }
+    var items=homeItems();
+    if(!items.length){
+      rows.innerHTML='<div class="row-empty">아직 만다라가 없어요<br>첫 목표를 적어보세요</div>';
+      return;
+    }
     rows.innerHTML='';
-    mandalas.forEach(function(m,i){
-      var c=PALETTE[i%PALETTE.length];
+    if(selIdx>=items.length) selIdx=items.length-1;
+    items.forEach(function(m,i){
+      var st=rowState(m);
+      var c=jkColor(m.title||'?');
       var d=document.createElement('div');
-      d.className='row'+(i===selIdx?' sel':'');
-      d.innerHTML='<span class="thumb" style="background:linear-gradient(150deg,'+c[0]+','+c[1]+')"></span>'
-        +'<span class="m"><span class="a"></span><span class="b">'+(m.cardCount?('카드 '+m.cardCount+'장 · '):'')+'탭해서 듣기</span></span>'
-        +(i===0?'<span class="new">NEW</span>':'');
+      d.className='row'+(i===selIdx?' sel':'')+(st.kind==='making'||st.kind==='loading'?' making':'');
+      var prog='';
+      if(st.pct!=null) prog='<span class="prog'+(st.pct>=100?' full':'')+'"><i style="width:'+st.pct+'%"></i></span>';
+      d.innerHTML='<span class="jk" style="background:linear-gradient(150deg,'+c[0]+','+c[1]+')"><b></b>'+prog+'</span>'
+        +'<span class="m"><span class="a"></span><span class="b">'+(st.dot?'<span class="dotnew"></span>':'')+'<span class="bt"></span></span></span>';
+      d.querySelector('.jk b').textContent=(m.title||'?').trim().charAt(0);
       d.querySelector('.a').textContent=m.title||'(제목 없음)';
-      d.addEventListener('click',function(){ selIdx=i; renderRows(); openNote(m); });
+      d.querySelector('.bt').textContent=st.line;
+      if(st.kind!=='making'&&st.kind!=='loading'){
+        d.addEventListener('click',function(){ selIdx=i; renderRows(); openNote(m); });
+      }
       rows.appendChild(d);
     });
     var selEl=rows.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
+  }
+  async function fetchBookStatus(m){
+    if(m.sample||bookCache[m.id]) return;
+    try{
+      var r=await api('/mandalas/'+m.id+'/book');
+      var j=await r.json();
+      var book=j.data&&j.data.book;
+      if(book&&book.chapters&&book.chapters.length) bookCache[m.id]={book:book, sourceVideos:(j.data.sourceVideos||0)};
+      else bookCache[m.id]={making:true};
+    }catch(e){ bookCache[m.id]={making:true}; }
+    renderRows();
   }
   async function loadList(){
     try{
       var r=await api('/mandalas/list?limit=12');
       var j=await r.json();
-      mandalas=j.mandalas||[]; selIdx=0; renderRows();
+      mandalas=(j.mandalas||[]);
+      selIdx=0; renderRows();
+      mandalas.slice(0,8).forEach(function(m){ fetchBookStatus(m) }); // S2: 병렬 상태 조회 + 캐시 재사용
     }catch(e){
-      document.getElementById('rows').innerHTML='<div class="row-empty">목록을 불러오지 못했어요</div>';
+      document.getElementById('rows').innerHTML='<div class="row-empty">'+(navigator.onLine===false?'오프라인이에요 — 연결 후 다시':'목록을 불러오지 못했어요 — 다시 시도해주세요')+'</div>';
     }
   }
 
-  /* ================= 노트 → 에피소드 (실재생) =================
-     book_json(chapters→sections{narrative,atoms{vid,ts,seg_ref}})을
-     비트 시퀀스로 평탄화: 내레이션 비트(TTS read-along) + 클립 비트(YT 구간). */
+  /* ================= 에피소드 엔진 ================= */
   var beats=[], bi=0, playing=false, curNote=null, chapterOfBeat=[], chapterCount=0;
   function stripMd(s){
     return String(s||'')
@@ -628,29 +704,28 @@
     var chs=(book&&book.chapters)||[];
     chapterCount=chs.length||1;
     chs.forEach(function(ch,ci){
-      if(ch.intro&&stripMd(ch.intro)) { beats.push({t:'n', title:ch.title, text:ch.intro}); chapterOfBeat.push(ci); }
+      beats.push({t:'ch', num:ci+1, title:ch.title||('챕터 '+(ci+1))}); chapterOfBeat.push(ci); // M3
+      if(ch.intro&&stripMd(ch.intro)){ beats.push({t:'n', title:ch.title, text:ch.intro}); chapterOfBeat.push(ci); }
       (ch.sections||[]).forEach(function(s){
         if(s.narrative&&stripMd(s.narrative)){ beats.push({t:'n', title:s.title, text:s.narrative}); chapterOfBeat.push(ci); }
         (s.atoms||[]).slice(0,2).forEach(function(a){
           if(!a.vid) return;
-          // Clip bounds come ONLY from v2 구간요약 (James rule — no invented
-          // windows, keeps ads/junk out). seg_ref = copy of that boundary;
-          // without it we resolve via /videos/:id/rich-summary at play time.
-          var b={t:'c', vid:a.vid, ts:(a.ts||0), text:a.text||''};
-          if(a.seg_ref && a.seg_ref.to_sec>a.seg_ref.from_sec){
-            b.from=a.seg_ref.from_sec; b.to=a.seg_ref.to_sec;
-          }
-          beats.push(b);
-          chapterOfBeat.push(ci);
+          var b={t:'c', vid:a.vid, ts:(a.ts||0), text:a.text||'', src:a.src||null};
+          if(a.seg_ref && a.seg_ref.to_sec>a.seg_ref.from_sec){ b.from=a.seg_ref.from_sec; b.to=a.seg_ref.to_sec; }
+          beats.push(b); chapterOfBeat.push(ci);
         });
       });
     });
   }
 
   var pState=document.getElementById('pState'), clipbox=document.getElementById('clipbox'),
-      readbox=document.getElementById('readbox'), ptrack=document.getElementById('ptrack');
+      readbox=document.getElementById('readbox'), ptrack=document.getElementById('ptrack'),
+      creditEl=document.getElementById('credit'), chcard=document.getElementById('chcard');
   function pShowState(big,sm){
-    pState.style.display='flex'; clipbox.hidden=true; readbox.hidden=true; ptrack.hidden=true;
+    pState.style.display='flex';
+    pState.innerHTML='<div class="pulse"></div><div class="big" id="pStateBig"></div><div class="sm" id="pStateSm"></div>';
+    clipbox.hidden=true; readbox.hidden=true; ptrack.hidden=true;
+    creditEl.hidden=true; chcard.classList.remove('show');
     document.getElementById('pStateBig').textContent=big;
     document.getElementById('pStateSm').innerHTML=sm||'';
   }
@@ -663,38 +738,51 @@
       el.appendChild(b);
     }
     document.getElementById('pPos').textContent=(bi+1)+' / '+beats.length;
+    document.getElementById('hairFill').style.width=Math.round(bi/Math.max(beats.length-1,1)*100)+'%';
+    if(curNote&&!curNote.sample) saveResume(curNote.id,bi,beats.length,false);
   }
 
-  /* ---- 내레이션 TTS (임시: 브라우저 음성 — 서버 pre-produce 전 단계) ---- */
-  var synth=window.speechSynthesis||null, speakSeq=0;
+  /* TTS read-along + 문장 조그 훅 */
+  var synth=window.speechSynthesis||null, speakSeq=0, curSents=[], curSentIdx=0, curSpans=null, curDone=null;
   function stopSpeech(){ speakSeq++; if(synth) synth.cancel(); }
-  function speakBeat(beat,done){
-    var sents=sentences(beat.text);
-    readbox.innerHTML='<div class="sec-title">'+(beat.title?String(beat.title).replace(/[<>&]/g,''):'내레이션')+'</div>'
-      +'<p>'+sents.map(function(s,i){return '<span class="sent" data-i="'+i+'"></span>'}).join(' ')+'</p>';
-    var spans=readbox.querySelectorAll('.sent');
-    sents.forEach(function(s,i){spans[i].textContent=s});
-    if(!synth||!sents.length){ // TTS 불가 → 읽기 시간만큼 대기 후 진행
-      var ms=Math.min(Math.max(sents.join(' ').length*90,2500),20000);
-      var seq=++speakSeq; setTimeout(function(){ if(seq===speakSeq&&playing) done(); },ms);
-      return;
-    }
-    var seq=++speakSeq, idx=0;
+  function renderSents(title,sents){
+    readbox.innerHTML='<div class="sec-title"></div><p>'+sents.map(function(){return '<span class="sent"></span>'}).join(' ')+'</p>';
+    readbox.querySelector('.sec-title').textContent=title||'내레이션';
+    curSpans=readbox.querySelectorAll('.sent');
+    sents.forEach(function(s,i){curSpans[i].textContent=s});
+  }
+  function speakFrom(idx){
+    var seq=++speakSeq;
+    curSentIdx=idx;
     (function next(){
       if(seq!==speakSeq||!playing) return;
-      if(idx>=sents.length){ done(); return; }
-      spans.forEach(function(sp){sp.classList.remove('on')});
-      var sp=spans[idx]; sp.classList.add('on');
+      if(curSentIdx>=curSents.length){ if(curDone) curDone(); return; }
+      curSpans.forEach(function(sp){sp.classList.remove('on')});
+      var sp=curSpans[curSentIdx]; sp.classList.add('on');
       if(sp.scrollIntoView) sp.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'});
-      var u=new SpeechSynthesisUtterance(sents[idx]);
+      if(!synth){ var ms=Math.min(Math.max(curSents[curSentIdx].length*90,1600),12000);
+        setTimeout(function(){ if(seq===speakSeq&&playing){ curSentIdx++; addCharge(.5); next(); } },ms); return; }
+      var u=new SpeechSynthesisUtterance(curSents[curSentIdx]);
       u.lang='ko-KR'; u.rate=1.05;
-      u.onend=function(){ idx++; addCharge(.6); next(); };
-      u.onerror=function(){ idx++; next(); };
+      u.onend=function(){ if(seq!==speakSeq) return; curSentIdx++; addCharge(.5); next(); };
+      u.onerror=function(){ if(seq!==speakSeq) return; curSentIdx++; next(); };
       synth.speak(u);
     })();
   }
+  function speakBeat(beat,done){
+    curSents=sentences(beat.text); curDone=done;
+    renderSents(beat.title,curSents);
+    if(!curSents.length){ done(); return; }
+    speakFrom(0);
+  }
+  function jogSentence(dir){ // 핸들 조그: 내레이션 = 문장 단위 (§4 명시 차이)
+    if(!curSents.length){ nextBeat(dir); return; }
+    var nx=curSentIdx+dir;
+    if(nx<0||nx>=curSents.length){ nextBeat(dir); return; }
+    stopSpeech(); speakFrom(nx);
+  }
 
-  /* ---- YouTube 클립 (IFrame API, 플레이어 1대 재사용) ---- */
+  /* YouTube 클립 — 경계는 v2 구간요약만 (§0-3) */
   var yt=null, ytReady=false, ytPoll=null, ytPending=null;
   window.onYouTubeIframeAPIReady=function(){
     yt=new YT.Player('yt',{
@@ -710,7 +798,6 @@
       yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
       try{yt.setVolume(0)}catch(e){}
       yt.playVideo();
-      // ramp-in (A rule: clips fade in, never slam)
       var v=0, ramp=setInterval(function(){ v+=12; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },40);
       if(ytPoll) clearInterval(ytPoll);
       var lastT=0, stallMs=0, nudged=false;
@@ -719,207 +806,341 @@
         try{
           var st=yt.getPlayerState();
           var t=yt.getCurrentTime?yt.getCurrentTime():0;
-          // tail fade-out over the final 0.9s (A rule)
           var rem=beat.to-t;
           if(t&&rem<0.9&&rem>0){ clearInterval(ramp); yt.setVolume(Math.max(0,Math.round(100*rem/0.9))); }
           if(st===0 || (t&&t>=beat.to-0.4)){ clearInterval(ytPoll); ytPoll=null; addCharge(1.2); nextBeat(1,true); return; }
-          // stall watchdog (A rule: respect buffering — nudge, then skip)
-          if(st===1 && t>lastT+0.2){ lastT=t; stallMs=0; }
-          else { stallMs+=500; }
+          if(st===1 && t>lastT+0.2){ lastT=t; stallMs=0; } else { stallMs+=500; }
           if(stallMs>=8000 && !nudged){ nudged=true; try{yt.seekTo(Math.max(beat.from,t+0.5),true); yt.playVideo();}catch(e){} }
           if(stallMs>=16000){ clearInterval(ytPoll); ytPoll=null; nextBeat(1,true); }
         }catch(e){}
       },500);
     }catch(e){ nextBeat(1,true); }
   }
-  function playClip(beat){
-    readbox.innerHTML='<div class="sec-title">원본 클립</div><p class="sent on" style="display:inline-block">'+String(beat.text||'').replace(/[<>&]/g,'')+'</p>';
-    if(ytReady) playClipNow(beat); else ytPending=beat;
-  }
-
-  /* ---- seg_ref 없는 atom → v2 구간요약(sections)에서 ts가 속한 구간 조회 ---- */
   var segCache={};
-  async function resolveBounds(beat){
+  async function resolveBeatMeta(beat){
     if(!(beat.vid in segCache)){
+      var entry={sections:[], credit:null};
       try{
         var r=await api('/videos/'+beat.vid+'/rich-summary');
         var j=await r.json();
-        segCache[beat.vid]=(j.data&&j.data.segments&&j.data.segments.sections)||[];
-      }catch(e){ segCache[beat.vid]=[]; }
+        entry.sections=(j.data&&j.data.segments&&j.data.segments.sections)||[];
+        entry.credit=(j.data&&j.data.oneLiner)||null;
+      }catch(e){}
+      segCache[beat.vid]=entry;
     }
-    var ss=segCache[beat.vid], hit=null, i;
+    return segCache[beat.vid];
+  }
+  async function resolveBounds(beat){
+    var meta=await resolveBeatMeta(beat);
+    var ss=meta.sections, hit=null, i;
     for(i=0;i<ss.length;i++){
       var s=ss[i];
       if(typeof s.from_sec==='number'&&typeof s.to_sec==='number'&&beat.ts>=s.from_sec&&beat.ts<s.to_sec){ hit=s; break; }
     }
     if(!hit){ for(i=ss.length-1;i>=0;i--){ if(typeof ss[i].from_sec==='number'&&ss[i].from_sec<=beat.ts&&ss[i].to_sec>ss[i].from_sec){ hit=ss[i]; break; } } }
-    if(hit){ beat.from=hit.from_sec; beat.to=hit.to_sec; return true; }
+    if(hit){ beat.from=hit.from_sec; beat.to=hit.to_sec; if(!beat.src&&hit.title) beat.src=hit.title; return true; }
     return false;
   }
+  function playClip(beat){
+    creditEl.hidden=false; // S1
+    creditEl.innerHTML='원본 · <b></b>';
+    creditEl.querySelector('b').textContent=beat.src||((segCache[beat.vid]&&segCache[beat.vid].credit)||'핵심구간');
+    readbox.hidden=false;
+    renderSents('원본 클립',[beat.text||'']);
+    if(curSpans&&curSpans[0]) curSpans[0].classList.add('on');
+    if(ytReady) playClipNow(beat); else ytPending=beat;
+  }
 
-  /* ---- 비트 실행 ---- */
   var runSeq=0;
   function runBeat(){
     if(!beats.length){ pShowState('재생할 내용이 없어요',''); return; }
     bi=Math.max(0,Math.min(bi,beats.length-1));
-    pState.style.display='none'; readbox.hidden=false; ptrack.hidden=false;
+    pState.style.display='none'; ptrack.hidden=false; chcard.classList.remove('show');
     var beat=beats[bi];
     renderChapters();
+    document.getElementById('pCh').textContent=(beat.t!=='ch'&&beat.title)?beat.title:'';
     stopSpeech(); stopClip();
-    if(beat.t==='c'){
-      clipbox.hidden=false; clipbox.classList.remove('narr');
-      if(beat.from!=null&&beat.to!=null){ playClip(beat); return; }
-      // No verified 구간요약 boundary -> resolve; unresolvable clips are
-      // SKIPPED (never play an invented window — ad/junk guard).
+    document.body.classList.toggle('clipmode', beat.t==='c');
+    if(beat.t==='ch'){ // M3
+      clipbox.hidden=true; readbox.hidden=true; creditEl.hidden=true;
+      document.getElementById('chNum').textContent=beat.num+'부';
+      document.getElementById('chTitle').textContent=beat.title;
+      chcard.classList.add('show');
+      chime('ch');
       var seq=++runSeq;
+      setTimeout(function(){ if(seq===runSeq&&playing&&beats[bi]===beat){ chcard.classList.remove('show'); nextBeat(1,true); } },1500);
+      return;
+    }
+    if(beat.t==='c'){
+      clipbox.hidden=false;
+      if(beat.from!=null&&beat.to!=null){ playClip(beat); return; }
+      var seq2=++runSeq;
       resolveBounds(beat).then(function(ok){
-        if(seq!==runSeq||!playing||beats[bi]!==beat) return;
-        if(ok) playClip(beat); else nextBeat(1,true);
+        if(seq2!==runSeq||!playing||beats[bi]!==beat) return;
+        if(ok) playClip(beat); else nextBeat(1,true); // 경계 없으면 스킵 — 임의 창 금지
       });
     }
-    else{ clipbox.hidden=true; speakBeat(beat,function(){ nextBeat(1,true); }); }
+    else{ clipbox.hidden=true; creditEl.hidden=true; readbox.hidden=false; speakBeat(beat,function(){ nextBeat(1,true); }); }
   }
   function nextBeat(dir,auto){
     if(!beats.length) return;
     var nx=bi+dir;
     if(nx>=beats.length){ finishNote(); return; }
-    if(nx<0) nx=0;
+    if(nx<0){ if(window.wheelRubber) wheelRubber(-1); return; }
     bi=nx;
     if(playing) runBeat(); else renderChapters();
   }
   function finishNote(){
-    playing=false; stopSpeech(); stopClip(); setCharging(false); chime('end'); charge=100; renderBatt();
-    pShowState('이번 회차, 다 들었어요','추천도 무한 피드도 없어요 — 오늘은 끝<br>가운데 버튼 = 처음부터 다시');
+    playing=false; stopSpeech(); stopClip(); setCharging(false); chime('end');
+    charge=100; renderBatt(); releaseWake();
+    if(curNote&&!curNote.sample) saveResume(curNote.id,0,beats.length,true);
+    document.body.classList.remove('clipmode');
+    var srcN=(curNote&&curNote.sourceVideos)||0;
+    var nextM=homeItems().filter(function(m){ return curNote&&m.id!==curNote.id&&rowState(m).kind!=='making'&&rowState(m).kind!=='loading'; })[0];
+    pShowState('','');
+    pState.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center;padding:0 14px">'
+      +'<span class="finbatt"><i></i></span>'
+      +'<div class="big" style="font-size:15px;font-weight:750;margin-top:4px">이번 회차, 다 들었어요</div>'
+      +'<div class="sm" style="font-size:11px;color:var(--paper-sub);font-weight:600">'+(srcN?('이 에피소드는 '+srcN+'개 영상에서 만들어졌어요'):'가운데 버튼 = 처음부터 다시')+'</div>'
+      +(nextM?'<button class="fin-next" id="finNext">다음: <b></b></button>':'')
+      +'</div>';
+    if(nextM){ pState.querySelector('#finNext b').textContent=nextM.title;
+      pState.querySelector('#finNext').onclick=function(){ openNote(nextM); }; }
     bi=0;
   }
   function setPlaying(on){
-    playing=on;
-    setCharging(on);
-    if(on) runBeat();
-    else{ stopSpeech(); stopClip(); }
+    playing=on; setCharging(on);
+    if(on){ acquireWake(); runBeat(); }
+    else{ stopSpeech(); stopClip(); releaseWake(); }
   }
 
   async function openNote(m){
     curNote=m; show('player');
     document.getElementById('pTitle').textContent=m.title||'노트';
     pShowState('노트를 여는 중…','');
-    try{
-      var r=await api('/mandalas/'+m.id+'/book');
-      var j=await r.json();
-      flatten(j.data&&j.data.book);
-      if(!beats.length){ pShowState('노트 준비 중','카드가 모이면 에피소드가 생겨요'); return; }
-      bi=0; playing=true; setCharging(true); chime('start'); runBeat();
-    }catch(e){
-      if(e.status===404) pShowState('노트 준비 중','아직 이 만다라의 노트가 만들어지지 않았어요<br>카드가 모이면 자동으로 생깁니다');
-      else pShowState('열지 못했어요','네트워크 확인 후 다시 시도해주세요');
+    var book=null;
+    if(m.sample){ book=m.book; }
+    else{
+      var cache=bookCache[m.id];
+      if(cache&&cache.book){ book=cache.book; m.sourceVideos=cache.sourceVideos; }
+      else{
+        try{
+          var r=await api('/mandalas/'+m.id+'/book');
+          var j=await r.json();
+          book=j.data&&j.data.book; m.sourceVideos=j.data&&j.data.sourceVideos;
+          bookCache[m.id]={book:book, sourceVideos:m.sourceVideos};
+        }catch(e){
+          if(e.status===404) pShowState('노트 준비 중','카드가 모이면 에피소드가 자동으로 생겨요');
+          else pShowState('열지 못했어요','연결 확인 후 다시 시도해주세요');
+          return;
+        }
+      }
+    }
+    flatten(book);
+    if(!beats.length){ pShowState('노트 준비 중','카드가 모이면 에피소드가 자동으로 생겨요'); return; }
+    var res=m.sample?null:loadResume(m.id);
+    bi=(res&&!res.done&&res.bi>0&&res.bi<beats.length)?res.bi:0;
+    playing=true; setCharging(true); acquireWake();
+    if(bi===0) chime('start');
+    coachOnce();
+    runBeat();
+  }
+
+  /* ================= 클릭휠 엔진 — §1.1a J1~J8 ================= */
+  var wheel=document.getElementById('wheel'), shade=document.getElementById('wheelShade');
+  var NOTCH=28;
+  (function(){
+    var dragging=false, lastAng=0, lastT=0, acc=0, visAngle=0, kick=0, rubber=0, rafId=null;
+    function angOf(e){
+      var r=wheel.getBoundingClientRect();
+      var x=e.clientX-(r.left+r.width/2), y=e.clientY-(r.top+r.height/2);
+      return {a:Math.atan2(y,x)*180/Math.PI+90, r:Math.hypot(x,y)/(r.width/2)};
+    }
+    function frame(){ // J1: rAF 직결
+      shade.style.transform='rotate('+(visAngle-kick+rubber)+'deg)';
+      kick*=0.72; rubber*=0.82;
+      if(Math.abs(kick)>0.05||Math.abs(rubber)>0.05||dragging){ rafId=requestAnimationFrame(frame); }
+      else rafId=null;
+    }
+    function kickFrame(){ if(!rafId) rafId=requestAnimationFrame(frame); }
+    wheel.addEventListener('pointerdown',function(e){
+      if(e.target.closest('.wbtn')||e.target.closest('.core')) return;
+      var p=angOf(e);
+      if(p.r<0.44||p.r>1.1) return; // J8: 허브 데드존 + 관용 존
+      dragging=true; lastAng=p.a; lastT=e.timeStamp; acc=0;
+      visAngle=p.a; // 음영이 손가락 위치에서 시작
+      wheel.classList.add('touching');
+      wheel.setPointerCapture(e.pointerId);
+      kickFrame();
+    });
+    wheel.addEventListener('pointermove',function(e){
+      if(!dragging) return;
+      var p=angOf(e);
+      var d=p.a-lastAng; if(d>180)d-=360; if(d<-180)d+=360;
+      var dt=Math.max(e.timeStamp-lastT,1);
+      lastAng=p.a; lastT=e.timeStamp;
+      visAngle+=d; acc+=d;
+      var vel=Math.abs(d)/dt*1000; // J3: 가속
+      var units=vel>360?4:vel>180?2:1;
+      while(acc>=NOTCH){ acc-=NOTCH; notch(1,units); }
+      while(acc<=-NOTCH){ acc+=NOTCH; notch(-1,units); }
+      kickFrame();
+    });
+    ['pointerup','pointercancel'].forEach(function(ev){
+      wheel.addEventListener(ev,function(){ dragging=false; acc=0; wheel.classList.remove('touching'); kickFrame(); });
+    });
+    function notch(dir,units){
+      kick+=1.5*dir; // J2: 시각 디텐트
+      if(navigator.vibrate) navigator.vibrate(8);
+      for(var u=0;u<(units||1);u++) dispatchNotch(dir);
+    }
+    window.wheelRubber=function(dir){ rubber+=15*dir; kickFrame(); }; // J4
+    window.wheelDemo=function(){ // J6: 첫 발견
+      wheel.classList.add('demo');
+      var t0=null;
+      function d(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/1200,1);
+        visAngle=Math.sin(p*Math.PI)*40; kickFrame();
+        if(p<1) requestAnimationFrame(d); else setTimeout(function(){wheel.classList.remove('demo')},250);
+      }
+      requestAnimationFrame(d);
+    };
+  })();
+  function dispatchNotch(dir){
+    if(cur==='home'){
+      var items=homeItems(); if(!items.length) return;
+      var nx=selIdx+dir;
+      if(nx<0||nx>=items.length){ wheelRubber(dir); return; } // J4
+      selIdx=nx; renderRows(); // J5: 스냅은 CSS --snap
+    } else if(cur==='player'){
+      if(bi+dir>=beats.length){ wheelRubber(1); finishNote(); return; }
+      nextBeat(dir); if(!playing){ playing=true; setCharging(true); acquireWake(); runBeat(); }
     }
   }
 
-  /* ================= 휠 배선 ================= */
-  // iPod grammar: MENU = one level up. player -> home(stop), home -> menu, menu -> back.
   document.getElementById('bMenu').onclick=function(){
     if(cur==='login') return;
-    if(cur==='player'){ setPlaying(false); show('home'); }
-    else if(cur==='menu'){ show(lastMain==='player'?'home':lastMain); }
+    if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('home'); renderRows(); }
+    else if(cur==='menu'){ show('home'); }
     else{ show('menu'); }
   };
-  document.getElementById('bPrev').onclick=function(){
-    if(cur==='home'&&mandalas.length){ selIdx=(selIdx-1+mandalas.length)%mandalas.length; renderRows(); }
-    else if(cur==='player'){ nextBeat(-1); if(!playing){playing=true; runBeat();} }
-  };
-  document.getElementById('bNext').onclick=function(){
-    if(cur==='home'&&mandalas.length){ selIdx=(selIdx+1)%mandalas.length; renderRows(); }
-    else if(cur==='player'){ nextBeat(1); if(!playing){playing=true; runBeat();} }
-  };
+  document.getElementById('bPrev').onclick=function(){ dispatchNotch(-1) };
+  document.getElementById('bNext').onclick=function(){ dispatchNotch(1) };
   function corePress(){
     if(cur==='login'){ loginRedirect(); return; }
-    if(cur==='home'){ if(mandalas[selIdx]) openNote(mandalas[selIdx]); return; }
-    if(cur==='player'){ setPlaying(!playing); if(!playing) toast('일시정지'); }
+    if(cur==='home'){ var items=homeItems(); var m=items[selIdx];
+      if(m){ var k=rowState(m).kind; if(k!=='making'&&k!=='loading') openNote(m); } return; }
+    if(cur==='player'){ setPlaying(!playing); }
   }
   document.getElementById('bCore').onclick=corePress;
   document.getElementById('bPlay').onclick=function(){
     if(cur==='player'){ setPlaying(!playing); }
-    else if(cur==='home'&&mandalas[selIdx]) openNote(mandalas[selIdx]);
+    else if(cur==='home'){ corePress(); }
   };
-
-  /* ---- 휠 드래그 = 조그 (재생 화면: 구간 이동 / 홈: 목록 이동) ---- */
-  (function(){
-    var wheel=document.getElementById('wheel');
-    var dragging=false, lastAng=0, acc=0, STEP=42; // deg per notch
-    function angOf(e){
-      var r=wheel.getBoundingClientRect();
-      var x=e.clientX-(r.left+r.width/2), y=e.clientY-(r.top+r.height/2);
-      return Math.atan2(y,x)*180/Math.PI;
-    }
-    var tex=document.getElementById('wheelTex'), texAngle=0;
-    wheel.addEventListener('pointerdown',function(e){
-      if(e.target.closest('.wbtn')||e.target.closest('.core')) return;
-      dragging=true; lastAng=angOf(e); acc=0;
-      wheel.classList.add('touching');
-      wheel.setPointerCapture(e.pointerId);
-    });
-    wheel.addEventListener('pointermove',function(e){
-      if(!dragging) return;
-      var a=angOf(e), d=a-lastAng;
-      if(d>180) d-=360; if(d<-180) d+=360;
-      lastAng=a; acc+=d;
-      texAngle+=d; tex.style.transform='rotate('+texAngle+'deg)'; // 1:1 with the finger
-      while(acc>=STEP){ acc-=STEP; notch(1); }
-      while(acc<=-STEP){ acc+=STEP; notch(-1); }
-    });
-    ['pointerup','pointercancel'].forEach(function(ev){
-      wheel.addEventListener(ev,function(){ dragging=false; acc=0; wheel.classList.remove('touching'); });
-    });
-    function notch(dir){
-      if(navigator.vibrate) navigator.vibrate(8); // silent detent — podcast, no click sound
-      if(cur==='player'){ nextBeat(dir); if(!playing){playing=true; runBeat();} }
-      else if(cur==='home'&&mandalas.length){
-        selIdx=(selIdx+dir+mandalas.length)%mandalas.length; renderRows();
+  document.getElementById('clipGuard').addEventListener('click',(function(){
+    var lastTap=0;
+    return function(){
+      var now=Date.now();
+      if(document.body.classList.contains('stage')&&now-lastTap<300){ // G1 더블탭
+        clipbox.classList.toggle('contain'); lastTap=0; return;
       }
-    }
-  })();
+      lastTap=now;
+      setTimeout(function(){ if(lastTap&&Date.now()-lastTap>=290){ lastTap=0;
+        if(cur==='player'){ setPlaying(!playing); hudWake(); } } },300);
+    };
+  })());
 
-  /* ---- 투명 게임핸들 (가로 무대): 터치로 깨어나고, 드래그 회전 = 조그 ---- */
-  (function(){
-    var handle=document.getElementById('handle');
-    var wakeT=null;
-    function wake(){
-      handle.classList.add('awake');
-      clearTimeout(wakeT); wakeT=setTimeout(function(){handle.classList.remove('awake')},2600);
+  /* ================= 게임핸들 — §2.4 A 기록 이식 ================= */
+  var stick=document.getElementById('stick'), knob=stick.querySelector('.knob');
+  var stAct=false, stArmed=true, stRot=false, stLastAng=null, stAcc=0, stDetent=0;
+  var stX0=0, stY0=0, stMoved=0, stT0=0, stWasOn=false, stHide=null;
+  function stickCenter(){ var r=stick.getBoundingClientRect(); return [r.left+r.width/2, r.top+r.height/2]; }
+  function hudWake(){ // G2: 핸들 활성 동안 HUD(헤어라인·상단) 동반 표시
+    document.body.classList.add('hud');
+    clearTimeout(hudWake._t); hudWake._t=setTimeout(function(){document.body.classList.remove('hud')},2600);
+  }
+  function stickHint(){ stick.classList.add('hint'); setTimeout(function(){stick.classList.remove('hint')},1600); }
+  stick.addEventListener('pointerdown',function(e){
+    stAct=true; stArmed=true; stRot=false; stLastAng=null; stAcc=0; stDetent=0;
+    stWasOn=stick.classList.contains('on'); clearTimeout(stHide);
+    stX0=e.clientX; stY0=e.clientY; stMoved=0; stT0=performance.now();
+    stick.classList.add('on'); hudWake();
+    stick.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  stick.addEventListener('pointermove',function(e){
+    if(!stAct) return; e.preventDefault();
+    stMoved=Math.max(stMoved, Math.hypot(e.clientX-stX0, e.clientY-stY0));
+    var c=stickCenter();
+    var dx=e.clientX-c[0], dy=e.clientY-c[1], r=Math.hypot(dx,dy);
+    var kx=Math.max(-26,Math.min(26,dx)), ky=Math.max(-26,Math.min(26,dy));
+    knob.style.transition='none';
+    knob.style.transform='translate(calc(-50% + '+kx+'px), calc(-50% + '+ky+'px))';
+    var ang=Math.atan2(dy,dx)*180/Math.PI;
+    if(!stRot){
+      if(r>22){
+        if(stLastAng!==null){ var d=ang-stLastAng; if(d>180)d-=360; if(d<-180)d+=360; stAcc+=d;
+          if(Math.abs(stAcc)>46){ stRot=true; stick.classList.add('rot'); stArmed=false; } }
+        stLastAng=ang;
+      } else stLastAng=null;
+      if(!stRot && stArmed && r>34){
+        if(Math.abs(dx)>Math.abs(dy)){ if(!playing){playing=true;setCharging(true);acquireWake();} nextBeat(dx>0?1:-1); runBeat(); }
+        else if(dy>0){ setPlaying(!playing); }
+        else { setPlaying(false); document.body.classList.remove('clipmode'); show('home'); renderRows(); }
+        stArmed=false; hudWake();
+        if(navigator.vibrate) navigator.vibrate(10);
+      }
+      if(r<12) stArmed=true;
+    } else {
+      var d2=ang-stLastAng; if(d2>180)d2-=360; if(d2<-180)d2+=360; stLastAng=ang; stDetent+=d2;
+      while(stDetent>=26){ stDetent-=26; stickJog(1); if(navigator.vibrate) navigator.vibrate(4); }
+      while(stDetent<=-26){ stDetent+=26; stickJog(-1); if(navigator.vibrate) navigator.vibrate(4); }
     }
-    document.addEventListener('pointerdown',function(){
-      if(document.body.classList.contains('stage')) wake();
+  },{passive:false});
+  function stickJog(dir){
+    hudWake();
+    var beat=beats[bi];
+    if(beat&&beat.t==='n'){ jogSentence(dir); }
+    else { if(!playing){playing=true;setCharging(true);acquireWake();} nextBeat(dir); runBeat(); }
+  }
+  ['pointerup','pointercancel'].forEach(function(ev){
+    stick.addEventListener(ev,function(){
+      var isTap=(ev==='pointerup')&&!stRot&&stMoved<10&&(performance.now()-stT0)<450;
+      if(isTap&&stWasOn){ setPlaying(!playing); if(navigator.vibrate) navigator.vibrate(10); }
+      stAct=false; stRot=false; stick.classList.remove('rot');
+      clearTimeout(stHide); stHide=setTimeout(function(){ if(!stAct) stick.classList.remove('on'); },2200);
+      knob.style.transition='transform .18s cubic-bezier(.22,.9,.3,1)'; knob.style.transform='translate(-50%,-50%)';
     });
-    document.getElementById('hCore').onclick=function(){ wake(); setPlaying(!playing); };
-    document.getElementById('hPrev').onclick=function(){ wake(); nextBeat(-1); if(!playing){playing=true; runBeat();} };
-    document.getElementById('hNext').onclick=function(){ wake(); nextBeat(1); if(!playing){playing=true; runBeat();} };
-    document.getElementById('hMenu').onclick=function(){ wake(); setPlaying(false); show('home'); };
-    var dragging=false, lastAng=0, acc=0, STEP=40;
-    function angOf(e){
-      var r=handle.getBoundingClientRect();
-      var x=e.clientX-(r.left+r.width/2), y=e.clientY-(r.top+r.height/2);
-      return Math.atan2(y,x)*180/Math.PI;
-    }
-    handle.addEventListener('pointerdown',function(e){
-      if(e.target.closest('.h-core')||e.target.closest('.h-btn')) return;
-      dragging=true; lastAng=angOf(e); acc=0; wake();
-      handle.setPointerCapture(e.pointerId);
-    });
-    handle.addEventListener('pointermove',function(e){
-      if(!dragging) return;
-      var a=angOf(e), d=a-lastAng;
-      if(d>180) d-=360; if(d<-180) d+=360;
-      lastAng=a; acc+=d; wake();
-      while(acc>=STEP){ acc-=STEP; nextBeat(1); if(!playing){playing=true; runBeat();} }
-      while(acc<=-STEP){ acc+=STEP; nextBeat(-1); if(!playing){playing=true; runBeat();} }
-    });
-    ['pointerup','pointercancel'].forEach(function(ev){
-      handle.addEventListener(ev,function(){ dragging=false; acc=0; });
-    });
-  })();
+  });
 
-  /* ================= MENU 항목 ================= */
+  /* ================= Wake Lock (C2) + 인터럽트 (C6) ================= */
+  var wakeLock=null;
+  async function acquireWake(){
+    try{ if('wakeLock' in navigator && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release',function(){wakeLock=null}); } }catch(e){}
+  }
+  function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){} }
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden && playing){ setPlaying(false); } // 위치는 resume이 기억
+  });
+
+  /* ================= 코치마크 (C5) + 첫 발견 (J6) ================= */
+  function coachOnce(){
+    try{
+      if(localStorage.getItem('insighta-wheel-coach')) return;
+      localStorage.setItem('insighta-wheel-coach','1');
+      toast('휠을 돌리면 구간이 움직여요');
+    }catch(e){}
+  }
+  function wheelIntroOnce(){
+    try{
+      if(localStorage.getItem('insighta-wheel-intro')) return;
+      localStorage.setItem('insighta-wheel-intro','1');
+      setTimeout(function(){ if(window.wheelDemo&&!reduce) wheelDemo(); },700);
+    }catch(e){}
+  }
+
+  /* ================= 메뉴 항목 ================= */
   document.getElementById('bLogin').onclick=loginRedirect;
+  document.getElementById('bSample').onclick=function(){ openNote(SAMPLE) };
   document.getElementById('bLogout').onclick=function(){
     try{localStorage.removeItem(OWN_KEY)}catch(e){}
     setPlaying(false); show('login');
@@ -931,7 +1152,6 @@
     try{ await navigator.clipboard.writeText(url); toast('링크가 복사됐어요'); }
     catch(e){ prompt('이 링크를 복사하세요', url); }
   };
-  document.getElementById('clipGuard').onclick=function(){ if(cur==='player') setPlaying(!playing); };
   document.getElementById('bInstall').onclick=function(){
     var standalone=matchMedia('(display-mode: standalone)').matches || navigator.standalone===true;
     toast(standalone?'이미 앱으로 실행 중':'공유 버튼 → "홈 화면에 추가"');
@@ -997,7 +1217,7 @@
       loadList();
       setTimeout(function(){ ov.classList.remove('show'); goalInput.value=''; },1800);
     }catch(e){
-      goMsg.innerHTML='만들지 못했어요 — 다시 시도해주세요<small>'+String(e.message||e).slice(0,60)+'</small>';
+      goMsg.innerHTML='만들지 못했어요 — 다시 시도해주세요<small>'+esc(String(e.message||e).slice(0,60))+'</small>';
       setTimeout(function(){ goBody.hidden=false; goProg.hidden=true;
         goTitle.textContent='무엇을 배우고 싶나요?'; },1600);
     }
@@ -1013,7 +1233,8 @@
   scr[cur].classList.add('active');
   (async function boot(){
     var tok=await freshToken();
-    if(tok){ show('home'); loadList(); } else { show('login'); }
+    if(tok){ show('home'); loadList(); wheelIntroOnce(); }
+    else { show('login'); }
   })();
 </script>
 </body>
