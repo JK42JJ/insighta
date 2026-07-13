@@ -47,3 +47,48 @@ export function loadCollapseThresholds(env: NodeJS.ProcessEnv = process.env): Co
     deboostRateMax: numEnv(env, 'COLLAPSE_DEBOOST_RATE_MAX', 0.5),
   };
 }
+
+// ── alert-state machine (pure — shared by the PR4 watch job + tests) ────────
+
+export function isCollapseWatchEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = String(env['COLLAPSE_WATCH_ENABLED'] ?? '')
+    .trim()
+    .toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes';
+}
+
+/** Re-alert suppression per metric (first alert immediate; repeats after cooldown). */
+export const ALERT_COOLDOWN_MS = 6 * 3600 * 1000;
+/** Unresolved-violation escalation unit (supervisor: daily re-send until resolved). */
+export const ALERT_ESCALATION_MS = 24 * 3600 * 1000;
+
+export interface AlertState {
+  lastAlertAt: Map<string, number>;
+  firstSeenAt: Map<string, number>;
+}
+
+export function shouldAlert(
+  metric: string,
+  now: number,
+  state: AlertState
+): { alert: boolean; escalationDays: number } {
+  const first = state.firstSeenAt.get(metric) ?? now;
+  if (!state.firstSeenAt.has(metric)) state.firstSeenAt.set(metric, now);
+  const last = state.lastAlertAt.get(metric);
+  const escalationDays = Math.floor((now - first) / ALERT_ESCALATION_MS);
+  if (last == null || now - last >= ALERT_COOLDOWN_MS) {
+    state.lastAlertAt.set(metric, now);
+    return { alert: true, escalationDays };
+  }
+  return { alert: false, escalationDays };
+}
+
+/** Drop state for metrics no longer violating so recurrence alerts fresh. */
+export function clearResolved(activeMetrics: Set<string>, state: AlertState): void {
+  for (const k of [...state.firstSeenAt.keys()]) {
+    if (!activeMetrics.has(k)) {
+      state.firstSeenAt.delete(k);
+      state.lastAlertAt.delete(k);
+    }
+  }
+}
