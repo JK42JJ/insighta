@@ -60,8 +60,8 @@ describe('parseJudgeResponse', () => {
   });
 });
 
-describe('judgeCellCards — fail-open', () => {
-  test('provider throw → 전원 fit', async () => {
+describe('judgeCellCards — unanimous 2-judge + fail-open', () => {
+  test('provider throw (both legs) → 전원 fit', async () => {
     const out = await judgeCellCards({
       centerGoal: 'g',
       cellTopic: 'c',
@@ -72,7 +72,7 @@ describe('judgeCellCards — fail-open', () => {
     });
     expect(out.every((v) => v.fit)).toBe(true);
   });
-  test('unfit 판정 전달', async () => {
+  test('만장일치 unfit → sink', async () => {
     const out = await judgeCellCards({
       centerGoal: 'g',
       cellTopic: 'c',
@@ -80,5 +80,30 @@ describe('judgeCellCards — fail-open', () => {
       generateImpl: async () => '[{"n":1,"fit":true},{"n":2,"fit":false}]',
     });
     expect(out[1]).toEqual({ videoId: 'bbb', fit: false });
+    expect(out[0]).toEqual({ videoId: 'aaa', fit: true });
+  });
+  test('의견 분열 (한 leg만 unfit) → fit 유지 (오침전 방지, 2026-07-13 반려견)', async () => {
+    const out = await judgeCellCards({
+      centerGoal: 'g',
+      cellTopic: 'c',
+      items,
+      generateImpl: async (model: string) =>
+        model.includes('gemini')
+          ? '[{"n":1,"fit":true},{"n":2,"fit":false}]'
+          : '[{"n":1,"fit":true},{"n":2,"fit":true}]',
+    });
+    expect(out[1]).toEqual({ videoId: 'bbb', fit: true });
+  });
+  test('한 leg 실패 + 다른 leg unfit → fit 유지 (실패 leg는 침전 차단)', async () => {
+    const out = await judgeCellCards({
+      centerGoal: 'g',
+      cellTopic: 'c',
+      items,
+      generateImpl: async (model: string) => {
+        if (model.includes('gemini')) throw new Error('down');
+        return '[{"n":1,"fit":false},{"n":2,"fit":false}]';
+      },
+    });
+    expect(out.every((v) => v.fit)).toBe(true);
   });
 });
