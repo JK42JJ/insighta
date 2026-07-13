@@ -45,7 +45,17 @@ export async function handleJudgeDeboost(
   const job = Array.isArray(jobs) ? jobs[0] : jobs;
   if (!job) return;
   if (!isJudgeDeboostEnabled()) return;
-  const { userId, mandalaId } = job.data;
+  await judgeMandala(job.data.userId, job.data.mandalaId);
+}
+
+/**
+ * Judge core — reusable by the queue worker AND the admin re-judge endpoint
+ * (2026-07-13 반려견 inversion: verdicts must be re-appliable after prompt/
+ * stack changes). Idempotent both ways: unfit sinks to UNFIT_RELEVANCE_PCT;
+ * a card judged FIT that is currently sunk RESTORES to NULL and the quick
+ * relevance backfill re-scores it (its IS NULL filter makes this safe).
+ */
+export async function judgeMandala(userId: string, mandalaId: string): Promise<void> {
   const prisma = getPrismaClient();
 
   // Cell topics from the root level's subjects.
@@ -65,21 +75,28 @@ export async function handleJudgeDeboost(
     select: {
       id: true,
       cell_index: true,
+      relevance_pct: true,
       video: { select: { youtube_video_id: true, title: true } },
     },
   });
-  const byCell = new Map<number, Array<{ rowId: string; videoId: string; title: string }>>();
+  const byCell = new Map<
+    number,
+    Array<{ rowId: string; videoId: string; title: string; relevancePct: number | null }>
+  >();
   for (const r of rows) {
     const title = r.video?.title?.trim();
     const vid = r.video?.youtube_video_id;
     if (!title || !vid || r.cell_index == null || r.cell_index < 0) continue;
     if (!byCell.has(r.cell_index)) byCell.set(r.cell_index, []);
-    byCell.get(r.cell_index)!.push({ rowId: r.id, videoId: vid, title });
+    byCell
+      .get(r.cell_index)!
+      .push({ rowId: r.id, videoId: vid, title, relevancePct: r.relevance_pct ?? null });
   }
   if (byCell.size === 0) return;
 
   let judged = 0;
   let deboosted = 0;
+  let restored = 0;
   await Promise.allSettled(
     [...byCell.entries()].map(async ([cellIndex, cards]) => {
       const cellTopic = subjects[cellIndex]?.trim();
@@ -91,24 +108,55 @@ export async function handleJudgeDeboost(
       });
       judged += verdicts.length;
       const unfitIds = new Set(verdicts.filter((v) => !v.fit).map((v) => v.videoId));
-      if (unfitIds.size === 0) return;
       const unfitRows = cards.filter((c) => unfitIds.has(c.videoId));
-      deboosted += unfitRows.length;
-      await prisma.userVideoState.updateMany({
-        where: { id: { in: unfitRows.map((c) => c.rowId) } },
-        data: { relevance_pct: UNFIT_RELEVANCE_PCT },
-      });
-      // Mirror on recommendation_cache so re-serves keep the sink.
-      await prisma.recommendation_cache
-        .updateMany({
-          where: { mandala_id: mandalaId, video_id: { in: unfitRows.map((c) => c.videoId) } },
+      // Restore: judged FIT but currently sunk (earlier verdict) → NULL, so
+      // the quick relevance backfill (IS NULL filter) re-scores it.
+      const restoreRows = cards.filter(
+        (c) => !unfitIds.has(c.videoId) && c.relevancePct === UNFIT_RELEVANCE_PCT
+      );
+      if (unfitRows.length > 0) {
+        deboosted += unfitRows.length;
+        await prisma.userVideoState.updateMany({
+          where: { id: { in: unfitRows.map((c) => c.rowId) } },
           data: { relevance_pct: UNFIT_RELEVANCE_PCT },
-        })
-        .catch(() => undefined);
+        });
+        // Mirror on recommendation_cache so re-serves keep the sink.
+        await prisma.recommendation_cache
+          .updateMany({
+            where: { mandala_id: mandalaId, video_id: { in: unfitRows.map((c) => c.videoId) } },
+            data: { relevance_pct: UNFIT_RELEVANCE_PCT },
+          })
+          .catch(() => undefined);
+      }
+      if (restoreRows.length > 0) {
+        restored += restoreRows.length;
+        await prisma.userVideoState.updateMany({
+          where: { id: { in: restoreRows.map((c) => c.rowId) } },
+          data: { relevance_pct: null },
+        });
+        await prisma.recommendation_cache
+          .updateMany({
+            where: { mandala_id: mandalaId, video_id: { in: restoreRows.map((c) => c.videoId) } },
+            data: { relevance_pct: null },
+          })
+          .catch(() => undefined);
+      }
       log.info(
-        `[judge] mandala=${mandalaId} cell=${cellIndex} unfit=${unfitRows.length}/${cards.length}`
+        `[judge] mandala=${mandalaId} cell=${cellIndex} unfit=${unfitRows.length} restored=${restoreRows.length} of=${cards.length}`
       );
     })
   );
-  log.info(`[judge] mandala=${mandalaId} judged=${judged} deboosted=${deboosted}`);
+  if (restored > 0) {
+    // Re-score restored cards (fire-and-forget; IS NULL filter = idempotent).
+    setImmediate(() => {
+      void import('@/modules/relevance/relevance-backfill-trigger')
+        .then(({ enqueueRelevanceBackfillForMandala }) =>
+          enqueueRelevanceBackfillForMandala({ userId, mandalaId, applyCutoff: false })
+        )
+        .catch(() => undefined);
+    });
+  }
+  log.info(
+    `[judge] mandala=${mandalaId} judged=${judged} deboosted=${deboosted} restored=${restored}`
+  );
 }

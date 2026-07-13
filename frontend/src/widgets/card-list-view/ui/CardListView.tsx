@@ -776,6 +776,7 @@ export function CardListView({
               {showDeboosted && (
                 <div className="opacity-60 animate-fade-in">
                   <CardList
+                    suppressSetScrollReset
                     cards={deboostedCards}
                     isLoading={false}
                     title={title}

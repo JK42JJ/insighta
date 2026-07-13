@@ -238,6 +238,25 @@ export async function adminPerformanceRoutes(fastify: FastifyInstance) {
     );
   });
 
+  // Re-judge a mandala with the CURRENT judge stack (unanimous 2-model) —
+  // re-appliable after prompt/stack changes; sinks unfit, restores fit-but-sunk.
+  fastify.post('/rejudge', adminAuth, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { mandalaId } = z.object({ mandalaId: z.string().uuid() }).parse(request.body ?? {});
+    const mandala = await db.user_mandalas.findUnique({
+      where: { id: mandalaId },
+      select: { id: true, user_id: true },
+    });
+    if (!mandala) return reply.code(404).send({ error: { message: 'mandala not found' } });
+    const { judgeMandala } = await import('@/modules/queue/handlers/judge-deboost');
+    setImmediate(() => {
+      void judgeMandala(mandala.user_id, mandalaId).catch((err) =>
+        log.warn(`admin rejudge failed: ${err instanceof Error ? err.message : String(err)}`)
+      );
+    });
+    log.info(`admin rejudge dispatched: mandala=${mandalaId}`);
+    return reply.send(createSuccessResponse({ dispatched: true, mandalaId }));
+  });
+
   fastify.post('/events', adminAuth, async (request: FastifyRequest, reply: FastifyReply) => {
     const body = ManualEventSchema.parse(request.body ?? {});
     const row = await db.config_change_events.create({

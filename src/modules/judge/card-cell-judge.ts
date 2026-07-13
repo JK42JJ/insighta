@@ -22,8 +22,16 @@ import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'card-cell-judge' });
 
-/** gA — the benchmark's main judge config (Gemini Flash via gateway). */
-export const JUDGE_MODEL = 'google/gemini-2.5-flash';
+/**
+ * Unanimous 2-judge stack (2026-07-13 — 반려견 false-sink incident: single gA
+ * sank 5 clearly-relevant dog-training cards). The quality report's confirmed
+ * design: NO single judge is safe; sinking requires UNANIMOUS unfit across
+ * different model families. A failed/unparseable leg votes fit (fail-open =
+ * blocks sinking, never causes it).
+ */
+export const JUDGE_MODELS = ['google/gemini-2.5-flash', 'deepseek/deepseek-v4-flash'] as const;
+/** @deprecated single-judge era; kept for log compat. */
+export const JUDGE_MODEL = JUDGE_MODELS[0];
 const JUDGE_TEMPERATURE = 0;
 const JUDGE_MAX_TOKENS = 800;
 
@@ -90,37 +98,54 @@ export async function judgeCellCards(params: {
   cellTopic: string;
   items: JudgeItem[];
   generateImpl?: (
+    model: string,
     prompt: string,
     options?: { temperature?: number; maxTokens?: number; format?: 'json' }
   ) => Promise<string>;
 }): Promise<JudgeVerdict[]> {
   if (params.items.length === 0) return [];
   const prompt = buildJudgePrompt(params);
-  try {
-    const generate =
-      params.generateImpl ??
-      (async (p: string, o?: { temperature?: number; maxTokens?: number; format?: 'json' }) => {
-        const provider = new OpenRouterGenerationProvider(JUDGE_MODEL);
-        return provider.generate(p, o);
-      });
-    const raw = await generate(prompt, {
-      temperature: JUDGE_TEMPERATURE,
-      maxTokens: JUDGE_MAX_TOKENS,
-      format: 'json',
+  const generate =
+    params.generateImpl ??
+    (async (
+      model: string,
+      p: string,
+      o?: { temperature?: number; maxTokens?: number; format?: 'json' }
+    ) => {
+      const provider = new OpenRouterGenerationProvider(model);
+      return provider.generate(p, o);
     });
-    const verdicts = parseJudgeResponse(raw, params.items);
-    if (!verdicts) {
-      log.warn('judge response unparseable — fail-open (all fit)', {
-        cellTopic: params.cellTopic,
-      });
-      return params.items.map((it) => ({ videoId: it.videoId, fit: true }));
-    }
-    return verdicts;
-  } catch (err) {
-    log.warn('judge call failed — fail-open (all fit)', {
-      cellTopic: params.cellTopic,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return params.items.map((it) => ({ videoId: it.videoId, fit: true }));
-  }
+
+  // One vote per model; any leg failure = that leg votes all-fit.
+  const legs = await Promise.all(
+    JUDGE_MODELS.map(async (model): Promise<JudgeVerdict[]> => {
+      try {
+        const raw = await generate(model, prompt, {
+          temperature: JUDGE_TEMPERATURE,
+          maxTokens: JUDGE_MAX_TOKENS,
+          format: 'json',
+        });
+        const verdicts = parseJudgeResponse(raw, params.items);
+        if (!verdicts) {
+          log.warn(`judge leg unparseable — leg votes fit (model=${model})`, {
+            cellTopic: params.cellTopic,
+          });
+          return params.items.map((it) => ({ videoId: it.videoId, fit: true }));
+        }
+        return verdicts;
+      } catch (err) {
+        log.warn(`judge leg failed — leg votes fit (model=${model})`, {
+          cellTopic: params.cellTopic,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return params.items.map((it) => ({ videoId: it.videoId, fit: true }));
+      }
+    })
+  );
+
+  // Unanimous rule: unfit ONLY when every leg says unfit.
+  return params.items.map((it, i) => ({
+    videoId: it.videoId,
+    fit: legs.some((leg) => leg[i]?.fit !== false),
+  }));
 }
