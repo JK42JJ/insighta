@@ -302,14 +302,22 @@
   }
 
   /* 재생 + 가로 = 무대 (§2) */
-  body.stage{padding:0}
+  /* ══ 편집 그리드 — 3밴드 프레임워크 [J:07-13 실기기 반려 후 도입] ══
+     밴드 A(상단 정보) / B(본문 뷰포트) / C(컨트롤). 무대 요소는 밴드 토큰만
+     참조 — 개별 좌표 즉흥 배치 금지 (중첩·균형 붕괴 구조적 차단) */
+  body.stage{padding:0;
+    --sg-x:9vw;                          /* 본문 좌우 여백 (A 원문) */
+    --sg-a:calc(var(--sat) + 10px);      /* 밴드A 시작 */
+    --sg-b:calc(var(--sat) + 66px);      /* 밴드B 시작 (제목행+컨텍스트행+숨) */
+    --sg-c:calc(var(--sab) + 62px)}      /* 밴드B 끝 (독 44 + 숨) */
   body.stage .device{max-width:none; max-height:none; border-radius:0; padding:0; gap:0; background:#0D0D10; box-shadow:none}
   body.stage .device::after{display:none}
   body.stage .wheelzone,body.stage .engrave{display:none}
   body.stage .epaper{flex:1; border-radius:0; box-shadow:none; background:#0D0D10; color:#EDE7DC; overflow:hidden}
   body.stage .scr[data-s="player"]{padding:0}
-  body.stage #scrPlayer .top{position:absolute; z-index:5; left:16px; right:16px; top:calc(var(--sat) + 10px); color:#B8AE9E;
+  body.stage #scrPlayer .top{position:absolute; z-index:5; left:16px; right:16px; top:var(--sg-a); color:#B8AE9E;
     transition:opacity .5s}
+  body.stage #scrPlayer .top .tt{max-width:58%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   body.stage.clipmode #scrPlayer .top{opacity:0}
   body.stage.clipmode.hud #scrPlayer .top{opacity:1}
   body.stage .batt .case{border-color:rgba(255,255,255,.45)}
@@ -336,29 +344,33 @@
   body.stage .chcard{background:#0D0D10; color:#EDE7DC}
   body.stage .chcard .t{color:#EDE7DC}
   /* 진행 = 최하단 2px 헤어라인 (G2: 클립 중엔 HUD 활성 시만) */
-  .hairline{display:none}
-  body.stage .hairline{display:block; position:absolute; z-index:5; left:0; right:0; bottom:0; height:2px;
-    background:rgba(255,255,255,.12)}
-  body.stage .hairline i{display:block; height:100%; background:var(--ui); transition:width .3s var(--soft)}
-  body.stage.clipmode .hairline{opacity:0; transition:opacity .3s}
-  body.stage.clipmode.hud .hairline{opacity:1}
+  .hairline{display:none} /* [J:07-13] 무대 진행면 = 독 단일 — 헤어라인 이중 표기 제거 */
   body.stage .ptrack{display:none}
   body.stage .player-state{position:absolute; inset:0; z-index:6} /* 완료 화면 버튼 = 탭레이어 위 */
 
   /* ── [J pick] 포커스 라인 스트림 (가로 내레이션) ── */
   .s-ctx{display:none}
-  body.stage .s-ctx{display:block; position:absolute; z-index:5; left:25%; right:25%; top:calc(var(--sat) + 12px);
-    text-align:center; font-size:11px; letter-spacing:.3em; color:#8F877A; font-weight:700;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  body.stage .s-ctx{display:block; position:absolute; z-index:5; left:var(--sg-x); right:var(--sg-x);
+    top:calc(var(--sg-a) + 26px); text-align:center; font-size:11px; letter-spacing:.3em; color:#8F877A;
+    font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   body.stage .s-ctx b{color:var(--acc); font-weight:800}
   .stream{display:none}
-  body.stage .stream:not([hidden]){display:flex; position:absolute; inset:0; z-index:2;
-    flex-direction:column; justify-content:center; align-items:center; padding:0 10%; gap:18px; text-align:center}
-  .stream .ln{max-width:72vw; line-height:1.6; transition:opacity .35s var(--soft)}
-  .stream .prv,.stream .nxt{font-size:19px; color:rgba(237,231,220,.28); font-weight:600}
-  .stream .now{font-size:30px; line-height:1.65; color:#EDE7DC; font-weight:750}
-  .stream .now .sent-hl{background:var(--butter); color:#3B372F; border-radius:6px; padding:1px 5px;
-    box-decoration-break:clone; -webkit-box-decoration-break:clone}
+  body.stage .stream:not([hidden]){display:block; position:absolute; z-index:2;
+    left:var(--sg-x); right:var(--sg-x); top:var(--sg-b); bottom:var(--sg-c); overflow:hidden;
+    -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%);
+    mask-image:linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%)}
+  .stream .col{position:absolute; left:0; right:0; top:50%;
+    transition:transform .55s cubic-bezier(.3,.75,.25,1)}
+  /* 전 라인 동일 폰트 + 현재 줄만 scale — 전환 중 레이아웃 불변 (슬라이드 안정) */
+  .sln{text-align:center; padding:9px 0; font-size:19px; line-height:1.6; font-weight:700;
+    color:rgba(237,231,220,.42); max-width:76%; margin:0 auto;
+    transition:transform .5s cubic-bezier(.3,.75,.25,1), color .45s; transform-origin:center}
+  .sln span{border-radius:6px; padding:1px 5px; box-decoration-break:clone; -webkit-box-decoration-break:clone;
+    transition:background .45s, color .45s}
+  .sln.far{color:rgba(237,231,220,.16)}
+  .sln.now{transform:scale(1.26); color:#EDE7DC}
+  .sln.now span{background:var(--butter); color:#3B372F}
+  @media (prefers-reduced-motion: reduce){ .stream .col,.sln{transition:none} }
   body.stage.clipmode .s-ctx{opacity:0; transition:opacity .3s}
   body.stage.clipmode.hud .s-ctx{opacity:1}
   body.stage .readbox{display:none !important} /* 가로 내레이션 = 스트림 전용 */
@@ -386,9 +398,7 @@
   body.stage.railopen #scrPlayer{left:31%; transform:scale(.94); transform-origin:right center;
     border-radius:14px; overflow:hidden; background:#131317;
     box-shadow:0 0 0 1px rgba(255,255,255,.07), -14px 0 34px rgba(0,0,0,.5)}
-  body.stage.railopen .stream{padding:0 7%}
-  body.stage.railopen .stream .prv,body.stage.railopen .stream .nxt{font-size:16px}
-  body.stage.railopen .stream .now{font-size:25px}
+  body.stage.railopen .sln{font-size:15px}
   body.stage.railopen .grip{display:none}
 
   /* ── C1 탭 존 레이어 ── */
@@ -398,7 +408,7 @@
 
   /* ── C2 독 ── */
   .dock{display:none}
-  body.stage .dock{display:flex; position:absolute; z-index:8; left:6%; right:6%; bottom:calc(var(--sab) + 12px);
+  body.stage .dock{display:flex; position:absolute; z-index:8; left:6%; right:6%; bottom:calc(var(--sab) + 6px);
     height:44px; border-radius:14px; align-items:center; gap:12px; padding:0 14px;
     background:rgba(20,20,24,.78); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
     opacity:0; pointer-events:none; transform:translateY(8px);
@@ -499,11 +509,7 @@
         <div class="hairline" id="hairline"><i id="hairFill" style="width:0%"></i></div>
         <!-- [J pick] 가로 무대: 포커스 라인 + 컨텍스트 + 탭 존 + 독 + 푸시 레일 -->
         <div class="s-ctx" id="sCtx"></div>
-        <div class="stream" id="stream" hidden>
-          <div class="ln prv" id="lnPrev"></div>
-          <div class="ln now" id="lnNow"></div>
-          <div class="ln nxt" id="lnNext"></div>
-        </div>
+        <div class="stream" id="stream" hidden><div class="col" id="strCol"></div></div>
         <div class="grip" id="grip" aria-hidden="true"></div>
         <div class="stagetap" id="stageTap" aria-hidden="true"></div>
         <div class="dock" id="dock">
@@ -628,7 +634,7 @@
     var on=land && cur==='player';
     var was=document.body.classList.contains('stage');
     document.body.classList.toggle('stage', on);
-    if(on&&!was){ hudWake(); updateStream(); updateDock(); }
+    if(on&&!was){ hudWake(); updateStream(true); updateDock(); }
     if(!on&&was){ document.body.classList.remove('railopen'); }
   }
   addEventListener('resize', syncStage);
@@ -850,6 +856,7 @@
     readbox.querySelector('.sec-title').textContent=title||'내레이션';
     curSpans=readbox.querySelectorAll('.sent');
     sents.forEach(function(s,i){curSpans[i].textContent=s});
+    renderStream();
   }
   function speakFrom(idx){
     var seq=++speakSeq;
@@ -1179,18 +1186,33 @@
     clearTimeout(hudWake._t); hudWake._t=setTimeout(function(){document.body.classList.remove('hud')},2600);
   }
   var streamEl=document.getElementById('stream'), sCtx=document.getElementById('sCtx'),
-      lnPrev=document.getElementById('lnPrev'), lnNow=document.getElementById('lnNow'), lnNext=document.getElementById('lnNext'),
+      strCol=document.getElementById('strCol'),
       rlList=document.getElementById('rlList'), rlCh=document.getElementById('rlCh'), rlFoot=document.getElementById('rlFoot'),
       stageTapEl=document.getElementById('stageTap'),
       dkPlay=document.getElementById('dkPlay'), dkFill=document.getElementById('dkFill'),
       dkPos=document.getElementById('dkPos'), dkBar=document.getElementById('dkBar');
   var SVG_PLAY='<svg width="14" height="14" viewBox="0 0 16 16"><path d="M4 2.5v11l9.5-5.5Z" fill="#fff"/></svg>',
       SVG_PAUSE='<svg width="14" height="14" viewBox="0 0 16 16"><path d="M4 2.5h3v11H4Zm5 0h3v11H9Z" fill="#fff"/></svg>';
-  function updateStream(){ // 포커스 라인: 현재 문장 크게 중앙, 전/후 흐릿
-    lnPrev.textContent=curSentIdx>0?curSents[curSentIdx-1]:'';
-    lnNext.textContent=curSentIdx<curSents.length-1?curSents[curSentIdx+1]:'';
-    lnNow.innerHTML='<span class="sent-hl"></span>';
-    lnNow.querySelector('.sent-hl').textContent=curSents[curSentIdx]||'';
+  function renderStream(){ // 비트의 전체 문장 → 슬라이드 칼럼 구축
+    strCol.innerHTML='';
+    curSents.forEach(function(t){
+      var d=document.createElement('div'); d.className='sln far';
+      var sp=document.createElement('span'); sp.textContent=t; d.appendChild(sp);
+      strCol.appendChild(d);
+    });
+    updateStream(true);
+  }
+  function updateStream(immediate){ // 현재 문장을 밴드B 중앙으로 — 미끄러지는 전환
+    var lines=strCol.children; if(!lines.length) return;
+    var idx=Math.max(0,Math.min(curSentIdx,lines.length-1));
+    for(var i=0;i<lines.length;i++){
+      var d=Math.abs(i-idx);
+      lines[i].className='sln'+(d===0?' now':(d===1?'':' far'));
+    }
+    var el=lines[idx], y=el.offsetTop+el.offsetHeight/2;
+    if(immediate) strCol.style.transition='none';
+    strCol.style.transform='translateY('+(-y)+'px)';
+    if(immediate){ void strCol.offsetHeight; strCol.style.transition=''; }
   }
   function updateDock(){
     dkFill.style.width=Math.round(bi/Math.max(beats.length-1,1)*100)+'%';
@@ -1234,8 +1256,12 @@
   function openRail(){
     document.body.classList.add('railopen'); updateRail();
     var nw=rlList.querySelector('.now'); if(nw&&nw.scrollIntoView) nw.scrollIntoView({block:'center'});
+    setTimeout(function(){ updateStream(true) },380); // 폭 변화 → 줄바꿈 재중앙
   }
-  function closeRail(){ document.body.classList.remove('railopen'); }
+  function closeRail(){
+    document.body.classList.remove('railopen');
+    setTimeout(function(){ updateStream(true) },380);
+  }
   function stageResume(){ if(!playing){ playing=true; setCharging(true); acquireWake(); } runBeat(); }
   function stageJump(dir){ // dispatchNotch와 동일 계약
     if(bi+dir>=beats.length){ finishNote(); return; }
