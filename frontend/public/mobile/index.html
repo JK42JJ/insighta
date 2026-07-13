@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Insighta Player</title>
+<meta name="description" content="만다라 하나를, 한 편의 팟캐스트로 듣는다 — Insighta 모바일 플레이어 (콘셉트)">
+<!-- PWA / iOS install -->
+<link rel="manifest" href="/mobile/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Insighta">
+<meta name="theme-color" content="#F5F2EC">
+<link rel="apple-touch-icon" href="/mobile/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/mobile/icon-192.png">
+<style>
+  /* ============ Insighta Player — 페이퍼 에디션 (콘셉트 앱 v1) ============
+     시안 C v5의 앱 버전. 크림 세라믹 바디 + e-페이퍼 스크린 + 감귤 다이얼.
+     휠 동작: MENU=홈 · 좌우=화면 이동 · 가운데=재생. 컬러웨이 3종 스위처. */
+  :root{
+    --studio-hi:#F5F2EC; --studio-lo:#E6E1D6; --ink:#2C2925; --ink-2:#837D72; --hair:#DCD6CA;
+    --paper:#F6F2E7; --paper-ink:#3B372F; --paper-sub:#8F887A;
+    --soft:cubic-bezier(.22,.9,.3,1); --spring:cubic-bezier(.34,1.4,.64,1);
+    --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:radial-gradient(130% 100% at 50% 0%, var(--studio-hi) 0%, var(--studio-lo) 100%);
+    color:var(--ink); margin:0; min-height:100dvh; overflow-x:hidden;
+    font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif; line-height:1.6;
+    display:flex; flex-direction:column; align-items:center;
+    padding:calc(var(--sat) + 14px) 18px calc(var(--sab) + 18px);
+    -webkit-tap-highlight-color:transparent; user-select:none;
+  }
+  .brand{font-size:10px; font-weight:700; letter-spacing:.42em; color:var(--ink-2); margin:6px 0 2px; text-transform:uppercase}
+  .brand i{font-style:normal; color:var(--acc,#E0703F)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---- 컬러웨이 ---- */
+  .th-cream{
+    --body-hi:#FBFAF6; --body-mid:#F1EEE6; --body-lo:#DDD7C9; --rim:#FFFFFF;
+    --wheel-hi:#FDFCF9; --wheel-mid:#F2EFE7; --wheel-lo:#D9D3C4;
+    --acc:#E0703F; --acc-hi:#EC8B5C; --acc-lo:#C6552A; --acc-ink:#7A2A0C; --shade:44,41,37;
+  }
+  .th-sage{
+    --body-hi:#DCE4D5; --body-mid:#BECBB3; --body-lo:#93A788; --rim:#EFF4EA;
+    --wheel-hi:#EAF0E4; --wheel-mid:#CFDBC5; --wheel-lo:#A3B797;
+    --acc:#F0EBDD; --acc-hi:#FBF8EF; --acc-lo:#CFC8B4; --acc-ink:#6B6450; --shade:52,66,46;
+  }
+  .th-mist{
+    --body-hi:#DCE6EE; --body-mid:#BECDD9; --body-lo:#90A7B8; --rim:#EFF4F8;
+    --wheel-hi:#E9F0F5; --wheel-mid:#CBD9E2; --wheel-lo:#9FB5C4;
+    --acc:#ECBD6B; --acc-hi:#F5D9A8; --acc-lo:#C8963C; --acc-ink:#6E4E14; --shade:44,60,72;
+  }
+
+  /* ---- 디바이스 ---- */
+  .stage3d{perspective:1200px; display:grid; place-items:center; width:100%; flex:1}
+  .device{
+    width:min(300px, 88vw); border-radius:42px; padding:18px 17px 22px; position:relative;
+    background:linear-gradient(160deg,var(--body-hi) 0%,var(--body-mid) 52%,var(--body-lo) 100%);
+    transform-style:preserve-3d; will-change:transform;
+    transition:transform .5s var(--soft), background .6s var(--soft), box-shadow .6s var(--soft);
+    box-shadow:
+      inset 0 2.5px 2px rgba(255,255,255,.95),
+      inset 0 -5px 10px rgba(var(--shade),.30),
+      inset 2.5px 0 5px rgba(255,255,255,.45),
+      inset -2.5px 0 6px rgba(var(--shade),.14),
+      0 2px 3px rgba(var(--shade),.10),
+      0 18px 28px -14px rgba(var(--shade),.38),
+      0 46px 80px -30px rgba(var(--shade),.50);
+  }
+  .device::after{content:""; position:absolute; inset:0; border-radius:42px; pointer-events:none;
+    box-shadow:inset 0 0 0 1.5px var(--rim), inset 0 0 0 3px rgba(var(--shade),.06)}
+  .device::before{content:""; position:absolute; inset:-2px; border-radius:44px; pointer-events:none; z-index:4;
+    background:linear-gradient(115deg, transparent 30%, rgba(255,255,255,.35) 46%, rgba(255,255,255,.06) 55%, transparent 66%);
+    background-size:280% 100%; background-position:110% 0; opacity:0}
+  .device.sweep::before{animation:sweep 1.4s var(--soft); opacity:1}
+  @keyframes sweep{from{background-position:130% 0}to{background-position:-40% 0}}
+
+  .epaper{
+    border-radius:24px; overflow:hidden; position:relative; aspect-ratio:4/4.3;
+    background:linear-gradient(175deg,#FAF6EC 0%,var(--paper) 60%,#EDE8DA 100%);
+    box-shadow:
+      inset 0 4px 9px rgba(94,86,72,.30),
+      inset 0 -1px 2px rgba(255,255,255,.6),
+      inset 0 0 0 1.5px rgba(94,86,72,.18),
+      0 1.5px 0 rgba(255,255,255,.9);
+    color:var(--paper-ink);
+  }
+  .epaper::after{content:""; position:absolute; inset:0; pointer-events:none; z-index:5;
+    background:linear-gradient(118deg, rgba(255,255,255,.20) 0%, rgba(255,255,255,.04) 16%, transparent 30%)}
+  .scr{position:absolute; inset:0; display:flex; flex-direction:column; padding:15px 16px 14px;
+    opacity:0; transform:translateX(14px); transition:opacity .38s var(--soft), transform .38s var(--soft); pointer-events:none}
+  .scr.active{opacity:1; transform:none; pointer-events:auto}
+  .scr.exit-l{transform:translateX(-14px)}
+  .top{display:flex; justify-content:space-between; align-items:center; font-size:9px; letter-spacing:.16em; color:var(--paper-sub); font-weight:700}
+  .batt{display:inline-flex; align-items:center; gap:2.5px}
+  .batt .case{width:20px; height:10px; border-radius:3px; border:1px solid #A99F8C; padding:1.5px}
+  .batt .case i{display:block; height:100%; border-radius:1.5px; background:var(--acc); transition:width .8s var(--soft), background .6s}
+  .batt .tip{width:1.8px; height:4px; border-radius:1px; background:#A99F8C}
+
+  .wheelzone{display:grid; place-items:center; padding-top:17px; transform:translateZ(26px)}
+  .wheel{
+    width:66%; aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center;
+    background:radial-gradient(circle at 50% 30%, var(--wheel-hi) 0%, var(--wheel-mid) 46%, var(--wheel-lo) 84%, var(--wheel-mid) 100%);
+    transition:background .6s;
+    box-shadow:
+      inset 0 3px 3px rgba(255,255,255,.9),
+      inset 0 -6px 11px rgba(var(--shade),.36),
+      inset 0 14px 22px -14px rgba(255,255,255,.9),
+      0 1.5px 2px rgba(255,255,255,.8),
+      0 12px 20px -9px rgba(var(--shade),.40);
+  }
+  .wheel::before{content:""; position:absolute; inset:0; border-radius:50%;
+    box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55), inset 0 0 0 3px rgba(var(--shade),.10)}
+  .wbtn{position:absolute; border:none; background:none; cursor:pointer; padding:9px 11px; border-radius:12px;
+    font-size:9px; font-weight:700; letter-spacing:.24em; color:#9C9585; font-family:inherit;
+    transition:transform .2s var(--spring), color .2s; touch-action:manipulation}
+  .wbtn:active{transform:scale(.86); color:#6E6758}
+  .wbtn.menu{top:6%; left:50%; transform:translateX(-50%)} .wbtn.menu:active{transform:translateX(-50%) scale(.86)}
+  .wbtn.prev{left:5%; top:50%; transform:translateY(-50%)} .wbtn.prev:active{transform:translateY(-50%) scale(.84)}
+  .wbtn.next{right:5%; top:50%; transform:translateY(-50%)} .wbtn.next:active{transform:translateY(-50%) scale(.84)}
+  .wbtn.play{bottom:5%; left:50%; transform:translateX(-50%)} .wbtn.play:active{transform:translateX(-50%) scale(.86)}
+  .core{
+    width:35%; aspect-ratio:1; border-radius:50%; border:none; cursor:pointer; position:relative;
+    background:radial-gradient(circle at 50% 30%, var(--acc-hi) 0%, var(--acc) 52%, var(--acc-lo) 100%);
+    transition:transform .25s var(--spring), background .6s, box-shadow .6s; touch-action:manipulation;
+    box-shadow:
+      inset 0 2.5px 3px rgba(255,255,255,.5),
+      inset 0 -4px 7px rgba(0,0,0,.28),
+      0 3px 6px rgba(var(--shade),.28),
+      0 9px 18px -7px rgba(var(--shade),.5);
+  }
+  .core::after{content:""; position:absolute; left:26%; top:14%; width:26%; height:17%; border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(255,255,255,.75), transparent 70%)}
+  .core:active{transform:scale(.93); box-shadow:inset 0 4px 8px rgba(0,0,0,.32), 0 2px 4px rgba(var(--shade),.2)}
+  .engrave{margin-top:14px; text-align:center; font-size:8px; font-weight:700; letter-spacing:.5em;
+    color:rgba(var(--shade),.34); text-shadow:0 1px 0 rgba(255,255,255,.8)}
+  .ground{width:74%; height:24px; margin:20px auto 0; border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(var(--shade),.30) 0%, transparent 66%);
+    transition:transform .5s var(--soft)}
+
+  /* ---- 화면 콘텐츠 ---- */
+  .cover{border-radius:11px; aspect-ratio:16/9; position:relative; overflow:hidden; margin-top:11px;
+    box-shadow:0 1px 0 rgba(255,255,255,.7), inset 0 0 0 1px rgba(94,86,72,.12), 0 5px 12px -6px rgba(94,86,72,.45)}
+  .cover .t{position:absolute; left:10px; bottom:8px; right:10px; font-size:8.5px; color:rgba(255,255,255,.9); font-weight:600}
+  .cover .badge{position:absolute; top:8px; left:8px; font-size:7.5px; font-weight:700; letter-spacing:.08em;
+    color:#fff; background:rgba(0,0,0,.25); border-radius:99px; padding:2px 8px}
+  .np-title{font-size:13.5px; font-weight:750; margin-top:12px; letter-spacing:-.01em; transition:opacity .45s}
+  .np-sub{font-size:9px; color:var(--paper-sub); margin-top:2px; font-weight:600}
+  .track{height:3px; border-radius:2px; background:#DED7C6; margin-top:12px; position:relative}
+  .track i{position:absolute; inset:0; width:36%; border-radius:2px; background:var(--acc); transition:width .3s linear, background .6s}
+  .track i::after{content:""; position:absolute; right:-3px; top:50%; width:9px; height:9px; transform:translateY(-50%);
+    border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(44,41,37,.35), inset 0 0 0 1px rgba(94,86,72,.2)}
+  .times{display:flex; justify-content:space-between; font-size:8.5px; color:var(--paper-sub); margin-top:6px; font-weight:600}
+
+  .rows{margin-top:10px; display:flex; flex-direction:column; gap:7px}
+  .row{display:flex; gap:9px; align-items:center; background:rgba(255,255,255,.55);
+    box-shadow:inset 0 0 0 1px rgba(94,86,72,.10), 0 2px 5px -3px rgba(94,86,72,.35); border-radius:11px; padding:7px 9px;
+    transition:transform .2s var(--spring)}
+  .row.sel{box-shadow:inset 0 0 0 1.5px var(--acc), 0 3px 8px -3px rgba(94,86,72,.4); transform:scale(1.02)}
+  .row .thumb{width:32px; height:32px; border-radius:8px; flex:none; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06), 0 2px 4px -2px rgba(0,0,0,.4)}
+  .row .m{min-width:0}
+  .row .a{font-size:10px; font-weight:750; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block}
+  .row .b{font-size:8px; color:var(--paper-sub); font-weight:600}
+  .row .new{margin-left:auto; font-size:7.5px; font-weight:800; letter-spacing:.1em; color:var(--acc-lo)}
+
+  .fin-scr{display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1}
+  .ring{width:68px; height:68px; border-radius:50%; position:relative; display:grid; place-items:center;
+    background:conic-gradient(var(--acc) 360deg, #DED7C6 0); transition:background .6s}
+  .ring::before{content:""; position:absolute; inset:5px; border-radius:50%;
+    background:linear-gradient(175deg,#FAF6EC,var(--paper)); box-shadow:0 1px 3px rgba(94,86,72,.25)}
+  .ring b{position:relative; font-size:9px; letter-spacing:.1em; color:var(--paper-ink); font-weight:800}
+  .fin-big{font-size:13px; font-weight:750; margin-top:12px}
+  .fin-meta{font-size:8.5px; color:var(--paper-sub); margin-top:3px; font-weight:600}
+  .fin-d6{margin-top:10px; font-size:8px; font-weight:800; letter-spacing:.08em; color:var(--acc-ink);
+    box-shadow:inset 0 0 0 1px rgba(94,86,72,.3); border-radius:99px; padding:3px 10px}
+
+  /* ---- 컬러웨이 스위처 ---- */
+  .picker{display:flex; gap:11px; justify-content:center; margin-top:22px; flex-wrap:wrap}
+  .chip{
+    display:flex; align-items:center; gap:8px; border:none; cursor:pointer; font-family:inherit;
+    background:#FFFDF8; border-radius:99px; padding:9px 15px 9px 10px; font-size:12px; font-weight:700; color:var(--ink);
+    box-shadow:inset 0 0 0 1px var(--hair), 0 4px 10px -6px rgba(44,41,37,.3);
+    transition:transform .25s var(--spring), box-shadow .25s; touch-action:manipulation;
+  }
+  .chip:active{transform:scale(.94)}
+  .chip.on{box-shadow:inset 0 0 0 2px var(--ink), 0 6px 14px -6px rgba(44,41,37,.35)}
+  .chip .sw{width:22px; height:22px; border-radius:50%; box-shadow:inset 0 1.5px 2px rgba(255,255,255,.7), inset 0 -2px 4px rgba(0,0,0,.2)}
+  .sw-cream{background:radial-gradient(circle at 50% 32%, #FBFAF6 30%, #E2DDD1)}
+  .sw-sage{background:radial-gradient(circle at 50% 32%, #D5DECB 30%, #93A788)}
+  .sw-mist{background:radial-gradient(circle at 50% 32%, #D7E2EA 30%, #90A7B8)}
+
+  /* ---- 설치 힌트 (브라우저에서만) ---- */
+  .install{
+    display:none; margin-top:18px; max-width:340px; text-align:center;
+    background:#FFFDF8; border-radius:16px; padding:12px 16px; font-size:12px; color:var(--ink-2);
+    box-shadow:inset 0 0 0 1px var(--hair), 0 6px 14px -8px rgba(44,41,37,.3);
+  }
+  .install b{color:var(--ink); font-weight:700}
+  .install.show{display:block}
+  .install button{border:none; background:none; font-family:inherit; font-size:11px; font-weight:700; color:var(--ink-2);
+    margin-top:6px; cursor:pointer; text-decoration:underline; text-underline-offset:2px}
+
+  footer{margin-top:16px; font-size:9.5px; color:var(--ink-2); letter-spacing:.06em; text-align:center}
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.001s !important; transition-duration:.001s !important}
+    .device{transform:none !important}
+  }
+</style>
+</head>
+<body>
+  <div class="brand">Insighta <i>·</i> Player</div>
+
+  <div class="stage3d" id="stage">
+    <div>
+      <div class="device th-cream" id="dev">
+        <div class="epaper">
+
+          <!-- SCREEN 0 : 홈 -->
+          <div class="scr active" data-s="0">
+            <div class="top"><span>이번 주</span><span class="batt"><span class="case"><i style="width:38%"></i></span><span class="tip"></span></span></div>
+            <div class="rows">
+              <div class="row sel">
+                <span class="thumb" style="background:linear-gradient(150deg,#E8A177,#C1633B)"></span>
+                <span class="m"><span class="a">지금 시작해서 AI 전문가되기</span><span class="b">시즌 · 8화 · <span class="num">1:47:30</span></span></span>
+                <span class="new">NEW</span>
+              </div>
+              <div class="row">
+                <span class="thumb" style="background:linear-gradient(150deg,#8C9BD1,#4D5C99)"></span>
+                <span class="m"><span class="a">바이브코딩 입문</span><span class="b">만다라 생성됨 · 노트 준비 중</span></span>
+              </div>
+              <div class="row">
+                <span class="thumb" style="background:linear-gradient(150deg,#8FBBA4,#4A7B60)"></span>
+                <span class="m"><span class="a">지정학으로 정세 읽기</span><span class="b">이어 듣기 · 5막 <span class="num">42:10</span></span></span>
+              </div>
+              <div class="row">
+                <span class="thumb" style="background:linear-gradient(150deg,#D9BC7E,#9A7A38)"></span>
+                <span class="m"><span class="a">수채화 풍경</span><span class="b">새 회차 대기</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SCREEN 1 : 재생 -->
+          <div class="scr" data-s="1">
+            <div class="top"><span>3막 · <span id="pstate">일시정지</span></span><span class="batt"><span class="case"><i id="pbatt" style="width:58%"></i></span><span class="tip"></span></span></div>
+            <div class="cover" style="background:
+              radial-gradient(120% 140% at 20% 15%, #6D7DBE 0%, transparent 55%),
+              linear-gradient(150deg,#8A93C4,#4E5B95 62%,#39406B)">
+              <span class="badge">원본 · 핵심구간</span>
+              <span class="t">컨볼루션 필터가 이미지를 훑는 장면</span>
+            </div>
+            <div class="np-title" id="klyric">"필터 하나는 세로선을 찾습니다"</div>
+            <div class="np-sub">내레이션 · 남 · 요약과 원본은 누르고 돌리기</div>
+            <div class="track"><i id="pfill" style="width:52%"></i></div>
+            <div class="times num"><span id="pt1">52:03</span><span id="pt2">-55:27</span></div>
+          </div>
+
+          <!-- SCREEN 2 : 완결 -->
+          <div class="scr" data-s="2">
+            <div class="top"><span>AI 전문가되기</span><span class="batt"><span class="case"><i style="width:100%"></i></span><span class="tip"></span></span></div>
+            <div class="fin-scr">
+              <div class="ring"><b>8/8</b></div>
+              <div class="fin-big">이번 회차, 다 들었어요</div>
+              <div class="fin-meta num">8막 · 1:47:30 · 배터리 가득</div>
+              <div class="fin-d6 num">다음 회차까지 D-6</div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="wheelzone">
+          <div class="wheel">
+            <button class="wbtn menu" id="bMenu">MENU</button>
+            <button class="wbtn prev" id="bPrev" aria-label="이전 화면">
+              <svg width="15" height="10" viewBox="0 0 15 10"><path d="M7.5 1 2 5l5.5 4V1Zm5.5 0L7.5 5 13 9V1Z" fill="currentColor"/></svg></button>
+            <button class="wbtn next" id="bNext" aria-label="다음 화면">
+              <svg width="15" height="10" viewBox="0 0 15 10"><path d="M7.5 1 13 5l-5.5 4V1Zm-5.5 0L7.5 5 2 9V1Z" fill="currentColor"/></svg></button>
+            <button class="wbtn play" id="bPlay" aria-label="재생/일시정지">
+              <svg width="16" height="9" viewBox="0 0 16 9"><path d="M1 .8 7 4.5 1 8.2V.8Z" fill="currentColor"/><path d="M10 1h2v7h-2zM14 1h2v7h-2z" fill="currentColor" transform="scale(.9)"/></svg></button>
+            <button class="core" id="bCore" aria-label="선택/재생"></button>
+          </div>
+        </div>
+        <div class="engrave">INSIGHTA</div>
+      </div>
+      <div class="ground" id="ground"></div>
+    </div>
+  </div>
+
+  <div class="picker" role="group" aria-label="컬러웨이 선택">
+    <button class="chip on" data-th="th-cream"><span class="sw sw-cream"></span>크림</button>
+    <button class="chip" data-th="th-sage"><span class="sw sw-sage"></span>세이지</button>
+    <button class="chip" data-th="th-mist"><span class="sw sw-mist"></span>안개</button>
+  </div>
+
+  <div class="install" id="install">
+    앱으로 쓰려면: 사파리 <b>공유 버튼</b> → <b>"홈 화면에 추가"</b>. 아이콘으로 열면 전체화면 앱이 됩니다.
+    <br><button id="installHide">알겠어요, 숨기기</button>
+  </div>
+
+  <footer>INSIGHTA · PLAYER CONCEPT · PAPER EDITION</footer>
+
+<script>
+  var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var dev=document.getElementById('dev');
+  var stage=document.getElementById('stage');
+  var ground=document.getElementById('ground');
+
+  /* 포인터/기울임 3D 틸트 (데스크톱: 포인터, 모바일: 미세 자동 스웨이) */
+  if(!reduce){
+    var raf=null;
+    var fine=matchMedia('(pointer:fine)').matches;
+    if(fine){
+      stage.addEventListener('pointermove',function(e){
+        var r=stage.getBoundingClientRect();
+        var x=(e.clientX-r.left)/r.width-.5, y=(e.clientY-r.top)/r.height-.5;
+        if(raf) return;
+        raf=requestAnimationFrame(function(){
+          dev.style.transform='rotateY('+(x*14)+'deg) rotateX('+(-y*10)+'deg)';
+          ground.style.transform='translateX('+(x*-22)+'px)';
+          raf=null;
+        });
+      });
+      stage.addEventListener('pointerleave',function(){ dev.style.transform=''; ground.style.transform=''; });
+    }else{
+      var t0=0;
+      (function sway(t){
+        if(!t0) t0=t;
+        var s=(t-t0)/1000;
+        dev.style.transform='rotateY('+(Math.sin(s*.5)*3.2)+'deg) rotateX('+(Math.cos(s*.4)*2.2)+'deg)';
+        requestAnimationFrame(sway);
+      })(0);
+    }
+  }
+
+  /* 컬러웨이 */
+  document.querySelectorAll('.chip').forEach(function(ch){
+    ch.addEventListener('click',function(){
+      document.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')});
+      ch.classList.add('on');
+      dev.classList.remove('th-cream','th-sage','th-mist');
+      dev.classList.add(ch.dataset.th);
+      dev.classList.remove('sweep'); void dev.offsetWidth; dev.classList.add('sweep');
+      try{localStorage.setItem('insighta-player-th',ch.dataset.th)}catch(e){}
+    });
+  });
+  try{
+    var saved=localStorage.getItem('insighta-player-th');
+    if(saved && /^th-(cream|sage|mist)$/.test(saved)){
+      dev.classList.remove('th-cream'); dev.classList.add(saved);
+      document.querySelectorAll('.chip').forEach(function(c){c.classList.toggle('on',c.dataset.th===saved)});
+    }
+  }catch(e){}
+
+  /* 화면 상태 머신 */
+  var scrs=Array.prototype.slice.call(document.querySelectorAll('.scr'));
+  var cur=0;
+  function show(n,dir){
+    var nx=((n%3)+3)%3;
+    if(nx===cur) return;
+    scrs[cur].classList.remove('active');
+    scrs[cur].classList.toggle('exit-l',dir>0);
+    cur=nx;
+    scrs[cur].classList.remove('exit-l');
+    scrs[cur].classList.add('active');
+  }
+  document.getElementById('bMenu').onclick=function(){show(0,-1)};
+  document.getElementById('bPrev').onclick=function(){show(cur-1,-1)};
+  document.getElementById('bNext').onclick=function(){show(cur+1,+1)};
+
+  /* 재생 데모 */
+  var playing=false, prog=52*60+3, TOTAL=107*60+30;
+  var fill=document.getElementById('pfill'), batt=document.getElementById('pbatt'),
+      t1=document.getElementById('pt1'), t2=document.getElementById('pt2'),
+      st=document.getElementById('pstate'), ly=document.getElementById('klyric');
+  var lines=['"필터 하나는 세로선을 찾습니다"','"다른 하나는 곡선을 찾습니다"','"실제 모델에선 어떻게 쌓일까요"','"카파시 강의의 한 장면 —"'];
+  var li=0;
+  function fmt(s){var m=Math.floor(s/60),ss=Math.floor(s%60);return m+':'+String(ss).padStart(2,'0')}
+  function togglePlay(){
+    if(cur!==1){show(1,+1)}
+    playing=!playing; st.textContent=playing?'재생 중':'일시정지';
+  }
+  document.getElementById('bPlay').onclick=togglePlay;
+  document.getElementById('bCore').onclick=togglePlay;
+  if(!reduce){
+    setInterval(function(){ if(!playing) return;
+      prog=Math.min(prog+8,TOTAL);
+      var pct=prog/TOTAL*100;
+      fill.style.width=pct+'%';
+      batt.style.width=Math.min(58+(pct-48)*.8,100)+'%';
+      t1.textContent=fmt(prog); t2.textContent='-'+fmt(TOTAL-prog);
+    },1000);
+    setInterval(function(){ if(!playing) return;
+      ly.style.opacity=0;
+      setTimeout(function(){ li=(li+1)%lines.length; ly.textContent=lines[li]; ly.style.opacity=1; },450);
+    },3400);
+  }
+
+  /* 설치 힌트: 브라우저 탭에서만, 설치(standalone) 후엔 숨김 */
+  (function(){
+    var standalone=matchMedia('(display-mode: standalone)').matches || navigator.standalone===true;
+    var hidden=false;
+    try{hidden=localStorage.getItem('insighta-player-install-hide')==='1'}catch(e){}
+    if(!standalone && !hidden){
+      document.getElementById('install').classList.add('show');
+    }
+    document.getElementById('installHide').onclick=function(){
+      document.getElementById('install').classList.remove('show');
+      try{localStorage.setItem('insighta-player-install-hide','1')}catch(e){}
+    };
+  })();
+</script>
+</body>
+</html>

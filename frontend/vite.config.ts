@@ -79,7 +79,9 @@ export default defineConfig(({ mode }) => {
           // and the SPA serves its 404 route instead of the real file
           // (a PWA-registered browser returned 404 for /beta-notice.gif while
           // the server served the GIF fine). Let these hit the network.
-          navigateFallbackDenylist: [/^\/api\//, /\.[^/]+$/],
+          // /mobile is a standalone static page (its own PWA manifest/scope),
+          // not an SPA route — the app-shell fallback must not swallow it.
+          navigateFallbackDenylist: [/^\/api\//, /^\/mobile(\/|$)/, /\.[^/]+$/],
           // 2026-04-22 (Phase 2 re-scoped): removed the `/api/*`
           // StaleWhileRevalidate runtime cache. Serving stale API
           // responses is incorrect for mandala-create / wizard-stream

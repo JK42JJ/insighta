@@ -1,0 +1,16 @@
+{
+  "name": "Insighta Player",
+  "short_name": "Insighta",
+  "description": "만다라 하나를, 한 편의 팟캐스트로 듣는다 — Insighta 모바일 플레이어",
+  "start_url": "/mobile/",
+  "scope": "/mobile/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#F5F2EC",
+  "background_color": "#F5F2EC",
+  "icons": [
+    { "src": "/mobile/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/mobile/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/mobile/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
