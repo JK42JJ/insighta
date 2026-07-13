@@ -848,9 +848,35 @@
     if(curNote&&!curNote.sample) saveResume(curNote.id,bi,beats.length,false);
   }
 
+  /* ── 에피소드 오디오 (ElevenLabs pre-produce) — manifest = (비트 인덱스, 문장해시) 키 ── */
+  var epAudio={tempo:1, ready:false}, curAudio=null;
+  function stopAudio(){ if(curAudio){ try{curAudio.pause()}catch(e){} curAudio=null; } }
+  async function sha12(t){
+    var buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+    return Array.from(new Uint8Array(buf)).map(function(x){return x.toString(16).padStart(2,'0')}).join('').slice(0,12);
+  }
+  async function loadEpisodeAudio(m){
+    epAudio={tempo:1, ready:false};
+    if(m.sample||!window.crypto||!crypto.subtle) return; // 샘플·비보안 컨텍스트 = 브라우저 TTS
+    try{
+      var r=await api('/mandalas/'+m.id+'/episode-audio'); // owner면 BE가 lazy 렌더 enqueue
+      var j=await r.json(); var d=(j&&j.data)||{};
+      if(!d.enabled||d.status!=='ready'||!d.manifest) return;
+      var map={};
+      (d.manifest.beats||[]).forEach(function(b){ map[b.i+':'+b.h]=b; });
+      for(var i=0;i<beats.length;i++){
+        var b=beats[i]; if(b.t!=='n') continue;
+        var sents=sentences(b.text); if(!sents.length) continue;
+        var mb=map[i+':'+(await sha12(sents.join(' ')))];
+        if(mb) b.audio=mb;
+      }
+      epAudio.tempo=d.manifest.tempo||1; epAudio.ready=true;
+    }catch(e){}
+  }
+
   /* TTS read-along + 문장 조그 훅 */
   var synth=window.speechSynthesis||null, speakSeq=0, curSents=[], curSentIdx=0, curSpans=null, curDone=null;
-  function stopSpeech(){ speakSeq++; if(synth) synth.cancel(); }
+  function stopSpeech(){ speakSeq++; if(synth) synth.cancel(); stopAudio(); }
   function renderSents(title,sents){
     readbox.innerHTML='<div class="sec-title"></div><p>'+sents.map(function(){return '<span class="sent"></span>'}).join(' ')+'</p>';
     readbox.querySelector('.sec-title').textContent=title||'내레이션';
@@ -881,7 +907,37 @@
     curSents=sentences(beat.text); curDone=done;
     renderSents(beat.title,curSents);
     if(!curSents.length){ done(); return; }
+    if(beat.audio&&epAudio.ready){ audioFrom(0,beat); return; }
     speakFrom(0);
+  }
+  function audioFrom(idx,beat){ // 실보이스 재생 + 문장 타이밍 싱크 (s[] = 1.0x 미디어 타임라인)
+    var seq=++speakSeq, m=beat.audio;
+    curSentIdx=Math.max(0,Math.min(idx,curSents.length-1));
+    var a=new Audio(m.f); curAudio=a;
+    a.playbackRate=epAudio.tempo||1;
+    try{a.preservesPitch=true; a.webkitPreservesPitch=true}catch(e){}
+    function hl(){
+      if(seq!==speakSeq) return;
+      curSpans.forEach(function(sp){sp.classList.remove('on')});
+      var sp=curSpans[curSentIdx];
+      if(sp){ sp.classList.add('on');
+        if(sp.scrollIntoView) sp.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'}); }
+      updateStream();
+    }
+    hl();
+    var st=(m.s&&m.s[curSentIdx])||0;
+    if(st>0){ a.addEventListener('loadedmetadata',function(){ try{a.currentTime=st}catch(e){} }); }
+    a.addEventListener('timeupdate',function(){
+      if(seq!==speakSeq||!playing) return;
+      var t=a.currentTime, k=curSentIdx;
+      while(m.s&&k+1<m.s.length&&t>=m.s[k+1]-0.05) k++;
+      if(k!==curSentIdx){ curSentIdx=k; addCharge(.5); hl(); }
+    });
+    a.addEventListener('ended',function(){
+      if(seq!==speakSeq) return; curAudio=null; addCharge(.5); if(curDone) curDone(); });
+    a.addEventListener('error',function(){
+      if(seq!==speakSeq) return; curAudio=null; speakFrom(curSentIdx); }); // 파일 실패 → TTS 폴백
+    var p=a.play(); if(p&&p.catch) p.catch(function(){ if(seq===speakSeq){ curAudio=null; speakFrom(curSentIdx); } });
   }
 
   /* YouTube 클립 — 경계는 v2 구간요약만 (§0-3) */
@@ -1062,6 +1118,7 @@
     if(!beats.length){ pShowState('노트 준비 중','카드가 모이면 에피소드가 자동으로 생겨요'); return; }
     buildRail();
     if(!m.sample) prefetchBounds();
+    loadEpisodeAudio(m);
     var res=m.sample?null:loadResume(m.id);
     bi=(res&&!res.done&&res.bi>0&&res.bi<beats.length)?res.bi:0;
     playing=true; setCharging(true); acquireWake();
