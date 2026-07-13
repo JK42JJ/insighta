@@ -102,6 +102,14 @@ export default {
   					height: '0'
   				}
   			},
+  			'progress-slide': {
+  				from: {
+  					transform: 'translateX(-100%)'
+  				},
+  				to: {
+  					transform: 'translateX(350%)'
+  				}
+  			},
   			'fade-in': {
   				from: {
   					opacity: '0',
@@ -299,6 +307,7 @@ export default {
 			'accordion-down': 'accordion-down 0.2s ease-out',
 			'accordion-up': 'accordion-up 0.2s ease-out',
 			'fade-in': 'fade-in 0.3s ease-out',
+			'progress-slide': 'progress-slide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite',
 			'scale-in': 'scale-in 0.2s ease-out',
 			'slide-up': 'slide-up 0.4s ease-out',
 			'ripple-expand': 'ripple-expand 700ms ease-out forwards',

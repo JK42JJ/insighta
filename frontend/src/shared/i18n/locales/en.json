@@ -758,7 +758,9 @@
     "statusQueued": "Queued",
     "statusQueuedTooltip": "Pending background analysis",
     "retryEnrichmentTooltip": "Retry caption fetch",
-    "enrichingAria": "Analyzing"
+    "enrichingAria": "Analyzing",
+    "deboostedShow": "Show {{count}} low-relevance cards",
+    "deboostedHide": "Show less"
   },
   "gridView": {
     "badgeNew": "Added"
