@@ -21,6 +21,16 @@ const items = [
 ];
 
 describe('buildJudgePrompt — 금지 조항 준수', () => {
+  it('carries the subject-mismatch clause (2026-07-13 — human-psych in 개의 심리 cell)', () => {
+    const prompt = buildJudgePrompt({
+      centerGoal: '반려견 기본 훈련 배우기',
+      cellTopic: '개의 심리',
+      items: [{ videoId: 'a', title: '심리학과에서 배우는 인지발달이론' }],
+    });
+    expect(prompt).toContain('학습 대상과 다른 대상');
+    expect(prompt).toContain('사람·아동·학생·내담자');
+  });
+
   const p = buildJudgePrompt({ centerGoal: '하프 마라톤 완주', cellTopic: '페이싱 전략', items });
   test('제목·셀주제·중심목표만 포함, 앵커 문장 포함', () => {
     expect(p).toContain('셀 주제: 페이싱 전략');
