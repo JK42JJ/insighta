@@ -56,13 +56,6 @@ function safeVideoId(videoUrl: string): string | null {
 }
 
 interface CardListProps {
-  /**
-   * T10 (2026-07-13) — secondary embedded instances (deboost fold) must NOT
-   * reset the shared [data-scroll-container] on mount/set-change: the fold
-   * toggle jumped the grid to the top because this instance's set-change
-   * effect fired scrollCardSetContainerToTop.
-   */
-  suppressSetScrollReset?: boolean;
   cards: InsightCard[];
   isLoading?: boolean;
   title: string;
@@ -132,7 +125,6 @@ function cardGridStyle(gridColumns: number): CSSProperties {
 }
 
 export function CardList({
-  suppressSetScrollReset,
   cards,
   isLoading,
   onCardClick,
@@ -302,10 +294,8 @@ export function CardList({
     // the observer). A new card set starts at the top — which also guarantees
     // the sentinel begins below the viewport, so the observer's first real
     // trigger is a clean user-scroll intersection change.
-    // T10: embedded fold instances skip the reset (their mount is not a
-    // card-set navigation — resetting jumped the grid to the top).
-    if (!suppressSetScrollReset) scrollCardSetContainerToTop(gridRef.current);
-  }, [cardListKey, resetVisibleCount, suppressSetScrollReset]);
+    scrollCardSetContainerToTop(gridRef.current);
+  }, [cardListKey, resetVisibleCount]);
 
   const visibleCards = useMemo(
     () => sortedCards.slice(0, visibleCount),

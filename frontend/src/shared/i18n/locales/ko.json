@@ -766,9 +766,7 @@
     "statusQueued": "분석 대기",
     "statusQueuedTooltip": "자동 분석 대기 중",
     "retryEnrichmentTooltip": "자막을 다시 가져옵니다",
-    "enrichingAria": "분석 중",
-    "deboostedShow": "관련성 낮음 {{count}}장 보기",
-    "deboostedHide": "간략히"
+    "enrichingAria": "분석 중"
   },
   "gridView": {
     "badgeNew": "추가됨"

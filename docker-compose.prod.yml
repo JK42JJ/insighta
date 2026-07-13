@@ -315,7 +315,9 @@ services:
       # judges title-vs-cell-topic per cell, 240s after creation; unfit cards
       # sink (relevance_pct=2), NEVER deleted (single-judge removal unsafe:
       # 150-label benchmark false-blocks 19-22%). Remove line = off.
-      - JUDGE_DEBOOST_ENABLED=true
+      # T10-R (2026-07-13): judge verdicts unreliable both ways (single=false
+      # sinks F16, unanimous=recall 3/10) — OFF until T11 dedicated-column era.
+      - JUDGE_DEBOOST_ENABLED=false
       # CP416 (2026-04-22) — restore the LoRA action-fill path. Without
       # this, generateMandala() called config.mandalaGen.model=undefined,
       # Ollama /api/generate returned 400, LoRA threw, and the Haiku
