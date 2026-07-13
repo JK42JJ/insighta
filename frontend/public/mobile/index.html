@@ -485,7 +485,6 @@
      book_json(chapters→sections{narrative,atoms{vid,ts,seg_ref}})을
      비트 시퀀스로 평탄화: 내레이션 비트(TTS read-along) + 클립 비트(YT 구간). */
   var beats=[], bi=0, playing=false, curNote=null, chapterOfBeat=[], chapterCount=0;
-  var CLIP_FALLBACK_SEC=22, CLIP_MAX_SEC=45;
   function stripMd(s){
     return String(s||'')
       .replace(/```[\s\S]*?```/g,' ').replace(/\|[^\n]*\|/g,' ')
@@ -504,10 +503,14 @@
         if(s.narrative&&stripMd(s.narrative)){ beats.push({t:'n', title:s.title, text:s.narrative}); chapterOfBeat.push(ci); }
         (s.atoms||[]).slice(0,2).forEach(function(a){
           if(!a.vid) return;
-          var from=a.seg_ref?a.seg_ref.from_sec:(a.ts||0);
-          var to=a.seg_ref?Math.min(a.seg_ref.to_sec,from+CLIP_MAX_SEC):(from+CLIP_FALLBACK_SEC);
-          if(to<=from) to=from+CLIP_FALLBACK_SEC;
-          beats.push({t:'c', vid:a.vid, from:from, to:to, text:a.text||''});
+          // Clip bounds come ONLY from v2 구간요약 (James rule — no invented
+          // windows, keeps ads/junk out). seg_ref = copy of that boundary;
+          // without it we resolve via /videos/:id/rich-summary at play time.
+          var b={t:'c', vid:a.vid, ts:(a.ts||0), text:a.text||''};
+          if(a.seg_ref && a.seg_ref.to_sec>a.seg_ref.from_sec){
+            b.from=a.seg_ref.from_sec; b.to=a.seg_ref.to_sec;
+          }
+          beats.push(b);
           chapterOfBeat.push(ci);
         });
       });
@@ -592,7 +595,28 @@
     if(ytReady) playClipNow(beat); else ytPending=beat;
   }
 
+  /* ---- seg_ref 없는 atom → v2 구간요약(sections)에서 ts가 속한 구간 조회 ---- */
+  var segCache={};
+  async function resolveBounds(beat){
+    if(!(beat.vid in segCache)){
+      try{
+        var r=await api('/videos/'+beat.vid+'/rich-summary');
+        var j=await r.json();
+        segCache[beat.vid]=(j.data&&j.data.segments&&j.data.segments.sections)||[];
+      }catch(e){ segCache[beat.vid]=[]; }
+    }
+    var ss=segCache[beat.vid], hit=null, i;
+    for(i=0;i<ss.length;i++){
+      var s=ss[i];
+      if(typeof s.from_sec==='number'&&typeof s.to_sec==='number'&&beat.ts>=s.from_sec&&beat.ts<s.to_sec){ hit=s; break; }
+    }
+    if(!hit){ for(i=ss.length-1;i>=0;i--){ if(typeof ss[i].from_sec==='number'&&ss[i].from_sec<=beat.ts&&ss[i].to_sec>ss[i].from_sec){ hit=ss[i]; break; } } }
+    if(hit){ beat.from=hit.from_sec; beat.to=hit.to_sec; return true; }
+    return false;
+  }
+
   /* ---- 비트 실행 ---- */
+  var runSeq=0;
   function runBeat(){
     if(!beats.length){ pShowState('재생할 내용이 없어요',''); return; }
     bi=Math.max(0,Math.min(bi,beats.length-1));
@@ -600,7 +624,17 @@
     var beat=beats[bi];
     renderChapters();
     stopSpeech(); stopClip();
-    if(beat.t==='c'){ clipbox.hidden=false; clipbox.classList.remove('narr'); playClip(beat); }
+    if(beat.t==='c'){
+      clipbox.hidden=false; clipbox.classList.remove('narr');
+      if(beat.from!=null&&beat.to!=null){ playClip(beat); return; }
+      // No verified 구간요약 boundary -> resolve; unresolvable clips are
+      // SKIPPED (never play an invented window — ad/junk guard).
+      var seq=++runSeq;
+      resolveBounds(beat).then(function(ok){
+        if(seq!==runSeq||!playing||beats[bi]!==beat) return;
+        if(ok) playClip(beat); else nextBeat(1,true);
+      });
+    }
     else{ clipbox.hidden=true; speakBeat(beat,function(){ nextBeat(1,true); }); }
   }
   function nextBeat(dir,auto){
