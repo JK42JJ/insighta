@@ -25,6 +25,17 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().optional(),
   SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
+  // ── Narration pre-produce (ElevenLabs, 2026-07-13) ─────────────────────
+  // Default off = current behaviour exactly (browser TTS on /mobile).
+  // Rollback = flag off, no code revert. Key: see credentials.md ElevenLabs.
+  NARRATION_PREPRODUCE_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+  ELEVENLABS_API_KEY: z.string().optional(),
+  // Per-episode character ceiling — cost guard against runaway books.
+  NARRATION_MAX_CHARS_PER_EPISODE: z.coerce.number().int().positive().default(60000),
   SUPABASE_JWT_SECRET: z.string().optional(),
 
   // YouTube API
@@ -306,6 +317,11 @@ export const config = {
   },
 
   // Supabase
+  narration: {
+    enabled: env.NARRATION_PREPRODUCE_ENABLED,
+    elevenLabsApiKey: env.ELEVENLABS_API_KEY,
+    maxCharsPerEpisode: env.NARRATION_MAX_CHARS_PER_EPISODE,
+  },
   supabase: {
     url: env.SUPABASE_URL,
     anonKey: env.SUPABASE_ANON_KEY,

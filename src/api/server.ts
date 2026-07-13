@@ -16,6 +16,7 @@ import { analyticsRoutes } from './routes/analytics';
 import { syncRoutes } from './routes/sync';
 import { quotaRoutes } from './routes/quota';
 import { mandalaRoutes } from './routes/mandalas';
+import { mandalaEpisodeAudioRoutes } from './routes/mandala-episode-audio';
 import { imageRoutes } from './routes/images';
 import { ontologyRoutes } from './routes/ontology';
 import { searchRoutes } from './routes/search';
@@ -302,6 +303,10 @@ export async function buildServer() {
 
       // Register mandala routes
       await instance.register(mandalaRoutes, { prefix: '/mandalas' });
+
+      // Episode narration audio (ElevenLabs pre-produce) — separate plugin to
+      // avoid conflicts with in-flight mandalas.ts work; same /mandalas prefix.
+      await instance.register(mandalaEpisodeAudioRoutes, { prefix: '/mandalas' });
 
       // Register image proxy routes
       await instance.register(imageRoutes, { prefix: '/images' });

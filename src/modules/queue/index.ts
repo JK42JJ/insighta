@@ -23,6 +23,7 @@ export { enqueueBatchVideoCollectorRun } from './handlers/batch-video-collector'
 export { enqueuePoolMaintenanceRun } from './handlers/pool-maintenance';
 export { enqueueRelevanceQuick } from './handlers/enrich-relevance-quick';
 export { enqueueNoteCvEnrich } from './handlers/note-cv-enrich';
+export { enqueueEpisodeNarrationRender } from './handlers/episode-narration-render';
 
 import { getJobQueue } from './manager';
 import { registerEnrichVideoWorker } from './handlers/enrich-video';
@@ -35,6 +36,7 @@ import { registerPoolServeFillWorker } from './handlers/pool-serve-fill';
 import { registerMandalaActionsFillWorker } from './handlers/mandala-actions-fill';
 import { registerMandalaPipelineWorker } from './handlers/mandala-pipeline';
 import { registerMandalaBookFillWorker } from './handlers/mandala-book-fill';
+import { registerEpisodeNarrationRenderWorker } from './handlers/episode-narration-render';
 import { registerJudgeDeboostWorker } from './handlers/judge-deboost';
 import { registerTranslateMandalaBulkWorker } from './handlers/translate-mandala-bulk';
 import { registerSegmentRelevanceFillWorker } from './handlers/segment-relevance-fill';
@@ -67,6 +69,7 @@ export async function initJobQueue(): Promise<void> {
   await registerMandalaActionsFillWorker();
   await registerMandalaPipelineWorker();
   await registerMandalaBookFillWorker();
+  await registerEpisodeNarrationRenderWorker();
   await registerJudgeDeboostWorker();
   await registerTranslateMandalaBulkWorker();
   await registerSegmentRelevanceFillWorker();

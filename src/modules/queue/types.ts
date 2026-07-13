@@ -51,6 +51,12 @@ export const JOB_NAMES = {
    * overwrites book_json + bumps version. Worker = fillMandalaBook.
    */
   MANDALA_BOOK_FILL: 'mandala-book-fill',
+  /**
+   * ElevenLabs episode narration pre-produce (2026-07-13) — lazy render of a
+   * mandala book into per-beat narration mp3s + manifest. Flag-gated
+   * (NARRATION_PREPRODUCE_ENABLED); singleton per mandala.
+   */
+  EPISODE_NARRATION_RENDER: 'episode-narration-render',
   JUDGE_DEBOOST: 'judge-deboost',
   /**
    * v2 translations (PR-T1) — bulk-translate a mandala's off-language v2 atoms
@@ -386,6 +392,21 @@ export const MANDALA_BOOK_FILL_OPTIONS = {
   retryBackoff: true,
   expireInMinutes: 10,
 } as const;
+
+/**
+ * Episode narration render (narration pre-produce) — retries resume from the
+ * persisted manifest, so a generous retry budget cannot double-bill.
+ */
+export const EPISODE_NARRATION_RENDER_OPTIONS = {
+  retryLimit: 3,
+  retryDelay: 60,
+  retryBackoff: true,
+  expireInMinutes: 30,
+} as const;
+
+export interface EpisodeNarrationRenderPayload {
+  mandalaId: string;
+}
 
 export interface MandalaBookFillPayload {
   userId: string;
