@@ -87,9 +87,12 @@
     font-size:9.5px; letter-spacing:.14em; color:var(--paper-sub); font-weight:700; flex:none}
   .top .tt{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
   .batt{display:inline-flex; align-items:center; gap:2.5px; flex:none}
-  .batt .case{width:20px; height:10px; border-radius:3px; border:1px solid #A99F8C; padding:1.5px}
-  .batt .case i{display:block; height:100%; border-radius:1.5px; background:var(--acc); transition:width .8s var(--soft), background .6s; width:20%}
+  .batt .case{width:20px; height:10px; border-radius:3px; border:1px solid #A99F8C; padding:1.5px; position:relative; overflow:visible}
+  .batt .case i{display:block; height:100%; border-radius:1.5px; background:#34C759; transition:width .8s var(--soft), background .6s; width:20%}
   .batt .tip{width:1.8px; height:4px; border-radius:1px; background:#A99F8C}
+  /* A rule: charging bolt shows only while actually streaming */
+  .batt .bolt{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); opacity:0; transition:opacity .35s; z-index:2}
+  .batt.chg .bolt{opacity:1}
 
   /* ---- 로그인 ---- */
   .login-scr{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 10px}
@@ -149,7 +152,8 @@
     background:linear-gradient(150deg,#8A93C4,#4E5B95 62%,#39406B);
     box-shadow:0 1px 0 rgba(255,255,255,.7), inset 0 0 0 1px rgba(94,86,72,.12), 0 5px 12px -6px rgba(94,86,72,.45)}
   .clipbox iframe,.clipbox #yt{position:absolute; inset:0; width:100%; height:100%; border:0}
-  .clipbox .chip{position:absolute; top:8px; left:8px; z-index:2; font-size:7.5px; font-weight:700; letter-spacing:.08em;
+  .clipbox .guard{position:absolute; inset:0; z-index:2}
+  .clipbox .chip{position:absolute; top:8px; left:8px; z-index:3; font-size:7.5px; font-weight:700; letter-spacing:.08em;
     color:#fff; background:rgba(0,0,0,.35); border-radius:99px; padding:2.5px 8px; pointer-events:none}
   .clipbox.narr .chip{display:none}
   .clipbox.narr::after{content:"내레이션"; position:absolute; inset:auto 8px 8px auto; font-size:7.5px; font-weight:700;
@@ -196,20 +200,41 @@
   .go-msg small{display:block; font-size:9px; color:var(--paper-sub); font-weight:600}
 
   /* ---- 클릭휠 ---- */
-  .wheelzone{display:grid; place-items:center; padding-top:14px; flex:none}
+  .wheelzone{display:grid; place-items:center; padding-top:12px; flex:none}
+  /* iPod click-wheel form: FLAT touch ring (not a dome) + recessed center well.
+     Depth comes from rim bevels and the well, not from a bulging gradient. */
   .wheel{
-    width:min(56vw, 240px); aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center;
-    background:radial-gradient(circle at 50% 30%, var(--wheel-hi) 0%, var(--wheel-mid) 46%, var(--wheel-lo) 84%, var(--wheel-mid) 100%);
+    width:min(70vw, 292px); aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center;
+    background:
+      radial-gradient(circle at 50% 42%, var(--wheel-hi) 0%, var(--wheel-mid) 62%, var(--wheel-lo) 96%);
     transition:background .6s; touch-action:none;
     box-shadow:
-      inset 0 3px 3px rgba(255,255,255,.9),
-      inset 0 -6px 11px rgba(var(--shade),.36),
-      inset 0 14px 22px -14px rgba(255,255,255,.9),
+      inset 0 2px 2px rgba(255,255,255,.85),
+      inset 0 -3px 6px rgba(var(--shade),.22),
       0 1.5px 2px rgba(255,255,255,.8),
-      0 12px 20px -9px rgba(var(--shade),.40);
+      0 14px 24px -10px rgba(var(--shade),.38);
   }
   .wheel::before{content:""; position:absolute; inset:0; border-radius:50%;
     box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55), inset 0 0 0 3px rgba(var(--shade),.10)}
+  /* recessed center well the button sits in (iPod detail) */
+  .wheel .well{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:42%; aspect-ratio:1; border-radius:50%; pointer-events:none;
+    box-shadow:inset 0 3px 6px rgba(var(--shade),.30), inset 0 -1px 1.5px rgba(255,255,255,.75)}
+  /* rotation feedback: soft anisotropic sheen + fine detent ticks, ring-only,
+     rotates 1:1 with the finger. Barely-there idle, clearer while touching. */
+  .wheel .tex{position:absolute; inset:3%; border-radius:50%; pointer-events:none; will-change:transform;
+    background:
+      repeating-conic-gradient(rgba(var(--shade),.055) 0deg .7deg, transparent .7deg 6deg),
+      conic-gradient(from 0deg,
+        transparent 0deg, rgba(255,255,255,.32) 34deg, transparent 78deg,
+        rgba(var(--shade),.05) 130deg, transparent 172deg,
+        rgba(255,255,255,.24) 214deg, transparent 258deg,
+        rgba(var(--shade),.05) 310deg, transparent 360deg);
+    -webkit-mask:radial-gradient(circle, transparent 46%, #000 52%, #000 97%, transparent 100%);
+            mask:radial-gradient(circle, transparent 46%, #000 52%, #000 97%, transparent 100%);
+    opacity:.28; transition:opacity .3s;
+  }
+  .wheel.touching .tex{opacity:.75}
   .wbtn{position:absolute; border:none; background:none; cursor:pointer; padding:9px 11px; border-radius:12px;
     font-size:9.5px; font-weight:700; letter-spacing:.24em; color:#9C9585; font-family:inherit;
     transition:transform .2s var(--spring), color .2s; touch-action:manipulation; z-index:2}
@@ -218,19 +243,20 @@
   .wbtn.prev{left:4%; top:50%; transform:translateY(-50%)} .wbtn.prev:active{transform:translateY(-50%) scale(.84)}
   .wbtn.next{right:4%; top:50%; transform:translateY(-50%)} .wbtn.next:active{transform:translateY(-50%) scale(.84)}
   .wbtn.play{bottom:4%; left:50%; transform:translateX(-50%)} .wbtn.play:active{transform:translateX(-50%) scale(.86)}
+  /* center button: flatter, sits INSIDE the well (iPod feel) — soft sheen
+     instead of a glossy dome, no big drop shadow */
   .core{
-    width:36%; aspect-ratio:1; border-radius:50%; border:none; cursor:pointer; position:relative; z-index:2;
-    background:radial-gradient(circle at 50% 30%, var(--acc-hi) 0%, var(--acc) 52%, var(--acc-lo) 100%);
+    width:35%; aspect-ratio:1; border-radius:50%; border:none; cursor:pointer; position:relative; z-index:2;
+    background:radial-gradient(circle at 50% 44%, var(--acc-hi) 0%, var(--acc) 68%, var(--acc-lo) 100%);
     transition:transform .25s var(--spring), background .6s, box-shadow .6s; touch-action:manipulation;
     box-shadow:
-      inset 0 2.5px 3px rgba(255,255,255,.5),
-      inset 0 -4px 7px rgba(0,0,0,.28),
-      0 3px 6px rgba(var(--shade),.28),
-      0 9px 18px -7px rgba(var(--shade),.5);
+      inset 0 1.5px 2px rgba(255,255,255,.45),
+      inset 0 -2.5px 5px rgba(0,0,0,.22),
+      0 1px 2px rgba(var(--shade),.25);
   }
-  .core::after{content:""; position:absolute; left:26%; top:14%; width:26%; height:17%; border-radius:50%;
-    background:radial-gradient(ellipse at center, rgba(255,255,255,.75), transparent 70%)}
-  .core:active{transform:scale(.93); box-shadow:inset 0 4px 8px rgba(0,0,0,.32), 0 2px 4px rgba(var(--shade),.2)}
+  .core::after{content:""; position:absolute; left:22%; top:12%; width:38%; height:22%; border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(255,255,255,.5), transparent 72%)}
+  .core:active{transform:scale(.95); box-shadow:inset 0 3px 7px rgba(0,0,0,.3)}
   .engrave{margin-top:11px; text-align:center; font-size:8px; font-weight:700; letter-spacing:.5em; flex:none;
     color:rgba(var(--shade),.34); text-shadow:0 1px 0 rgba(255,255,255,.8)}
 
@@ -339,14 +365,14 @@
 
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
-        <div class="top"><span class="tt">내 만다라</span><span class="batt"><span class="case"><i id="battHome"></i></span><span class="tip"></span></span></div>
+        <div class="top"><span class="tt">내 만다라</span><span class="batt"><span class="case"><i id="battHome"></i><svg class="bolt" width="7" height="10" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
         <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
         <div class="rows" id="rows"><div class="row-empty" id="rowsEmpty">불러오는 중…</div></div>
       </div>
 
       <!-- MENU -->
       <div class="scr" data-s="menu" id="scrMenu">
-        <div class="top"><span class="tt">MENU</span><span class="batt"><span class="case"><i id="battMenu"></i></span><span class="tip"></span></span></div>
+        <div class="top"><span class="tt">MENU</span><span class="batt"><span class="case"><i id="battMenu"></i><svg class="bolt" width="7" height="10" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
         <div class="menu-list">
           <div class="mrow" style="cursor:default">
             컬러웨이
@@ -365,7 +391,7 @@
 
       <!-- 플레이어 -->
       <div class="scr" data-s="player" id="scrPlayer">
-        <div class="top"><span class="tt" id="pTitle">노트</span><span class="batt"><span class="case"><i id="battPlay"></i></span><span class="tip"></span></span></div>
+        <div class="top"><span class="tt" id="pTitle">노트</span><span class="batt"><span class="case"><i id="battPlay"></i><svg class="bolt" width="7" height="10" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
         <div class="player-state" id="pState">
           <div class="pulse"></div>
           <div class="big" id="pStateBig">노트를 여는 중…</div>
@@ -374,6 +400,7 @@
         <div class="clipbox" id="clipbox" hidden>
           <span class="chip">원본 · 핵심구간</span>
           <div id="yt"></div>
+          <div class="guard" id="clipGuard" aria-hidden="true"></div>
         </div>
         <div class="readbox" id="readbox" hidden></div>
         <div class="ptrack" id="ptrack" hidden>
@@ -401,6 +428,8 @@
 
     <div class="wheelzone">
       <div class="wheel" id="wheel">
+        <span class="tex" id="wheelTex" aria-hidden="true"></span>
+        <span class="well" aria-hidden="true"></span>
         <button class="wbtn menu" id="bMenu">MENU</button>
         <button class="wbtn prev" id="bPrev" aria-label="이전">
           <svg width="16" height="11" viewBox="0 0 15 10"><path d="M7.5 1 2 5l5.5 4V1Zm5.5 0L7.5 5 13 9V1Z" fill="currentColor"/></svg></button>
@@ -503,10 +532,36 @@
 
   /* ================= 배터리 = 지식 충전 (실청취만) ================= */
   var charge=20;
-  function renderBatt(){ ['battHome','battMenu','battPlay'].forEach(function(id){
-    var el=document.getElementById(id); if(el) el.style.width=Math.min(charge,100)+'%'; }); }
+  function renderBatt(){
+    var col=charge<=20?'#FF3B30':'#34C759'; // Apple semantics (A rule)
+    ['battHome','battMenu','battPlay'].forEach(function(id){
+      var el=document.getElementById(id); if(!el) return;
+      el.style.width=Math.min(charge,100)+'%'; el.style.background=col;
+    });
+  }
   function addCharge(v){ charge=Math.min(charge+v,100); renderBatt(); }
+  function setCharging(on){ // bolt only while actually streaming (A rule)
+    document.querySelectorAll('.batt').forEach(function(b){b.classList.toggle('chg',on)});
+  }
   renderBatt();
+
+  /* 시작/종료 차임 — 부드러운 2음 사인 스팅 (A rule) */
+  var actx=null;
+  function chime(kind){
+    try{
+      actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+      var notes=kind==='start'?[523.25,783.99]:[783.99,523.25];
+      notes.forEach(function(f,i){
+        var o=actx.createOscillator(), g=actx.createGain();
+        o.type='sine'; o.frequency.value=f; o.connect(g); g.connect(actx.destination);
+        var st=actx.currentTime+i*0.16;
+        g.gain.setValueAtTime(0.0001,st);
+        g.gain.exponentialRampToValueAtTime(0.09,st+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001,st+0.5);
+        o.start(st); o.stop(st+0.55);
+      });
+    }catch(e){}
+  }
 
   /* ================= 컬러웨이 (MENU 내) ================= */
   document.querySelectorAll('.way').forEach(function(w){
@@ -538,7 +593,8 @@
       var d=document.createElement('div');
       d.className='row'+(i===selIdx?' sel':'');
       d.innerHTML='<span class="thumb" style="background:linear-gradient(150deg,'+c[0]+','+c[1]+')"></span>'
-        +'<span class="m"><span class="a"></span><span class="b">'+(m.cardCount?('카드 '+m.cardCount+'장 · '):'')+'탭해서 듣기</span></span>';
+        +'<span class="m"><span class="a"></span><span class="b">'+(m.cardCount?('카드 '+m.cardCount+'장 · '):'')+'탭해서 듣기</span></span>'
+        +(i===0?'<span class="new">NEW</span>':'');
       d.querySelector('.a').textContent=m.title||'(제목 없음)';
       d.addEventListener('click',function(){ selIdx=i; renderRows(); openNote(m); });
       rows.appendChild(d);
@@ -652,14 +708,26 @@
   function playClipNow(beat){
     try{
       yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
+      try{yt.setVolume(0)}catch(e){}
       yt.playVideo();
+      // ramp-in (A rule: clips fade in, never slam)
+      var v=0, ramp=setInterval(function(){ v+=12; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },40);
       if(ytPoll) clearInterval(ytPoll);
+      var lastT=0, stallMs=0, nudged=false;
       ytPoll=setInterval(function(){
         if(!playing){ return; }
         try{
           var st=yt.getPlayerState();
           var t=yt.getCurrentTime?yt.getCurrentTime():0;
-          if(st===0 || (t&&t>=beat.to-0.4)){ clearInterval(ytPoll); ytPoll=null; addCharge(1.2); nextBeat(1,true); }
+          // tail fade-out over the final 0.9s (A rule)
+          var rem=beat.to-t;
+          if(t&&rem<0.9&&rem>0){ clearInterval(ramp); yt.setVolume(Math.max(0,Math.round(100*rem/0.9))); }
+          if(st===0 || (t&&t>=beat.to-0.4)){ clearInterval(ytPoll); ytPoll=null; addCharge(1.2); nextBeat(1,true); return; }
+          // stall watchdog (A rule: respect buffering — nudge, then skip)
+          if(st===1 && t>lastT+0.2){ lastT=t; stallMs=0; }
+          else { stallMs+=500; }
+          if(stallMs>=8000 && !nudged){ nudged=true; try{yt.seekTo(Math.max(beat.from,t+0.5),true); yt.playVideo();}catch(e){} }
+          if(stallMs>=16000){ clearInterval(ytPoll); ytPoll=null; nextBeat(1,true); }
         }catch(e){}
       },500);
     }catch(e){ nextBeat(1,true); }
@@ -720,12 +788,13 @@
     if(playing) runBeat(); else renderChapters();
   }
   function finishNote(){
-    playing=false; stopSpeech(); stopClip(); charge=100; renderBatt();
+    playing=false; stopSpeech(); stopClip(); setCharging(false); chime('end'); charge=100; renderBatt();
     pShowState('이번 회차, 다 들었어요','추천도 무한 피드도 없어요 — 오늘은 끝<br>가운데 버튼 = 처음부터 다시');
     bi=0;
   }
   function setPlaying(on){
     playing=on;
+    setCharging(on);
     if(on) runBeat();
     else{ stopSpeech(); stopClip(); }
   }
@@ -739,7 +808,7 @@
       var j=await r.json();
       flatten(j.data&&j.data.book);
       if(!beats.length){ pShowState('노트 준비 중','카드가 모이면 에피소드가 생겨요'); return; }
-      bi=0; playing=true; runBeat();
+      bi=0; playing=true; setCharging(true); chime('start'); runBeat();
     }catch(e){
       if(e.status===404) pShowState('노트 준비 중','아직 이 만다라의 노트가 만들어지지 않았어요<br>카드가 모이면 자동으로 생깁니다');
       else pShowState('열지 못했어요','네트워크 확인 후 다시 시도해주세요');
@@ -782,9 +851,11 @@
       var x=e.clientX-(r.left+r.width/2), y=e.clientY-(r.top+r.height/2);
       return Math.atan2(y,x)*180/Math.PI;
     }
+    var tex=document.getElementById('wheelTex'), texAngle=0;
     wheel.addEventListener('pointerdown',function(e){
       if(e.target.closest('.wbtn')||e.target.closest('.core')) return;
       dragging=true; lastAng=angOf(e); acc=0;
+      wheel.classList.add('touching');
       wheel.setPointerCapture(e.pointerId);
     });
     wheel.addEventListener('pointermove',function(e){
@@ -792,13 +863,15 @@
       var a=angOf(e), d=a-lastAng;
       if(d>180) d-=360; if(d<-180) d+=360;
       lastAng=a; acc+=d;
+      texAngle+=d; tex.style.transform='rotate('+texAngle+'deg)'; // 1:1 with the finger
       while(acc>=STEP){ acc-=STEP; notch(1); }
       while(acc<=-STEP){ acc+=STEP; notch(-1); }
     });
     ['pointerup','pointercancel'].forEach(function(ev){
-      wheel.addEventListener(ev,function(){ dragging=false; acc=0; });
+      wheel.addEventListener(ev,function(){ dragging=false; acc=0; wheel.classList.remove('touching'); });
     });
     function notch(dir){
+      if(navigator.vibrate) navigator.vibrate(8); // silent detent — podcast, no click sound
       if(cur==='player'){ nextBeat(dir); if(!playing){playing=true; runBeat();} }
       else if(cur==='home'&&mandalas.length){
         selIdx=(selIdx+dir+mandalas.length)%mandalas.length; renderRows();
@@ -858,6 +931,7 @@
     try{ await navigator.clipboard.writeText(url); toast('링크가 복사됐어요'); }
     catch(e){ prompt('이 링크를 복사하세요', url); }
   };
+  document.getElementById('clipGuard').onclick=function(){ if(cur==='player') setPlaying(!playing); };
   document.getElementById('bInstall').onclick=function(){
     var standalone=matchMedia('(display-mode: standalone)').matches || navigator.standalone===true;
     toast(standalone?'이미 앱으로 실행 중':'공유 버튼 → "홈 화면에 추가"');
