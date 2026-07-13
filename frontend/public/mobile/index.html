@@ -205,6 +205,62 @@
     margin-top:6px; cursor:pointer; text-decoration:underline; text-underline-offset:2px}
 
   footer{margin-top:16px; font-size:9.5px; color:var(--ink-2); letter-spacing:.06em; text-align:center}
+  footer button{border:none; background:none; font:inherit; color:var(--ink-2); text-decoration:underline; text-underline-offset:2px; cursor:pointer; padding:2px 4px}
+
+  /* ---- 로그인 화면 ---- */
+  .login-scr{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:0; padding:0 10px}
+  .login-mark{font-size:8.5px; font-weight:800; letter-spacing:.5em; color:var(--paper-sub)}
+  .login-big{font-size:15px; font-weight:750; line-height:1.5; margin-top:10px}
+  .login-sub{font-size:9px; color:var(--paper-sub); font-weight:600; margin-top:6px}
+  .gbtn{
+    margin-top:16px; display:flex; align-items:center; gap:8px; border:none; cursor:pointer; font-family:inherit;
+    background:#fff; border-radius:99px; padding:10px 16px; font-size:11.5px; font-weight:750; color:#3B372F;
+    box-shadow:inset 0 0 0 1px rgba(94,86,72,.18), 0 3px 8px -3px rgba(94,86,72,.45);
+    transition:transform .2s var(--spring); touch-action:manipulation;
+  }
+  .gbtn:active{transform:scale(.95)}
+  .login-err{font-size:8.5px; color:#B4472B; font-weight:600; margin-top:9px; min-height:11px}
+
+  /* ---- 목표 입력 ---- */
+  .goal-pill{
+    margin-top:10px; display:flex; align-items:center; justify-content:center; gap:7px;
+    border:none; cursor:pointer; font-family:inherit; width:100%;
+    background:rgba(255,255,255,.6); border-radius:11px; padding:9px; font-size:10.5px; font-weight:750; color:var(--paper-ink);
+    box-shadow:inset 0 0 0 1.5px var(--acc); transition:transform .2s var(--spring); touch-action:manipulation;
+  }
+  .goal-pill:active{transform:scale(.97)}
+  .gp-plus{width:12px; height:12px; border-radius:50%; background:var(--acc); position:relative; flex:none}
+  .gp-plus::before,.gp-plus::after{content:""; position:absolute; background:#fff; left:50%; top:50%; transform:translate(-50%,-50%)}
+  .gp-plus::before{width:6px; height:1.6px} .gp-plus::after{width:1.6px; height:6px}
+
+  .goal-ov{
+    position:absolute; inset:0; z-index:6; display:none; flex-direction:column; justify-content:center;
+    background:linear-gradient(175deg,#FAF6ECf2,#F6F2E7f5); backdrop-filter:blur(2px); padding:18px;
+  }
+  .goal-ov.show{display:flex}
+  .go-title{font-size:13px; font-weight:750; text-align:center; color:var(--paper-ink)}
+  .go-body{margin-top:12px}
+  #goalInput{
+    width:100%; border:none; border-radius:12px; padding:12px 13px; font-family:inherit;
+    font-size:16px; font-weight:600; color:var(--paper-ink); background:#fff;
+    box-shadow:inset 0 0 0 1.5px rgba(94,86,72,.22);
+  }
+  #goalInput:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
+  .go-actions{display:flex; gap:9px; margin-top:11px}
+  .go-cancel,.go-make{
+    flex:1; border:none; cursor:pointer; font-family:inherit; border-radius:11px; padding:10px;
+    font-size:11.5px; font-weight:750; transition:transform .2s var(--spring); touch-action:manipulation;
+  }
+  .go-cancel{background:rgba(255,255,255,.7); color:var(--paper-sub); box-shadow:inset 0 0 0 1px rgba(94,86,72,.16)}
+  .go-make{background:var(--acc); color:#fff; box-shadow:0 4px 10px -4px rgba(0,0,0,.35)}
+  .go-cancel:active,.go-make:active{transform:scale(.95)}
+  .go-progress{display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:14px}
+  .go-dot{width:12px; height:12px; border-radius:50%; background:var(--acc); animation:godot 1.1s var(--soft) infinite}
+  @keyframes godot{0%,100%{transform:scale(.7); opacity:.5}50%{transform:scale(1.15); opacity:1}}
+  .go-msg{font-size:10.5px; font-weight:700; color:var(--paper-ink); text-align:center; line-height:1.7}
+  .go-msg small{display:block; font-size:8.5px; color:var(--paper-sub); font-weight:600}
+
+  .row-empty{font-size:9.5px; color:var(--paper-sub); font-weight:600; text-align:center; padding:20px 0}
 
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.001s !important; transition-duration:.001s !important}
@@ -220,27 +276,44 @@
       <div class="device th-cream" id="dev">
         <div class="epaper">
 
-          <!-- SCREEN 0 : 홈 -->
+          <!-- SCREEN L : 로그인 -->
+          <div class="scr" data-s="login" id="scrLogin">
+            <div class="login-scr">
+              <div class="login-mark">INSIGHTA</div>
+              <div class="login-big">만다라 하나를,<br>한 편의 팟캐스트로.</div>
+              <div class="login-sub">로그인하면 내 만다라가 이 기계에 도착합니다</div>
+              <button class="gbtn" id="bLogin">
+                <svg width="15" height="15" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.5 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.6a14.5 14.5 0 0 1 0-9.2l-7.9-6.2a24 24 0 0 0 0 21.6l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.6-5.8l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-4-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>
+                Google로 계속하기
+              </button>
+              <div class="login-err" id="loginErr"></div>
+            </div>
+          </div>
+
+          <!-- SCREEN 0 : 홈 (로그인 시 실데이터) -->
           <div class="scr active" data-s="0">
-            <div class="top"><span>이번 주</span><span class="batt"><span class="case"><i style="width:38%"></i></span><span class="tip"></span></span></div>
-            <div class="rows">
-              <div class="row sel">
-                <span class="thumb" style="background:linear-gradient(150deg,#E8A177,#C1633B)"></span>
-                <span class="m"><span class="a">지금 시작해서 AI 전문가되기</span><span class="b">시즌 · 8화 · <span class="num">1:47:30</span></span></span>
-                <span class="new">NEW</span>
+            <div class="top"><span>내 만다라</span><span class="batt"><span class="case"><i style="width:38%"></i></span><span class="tip"></span></span></div>
+            <button class="goal-pill" id="bGoal">
+              <span class="gp-plus"></span>원하는 목표 적기
+            </button>
+            <div class="rows" id="rows">
+              <div class="row-empty" id="rowsEmpty">불러오는 중…</div>
+            </div>
+          </div>
+
+          <!-- 목표 입력 오버레이 -->
+          <div class="goal-ov" id="goalOv">
+            <div class="go-title" id="goTitle">무엇을 배우고 싶나요?</div>
+            <div class="go-body" id="goBody">
+              <input id="goalInput" type="text" maxlength="80" placeholder="예: 처음부터 시작하는 수채화" autocomplete="off">
+              <div class="go-actions">
+                <button class="go-cancel" id="goCancel">닫기</button>
+                <button class="go-make" id="goMake">만들기</button>
               </div>
-              <div class="row">
-                <span class="thumb" style="background:linear-gradient(150deg,#8C9BD1,#4D5C99)"></span>
-                <span class="m"><span class="a">바이브코딩 입문</span><span class="b">만다라 생성됨 · 노트 준비 중</span></span>
-              </div>
-              <div class="row">
-                <span class="thumb" style="background:linear-gradient(150deg,#8FBBA4,#4A7B60)"></span>
-                <span class="m"><span class="a">지정학으로 정세 읽기</span><span class="b">이어 듣기 · 5막 <span class="num">42:10</span></span></span>
-              </div>
-              <div class="row">
-                <span class="thumb" style="background:linear-gradient(150deg,#D9BC7E,#9A7A38)"></span>
-                <span class="m"><span class="a">수채화 풍경</span><span class="b">새 회차 대기</span></span>
-              </div>
+            </div>
+            <div class="go-progress" id="goProgress" hidden>
+              <div class="go-dot"></div>
+              <div class="go-msg" id="goMsg">만다라 구조를 그리는 중…</div>
             </div>
           </div>
 
@@ -301,7 +374,7 @@
     <br><button id="installHide">알겠어요, 숨기기</button>
   </div>
 
-  <footer>INSIGHTA · PLAYER CONCEPT · PAPER EDITION</footer>
+  <footer>INSIGHTA · PLAYER · PAPER EDITION · <button id="bShare">공유</button><span id="footAuth" hidden>· <button id="bLogout">로그아웃</button></span></footer>
 
 <script>
   var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -355,10 +428,12 @@
     }
   }catch(e){}
 
-  /* 화면 상태 머신 */
-  var scrs=Array.prototype.slice.call(document.querySelectorAll('.scr'));
-  var cur=0;
+  /* 화면 상태 머신 (숫자 화면만 순환; 로그인 화면은 auth 게이트가 관리) */
+  var scrs=[0,1,2].map(function(i){return document.querySelector('.scr[data-s="'+i+'"]')});
+  var scrLogin=document.getElementById('scrLogin');
+  var cur=0, authed=false;
   function show(n,dir){
+    if(!authed) return;
     var nx=((n%3)+3)%3;
     if(nx===cur) return;
     scrs[cur].classList.remove('active');
@@ -411,6 +486,197 @@
       document.getElementById('install').classList.remove('show');
       try{localStorage.setItem('insighta-player-install-hide','1')}catch(e){}
     };
+  })();
+
+  /* ================= 실계정 연동 =================
+     Supabase Google OAuth(implicit) + 같은 오리진 /api 호출.
+     publishable key는 원래 클라이언트 공개값(메인 SPA 번들과 동일). */
+  var SUPA='https://rckkhhjanqgaopynhfgd.supabase.co';
+  var SUPA_KEY='sb_publishable_4qmeVEdSP70SEK3Ct_xHdA_Kp9aBfJK';
+  var OWN_KEY='insighta-mobile-auth';
+  var SPA_KEY='sb-rckkhhjanqgaopynhfgd-auth-token';
+
+  function readJSON(raw){
+    if(!raw) return null;
+    try{
+      if(raw.indexOf('base64-')===0) raw=atob(raw.slice(7));
+      return JSON.parse(raw);
+    }catch(e){ return null }
+  }
+  function saveSession(s){ try{localStorage.setItem(OWN_KEY,JSON.stringify(s))}catch(e){} }
+  function loadSession(){
+    // 1) OAuth 콜백 해시 → 2) 자체 저장 → 3) 같은 오리진 SPA 세션 재사용
+    if(location.hash.indexOf('access_token=')>=0){
+      var p=new URLSearchParams(location.hash.slice(1));
+      var s={access_token:p.get('access_token'), refresh_token:p.get('refresh_token'),
+             expires_at:Math.floor(Date.now()/1000)+parseInt(p.get('expires_in')||'3600',10)};
+      history.replaceState(null,'',location.pathname+location.search);
+      saveSession(s); return s;
+    }
+    var own=readJSON(localStorage.getItem(OWN_KEY)); if(own&&own.access_token) return own;
+    var spa=readJSON(localStorage.getItem(SPA_KEY)); if(spa&&spa.access_token) return spa;
+    return null;
+  }
+  async function freshToken(){
+    var s=loadSession(); if(!s) return null;
+    var now=Math.floor(Date.now()/1000);
+    if(s.expires_at && s.expires_at>now+60) return s.access_token;
+    if(!s.refresh_token) return null;
+    try{
+      var r=await fetch(SUPA+'/auth/v1/token?grant_type=refresh_token',{
+        method:'POST', headers:{apikey:SUPA_KEY,'Content-Type':'application/json'},
+        body:JSON.stringify({refresh_token:s.refresh_token})});
+      if(!r.ok) return null;
+      var j=await r.json();
+      var ns={access_token:j.access_token, refresh_token:j.refresh_token||s.refresh_token,
+              expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600)};
+      saveSession(ns); return ns.access_token;
+    }catch(e){ return null }
+  }
+  function loginRedirect(){
+    location.href=SUPA+'/auth/v1/authorize?provider=google&redirect_to='
+      +encodeURIComponent(location.origin+'/mobile/');
+  }
+  async function api(path,opts){
+    var tok=await freshToken();
+    if(!tok) throw new Error('unauthenticated');
+    opts=opts||{}; opts.headers=Object.assign({Authorization:'Bearer '+tok,'Content-Type':'application/json'},opts.headers||{});
+    var r=await fetch('/api/v1'+path,opts);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r;
+  }
+
+  /* ---- auth 게이트 ---- */
+  function setAuthed(on){
+    authed=on;
+    scrLogin.classList.toggle('active',!on);
+    if(on){ scrs[cur].classList.add('active'); }
+    else { scrs.forEach(function(s){s.classList.remove('active')}); }
+    document.getElementById('footAuth').hidden=!on;
+  }
+  document.getElementById('bLogin').onclick=loginRedirect;
+  document.getElementById('bLogout').onclick=function(){
+    try{localStorage.removeItem(OWN_KEY)}catch(e){}
+    setAuthed(false);
+  };
+
+  /* ---- 홈 리스트 (실데이터) ---- */
+  var PALETTE=[['#E8A177','#C1633B'],['#8C9BD1','#4D5C99'],['#8FBBA4','#4A7B60'],['#D9BC7E','#9A7A38'],['#C79BC0','#7C5077'],['#9BBFC7','#4E7A85']];
+  async function loadList(){
+    var rows=document.getElementById('rows');
+    var empty=document.getElementById('rowsEmpty');
+    try{
+      var r=await api('/mandalas/list?limit=6');
+      var j=await r.json();
+      var ms=(j.mandalas||[]);
+      if(!ms.length){ empty.textContent='아직 만다라가 없어요 — 첫 목표를 적어보세요'; return; }
+      rows.innerHTML=ms.slice(0,4).map(function(m,i){
+        var c=PALETTE[i%PALETTE.length];
+        var meta=(m.cardCount!=null?('카드 '+m.cardCount+'장'):'노트 준비 중');
+        return '<div class="row'+(i===0?' sel':'')+'">'
+          +'<span class="thumb" style="background:linear-gradient(150deg,'+c[0]+','+c[1]+')"></span>'
+          +'<span class="m"><span class="a"></span><span class="b">'+meta+'</span></span>'
+          +(i===0?'<span class="new">NEW</span>':'')+'</div>';
+      }).join('');
+      // title은 textContent로 (XSS 방지)
+      var as=rows.querySelectorAll('.a');
+      ms.slice(0,4).forEach(function(m,i){ as[i].textContent=m.title||'(제목 없음)'; });
+    }catch(e){
+      empty.textContent='목록을 불러오지 못했어요 — 당겨서 새로고침 대신, 다시 열어주세요';
+    }
+  }
+
+  /* ---- 목표 입력 → wizard-stream → create-with-data ---- */
+  var ov=document.getElementById('goalOv'), goBody=document.getElementById('goBody'),
+      goProg=document.getElementById('goProgress'), goMsg=document.getElementById('goMsg'),
+      goTitle=document.getElementById('goTitle'), goalInput=document.getElementById('goalInput');
+  document.getElementById('bGoal').onclick=function(){
+    ov.classList.add('show'); goBody.hidden=false; goProg.hidden=true;
+    goTitle.textContent='무엇을 배우고 싶나요?';
+    setTimeout(function(){goalInput.focus()},60);
+  };
+  document.getElementById('goCancel').onclick=function(){ ov.classList.remove('show') };
+
+  async function wizardStream(goal,sessionId,tok){
+    var r=await fetch('/api/v1/mandalas/wizard-stream',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json',Accept:'text/event-stream'},
+      body:JSON.stringify({goal:goal, previewOnly:true, session_id:sessionId})
+    });
+    if(!r.ok||!r.body) throw new Error('wizard-stream HTTP '+r.status);
+    var reader=r.body.getReader(), dec=new TextDecoder(), buf='', structure=null;
+    while(true){
+      var ch=await reader.read(); if(ch.done) break;
+      buf+=dec.decode(ch.value,{stream:true});
+      var blocks=buf.split('\n\n'); buf=blocks.pop()||'';
+      for(var b=0;b<blocks.length;b++){
+        var block=blocks[b]; if(!block||block.charAt(0)===':') continue;
+        var ev='',data='';
+        block.split('\n').forEach(function(l){
+          if(l.indexOf('event: ')===0) ev=l.slice(7).trim();
+          else if(l.indexOf('data: ')===0) data+=l.slice(6);
+        });
+        if(!ev) continue;
+        var payload=data?JSON.parse(data):{};
+        if(ev==='structure_ready') structure=payload.structure;
+        else if(ev==='error'||ev==='structure_error'||ev==='save_error')
+          throw new Error(payload.message||('wizard-stream '+ev));
+        else if(ev==='complete'){ reader.cancel(); return structure; }
+      }
+    }
+    return structure;
+  }
+
+  document.getElementById('goMake').onclick=async function(){
+    var goal=(goalInput.value||'').trim();
+    if(goal.length<4){ goalInput.focus(); return; }
+    goBody.hidden=true; goProg.hidden=false;
+    goTitle.textContent='"'+goal+'"';
+    try{
+      var tok=await freshToken(); if(!tok){ loginRedirect(); return; }
+      var sessionId=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2));
+      goMsg.innerHTML='만다라 구조를 그리는 중…<small>10~20초</small>';
+      var st=await wizardStream(goal,sessionId,tok);
+      if(!st) throw new Error('구조 생성 실패');
+      goMsg.innerHTML='카드를 모아 저장하는 중…<small>거의 다 됐어요</small>';
+      await api('/mandalas/create-with-data',{method:'POST',body:JSON.stringify({
+        title:st.center_label||goal, centerGoal:st.center_goal||goal,
+        subjects:st.sub_goals||[], centerLabel:st.center_label,
+        subLabels:st.sub_labels, session_id:sessionId
+      })});
+      goMsg.innerHTML='만들어졌어요 — 노트 준비 중<small>카드가 모이면 목록에 떠요</small>';
+      loadList();
+      setTimeout(function(){ ov.classList.remove('show'); goalInput.value=''; },1800);
+    }catch(e){
+      goMsg.innerHTML='만들지 못했어요 — 다시 시도해주세요<small>'+String(e.message||e).slice(0,60)+'</small>';
+      setTimeout(function(){ goBody.hidden=false; goProg.hidden=true;
+        goTitle.textContent='무엇을 배우고 싶나요?'; },1600);
+    }
+  };
+
+  /* ---- 공유 (iOS 공유시트 → 카카오톡 포함) ---- */
+  document.getElementById('bShare').onclick=async function(){
+    var url=location.origin+'/mobile/?invite=1';
+    var data={title:'Insighta Player', text:'만다라 하나를, 한 편의 팟캐스트로 — 목표만 적으면 노트가 도착해요', url:url};
+    try{
+      if(navigator.share){ await navigator.share(data); return; }
+    }catch(e){ if(e && e.name==='AbortError') return; }
+    try{ await navigator.clipboard.writeText(url);
+      this.textContent='링크 복사됨'; var b=this;
+      setTimeout(function(){b.textContent='공유'},1500);
+    }catch(e){ prompt('이 링크를 복사하세요', url); }
+  };
+  /* 초대 링크로 진입 시 로그인 카피 전환 */
+  if(new URLSearchParams(location.search).get('invite')==='1'){
+    var ls=document.querySelector('.login-sub');
+    if(ls) ls.textContent='친구가 공유한 인사이타 — Google로 3초 만에 시작';
+  }
+
+  /* ---- 부팅: 세션 → 게이트 + 리스트 ---- */
+  (async function boot(){
+    var tok=await freshToken();
+    setAuthed(!!tok);
+    if(tok) loadList();
   })();
 </script>
 </body>
