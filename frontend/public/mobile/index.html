@@ -239,7 +239,7 @@
     opacity:0; transition:opacity .3s, transform .3s var(--spring); pointer-events:none; z-index:9; white-space:nowrap}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 
-  /* ---- 가로 보기: 화면=좌측 전체, 휠=우측 축소 (세로 전용 레이아웃 붕괴 수정) ---- */
+  /* ---- 가로 보기 (홈/메뉴/로그인): 화면=좌측 전체, 휠=우측 축소 ---- */
   @media (orientation: landscape) and (max-height: 560px){
     body{padding:calc(var(--sat) + 6px) 10px calc(var(--sab) + 6px)}
     .device{max-width:none; max-height:none; flex-direction:row; align-items:stretch; gap:14px; padding:14px 16px}
@@ -248,6 +248,62 @@
     .wheel{width:min(88%, 34vh)}
     .engrave{display:none}
   }
+
+  /* ---- 가로 + 재생 = A안 무대: 엣지투엣지 전체화면 + 투명 게임핸들 ---- */
+  body.stage{padding:0}
+  body.stage .device{max-width:none; max-height:none; border-radius:0; padding:0; gap:0;
+    background:#161311; box-shadow:none}
+  body.stage .device::after{display:none}
+  body.stage .wheelzone,body.stage .engrave{display:none}
+  body.stage .epaper{flex:1; border-radius:0; box-shadow:none;
+    background:#161311; color:#EDE7DC}
+  body.stage .epaper::after{display:none}
+  body.stage .scr[data-s="player"]{padding:0}
+  body.stage #scrPlayer .top{position:absolute; z-index:5; left:16px; right:16px; top:calc(var(--sat) + 10px); color:#B8AE9E}
+  body.stage .clipbox{position:absolute; inset:0; margin:0; aspect-ratio:auto; border-radius:0; box-shadow:none}
+  body.stage .clipbox .chip{top:auto; bottom:calc(var(--sab) + 34px); left:16px}
+  body.stage .readbox{position:absolute; left:max(17%, 168px); right:9%; top:18%; bottom:16%; margin:0;
+    font-size:16.5px; line-height:2.05}
+  body.stage .batt .case{border-color:rgba(255,255,255,.45)}
+  body.stage .batt .tip{background:rgba(255,255,255,.45)}
+  body.stage .clipbox:not([hidden]) ~ .readbox{display:none}
+  body.stage .readbox .sec-title{color:#8F877A}
+  body.stage .ptrack{position:absolute; z-index:5; left:16px; right:16px; bottom:calc(var(--sab) + 10px)}
+  body.stage .chapters i{background:rgba(255,255,255,.16)}
+  body.stage .chapters i.done{background:rgba(224,112,63,.55)}
+  body.stage .chapters i.now{background:var(--acc)}
+  body.stage .ptimes{color:rgba(237,231,220,.5)}
+  body.stage .player-state{position:absolute; inset:0}
+
+  /* 투명 게임핸들 — 터치 시에만 또렷, 외곽 실선 없음 (A 결정) */
+  .handle{display:none}
+  body.stage .handle{
+    display:block; position:fixed; z-index:7; left:14px; top:50%; transform:translateY(-50%);
+    width:132px; height:132px; border-radius:50%; touch-action:none;
+    background:radial-gradient(circle at 50% 42%, rgba(255,255,255,.10), rgba(255,255,255,.04) 70%, transparent 100%);
+    opacity:.22; transition:opacity .35s var(--soft);
+  }
+  body.stage .handle.awake{opacity:1;
+    background:radial-gradient(circle at 50% 42%, rgba(255,255,255,.16), rgba(255,255,255,.06) 70%, transparent 100%)}
+  .handle .h-core{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:52px; height:52px; border-radius:50%; border:none; cursor:pointer; touch-action:manipulation;
+    /* fixed tangerine — the handle sits outside the themed device, and on the
+       dark stage the accent must stay visible in every colorway */
+    background:radial-gradient(circle at 50% 32%, #EC8B5C, #E0703F 55%, #C6552A);
+    box-shadow:inset 0 2px 3px rgba(255,255,255,.4), inset 0 -3px 5px rgba(0,0,0,.3);
+    transition:transform .2s var(--spring);
+  }
+  .handle .h-core:active{transform:translate(-50%,-50%) scale(.9)}
+  .handle .h-btn{position:absolute; border:none; background:none; cursor:pointer; color:rgba(255,255,255,.75);
+    padding:8px; touch-action:manipulation; transition:transform .2s var(--spring)}
+  .handle .h-btn:active{transform:scale(.85)}
+  .handle .h-prev{left:-4px; top:50%; transform:translateY(-50%)}
+  .handle .h-prev:active{transform:translateY(-50%) scale(.85)}
+  .handle .h-next{right:-4px; top:50%; transform:translateY(-50%)}
+  .handle .h-next:active{transform:translateY(-50%) scale(.85)}
+  .handle .h-menu{top:-4px; left:50%; transform:translateX(-50%); font-size:8.5px; font-weight:700; letter-spacing:.2em; font-family:inherit}
+  .handle .h-menu:active{transform:translateX(-50%) scale(.85)}
 
   /* ---- 설치형(standalone): 폰 자체가 기기 — 프레임 여백 제거, 엣지투엣지 ---- */
   @media (display-mode: standalone){
@@ -358,6 +414,16 @@
     <div class="engrave">INSIGHTA</div>
   </div>
 
+  <!-- 가로 무대용 투명 게임핸들 (A안: 터치 시 활성, 그 외 투명) -->
+  <div class="handle" id="handle">
+    <button class="h-btn h-menu" id="hMenu">MENU</button>
+    <button class="h-btn h-prev" id="hPrev" aria-label="이전 구간">
+      <svg width="16" height="11" viewBox="0 0 15 10"><path d="M7.5 1 2 5l5.5 4V1Zm5.5 0L7.5 5 13 9V1Z" fill="currentColor"/></svg></button>
+    <button class="h-btn h-next" id="hNext" aria-label="다음 구간">
+      <svg width="16" height="11" viewBox="0 0 15 10"><path d="M7.5 1 13 5l-5.5 4V1Zm-5.5 0L7.5 5 2 9V1Z" fill="currentColor"/></svg></button>
+    <button class="h-core" id="hCore" aria-label="재생/일시정지"></button>
+  </div>
+
   <div class="toast" id="toast"></div>
 
 <script>
@@ -425,7 +491,15 @@
     scr[cur].classList.remove('active');
     cur=n; scr[cur].classList.add('active');
     if(n==='home'||n==='player') lastMain=n;
+    syncStage();
   }
+  /* A-rule: landscape + player = edge-to-edge stage with the ghost handle. */
+  function syncStage(){
+    var land=matchMedia('(orientation: landscape)').matches;
+    document.body.classList.toggle('stage', land && cur==='player');
+  }
+  addEventListener('resize', syncStage);
+  addEventListener('orientationchange', syncStage);
 
   /* ================= 배터리 = 지식 충전 (실청취만) ================= */
   var charge=20;
@@ -730,6 +804,45 @@
         selIdx=(selIdx+dir+mandalas.length)%mandalas.length; renderRows();
       }
     }
+  })();
+
+  /* ---- 투명 게임핸들 (가로 무대): 터치로 깨어나고, 드래그 회전 = 조그 ---- */
+  (function(){
+    var handle=document.getElementById('handle');
+    var wakeT=null;
+    function wake(){
+      handle.classList.add('awake');
+      clearTimeout(wakeT); wakeT=setTimeout(function(){handle.classList.remove('awake')},2600);
+    }
+    document.addEventListener('pointerdown',function(){
+      if(document.body.classList.contains('stage')) wake();
+    });
+    document.getElementById('hCore').onclick=function(){ wake(); setPlaying(!playing); };
+    document.getElementById('hPrev').onclick=function(){ wake(); nextBeat(-1); if(!playing){playing=true; runBeat();} };
+    document.getElementById('hNext').onclick=function(){ wake(); nextBeat(1); if(!playing){playing=true; runBeat();} };
+    document.getElementById('hMenu').onclick=function(){ wake(); setPlaying(false); show('home'); };
+    var dragging=false, lastAng=0, acc=0, STEP=40;
+    function angOf(e){
+      var r=handle.getBoundingClientRect();
+      var x=e.clientX-(r.left+r.width/2), y=e.clientY-(r.top+r.height/2);
+      return Math.atan2(y,x)*180/Math.PI;
+    }
+    handle.addEventListener('pointerdown',function(e){
+      if(e.target.closest('.h-core')||e.target.closest('.h-btn')) return;
+      dragging=true; lastAng=angOf(e); acc=0; wake();
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener('pointermove',function(e){
+      if(!dragging) return;
+      var a=angOf(e), d=a-lastAng;
+      if(d>180) d-=360; if(d<-180) d+=360;
+      lastAng=a; acc+=d; wake();
+      while(acc>=STEP){ acc-=STEP; nextBeat(1); if(!playing){playing=true; runBeat();} }
+      while(acc<=-STEP){ acc+=STEP; nextBeat(-1); if(!playing){playing=true; runBeat();} }
+    });
+    ['pointerup','pointercancel'].forEach(function(ev){
+      handle.addEventListener(ev,function(){ dragging=false; acc=0; });
+    });
   })();
 
   /* ================= MENU 항목 ================= */
