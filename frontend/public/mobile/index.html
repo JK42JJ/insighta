@@ -159,7 +159,9 @@
             mask-image:linear-gradient(180deg,transparent 0,#000 12px,#000 calc(100% - 18px),transparent 100%)}
   .readbox p{margin:0 0 8px}
   .readbox .sent{border-radius:7px; padding:1px 3px; margin:0 -1px; transition:background .35s var(--soft), color .35s}
-  .readbox .sent.on{background:var(--acc); color:#fff; font-weight:700}
+  /* Highlight = fixed butter marker + ink text (A-rule): must stay readable
+     in every colorway — accent-colored highlight broke sage/mist. */
+  .readbox .sent.on{background:#F5D48A; color:#3B372F; font-weight:700}
   .readbox .sec-title{font-size:9.5px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:2px 0 6px}
   .ptrack{flex:none; margin-top:10px}
   .chapters{display:flex; gap:4px}
@@ -236,6 +238,26 @@
     background:var(--ink); color:#F5F2EC; font-size:11.5px; font-weight:700; border-radius:99px; padding:9px 16px;
     opacity:0; transition:opacity .3s, transform .3s var(--spring); pointer-events:none; z-index:9; white-space:nowrap}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  /* ---- 가로 보기: 화면=좌측 전체, 휠=우측 축소 (세로 전용 레이아웃 붕괴 수정) ---- */
+  @media (orientation: landscape) and (max-height: 560px){
+    body{padding:calc(var(--sat) + 6px) 10px calc(var(--sab) + 6px)}
+    .device{max-width:none; max-height:none; flex-direction:row; align-items:stretch; gap:14px; padding:14px 16px}
+    .epaper{flex:1}
+    .wheelzone{padding:0; width:34%; align-self:center}
+    .wheel{width:min(88%, 34vh)}
+    .engrave{display:none}
+  }
+
+  /* ---- 설치형(standalone): 폰 자체가 기기 — 프레임 여백 제거, 엣지투엣지 ---- */
+  @media (display-mode: standalone){
+    body{padding:0}
+    .device{max-width:none; max-height:none; border-radius:0; padding:calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px)}
+    .device::after{border-radius:0}
+  }
+  body.standalone{padding:0}
+  body.standalone .device{max-width:none; max-height:none; border-radius:0; padding:calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px)}
+  body.standalone .device::after{border-radius:0}
 
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.001s !important; transition-duration:.001s !important}
@@ -617,8 +639,12 @@
   }
 
   /* ================= 휠 배선 ================= */
+  // iPod grammar: MENU = one level up. player -> home(stop), home -> menu, menu -> back.
   document.getElementById('bMenu').onclick=function(){
-    if(cur!=='login') show(cur==='menu'?lastMain:'menu');
+    if(cur==='login') return;
+    if(cur==='player'){ setPlaying(false); show('home'); }
+    else if(cur==='menu'){ show(lastMain==='player'?'home':lastMain); }
+    else{ show('menu'); }
   };
   document.getElementById('bPrev').onclick=function(){
     if(cur==='home'&&mandalas.length){ selIdx=(selIdx-1+mandalas.length)%mandalas.length; renderRows(); }
@@ -759,6 +785,9 @@
   /* ================= 부팅 ================= */
   if(new URLSearchParams(location.search).get('invite')==='1'){
     document.getElementById('loginSub').textContent='친구가 공유한 인사이타 — Google로 3초 만에 시작';
+  }
+  if(navigator.standalone===true || matchMedia('(display-mode: standalone)').matches){
+    document.body.classList.add('standalone');
   }
   scr[cur].classList.add('active');
   (async function boot(){
