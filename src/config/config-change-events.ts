@@ -80,3 +80,9 @@ export function diffFlags(
   }
   return diff;
 }
+
+/** Build SHA baked into the image (Dockerfile ARG). null when absent (local dev). */
+export function getGitSha(env: NodeJS.ProcessEnv = process.env): string | null {
+  const v = (env['GIT_SHA'] ?? '').trim();
+  return v.length > 0 ? v : null;
+}

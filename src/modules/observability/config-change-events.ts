@@ -23,6 +23,7 @@ import {
   isConfigChangeEventsEnabled,
   buildFlagsFingerprint,
   diffFlags,
+  getGitSha,
 } from '@/config/config-change-events';
 
 const log = logger.child({ module: 'config-change-events' });
@@ -36,7 +37,7 @@ export async function reportBootConfigEvent(): Promise<void> {
   if (!isConfigChangeEventsEnabled()) return;
   try {
     const db = getPrismaClient();
-    const gitSha = (process.env['GIT_SHA'] ?? '').trim() || null;
+    const gitSha = getGitSha();
     const flags = buildFlagsFingerprint();
 
     const latest = await db.config_change_events.findFirst({
