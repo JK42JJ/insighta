@@ -347,8 +347,8 @@
 
   /* ── [J pick] 포커스 라인 스트림 (가로 내레이션) ── */
   .s-ctx{display:none}
-  body.stage .s-ctx{display:block; position:absolute; z-index:5; left:10%; right:10%; top:calc(var(--sat) + 12px);
-    text-align:center; font-size:11px; letter-spacing:.28em; color:#8F877A; font-weight:700;
+  body.stage .s-ctx{display:block; position:absolute; z-index:5; left:25%; right:25%; top:calc(var(--sat) + 12px);
+    text-align:center; font-size:11px; letter-spacing:.3em; color:#8F877A; font-weight:700;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   body.stage .s-ctx b{color:var(--acc); font-weight:800}
   .stream{display:none}
@@ -357,16 +357,15 @@
   .stream .ln{max-width:72vw; line-height:1.6; transition:opacity .35s var(--soft)}
   .stream .prv,.stream .nxt{font-size:19px; color:rgba(237,231,220,.28); font-weight:600}
   .stream .now{font-size:30px; line-height:1.65; color:#EDE7DC; font-weight:750}
-  .stream .now .sent-hl{background:var(--butter); color:#3B372F; border-radius:9px; padding:1px 8px;
+  .stream .now .sent-hl{background:var(--butter); color:#3B372F; border-radius:6px; padding:1px 5px;
     box-decoration-break:clone; -webkit-box-decoration-break:clone}
-  body.stage #scrPlayer .top .tt{visibility:hidden} /* 제목은 s-ctx로 — 배터리는 유지 */
   body.stage.clipmode .s-ctx{opacity:0; transition:opacity .3s}
   body.stage.clipmode.hud .s-ctx{opacity:1}
   body.stage .readbox{display:none !important} /* 가로 내레이션 = 스트림 전용 */
 
   /* ── 엣지 그립 + 푸시 레일 ── */
   .grip{display:none}
-  body.stage .grip{display:block; position:absolute; z-index:6; left:0; top:38%; bottom:38%; width:3px;
+  body.stage .grip{display:block; position:absolute; z-index:6; left:0; top:38%; bottom:38%; width:2px;
     border-radius:0 2px 2px 0; background:rgba(255,255,255,.22)}
   .rail{display:none}
   body.stage .rail{display:flex; position:absolute; z-index:1; left:0; top:0; bottom:0; width:31%;
@@ -839,7 +838,7 @@
     }
     document.getElementById('pPos').textContent=(bi+1)+' / '+beats.length;
     document.getElementById('hairFill').style.width=Math.round(bi/Math.max(beats.length-1,1)*100)+'%';
-    updateDock(); updateRail();
+    updateDock(); updateRail(); updateCtx();
     if(curNote&&!curNote.sample) saveResume(curNote.id,bi,beats.length,false);
   }
 
@@ -974,7 +973,7 @@
     document.getElementById('pCh').textContent=(beat.t!=='ch'&&beat.title)?beat.title:'';
     stopSpeech(); stopClip();
     document.body.classList.toggle('clipmode', beat.t==='c');
-    streamEl.hidden=(beat.t!=='n'); updateCtx(beat);
+    streamEl.hidden=(beat.t!=='n');
     if(beat.t==='ch'){ // M3
       clipbox.hidden=true; readbox.hidden=true; creditEl.hidden=true;
       document.getElementById('chNum').textContent=beat.num+'부';
@@ -1198,10 +1197,12 @@
     dkPos.textContent=(bi+1)+' / '+beats.length;
     dkPlay.innerHTML=playing?SVG_PAUSE:SVG_PLAY;
   }
-  function updateCtx(beat){
-    sCtx.innerHTML='<b></b><span></span>';
-    sCtx.querySelector('b').textContent=(curNote&&curNote.title)||'노트';
-    sCtx.querySelector('span').textContent=(beat&&beat.t!=='ch'&&beat.title)?(' · '+beat.title):'';
+  function updateCtx(){ // 목업 ①: "N부 · 섹션 · n/총"
+    var beat=beats[bi]; if(!beat){ sCtx.textContent=''; return; }
+    sCtx.innerHTML='<b></b><span></span><span class="num"></span>';
+    sCtx.querySelector('b').textContent=((chapterOfBeat[bi]||0)+1)+'부';
+    sCtx.querySelector('span').textContent=(beat.t!=='ch'&&beat.title)?(' · '+beat.title):'';
+    sCtx.querySelector('.num').textContent=' · '+(bi+1)+' / '+beats.length;
   }
   function buildRail(){ // 섹션 목록 = 구간 점프
     rlList.innerHTML='';
