@@ -42,6 +42,7 @@ import { registerDeckBuildWorker } from './handlers/deck-build';
 import { registerNoteCvEnrichWorker } from './handlers/note-cv-enrich';
 import { registerKeyAlarmWorker } from './handlers/key-alarm';
 import { registerSearchMetricsRollupWorker } from './handlers/search-metrics-rollup';
+import { registerCollapseWatchWorker } from './handlers/collapse-watch';
 import { logger } from '../../utils/logger';
 
 /**
@@ -73,8 +74,9 @@ export async function initJobQueue(): Promise<void> {
   await registerNoteCvEnrichWorker();
   await registerKeyAlarmWorker();
   await registerSearchMetricsRollupWorker();
+  await registerCollapseWatchWorker();
 
-  logger.info('Job queue fully initialized (pg-boss + 16 workers)');
+  logger.info('Job queue fully initialized (pg-boss + 17 workers)');
 
   // Performance-monitor PR1 — boot self-report (fire-and-forget, flag-gated
   // no-op when CONFIG_CHANGE_EVENTS_ENABLED is unset). Records git_sha + flag
