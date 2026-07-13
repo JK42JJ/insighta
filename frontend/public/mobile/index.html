@@ -43,17 +43,17 @@
   .th-cream{
     --body-hi:#FBFAF6; --body-mid:#F1EEE6; --body-lo:#DDD7C9; --rim:#FFFFFF;
     --wheel-a:#F7F5EF; --wheel-b:#EFECE4; --wheel-c:#E4E0D5;
-    --acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --shade:44,41,37;
+    --acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30; --shade:44,41,37;
   }
   .th-sage{
     --body-hi:#DCE4D5; --body-mid:#BECBB3; --body-lo:#93A788; --rim:#EFF4EA;
     --wheel-a:#EDF2E8; --wheel-b:#DDE6D5; --wheel-c:#C8D5BC;
-    --acc:#F0EBDD; --acc-hi:#F6F2E7; --acc-lo:#DCD5C2; --acc-ink:#6B6450; --shade:52,66,46;
+    --acc:#F0EBDD; --acc-hi:#F6F2E7; --acc-lo:#DCD5C2; --acc-ink:#6B6450; --ui:#6F8A63; --shade:52,66,46;
   }
   .th-mist{
     --body-hi:#DCE6EE; --body-mid:#BECDD9; --body-lo:#90A7B8; --rim:#EFF4F8;
     --wheel-a:#ECF1F5; --wheel-b:#DAE3EA; --wheel-c:#C3D1DB;
-    --acc:#ECBD6B; --acc-hi:#F1C87F; --acc-lo:#D9A551; --acc-ink:#6E4E14; --shade:44,60,72;
+    --acc:#ECBD6B; --acc-hi:#F1C87F; --acc-lo:#D9A551; --acc-ink:#6E4E14; --ui:#B8862F; --shade:44,60,72;
   }
 
   /* ---- 디바이스 ---- */
@@ -124,17 +124,17 @@
     margin-top:11px; display:flex; align-items:center; justify-content:center; gap:8px;
     border:none; cursor:pointer; font-family:inherit; width:100%; flex:none;
     background:rgba(255,255,255,.6); border-radius:12px; padding:11px; font-size:12px; font-weight:750; color:var(--paper-ink);
-    box-shadow:inset 0 0 0 1.5px var(--acc); transition:transform var(--snap) var(--spring); touch-action:manipulation;
+    box-shadow:inset 0 0 0 1.5px var(--ui); transition:transform var(--snap) var(--spring); touch-action:manipulation;
   }
   .goal-pill:active{transform:scale(.97)}
-  .gp-plus{width:13px; height:13px; border-radius:50%; background:var(--acc); position:relative; flex:none}
+  .gp-plus{width:13px; height:13px; border-radius:50%; background:var(--ui); position:relative; flex:none}
   .gp-plus::before,.gp-plus::after{content:""; position:absolute; background:#fff; left:50%; top:50%; transform:translate(-50%,-50%)}
   .gp-plus::before{width:7px; height:1.7px} .gp-plus::after{width:1.7px; height:7px}
   .rows{margin-top:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; min-height:0; padding-bottom:4px}
   .row{display:flex; gap:10px; align-items:center; background:rgba(255,255,255,.55); flex:none;
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.10); border-radius:12px; padding:9px 10px;
     transition:transform var(--snap) var(--spring), box-shadow var(--snap) var(--soft); cursor:pointer; touch-action:manipulation}
-  .row.sel{box-shadow:inset 0 0 0 1.5px var(--acc), 0 3px 8px -3px rgba(94,86,72,.4)}
+  .row.sel{box-shadow:inset 0 0 0 1.5px var(--ui), 0 3px 8px -3px rgba(94,86,72,.4)}
   .row:active{transform:scale(.98)}
   .row.making{opacity:.55; cursor:default; filter:saturate(.15)}
   .row.making:active{transform:none}
@@ -150,7 +150,7 @@
   .row .m{min-width:0; flex:1}
   .row .a{font-size:13px; font-weight:750; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; letter-spacing:-.01em}
   .row .b{font-size:10px; color:var(--paper-sub); font-weight:600; display:flex; align-items:center; gap:5px; margin-top:2px}
-  .dotnew{width:6px; height:6px; border-radius:50%; background:var(--acc); flex:none}
+  .dotnew{width:6px; height:6px; border-radius:50%; background:var(--ui); flex:none}
   .row-empty{font-size:11px; color:var(--paper-sub); font-weight:600; text-align:center; padding:22px 8px; line-height:1.8}
 
   /* ---- MENU ---- */
@@ -195,19 +195,19 @@
   .chcard{position:absolute; inset:0; z-index:6; display:none; flex-direction:column; align-items:center; justify-content:center;
     text-align:center; background:linear-gradient(175deg,#FAF6EC,#F0EBDD); gap:8px}
   .chcard.show{display:flex}
-  .chcard .n{font-size:11px; letter-spacing:.3em; font-weight:800; color:var(--acc-lo)}
+  .chcard .n{font-size:11px; letter-spacing:.3em; font-weight:800; color:var(--ui)}
   .chcard .t{font-size:19px; font-weight:750; letter-spacing:-.01em; padding:0 24px; line-height:1.5}
   .ptrack{flex:none; margin-top:10px}
   .chapters{display:flex; gap:4px}
-  .chapters i{flex:1; height:4px; border-radius:2.5px; background:#DED7C6; transition:background .4s}
-  .chapters i.done{background:var(--acc-lo)}
-  .chapters i.now{background:var(--acc)}
+  .chapters i{flex:1; height:4px; border-radius:2.5px; background:#DED7C6; transition:background .4s; position:relative; overflow:hidden}
+  .chapters i.done{background:var(--ui)}
+  .chapters i.now .fillp{position:absolute; left:0; top:0; bottom:0; background:var(--ui); border-radius:2.5px; transition:width .4s var(--soft)}
   .ptimes{display:flex; justify-content:space-between; gap:10px; font-size:10px; color:var(--paper-sub); margin-top:6px; font-weight:600}
   .ptimes #pCh{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .player-state{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:9px; padding:0 14px}
   .player-state .big{font-size:14px; font-weight:750}
   .player-state .sm{font-size:11px; color:var(--paper-sub); font-weight:600; line-height:1.8}
-  .pulse{width:13px; height:13px; border-radius:50%; background:var(--acc); animation:pu 1.1s var(--soft) infinite}
+  .pulse{width:13px; height:13px; border-radius:50%; background:var(--ui); animation:pu 1.1s var(--soft) infinite}
   @keyframes pu{0%,100%{transform:scale(.7); opacity:.5}50%{transform:scale(1.15); opacity:1}}
   /* C3: 완결 — 대형 그린 배터리 */
   .finbatt{width:64px; height:30px; border:2.5px solid var(--green); border-radius:7px; padding:4px; position:relative; display:block}
@@ -234,16 +234,19 @@
   .go-cancel,.go-make{flex:1; border:none; cursor:pointer; font-family:inherit; border-radius:12px; padding:12px;
     font-size:12.5px; font-weight:750; transition:transform var(--snap) var(--spring); touch-action:manipulation}
   .go-cancel{background:rgba(255,255,255,.7); color:var(--paper-sub); box-shadow:inset 0 0 0 1px rgba(94,86,72,.16)}
-  .go-make{background:var(--acc); color:#fff; box-shadow:0 4px 10px -4px rgba(0,0,0,.35)}
+  .go-make{background:var(--ui); color:#fff; box-shadow:0 4px 10px -4px rgba(0,0,0,.35)}
   .go-cancel:active,.go-make:active{transform:scale(.95)}
   .go-progress{display:flex; flex-direction:column; align-items:center; gap:11px; margin-top:15px}
+  .go-progress[hidden],.go-body[hidden]{display:none}
+  [hidden]{display:none !important} /* display 클래스가 hidden을 이기는 사고 방지 (§7b) */
   .go-msg{font-size:11.5px; font-weight:700; text-align:center; line-height:1.7}
   .go-msg small{display:block; font-size:9px; color:var(--paper-sub); font-weight:600}
 
   /* ================= 클릭휠 — §1.1 + §1.1a ================= */
-  .wheelzone{display:grid; place-items:center; padding-top:12px; flex:none}
+  /* [클래식 §1.0] 하단 필드 = 폭과 같은 정사각, 휠 정중앙 → 4방 여백 균등 */
+  .wheelzone{display:grid; place-items:center; flex:none; aspect-ratio:1; width:100%}
   .wheel{
-    width:min(72vw, 300px); aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center;
+    width:62%; aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center; /* [클래식] 38.5/61.8 */
     /* 평평한 매트 도넛 — 명암 ±4%, 돔 금지 */
     background:radial-gradient(circle at 50% 38%, var(--wheel-a) 0%, var(--wheel-b) 60%, var(--wheel-c) 100%);
     transition:background .6s; touch-action:none;
@@ -257,9 +260,12 @@
   /* 터치 추종 음영 — 눈금 폐기, 잉크 7% 스팟이 손가락과 1:1로 돎 */
   .wheel .shade{position:absolute; inset:0; border-radius:50%; pointer-events:none; opacity:0;
     transition:opacity .3s var(--soft); will-change:transform}
-  .wheel .shade::before{content:""; position:absolute; left:50%; top:6%; width:40%; height:32%;
+  .wheel .shade::before{content:""; position:absolute; left:50%; top:4%; width:46%; height:36%;
     transform:translateX(-50%); border-radius:50%;
-    background:radial-gradient(ellipse at center, rgba(var(--shade),.10), rgba(var(--shade),.045) 55%, transparent 75%)}
+    background:radial-gradient(ellipse at center, rgba(var(--shade),.16), rgba(var(--shade),.07) 55%, transparent 78%)}
+  .wheel .shade::after{content:""; position:absolute; left:50%; bottom:4%; width:40%; height:30%;
+    transform:translateX(-50%); border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(255,255,255,.5), rgba(255,255,255,.18) 55%, transparent 78%)}
   .wheel.touching .shade,.wheel.demo .shade{opacity:1}
   /* 파인 센터 웰 + 평평한 허브 (볼록·광택점 금지) */
   .wheel .well{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
@@ -276,20 +282,20 @@
     font-size:9px; font-weight:700; letter-spacing:.16em; color:rgba(var(--shade),.42); font-family:inherit;
     transition:transform var(--snap) var(--spring), color .2s; touch-action:manipulation; z-index:2}
   .wbtn svg{display:block; fill:currentColor}
-  .wbtn:active{transform:scale(.86); color:rgba(var(--shade),.7)}
-  .wbtn.menu{top:5.5%; left:50%; transform:translateX(-50%)} .wbtn.menu:active{transform:translateX(-50%) scale(.86)}
-  .wbtn.prev{left:4.5%; top:50%; transform:translateY(-50%)} .wbtn.prev:active{transform:translateY(-50%) scale(.84)}
-  .wbtn.next{right:4.5%; top:50%; transform:translateY(-50%)} .wbtn.next:active{transform:translateY(-50%) scale(.84)}
-  .wbtn.play{bottom:4.5%; left:50%; transform:translateX(-50%)} .wbtn.play:active{transform:translateX(-50%) scale(.86)}
-  .engrave{margin-top:11px; text-align:center; font-size:8px; font-weight:700; letter-spacing:.5em; flex:none;
-    color:rgba(var(--shade),.34); text-shadow:0 1px 0 rgba(255,255,255,.8)}
+  .wbtn:active{transform:scale(.86); opacity:.55} /* [A] press */
+  .wbtn.menu{top:14px; left:50%; transform:translateX(-50%)} .wbtn.menu:active{transform:translateX(-50%) scale(.86)}
+  .wbtn.prev{left:14px; top:50%; transform:translateY(-50%)} .wbtn.prev:active{transform:translateY(-50%) scale(.84)}
+  .wbtn.next{right:14px; top:50%; transform:translateY(-50%)} .wbtn.next:active{transform:translateY(-50%) scale(.84)}
+  .wbtn.play{bottom:14px; left:50%; transform:translateX(-50%)} .wbtn.play:active{transform:translateX(-50%) scale(.86)}
+  .engrave{margin-top:0; text-align:center; font-size:8px; font-weight:700; letter-spacing:.5em; flex:none;
+    color:rgba(var(--shade),.28); text-shadow:0 1px 0 rgba(255,255,255,.8)}
 
   /* ================= 가로 ================= */
   @media (orientation: landscape) and (max-height: 560px){
     body{padding:calc(var(--sat) + 6px) 10px calc(var(--sab) + 6px)}
     .device{max-width:none; max-height:none; flex-direction:row; align-items:stretch; gap:14px; padding:14px 16px}
     .epaper{flex:1}
-    .wheelzone{padding:0; width:34%; align-self:center}
+    .wheelzone{width:34%; aspect-ratio:auto; align-self:center}
     .wheel{width:min(88%, 36vh)}
     .engrave{display:none}
   }
@@ -309,9 +315,10 @@
   body.stage .batt .tip{background:rgba(255,255,255,.45)}
   /* 클립 = 커버 전체화면, 더블탭 = 컨테인 (G1) */
   body.stage .clipbox{position:absolute; inset:0; margin:0; aspect-ratio:auto; border-radius:0; box-shadow:none; background:#000}
+  /* [A] clipmode = video centered on black (컨테인). 더블탭 = 커버(옵션) */
   body.stage .clipwrap{position:absolute; inset:auto; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:100vw; height:calc(100vw * 9 / 16)}
-  body.stage .clipbox.contain .clipwrap{height:100dvh; width:calc(100dvh * 16 / 9)}
+    height:100dvh; width:calc(100dvh * 16 / 9); max-width:100vw; max-height:100dvh}
+  body.stage .clipbox.cover .clipwrap{width:100vw; height:calc(100vw * 9 / 16); max-width:none; max-height:none}
   /* 메타 캡슐 — 4초 후 페이드 (A metaAway) */
   body.stage .credit{position:absolute; z-index:5; left:16px; bottom:calc(var(--sab) + 18px); margin:0; max-width:60vw;
     background:rgba(8,9,14,.55); color:#F2F3F8; border-radius:8px; padding:8px 12px;
@@ -330,14 +337,14 @@
   .hairline{display:none}
   body.stage .hairline{display:block; position:absolute; z-index:5; left:0; right:0; bottom:0; height:2px;
     background:rgba(255,255,255,.12)}
-  body.stage .hairline i{display:block; height:100%; background:var(--acc); transition:width .3s var(--soft)}
+  body.stage .hairline i{display:block; height:100%; background:var(--ui); transition:width .3s var(--soft)}
   body.stage.clipmode .hairline{opacity:0; transition:opacity .3s}
   body.stage.clipmode.hud .hairline{opacity:1}
   body.stage .ptrack{display:none}
   body.stage .player-state{position:absolute; inset:0}
 
   /* ---- 게임핸들 — §2.4 A 기록 원형 ---- */
-  #stick{display:none; position:fixed; left:12vw; bottom:22px; width:84px; height:84px; border-radius:50%;
+  #stick{display:none; position:fixed; right:12vw; bottom:22px; width:84px; height:84px; border-radius:50%;
     background:radial-gradient(circle, rgba(255,255,255,.16) 55%, rgba(255,255,255,.04) 78%, transparent 100%);
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
     z-index:40; touch-action:none; user-select:none; -webkit-user-select:none;
@@ -348,13 +355,20 @@
     transform:translate(-50%,-50%); background:rgba(255,255,255,.55);
     box-shadow:inset 0 1px 2px rgba(255,255,255,.8), 0 2px 6px rgba(0,0,0,.3);
     transition:transform .18s var(--soft)}
-  #stick.rot{box-shadow:0 0 18px rgba(224,112,63,.5)} /* 회전모드 = 소프트 글로우 */
+  #stick.rot{box-shadow:0 0 18px rgba(90,140,255,.5)} /* A 원문값 */ /* 회전모드 = 소프트 글로우 */
 
   .toast{position:fixed; left:50%; bottom:calc(var(--sab) + 26px); transform:translateX(-50%) translateY(20px);
     background:var(--ink); color:#F5F2EC; font-size:11.5px; font-weight:700; border-radius:99px; padding:9px 16px;
     opacity:0; transition:opacity .3s, transform .3s var(--spring); pointer-events:none; z-index:50; white-space:nowrap;
     max-width:86vw; overflow:hidden; text-overflow:ellipsis}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  /* §5: 세로 짧은 뷰포트 — 하단 트림 압축, 회수분은 스크린이 흡수 */
+  @media (max-height: 820px) and (orientation: portrait){
+    body{padding-bottom:calc(var(--sab) + 4px)}
+    .device{padding-bottom:8px}
+    .engrave{display:none}
+  }
 
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.001s !important; transition-duration:.001s !important}
@@ -732,9 +746,16 @@
   function renderChapters(){
     var el=document.getElementById('pchap'); el.innerHTML='';
     var curCh=chapterOfBeat[bi]||0;
+    // 현재 챕터 내부 진행률 (비트 기준) — 진행이 '보여야' 한다 [J:07-13]
+    var chStart=-1, chEnd=-1;
+    for(var k=0;k<chapterOfBeat.length;k++){
+      if(chapterOfBeat[k]===curCh){ if(chStart<0) chStart=k; chEnd=k; }
+    }
+    var inPct=(chEnd>chStart)?Math.round((bi-chStart)/(chEnd-chStart)*100):100;
     for(var i=0;i<chapterCount;i++){
       var b=document.createElement('i');
-      if(i<curCh) b.className='done'; else if(i===curCh) b.className='now';
+      if(i<curCh) b.className='done';
+      else if(i===curCh){ b.className='now'; b.innerHTML='<span class="fillp" style="width:'+inPct+'%"></span>'; }
       el.appendChild(b);
     }
     document.getElementById('pPos').textContent=(bi+1)+' / '+beats.length;
@@ -830,6 +851,23 @@
     }
     return segCache[beat.vid];
   }
+  function boundsFromCache(beat){ // 동기 — iOS 제스처 보존 경로
+    var meta=segCache[beat.vid]; if(!meta) return false;
+    var ss=meta.sections, hit=null, i;
+    for(i=0;i<ss.length;i++){
+      var s0=ss[i];
+      if(typeof s0.from_sec==='number'&&typeof s0.to_sec==='number'&&beat.ts>=s0.from_sec&&beat.ts<s0.to_sec){ hit=s0; break; }
+    }
+    if(!hit){ for(i=ss.length-1;i>=0;i--){ if(typeof ss[i].from_sec==='number'&&ss[i].from_sec<=beat.ts&&ss[i].to_sec>ss[i].from_sec){ hit=ss[i]; break; } } }
+    if(hit){ beat.from=hit.from_sec; beat.to=hit.to_sec; if(!beat.src&&hit.title) beat.src=hit.title; return true; }
+    return false;
+  }
+  // 노트 오픈 시 전 클립 경계 선조회 — 재생·구간이동이 항상 동기 경로 (⏭ 2회 눌림 버그 근본 수정)
+  function prefetchBounds(){
+    var vids={};
+    beats.forEach(function(b){ if(b.t==='c'&&b.from==null) vids[b.vid]=1; });
+    Object.keys(vids).forEach(function(v){ resolveBeatMeta({vid:v}); });
+  }
   async function resolveBounds(beat){
     var meta=await resolveBeatMeta(beat);
     var ss=meta.sections, hit=null, i;
@@ -874,6 +912,7 @@
     if(beat.t==='c'){
       clipbox.hidden=false;
       if(beat.from!=null&&beat.to!=null){ playClip(beat); return; }
+      if(boundsFromCache(beat)){ playClip(beat); return; } // 동기 — 제스처 보존
       var seq2=++runSeq;
       resolveBounds(beat).then(function(ok){
         if(seq2!==runSeq||!playing||beats[bi]!==beat) return;
@@ -938,6 +977,7 @@
     }
     flatten(book);
     if(!beats.length){ pShowState('노트 준비 중','카드가 모이면 에피소드가 자동으로 생겨요'); return; }
+    if(!m.sample) prefetchBounds();
     var res=m.sample?null:loadResume(m.id);
     bi=(res&&!res.done&&res.bi>0&&res.bi<beats.length)?res.bi:0;
     playing=true; setCharging(true); acquireWake();
@@ -948,7 +988,7 @@
 
   /* ================= 클릭휠 엔진 — §1.1a J1~J8 ================= */
   var wheel=document.getElementById('wheel'), shade=document.getElementById('wheelShade');
-  var NOTCH=28;
+  var NOTCH=32; // [A] DETENT=32
   (function(){
     var dragging=false, lastAng=0, lastT=0, acc=0, visAngle=0, kick=0, rubber=0, rafId=null;
     function angOf(e){
@@ -986,13 +1026,14 @@
       while(acc<=-NOTCH){ acc+=NOTCH; notch(-1,units); }
       kickFrame();
     });
-    ['pointerup','pointercancel'].forEach(function(ev){
+    ['pointerup','pointercancel','pointerleave'].forEach(function(ev){
       wheel.addEventListener(ev,function(){ dragging=false; acc=0; wheel.classList.remove('touching'); kickFrame(); });
     });
     function notch(dir,units){
       kick+=1.5*dir; // J2: 시각 디텐트
       if(navigator.vibrate) navigator.vibrate(8);
-      for(var u=0;u<(units||1);u++) dispatchNotch(dir);
+      var n=(cur==='player')?(units||1):1; // J3: 가속은 재생 구간만 — 메뉴는 1노치 1행 (아이팟)
+      for(var u=0;u<n;u++) dispatchNotch(dir);
     }
     window.wheelRubber=function(dir){ rubber+=15*dir; kickFrame(); }; // J4
     window.wheelDemo=function(){ // J6: 첫 발견
@@ -1005,12 +1046,18 @@
       requestAnimationFrame(d);
     };
   })();
+  function updateSel(){
+    var rows=document.getElementById('rows');
+    for(var i=0;i<rows.children.length;i++) rows.children[i].classList.toggle('sel', i===selIdx);
+    var el=rows.children[selIdx];
+    if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
+  }
   function dispatchNotch(dir){
     if(cur==='home'){
       var items=homeItems(); if(!items.length) return;
       var nx=selIdx+dir;
       if(nx<0||nx>=items.length){ wheelRubber(dir); return; } // J4
-      selIdx=nx; renderRows(); // J5: 스냅은 CSS --snap
+      selIdx=nx; updateSel(); // J5: 1노치 1행, 선택만 이동 (아이팟 메뉴)
     } else if(cur==='player'){
       if(bi+dir>=beats.length){ wheelRubber(1); finishNote(); return; }
       nextBeat(dir); if(!playing){ playing=true; setCharging(true); acquireWake(); runBeat(); }
@@ -1041,7 +1088,7 @@
     return function(){
       var now=Date.now();
       if(document.body.classList.contains('stage')&&now-lastTap<300){ // G1 더블탭
-        clipbox.classList.toggle('contain'); lastTap=0; return;
+        clipbox.classList.toggle('cover'); lastTap=0; return;
       }
       lastTap=now;
       setTimeout(function(){ if(lastTap&&Date.now()-lastTap>=290){ lastTap=0;
