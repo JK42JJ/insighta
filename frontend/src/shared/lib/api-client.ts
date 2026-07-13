@@ -596,6 +596,67 @@ export class ApiHttpError extends Error {
   }
 }
 
+// Admin Performance Monitor — kept in sync with src/api/routes/admin/performance.ts
+export interface PerfKpiMandalaDay {
+  day: string;
+  mandalas: number;
+  place_off_p50_s: number | null;
+  place_off_p95_s: number | null;
+  cards_p50: number | null;
+  cells_p50: number | null;
+  shorts: number;
+  deboost_rate: number | null;
+}
+
+export interface PerfKpiPrecomputeDay {
+  day: string;
+  total: number;
+  consumed: number;
+  dur_p50_s: number | null;
+  dur_p95_s: number | null;
+}
+
+export interface PerfKpiTraceDay {
+  day: string;
+  gate_pass_ratio: number | null;
+  embed_p95_ms: number | null;
+}
+
+export interface PerfChangeEvent {
+  id: string;
+  created_at: string;
+  source: string;
+  git_sha: string | null;
+  flags: Record<string, string> | null;
+  diff: Record<string, { from: string | null; to: string | null }> | null;
+  note: string | null;
+  experiment: string | null;
+  experiment_criteria: string | null;
+}
+
+export interface PerfViolation {
+  metric: string;
+  value: number;
+  threshold: number;
+  direction: 'above' | 'below';
+}
+
+export interface AdminPerformanceDiagnosis {
+  generated_at: string;
+  interpretation: { rules: readonly string[] };
+  current: { git_sha: string | null; flags: Record<string, string> };
+  thresholds: Record<string, number>;
+  window_24h: Record<string, number | null> | null;
+  violations: PerfViolation[];
+  kpi_7d: {
+    mandala_days: PerfKpiMandalaDay[];
+    precompute_days: PerfKpiPrecomputeDay[];
+    trace_days: PerfKpiTraceDay[];
+  };
+  events_30d: PerfChangeEvent[];
+  weak_runs_7d: { mandala_id: string; created_at: string; cards: number; goal: string | null }[];
+}
+
 // Admin Pool Health — kept in sync with src/api/routes/admin/pool-health.ts
 // (PoolHealthSnapshot) + src/config/pool-health.ts (POOL_HEALTH_THRESHOLDS).
 export type PoolHealthStatus = 'ok' | 'warn' | 'critical' | 'na';
@@ -2833,6 +2894,30 @@ class ApiClient {
     message?: string;
   }> {
     return this.request('/admin/v2-quality-audit/run-now', { method: 'POST' });
+  }
+
+  // ========================================
+  // Admin Performance Monitor (diagnosis + manual markers)
+  // ========================================
+
+  async getAdminPerformanceDiagnosis(): Promise<AdminPerformanceDiagnosis> {
+    const res = await this.request<{ success: boolean; data: AdminPerformanceDiagnosis }>(
+      '/admin/performance/diagnosis',
+      { timeoutMs: 30_000 }
+    );
+    return res.data;
+  }
+
+  async postAdminPerformanceEvent(body: {
+    note: string;
+    experiment?: 'candidate' | 'adopted' | 'reverted';
+    experiment_criteria?: string;
+  }): Promise<{ id: string; created_at: string }> {
+    const res = await this.request<{ success: boolean; data: { id: string; created_at: string } }>(
+      '/admin/performance/events',
+      { method: 'POST', body: JSON.stringify(body) }
+    );
+    return res.data;
   }
 
   // ========================================
