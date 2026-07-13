@@ -2315,6 +2315,23 @@ model video_pool {
 /// re-embedding user mandalas. IVFFlat index is created in raw SQL after
 /// rows accumulate (ivfflat needs training data); until then cosine uses
 /// brute-force `<=>` which is fine for the initial <5k pool size.
+/// T10 judge-round relevance snapshot (CP517 track, 2026-07-12) — created
+/// directly on prod during the T10 measurement; registered here so
+/// `prisma db push` stops proposing to DROP it (blocked every deploy,
+/// 2026-07-13). No PK on the physical table -> @@ignore (schema parity
+/// only; not exposed through the Prisma client).
+model t10r_pct2_snapshot {
+  src           String?
+  row_id        String?
+  mandala_id    String?
+  video_ref     String?
+  relevance_pct Int?
+  snapped_at    DateTime? @db.Timestamptz(6)
+
+  @@ignore
+  @@schema("public")
+}
+
 model video_pool_embeddings {
   id            String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   video_id      String                      @db.VarChar(20)
