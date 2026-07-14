@@ -11,6 +11,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Insighta">
 <meta name="theme-color" content="#F5F2EC">
+<link rel="preconnect" href="https://www.youtube.com">
+<link rel="preconnect" href="https://i.ytimg.com">
+<link rel="preconnect" href="https://googlevideo.com">
 <link rel="apple-touch-icon" href="/mobile/icon-180.png">
 <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" href="/mobile/splash-1125x2436.png">
 <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" href="/mobile/splash-1170x2532.png">
@@ -195,6 +198,8 @@
     background:#20242E;
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.12), 0 5px 12px -6px rgba(94,86,72,.45)}
   .clipwrap{position:absolute; inset:0}
+  .clipwrap .ytp{position:absolute; inset:0}
+  .clipwrap .ytp.off{opacity:0; pointer-events:none} /* 프리큐 슬롯 — 화면 밖이 아니라 뒤에서 버퍼 */
   .clipwrap iframe,#yt{position:absolute; inset:0; width:100%; height:100%; border:0}
   .clipbox .guard{position:absolute; inset:0; z-index:3}
   /* S1: 원본 크레딧 — 상시 표기 */
@@ -614,7 +619,7 @@
           <div class="sm" id="pStateSm"></div>
         </div>
         <div class="clipbox" id="clipbox" hidden>
-          <div class="clipwrap" id="clipwrap"><div id="yt"></div></div>
+          <div class="clipwrap" id="clipwrap"><div class="ytp" id="ytA"></div><div class="ytp off" id="ytB"></div></div>
           <div class="clipveil" id="clipVeil" aria-hidden="true"><i></i><span>INSIGHTA</span></div>
           <div class="guard" id="clipGuard" aria-hidden="true"></div>
         </div>
@@ -1249,15 +1254,52 @@
     prefetchAround(bi+1); // 다음 내레이션 선로드 유지
   }
 
-  /* YouTube 클립 — 경계는 v2 구간요약만 (§0-3) */
-  var yt=null, ytReady=false, ytPoll=null, ytPending=null;
-  window.onYouTubeIframeAPIReady=function(){
-    yt=new YT.Player('yt',{
+  /* YouTube 클립 — 경계는 v2 구간요약만 (§0-3)
+     듀얼 플레이어 프리큐 [J:07-14 "버퍼링 최소화 설계"]: 유휴 슬롯이 다음 클립을
+     미리 cue(버퍼) → 전환 = 스왑(수백 ms). 내레이션 중에도 다음 클립을 큐. */
+  var ytP=[null,null], ytAct=0, yt=null, ytReady=false, ytPoll=null, ytPending=null;
+  function mkPlayer(elId, first){
+    return new YT.Player(elId,{
       width:'100%', height:'100%', videoId:'',
       playerVars:{playsinline:1, rel:0, modestbranding:1, controls:0, disablekb:1},
-      events:{onReady:function(){ ytReady=true; if(ytPending){ playClipNow(ytPending); ytPending=null; } }}
+      events:{onReady:function(){
+        if(first){ ytReady=true; if(ytPending){ playClipNow(ytPending); ytPending=null; } }
+      }}
     });
+  }
+  window.onYouTubeIframeAPIReady=function(){
+    ytP[0]=mkPlayer('ytA', true);
+    ytP[1]=mkPlayer('ytB', false);
+    yt=ytP[0];
   };
+  function ytSwap(){ // 유휴 슬롯을 활성으로
+    ytAct=1-ytAct; yt=ytP[ytAct];
+    document.getElementById('ytA').classList.toggle('off', ytAct!==0);
+    document.getElementById('ytB').classList.toggle('off', ytAct!==1);
+  }
+  function ytIdle(){ return ytP[1-ytAct]; }
+  function nextClipBeat(from){ // from 이후 첫 클립 비트 (경계 확보된 것만)
+    for(var k=from;k<beats.length;k++){
+      var b=beats[k];
+      if(b.t==='c'){
+        if(b.from==null&&!boundsFromCache(b)) return null; // 경계 미해결 — 큐 불가
+        return b;
+      }
+    }
+    return null;
+  }
+  var cuedKey=null;
+  function cueNext(){ // 유휴 슬롯에 다음 클립 프리큐 (버퍼)
+    try{
+      var idle=ytIdle(); if(!idle||!idle.cueVideoById) return;
+      var b=nextClipBeat(bi+1); if(!b){ cuedKey=null; return; }
+      var key=b.vid+':'+b.from;
+      if(cuedKey===key) return;
+      idle.cueVideoById({videoId:b.vid, startSeconds:b.from, endSeconds:b.to});
+      try{idle.mute()}catch(e){}
+      cuedKey=key;
+    }catch(e){}
+  }
   (function(){ var s=document.createElement('script'); s.src='https://www.youtube.com/iframe_api'; document.head.appendChild(s); })();
   var clipVeil=document.getElementById('clipVeil');
   function veilShow(){ clipVeil.classList.remove('off'); clipVeil.classList.remove('hold'); clearTimeout(veilShow._t);
@@ -1279,12 +1321,18 @@
           resume=(tcur>beat.from+0.5&&tcur<beat.to-0.5); }catch(e){}
       }
       curClipKey=key;
-      if(!resume) yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
+      var pk=beat.vid+':'+beat.from;
+      if(!resume&&cuedKey===pk&&ytIdle()){ // 프리큐 히트 → 스왑, 즉시 시작
+        try{ yt.stopVideo() }catch(e){}
+        ytSwap(); cuedKey=null;
+      }
+      else if(!resume) yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
       try{yt.setPlaybackRate(Math.min(spd,2))}catch(e){} // YT 상한 2× (플랫폼 한계)
       // iOS: 제스처 없는 소리-영상 자동재생 차단 → 뮤트로 시작(허용됨), 재생 확인 후 언뮤트+램프
       try{yt.mute()}catch(e){}
       try{yt.setVolume(0)}catch(e){}
       yt.playVideo();
+      setTimeout(cueNext, 900); // 현재 클립이 안정된 뒤 다음 클립 프리큐
       var v=0, ramp=null, unmuted=false;
       function rampUp(){ if(unmuted) return; unmuted=true;
         try{yt.unMute()}catch(e){}
@@ -1425,7 +1473,11 @@
         if(ok) playClip(beat); else nextBeat(1,true); // 경계 없으면 스킵 — 임의 창 금지
       });
     }
-    else{ clipbox.hidden=true; creditEl.hidden=true; readbox.hidden=false; speakBeat(beat,function(){ nextBeat(1,true); }); }
+    else{
+      clipbox.hidden=true; creditEl.hidden=true; readbox.hidden=false;
+      if(ytReady) cueNext(); // 내레이션이 흐르는 동안 다음 클립 버퍼 [J:07-14]
+      speakBeat(beat,function(){ nextBeat(1,true); });
+    }
   }
   function nextBeat(dir,auto){
     if(!beats.length) return;
