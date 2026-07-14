@@ -218,6 +218,10 @@ jobs:
           OR_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OR_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           COHERE_KEY: ${{ secrets.COHERE_API_KEY }}
+          # Naver Open API — book research/factcheck Korean evidence leg
+          # (2026-07-14 provider swap; Google CSE closed to new customers).
+          NAVER_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           ELEVEN_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           NARRATION_PREPRODUCE_ENABLED: ${{ vars.NARRATION_PREPRODUCE_ENABLED }}
           YT_SEARCH_KEY: ${{ secrets.YOUTUBE_API_KEY_SEARCH }}
@@ -316,6 +320,16 @@ jobs:
             # tuning knob (CP392 non-secret rule).
             if [ -n "${COHERE_KEY}" ]; then
               grep -q '^COHERE_API_KEY=' .env 2>/dev/null && sed -i "s|^COHERE_API_KEY=.*|COHERE_API_KEY=${COHERE_KEY}|" .env || echo "COHERE_API_KEY=${COHERE_KEY}" >> .env
+            fi
+            # Naver Open API (book research/factcheck Korean evidence).
+            # Absent = skip — graceful naverEnabled=false, fill-book logs the
+            # degradation loudly (silent-0 class, 2026-07-14). The global leg
+            # rides OPENROUTER_API_KEY (already synced above).
+            if [ -n "${NAVER_ID}" ]; then
+              grep -q '^NAVER_CLIENT_ID=' .env 2>/dev/null && sed -i "s|^NAVER_CLIENT_ID=.*|NAVER_CLIENT_ID=${NAVER_ID}|" .env || echo "NAVER_CLIENT_ID=${NAVER_ID}" >> .env
+            fi
+            if [ -n "${NAVER_SECRET}" ]; then
+              grep -q '^NAVER_CLIENT_SECRET=' .env 2>/dev/null && sed -i "s|^NAVER_CLIENT_SECRET=.*|NAVER_CLIENT_SECRET=${NAVER_SECRET}|" .env || echo "NAVER_CLIENT_SECRET=${NAVER_SECRET}" >> .env
             fi
             # CP500++ CONFIG-SSOT (2026-06-16) — runtime TOGGLES removed from the
             # .env-write path. Toggle activation SSOT = docker-compose.prod.yml
