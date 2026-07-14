@@ -108,8 +108,9 @@
   .tl h3{font-size:16.5px; font-weight:800; letter-spacing:-.02em}
   .tl>p{font-size:13.5px; color:var(--muted); margin-top:6px; max-width:66ch}
   .band{display:flex; gap:5px; margin-top:18px; position:relative; height:36px}
-  .seg{border-radius:9px; display:grid; place-items:center;
-    font-family:var(--hel); font-size:10px; font-weight:700; letter-spacing:.12em}
+  .seg{border-radius:9px; display:grid; place-items:center; padding:0 5px;
+    font-family:var(--hel); font-size:10px; font-weight:700; letter-spacing:.12em;
+    white-space:nowrap; min-width:max-content} /* 좁은 뷰포트에서 라벨 세로 꺾임 방지 */
   .seg.n{background:#EFE7D2; color:#7A7260}
   .seg.y{background:linear-gradient(178deg,#E87B4C,#CE5F30); color:#fff}
   .seg.f{background:#5F7CAD; color:#fff}
@@ -118,6 +119,11 @@
     width:9px; height:9px; border-radius:50%; background:var(--acc)}
   .leg{display:flex; gap:18px; flex-wrap:wrap; margin-top:14px; font-size:11.5px; color:var(--muted); font-weight:600}
   .leg i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px}
+  @media (max-width:480px){ /* 모바일: 7조각 + 간격이 한 줄에 들어가도록 축소 */
+    .tl{padding:20px 16px}
+    .band{gap:4px; height:32px}
+    .seg{font-size:9px; letter-spacing:.05em; padding:0 4px}
+  }
 
   /* ═══ 원칙 ═══ */
   .laws-sec{padding:clamp(44px,6vw,74px) 0 0}
