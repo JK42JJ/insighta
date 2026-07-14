@@ -1693,6 +1693,9 @@ class ApiClient {
   async markBetaInvited(id: string): Promise<{ application: { id: string; status: string } }> {
     return this.request(`/admin/beta-applications/${encodeURIComponent(id)}/mark-invited`, {
       method: 'POST',
+      // request() always sets Content-Type: application/json — a body-less POST
+      // 400s with FST_ERR_CTP_EMPTY_JSON_BODY before the route runs (#935 class).
+      body: JSON.stringify({}),
     });
   }
 
