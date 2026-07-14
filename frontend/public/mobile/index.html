@@ -1526,6 +1526,11 @@
     unlockAudio(); // 탭 제스처 안에서 오디오 세션 활성화 (iOS)
     curNote=m; show('player');
     document.getElementById('bShareNote').hidden=!!(m.sample||m.guest);
+    if(!m.sample&&!m.guest&&!m._shareUrl){ // 공유 링크 선발급 — 탭 시점엔 동기 공유 (iOS 제스처 보존)
+      api('/mandalas/'+m.id+'/share-token',{method:'POST'}).then(function(r){return r.json()})
+        .then(function(j){ if(j&&j.data&&j.data.token) m._shareUrl=location.origin+'/mobile/?g='+encodeURIComponent(j.data.token); })
+        .catch(function(){});
+    }
     document.getElementById('pTitle').textContent=m.title||'노트';
     pShowSkeleton('노트를 여는 중');
     var book=null;
@@ -1921,19 +1926,28 @@
     try{localStorage.removeItem(OWN_KEY)}catch(e){}
     setPlaying(false); show('login');
   };
-  document.getElementById('bShareNote').onclick=async function(){
+  document.getElementById('bShareNote').onclick=function(){
     if(!curNote||curNote.sample||curNote.guest) return;
-    var url;
-    try{
-      var r=await api('/mandalas/'+curNote.id+'/share-token',{method:'POST'});
-      var j=await r.json();
-      url=location.origin+'/mobile/?g='+encodeURIComponent(j.data.token);
-    }catch(e){ toast('링크를 만들지 못했어요'); return; }
+    var url=curNote._shareUrl;
+    if(!url){ // 선발급 미완 — 재발급 후 안내 (제스처 밖 공유 시트는 iOS가 차단)
+      toast('공유 링크 준비 중 — 잠시 후 다시 탭해주세요');
+      api('/mandalas/'+curNote.id+'/share-token',{method:'POST'}).then(function(r){return r.json()})
+        .then(function(j){ if(j&&j.data&&j.data.token) curNote._shareUrl=location.origin+'/mobile/?g='+encodeURIComponent(j.data.token); })
+        .catch(function(){ toast('링크를 만들지 못했어요'); });
+      return;
+    }
     var data={title:'다이얼 — '+(curNote.title||'노트'),
       text:(curNote.title||'노트')+' — 48시간 무료 청취 · 첫 회차는 순서대로 이어집니다', url:url};
-    try{ if(navigator.share){ await navigator.share(data); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
-    try{ await navigator.clipboard.writeText(url); toast('48시간 링크가 복사됐어요'); }
-    catch(e){ prompt('이 링크를 복사하세요', url); }
+    if(navigator.share){
+      navigator.share(data).catch(function(e){
+        if(e&&e.name==='AbortError') return;
+        navigator.clipboard.writeText(url).then(function(){ toast('48시간 링크가 복사됐어요'); })
+          .catch(function(){ prompt('이 링크를 복사하세요', url); });
+      });
+      return;
+    }
+    navigator.clipboard.writeText(url).then(function(){ toast('48시간 링크가 복사됐어요'); })
+      .catch(function(){ prompt('이 링크를 복사하세요', url); });
   };
   // Android/Chrome: beforeinstallprompt 캡처 → 버튼 탭 시 실제 설치 프롬프트
   var deferredInstall=null;
