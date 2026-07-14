@@ -205,11 +205,23 @@
   .chcard .t{font-size:19px; font-weight:750; letter-spacing:-.01em; padding:0 24px; line-height:1.5}
   .ptrack{flex:none; margin-top:10px}
   .chapters{display:flex; gap:4px}
-  .chapters i{flex:1; height:4px; border-radius:2.5px; background:#DED7C6; transition:background .4s; position:relative; overflow:hidden}
+  /* 필름 트랙 [J:07-14] — 내레이션=실선, 유튜브 클립=필름 칩, 현재 위치=글라이딩 재생 헤드 */
+  .chapters{padding:3px 0} /* 칩·헤드가 바 위로 살짝 걸치는 여유 */
+  .chapters i{flex:1; height:4px; border-radius:2.5px; background:#DED7C6; transition:background .4s; position:relative}
   .chapters i.done{background:var(--ui)}
-  .chapters i.now .fillp{position:absolute; left:0; top:0; bottom:0; background:var(--ui); border-radius:2.5px; transition:width .4s var(--soft)}
-  .ptimes{display:flex; justify-content:space-between; gap:10px; font-size:10px; color:var(--paper-sub); margin-top:6px; font-weight:600}
+  .chapters i.now .fillp{position:absolute; left:0; top:0; bottom:0; background:var(--ui); border-radius:2.5px;
+    transition:width .45s linear}
+  .cchip{position:absolute; top:50%; width:7px; height:9px; border-radius:2.5px; transform:translate(-50%,-50%);
+    background:var(--paper-hi, #FAF6EC); border:1.4px solid rgba(var(--shade),.32); z-index:1;
+    transition:background .4s, border-color .4s}
+  .cchip.past{background:var(--ui); border-color:var(--ui)}
+  .cchip.live{border-color:var(--acc); background:var(--paper-hi, #FAF6EC);
+    box-shadow:0 0 0 3px rgba(224,112,63,.16)}
+  .phead{position:absolute; top:50%; transform:translate(-50%,-50%); width:9px; height:9px; border-radius:50%;
+    background:var(--acc); box-shadow:0 0 0 3px rgba(224,112,63,.20); z-index:2; transition:left .45s linear}
+  .ptimes{display:flex; align-items:center; gap:10px; font-size:10px; color:var(--paper-sub); margin-top:6px; font-weight:600}
   .ptimes #pCh{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .pclock{margin-left:auto; font-size:10px; color:var(--paper-sub); font-weight:650; flex:none}
   .player-state{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:9px; padding:0 14px}
   .player-state .big{font-size:14px; font-weight:750}
   .player-state .sm{font-size:11px; color:var(--paper-sub); font-weight:600; line-height:1.8}
@@ -465,7 +477,7 @@
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
   .spd{border:1px solid rgba(var(--shade),.28); background:none; cursor:pointer; touch-action:manipulation;
     font-family:inherit; font-size:10.5px; font-weight:750; color:var(--paper-sub);
-    border-radius:999px; padding:2px 9px; margin-left:auto; line-height:1.5}
+    border-radius:999px; padding:2px 9px; line-height:1.5; flex:none}
   .spd.on{color:var(--acc-ink); border-color:var(--acc-lo); background:rgba(var(--shade),.05)}
   .spd:active{transform:scale(.92)}
   body.stage .ptrack .spd{display:none} /* 무대는 전용 캡슐 사용 */
@@ -556,7 +568,7 @@
         <div class="chcard" id="chcard"><div class="n" id="chNum"></div><div class="t" id="chTitle"></div></div>
         <div class="ptrack" id="ptrack" hidden>
           <div class="chapters" id="pchap"></div>
-          <div class="ptimes"><span id="pPos" class="num">1 / 1</span><span id="pCh"></span><button class="spd num" id="spdBtn" aria-label="재생 속도">1×</button></div>
+          <div class="ptimes"><span id="pPos" class="num">1 / 1</span><span id="pCh"></span><span class="pclock num" id="pClock"></span><button class="spd num" id="spdBtn" aria-label="재생 속도">1×</button></div>
         </div>
         <div class="hairline" id="hairline"><i id="hairFill" style="width:0%"></i></div>
         <!-- [J pick] 가로 무대: 포커스 라인 + 컨텍스트 + 탭 존 + 독 + 푸시 레일 -->
@@ -894,21 +906,69 @@
     document.getElementById('pStateBig').textContent=big;
     document.getElementById('pStateSm').innerHTML=sm||'';
   }
+  /* ── 시간 모델: 비트별 콘텐츠 길이(초) — 실측 우선, 미상은 추정 ── */
+  var CLIP_DUR_FALLBACK=30, CH_CARD_SEC=1.5, TTS_SEC_PER_CHAR=0.09;
+  function beatDur(i){
+    var b=beats[i]; if(!b) return 0;
+    if(b.t==='ch') return CH_CARD_SEC;
+    if(b.t==='c') return (b.to!=null&&b.from!=null)?Math.max(1,b.to-b.from):CLIP_DUR_FALLBACK;
+    if(b.audio&&b.audio.d) return b.audio.d;
+    return Math.min(Math.max((b.text||'').length*TTS_SEC_PER_CHAR,2),120);
+  }
+  function beatFrac(){ // 현재 비트 내부 진행 0..1
+    var b=beats[bi]; if(!b) return 0;
+    try{
+      if(b.t==='c'&&yt&&yt.getCurrentTime&&b.from!=null){
+        return Math.max(0,Math.min(1,(yt.getCurrentTime()-b.from)/Math.max(1,(b.to-b.from))));
+      }
+      if(b.t==='n'&&curAudio&&b.audio){ return Math.max(0,Math.min(1,curAudio.currentTime/Math.max(1,b.audio.d))); }
+      if(b.t==='n'&&curSents.length){ return Math.max(0,Math.min(1,curSentIdx/curSents.length)); }
+    }catch(e){}
+    return 0;
+  }
+  function fmtSec(t){ t=Math.max(0,Math.round(t)); return Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); }
+  var trkFill=null, trkHead=null, trkStart=0, trkCount=1;
+  function renderLive(){ // 초 단위 생동: 헤드·필·시계 (0.5s 틱)
+    var f=beatFrac();
+    var pct=Math.min(100,((bi-trkStart+f)/trkCount)*100);
+    if(trkFill) trkFill.style.width=pct+'%';
+    if(trkHead) trkHead.style.left=pct+'%';
+    var el=0; for(var k=0;k<bi;k++) el+=beatDur(k);
+    el+=f*beatDur(bi);
+    var tot=0; for(var k2=0;k2<beats.length;k2++) tot+=beatDur(k2);
+    var c=document.getElementById('pClock');
+    if(c) c.textContent=fmtSec(el)+' / '+fmtSec(tot);
+  }
+  var liveTick=null;
+  function startLive(){ if(!liveTick) liveTick=setInterval(function(){ if(cur==='player'&&beats.length) renderLive(); },500); }
   function renderChapters(){
     var el=document.getElementById('pchap'); el.innerHTML='';
     var curCh=chapterOfBeat[bi]||0;
-    // 현재 챕터 내부 진행률 (비트 기준) — 진행이 '보여야' 한다 [J:07-13]
-    var chStart=-1, chEnd=-1;
+    // 챕터별 비트 범위
+    var ranges=[];
     for(var k=0;k<chapterOfBeat.length;k++){
-      if(chapterOfBeat[k]===curCh){ if(chStart<0) chStart=k; chEnd=k; }
+      var c0=chapterOfBeat[k];
+      if(!ranges[c0]) ranges[c0]={s:k,e:k}; else ranges[c0].e=k;
     }
-    var inPct=(chEnd>chStart)?Math.round((bi-chStart)/(chEnd-chStart)*100):100;
+    trkStart=(ranges[curCh]||{s:bi}).s; trkCount=Math.max(1,((ranges[curCh]||{e:bi}).e-trkStart+1));
     for(var i=0;i<chapterCount;i++){
       var b=document.createElement('i');
+      var r=ranges[i]||{s:0,e:0}, n=Math.max(1,r.e-r.s+1);
       if(i<curCh) b.className='done';
-      else if(i===curCh){ b.className='now'; b.innerHTML='<span class="fillp" style="width:'+inPct+'%"></span>'; }
+      else if(i===curCh){ b.className='now'; b.innerHTML='<span class="fillp"></span><span class="phead"></span>'; }
+      // 유튜브 클립 = 필름 칩 (지나감=채움 / 현재=글로우 / 예정=윤곽)
+      for(var k3=r.s;k3<=r.e;k3++){
+        if(beats[k3]&&beats[k3].t==='c'){
+          var chip=document.createElement('span');
+          chip.className='cchip'+(k3<bi?' past':(k3===bi?' live':''));
+          chip.style.left=(((k3-r.s+0.5)/n)*100)+'%';
+          b.appendChild(chip);
+        }
+      }
       el.appendChild(b);
     }
+    trkFill=el.querySelector('.fillp'); trkHead=el.querySelector('.phead');
+    renderLive(); startLive();
     document.getElementById('pPos').textContent=(bi+1)+' / '+beats.length;
     document.getElementById('hairFill').style.width=Math.round(bi/Math.max(beats.length-1,1)*100)+'%';
     updateDock(); updateRail(); updateCtx();
@@ -1186,9 +1246,11 @@
     return false;
   }
   function playClip(beat){
-    creditEl.hidden=false; // S1
-    creditEl.innerHTML='원본 · <b></b>';
+    creditEl.hidden=false; // S1 — 구간정보 포함 [J:07-14]
+    creditEl.innerHTML='원본 · <b></b><span class="crng num"></span>';
     creditEl.querySelector('b').textContent=beat.src||((segCache[beat.vid]&&segCache[beat.vid].credit)||'핵심구간');
+    if(beat.from!=null&&beat.to!=null)
+      creditEl.querySelector('.crng').textContent=' · '+fmtSec(beat.from)+'–'+fmtSec(beat.to);
     readbox.hidden=false;
     renderSents('',[beat.text||'']); // [J:07-14] '원본 클립' 라벨 제거 — 요약 가림
     if(curSpans&&curSpans[0]) curSpans[0].classList.add('on');
