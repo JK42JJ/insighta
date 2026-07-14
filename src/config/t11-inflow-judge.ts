@@ -14,6 +14,30 @@
  * Flag default OFF (unset = no judging at all). Rollback: flag flip.
  */
 
+/**
+ * T11 model-panel experiment (James-directed, hypothesis-first 2026-07-14).
+ * H1: judge failure axis = Korean-YouTube literacy + instruction adherence,
+ * not model size. H2: legs must come from different vendors. H3: flash tier
+ * suffices. Panel rides the SERVICE shadow path (no offline experiment
+ * scripts — LLM-API hard rule): every organic mandala judges on all panel
+ * models; fixtures (반려견/라떼아트) provide the labeled scorecard.
+ * DeepSeek stays as the control leg for the collapse hypothesis.
+ */
+export const JUDGE_PANEL_MODELS = [
+  'google/gemini-2.5-flash', // 현직 gA — 기준선 (엄격 축)
+  'openai/gpt-4o-mini', // 지시준수 정밀 + 계통 다양성
+  'anthropic/claude-haiku-4.5', // 한국어·지시준수, 서비스 현역
+  'qwen/qwen3-30b-a3b-instruct-2507', // 중국계 대표, v2 현역
+  'deepseek/deepseek-v4-flash', // 현직 gB — 붕괴 가설 대조군
+] as const;
+
+export function isT11JudgePanelEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = String(env['T11_JUDGE_PANEL_ENABLED'] ?? '')
+    .trim()
+    .toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes';
+}
+
 export function isT11InflowJudgeEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const v = String(env['T11_INFLOW_JUDGE_ENABLED'] ?? '')
     .trim()

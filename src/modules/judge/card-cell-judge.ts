@@ -170,6 +170,8 @@ export async function judgeCellCardsDetailed(params: {
   centerGoal: string;
   cellTopic: string;
   items: JudgeItem[];
+  /** Leg models (default: production JUDGE_MODELS). Panel runs pass more. */
+  models?: readonly string[];
   generateImpl?: (
     model: string,
     prompt: string,
@@ -177,6 +179,7 @@ export async function judgeCellCardsDetailed(params: {
   ) => Promise<string>;
 }): Promise<JudgeDetailedResult> {
   if (params.items.length === 0) return { final: [], legs: [] };
+  const models = params.models ?? JUDGE_MODELS;
   const prompt = buildJudgePrompt(params);
   const generate =
     params.generateImpl ??
@@ -189,7 +192,7 @@ export async function judgeCellCardsDetailed(params: {
       return provider.generate(p, o);
     });
   const legs = await Promise.all(
-    JUDGE_MODELS.map(async (model): Promise<JudgeLegDetail> => {
+    models.map(async (model): Promise<JudgeLegDetail> => {
       try {
         const raw = await generate(model, prompt, {
           temperature: JUDGE_TEMPERATURE,
@@ -206,9 +209,13 @@ export async function judgeCellCardsDetailed(params: {
       }
     })
   );
+  // Continuity: `final` stays the PRODUCTION unanimous pair even when a
+  // wider panel runs — panel legs are experiment data, not the verdict.
+  const prodLegs = legs.filter((l) => (JUDGE_MODELS as readonly string[]).includes(l.model));
+  const verdictLegs = prodLegs.length > 0 ? prodLegs : legs;
   const final = params.items.map((it, i) => ({
     videoId: it.videoId,
-    fit: legs.some((leg) => leg.verdicts[i]?.fit !== false),
+    fit: verdictLegs.some((leg) => leg.verdicts[i]?.fit !== false),
   }));
   return { final, legs };
 }
