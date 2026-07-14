@@ -149,3 +149,66 @@ export async function judgeCellCards(params: {
     fit: legs.some((leg) => leg[i]?.fit !== false),
   }));
 }
+
+export interface JudgeLegDetail {
+  model: string;
+  verdicts: JudgeVerdict[];
+}
+
+export interface JudgeDetailedResult {
+  final: JudgeVerdict[];
+  legs: JudgeLegDetail[];
+}
+
+/**
+ * T11 Stage1 — per-leg detail for the supervisor's shadow metrics (split
+ * rate + directional decomposition gA-only vs gB-only unfit). Same legs and
+ * unanimous rule as judgeCellCards; exposed separately so existing callers
+ * keep the simple contract.
+ */
+export async function judgeCellCardsDetailed(params: {
+  centerGoal: string;
+  cellTopic: string;
+  items: JudgeItem[];
+  generateImpl?: (
+    model: string,
+    prompt: string,
+    options?: { temperature?: number; maxTokens?: number; format?: 'json' }
+  ) => Promise<string>;
+}): Promise<JudgeDetailedResult> {
+  if (params.items.length === 0) return { final: [], legs: [] };
+  const prompt = buildJudgePrompt(params);
+  const generate =
+    params.generateImpl ??
+    (async (
+      model: string,
+      p: string,
+      o?: { temperature?: number; maxTokens?: number; format?: 'json' }
+    ) => {
+      const provider = new OpenRouterGenerationProvider(model);
+      return provider.generate(p, o);
+    });
+  const legs = await Promise.all(
+    JUDGE_MODELS.map(async (model): Promise<JudgeLegDetail> => {
+      try {
+        const raw = await generate(model, prompt, {
+          temperature: JUDGE_TEMPERATURE,
+          maxTokens: JUDGE_MAX_TOKENS,
+          format: 'json',
+        });
+        const verdicts = parseJudgeResponse(raw, params.items);
+        return {
+          model,
+          verdicts: verdicts ?? params.items.map((it) => ({ videoId: it.videoId, fit: true })),
+        };
+      } catch {
+        return { model, verdicts: params.items.map((it) => ({ videoId: it.videoId, fit: true })) };
+      }
+    })
+  );
+  const final = params.items.map((it, i) => ({
+    videoId: it.videoId,
+    fit: legs.some((leg) => leg.verdicts[i]?.fit !== false),
+  }));
+  return { final, legs };
+}

@@ -39,6 +39,7 @@ import {
   ATTACH_BUDGET_MS,
   ATTACH_POLL_INTERVAL_MS,
 } from '@/config/precompute-attach';
+import { isT11InflowJudgeEnabled } from '@/config/t11-inflow-judge';
 import { randomUUID } from 'crypto';
 
 const log = logger.child({ module: 'wizard-precompute' });
@@ -261,6 +262,29 @@ export async function startPrecompute(input: StartPrecomputeInput): Promise<void
         discover_result: result as unknown as Prisma.InputJsonValue,
       },
     });
+
+    // T11 Stage1 (post-done race, supervisor GO 2026-07-14): the unanimous
+    // judge runs AFTER done is marked — the consume SLA path never waits on
+    // it (F12's cause was judging ON the path). Shadow: verdicts + metrics
+    // land in the dedicated judge_verdicts column only; placement unchanged.
+    if (isT11InflowJudgeEnabled() && result.slots.length > 0) {
+      setImmediate(() => {
+        void import('./inflow-judge-shadow')
+          .then(({ runInflowJudgeShadow }) =>
+            runInflowJudgeShadow({
+              sessionId: input.sessionId,
+              centerGoal: input.goal,
+              subGoals: input.subGoals,
+              slots: result.slots.map((sl) => ({
+                videoId: sl.videoId,
+                title: sl.title,
+                cellIndex: sl.cellIndex,
+              })),
+            })
+          )
+          .catch(() => undefined);
+      });
+    }
 
     log.info(
       `precompute done: session=${input.sessionId} slots=${result.slots.length} ` +
