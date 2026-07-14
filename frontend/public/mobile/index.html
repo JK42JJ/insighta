@@ -316,9 +316,9 @@
   /* [J pick 07-14] C3 미니 휠 — 세로 클릭휠의 미니어처, 반투명 상주 */
   body.stage .wheelzone{display:block; position:absolute; z-index:7; width:176px; padding:0;
     right:calc(env(safe-area-inset-right, 0px) + 14px); bottom:calc(var(--sab) + 14px); left:auto; top:auto}
-  body.stage .wheel{width:100%; opacity:.38; transition:opacity .3s var(--soft)}
+  body.stage .wheel{width:100%; opacity:0; transition:opacity .3s var(--soft)} /* 평시 투명 [J:07-14] */
   body.stage.railopen .wheelzone{display:none} /* 레일 = 모달 — 휠 잠시 퇴장 */
-  body.stage .wheel.touching{opacity:1}
+  body.stage .wheel.touching,body.stage .wheel.hint{opacity:1}
   .hubpos{display:none}
   body.stage .hubpos{display:block; position:absolute; z-index:3; left:50%; top:50%;
     transform:translate(-50%,-50%); pointer-events:none;
@@ -642,7 +642,9 @@
     var on=land && cur==='player';
     var was=document.body.classList.contains('stage');
     document.body.classList.toggle('stage', on);
-    if(on&&!was){ hudWake(); updateStream(true); updateDock(); }
+    if(on&&!was){ hudWake(); updateStream(true); updateDock();
+      var wh=document.querySelector('.wheel');
+      if(wh){ wh.classList.add('hint'); setTimeout(function(){wh.classList.remove('hint')},1600); } }
     if(!on&&was){ document.body.classList.remove('railopen'); }
   }
   addEventListener('resize', syncStage);
