@@ -22,6 +22,7 @@ import {
   type ShareMode,
   type ShareTargetType,
 } from '@/modules/share-links/manager';
+import { resolveOgMeta } from './og';
 
 function escapeHtml(s: string): string {
   return s
@@ -157,7 +158,7 @@ export async function shareLinkResolverRoutes(fastify: FastifyInstance): Promise
         .header('Content-Type', 'text/html; charset=utf-8')
         // Short cache: bots re-scrape fresh cards; humans redirect instantly.
         .header('Cache-Control', 'public, max-age=300')
-        .send(ogPage({ ...meta, image: brandImage, pageUrl }))
+        .send(ogPage({ image: brandImage, ...meta, pageUrl }))
     );
   });
 }
@@ -165,7 +166,7 @@ export async function shareLinkResolverRoutes(fastify: FastifyInstance): Promise
 async function targetMeta(
   row: ShareLinkRow,
   origin: string
-): Promise<{ title: string; description: string; redirectTo: string }> {
+): Promise<{ title: string; description: string; redirectTo: string; image?: string }> {
   const prisma = getPrismaClient();
   const mandala = await prisma.user_mandalas.findFirst({
     where: { id: row.target_id },
@@ -180,12 +181,24 @@ async function targetMeta(
         description: '가입 없이 48시간 무료 청취 · AI가 유튜브 핵심 구간만 이어 만든 지식 팟캐스트',
         redirectTo: `${origin}/mobile/?s=${encodeURIComponent(row.code)}`,
       };
-    case 'learning_video': // Phase 2 — minted by the learning-page share menu
+    case 'learning_video': {
+      // Card parity with the legacy /og/learning route: video title,
+      // AI one-liner, real thumbnail (og.ts is the single resolver).
+      if (row.video_id) {
+        const og = await resolveOgMeta(row.target_id, row.video_id);
+        return {
+          title: og.title,
+          description: og.description,
+          image: og.thumbnail,
+          redirectTo: `${origin}${og.spaPath}`,
+        };
+      }
       return {
         title: `${noteTitle} — Insighta`,
         description: 'AI가 고른 유튜브 핵심 구간으로 배우는 나만의 커리큘럼',
         redirectTo: `${origin}/learning/${row.target_id}/${row.video_id ?? ''}`,
       };
+    }
     case 'mandala': // Phase 3 — recipient page lands here
     default:
       return {
