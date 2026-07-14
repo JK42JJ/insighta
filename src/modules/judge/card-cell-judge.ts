@@ -29,7 +29,16 @@ const log = logger.child({ module: 'card-cell-judge' });
  * different model families. A failed/unparseable leg votes fit (fail-open =
  * blocks sinking, never causes it).
  */
-export const JUDGE_MODELS = ['google/gemini-2.5-flash', 'deepseek/deepseek-v4-flash'] as const;
+/**
+ * T11 pair swap (2026-07-14, supervisor GO): fixture scorecard (garbage 11 +
+ * fit 7) — DeepSeek 5/11 garbage-recall (+0/60 organic = collapse confirmed),
+ * Qwen 0/11 (same lenient-collapse axis, H1). New pair = best balance with
+ * vendor diversity: GPT-4o-mini 11/11 & 6/7, Haiku 4.5 11/11 & 5/7.
+ * PROVISIONAL until organic 4-metric re-accumulation on this pair (fixtures
+ * are biased toward known failure modes — supervisor caveat). Gemini stays a
+ * panel control leg (strict axis: 11/11 & 4/7).
+ */
+export const JUDGE_MODELS = ['openai/gpt-4o-mini', 'anthropic/claude-haiku-4.5'] as const;
 /** @deprecated single-judge era; kept for log compat. */
 export const JUDGE_MODEL = JUDGE_MODELS[0];
 const JUDGE_TEMPERATURE = 0;

@@ -88,7 +88,7 @@ describe('judgeCellCards — unanimous 2-judge + fail-open', () => {
       cellTopic: 'c',
       items,
       generateImpl: async (model: string) =>
-        model.includes('gemini')
+        model.includes('gpt')
           ? '[{"n":1,"fit":true},{"n":2,"fit":false}]'
           : '[{"n":1,"fit":true},{"n":2,"fit":true}]',
     });
@@ -100,7 +100,7 @@ describe('judgeCellCards — unanimous 2-judge + fail-open', () => {
       cellTopic: 'c',
       items,
       generateImpl: async (model: string) => {
-        if (model.includes('gemini')) throw new Error('down');
+        if (model.includes('gpt')) throw new Error('down');
         return '[{"n":1,"fit":false},{"n":2,"fit":false}]';
       },
     });
