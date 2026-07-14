@@ -605,6 +605,7 @@
             </span>
           </div>
           <button class="mrow" id="bInstall">홈 화면에 설치<span class="sub">전체화면 앱</span></button>
+          <button class="mrow" id="bRefresh">새로고침<span class="sub">최신 버전 불러오기</span></button>
           <button class="mrow" id="bLogout">로그아웃</button>
         </div>
         <div class="menu-note">MENU를 다시 누르면 돌아갑니다</div>
@@ -745,7 +746,12 @@
   }
   async function api(path,opts){
     var tok=await freshToken(); if(!tok) throw new Error('unauthenticated');
-    opts=opts||{}; opts.headers=Object.assign({Authorization:'Bearer '+tok,'Content-Type':'application/json'},opts.headers||{});
+    opts=opts||{};
+    // Content-Type only with a body — Fastify 400s (FST_ERR_CTP_EMPTY_JSON_BODY)
+    // on bodyless POSTs that claim application/json (broke share-token mint).
+    var base={Authorization:'Bearer '+tok};
+    if(opts.body) base['Content-Type']='application/json';
+    opts.headers=Object.assign(base,opts.headers||{});
     var r=await fetch('/api/v1'+path,opts);
     if(!r.ok){ var e=new Error('HTTP '+r.status); e.status=r.status; throw e; }
     return r;
@@ -1922,6 +1928,13 @@
   /* ================= 메뉴 항목 ================= */
   document.getElementById('bLogin').onclick=loginRedirect;
   document.getElementById('bSample').onclick=function(){ openNote(SAMPLE) };
+  document.getElementById('bRefresh').onclick=function(){
+    // 설치형(standalone)엔 브라우저 새로고침 UI가 없다. cache:'reload'로
+    // HTTP 캐시를 강제 재검증해 최신 번들을 받은 뒤 리로드 (쿼리·게스트 토큰 보존).
+    toast('새로고침 중…');
+    fetch(location.pathname,{cache:'reload'}).catch(function(){})
+      .finally(function(){ location.reload(); });
+  };
   document.getElementById('bLogout').onclick=function(){
     try{localStorage.removeItem(OWN_KEY)}catch(e){}
     setPlaying(false); show('login');
