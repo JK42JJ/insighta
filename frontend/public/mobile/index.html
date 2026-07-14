@@ -782,8 +782,8 @@
 
   /* ================= 이어 듣기 (C1) ================= */
   function resumeKey(id){ return 'insighta-resume-'+id }
-  function saveResume(id,pos,total,done){
-    try{localStorage.setItem(resumeKey(id),JSON.stringify({bi:pos,total:total,done:!!done}))}catch(e){}
+  function saveResume(id,pos,total,done){ // (pos=재생 위치, 학습 진도는 lb로 별도)
+    try{localStorage.setItem(resumeKey(id),JSON.stringify({bi:pos,total:total,done:!!done,lb:learnedBi}))}catch(e){}
   }
   function loadResume(id){ return readJSON(localStorage.getItem(resumeKey(id))) }
 
@@ -1215,9 +1215,15 @@
       curClipKey=key;
       if(!resume) yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
       try{yt.setPlaybackRate(Math.min(spd,2))}catch(e){} // YT 상한 2× (플랫폼 한계)
+      // iOS: 제스처 없는 소리-영상 자동재생 차단 → 뮤트로 시작(허용됨), 재생 확인 후 언뮤트+램프
+      try{yt.mute()}catch(e){}
       try{yt.setVolume(0)}catch(e){}
       yt.playVideo();
-      var v=0, ramp=setInterval(function(){ v+=12; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },40);
+      var v=0, ramp=null, unmuted=false;
+      function rampUp(){ if(unmuted) return; unmuted=true;
+        try{yt.unMute()}catch(e){}
+        ramp=setInterval(function(){ v+=12; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },40);
+      }
       if(ytPoll) clearInterval(ytPoll);
       var lastT=0, stallMs=0, nudged=false;
       ytPoll=setInterval(function(){
@@ -1226,18 +1232,19 @@
           var st=yt.getPlayerState();
           var t=yt.getCurrentTime?yt.getCurrentTime():0;
           var rem=beat.to-t;
-          if(t&&rem<0.9&&rem>0){ clearInterval(ramp); yt.setVolume(Math.max(0,Math.round(100*rem/0.9))); }
+          if(t&&rem<0.9&&rem>0){ if(ramp) clearInterval(ramp); yt.setVolume(Math.max(0,Math.round(100*rem/0.9))); }
           if(st===0 || (t&&t>=beat.to-0.4)){ clearInterval(ytPoll); ytPoll=null; addCharge(1.2); nextBeat(1,true); return; }
           if(st===1 && t>0.1){
-            veilHide();
+            veilHide(); rampUp(); // 재생 확인 → 소리 개방
             try{ var vd=yt.getVideoData&&yt.getVideoData(); // 영상 제목 — 추가 요청 없이
               var ct=document.getElementById('cTitle');
               if(vd&&vd.title&&ct&&ct.textContent!==vd.title) ct.textContent=vd.title;
             }catch(e){}
           }
           if(st===1 && t>lastT+0.2){ lastT=t; stallMs=0; } else { stallMs+=500; }
-          if(stallMs>=8000 && !nudged){ nudged=true; try{yt.seekTo(Math.max(beat.from,t+0.5),true); yt.playVideo();}catch(e){} }
-          if(stallMs>=16000){ clearInterval(ytPoll); ytPoll=null; nextBeat(1,true); }
+          if(stallMs>=4000 && !nudged){ nudged=true;
+            try{ yt.mute(); yt.seekTo(Math.max(beat.from,t||beat.from),true); yt.playVideo(); }catch(e){} }
+          if(stallMs>=10000){ clearInterval(ytPoll); ytPoll=null; nextBeat(1,true); }
         }catch(e){}
       },500);
     }catch(e){ nextBeat(1,true); }
@@ -1299,7 +1306,7 @@
     if(ytReady) playClipNow(beat); else ytPending=beat;
   }
 
-  var runSeq=0, finished=false;
+  var runSeq=0, finished=false, learnedBi=0; // 학습 진도 = 자연 재생으로 통과한 비트만 [J:07-14]
   /* 게스트 정책 [J:07-14]: 첫 완청 전 빨리감기 잠금 (학습 흐름 보전) */
   function guestKey(){
     try{
@@ -1357,17 +1364,21 @@
   function nextBeat(dir,auto){
     if(!beats.length) return;
     var nx=bi+dir;
-    if(nx>=beats.length){ finishNote(); return; }
+    if(auto&&dir>0) learnedBi=Math.max(learnedBi,nx); // 정속 시청만 진도 인정
+    if(nx>=beats.length){ finishNote(auto); return; }
     if(nx<0){ if(window.wheelRubber) wheelRubber(-1); return; }
     bi=nx;
     if(playing) runBeat(); else renderChapters();
   }
-  function finishNote(){
+  function finishNote(auto){
     finished=true;
-    if(curNote&&curNote.guest){ try{ localStorage.setItem(guestKey(),'1') }catch(e){} } // 완청 = 빨리감기 해제
+    // 완청(학습) 인정 = 자연 재생 도달 또는 전 구간을 실제로 들은 경우만 — 빨리감기 종점은 화면만
+    var learned=!!auto||learnedBi>=beats.length-1;
+    if(learned&&curNote&&curNote.guest){ try{ localStorage.setItem(guestKey(),'1') }catch(e){} } // 완청 = 빨리감기 해제
     playing=false; stopSpeech(); stopClip(); setCharging(false); chime('end');
-    charge=100; renderBatt(); releaseWake();
-    if(curNote&&!curNote.sample) saveResume(curNote.id,0,beats.length,true);
+    if(learned){ charge=100; renderBatt(); }
+    releaseWake();
+    if(curNote&&!curNote.sample) saveResume(curNote.id,0,beats.length,learned);
     document.body.classList.remove('clipmode');
     var srcN=(curNote&&curNote.sourceVideos)||0;
     var nextM=homeItems().filter(function(m){ return curNote&&m.id!==curNote.id&&rowState(m).kind!=='making'&&rowState(m).kind!=='loading'; })[0];
@@ -1424,6 +1435,7 @@
     await Promise.race([ loadEpisodeAudio(m), new Promise(function(r){setTimeout(r,1500)}) ]);
     var res=m.sample?null:loadResume(m.id);
     bi=(res&&!res.done&&res.bi>0&&res.bi<beats.length)?res.bi:0;
+    learnedBi=(res&&res.lb)?Math.min(res.lb,beats.length):0;
     playing=true; setCharging(true); acquireWake();
     if(bi===0) chime('start');
     coachOnce();
