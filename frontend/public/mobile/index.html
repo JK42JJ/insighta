@@ -100,6 +100,9 @@
   .ksig .c.on{fill:var(--ui)}
   .ksig .c.core{fill:transparent; stroke:rgba(var(--shade),.22); stroke-width:1}
   .ksig .c.core.on{fill:var(--butter, #F5D48A); stroke:none}
+  /* 버퍼 대기: 현재 문장 하이라이트 숨쉬기 = "준비 중" (탭 무반응처럼 보이는 것 방지) */
+  body.abuff .readbox .sent.on{animation:sigBreath 1.1s ease-in-out infinite}
+  body.abuff .sln.now span{animation:sigBreath 1.1s ease-in-out infinite}
   @keyframes sigBreath{0%,100%{opacity:1}50%{opacity:.45}}
   .batt.chg .ksig .c.live{animation:sigBreath 1.6s ease-in-out infinite}
   @media (prefers-reduced-motion: reduce){ .batt.chg .ksig .c.live{animation:none} }
@@ -931,9 +934,49 @@
     toast('재생 속도 '+spdLabel());
   }
 
-  /* ── 에피소드 오디오 (ElevenLabs pre-produce) — manifest = (비트 인덱스, 문장해시) 키 ── */
+  /* ── 에피소드 오디오 (ElevenLabs pre-produce) — manifest = (비트 인덱스, 문장해시) 키 ──
+     파이프라인 설계 [J:07-14 "버퍼링 고려 없으면 설계하라"]:
+     단일 엘리먼트(첫 제스처 1회 언락 — iOS 정책) + 블롭 프리페치(현재+다음 2개, LRU 8)
+     + 버퍼 대기 중 하이라이트 숨쉬기 → 준비 즉시 자동 시작. 탭 1회 = 반응 1회. */
   var epAudio={tempo:1, ready:false}, curAudio=null;
-  function stopAudio(){ if(curAudio){ try{curAudio.pause()}catch(e){} curAudio=null; } }
+  var narrEl=null, narrUnlocked=false, blobCache={}, blobOrder=[];
+  var PREFETCH_AHEAD=2, BLOB_CACHE_MAX=8;
+  var SILENT_WAV='data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+  function unlockAudio(){ // 사용자 제스처 안에서 1회 — 이후 프로그래매틱 재생 허용
+    if(narrUnlocked) return;
+    try{
+      narrEl=narrEl||new Audio();
+      narrEl.playsInline=true; narrEl.setAttribute('playsinline','');
+      narrEl.muted=true; narrEl.src=SILENT_WAV;
+      var p=narrEl.play();
+      if(p&&p.then) p.then(function(){ narrEl.pause(); narrEl.muted=false; narrUnlocked=true; })
+                     .catch(function(){ narrEl.muted=false; });
+      else{ narrEl.pause(); narrEl.muted=false; narrUnlocked=true; }
+    }catch(e){}
+  }
+  async function prefetchNarr(i){ // 비트 오디오 → 블롭 선로드
+    var b=beats[i]; if(!b||b.t!=='n'||!b.audio) return;
+    var f=b.audio.f; if(blobCache[f]) return;
+    blobCache[f]='pending';
+    try{
+      var r=await fetch(f); if(!r.ok){ delete blobCache[f]; return; }
+      var u=URL.createObjectURL(await r.blob());
+      blobCache[f]=u; blobOrder.push(f);
+      if(blobOrder.length>BLOB_CACHE_MAX){
+        var old=blobOrder.shift();
+        if(blobCache[old]&&blobCache[old]!=='pending') URL.revokeObjectURL(blobCache[old]);
+        delete blobCache[old];
+      }
+    }catch(e){ delete blobCache[f]; }
+  }
+  function prefetchAround(i){ // 현재 위치부터 내레이션 2개 선로드
+    var n=0;
+    for(var k=Math.max(0,i);k<beats.length&&n<PREFETCH_AHEAD;k++){
+      if(beats[k].t==='n'&&beats[k].audio){ prefetchNarr(k); n++; }
+    }
+  }
+  function abuff(on){ document.body.classList.toggle('abuff', !!on); } // 버퍼 대기 신호
+  function stopAudio(){ abuff(false); if(curAudio){ try{curAudio.pause()}catch(e){} curAudio=null; } }
   async function sha12(t){
     var buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
     return Array.from(new Uint8Array(buf)).map(function(x){return x.toString(16).padStart(2,'0')}).join('').slice(0,12);
@@ -961,6 +1004,7 @@
         if(mb) b.audio=mb;
       }
       epAudio.tempo=d.manifest.tempo||1; epAudio.ready=true;
+      prefetchAround(bi); // 첫 내레이션 즉시 선로드 — 탭과 재생 사이 시간차 제거
     }catch(e){}
   }
 
@@ -998,13 +1042,26 @@
     curSents=sentences(beat.text); curDone=done;
     renderSents(beat.title,curSents);
     if(!curSents.length){ done(); return; }
-    if(beat.audio&&epAudio.ready){ audioFrom(0,beat); return; }
+    if(beat.audio&&epAudio.ready){
+      var k=0; // 일시정지 재개 = 듣던 문장부터 (엘리먼트가 같은 비트를 물고 있으면)
+      if(narrEl&&narrEl._beatKey===(bi+':'+beat.audio.h)&&narrEl.currentTime>0.1){
+        var t=narrEl.currentTime, ss=beat.audio.s||[];
+        while(k+1<ss.length&&t>=ss[k+1]-0.05) k++;
+      }
+      audioFrom(k,beat); return;
+    }
     speakFrom(0);
   }
-  function audioFrom(idx,beat){ // 실보이스 재생 + 문장 타이밍 싱크 (s[] = 1.0x 미디어 타임라인)
+  function audioFrom(idx,beat){ // 실보이스 재생 — 단일 엘리먼트 + 프리페치 캐시 + 버퍼 대기
     var seq=++speakSeq, m=beat.audio;
     curSentIdx=Math.max(0,Math.min(idx,curSents.length-1));
-    var a=new Audio(m.f); curAudio=a;
+    var a=narrEl=narrEl||new Audio();
+    a.playsInline=true; a.muted=false; curAudio=a;
+    var cached=blobCache[m.f];
+    var src=(cached&&cached!=='pending')?cached:m.f;
+    var beatKey=bi+':'+m.h;
+    if(a._src!==src){ a.src=src; a._src=src; a.load(); }
+    a._beatKey=beatKey;
     a.playbackRate=(epAudio.tempo||1)*spd;
     try{a.preservesPitch=true; a.webkitPreservesPitch=true}catch(e){}
     function hl(){
@@ -1017,18 +1074,28 @@
     }
     hl();
     var st=(m.s&&m.s[curSentIdx])||0;
-    if(st>0){ a.addEventListener('loadedmetadata',function(){ try{a.currentTime=st}catch(e){} }); }
-    a.addEventListener('timeupdate',function(){
+    function fallback(){ if(seq!==speakSeq) return; abuff(false); curAudio=null; speakFrom(curSentIdx); }
+    function seekPlay(){
+      if(seq!==speakSeq||!playing) return;
+      try{ if(Math.abs(a.currentTime-st)>0.12) a.currentTime=st; }catch(e){}
+      var p=a.play();
+      if(p&&p.then) p.then(function(){ if(seq===speakSeq) abuff(false); }).catch(fallback);
+      else abuff(false);
+    }
+    a.ontimeupdate=function(){
       if(seq!==speakSeq||!playing) return;
       var t=a.currentTime, k=curSentIdx;
       while(m.s&&k+1<m.s.length&&t>=m.s[k+1]-0.05) k++;
       if(k!==curSentIdx){ curSentIdx=k; addCharge(.5); hl(); }
-    });
-    a.addEventListener('ended',function(){
-      if(seq!==speakSeq) return; curAudio=null; addCharge(.5); if(curDone) curDone(); });
-    a.addEventListener('error',function(){
-      if(seq!==speakSeq) return; curAudio=null; speakFrom(curSentIdx); }); // 파일 실패 → TTS 폴백
-    var p=a.play(); if(p&&p.catch) p.catch(function(){ if(seq===speakSeq){ curAudio=null; speakFrom(curSentIdx); } });
+    };
+    a.onended=function(){ if(seq!==speakSeq) return; abuff(false); curAudio=null; addCharge(.5); if(curDone) curDone(); };
+    a.onerror=function(){ fallback(); };
+    if(a.readyState>=3){ seekPlay(); } // HAVE_FUTURE_DATA — 즉시
+    else{
+      abuff(true); // 버퍼 대기 신호 (하이라이트 숨쉬기) — 준비되는 즉시 자동 시작
+      a.oncanplay=function(){ a.oncanplay=null; seekPlay(); };
+    }
+    prefetchAround(bi+1); // 다음 내레이션 선로드 유지
   }
 
   /* YouTube 클립 — 경계는 v2 구간요약만 (§0-3) */
@@ -1136,7 +1203,7 @@
     var beat=beats[bi];
     renderChapters(); msUpdate();
     document.getElementById('pCh').textContent=(beat.t!=='ch'&&beat.title)?beat.title:'';
-    stopSpeech(); stopClip();
+    stopSpeech(); stopClip(); abuff(false);
     document.body.classList.toggle('clipmode', beat.t==='c');
     streamEl.hidden=(beat.t!=='n');
     if(beat.t==='ch'){ // M3
@@ -1188,6 +1255,7 @@
     bi=0;
   }
   function setPlaying(on){
+    if(on) unlockAudio();
     playing=on; setCharging(on);
     if(on){ acquireWake(); runBeat(); }
     else{ stopSpeech(); stopClip(); releaseWake();
@@ -1197,6 +1265,7 @@
   }
 
   async function openNote(m){
+    unlockAudio(); // 탭 제스처 안에서 오디오 세션 활성화 (iOS)
     curNote=m; show('player');
     document.getElementById('pTitle').textContent=m.title||'노트';
     pShowState('노트를 여는 중…','');
