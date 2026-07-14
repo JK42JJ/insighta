@@ -177,7 +177,8 @@
   .menu-note{font-size:9px; color:var(--paper-sub); font-weight:600; text-align:center; margin-top:auto; padding-top:8px}
 
   /* ---- 플레이어 (세로) ---- */
-  .clipbox{border-radius:12px; overflow:hidden; position:relative; aspect-ratio:16/9; flex:none; margin-top:10px;
+  .clipbox{border-radius:12px; overflow:hidden; position:relative; aspect-ratio:16/9; flex:none;
+    margin:10px -10px 0; /* [J:07-14] 좌우 여백 회수 — 화면 패딩 16px 중 10px 상쇄 = 유튜브 창 확대 */
     background:#20242E;
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.12), 0 5px 12px -6px rgba(94,86,72,.45)}
   .clipwrap{position:absolute; inset:0}
@@ -211,15 +212,15 @@
   .chapters i.done{background:var(--ui)}
   .chapters i.now .fillp{position:absolute; left:0; top:0; bottom:0; background:var(--ui); border-radius:2.5px;
     transition:width .45s linear}
-  .cchip{position:absolute; top:50%; width:7px; height:9px; border-radius:2.5px; transform:translate(-50%,-50%);
-    background:var(--paper-hi, #FAF6EC); border:1.4px solid rgba(var(--shade),.32); z-index:1;
-    transition:background .4s, border-color .4s}
-  .cchip.past{background:var(--ui); border-color:var(--ui)}
-  .cchip.live{border-color:var(--acc); background:var(--paper-hi, #FAF6EC);
-    box-shadow:0 0 0 3px rgba(224,112,63,.16)}
+  /* 클립 틱 — 인지 가능한 최소 표기 [J:07-14 "심플하게"] : 현재 챕터만, 얇은 세로선 */
+  .cchip{position:absolute; top:50%; width:2px; height:8px; border-radius:1px; transform:translate(-50%,-50%);
+    background:rgba(var(--shade),.30); z-index:1; transition:background .4s}
+  .cchip.past{background:rgba(var(--shade),.18)}
+  .cchip.live{background:var(--acc); width:3px; box-shadow:0 0 0 2.5px rgba(224,112,63,.16)}
   .phead{position:absolute; top:50%; transform:translate(-50%,-50%); width:9px; height:9px; border-radius:50%;
     background:var(--acc); box-shadow:0 0 0 3px rgba(224,112,63,.20); z-index:2; transition:left .45s linear}
   .ptimes{display:flex; align-items:center; gap:10px; font-size:10px; color:var(--paper-sub); margin-top:6px; font-weight:600}
+  .ptimes #pPos{flex:none; white-space:nowrap}
   .ptimes #pCh{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .pclock{margin-left:auto; font-size:10px; color:var(--paper-sub); font-weight:650; flex:none}
   .player-state{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:9px; padding:0 14px}
@@ -956,13 +957,19 @@
       var r=ranges[i]||{s:0,e:0}, n=Math.max(1,r.e-r.s+1);
       if(i<curCh) b.className='done';
       else if(i===curCh){ b.className='now'; b.innerHTML='<span class="fillp"></span><span class="phead"></span>'; }
-      // 유튜브 클립 = 필름 칩 (지나감=채움 / 현재=글로우 / 예정=윤곽)
-      for(var k3=r.s;k3<=r.e;k3++){
-        if(beats[k3]&&beats[k3].t==='c'){
-          var chip=document.createElement('span');
-          chip.className='cchip'+(k3<bi?' past':(k3===bi?' live':''));
-          chip.style.left=(((k3-r.s+0.5)/n)*100)+'%';
-          b.appendChild(chip);
+      // 유튜브 클립 틱 — 현재 챕터에만, 3% 이내 인접은 병합 (과밀 방지 [J:07-14])
+      if(i===curCh){
+        var lastPct=-10;
+        for(var k3=r.s;k3<=r.e;k3++){
+          if(beats[k3]&&beats[k3].t==='c'){
+            var pct2=((k3-r.s+0.5)/n)*100;
+            if(pct2-lastPct<3&&k3!==bi) continue;
+            lastPct=pct2;
+            var chip=document.createElement('span');
+            chip.className='cchip'+(k3<bi?' past':(k3===bi?' live':''));
+            chip.style.left=pct2+'%';
+            b.appendChild(chip);
+          }
         }
       }
       el.appendChild(b);
@@ -1265,6 +1272,12 @@
     var beat=beats[bi];
     renderChapters(); msUpdate();
     document.getElementById('pCh').textContent=(beat.t!=='ch'&&beat.title)?beat.title:'';
+    // 백그라운드 + 실보이스 노트: 클립 비트는 건너뛰고 내레이션으로 (iframe 영상은 백그라운드 재생 불가)
+    if(document.hidden&&beat.t==='c'&&epAudio.ready){
+      var nn=bi+1; while(nn<beats.length&&beats[nn].t!=='n') nn++;
+      if(nn>=beats.length){ finishNote(); return; }
+      bi=nn; beat=beats[bi]; renderChapters();
+    }
     stopSpeech(); stopClip(); abuff(false);
     document.body.classList.toggle('clipmode', beat.t==='c');
     streamEl.hidden=(beat.t!=='n');
@@ -1657,9 +1670,10 @@
   function releaseWake(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){} }
   document.addEventListener('visibilitychange',function(){
     if(document.hidden && playing){
-      // 실보이스 내레이션은 백그라운드 계속 재생 — 클립/브라우저TTS만 일시정지
-      var beat=beats[bi], bg=!!(curAudio&&beat&&beat.t==='n');
-      if(!bg) setPlaying(false); // 위치는 resume이 기억
+      var beat=beats[bi];
+      if(beat&&beat.t==='c'&&epAudio.ready){ runBeat(); return; } // 클립 중 백그라운드 진입 → 내레이션으로 스킵
+      var bg=!!(curAudio&&beat&&beat.t==='n');
+      if(!bg) setPlaying(false); // TTS 폴백은 백그라운드 불가 — 위치는 resume이 기억
     }
   });
 
