@@ -1142,7 +1142,7 @@
   }
   async function loadEpisodeAudio(m){
     epAudio={tempo:1, ready:false};
-    if(!window.crypto||!crypto.subtle) return; // 비보안 컨텍스트 = 브라우저 TTS
+    if(!window.crypto||!crypto.subtle) return; // 비보안 컨텍스트 = 무음 리드얼롱
     try{
       var d;
       if(m.sample){ // 샘플 = 동봉된 정적 프리렌더 (첫 인상 = 실보이스 보장)
@@ -1171,9 +1171,10 @@
     }catch(e){}
   }
 
-  /* TTS read-along + 문장 조그 훅 */
-  var synth=window.speechSynthesis||null, speakSeq=0, curSents=[], curSentIdx=0, curSpans=null, curDone=null;
-  function stopSpeech(){ speakSeq++; if(synth) synth.cancel(); stopAudio(); }
+  /* 리드얼롱 + 문장 조그 훅 — 브라우저 TTS 금지 (2026-07-14 James: 로봇 음성 원칙 차단).
+     실보이스 없는 비트는 무음 리드얼롱(하이라이트 시간 진행)만. */
+  var speakSeq=0, curSents=[], curSentIdx=0, curSpans=null, curDone=null;
+  function stopSpeech(){ speakSeq++; stopAudio(); }
   function renderSents(title,sents){
     readbox.innerHTML='<div class="sec-title"></div><p>'+sents.map(function(){return '<span class="sent"></span>'}).join(' ')+'</p>';
     var secEl=readbox.querySelector('.sec-title');
@@ -1192,13 +1193,8 @@
       var sp=curSpans[curSentIdx]; sp.classList.add('on');
       updateStream();
       if(sp.scrollIntoView) sp.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'});
-      if(!synth){ var ms=Math.min(Math.max(curSents[curSentIdx].length*90,1600),12000)/spd;
-        setTimeout(function(){ if(seq===speakSeq&&playing){ curSentIdx++; addCharge(.5); next(); } },ms); return; }
-      var u=new SpeechSynthesisUtterance(curSents[curSentIdx]);
-      u.lang='ko-KR'; u.rate=1.05*spd;
-      u.onend=function(){ if(seq!==speakSeq) return; curSentIdx++; addCharge(.5); next(); };
-      u.onerror=function(){ if(seq!==speakSeq) return; curSentIdx++; next(); };
-      synth.speak(u);
+      var ms=Math.min(Math.max(curSents[curSentIdx].length*90,1600),12000)/spd;
+      setTimeout(function(){ if(seq===speakSeq&&playing){ curSentIdx++; addCharge(.5); next(); } },ms);
     })();
   }
   function speakBeat(beat,done){
