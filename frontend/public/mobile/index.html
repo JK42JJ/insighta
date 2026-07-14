@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Insighta Player</title>
+<title>다이얼 — Insighta</title>
 <meta name="description" content="만다라 하나를, 한 편의 팟캐스트로 듣는다 — Insighta 모바일 플레이어">
 <link rel="manifest" href="/mobile/manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -38,6 +38,7 @@
     -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none;
   }
   .num{font-variant-numeric:tabular-nums}
+  :root{--butter:#F5D48A}
 
   /* ---- 컬러웨이 ---- */
   .th-cream{
@@ -93,13 +94,15 @@
     font-size:10px; letter-spacing:.14em; color:var(--paper-sub); font-weight:700; flex:none}
   .top .tt{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
   /* 배터리 — §0-5: 케이스 28×13 + 볼트 6×9 (비례 고정) */
-  .batt{display:inline-flex; align-items:center; gap:3px; flex:none}
-  .batt .case{width:28px; height:13px; border-radius:3.5px; border:1.2px solid #A99F8C; padding:2px; position:relative}
-  .batt .case i{display:block; height:100%; border-radius:1.5px; background:var(--green);
-    transition:width .8s var(--soft), background .6s; width:20%}
-  .batt .tip{width:2px; height:5px; border-radius:1px; background:#A99F8C}
-  .batt .bolt{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); opacity:0; transition:opacity .35s}
-  .batt.chg .bolt{opacity:1}
+  /* 지식 시그널 = 미니 만다라 — 여덟 칸이 차고, 완청에 중심 점등 [J pick 07-14] */
+  .batt{display:inline-flex; align-items:center; flex:none}
+  .ksig .c{fill:rgba(var(--shade),.16); transition:fill .5s}
+  .ksig .c.on{fill:var(--ui)}
+  .ksig .c.core{fill:transparent; stroke:rgba(var(--shade),.22); stroke-width:1}
+  .ksig .c.core.on{fill:var(--butter, #F5D48A); stroke:none}
+  @keyframes sigBreath{0%,100%{opacity:1}50%{opacity:.45}}
+  .batt.chg .ksig .c.live{animation:sigBreath 1.6s ease-in-out infinite}
+  @media (prefers-reduced-motion: reduce){ .batt.chg .ksig .c.live{animation:none} }
 
   /* ---- 로그인 ---- */
   .login-scr{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 10px}
@@ -210,9 +213,9 @@
   .pulse{width:13px; height:13px; border-radius:50%; background:var(--ui); animation:pu 1.1s var(--soft) infinite}
   @keyframes pu{0%,100%{transform:scale(.7); opacity:.5}50%{transform:scale(1.15); opacity:1}}
   /* C3: 완결 — 대형 그린 배터리 */
-  .finbatt{width:64px; height:30px; border:2.5px solid var(--green); border-radius:7px; padding:4px; position:relative; display:block}
-  .finbatt::after{content:""; position:absolute; right:-7px; top:9px; width:4.5px; height:12px; background:var(--green); border-radius:0 2px 2px 0}
-  .finbatt i{display:block; height:100%; width:100%; background:var(--green); border-radius:2.5px}
+  .finsig{display:block; width:46px; height:46px}
+  .finsig .c{fill:var(--ui)}
+  .finsig .c.core{fill:var(--butter, #F5D48A)}
   .fin-next{margin-top:14px; border:none; background:rgba(255,255,255,.6); font-family:inherit; cursor:pointer;
     border-radius:11px; padding:10px 14px; font-size:11.5px; font-weight:700; color:var(--paper-ink);
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.14); touch-action:manipulation; max-width:100%;
@@ -316,9 +319,10 @@
   /* [J pick 07-14] C3 미니 휠 — 세로 클릭휠의 미니어처, 반투명 상주 */
   body.stage .wheelzone{display:block; position:absolute; z-index:7; width:176px; padding:0;
     right:calc(env(safe-area-inset-right, 0px) + 14px); bottom:calc(var(--sab) + 14px); left:auto; top:auto}
-  body.stage .wheel{width:100%; opacity:0; transition:opacity .3s var(--soft)} /* 평시 투명 [J:07-14] */
+  /* A-기록 핸들 문법 [J:07-14]: 평시 투명 → 터치 시 저투명(시청 무방해) → 3초 머문 뒤 소멸 */
+  body.stage .wheel{width:100%; opacity:0; transition:opacity .35s var(--soft)}
   body.stage.railopen .wheelzone{display:none} /* 레일 = 모달 — 휠 잠시 퇴장 */
-  body.stage .wheel.touching,body.stage .wheel.hint{opacity:1}
+  body.stage .wheel.awake{opacity:.25}
   .hubpos{display:none}
   body.stage .hubpos{display:block; position:absolute; z-index:3; left:50%; top:50%;
     transform:translate(-50%,-50%); pointer-events:none;
@@ -330,8 +334,10 @@
   body.stage #scrPlayer .top .tt{max-width:58%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   body.stage.clipmode #scrPlayer .top{opacity:0}
   body.stage.clipmode.hud #scrPlayer .top{opacity:1}
-  body.stage .batt .case{border-color:rgba(255,255,255,.45)}
-  body.stage .batt .tip{background:rgba(255,255,255,.45)}
+  body.stage .ksig .c{fill:rgba(237,231,220,.2)}
+  body.stage .ksig .c.on{fill:var(--acc)}
+  body.stage .ksig .c.core{fill:transparent; stroke:rgba(237,231,220,.28)}
+  body.stage .ksig .c.core.on{fill:#F5D48A; stroke:none}
   /* 클립 = 커버 전체화면, 더블탭 = 컨테인 (G1) */
   body.stage .clipbox{position:absolute; inset:0; margin:0; aspect-ratio:auto; border-radius:0; box-shadow:none; background:#000}
   /* [A] clipmode = video centered on black (컨테인). 더블탭 = 커버(옵션) */
@@ -505,14 +511,14 @@
 
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
-        <div class="top"><span class="tt">내 만다라</span><span class="batt"><span class="case"><i id="battHome"></i><svg class="bolt" width="6" height="9" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
+        <div class="top"><span class="tt">내 만다라</span><span class="batt" id="sigHome"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
         <div class="rows" id="rows"><div class="row-empty">불러오는 중…</div></div>
       </div>
 
       <!-- MENU -->
       <div class="scr" data-s="menu" id="scrMenu">
-        <div class="top"><span class="tt">MENU</span><span class="batt"><span class="case"><i id="battMenu"></i><svg class="bolt" width="6" height="9" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
+        <div class="top"><span class="tt">MENU</span><span class="batt" id="sigMenu"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <div class="menu-list">
           <div class="mrow" style="cursor:default">
             컬러웨이
@@ -531,7 +537,7 @@
 
       <!-- 플레이어 -->
       <div class="scr" data-s="player" id="scrPlayer">
-        <div class="top"><span class="tt" id="pTitle">노트</span><span class="batt"><span class="case"><i id="battPlay"></i><svg class="bolt" width="6" height="9" viewBox="0 0 8 12" aria-hidden="true"><path d="M4.8 0 L0.7 6.7 H3.4 L2.9 12 L7.3 5 H4.4 Z" fill="#2C2925" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/></svg></span><span class="tip"></span></span></div>
+        <div class="top"><span class="tt" id="pTitle">노트</span><span class="batt" id="sigPlay"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <div class="player-state" id="pState">
           <div class="pulse"></div>
           <div class="big" id="pStateBig">노트를 여는 중…</div>
@@ -685,9 +691,7 @@
     var on=land && cur==='player';
     var was=document.body.classList.contains('stage');
     document.body.classList.toggle('stage', on);
-    if(on&&!was){ hudWake(); updateStream(true); updateDock();
-      var wh=document.querySelector('.wheel');
-      if(wh){ wh.classList.add('hint'); setTimeout(function(){wh.classList.remove('hint')},1600); } }
+    if(on&&!was){ hudWake(); updateStream(true); updateDock(); wheelAwake(); wheelSleep(); }
     if(!on&&was){ document.body.classList.remove('railopen'); }
   }
   addEventListener('resize', syncStage);
@@ -695,11 +699,18 @@
 
   /* ================= 배터리 (§0-5) ================= */
   var charge=20;
-  function renderBatt(){
-    var col=charge<=20?'#FF3B30':'#34C759';
-    ['battHome','battMenu','battPlay'].forEach(function(id){
-      var el=document.getElementById(id); if(!el) return;
-      el.style.width=Math.min(charge,100)+'%'; el.style.background=col;
+  function renderBatt(){ // 미니 만다라: 시계방향 8칸 채움, 완청(100)=중심 버터 점등
+    var lit=Math.min(8, Math.floor(charge/100*8+0.0001));
+    var full=charge>=100;
+    ['sigHome','sigMenu','sigPlay'].forEach(function(id){
+      var w=document.getElementById(id); if(!w) return;
+      var cells=w.querySelectorAll('.ksig .c');
+      for(var i=0;i<8;i++){
+        cells[i].classList.toggle('on', i<lit);
+        cells[i].classList.toggle('live', i===lit-1&&!full); // 방금 켜진 칸 = 숨쉬기(충전 중)
+      }
+      cells[8].classList.toggle('on', full);
+      if(full) cells[8].classList.add('live');
     });
   }
   function addCharge(v){ charge=Math.min(charge+v,100); renderBatt(); }
@@ -929,10 +940,17 @@
   }
   async function loadEpisodeAudio(m){
     epAudio={tempo:1, ready:false};
-    if(m.sample||!window.crypto||!crypto.subtle) return; // 샘플·비보안 컨텍스트 = 브라우저 TTS
+    if(!window.crypto||!crypto.subtle) return; // 비보안 컨텍스트 = 브라우저 TTS
     try{
-      var r=await api('/mandalas/'+m.id+'/episode-audio'); // owner면 BE가 lazy 렌더 enqueue
-      var j=await r.json(); var d=(j&&j.data)||{};
+      var d;
+      if(m.sample){ // 샘플 = 동봉된 정적 프리렌더 (첫 인상 = 실보이스 보장)
+        var rs=await fetch('/mobile/sample-audio/manifest.json');
+        if(!rs.ok) return;
+        d={enabled:true, status:'ready', manifest:await rs.json()};
+      } else {
+        var r=await api('/mandalas/'+m.id+'/episode-audio'); // owner면 BE가 lazy 렌더 enqueue
+        var j=await r.json(); d=(j&&j.data)||{};
+      }
       if(!d.enabled||d.status!=='ready'||!d.manifest) return;
       var map={};
       (d.manifest.beats||[]).forEach(function(b){ map[b.i+':'+b.h]=b; });
@@ -1160,7 +1178,7 @@
     var nextM=homeItems().filter(function(m){ return curNote&&m.id!==curNote.id&&rowState(m).kind!=='making'&&rowState(m).kind!=='loading'; })[0];
     pShowState('','');
     pState.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center;padding:0 14px">'
-      +'<span class="finbatt"><i></i></span>'
+      +'<svg class="finsig" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg>'
       +'<div class="big" style="font-size:15px;font-weight:750;margin-top:4px">이번 회차, 다 들었어요</div>'
       +'<div class="sm" style="font-size:11px;color:var(--paper-sub);font-weight:600">'+(srcN?('이 에피소드는 '+srcN+'개 영상에서 만들어졌어요'):'가운데 버튼 = 처음부터 다시')+'</div>'
       +(nextM?'<button class="fin-next" id="finNext">다음: <b></b></button>':'')
@@ -1354,6 +1372,26 @@
   })());
 
   /* ================= 무대 컨트롤러 — §2.2 [J pick] 포커스 라인 + 푸시 레일 + C1/C2 ================= */
+  /* 무대 휠 표시 수명: 터치 중 유지, 손 뗀 뒤 3s 후 소멸 (A 게임핸들 문법) */
+  var WHEEL_LINGER_MS=3000;
+  function wheelAwake(){
+    var wh=document.querySelector('.wheel'); if(!wh) return;
+    wh.classList.add('awake'); clearTimeout(wheelAwake._t);
+  }
+  function wheelSleep(){
+    clearTimeout(wheelAwake._t);
+    wheelAwake._t=setTimeout(function(){
+      var wh=document.querySelector('.wheel'); if(wh) wh.classList.remove('awake');
+    },WHEEL_LINGER_MS);
+  }
+  (function(){
+    var wz=document.querySelector('.wheelzone'); if(!wz) return;
+    wz.addEventListener('pointerdown',function(){ if(document.body.classList.contains('stage')) wheelAwake(); });
+    ['pointerup','pointercancel'].forEach(function(ev){
+      wz.addEventListener(ev,function(){ if(document.body.classList.contains('stage')) wheelSleep(); });
+    });
+  })();
+
   function hudWake(){ // HUD(헤어라인·상단·독) 표시 후 자동 숨김
     document.body.classList.add('hud');
     clearTimeout(hudWake._t); hudWake._t=setTimeout(function(){document.body.classList.remove('hud')},2600);
