@@ -938,6 +938,7 @@
   function stripMd(s){
     return String(s||'')
       .replace(/```[\s\S]*?```/g,' ').replace(/\|[^\n]*\|/g,' ')
+      .replace(/\[!\w+\]\s*/g,'') // 콜아웃([!warning] 등) 낭독·표시 금지 — BE sentences.ts와 패리티
       .replace(/[#>*_`~]|\[(.*?)\]\(.*?\)/g,'$1').replace(/\s+/g,' ').trim();
   }
   function sentences(s){

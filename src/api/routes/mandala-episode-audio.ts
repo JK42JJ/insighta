@@ -19,7 +19,7 @@ import { getPrismaClient } from '@/modules/database/client';
 import { config } from '@/config/index';
 import { logger } from '@/utils/logger';
 import { enqueueEpisodeNarrationRender } from '@/modules/queue/handlers/episode-narration-render';
-import type { EpisodeManifest } from '@/modules/narration/render-episode';
+import { MANIFEST_V, type EpisodeManifest } from '@/modules/narration/render-episode';
 
 const log = logger.child({ module: 'routes/mandala-episode-audio' });
 
@@ -71,7 +71,11 @@ export async function mandalaEpisodeAudioRoutes(fastify: FastifyInstance): Promi
       );
       const row = rows[0];
 
-      if (row?.status === 'ready' && row.book_version === bookVersion) {
+      if (
+        row?.status === 'ready' &&
+        row.book_version === bookVersion &&
+        row.manifest_json?.v === MANIFEST_V
+      ) {
         return reply.code(200).send({
           status: 'ok',
           data: { enabled: true, status: 'ready', manifest: row.manifest_json },

@@ -35,8 +35,11 @@ export interface ManifestBeat {
   s: number[];
 }
 
+/** 전처리 규칙이 바뀌면 범프 — 스테일 매니페스트가 lazy 재렌더된다 */
+export const MANIFEST_V = 2 as const;
+
 export interface EpisodeManifest {
-  v: 1;
+  v: number;
   host: NarrationHost;
   voiceId: string;
   tempo: number;
@@ -117,7 +120,11 @@ export async function renderEpisodeNarration(mandalaId: string): Promise<RenderR
       : classifyHost(mandala.title ?? '', mandala.domain);
   const preset = HOSTS[host];
 
-  if (existing?.status === 'ready' && existing.book_version === bookVersion) {
+  if (
+    existing?.status === 'ready' &&
+    existing.book_version === bookVersion &&
+    existing.manifest_json?.v === MANIFEST_V
+  ) {
     return { ok: true, action: 'fresh' };
   }
 
@@ -146,7 +153,7 @@ export async function renderEpisodeNarration(mandalaId: string): Promise<RenderR
     (existing?.manifest_json?.beats ?? []).map((m) => [`${m.i}:${m.h}`, m])
   );
   const manifest: EpisodeManifest = {
-    v: 1,
+    v: MANIFEST_V,
     host,
     voiceId: preset.voiceId,
     tempo: NARRATION_TEMPO,

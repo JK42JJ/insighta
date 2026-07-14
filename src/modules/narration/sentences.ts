@@ -12,6 +12,7 @@ export function stripMd(s: unknown): string {
   return String(s ?? '')
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/\|[^\n]*\|/g, ' ')
+    .replace(/\[!\w+\]\s*/g, '') // 마크다운 콜아웃([!warning] 등) — 낭독·표시 금지
     .replace(/[#>*_`~]|\[(.*?)\]\(.*?\)/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();
