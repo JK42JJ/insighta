@@ -48,8 +48,7 @@ import { getPrismaClient } from '../../database/client';
 import { logger } from '../../../utils/logger';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, RICH_SUMMARY_RETRY_OPTIONS, type EnrichRichSummaryPayload } from '../types';
-import { enqueueMandalaBookFill } from './mandala-book-fill';
-import { bookRefillEnqueueOptions } from './book-refill-debounce';
+import { maybeTriggerBookFill } from './book-fill-gate';
 import { isCompleteV2 } from './v2-completeness';
 import { config } from '@/config/index';
 import { loadRichSummaryConfig } from '@/config/rich-summary';
@@ -139,18 +138,10 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
       jobId: job.id,
       videoId,
     });
-    // Still re-fill the book so THIS mandala reflects the already-global v2
-    // (the post-enrich book trigger would not fire when generation is skipped).
+    // Still consider a book-fill so THIS mandala reflects the already-global v2
+    // (the completion gate fires only when the whole mandala is done).
     if (mandalaId) {
-      await enqueueMandalaBookFill(
-        { userId, mandalaId, trigger: 'enrich-cache-hit' },
-        bookRefillEnqueueOptions(mandalaId)
-      ).catch((err) => {
-        logger.warn('enrich-rich-summary: cache-hit book re-fill enqueue failed (non-fatal)', {
-          mandalaId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
+      await maybeTriggerBookFill({ userId, mandalaId });
     }
     return;
   }
@@ -316,23 +307,12 @@ async function handleEnrichRichSummary(job: PgBoss.Job<EnrichRichSummaryPayload>
         : { reason: v2Outcome.reason },
   });
 
-  // Book regen trigger — when v2 segments (the book's atom source) are written,
-  // re-fill the mandala's book so videos enriched AFTER the book was first
-  // generated are reflected (fixes the stale-book race that left new mandalas
-  // with empty "토픽 0" notes). Debounced: singletonKey = one queued re-fill per
-  // mandala, startAfter 120s collects an enrich burst into a single re-fill so
-  // topic-synthesis (Haiku) is not over-triggered. No new Sonnet/v2 cost — the
-  // re-fill reuses already-written v2 atoms.
+  // Book-fill trigger — hand off to the completion gate. It builds the note ONCE
+  // when every mandala video's v2 has settled, then updates only every ≥5 new
+  // summaries (CP516), instead of the per-video re-fill that ran the book's
+  // Sonnet stages 3-4× per mandala. Flag-gated: legacy debounced re-fill when off.
   if (v2Outcome.kind === 'pass' && mandalaId) {
-    await enqueueMandalaBookFill(
-      { userId, mandalaId, trigger: 'enrich-complete' },
-      bookRefillEnqueueOptions(mandalaId)
-    ).catch((err) => {
-      logger.warn('enrich-rich-summary: book re-fill enqueue failed (non-fatal)', {
-        mandalaId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
+    await maybeTriggerBookFill({ userId, mandalaId });
   }
 }
 
