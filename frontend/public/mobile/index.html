@@ -480,6 +480,12 @@
     color:var(--paper-sub); padding:9px; margin-top:2px; touch-action:manipulation}
 
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
+  .shr{border:none; background:none; cursor:pointer; touch-action:manipulation; color:var(--paper-sub);
+    padding:4px 8px; margin-left:auto; flex:none; line-height:0}
+  .shr:active{transform:scale(.88)}
+  .shr svg{display:block}
+  body.stage .shr{color:#B8AE9E}
+  .top .batt{margin-left:0}
   .spd{border:1px solid rgba(var(--shade),.28); background:none; cursor:pointer; touch-action:manipulation;
     font-family:inherit; font-size:10.5px; font-weight:750; color:var(--paper-sub);
     border-radius:999px; padding:2px 9px; line-height:1.5; flex:none}
@@ -548,7 +554,6 @@
               <button class="way way-mist" data-th="th-mist" aria-label="안개"></button>
             </span>
           </div>
-          <button class="mrow" id="bShare">친구에게 공유<span class="sub">카카오톡 등</span></button>
           <button class="mrow" id="bInstall">홈 화면에 설치<span class="sub">전체화면 앱</span></button>
           <button class="mrow" id="bLogout">로그아웃</button>
         </div>
@@ -557,7 +562,7 @@
 
       <!-- 플레이어 -->
       <div class="scr" data-s="player" id="scrPlayer">
-        <div class="top"><span class="tt" id="pTitle">노트</span><span class="batt" id="sigPlay"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
+        <div class="top"><span class="tt" id="pTitle">노트</span><button class="shr" id="bShareNote" aria-label="이 노트 공유" hidden><svg width="13" height="16" viewBox="0 0 15 18"><path d="M7.5 1v10M4.2 4.2 7.5 1l3.3 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7.4" width="11" height="9.4" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><span class="batt" id="sigPlay"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <div class="player-state" id="pState">
           <div class="pulse"></div>
           <div class="big" id="pStateBig">노트를 여는 중…</div>
@@ -1066,6 +1071,10 @@
         var rs=await fetch('/mobile/sample-audio/manifest.json');
         if(!rs.ok) return;
         d={enabled:true, status:'ready', manifest:await rs.json()};
+      } else if(m.guest){ // 게스트 = 토큰 경로 (읽기 전용, 렌더 트리거 없음)
+        var rg=await fetch('/api/v1/guest/'+GUEST+'/episode-audio');
+        if(!rg.ok) return;
+        var jg=await rg.json(); d=(jg&&jg.data)||{};
       } else {
         var r=await api('/mandalas/'+m.id+'/episode-audio'); // owner면 BE가 lazy 렌더 enqueue
         var j=await r.json(); d=(j&&j.data)||{};
@@ -1238,7 +1247,10 @@
     if(!(beat.vid in segCache)){
       var entry={sections:[], credit:null};
       try{
-        var r=await api('/videos/'+beat.vid+'/rich-summary');
+        var r=GUEST
+          ? await fetch('/api/v1/guest/'+GUEST+'/video/'+beat.vid+'/rich-summary')
+          : await api('/videos/'+beat.vid+'/rich-summary');
+        if(GUEST&&!r.ok) throw new Error('guest '+r.status);
         var j=await r.json();
         entry.sections=(j.data&&j.data.segments&&j.data.segments.sections)||[];
         entry.credit=(j.data&&j.data.oneLiner)||null;
@@ -1365,10 +1377,11 @@
   async function openNote(m){
     unlockAudio(); // 탭 제스처 안에서 오디오 세션 활성화 (iOS)
     curNote=m; show('player');
+    document.getElementById('bShareNote').hidden=!!(m.sample||m.guest);
     document.getElementById('pTitle').textContent=m.title||'노트';
     pShowState('노트를 여는 중…','');
     var book=null;
-    if(m.sample){ book=m.book; }
+    if(m.sample||m.guest){ book=m.book; }
     else{
       var cache=bookCache[m.id];
       if(cache&&cache.book){ book=cache.book; m.sourceVideos=cache.sourceVideos; }
@@ -1499,6 +1512,7 @@
   document.getElementById('bMenu').onclick=function(){
     if(wheelStole()) return;
     if(cur==='login') return;
+    if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
     if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('home'); renderRows(); }
     else if(cur==='menu'){ show('home'); }
     else{ show('menu'); }
@@ -1743,11 +1757,18 @@
     try{localStorage.removeItem(OWN_KEY)}catch(e){}
     setPlaying(false); show('login');
   };
-  document.getElementById('bShare').onclick=async function(){
-    var url=location.origin+'/mobile/?invite=1';
-    var data={title:'다이얼 — Insighta', text:'유튜브를 나만의 지식노트로 — 목표만 적으면 노트가 도착해요', url:url};
+  document.getElementById('bShareNote').onclick=async function(){
+    if(!curNote||curNote.sample||curNote.guest) return;
+    var url;
+    try{
+      var r=await api('/mandalas/'+curNote.id+'/share-token',{method:'POST'});
+      var j=await r.json();
+      url=location.origin+'/mobile/?g='+encodeURIComponent(j.data.token);
+    }catch(e){ toast('링크를 만들지 못했어요'); return; }
+    var data={title:'다이얼 — '+(curNote.title||'노트'),
+      text:'48시간 무료로 들어보세요 — '+(curNote.title||''), url:url};
     try{ if(navigator.share){ await navigator.share(data); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
-    try{ await navigator.clipboard.writeText(url); toast('링크가 복사됐어요'); }
+    try{ await navigator.clipboard.writeText(url); toast('48시간 링크가 복사됐어요'); }
     catch(e){ prompt('이 링크를 복사하세요', url); }
   };
   // Android/Chrome: beforeinstallprompt 캡처 → 버튼 탭 시 실제 설치 프롬프트
@@ -1842,7 +1863,23 @@
     document.body.classList.add('standalone');
   }
   scr[cur].classList.add('active');
+  var GUEST=null;
   (async function boot(){
+    var g=new URLSearchParams(location.search).get('g');
+    if(g){ // 공유 링크 = 48시간 게스트 청취 → 만료 시 로그인 안내
+      GUEST=g;
+      try{
+        var r=await fetch('/api/v1/guest/'+encodeURIComponent(g)+'/book');
+        if(r.status===401){ GUEST=null; show('login'); toast('공유 링크가 만료됐어요 — 로그인하고 계속 들어보세요'); return; }
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        var j=await r.json();
+        var m={id:'__guest__', guest:true, title:j.data.title||'공유된 노트',
+               book:j.data.book, sourceVideos:j.data.sourceVideos};
+        document.getElementById('loginSub').textContent='선물 받은 노트를 듣고 있어요 — 내 노트를 만들려면 로그인';
+        openNote(m);
+        return;
+      }catch(e){ GUEST=null; show('login'); toast('링크를 열지 못했어요'); return; }
+    }
     var tok=await freshToken();
     if(tok){ show('home'); loadList(); wheelIntroOnce(); }
     else { show('login'); }
