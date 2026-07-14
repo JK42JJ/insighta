@@ -1429,11 +1429,9 @@
 
   var runSeq=0, finished=false, learnedBi=0; // 학습 진도 = 자연 재생으로 통과한 비트만 [J:07-14]
   /* 게스트 정책 [J:07-14]: 첫 완청 전 빨리감기 잠금 (학습 흐름 보전) */
+  var GUEST_MID=null; // 게스트 book 응답의 mandalaId — 완청 localStorage 키
   function guestKey(){
-    try{
-      var b=GUEST.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
-      return 'insighta-guest-done-'+JSON.parse(atob(b)).m;
-    }catch(e){ return 'insighta-guest-done'; }
+    return 'insighta-guest-done-'+(GUEST_MID||GUEST||'');
   }
   function guestFwdOk(){
     if(!curNote||!curNote.guest) return true;
@@ -1533,8 +1531,9 @@
     curNote=m; show('player');
     document.getElementById('bShareNote').hidden=!!(m.sample||m.guest);
     if(!m.sample&&!m.guest&&!m._shareUrl){ // 공유 링크 선발급 — 탭 시점엔 동기 공유 (iOS 제스처 보존)
-      api('/mandalas/'+m.id+'/share-token',{method:'POST'}).then(function(r){return r.json()})
-        .then(function(j){ if(j&&j.data&&j.data.token) m._shareUrl=location.origin+'/mobile/?g='+encodeURIComponent(j.data.token); })
+      api('/share-links',{method:'POST',body:JSON.stringify({targetType:'note_episode',targetId:m.id})})
+        .then(function(r){return r.json()})
+        .then(function(j){ if(j&&j.data&&j.data.url) m._shareUrl=j.data.url; })
         .catch(function(){});
     }
     document.getElementById('pTitle').textContent=m.title||'노트';
@@ -1944,8 +1943,9 @@
     var url=curNote._shareUrl;
     if(!url){ // 선발급 미완 — 재발급 후 안내 (제스처 밖 공유 시트는 iOS가 차단)
       toast('공유 링크 준비 중 — 잠시 후 다시 탭해주세요');
-      api('/mandalas/'+curNote.id+'/share-token',{method:'POST'}).then(function(r){return r.json()})
-        .then(function(j){ if(j&&j.data&&j.data.token) curNote._shareUrl=location.origin+'/mobile/?g='+encodeURIComponent(j.data.token); })
+      api('/share-links',{method:'POST',body:JSON.stringify({targetType:'note_episode',targetId:curNote.id})})
+        .then(function(r){return r.json()})
+        .then(function(j){ if(j&&j.data&&j.data.url) curNote._shareUrl=j.data.url; })
         .catch(function(){ toast('링크를 만들지 못했어요'); });
       return;
     }
@@ -2056,7 +2056,7 @@
   scr[cur].classList.add('active');
   var GUEST=null;
   (async function boot(){
-    var g=new URLSearchParams(location.search).get('g');
+    var g=new URLSearchParams(location.search).get('s');
     if(g){ // 공유 링크 = 48시간 게스트 청취 → 만료 시 로그인 안내
       GUEST=g;
       try{
@@ -2064,6 +2064,7 @@
         if(r.status===401){ GUEST=null; show('login'); toast('공유 링크가 만료됐어요 — 로그인하고 계속 들어보세요'); return; }
         if(!r.ok) throw new Error('HTTP '+r.status);
         var j=await r.json();
+        GUEST_MID=j.data.mandalaId||null;
         var m={id:'__guest__', guest:true, title:j.data.title||'공유된 노트',
                book:j.data.book, sourceVideos:j.data.sourceVideos};
         document.getElementById('loginSub').textContent='선물 받은 노트를 듣고 있어요 — 내 노트를 만들려면 로그인';

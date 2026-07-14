@@ -186,6 +186,9 @@ const envSchema = z.object({
   GMAIL_SMTP_PORT: z.coerce.number().default(587),
   GMAIL_SMTP_FROM: z.string().default('noreply@insighta.one'),
 
+  // Share v2 — public origin used to build short share URLs (/s/:code).
+  PUBLIC_ORIGIN: z.string().default('https://insighta.one'),
+
   // Observability Phase 2-A — ops alarm recipient (admin inbox). Empty = the
   // alarm job logs the count but sends NO email (inert until the operator sets a
   // real inbox). An email address is config, not a secret (CP392).
@@ -510,6 +513,10 @@ export const config = {
     smtpHost: env.GMAIL_SMTP_HOST,
     smtpPort: env.GMAIL_SMTP_PORT,
     smtpFrom: env.GMAIL_SMTP_FROM,
+  },
+
+  share: {
+    publicOrigin: env.PUBLIC_ORIGIN,
   },
 
   // Observability Phase 2-A — ops alarms.

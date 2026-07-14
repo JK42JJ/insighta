@@ -2617,3 +2617,24 @@ model beta_applications {
   @@index([status])
   @@schema("public")
 }
+
+/// Share v2 (2026-07-14): single short-link backbone — every share surface
+/// mints one row here; GET /s/:code resolves it (bot=OG card, human=302).
+/// Server-side lookup (not self-verifying tokens) so links are revocable.
+/// Raw SQL DDL: prisma/migrations/share-links/001_create_share_links.sql
+model share_links {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String    @unique @db.VarChar(16)
+  target_type String    @db.VarChar(24) // 'note_episode' | 'learning_video' | 'mandala'
+  target_id   String    @db.Uuid // mandala id
+  video_id    String?   @db.VarChar(16) // learning_video only
+  mode        String    @default("guest_listen") @db.VarChar(24)
+  expires_at  DateTime? @db.Timestamptz(6)
+  created_by  String    @db.Uuid
+  revoked_at  DateTime? @db.Timestamptz(6)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([target_id])
+  @@index([created_by])
+  @@schema("public")
+}

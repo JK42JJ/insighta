@@ -89,6 +89,21 @@ server {
         proxy_send_timeout 600s;
     }
 
+    # Share v2 short links — insighta.one/s/{code}. Server-resolved (bot gets
+    # the OG card, human gets a 302) so it must reach the API, not the SPA
+    # shell. Longest-prefix match beats the / catch-all below.
+    location /s/ {
+        proxy_pass ${API_URL}/api/v1/s/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 30s;
+    }
+
     # SPA fallback for all routes (React Router)
     location / {
         try_files $uri $uri/ /index.html;
