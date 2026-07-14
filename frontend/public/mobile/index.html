@@ -12,6 +12,9 @@
 <meta name="apple-mobile-web-app-title" content="Insighta">
 <meta name="theme-color" content="#F5F2EC">
 <link rel="apple-touch-icon" href="/mobile/icon-180.png">
+<link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" href="/mobile/splash-1125x2436.png">
+<link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" href="/mobile/splash-1170x2532.png">
+<link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" href="/mobile/splash-1290x2796.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/mobile/icon-192.png">
 <style>
   /* ============ Insighta Player — 설계 명세 v1/v2 구현 ============
@@ -158,6 +161,16 @@
   .row .b{font-size:10px; color:var(--paper-sub); font-weight:600; display:flex; align-items:center; gap:5px; margin-top:2px}
   .dotnew{width:6px; height:6px; border-radius:50%; background:var(--ui); flex:none}
   .row-empty{font-size:11px; color:var(--paper-sub); font-weight:600; text-align:center; padding:22px 8px; line-height:1.8}
+  /* 스켈레톤 토큰 [J:07-14 전수] — 시머는 은은하게, 페이퍼 톤 안에서 */
+  .sk{background:linear-gradient(90deg, rgba(var(--shade),.12) 25%, rgba(var(--shade),.05) 37%, rgba(var(--shade),.12) 63%);
+    background-size:400% 100%; border-radius:7px; animation:skm 1.5s ease infinite}
+  @keyframes skm{0%{background-position:100% 0}100%{background-position:0 0}}
+  .skrow{display:flex; gap:12px; align-items:center; padding:12px 12px}
+  .skrow .skj{width:44px; height:44px; border-radius:11px; flex:none}
+  .skrow .skm{flex:1; display:flex; flex-direction:column; gap:8px}
+  .skt{animation:bsk2 1.5s ease-in-out infinite}
+  @keyframes bsk2{0%,100%{opacity:.45}50%{opacity:1}}
+  @media (prefers-reduced-motion: reduce){ .sk,.skt{animation:none} }
 
   /* ---- MENU ---- */
   .menu-list{margin-top:12px; display:flex; flex-direction:column; gap:8px}
@@ -518,6 +531,38 @@
 </style>
 </head>
 <body>
+  <!-- 부팅 스켈레톤 — 콜드 런치 백지 방지 [J:07-14]. 앱 첫 화면 표시 시 페이드아웃 -->
+  <div id="boot" style="position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;
+    align-items:center;justify-content:flex-start;background:#EDE9DE;
+    transition:opacity .4s ease;padding:calc(env(safe-area-inset-top,0px) + 26px) 22px calc(env(safe-area-inset-bottom,0px) + 18px)">
+    <style>
+      @keyframes bsk{0%,100%{opacity:.45}50%{opacity:1}}
+      @keyframes bhb{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+      #boot .bl{background:#DDD6C5;border-radius:7px;animation:bsk 1.5s ease-in-out infinite}
+      @media (prefers-reduced-motion:reduce){#boot .bl,#boot .bhub{animation:none !important}}
+    </style>
+    <div style="width:100%;max-width:420px;flex:1;display:flex;flex-direction:column">
+      <div style="flex:1;background:linear-gradient(175deg,#FAF6EC,#F0EADA);border-radius:24px;
+        box-shadow:inset 0 4px 9px rgba(94,86,72,.18),inset 0 0 0 1.5px rgba(94,86,72,.12);
+        padding:22px 18px;display:flex;flex-direction:column;gap:14px">
+        <div class="bl" style="width:34%;height:11px"></div>
+        <div class="bl" style="width:88%;height:15px;animation-delay:.12s"></div>
+        <div class="bl" style="width:72%;height:15px;animation-delay:.24s"></div>
+        <div class="bl" style="width:80%;height:15px;animation-delay:.36s"></div>
+      </div>
+      <div style="flex:none;display:grid;place-items:center;padding:26px 0 6px">
+        <div class="bhub" style="width:56vw;max-width:246px;aspect-ratio:1;border-radius:50%;
+          background:radial-gradient(circle at 50% 38%,#FBFAF6,#EFECE4 62%,#E2DDD0);
+          box-shadow:0 2px 6px rgba(94,86,72,.22),inset 0 1px 0 rgba(255,255,255,.85);
+          display:grid;place-items:center;animation:bhb 2.2s ease-in-out infinite">
+          <div style="width:39%;aspect-ratio:1;border-radius:50%;
+            background:linear-gradient(178deg,#E9A886,#DE9468);opacity:.75"></div>
+        </div>
+      </div>
+      <div style="text-align:center;font-family:'Apple SD Gothic Neo',system-ui,sans-serif;
+        font-size:9px;letter-spacing:.5em;color:#B4AC9B;font-weight:700;padding-left:.5em">INSIGHTA</div>
+    </div>
+  </div>
   <div class="device th-cream" id="dev">
     <div class="epaper">
 
@@ -539,7 +584,7 @@
       <div class="scr" data-s="home" id="scrHome">
         <div class="top"><span class="tt">내 만다라</span><span class="batt" id="sigHome"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
-        <div class="rows" id="rows"><div class="row-empty">불러오는 중…</div></div>
+        <div class="rows" id="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
       </div>
 
       <!-- MENU -->
@@ -705,7 +750,12 @@
   var SCREENS=['login','home','menu','player'];
   var scr={}; SCREENS.forEach(function(n){scr[n]=document.querySelector('.scr[data-s="'+n+'"]')});
   var cur='login';
+  function bootDone(){
+    var b=document.getElementById('boot'); if(!b) return;
+    b.style.opacity='0'; setTimeout(function(){ if(b.parentNode) b.parentNode.removeChild(b); },420);
+  }
   function show(n){
+    bootDone();
     if(n===cur) return;
     scr[cur].classList.remove('active');
     cur=n; scr[cur].classList.add('active');
@@ -817,7 +867,7 @@
     if(m.sample) return {kind:'ready', line:'샘플 에피소드'};
     var cache=bookCache[m.id];
     var res=loadResume(m.id);
-    if(!cache) return {kind:'loading', line:'확인 중…'};
+    if(!cache) return {kind:'loading', line:'확인 중…', skt:true};
     if(cache.making) return {kind:'making', line:'노트 만드는 중 · 카드 모으는 중'};
     if(res&&res.done) return {kind:'done', line:'다 들었어요', pct:100};
     if(res&&res.bi>0) return {kind:'resume', line:'이어 듣기 · '+(res.bi+1)+' / '+res.total, pct:Math.round(res.bi/Math.max(res.total-1,1)*100)};
@@ -845,6 +895,7 @@
       d.querySelector('.jk b').textContent=(m.title||'?').trim().charAt(0);
       d.querySelector('.a').textContent=m.title||'(제목 없음)';
       d.querySelector('.bt').textContent=st.line;
+      if(st.skt) d.querySelector('.bt').classList.add('skt');
       if(st.kind!=='making'&&st.kind!=='loading'){
         d.addEventListener('click',function(){ selIdx=i; renderRows(); openNote(m); });
       }
@@ -863,7 +914,9 @@
     }catch(e){ bookCache[m.id]={making:true}; }
     renderRows();
   }
+  var SK_ROW='<div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div>';
   async function loadList(){
+    document.getElementById('rows').innerHTML=SK_ROW+SK_ROW+SK_ROW;
     try{
       var r=await api('/mandalas/list?limit=12');
       var j=await r.json();
@@ -907,6 +960,19 @@
   var pState=document.getElementById('pState'), clipbox=document.getElementById('clipbox'),
       readbox=document.getElementById('readbox'), ptrack=document.getElementById('ptrack'),
       creditEl=document.getElementById('credit'), chcard=document.getElementById('chcard');
+  function pShowSkeleton(caption){ // 읽을 자리의 뼈대가 먼저 눕는다 [J:07-14]
+    pState.style.display='flex';
+    pState.innerHTML='<div style="width:100%;max-width:420px;display:flex;flex-direction:column;gap:13px;padding:6px 4px">'
+      +'<span class="sk" style="width:30%;height:10px"></span>'
+      +'<span class="sk" style="width:92%;height:15px"></span>'
+      +'<span class="sk" style="width:84%;height:15px"></span>'
+      +'<span class="sk" style="width:88%;height:15px"></span>'
+      +'<span class="sk" style="width:55%;height:15px"></span>'
+      +'<div class="sm" style="margin-top:6px">'+(caption||'')+'</div></div>';
+    clipbox.hidden=true; readbox.hidden=true; ptrack.hidden=true;
+    creditEl.hidden=true; chcard.classList.remove('show');
+    streamEl.hidden=true; sCtx.textContent='';
+  }
   function pShowState(big,sm){
     pState.style.display='flex';
     pState.innerHTML='<div class="pulse"></div><div class="big" id="pStateBig"></div><div class="sm" id="pStateSm"></div>';
@@ -1408,7 +1474,7 @@
     curNote=m; show('player');
     document.getElementById('bShareNote').hidden=!!(m.sample||m.guest);
     document.getElementById('pTitle').textContent=m.title||'노트';
-    pShowState('노트를 여는 중…','');
+    pShowSkeleton('노트를 여는 중');
     var book=null;
     if(m.sample||m.guest){ book=m.book; }
     else{
