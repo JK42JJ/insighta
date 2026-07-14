@@ -606,7 +606,19 @@ async function enrichBookLoop2(
   mandalaId: string
 ): Promise<void> {
   const chapters = book.chapters ?? [];
-  const cse = createGoogleCseClient(loadGoogleCseConfig());
+  const cseConfig = loadGoogleCseConfig();
+  const cse = createGoogleCseClient(cseConfig);
+  if (!cseConfig.enabled) {
+    // Silent-0 class (2026-07-14 incident): CSE credentials were never
+    // provisioned after CP458's name-only registration — research produced 0
+    // findings and factcheck ran without web evidence for 2 months with no
+    // signal. Degradation must be LOUD, never silent.
+    log.warn(
+      'CSE unset — book research yields 0 findings and factcheck runs WITHOUT web evidence ' +
+        '(register GOOGLE_CSE_API_KEY secret + GOOGLE_CSE_CX variable; credentials.md L163)',
+      { mandalaId }
+    );
+  }
 
   // research (loop-2-B) — web gap-fill, reference-tracked (P-2B-REF).
   try {

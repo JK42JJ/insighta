@@ -218,6 +218,10 @@ jobs:
           OR_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OR_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           COHERE_KEY: ${{ secrets.COHERE_API_KEY }}
+          # CSE — book research(STORM)/factcheck web evidence (CP458 name-only
+          # registration; key provisioning completed 2026-07-14 track).
+          GOOGLE_CSE_API_KEY: ${{ secrets.GOOGLE_CSE_API_KEY }}
+          GOOGLE_CSE_CX: ${{ vars.GOOGLE_CSE_CX }}
           ELEVEN_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           NARRATION_PREPRODUCE_ENABLED: ${{ vars.NARRATION_PREPRODUCE_ENABLED }}
           YT_SEARCH_KEY: ${{ secrets.YOUTUBE_API_KEY_SEARCH }}
@@ -316,6 +320,15 @@ jobs:
             # tuning knob (CP392 non-secret rule).
             if [ -n "${COHERE_KEY}" ]; then
               grep -q '^COHERE_API_KEY=' .env 2>/dev/null && sed -i "s|^COHERE_API_KEY=.*|COHERE_API_KEY=${COHERE_KEY}|" .env || echo "COHERE_API_KEY=${COHERE_KEY}" >> .env
+            fi
+            # Google CSE (book research/factcheck evidence). Absent = skip —
+            # graceful enabled=false stays, but fill-book now logs the
+            # degradation loudly (silent-0 class, 2026-07-14).
+            if [ -n "${GOOGLE_CSE_API_KEY}" ]; then
+              grep -q '^GOOGLE_CSE_API_KEY=' .env 2>/dev/null && sed -i "s|^GOOGLE_CSE_API_KEY=.*|GOOGLE_CSE_API_KEY=${GOOGLE_CSE_API_KEY}|" .env || echo "GOOGLE_CSE_API_KEY=${GOOGLE_CSE_API_KEY}" >> .env
+            fi
+            if [ -n "${GOOGLE_CSE_CX}" ]; then
+              grep -q '^GOOGLE_CSE_CX=' .env 2>/dev/null && sed -i "s|^GOOGLE_CSE_CX=.*|GOOGLE_CSE_CX=${GOOGLE_CSE_CX}|" .env || echo "GOOGLE_CSE_CX=${GOOGLE_CSE_CX}" >> .env
             fi
             # CP500++ CONFIG-SSOT (2026-06-16) — runtime TOGGLES removed from the
             # .env-write path. Toggle activation SSOT = docker-compose.prod.yml
