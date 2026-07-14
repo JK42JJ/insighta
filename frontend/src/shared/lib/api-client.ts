@@ -1153,6 +1153,24 @@ class ApiClient {
    * single source of truth for the FE share-menu preview card so what the
    * user sees matches the SNS-rendered card byte-for-byte. CP454+.
    */
+  /**
+   * Share v2 — mint a short link (insighta.one/s/CODE). One backbone for
+   * every share surface; BE reuses a live link for the same target+mode.
+   */
+  async mintShortLink(input: {
+    targetType: 'note_episode' | 'learning_video' | 'mandala';
+    targetId: string;
+    videoId?: string;
+  }): Promise<{
+    status: string;
+    data: { code: string; url: string; expiresAt: string | null };
+  }> {
+    return this.request('/share-links', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
   async getLearningShareOgMeta(
     mandalaId: string,
     videoId: string
