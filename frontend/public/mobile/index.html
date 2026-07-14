@@ -480,6 +480,12 @@
     color:var(--paper-sub); padding:9px; margin-top:2px; touch-action:manipulation}
 
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
+  .shr{border:none; background:none; cursor:pointer; touch-action:manipulation; color:var(--paper-sub);
+    padding:4px 8px; margin-left:auto; flex:none; line-height:0}
+  .shr:active{transform:scale(.88)}
+  .shr svg{display:block}
+  body.stage .shr{color:#B8AE9E}
+  .top .batt{margin-left:0}
   .spd{border:1px solid rgba(var(--shade),.28); background:none; cursor:pointer; touch-action:manipulation;
     font-family:inherit; font-size:10.5px; font-weight:750; color:var(--paper-sub);
     border-radius:999px; padding:2px 9px; line-height:1.5; flex:none}
@@ -548,7 +554,6 @@
               <button class="way way-mist" data-th="th-mist" aria-label="안개"></button>
             </span>
           </div>
-          <button class="mrow" id="bShare">친구에게 공유<span class="sub">카카오톡 등</span></button>
           <button class="mrow" id="bInstall">홈 화면에 설치<span class="sub">전체화면 앱</span></button>
           <button class="mrow" id="bLogout">로그아웃</button>
         </div>
@@ -557,7 +562,7 @@
 
       <!-- 플레이어 -->
       <div class="scr" data-s="player" id="scrPlayer">
-        <div class="top"><span class="tt" id="pTitle">노트</span><span class="batt" id="sigPlay"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
+        <div class="top"><span class="tt" id="pTitle">노트</span><button class="shr" id="bShareNote" aria-label="이 노트 공유" hidden><svg width="13" height="16" viewBox="0 0 15 18"><path d="M7.5 1v10M4.2 4.2 7.5 1l3.3 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7.4" width="11" height="9.4" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><span class="batt" id="sigPlay"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <div class="player-state" id="pState">
           <div class="pulse"></div>
           <div class="big" id="pStateBig">노트를 여는 중…</div>
@@ -777,8 +782,8 @@
 
   /* ================= 이어 듣기 (C1) ================= */
   function resumeKey(id){ return 'insighta-resume-'+id }
-  function saveResume(id,pos,total,done){
-    try{localStorage.setItem(resumeKey(id),JSON.stringify({bi:pos,total:total,done:!!done}))}catch(e){}
+  function saveResume(id,pos,total,done){ // (pos=재생 위치, 학습 진도는 lb로 별도)
+    try{localStorage.setItem(resumeKey(id),JSON.stringify({bi:pos,total:total,done:!!done,lb:learnedBi}))}catch(e){}
   }
   function loadResume(id){ return readJSON(localStorage.getItem(resumeKey(id))) }
 
@@ -1066,6 +1071,10 @@
         var rs=await fetch('/mobile/sample-audio/manifest.json');
         if(!rs.ok) return;
         d={enabled:true, status:'ready', manifest:await rs.json()};
+      } else if(m.guest){ // 게스트 = 토큰 경로 (읽기 전용, 렌더 트리거 없음)
+        var rg=await fetch('/api/v1/guest/'+GUEST+'/episode-audio');
+        if(!rg.ok) return;
+        var jg=await rg.json(); d=(jg&&jg.data)||{};
       } else {
         var r=await api('/mandalas/'+m.id+'/episode-audio'); // owner면 BE가 lazy 렌더 enqueue
         var j=await r.json(); d=(j&&j.data)||{};
@@ -1206,9 +1215,15 @@
       curClipKey=key;
       if(!resume) yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
       try{yt.setPlaybackRate(Math.min(spd,2))}catch(e){} // YT 상한 2× (플랫폼 한계)
+      // iOS: 제스처 없는 소리-영상 자동재생 차단 → 뮤트로 시작(허용됨), 재생 확인 후 언뮤트+램프
+      try{yt.mute()}catch(e){}
       try{yt.setVolume(0)}catch(e){}
       yt.playVideo();
-      var v=0, ramp=setInterval(function(){ v+=12; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },40);
+      var v=0, ramp=null, unmuted=false;
+      function rampUp(){ if(unmuted) return; unmuted=true;
+        try{yt.unMute()}catch(e){}
+        ramp=setInterval(function(){ v+=12; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },40);
+      }
       if(ytPoll) clearInterval(ytPoll);
       var lastT=0, stallMs=0, nudged=false;
       ytPoll=setInterval(function(){
@@ -1217,18 +1232,19 @@
           var st=yt.getPlayerState();
           var t=yt.getCurrentTime?yt.getCurrentTime():0;
           var rem=beat.to-t;
-          if(t&&rem<0.9&&rem>0){ clearInterval(ramp); yt.setVolume(Math.max(0,Math.round(100*rem/0.9))); }
+          if(t&&rem<0.9&&rem>0){ if(ramp) clearInterval(ramp); yt.setVolume(Math.max(0,Math.round(100*rem/0.9))); }
           if(st===0 || (t&&t>=beat.to-0.4)){ clearInterval(ytPoll); ytPoll=null; addCharge(1.2); nextBeat(1,true); return; }
           if(st===1 && t>0.1){
-            veilHide();
+            veilHide(); rampUp(); // 재생 확인 → 소리 개방
             try{ var vd=yt.getVideoData&&yt.getVideoData(); // 영상 제목 — 추가 요청 없이
               var ct=document.getElementById('cTitle');
               if(vd&&vd.title&&ct&&ct.textContent!==vd.title) ct.textContent=vd.title;
             }catch(e){}
           }
           if(st===1 && t>lastT+0.2){ lastT=t; stallMs=0; } else { stallMs+=500; }
-          if(stallMs>=8000 && !nudged){ nudged=true; try{yt.seekTo(Math.max(beat.from,t+0.5),true); yt.playVideo();}catch(e){} }
-          if(stallMs>=16000){ clearInterval(ytPoll); ytPoll=null; nextBeat(1,true); }
+          if(stallMs>=4000 && !nudged){ nudged=true;
+            try{ yt.mute(); yt.seekTo(Math.max(beat.from,t||beat.from),true); yt.playVideo(); }catch(e){} }
+          if(stallMs>=10000){ clearInterval(ytPoll); ytPoll=null; nextBeat(1,true); }
         }catch(e){}
       },500);
     }catch(e){ nextBeat(1,true); }
@@ -1238,7 +1254,10 @@
     if(!(beat.vid in segCache)){
       var entry={sections:[], credit:null};
       try{
-        var r=await api('/videos/'+beat.vid+'/rich-summary');
+        var r=GUEST
+          ? await fetch('/api/v1/guest/'+GUEST+'/video/'+beat.vid+'/rich-summary')
+          : await api('/videos/'+beat.vid+'/rich-summary');
+        if(GUEST&&!r.ok) throw new Error('guest '+r.status);
         var j=await r.json();
         entry.sections=(j.data&&j.data.segments&&j.data.segments.sections)||[];
         entry.credit=(j.data&&j.data.oneLiner)||null;
@@ -1287,7 +1306,23 @@
     if(ytReady) playClipNow(beat); else ytPending=beat;
   }
 
-  var runSeq=0;
+  var runSeq=0, finished=false, learnedBi=0; // 학습 진도 = 자연 재생으로 통과한 비트만 [J:07-14]
+  /* 게스트 정책 [J:07-14]: 첫 완청 전 빨리감기 잠금 (학습 흐름 보전) */
+  function guestKey(){
+    try{
+      var b=GUEST.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+      return 'insighta-guest-done-'+JSON.parse(atob(b)).m;
+    }catch(e){ return 'insighta-guest-done'; }
+  }
+  function guestFwdOk(){
+    if(!curNote||!curNote.guest) return true;
+    try{ return localStorage.getItem(guestKey())==='1'; }catch(e){ return false; }
+  }
+  var gfNoticeAt=0;
+  function guestFwdNotice(){
+    var now=Date.now();
+    if(now-gfNoticeAt>2500){ gfNoticeAt=now; toast('첫 청취는 순서대로 이어져요 — 완청하면 빨리감기가 열립니다'); }
+  }
   function runBeat(){
     if(!beats.length){ pShowState('재생할 내용이 없어요',''); return; }
     bi=Math.max(0,Math.min(bi,beats.length-1));
@@ -1329,15 +1364,21 @@
   function nextBeat(dir,auto){
     if(!beats.length) return;
     var nx=bi+dir;
-    if(nx>=beats.length){ finishNote(); return; }
+    if(auto&&dir>0) learnedBi=Math.max(learnedBi,nx); // 정속 시청만 진도 인정
+    if(nx>=beats.length){ finishNote(auto); return; }
     if(nx<0){ if(window.wheelRubber) wheelRubber(-1); return; }
     bi=nx;
     if(playing) runBeat(); else renderChapters();
   }
-  function finishNote(){
+  function finishNote(auto){
+    finished=true;
+    // 완청(학습) 인정 = 자연 재생 도달 또는 전 구간을 실제로 들은 경우만 — 빨리감기 종점은 화면만
+    var learned=!!auto||learnedBi>=beats.length-1;
+    if(learned&&curNote&&curNote.guest){ try{ localStorage.setItem(guestKey(),'1') }catch(e){} } // 완청 = 빨리감기 해제
     playing=false; stopSpeech(); stopClip(); setCharging(false); chime('end');
-    charge=100; renderBatt(); releaseWake();
-    if(curNote&&!curNote.sample) saveResume(curNote.id,0,beats.length,true);
+    if(learned){ charge=100; renderBatt(); }
+    releaseWake();
+    if(curNote&&!curNote.sample) saveResume(curNote.id,0,beats.length,learned);
     document.body.classList.remove('clipmode');
     var srcN=(curNote&&curNote.sourceVideos)||0;
     var nextM=homeItems().filter(function(m){ return curNote&&m.id!==curNote.id&&rowState(m).kind!=='making'&&rowState(m).kind!=='loading'; })[0];
@@ -1353,7 +1394,7 @@
     bi=0;
   }
   function setPlaying(on){
-    if(on) unlockAudio();
+    if(on){ unlockAudio(); finished=false; }
     playing=on; setCharging(on);
     if(on){ acquireWake(); runBeat(); }
     else{ stopSpeech(); stopClip(); releaseWake();
@@ -1365,10 +1406,11 @@
   async function openNote(m){
     unlockAudio(); // 탭 제스처 안에서 오디오 세션 활성화 (iOS)
     curNote=m; show('player');
+    document.getElementById('bShareNote').hidden=!!(m.sample||m.guest);
     document.getElementById('pTitle').textContent=m.title||'노트';
     pShowState('노트를 여는 중…','');
     var book=null;
-    if(m.sample){ book=m.book; }
+    if(m.sample||m.guest){ book=m.book; }
     else{
       var cache=bookCache[m.id];
       if(cache&&cache.book){ book=cache.book; m.sourceVideos=cache.sourceVideos; }
@@ -1393,6 +1435,7 @@
     await Promise.race([ loadEpisodeAudio(m), new Promise(function(r){setTimeout(r,1500)}) ]);
     var res=m.sample?null:loadResume(m.id);
     bi=(res&&!res.done&&res.bi>0&&res.bi<beats.length)?res.bi:0;
+    learnedBi=(res&&res.lb)?Math.min(res.lb,beats.length):0;
     playing=true; setCharging(true); acquireWake();
     if(bi===0) chime('start');
     coachOnce();
@@ -1491,6 +1534,12 @@
       if(nx<0||nx>=items.length){ wheelRubber(dir); return; } // J4
       selIdx=nx; updateSel(); // J5: 1노치 1행, 선택만 이동 (아이팟 메뉴)
     } else if(cur==='player'){
+      if(finished){ // 완청 화면: 우측 = 더 진행 없음, 좌측 = 마지막 구간으로 복귀
+        if(dir>0){ wheelRubber(1); return; }
+        finished=false; bi=Math.max(0,beats.length-1);
+        pState.style.display='none'; ptrack.hidden=false; renderChapters(); return;
+      }
+      if(dir>0&&!guestFwdOk()){ guestFwdNotice(); return; }
       if(bi+dir>=beats.length){ wheelRubber(1); finishNote(); return; }
       nextBeat(dir); if(!playing){ playing=true; setCharging(true); acquireWake(); runBeat(); }
     }
@@ -1499,6 +1548,7 @@
   document.getElementById('bMenu').onclick=function(){
     if(wheelStole()) return;
     if(cur==='login') return;
+    if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
     if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('home'); renderRows(); }
     else if(cur==='menu'){ show('home'); }
     else{ show('menu'); }
@@ -1612,7 +1662,10 @@
       if(label==null) return;
       var btn=document.createElement('button');
       btn.className='rl-it'+(head?' hd':''); btn.textContent=label; btn.dataset.bi=i;
-      btn.addEventListener('click',function(){ bi=i; closeRail(); stageResume(); });
+      btn.addEventListener('click',function(){
+        if(i>bi&&!guestFwdOk()){ guestFwdNotice(); return; }
+        finished=false; bi=i; closeRail(); stageResume();
+      });
       rlList.appendChild(btn);
     });
     rlFoot.textContent=chapterCount+'부 · '+beats.length+'구간';
@@ -1639,6 +1692,12 @@
   }
   function stageResume(){ if(!playing){ playing=true; setCharging(true); acquireWake(); } runBeat(); }
   function stageJump(dir){ // dispatchNotch와 동일 계약
+    if(finished){
+      if(dir>0){ hudWake(); return; }
+      finished=false; bi=Math.max(0,beats.length-1);
+      pState.style.display='none'; ptrack.hidden=false; renderChapters(); hudWake(); return;
+    }
+    if(dir>0&&!guestFwdOk()){ guestFwdNotice(); hudWake(); return; }
     if(bi+dir>=beats.length){ finishNote(); return; }
     nextBeat(dir);
     if(!playing){ playing=true; setCharging(true); acquireWake(); runBeat(); }
@@ -1743,11 +1802,18 @@
     try{localStorage.removeItem(OWN_KEY)}catch(e){}
     setPlaying(false); show('login');
   };
-  document.getElementById('bShare').onclick=async function(){
-    var url=location.origin+'/mobile/?invite=1';
-    var data={title:'다이얼 — Insighta', text:'유튜브를 나만의 지식노트로 — 목표만 적으면 노트가 도착해요', url:url};
+  document.getElementById('bShareNote').onclick=async function(){
+    if(!curNote||curNote.sample||curNote.guest) return;
+    var url;
+    try{
+      var r=await api('/mandalas/'+curNote.id+'/share-token',{method:'POST'});
+      var j=await r.json();
+      url=location.origin+'/mobile/?g='+encodeURIComponent(j.data.token);
+    }catch(e){ toast('링크를 만들지 못했어요'); return; }
+    var data={title:'다이얼 — '+(curNote.title||'노트'),
+      text:(curNote.title||'노트')+' — 48시간 무료 청취 · 첫 회차는 순서대로 이어집니다', url:url};
     try{ if(navigator.share){ await navigator.share(data); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
-    try{ await navigator.clipboard.writeText(url); toast('링크가 복사됐어요'); }
+    try{ await navigator.clipboard.writeText(url); toast('48시간 링크가 복사됐어요'); }
     catch(e){ prompt('이 링크를 복사하세요', url); }
   };
   // Android/Chrome: beforeinstallprompt 캡처 → 버튼 탭 시 실제 설치 프롬프트
@@ -1842,7 +1908,24 @@
     document.body.classList.add('standalone');
   }
   scr[cur].classList.add('active');
+  var GUEST=null;
   (async function boot(){
+    var g=new URLSearchParams(location.search).get('g');
+    if(g){ // 공유 링크 = 48시간 게스트 청취 → 만료 시 로그인 안내
+      GUEST=g;
+      try{
+        var r=await fetch('/api/v1/guest/'+encodeURIComponent(g)+'/book');
+        if(r.status===401){ GUEST=null; show('login'); toast('공유 링크가 만료됐어요 — 로그인하고 계속 들어보세요'); return; }
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        var j=await r.json();
+        var m={id:'__guest__', guest:true, title:j.data.title||'공유된 노트',
+               book:j.data.book, sourceVideos:j.data.sourceVideos};
+        document.getElementById('loginSub').textContent='선물 받은 노트를 듣고 있어요 — 내 노트를 만들려면 로그인';
+        openNote(m);
+        toast('48시간 동안 들을 수 있어요');
+        return;
+      }catch(e){ GUEST=null; show('login'); toast('링크를 열지 못했어요'); return; }
+    }
     var tok=await freshToken();
     if(tok){ show('home'); loadList(); wheelIntroOnce(); }
     else { show('login'); }
