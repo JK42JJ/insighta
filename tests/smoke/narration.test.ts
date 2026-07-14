@@ -25,6 +25,11 @@ describe('narration sentences (player parity)', () => {
     expect(stripMd('## 제목\n**굵게** [링크](http://x)와 `코드`')).toBe('제목 굵게 링크와 코드');
   });
 
+  it('strips markdown callout tokens ([!warning] 등) — 낭독 금지', () => {
+    expect(stripMd('> [!warning] 이 구간은 주의가 필요하다.')).toBe('이 구간은 주의가 필요하다.');
+    expect(stripMd('[!note]핵심 요약입니다.')).toBe('핵심 요약입니다.');
+  });
+
   it('filters fragments of length <= 1', () => {
     expect(sentences('가. 나머지는 유지됩니다.')).toEqual(['가.', '나머지는 유지됩니다.']);
     expect(sentences('.')).toEqual([]);
