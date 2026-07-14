@@ -24,11 +24,13 @@
  * DeepSeek stays as the control leg for the collapse hypothesis.
  */
 export const JUDGE_PANEL_MODELS = [
-  'google/gemini-2.5-flash', // 현직 gA — 기준선 (엄격 축)
-  'openai/gpt-4o-mini', // 지시준수 정밀 + 계통 다양성
-  'anthropic/claude-haiku-4.5', // 한국어·지시준수, 서비스 현역
-  'qwen/qwen3-30b-a3b-instruct-2507', // 중국계 대표, v2 현역
-  'deepseek/deepseek-v4-flash', // 현직 gB — 붕괴 가설 대조군
+  // Round-1 fixture scorecard (2026-07-14): DeepSeek collapse confirmed
+  // (5/11 fixture + 0/60 organic), Qwen same lenient-collapse axis (0/11) —
+  // both dropped. Gemini kept as the strict-axis CONTROL leg (supervisor:
+  // split-case adjudication data for the Stage2 gate; cost negligible).
+  'openai/gpt-4o-mini', // 신임 pair A — 11/11 & 6/7 (균형 최우수)
+  'anthropic/claude-haiku-4.5', // 신임 pair B — 11/11 & 5/7
+  'google/gemini-2.5-flash', // 대조군 — 11/11 & 4/7 (엄격 축)
 ] as const;
 
 export function isT11JudgePanelEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
