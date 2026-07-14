@@ -1,33 +1,20 @@
 /**
- * Note-ready email CTA — pure helpers (config-free, unit-testable).
+ * Note-ready email CTA — pure helper (config-free, unit-testable).
  *
  * The FE learning route is `/learning/:mandalaId/:videoId` (two segments,
- * frontend/src/app/router/index.tsx). A bare `/learning/:mandalaId` matches no
- * route and client-renders the 404 page — the exact bug a sample-email click
- * surfaced on 2026-07-14. Always emit a two-segment URL, or fall back to the
- * mandala dashboard (a real route) when the book has no video to focus.
+ * frontend/src/app/router/index.tsx); `?view=note` lands directly in note mode
+ * (the CTA promises the note, not the player). The focus video MUST come from
+ * the same source the learning page renders (user_local_cards placed cards) —
+ * a book-atom pick can target a mandala whose learning list is empty, which
+ * reads as a broken page (2026-07-14 sample regression). No placed video →
+ * link the mandala dashboard, never a hollow learning deep link.
  */
 
 const SITE_ORIGIN = 'https://insighta.one';
 
-/** Loose book_json walk — DB jsonb, so trust nothing about the shape. */
-export function firstBookVideoId(bookJson: unknown): string | null {
-  const book = bookJson as {
-    chapters?: Array<{ sections?: Array<{ atoms?: Array<{ vid?: unknown }> }> }>;
-  } | null;
-  for (const chapter of book?.chapters ?? []) {
-    for (const section of chapter?.sections ?? []) {
-      for (const atom of section?.atoms ?? []) {
-        if (typeof atom?.vid === 'string' && atom.vid.length > 0) return atom.vid;
-      }
-    }
-  }
-  return null;
-}
-
-/** Two-segment learning deep link when a focus video exists; dashboard otherwise. */
+/** Note-mode learning deep link when a placed video exists; dashboard otherwise. */
 export function noteReadyCtaUrl(mandalaId: string, videoId: string | null): string {
   return videoId
-    ? `${SITE_ORIGIN}/learning/${mandalaId}/${videoId}`
+    ? `${SITE_ORIGIN}/learning/${mandalaId}/${videoId}?view=note`
     : `${SITE_ORIGIN}/mandalas/${mandalaId}`;
 }

@@ -17,7 +17,7 @@ import { getJobQueue } from '../manager';
 import { JOB_NAMES, MANDALA_BOOK_FILL_OPTIONS, type MandalaBookFillPayload } from '../types';
 import { richSummaryWorkOptions } from './rich-summary-work-options';
 import { sendNoteReadyEmail } from '@/modules/email/transactional';
-import { firstBookVideoId, noteReadyCtaUrl } from '@/modules/email/note-ready-cta';
+import { noteReadyCtaUrl } from '@/modules/email/note-ready-cta';
 
 const log = logger.child({ module: 'queue/mandala-book-fill' });
 
@@ -34,15 +34,21 @@ async function notifyNoteReady(userId: string, mandalaId: string): Promise<void>
     });
     const to = mandala?.users?.email ?? '';
     if (!to) return;
-    // The learning route needs a videoId segment — link to the book's first
-    // video, or the mandala dashboard when none is extractable.
-    const book = await getPrismaClient().mandala_books.findUnique({
-      where: { mandala_id: mandalaId },
-      select: { book_json: true },
+    // Focus video from the SAME source the learning page renders (placed
+    // cards) — a book-atom pick can land on an empty learning list.
+    const firstCard = await getPrismaClient().user_local_cards.findFirst({
+      where: {
+        user_id: userId,
+        mandala_id: mandalaId,
+        cell_index: { gte: 0 },
+        video_id: { not: null },
+      },
+      orderBy: [{ cell_index: 'asc' }, { sort_order: 'asc' }],
+      select: { video_id: true },
     });
     await sendNoteReadyEmail(to, {
       mandalaName: mandala?.title ?? '내 만다라',
-      ctaUrl: noteReadyCtaUrl(mandalaId, firstBookVideoId(book?.book_json)),
+      ctaUrl: noteReadyCtaUrl(mandalaId, firstCard?.video_id ?? null),
     });
   } catch (err) {
     log.warn('note-ready email skipped (non-fatal)', {

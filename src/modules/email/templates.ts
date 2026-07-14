@@ -102,11 +102,78 @@ export function buildWelcomeEmail(params: WelcomeEmailParams): { subject: string
       <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">3분이면 충분해요 · 언제든 이어서 할 수 있어요</div>
     </td></tr>`;
   return {
-    subject: 'Insighta 클로즈드 베타에 초대합니다 — 3분이면 첫 만다라',
+    // Post-signup welcome tone — the pre-signup moment is buildBetaInviteEmail.
+    subject: '환영해요 — 3분이면 첫 만다라',
     html: shell(
       { label: 'WELCOME', color: GOLD },
       inner,
       '목표만 정하세요, 영상은 저희가 채울게요.'
+    ),
+  };
+}
+
+export interface BetaInviteEmailParams {
+  /** Learning-goal sentence from the beta application form (optional). */
+  goal?: string | null;
+  ctaUrl?: string;
+}
+
+/**
+ * Beta invite — sent when admin marks an application invited. The recipient is
+ * NOT a member yet: the email must announce the invitation, drive signup with
+ * the applied email (the invite gate matches on it), and carry the onboarding
+ * guide in one message.
+ */
+export function buildBetaInviteEmail(params: BetaInviteEmailParams): {
+  subject: string;
+  html: string;
+} {
+  const url = params.ctaUrl ?? `${SITE_ORIGIN}/login`;
+  const goal = params.goal?.trim() ? esc(params.goal.trim()) : '';
+  const goalCard = goal
+    ? `<table role="presentation" width="100%" style="border:2px solid ${INK};border-radius:14px;background:#fff;margin-top:16px"><tr>
+        <td style="padding:13px 16px">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:${MUTED}">남겨주신 학습 목표</div>
+          <div style="font-size:14px;font-weight:800;color:${INK};margin-top:4px">“${goal}”</div>
+        </td>
+      </tr></table>`
+    : '';
+  const rows = [
+    ['신청하신 이메일로 로그인', '이 이메일의 구글 계정으로 로그인하면 초대가 바로 적용돼요.'],
+    ['목표 하나를 정하기', '남겨주신 목표를 만다라로 펼쳐, 딱 맞는 영상을 채워 드려요.'],
+    ['노트가 저절로', '담은 영상의 핵심을 엮어 ‘10분만에 보는 책’ 노트를 만들어 드려요.'],
+  ]
+    .map(
+      ([t, d], i) =>
+        `<tr><td style="padding:13px 2px;border-top:1px dashed #d7d3c6">
+          <table role="presentation"><tr>
+            <td style="width:28px;height:28px;border:2px solid ${INK};border-radius:9px;color:${INDIGO};font-weight:800;font-size:13px;text-align:center;background:#fff">${i + 1}</td>
+            <td style="padding-left:14px">
+              <div style="font-size:14.5px;font-weight:800;color:${INK}">${t}</div>
+              <div style="font-size:12.5px;color:${MUTED};margin-top:2px">${d}</div>
+            </td>
+          </tr></table>
+        </td></tr>`
+    )
+    .join('');
+  const inner = `
+    <tr><td style="padding:14px 26px 2px;text-align:center">${mascot('mascot-welcome.gif')}</td></tr>
+    <tr><td style="padding:8px 30px 2px;text-align:center">
+      ${heading('베타테스트에', '초대합니다')}
+      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">신청해 주셔서 감사해요. 자리가 준비됐어요 — 이 이메일로 로그인하면 바로 시작돼요.</div>
+    </td></tr>
+    <tr><td style="padding:4px 30px 30px">
+      ${goalCard}
+      <table role="presentation" width="100%" style="margin-top:14px">${rows}</table>
+      <div style="text-align:center;margin-top:24px">${cta('베타 참여 시작하기', url, INDIGO)}</div>
+      <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">베타 기간 2026. 7. 13 – 8. 24 · 베타 기간에는 모든 기능이 무료예요</div>
+    </td></tr>`;
+  return {
+    subject: 'Insighta 클로즈드 베타에 초대합니다 — 자리가 준비됐어요',
+    html: shell(
+      { label: 'INVITED', color: INDIGO },
+      inner,
+      '클로즈드 베타 자리가 준비됐어요 — 이 이메일로 로그인하면 시작돼요.'
     ),
   };
 }
