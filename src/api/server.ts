@@ -17,7 +17,8 @@ import { syncRoutes } from './routes/sync';
 import { quotaRoutes } from './routes/quota';
 import { mandalaRoutes } from './routes/mandalas';
 import { mandalaEpisodeAudioRoutes } from './routes/mandala-episode-audio';
-import { shareTokenRoutes, guestNoteRoutes } from './routes/guest-share';
+import { guestNoteRoutes } from './routes/guest-share';
+import { shareLinkMintRoutes, shareLinkResolverRoutes } from './routes/share-links';
 import { imageRoutes } from './routes/images';
 import { ontologyRoutes } from './routes/ontology';
 import { searchRoutes } from './routes/search';
@@ -309,8 +310,10 @@ export async function buildServer() {
       // avoid conflicts with in-flight mandalas.ts work; same /mandalas prefix.
       await instance.register(mandalaEpisodeAudioRoutes, { prefix: '/mandalas' });
 
-      // Guest share (48h logged-out listening) — mint under /mandalas, read under /guest
-      await instance.register(shareTokenRoutes, { prefix: '/mandalas' });
+      // Share v2 — one short-link backbone: mint, resolve (/s/:code via
+      // nginx), and 48h guest listening keyed on the same 8-char code.
+      await instance.register(shareLinkMintRoutes, { prefix: '/share-links' });
+      await instance.register(shareLinkResolverRoutes, { prefix: '/s' });
       await instance.register(guestNoteRoutes, { prefix: '/guest' });
 
       // Register image proxy routes
