@@ -81,7 +81,13 @@ export default defineConfig(({ mode }) => {
           // the server served the GIF fine). Let these hit the network.
           // /mobile is a standalone static page (its own PWA manifest/scope),
           // not an SPA route — the app-shell fallback must not swallow it.
-          navigateFallbackDenylist: [/^\/api\//, /^\/mobile(\/|$)/, /\.[^/]+$/],
+          // /learning deep links (note-ready email CTA) must always run the
+          // CURRENT bundle: a stale SW serving the precached index.html ran
+          // pre-?view=note code and opened the player instead of the note
+          // (owner-reported, 2026-07-14). Hard navigations to /learning hit
+          // the network for fresh index.html; in-app moves are client-side
+          // routing and never reach the SW navigation route.
+          navigateFallbackDenylist: [/^\/api\//, /^\/mobile(\/|$)/, /^\/learning\//, /\.[^/]+$/],
           // 2026-04-22 (Phase 2 re-scoped): removed the `/api/*`
           // StaleWhileRevalidate runtime cache. Serving stale API
           // responses is incorrect for mandala-create / wizard-stream
