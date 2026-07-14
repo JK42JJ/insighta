@@ -17,7 +17,12 @@
 import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database/client';
 import { judgeCellCardsDetailed } from '@/modules/judge/card-cell-judge';
-import { planCellFloor, type CellVerdictInput } from '@/config/t11-inflow-judge';
+import {
+  planCellFloor,
+  isT11JudgePanelEnabled,
+  JUDGE_PANEL_MODELS,
+  type CellVerdictInput,
+} from '@/config/t11-inflow-judge';
 import { loadPoolServeConfig } from '@/config/pool-serve';
 import { logger } from '@/utils/logger';
 
@@ -47,6 +52,8 @@ export async function runInflowJudgeShadow(input: {
 
     let judged = 0;
     let split = 0;
+    const modelUnfit: Record<string, number> = {};
+    const modelJudged: Record<string, number> = {};
     let gaOnlyUnfit = 0;
     let gbOnlyUnfit = 0;
     const verdictInputs: CellVerdictInput[] = [];
@@ -60,11 +67,19 @@ export async function runInflowJudgeShadow(input: {
           centerGoal: input.centerGoal,
           cellTopic,
           items: slots.map((s) => ({ videoId: s.videoId, title: s.title })),
+          // Panel experiment (James 2026-07-14): wider legs ride the same
+          // service call; `final` stays the production pair.
+          ...(isT11JudgePanelEnabled() ? { models: JUDGE_PANEL_MODELS } : {}),
         });
         const cellOut: { videoId: string; fit: boolean; legs: boolean[] }[] = [];
         detailed.final.forEach((v, i) => {
           judged += 1;
           const legFits = detailed.legs.map((leg) => leg.verdicts[i]?.fit !== false);
+          for (let li = 0; li < detailed.legs.length; li++) {
+            const model = detailed.legs[li]!.model;
+            if (!legFits[li]) modelUnfit[model] = (modelUnfit[model] ?? 0) + 1;
+            modelJudged[model] = (modelJudged[model] ?? 0) + 1;
+          }
           const [ga, gb] = [legFits[0] !== false, legFits[1] !== false];
           if (ga !== gb) {
             split += 1;
@@ -85,6 +100,9 @@ export async function runInflowJudgeShadow(input: {
       schema: 1,
       computed_at: new Date().toISOString(),
       duration_ms: Date.now() - t0,
+      panel: isT11JudgePanelEnabled()
+        ? { models: [...JUDGE_PANEL_MODELS], model_judged: modelJudged, model_unfit: modelUnfit }
+        : undefined,
       metrics: {
         judged,
         unanimous_unfit: verdictInputs.filter((v) => !v.fit).length,

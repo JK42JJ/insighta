@@ -322,6 +322,9 @@ services:
       # verdicts+metrics into the dedicated judge_verdicts column only;
       # placement unchanged. Rollback: delete.
       - T11_INFLOW_JUDGE_ENABLED=true
+      # T11 model panel (James 2026-07-14): 5-leg shadow experiment — panel
+      # legs recorded, verdict stays the production pair. Rollback: delete.
+      - T11_JUDGE_PANEL_ENABLED=true
       # CP416 (2026-04-22) — restore the LoRA action-fill path. Without
       # this, generateMandala() called config.mandalaGen.model=undefined,
       # Ollama /api/generate returned 400, LoRA threw, and the Haiku
