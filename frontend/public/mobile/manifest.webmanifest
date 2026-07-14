@@ -1,6 +1,6 @@
 {
-  "name": "Insighta Player",
-  "short_name": "Insighta",
+  "name": "다이얼 — Insighta",
+  "short_name": "다이얼",
   "description": "만다라 하나를, 한 편의 팟캐스트로 듣는다 — Insighta 모바일 플레이어",
   "start_url": "/mobile/",
   "scope": "/mobile/",

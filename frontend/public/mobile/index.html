@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Insighta Player</title>
+<title>다이얼 — Insighta</title>
 <meta name="description" content="만다라 하나를, 한 편의 팟캐스트로 듣는다 — Insighta 모바일 플레이어">
 <link rel="manifest" href="/mobile/manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -319,9 +319,10 @@
   /* [J pick 07-14] C3 미니 휠 — 세로 클릭휠의 미니어처, 반투명 상주 */
   body.stage .wheelzone{display:block; position:absolute; z-index:7; width:176px; padding:0;
     right:calc(env(safe-area-inset-right, 0px) + 14px); bottom:calc(var(--sab) + 14px); left:auto; top:auto}
-  body.stage .wheel{width:100%; opacity:0; transition:opacity .3s var(--soft)} /* 평시 투명 [J:07-14] */
+  /* A-기록 핸들 문법 [J:07-14]: 평시 투명 → 터치 시 저투명(시청 무방해) → 3초 머문 뒤 소멸 */
+  body.stage .wheel{width:100%; opacity:0; transition:opacity .35s var(--soft)}
   body.stage.railopen .wheelzone{display:none} /* 레일 = 모달 — 휠 잠시 퇴장 */
-  body.stage .wheel.touching,body.stage .wheel.hint{opacity:1}
+  body.stage .wheel.awake{opacity:.25}
   .hubpos{display:none}
   body.stage .hubpos{display:block; position:absolute; z-index:3; left:50%; top:50%;
     transform:translate(-50%,-50%); pointer-events:none;
@@ -690,9 +691,7 @@
     var on=land && cur==='player';
     var was=document.body.classList.contains('stage');
     document.body.classList.toggle('stage', on);
-    if(on&&!was){ hudWake(); updateStream(true); updateDock();
-      var wh=document.querySelector('.wheel');
-      if(wh){ wh.classList.add('hint'); setTimeout(function(){wh.classList.remove('hint')},1600); } }
+    if(on&&!was){ hudWake(); updateStream(true); updateDock(); wheelAwake(); wheelSleep(); }
     if(!on&&was){ document.body.classList.remove('railopen'); }
   }
   addEventListener('resize', syncStage);
@@ -1366,6 +1365,26 @@
   })());
 
   /* ================= 무대 컨트롤러 — §2.2 [J pick] 포커스 라인 + 푸시 레일 + C1/C2 ================= */
+  /* 무대 휠 표시 수명: 터치 중 유지, 손 뗀 뒤 3s 후 소멸 (A 게임핸들 문법) */
+  var WHEEL_LINGER_MS=3000;
+  function wheelAwake(){
+    var wh=document.querySelector('.wheel'); if(!wh) return;
+    wh.classList.add('awake'); clearTimeout(wheelAwake._t);
+  }
+  function wheelSleep(){
+    clearTimeout(wheelAwake._t);
+    wheelAwake._t=setTimeout(function(){
+      var wh=document.querySelector('.wheel'); if(wh) wh.classList.remove('awake');
+    },WHEEL_LINGER_MS);
+  }
+  (function(){
+    var wz=document.querySelector('.wheelzone'); if(!wz) return;
+    wz.addEventListener('pointerdown',function(){ if(document.body.classList.contains('stage')) wheelAwake(); });
+    ['pointerup','pointercancel'].forEach(function(ev){
+      wz.addEventListener(ev,function(){ if(document.body.classList.contains('stage')) wheelSleep(); });
+    });
+  })();
+
   function hudWake(){ // HUD(헤어라인·상단·독) 표시 후 자동 숨김
     document.body.classList.add('hud');
     clearTimeout(hudWake._t); hudWake._t=setTimeout(function(){document.body.classList.remove('hud')},2600);
