@@ -5,6 +5,9 @@ export type CenterTab = 'chapters' | 'summary';
 
 export type CenterViewMode = 'player' | 'note';
 
+/** `?view=note` deep links (note-ready email CTA) land directly in note mode. */
+export const isNoteViewParam = (v: string | null): boolean => v === 'note';
+
 export type ActiveRegion = 'sidebar' | 'player' | 'book-index' | 'notes' | 'chat' | null;
 
 export type PlayerState = 'playing' | 'paused' | 'buffering' | 'ended' | 'unstarted' | 'cued';
