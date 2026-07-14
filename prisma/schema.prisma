@@ -530,6 +530,10 @@ model mandala_wizard_precompute {
   target_level        String?   @db.VarChar(30)
   /// 'pending' | 'running' | 'done' | 'failed' | 'consumed'
   status              String    @default("pending") @db.VarChar(20)
+  /// T11 Stage1 (2026-07-14) — inflow judge verdicts (post-done race, shadow).
+  /// DEDICATED column per the data-write rule: judge output never touches
+  /// relevance_pct. DDL: prisma/migrations/t11-inflow-judge/001_add_judge_verdicts.sql
+  judge_verdicts      Json?     @db.JsonB
   discover_result     Json?
   error_message       String?
   consumed_mandala_id String?   @db.Uuid
