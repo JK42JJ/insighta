@@ -28,7 +28,7 @@ import { synthesizeBookSkeleton, type BookSkeleton } from './book-skeleton';
 import { weaveChapterBody } from './book-body';
 import { researchBookGaps } from './book-research';
 import { factcheckChapterBody } from './book-factcheck';
-import { createGoogleCseClient, loadGoogleCseConfig } from '@/modules/google-cse';
+import { createWebSearchClient, loadWebSearchConfig } from '@/modules/web-search';
 import { enqueueEnrichRichSummary, enqueueNoteCvEnrich } from '@/modules/queue';
 import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
 import { getStoredTranslation } from '@/modules/skills/rich-summary-translator';
@@ -606,16 +606,22 @@ async function enrichBookLoop2(
   mandalaId: string
 ): Promise<void> {
   const chapters = book.chapters ?? [];
-  const cseConfig = loadGoogleCseConfig();
-  const cse = createGoogleCseClient(cseConfig);
-  if (!cseConfig.enabled) {
-    // Silent-0 class (2026-07-14 incident): CSE credentials were never
-    // provisioned after CP458's name-only registration — research produced 0
-    // findings and factcheck ran without web evidence for 2 months with no
-    // signal. Degradation must be LOUD, never silent.
+  const wsConfig = loadWebSearchConfig();
+  const cse = createWebSearchClient(wsConfig);
+  if (!wsConfig.enabled) {
+    // Silent-0 class (2026-07-14 incident): the CSE credentials behind the
+    // original research/factcheck were never provisioned — 2 months of 0
+    // findings + evidence-free verdicts with no signal. Degradation must be
+    // LOUD, never silent.
     log.warn(
-      'CSE unset — book research yields 0 findings and factcheck runs WITHOUT web evidence ' +
-        '(register GOOGLE_CSE_API_KEY secret + GOOGLE_CSE_CX variable; credentials.md L163)',
+      'web-search unset — book research yields 0 findings and factcheck runs WITHOUT web ' +
+        'evidence (NAVER_CLIENT_ID/SECRET + OPENROUTER_API_KEY; credentials.md)',
+      { mandalaId }
+    );
+  } else if (!wsConfig.naverEnabled || !wsConfig.globalEnabled) {
+    log.warn(
+      `web-search partial — ${wsConfig.naverEnabled ? 'global(en/ja/zh)' : 'naver(ko)'} leg ` +
+        'unconfigured; queries in that language yield no evidence',
       { mandalaId }
     );
   }
