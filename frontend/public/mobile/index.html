@@ -439,6 +439,35 @@
   .clipveil.hold i{display:none}
   @keyframes veilspin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion: reduce){ .clipveil i{animation:none} }
+  /* iOS 설치 가이드 시트 */
+  .inst-ov{position:absolute; inset:0; z-index:60; background:rgba(30,27,22,.45);
+    display:flex; align-items:flex-end; justify-content:center; padding:18px}
+  .inst-ov[hidden]{display:none !important}
+  .inst-card{width:100%; max-width:330px; background:var(--paper-hi, #FAF6EC); border-radius:18px;
+    padding:20px 20px 14px; box-shadow:0 18px 44px rgba(30,27,22,.35); display:flex; flex-direction:column; gap:11px}
+  .inst-t{font-size:15px; font-weight:800; color:var(--paper-ink)}
+  .inst-step{font-size:13.5px; color:var(--paper-ink); line-height:1.7}
+  .inst-step b{color:var(--acc-ink)}
+  .inst-n{display:inline-grid; place-items:center; width:19px; height:19px; border-radius:50%;
+    background:var(--acc); color:#fff; font-size:11px; font-weight:800; margin-right:8px}
+  .inst-x{border:none; background:none; cursor:pointer; font-family:inherit; font-size:13px; font-weight:750;
+    color:var(--paper-sub); padding:9px; margin-top:2px; touch-action:manipulation}
+
+  /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
+  .spd{border:1px solid rgba(var(--shade),.28); background:none; cursor:pointer; touch-action:manipulation;
+    font-family:inherit; font-size:10.5px; font-weight:750; color:var(--paper-sub);
+    border-radius:999px; padding:2px 9px; margin-left:auto; line-height:1.5}
+  .spd.on{color:var(--acc-ink); border-color:var(--acc-lo); background:rgba(var(--shade),.05)}
+  .spd:active{transform:scale(.92)}
+  body.stage .ptrack .spd{display:none} /* 무대는 전용 캡슐 사용 */
+  .spd-stage{display:none}
+  body.stage .spd-stage{display:block; position:absolute; z-index:6; right:16px; top:calc(var(--sg-a) + 26px);
+    border:1px solid rgba(237,231,220,.28); background:rgba(20,20,24,.5); color:#B8AE9E;
+    font-family:inherit; font-size:10.5px; font-weight:750; border-radius:999px; padding:2px 9px;
+    cursor:pointer; touch-action:manipulation; transition:opacity .3s}
+  body.stage .spd-stage.on{color:#F5D48A; border-color:rgba(245,212,138,.55)}
+  body.stage.clipmode .spd-stage{opacity:0; pointer-events:none}
+  body.stage.clipmode.hud .spd-stage{opacity:1; pointer-events:auto}
   .toast{position:fixed; left:50%; bottom:calc(var(--sab) + 26px); transform:translateX(-50%) translateY(20px);
     background:var(--ink); color:#F5F2EC; font-size:11.5px; font-weight:700; border-radius:99px; padding:9px 16px;
     opacity:0; transition:opacity .3s, transform .3s var(--spring); pointer-events:none; z-index:50; white-space:nowrap;
@@ -518,11 +547,12 @@
         <div class="chcard" id="chcard"><div class="n" id="chNum"></div><div class="t" id="chTitle"></div></div>
         <div class="ptrack" id="ptrack" hidden>
           <div class="chapters" id="pchap"></div>
-          <div class="ptimes"><span id="pPos" class="num">1 / 1</span><span id="pCh"></span></div>
+          <div class="ptimes"><span id="pPos" class="num">1 / 1</span><span id="pCh"></span><button class="spd num" id="spdBtn" aria-label="재생 속도">1×</button></div>
         </div>
         <div class="hairline" id="hairline"><i id="hairFill" style="width:0%"></i></div>
         <!-- [J pick] 가로 무대: 포커스 라인 + 컨텍스트 + 탭 존 + 독 + 푸시 레일 -->
         <div class="s-ctx" id="sCtx"></div>
+        <button class="spd-stage num" id="spdStage" aria-label="재생 속도">1×</button>
         <div class="stream" id="stream" hidden><div class="col" id="strCol"></div></div>
         <div class="grip" id="grip" aria-hidden="true"></div>
         <div class="stagetap" id="stageTap" aria-hidden="true"></div>
@@ -531,6 +561,19 @@
       <!-- 푸시 레일 — epaper 직속 (무대 transform 비종속) -->
       <div class="rail" id="rail"><div class="rl-ch" id="rlCh"></div><div class="rl-list" id="rlList"></div>
         <div class="rl-foot num" id="rlFoot"></div></div>
+
+      <!-- iOS 설치 가이드 시트 (프로그래매틱 설치 불가 — 단계 안내) -->
+      <div class="inst-ov" id="instOv" hidden>
+        <div class="inst-card">
+          <div class="inst-t">홈 화면에 설치</div>
+          <div class="inst-step"><span class="inst-n num">1</span>하단 
+            <svg width="15" height="18" viewBox="0 0 15 18" aria-hidden="true" style="vertical-align:-3px"><path d="M7.5 1v10M4.2 4.2 7.5 1l3.3 3.2" fill="none" stroke="#3478F6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7.4" width="11" height="9.4" rx="2" fill="none" stroke="#3478F6" stroke-width="1.6"/></svg>
+            <b>공유</b> 버튼을 누르고</div>
+          <div class="inst-step"><span class="inst-n num">2</span>목록을 내려 <b>"홈 화면에 추가"</b></div>
+          <div class="inst-step"><span class="inst-n num">3</span>오른쪽 위 <b>추가</b> — 끝</div>
+          <button class="inst-x" id="instClose">닫기</button>
+        </div>
+      </div>
 
       <!-- 목표 입력 -->
       <div class="goal-ov" id="goalOv">
@@ -858,6 +901,25 @@
     if(curNote&&!curNote.sample) saveResume(curNote.id,bi,beats.length,false);
   }
 
+  /* ── 배속 (1→1.5→2→2.5 순환, localStorage 유지) ── */
+  var SPD_STEPS=[1,1.5,2,2.5], spd=1;
+  try{ var sv=parseFloat(localStorage.getItem('insighta-speed')); if(SPD_STEPS.indexOf(sv)>=0) spd=sv; }catch(e){}
+  function spdLabel(){ return (spd%1?spd:spd)+'×'; }
+  function renderSpd(){
+    ['spdBtn','spdStage'].forEach(function(id){
+      var b=document.getElementById(id); if(!b) return;
+      b.textContent=spdLabel(); b.classList.toggle('on', spd!==1);
+    });
+  }
+  function cycleSpd(){
+    spd=SPD_STEPS[(SPD_STEPS.indexOf(spd)+1)%SPD_STEPS.length];
+    try{localStorage.setItem('insighta-speed',String(spd))}catch(e){}
+    renderSpd();
+    if(curAudio){ curAudio.playbackRate=(epAudio.tempo||1)*spd; }
+    try{ if(yt&&yt.setPlaybackRate&&document.body.classList.contains('clipmode')) yt.setPlaybackRate(Math.min(spd,2)); }catch(e){}
+    toast('재생 속도 '+spdLabel());
+  }
+
   /* ── 에피소드 오디오 (ElevenLabs pre-produce) — manifest = (비트 인덱스, 문장해시) 키 ── */
   var epAudio={tempo:1, ready:false}, curAudio=null;
   function stopAudio(){ if(curAudio){ try{curAudio.pause()}catch(e){} curAudio=null; } }
@@ -905,10 +967,10 @@
       var sp=curSpans[curSentIdx]; sp.classList.add('on');
       updateStream();
       if(sp.scrollIntoView) sp.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'});
-      if(!synth){ var ms=Math.min(Math.max(curSents[curSentIdx].length*90,1600),12000);
+      if(!synth){ var ms=Math.min(Math.max(curSents[curSentIdx].length*90,1600),12000)/spd;
         setTimeout(function(){ if(seq===speakSeq&&playing){ curSentIdx++; addCharge(.5); next(); } },ms); return; }
       var u=new SpeechSynthesisUtterance(curSents[curSentIdx]);
-      u.lang='ko-KR'; u.rate=1.05;
+      u.lang='ko-KR'; u.rate=1.05*spd;
       u.onend=function(){ if(seq!==speakSeq) return; curSentIdx++; addCharge(.5); next(); };
       u.onerror=function(){ if(seq!==speakSeq) return; curSentIdx++; next(); };
       synth.speak(u);
@@ -925,7 +987,7 @@
     var seq=++speakSeq, m=beat.audio;
     curSentIdx=Math.max(0,Math.min(idx,curSents.length-1));
     var a=new Audio(m.f); curAudio=a;
-    a.playbackRate=epAudio.tempo||1;
+    a.playbackRate=(epAudio.tempo||1)*spd;
     try{a.preservesPitch=true; a.webkitPreservesPitch=true}catch(e){}
     function hl(){
       if(seq!==speakSeq) return;
@@ -974,6 +1036,7 @@
     veilShow();
     try{
       yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
+      try{yt.setPlaybackRate(Math.min(spd,2))}catch(e){} // YT 상한 2× (플랫폼 한계)
       try{yt.setVolume(0)}catch(e){}
       yt.playVideo();
       var v=0, ramp=setInterval(function(){ v+=12; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },40);
@@ -1255,6 +1318,11 @@
     else if(cur==='menu'){ show('home'); }
     else{ show('menu'); }
   };
+  document.getElementById('instClose').onclick=function(){ document.getElementById('instOv').hidden=true; };
+  document.getElementById('instOv').addEventListener('click',function(e){ if(e.target===this) this.hidden=true; });
+  document.getElementById('spdBtn').onclick=cycleSpd;
+  document.getElementById('spdStage').onclick=cycleSpd;
+  renderSpd();
   document.getElementById('bPrev').onclick=function(){ if(wheelStole()) return; dispatchNotch(-1) };
   document.getElementById('bNext').onclick=function(){ if(wheelStole()) return; dispatchNotch(1) };
   function corePress(){
@@ -1476,9 +1544,22 @@
     try{ await navigator.clipboard.writeText(url); toast('링크가 복사됐어요'); }
     catch(e){ prompt('이 링크를 복사하세요', url); }
   };
+  // Android/Chrome: beforeinstallprompt 캡처 → 버튼 탭 시 실제 설치 프롬프트
+  var deferredInstall=null;
+  window.addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); deferredInstall=e; });
   document.getElementById('bInstall').onclick=function(){
     var standalone=matchMedia('(display-mode: standalone)').matches || navigator.standalone===true;
-    toast(standalone?'이미 앱으로 실행 중':'공유 버튼 → "홈 화면에 추가"');
+    if(standalone){ toast('이미 앱으로 실행 중'); return; }
+    if(deferredInstall){ // Android — 네이티브 설치 다이얼로그 (실설치)
+      deferredInstall.prompt();
+      deferredInstall.userChoice.then(function(r){
+        if(r&&r.outcome==='accepted') toast('홈 화면에 설치했어요');
+        deferredInstall=null;
+      });
+      return;
+    }
+    // iOS — 프로그래매틱 설치 불가(플랫폼 정책) → 단계 가이드 시트
+    document.getElementById('instOv').hidden=false;
   };
 
   /* ================= 목표 입력 ================= */
