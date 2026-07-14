@@ -223,6 +223,8 @@
   .ptimes #pPos{flex:none; white-space:nowrap}
   .ptimes #pCh{min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .pclock{margin-left:auto; font-size:10px; color:var(--paper-sub); font-weight:650; flex:none}
+  .credit .crem{color:var(--acc-ink); font-weight:750}
+  body.stage .credit .crem{color:#F5D48A}
   .player-state{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:9px; padding:0 14px}
   .player-state .big{font-size:14px; font-weight:750}
   .player-state .sm{font-size:11px; color:var(--paper-sub); font-weight:600; line-height:1.8}
@@ -931,6 +933,11 @@
   var trkFill=null, trkHead=null, trkStart=0, trkCount=1;
   function renderLive(){ // 초 단위 생동: 헤드·필·시계 (0.5s 틱)
     var f=beatFrac();
+    var b0=beats[bi], rem=document.getElementById('cRem');
+    if(rem&&b0&&b0.t==='c'&&b0.to!=null){ // 클립 잔여 카운트다운
+      try{ var t=yt&&yt.getCurrentTime?yt.getCurrentTime():b0.from;
+        rem.textContent=' · -'+fmtSec(Math.max(0,b0.to-t)); }catch(e){}
+    }
     var pct=Math.min(100,((bi-trkStart+f)/trkCount)*100);
     if(trkFill) trkFill.style.width=pct+'%';
     if(trkHead) trkHead.style.left=pct+'%';
@@ -1254,7 +1261,7 @@
   }
   function playClip(beat){
     creditEl.hidden=false; // S1 — 구간정보 포함 [J:07-14]
-    creditEl.innerHTML='원본 · <b></b><span class="crng num"></span>';
+    creditEl.innerHTML='원본 · <b></b><span class="crng num"></span><span class="crem num" id="cRem"></span>';
     creditEl.querySelector('b').textContent=beat.src||((segCache[beat.vid]&&segCache[beat.vid].credit)||'핵심구간');
     if(beat.from!=null&&beat.to!=null)
       creditEl.querySelector('.crng').textContent=' · '+fmtSec(beat.from)+'–'+fmtSec(beat.to);
