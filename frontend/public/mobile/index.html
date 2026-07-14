@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>다이얼 — Insighta</title>
-<meta name="description" content="만다라 하나를, 한 편의 팟캐스트로 듣는다 — Insighta 모바일 플레이어">
+<meta name="description" content="유튜브를 나만의 지식노트로 — 다이얼, Insighta 플레이어">
 <link rel="manifest" href="/mobile/manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -186,8 +186,10 @@
   .clipbox .guard{position:absolute; inset:0; z-index:3}
   /* S1: 원본 크레딧 — 상시 표기 */
   .credit{flex:none; margin-top:8px; font-size:10px; color:var(--paper-sub); font-weight:600;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .credit b{color:var(--paper-ink); font-weight:700}
+    display:flex; align-items:center; gap:5px; white-space:nowrap; min-width:0}
+  .credit b{color:var(--paper-ink); font-weight:700; flex:0 1 auto; min-width:0;
+    overflow:hidden; text-overflow:ellipsis}
+  .credit .crng,.credit .crem{flex:none}
   /* read-along — §1.1b: 세로 17px/1.85 고정 */
   .readbox{flex:1; min-height:0; overflow-y:auto; margin-top:10px; font-size:17px; line-height:1.85;
     letter-spacing:-.005em; padding-right:2px;
@@ -517,7 +519,7 @@
       <div class="scr" data-s="login" id="scrLogin">
         <div class="login-scr">
           <div class="login-mark">INSIGHTA</div>
-          <div class="login-big">만다라 하나를,<br>한 편의 팟캐스트로.</div>
+          <div class="login-big">유튜브를<br>나만의 지식노트로.</div>
           <div class="login-sub" id="loginSub">로그인하면 내 만다라가 이 기계에 도착합니다</div>
           <button class="gbtn" id="bLogin">
             <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.5 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.6a14.5 14.5 0 0 1 0-9.2l-7.9-6.2a24 24 0 0 0 0 21.6l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.6-5.8l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-4-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>
@@ -1191,10 +1193,18 @@
     else{ clipVeil.classList.add('off'); clipVeil.classList.remove('hold'); }
   }
   function stopClip(){ if(ytPoll){clearInterval(ytPoll); ytPoll=null;} try{ if(yt&&yt.pauseVideo) yt.pauseVideo(); }catch(e){} }
+  var curClipKey=null;
   function playClipNow(beat){
     veilShow();
     try{
-      yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
+      // 같은 클립의 일시정지 재개 = 이어서 재생 [J:07-14 중대결함 — 처음부터 재로드 금지]
+      var key=bi+':'+beat.vid, resume=false;
+      if(curClipKey===key){
+        try{ var tcur=yt.getCurrentTime?yt.getCurrentTime():0;
+          resume=(tcur>beat.from+0.5&&tcur<beat.to-0.5); }catch(e){}
+      }
+      curClipKey=key;
+      if(!resume) yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
       try{yt.setPlaybackRate(Math.min(spd,2))}catch(e){} // YT 상한 2× (플랫폼 한계)
       try{yt.setVolume(0)}catch(e){}
       yt.playVideo();
@@ -1209,7 +1219,13 @@
           var rem=beat.to-t;
           if(t&&rem<0.9&&rem>0){ clearInterval(ramp); yt.setVolume(Math.max(0,Math.round(100*rem/0.9))); }
           if(st===0 || (t&&t>=beat.to-0.4)){ clearInterval(ytPoll); ytPoll=null; addCharge(1.2); nextBeat(1,true); return; }
-          if(st===1 && t>0.1) veilHide();
+          if(st===1 && t>0.1){
+            veilHide();
+            try{ var vd=yt.getVideoData&&yt.getVideoData(); // 영상 제목 — 추가 요청 없이
+              var ct=document.getElementById('cTitle');
+              if(vd&&vd.title&&ct&&ct.textContent!==vd.title) ct.textContent=vd.title;
+            }catch(e){}
+          }
           if(st===1 && t>lastT+0.2){ lastT=t; stallMs=0; } else { stallMs+=500; }
           if(stallMs>=8000 && !nudged){ nudged=true; try{yt.seekTo(Math.max(beat.from,t+0.5),true); yt.playVideo();}catch(e){} }
           if(stallMs>=16000){ clearInterval(ytPoll); ytPoll=null; nextBeat(1,true); }
@@ -1260,9 +1276,9 @@
     return false;
   }
   function playClip(beat){
-    creditEl.hidden=false; // S1 — 구간정보 포함 [J:07-14]
-    creditEl.innerHTML='원본 · <b></b><span class="crng num"></span><span class="crem num" id="cRem"></span>';
-    creditEl.querySelector('b').textContent=beat.src||((segCache[beat.vid]&&segCache[beat.vid].credit)||'핵심구간');
+    creditEl.hidden=false; // S1 — '원본' 라벨 대신 영상 제목 [J:07-14], 로드되면 실제 제목으로 교체
+    creditEl.innerHTML='<b id="cTitle"></b><span class="crng num"></span><span class="crem num" id="cRem"></span>';
+    creditEl.querySelector('b').textContent=beat.src||((segCache[beat.vid]&&segCache[beat.vid].credit)||'원본 핵심구간');
     if(beat.from!=null&&beat.to!=null)
       creditEl.querySelector('.crng').textContent=' · '+fmtSec(beat.from)+'–'+fmtSec(beat.to);
     readbox.hidden=false;
@@ -1729,7 +1745,7 @@
   };
   document.getElementById('bShare').onclick=async function(){
     var url=location.origin+'/mobile/?invite=1';
-    var data={title:'Insighta Player', text:'만다라 하나를, 한 편의 팟캐스트로 — 목표만 적으면 노트가 도착해요', url:url};
+    var data={title:'다이얼 — Insighta', text:'유튜브를 나만의 지식노트로 — 목표만 적으면 노트가 도착해요', url:url};
     try{ if(navigator.share){ await navigator.share(data); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
     try{ await navigator.clipboard.writeText(url); toast('링크가 복사됐어요'); }
     catch(e){ prompt('이 링크를 복사하세요', url); }
