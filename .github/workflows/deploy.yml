@@ -45,7 +45,9 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: 'latest' resolves via unauthenticated GitHub API and rate-limits
+          # on shared runners (2 consecutive EF-deploy failures, 2026-07-14).
+          version: 2.109.1
 
       - name: Deploy Edge Functions
         env:

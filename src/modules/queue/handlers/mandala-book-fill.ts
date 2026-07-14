@@ -34,21 +34,37 @@ async function notifyNoteReady(userId: string, mandalaId: string): Promise<void>
     });
     const to = mandala?.users?.email ?? '';
     if (!to) return;
-    // Focus video from the SAME source the learning page renders (placed
-    // cards) — a book-atom pick can land on an empty learning list.
-    const firstCard = await getPrismaClient().user_local_cards.findFirst({
+    // Focus video from the SAME sources the learning page renders
+    // (useMandalaCards = user_video_states ∪ user_local_cards, placed only).
+    // uvs is the dominant table (auto-add/wizard cards) and is video-UUID
+    // keyed — join youtube_videos for the 11-char id the /learning route uses.
+    const synced = await getPrismaClient().userVideoState.findFirst({
       where: {
         user_id: userId,
         mandala_id: mandalaId,
         cell_index: { gte: 0 },
-        video_id: { not: null },
+        is_in_ideation: false,
       },
       orderBy: [{ cell_index: 'asc' }, { sort_order: 'asc' }],
-      select: { video_id: true },
+      select: { video: { select: { youtube_video_id: true } } },
     });
+    let focusVideoId = synced?.video?.youtube_video_id ?? null;
+    if (!focusVideoId) {
+      const local = await getPrismaClient().user_local_cards.findFirst({
+        where: {
+          user_id: userId,
+          mandala_id: mandalaId,
+          cell_index: { gte: 0 },
+          video_id: { not: null },
+        },
+        orderBy: [{ cell_index: 'asc' }, { sort_order: 'asc' }],
+        select: { video_id: true },
+      });
+      focusVideoId = local?.video_id ?? null;
+    }
     await sendNoteReadyEmail(to, {
       mandalaName: mandala?.title ?? '내 만다라',
-      ctaUrl: noteReadyCtaUrl(mandalaId, firstCard?.video_id ?? null),
+      ctaUrl: noteReadyCtaUrl(mandalaId, focusVideoId),
     });
   } catch (err) {
     log.warn('note-ready email skipped (non-fatal)', {
