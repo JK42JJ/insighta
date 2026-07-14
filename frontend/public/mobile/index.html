@@ -1299,7 +1299,23 @@
     if(ytReady) playClipNow(beat); else ytPending=beat;
   }
 
-  var runSeq=0;
+  var runSeq=0, finished=false;
+  /* 게스트 정책 [J:07-14]: 첫 완청 전 빨리감기 잠금 (학습 흐름 보전) */
+  function guestKey(){
+    try{
+      var b=GUEST.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+      return 'insighta-guest-done-'+JSON.parse(atob(b)).m;
+    }catch(e){ return 'insighta-guest-done'; }
+  }
+  function guestFwdOk(){
+    if(!curNote||!curNote.guest) return true;
+    try{ return localStorage.getItem(guestKey())==='1'; }catch(e){ return false; }
+  }
+  var gfNoticeAt=0;
+  function guestFwdNotice(){
+    var now=Date.now();
+    if(now-gfNoticeAt>2500){ gfNoticeAt=now; toast('첫 청취는 순서대로 이어져요 — 완청하면 빨리감기가 열립니다'); }
+  }
   function runBeat(){
     if(!beats.length){ pShowState('재생할 내용이 없어요',''); return; }
     bi=Math.max(0,Math.min(bi,beats.length-1));
@@ -1347,6 +1363,8 @@
     if(playing) runBeat(); else renderChapters();
   }
   function finishNote(){
+    finished=true;
+    if(curNote&&curNote.guest){ try{ localStorage.setItem(guestKey(),'1') }catch(e){} } // 완청 = 빨리감기 해제
     playing=false; stopSpeech(); stopClip(); setCharging(false); chime('end');
     charge=100; renderBatt(); releaseWake();
     if(curNote&&!curNote.sample) saveResume(curNote.id,0,beats.length,true);
@@ -1365,7 +1383,7 @@
     bi=0;
   }
   function setPlaying(on){
-    if(on) unlockAudio();
+    if(on){ unlockAudio(); finished=false; }
     playing=on; setCharging(on);
     if(on){ acquireWake(); runBeat(); }
     else{ stopSpeech(); stopClip(); releaseWake();
@@ -1504,6 +1522,12 @@
       if(nx<0||nx>=items.length){ wheelRubber(dir); return; } // J4
       selIdx=nx; updateSel(); // J5: 1노치 1행, 선택만 이동 (아이팟 메뉴)
     } else if(cur==='player'){
+      if(finished){ // 완청 화면: 우측 = 더 진행 없음, 좌측 = 마지막 구간으로 복귀
+        if(dir>0){ wheelRubber(1); return; }
+        finished=false; bi=Math.max(0,beats.length-1);
+        pState.style.display='none'; ptrack.hidden=false; renderChapters(); return;
+      }
+      if(dir>0&&!guestFwdOk()){ guestFwdNotice(); return; }
       if(bi+dir>=beats.length){ wheelRubber(1); finishNote(); return; }
       nextBeat(dir); if(!playing){ playing=true; setCharging(true); acquireWake(); runBeat(); }
     }
@@ -1626,7 +1650,10 @@
       if(label==null) return;
       var btn=document.createElement('button');
       btn.className='rl-it'+(head?' hd':''); btn.textContent=label; btn.dataset.bi=i;
-      btn.addEventListener('click',function(){ bi=i; closeRail(); stageResume(); });
+      btn.addEventListener('click',function(){
+        if(i>bi&&!guestFwdOk()){ guestFwdNotice(); return; }
+        finished=false; bi=i; closeRail(); stageResume();
+      });
       rlList.appendChild(btn);
     });
     rlFoot.textContent=chapterCount+'부 · '+beats.length+'구간';
@@ -1653,6 +1680,12 @@
   }
   function stageResume(){ if(!playing){ playing=true; setCharging(true); acquireWake(); } runBeat(); }
   function stageJump(dir){ // dispatchNotch와 동일 계약
+    if(finished){
+      if(dir>0){ hudWake(); return; }
+      finished=false; bi=Math.max(0,beats.length-1);
+      pState.style.display='none'; ptrack.hidden=false; renderChapters(); hudWake(); return;
+    }
+    if(dir>0&&!guestFwdOk()){ guestFwdNotice(); hudWake(); return; }
     if(bi+dir>=beats.length){ finishNote(); return; }
     nextBeat(dir);
     if(!playing){ playing=true; setCharging(true); acquireWake(); runBeat(); }
@@ -1766,7 +1799,7 @@
       url=location.origin+'/mobile/?g='+encodeURIComponent(j.data.token);
     }catch(e){ toast('링크를 만들지 못했어요'); return; }
     var data={title:'다이얼 — '+(curNote.title||'노트'),
-      text:'48시간 무료로 들어보세요 — '+(curNote.title||''), url:url};
+      text:(curNote.title||'노트')+' — 48시간 무료 청취 · 첫 회차는 순서대로 이어집니다', url:url};
     try{ if(navigator.share){ await navigator.share(data); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
     try{ await navigator.clipboard.writeText(url); toast('48시간 링크가 복사됐어요'); }
     catch(e){ prompt('이 링크를 복사하세요', url); }
@@ -1877,6 +1910,7 @@
                book:j.data.book, sourceVideos:j.data.sourceVideos};
         document.getElementById('loginSub').textContent='선물 받은 노트를 듣고 있어요 — 내 노트를 만들려면 로그인';
         openNote(m);
+        toast('48시간 동안 들을 수 있어요');
         return;
       }catch(e){ GUEST=null; show('login'); toast('링크를 열지 못했어요'); return; }
     }
