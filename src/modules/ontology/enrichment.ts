@@ -380,6 +380,8 @@ export async function enrichVideo(
      */
     withRichSummary?: boolean;
     userId?: string;
+    /** Book-chain relink (2026-07-12): enables the post-v2 book/note fill. */
+    mandalaId?: string;
   }
 ): Promise<VideoSummaryResult> {
   const prisma = getPrismaClient();
@@ -527,6 +529,27 @@ export async function enrichVideo(
         transcript,
         segments: richSummarySegments,
       });
+      // Book-chain relink (2026-07-12): v2 now flows through THIS inline path
+      // (wizard trigger -> enrich-video), but the book/note fill was only
+      // enqueued by the standalone enrich-rich-summary job handler — which no
+      // longer runs. Re-fire it here (same 120s-debounced singleton per
+      // mandala) so 카드 -> v2 -> 노트 completes again. Non-fatal.
+      if (options.mandalaId) {
+        const { enqueueMandalaBookFill } =
+          await import('@/modules/queue/handlers/mandala-book-fill');
+        const { bookRefillEnqueueOptions } =
+          await import('@/modules/queue/handlers/book-refill-debounce');
+        await enqueueMandalaBookFill(
+          { userId: options.userId, mandalaId: options.mandalaId, trigger: 'enrich-complete' },
+          bookRefillEnqueueOptions(options.mandalaId)
+        ).catch((err) => {
+          logger.warn('book re-fill enqueue failed (non-fatal)', {
+            videoId,
+            mandalaId: options.mandalaId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
     } catch (err) {
       logger.warn('Rich summary generation failed (non-fatal)', {
         videoId,

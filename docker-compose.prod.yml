@@ -113,7 +113,26 @@ services:
       # D-04 §4-2 wizard shadow (supervisor-approved after CUT=false zero-
       # impact proof, wizard-precompute.ts:179): judge scores + traces
       # would_cut, slots untouched. CUT stays off until the canary gate.
-      - INFLOW_GATE_ENABLED=true
+      # T6 (2026-07-12, matrix F12): inflow-gate shadow judge added 15-50s to
+      # wizard precompute (v5 discover itself is <1s) — killed done-by-click
+      # since 7/3 (#1085). CUT was never on; judge-deboost (post-placement)
+      # owns precision now. Rollback: flip back to true.
+      - INFLOW_GATE_ENABLED=false
+      # V2 auto-enrich cost gate (T6 tooling). true = normal service chain
+      # (wizard v2 burst + book fill). Set false only for test windows.
+      - V2_AUTO_ENRICH_ENABLED=true
+      # T7 (matrix §11-b): consume miss → attach to in-flight precompute
+      # instead of re-running discover (quota x2, 21-43s). Rollback: delete.
+      - PRECOMPUTE_ATTACH_ENABLED=true
+      # T9 (matrix F6): deficit-cell subgoal queries carry a domain anchor
+      # from the center goal ("일본어 JLPT N3" + "청취 회화"). Rollback: delete.
+      - DISCOVER_SUBGOAL_ANCHOR_ENABLED=true
+      # Perf-monitor PR1: boot self-report of git_sha + flag fingerprint into
+      # config_change_events (timeline markers). Rollback: delete.
+      - CONFIG_CHANGE_EVENTS_ENABLED=true
+      # Perf-monitor PR4: 15-min collapse watch + daily dead-man heartbeat
+      # (mails OBSERVABILITY_ALERT_EMAIL). Rollback: delete.
+      - COLLAPSE_WATCH_ENABLED=true
       # CP494 canary — pool-first backfill gate. Fill cells from the quota-FREE +
       # embedding-FREE video_pool (tsvector, v2_promoted ~1.1k) BEFORE live search;
       # a cell with ≥3 pool candidates drops its live search.list query → quota
@@ -174,12 +193,12 @@ services:
       # (c) per-cell would-serve L2 data before any enforce. Rollback = delete
       # line → code default false (DOMAIN_FIT_SERVE_SHADOW off).
       # NOTE: this config's boolFlag accepts only true/1/yes (NOT "on") — use =true.
-      - DOMAIN_FIT_SERVE_SHADOW=true
+      - DOMAIN_FIT_SERVE_SHADOW=false  # T4: 7/3 value
       # R24 SERVE-edge enforce flip (supervisor [GO] 2026-07-06, PR #1104 code).
       # Demote-only composite deboost on pool-serve-fill pool + live-fallback
       # branches; card count preserved; classifier-unavailable = fail-open
       # (multiplier 1, not cached). Rollback = delete line → code default false.
-      - DOMAIN_FIT_SERVE_ENFORCE=true
+      - DOMAIN_FIT_SERVE_ENFORCE=false  # T4: 7/3 value
       # G3 W1③ supply bridge — serve the backfilled yt_promoted rows.
       # W1① backfill embedded 7,015 yt_promoted (gold/silver, classifyQuality —
       # same gate as v2_promoted, NOT batch_trend). Measured: cohort cos>=0.5
@@ -202,7 +221,7 @@ services:
       # sources alongside v2_promoted (1,365 active). Probe pattern — measure niche
       # (기타/DA) re-serve poolPassed/livePassed then decide retain vs revert.
       # Revert: delete this line + redeploy → code default POOL_SOURCES_BASE=['v2_promoted'].
-      - POOL_SERVE_SOURCES_EXTRA=yt_promoted
+      # - POOL_SERVE_SOURCES_EXTRA=yt_promoted  # T4: absent on 7/3 (re-admit in T5 with supply track)
       # 2026-07-06 (James [GO], supervisor canary) — global channel HARD cap.
       # The per-cell soft cap (2/cell) can't see a channel spread 2 across N cells
       # (measured: 말트영어 10/49 in a 5-cell 영어 add_cards trace, zero per-cell
@@ -210,7 +229,7 @@ services:
       # (demote-only, count-neutral — measured 10→3 primary, 49→49 total). Fires
       # only when candidates ≥ V5_CHANNEL_HARD_CAP_MIN_CANDIDATES (30) so thin
       # cells keep soft-demote. Rollback = set to 0 + redeploy (code default off).
-      - V5_CHANNEL_HARD_CAP=3
+      # - V5_CHANNEL_HARD_CAP=3  # T4: absent on 7/3
       # CP500++ (2026-06-18, James [GO]) — restore the min-view floor on the
       # wizard/auto-add path. #804 (2026-05-30) switched the wizard v3→v5; the v3
       # quality gate (filterByQualityGate, MIN_VIEW 1000) was NOT carried into v5,
@@ -249,6 +268,56 @@ services:
       # Revert: delete this line → falls back to ollama-first behaviour.
       # See docs/design/mac-mini-deprecation-2026-05-13.md §4 Phase D1.
       - IKS_EMBED_PROVIDER=openrouter
+      # P0 2026-07-10 — serving-path embed fast-timeout. OpenRouter
+      # qwen3-embedding latency degraded to a 30-42s p90 tail (traces:
+      # embed.batch p50 1.5s->8.4s, p90 2.9s->36s), overrunning the wizard
+      # precompute/post-creation discover window -> 0 cards until manual
+      # refresh (~2min). ON caps the SERVING discover embeds at 12s / 0 retry
+      # so a slow chunk fails fast to lexical (never 0 cards) instead of
+      # hanging the window. Bulk collector/backfill keep the 20s default.
+      # 12s is between measured batch p50 (~8.4s, keep) and p90 (~36s, cut).
+      # Watch getEmbedServingDowngradeCount after enabling; tune the two
+      # values via env. Set false / re-comment = existing 20s x 2 rollback.
+      # ENABLED 2026-07-10 (P0 hemostasis, James "배포 진행"):
+      - EMBED_SERVING_FAST_TIMEOUT_ENABLED=true
+      - EMBED_SERVING_TIMEOUT_MS=12000
+      - EMBED_SERVING_MAX_RETRIES=0
+      # P0 2026-07-11 — ROOT CAUSE of the 7/6+ wizard 27-96s serving: OpenRouter
+      # routes qwen3-embedding-8b across Nebius/DeepInfra/SiliconFlow, and
+      # DeepInfra started hanging 25s+ (pinned probe 3/3; ~1/3 of default-routed
+      # calls stalled -> 20s timeout x retries = 40s per call on the wizard
+      # critical path). Skip it at request level. Remove name(s) / unset = no
+      # provider field (exact legacy request). Re-check monthly whether
+      # DeepInfra recovered (it is one of 3 capacity legs).
+      # Full record: docs/qa/wizard-0card-investigation-2026-07-11.md
+      - OPENROUTER_EMBED_IGNORE_PROVIDERS=DeepInfra
+      # T5-perf (2026-07-12) — provider PREFERENCE (fallbacks allowed, not a
+      # pin): SiliconFlow measured 0.5-0.9s consistently vs Nebius 0.5-12s
+      # variance (run 8dbb3e67 had a 11.9s embed call). Remove line = router default.
+      - OPENROUTER_EMBED_PROVIDER_ORDER=SiliconFlow
+      # P0 2026-07-11 — never-zero floor: when the RANKING gate (center cosine/
+      # jaccard) drops every candidate, admit top-N (search-rank, safety gates
+      # already applied) into deficit cells instead of "No recommendations" ->
+      # 0 cards (kapasi mode: 108 found -> 0 served). "덜 정렬된 카드 > 0장".
+      # Unset/false = legacy fail-closed rollback.
+      # FLIPPED 2026-07-11 after FIX-1 verification (ignore-body probe x6:
+      # 0.49-2.4s, zero hangs vs 3-4/10 at 29.6-30s before) — supervisor
+      # staged-flip order FIX-1 -> FIX-3 honored.
+      - DISCOVER_NEVER_ZERO_FLOOR=true
+      # T5 (2026-07-12, archetype matrix) — supply x2 + shorts-at-source +
+      # MISS-path first-paint. Measured basis: run 1710a7c8 (James manual):
+      # supply 181, shorts ate 96 (53%), 11 cards; rule queries 0-7 items vs
+      # LLM 50. Rollback = remove these three lines (each independent).
+      - V3_SEARCH_VIDEO_DURATION=medium
+      - DISCOVER_SKIP_RULE_QUERIES=true
+      - DISCOVER_PROGRESSIVE_FILL=true
+      # gA judge deboost (2026-07-12, James GO): Gemini Flash via gateway
+      # judges title-vs-cell-topic per cell, 240s after creation; unfit cards
+      # sink (relevance_pct=2), NEVER deleted (single-judge removal unsafe:
+      # 150-label benchmark false-blocks 19-22%). Remove line = off.
+      # T10-R (2026-07-13): judge verdicts unreliable both ways (single=false
+      # sinks F16, unanimous=recall 3/10) — OFF until T11 dedicated-column era.
+      - JUDGE_DEBOOST_ENABLED=false
       # CP416 (2026-04-22) — restore the LoRA action-fill path. Without
       # this, generateMandala() called config.mandalaGen.model=undefined,
       # Ollama /api/generate returned 400, LoRA threw, and the Haiku
@@ -403,6 +472,12 @@ services:
       # Table: mandala_wizard_precompute (10min TTL, pg_cron sweep */5 min).
       # Revert: delete this line → feature no-ops.
       - WIZARD_PRECOMPUTE_ENABLED=true
+      # P0 (2026-07-10) — durable video pipeline via pg-boss. Routes the
+      # post-creation pipeline (embeddings->discover->auto-add) through a
+      # pg-boss job so a container restart mid-run redelivers+retries
+      # instead of orphaning the run at 0 cards. Revert: delete this line
+      # (unset => legacy setImmediate). Handler: mandala-pipeline.ts.
+      - PIPELINE_DURABLE_ENABLED=false  # T4: 7/3 dispatch (setImmediate)
       # CP493 (2026-06-03) — merged structure+queries generation (canary). ONE
       # Haiku call yields the mandala structure AND a searchable per-cell query
       # in a single continuous context, replacing the two disconnected calls
@@ -451,7 +526,10 @@ services:
       # exceeded — embedding.ts will chunk into 2-3 batches, adding ~1-2s
       # latency. Acceptable for the candidate-pool expansion gain.
       # Rollback: set back to 30.
-      - V3_SEMANTIC_MAX_CANDIDATES=100
+      # T8b (matrix F5): 100-cap left 95/195 of the marathon harvest with NO
+      # embedding -> auto-dropped by the center gate (silent slaughter). 250
+      # covers the full post-dedup harvest (hardcap 180 + margin).
+      - V3_SEMANTIC_MAX_CANDIDATES=250
       # CP436 PR-Y0d (Issue #543) — bypass mandala-filter and trust YouTube's
       # search.list ranking. User feedback (2026-04-28): the 9-axis filter
       # actively degraded card quality vs the original YouTube-only path
@@ -550,8 +628,16 @@ services:
       # (yt_promoted 84→7,084 active, title-restored) reaches the wizard sync path,
       # not just pool-serve. Test-condition setup for the 0707 wizard verification.
       # Rollback: delete yt_promoted → code default ['v2_promoted'] (env one-liner).
-      - V3_TIER1_SOURCES=v2_promoted,yt_promoted
-      - V3_SEMANTIC_MIN_COSINE=0.5
+      # RESTORED 2026-07-12 to the pre-7/6 value (James: "7/6과 동일해야해").
+      # #1108 (7/7) admitted yt_promoted here, growing the tier1 pool scan
+      # 1.1k -> 6.3k rows -> pool query 2.9s -> 5.1s (22.8s cold) -> precompute
+      # no longer finishes inside wizard review time -> MISS -> blank landing.
+      # Re-admit only with an indexed pool-match design (P2 track, post-beta).
+      - V3_TIER1_SOURCES=v2_promoted
+      # T8b recall: 0.5 passed only 31/100 embedded on-topic marathon titles.
+      # Precision backstop = judge-deboost (post-placement). Next step 0.42
+      # only with judge deboost-rate evidence.
+      - V3_SEMANTIC_MIN_COSINE=0.45
       # BL-17 (2026-07-04) — fail-closed empty-title guard. SCRUB (YouTube ToS
       # 30d metadata wipe, is_active-agnostic) + /like zombie upsert leave ~691
       # live v2_promoted rows with title=''; their empty-string embedding
@@ -560,7 +646,7 @@ services:
       # can't evaluate a blank title, so reject not admit). Measured blast:
       # 14/88 cells touched, 2 newly-sparse (7→2, 4→2), 0 newly-empty.
       # Rollback: remove line → code default off (DEFAULT_EMPTY_TITLE_GATE=false).
-      - V3_EMPTY_TITLE_GATE=on
+      - V3_EMPTY_TITLE_GATE=off  # T4: 7/3 value (hard-cut era gate; PDF principle 1: hard-cut -> deboost)
       # CP457+ — per-step request/response capture for video-discovery
       # (LLM prompts, YouTube search, Cohere rerank, embeddings, results).
       # Writes to public.video_discover_traces (TTL 7d). Fire-and-forget;

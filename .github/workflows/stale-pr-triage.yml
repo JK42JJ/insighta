@@ -1,0 +1,84 @@
+name: Stale PR Triage
+
+# Flags open PRs that have been idle 2+ days so they get triaged (merge / close /
+# rebase) instead of silently accumulating. Motivated by #1139: a ready revert
+# sat ~22h unmerged while its env-side counterpart shipped, leaving a code<->env
+# mismatch that caused a prod card-wipe. This bot NEVER auto-closes — the lesson
+# was that a *ready* fix must not be lost, only surfaced.
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # daily 00:00 UTC (09:00 KST)
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write # add labels + comments
+  issues: write # create labels
+  contents: read
+
+concurrency:
+  group: stale-pr-triage
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Flag stale and ready-unmerged PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          STALE_DAYS: '2'
+        run: |
+          set -euo pipefail
+
+          # Idempotent label ensure.
+          gh label create "stale:2d+" --repo "$REPO" --color BFBFBF \
+            --description "Open with no activity for 2+ days — triage: merge/close/update" 2>/dev/null || true
+          gh label create "ready-unmerged" --repo "$REPO" --color FBCA04 \
+            --description "Mergeable + CI green but open 2+ days — deploy-miss risk (#1139 class)" 2>/dev/null || true
+
+          cutoff=$(date -u -d "-${STALE_DAYS} days" +%s)
+
+          gh pr list --repo "$REPO" --state open --limit 100 \
+            --json number,title,updatedAt,isDraft,mergeable,labels,statusCheckRollup > prs.json
+
+          echo "## Stale PR triage ($(date -u +%F))" >> "$GITHUB_STEP_SUMMARY"
+          flagged=0
+
+          for num in $(jq -r '.[].number' prs.json); do
+            pr=$(jq --argjson n "$num" '.[] | select(.number == $n)' prs.json)
+
+            [ "$(echo "$pr" | jq -r '.isDraft')" = "true" ] && continue
+
+            updts=$(date -u -d "$(echo "$pr" | jq -r '.updatedAt')" +%s)
+            [ "$updts" -gt "$cutoff" ] && continue # not stale
+
+            flagged=$((flagged + 1))
+            title=$(echo "$pr" | jq -r '.title')
+            mergeable=$(echo "$pr" | jq -r '.mergeable')
+            has_stale=$(echo "$pr" | jq -r '[.labels[].name] | index("stale:2d+") != null')
+            has_ready=$(echo "$pr" | jq -r '[.labels[].name] | index("ready-unmerged") != null')
+            checks_ok=$(echo "$pr" | jq -r '[.statusCheckRollup[]? | (.conclusion // .state // "PENDING")] | (length > 0 and all(. == "SUCCESS"))')
+
+            # First-time stale flag → label + comment once.
+            if [ "$has_stale" != "true" ]; then
+              gh pr edit "$num" --repo "$REPO" --add-label "stale:2d+"
+              gh pr comment "$num" --repo "$REPO" --body \
+                "This PR has had no activity for 2+ days. Please triage it: **merge / close / rebase-update**. (This bot never auto-closes.)"
+            fi
+
+            # Ready-but-unmerged alarm (the #1139 failure mode) → label + comment once.
+            if [ "$mergeable" = "MERGEABLE" ] && [ "$checks_ok" = "true" ]; then
+              if [ "$has_ready" != "true" ]; then
+                gh pr edit "$num" --repo "$REPO" --add-label "ready-unmerged"
+                gh pr comment "$num" --repo "$REPO" --body \
+                  "⚠️ **ready-unmerged** — mergeable + CI green but open 2+ days. A ready fix left undeployed can escalate into an incident (cf. #1139: a ready revert sat ~22h unmerged and contributed to a prod card-wipe). Please **merge**, or explicitly **close**."
+              fi
+              echo "- #$num **ready-unmerged** (mergeable + green) — $title" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- #$num stale ($mergeable) — $title" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+          [ "$flagged" -eq 0 ] && echo "No stale PRs. 🎉" >> "$GITHUB_STEP_SUMMARY"

@@ -27,6 +27,7 @@ import { buildRuleBasedQueriesSync, type SearchQuery } from '../v2/keyword-build
 import { buildLLMQueriesPerCell, type QueryGenMeta } from './llm-query-gen';
 import { translateQueriesToEn } from './en-query-translate';
 import { getV5Config } from './config';
+import { getSearchVideoDuration } from '@/config/discover-t5';
 import { logChannelDistribution } from '../diversity-guard';
 import { detectLanguage } from '@/utils/detect-language';
 import { MERGED_GEN_MODEL } from '@/prompts/mandala-with-queries-generator';
@@ -625,6 +626,11 @@ export async function runYouTubeFanout(input: FanoutInput): Promise<FanoutResult
         regionCode: input.language === 'ko' ? 'KR' : 'US',
         timeoutMs: cfg.searchTimeoutMs,
         publishedAfter: input.publishedAfter,
+        // T8a (matrix §11-b): long-form-only harvest. v3 gained this in T5
+        // (executor runSearchTraced) but the v5 wizard path kept harvesting
+        // shorts and dropping them post-hoc — measured 69/180 (38%) of the
+        // cooking-field harvest wasted (R-T6 round). Same env knob as v3.
+        ...(getSearchVideoDuration() ? { videoDuration: getSearchVideoDuration()! } : {}),
       }).then((items) => ({ items, cellIndex: q.cellIndex ?? null }))
     )
   );

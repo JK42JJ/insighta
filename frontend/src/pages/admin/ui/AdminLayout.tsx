@@ -11,8 +11,6 @@ import {
   HeartPulse,
   ToggleRight,
   Bot,
-  SlidersHorizontal,
-  Activity,
   Gauge,
   Footprints,
   Rocket,
@@ -32,14 +30,9 @@ const NAV_ITEMS = [
   { to: '/admin/health', icon: HeartPulse, label: 'Health' },
   { to: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
   { to: '/admin/chatbot-models', icon: Bot, label: 'Chatbot Models' },
-  // CP488 — search algorithm catalog + per-mandala override + A/B comparison.
-  { to: '/admin/search-algorithms', icon: SlidersHorizontal, label: 'Search Algorithms' },
-  // CP488+ — v2 quality audit daily scan dashboard.
-  { to: '/admin/v2-quality-audit', icon: Activity, label: 'V2 Quality Audit' },
-  // CP489+ — v4 LLM-arbiter PoC runs dashboard (operator-only mockup).
-  { to: '/admin/v4-arbiter-runs', icon: Activity, label: 'V4 Arbiter Runs' },
-  // Content Pool Health — 5-section dashboard (volume/enrich/source/reuse/promote).
-  { to: '/admin/pool-health', icon: Gauge, label: 'Pool Health' },
+  // Perf-monitor PR3 (2026-07-13) — consolidation page: 타임라인(KPI+변경마커)/
+  // 파라미터/공급(Pool Health)/품질(v2 Audit) 4 tabs. Old routes redirect here.
+  { to: '/admin/performance', icon: Gauge, label: 'Performance' },
   // Observability G2 — Search-Trace Explorer (Card Journey debug view).
   { to: '/admin/search-trace', icon: Footprints, label: 'Search Trace' },
 ] as const;

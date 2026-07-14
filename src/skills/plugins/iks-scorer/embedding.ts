@@ -25,6 +25,7 @@ import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
 import { config } from '@/config/index';
+import { getEmbedIgnoreProviders, getEmbedProviderOrder } from '@/config/embed-provider-prefs';
 import { logLLMCall } from '@/modules/llm/call-logger';
 import { recordTrace } from '@/modules/discover-tracing';
 
@@ -90,6 +91,19 @@ export interface EmbeddingClientOptions {
   fetchImpl?: typeof fetch;
   /** Per-call timeout override (ms). Defaults to EMBED_TIMEOUT_MS. */
   timeoutMs?: number;
+  /**
+   * OpenRouter transient-error retry budget override. Defaults to
+   * OPENROUTER_EMBED_MAX_RETRIES (2). The serving/precompute path sets 0 so a
+   * slow / 404 chunk fails fast to lexical instead of multiplying the timeout
+   * (12s x 3). See src/config/embed-serving-timeout.ts.
+   */
+  maxRetries?: number;
+  /**
+   * Marks a serving/precompute discover call. When set, a partial / empty
+   * embed result (some inputs null) increments the lexical-downgrade counter
+   * (getEmbedServingDowngradeCount) so ops can alarm on silent all-lexical.
+   */
+  servingScope?: boolean;
   /** W3 (CP499+) — external abort (e.g. the calling pipeline gave up).
    *  Linked into the per-call controller so an abandoned pipeline doesn't
    *  leave embeds running to completion. */
@@ -118,6 +132,16 @@ export async function isOllamaReachable(opts: EmbeddingClientOptions = {}): Prom
   } catch {
     return false;
   }
+}
+
+// Serving-path lexical-downgrade counter (P0 2026-07-10). Incremented when a
+// `servingScope` embedBatch returns fewer vectors than inputs — i.e. a slow /
+// 404 chunk was cut to the lexical path by the tight serving budget. Logged
+// per fire so the daily metrics rollup can alarm if the service is silently
+// running all-lexical (OpenRouter got worse). See config/embed-serving-timeout.
+let embedServingDowngrades = 0;
+export function getEmbedServingDowngradeCount(): number {
+  return embedServingDowngrades;
 }
 
 /**
@@ -164,6 +188,14 @@ export async function embedBatch(
   }
 
   const okCount = out.reduce((n, v) => (v ? n + 1 : n), 0);
+  if (opts.servingScope && okCount < texts.length) {
+    embedServingDowngrades += 1;
+    log.warn(
+      `[embed-serving] lexical downgrade #${embedServingDowngrades}: ${
+        texts.length - okCount
+      }/${texts.length} inputs unembedded (slow/404 cut to lexical) — candidates fall to lexical ranking`
+    );
+  }
   const firstVec = out.find((v): v is number[] => v != null);
   const chunkCount = Math.ceil(texts.length / chunkSize);
   // CP457+ trace — text inputs + vector counts (skip the 4096d vectors
@@ -412,13 +444,34 @@ async function embedOneChunkViaOpenRouter(
   try {
     let res: Response;
     try {
+      // P0 2026-07-11 — skip hung providers (DeepInfra: 25s+ hang 3/3 pinned
+      // probe; ~1/3 of default-routed calls stalled 20-30s -> 40s with retry).
+      // Empty list = no provider field, byte-identical legacy request.
+      const ignoreProviders = getEmbedIgnoreProviders();
+      const orderProviders = getEmbedProviderOrder();
+      const providerPrefs =
+        ignoreProviders.length > 0 || orderProviders.length > 0
+          ? {
+              provider: {
+                ...(ignoreProviders.length > 0 ? { ignore: ignoreProviders } : {}),
+                // Preference, not a pin: fallbacks stay allowed (no SPOF).
+                ...(orderProviders.length > 0
+                  ? { order: orderProviders, allow_fallbacks: true }
+                  : {}),
+              },
+            }
+          : {};
       res = await fetchFn(`${baseUrl}/embeddings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({ model, input: texts }),
+        body: JSON.stringify({
+          model,
+          input: texts,
+          ...providerPrefs,
+        }),
         signal: controller.signal,
       });
     } catch (err) {
@@ -521,21 +574,24 @@ async function embedOneChunkViaOpenRouterRetrying(
   texts: string[],
   opts: EmbeddingClientOptions
 ): Promise<number[][]> {
+  // Serving/precompute callers pass maxRetries: 0 so a slow / 404 chunk is a
+  // hard timeout cap, not timeout x (retries + 1). Bulk defaults to 2 (CP458).
+  const maxRetries = opts.maxRetries ?? OPENROUTER_EMBED_MAX_RETRIES;
   let lastErr: unknown;
-  for (let attempt = 0; attempt <= OPENROUTER_EMBED_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await embedOneChunkViaOpenRouter(texts, opts);
     } catch (err) {
       lastErr = err;
       // W3 — external abort is terminal: the pipeline gave up, never retry.
       const retryable = err instanceof EmbeddingError && err.retryable && !opts.signal?.aborted;
-      if (!retryable || attempt === OPENROUTER_EMBED_MAX_RETRIES) {
+      if (!retryable || attempt === maxRetries) {
         throw err;
       }
       const backoffMs = OPENROUTER_EMBED_RETRY_BASE_MS * 2 ** attempt;
       log.warn(
         `OpenRouter embed transient error (attempt ${attempt + 1}/${
-          OPENROUTER_EMBED_MAX_RETRIES + 1
+          maxRetries + 1
         }), retrying in ${backoffMs}ms: ${err instanceof Error ? err.message : String(err)}`
       );
       await sleep(backoffMs);

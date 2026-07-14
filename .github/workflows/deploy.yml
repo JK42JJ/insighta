@@ -86,6 +86,8 @@ jobs:
           tags: |
             ${{ env.API_IMAGE }}:latest
             ${{ env.API_IMAGE }}:${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -214,6 +216,8 @@ jobs:
           OR_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OR_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           COHERE_KEY: ${{ secrets.COHERE_API_KEY }}
+          ELEVEN_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          NARRATION_PREPRODUCE_ENABLED: ${{ vars.NARRATION_PREPRODUCE_ENABLED }}
           YT_SEARCH_KEY: ${{ secrets.YOUTUBE_API_KEY_SEARCH }}
           YT_SEARCH_KEY_2: ${{ secrets.YOUTUBE_API_KEY_SEARCH_2 }}
           YT_SEARCH_KEY_3: ${{ secrets.YOUTUBE_API_KEY_SEARCH_3 }}
@@ -286,13 +290,24 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           # CP500++ CONFIG-SSOT — toggle keys removed from this forward list
           # (now compose-SSOT); only secrets + non-conflicting config remain.
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN,AZURE_TRANSCRIPT_URL,SNAPSHOT_SERVICE_URL,SNAPSHOT_SERVICE_TOKEN
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN,AZURE_TRANSCRIPT_URL,SNAPSHOT_SERVICE_URL,SNAPSHOT_SERVICE_TOKEN,ELEVEN_KEY,NARRATION_PREPRODUCE_ENABLED
           script: |
             set -e
             cd /opt/tubearchive
             # Add OPENROUTER keys if missing, update if present
             grep -q '^OPENROUTER_API_KEY=' .env 2>/dev/null && sed -i "s|^OPENROUTER_API_KEY=.*|OPENROUTER_API_KEY=${OR_KEY}|" .env || echo "OPENROUTER_API_KEY=${OR_KEY}" >> .env
             grep -q '^OPENROUTER_MODEL=' .env 2>/dev/null && sed -i "s|^OPENROUTER_MODEL=.*|OPENROUTER_MODEL=${OR_MODEL}|" .env || echo "OPENROUTER_MODEL=${OR_MODEL}" >> .env
+            # 2026-07-13 — ElevenLabs narration pre-produce key (flag-gated by
+            # NARRATION_PREPRODUCE_ENABLED; see src/modules/narration/). Guarded
+            # like CHATBOT_FAILOVER_ENABLED so an unset secret never blanks .env.
+            if [ -n "${ELEVEN_KEY}" ]; then
+              grep -q '^ELEVENLABS_API_KEY=' .env 2>/dev/null && sed -i "s|^ELEVENLABS_API_KEY=.*|ELEVENLABS_API_KEY=${ELEVEN_KEY}|" .env || echo "ELEVENLABS_API_KEY=${ELEVEN_KEY}" >> .env
+            fi
+            # Narration flag — GitHub Variable NARRATION_PREPRODUCE_ENABLED=true
+            # to activate; unset leaves .env untouched (config default false).
+            if [ -n "${NARRATION_PREPRODUCE_ENABLED}" ]; then
+              grep -q '^NARRATION_PREPRODUCE_ENABLED=' .env 2>/dev/null && sed -i "s|^NARRATION_PREPRODUCE_ENABLED=.*|NARRATION_PREPRODUCE_ENABLED=${NARRATION_PREPRODUCE_ENABLED}|" .env || echo "NARRATION_PREPRODUCE_ENABLED=${NARRATION_PREPRODUCE_ENABLED}" >> .env
+            fi
             # 2026-05-12 — Cohere Rerank API key (hybrid-retrieval spec, Issue #610).
             # Used by src/modules/rerank/cohere-client.ts. Same idempotent pattern.
             # Flag V3_ENABLE_HYBRID_RERANK stays in docker-compose.prod.yml as

@@ -37,7 +37,7 @@ export async function registerEnrichVideoWorker(): Promise<void> {
  * Handle a single enrich-video job.
  */
 async function handleEnrichVideo(job: PgBoss.Job<EnrichVideoPayload>): Promise<void> {
-  const { videoId, title, url, source, withRichSummary, userId } = job.data;
+  const { videoId, title, url, source, withRichSummary, userId, mandalaId } = job.data;
 
   logger.info('enrich-video: processing', {
     jobId: job.id,
@@ -48,7 +48,7 @@ async function handleEnrichVideo(job: PgBoss.Job<EnrichVideoPayload>): Promise<v
   });
 
   try {
-    await enrichVideo(videoId, { title, url, withRichSummary, userId });
+    await enrichVideo(videoId, { title, url, withRichSummary, userId, mandalaId });
 
     logger.info('enrich-video: completed', { jobId: job.id, videoId });
   } catch (err) {
