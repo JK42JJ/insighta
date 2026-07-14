@@ -17,6 +17,7 @@ import { getJobQueue } from '../manager';
 import { JOB_NAMES, MANDALA_BOOK_FILL_OPTIONS, type MandalaBookFillPayload } from '../types';
 import { richSummaryWorkOptions } from './rich-summary-work-options';
 import { sendNoteReadyEmail } from '@/modules/email/transactional';
+import { firstBookVideoId, noteReadyCtaUrl } from '@/modules/email/note-ready-cta';
 
 const log = logger.child({ module: 'queue/mandala-book-fill' });
 
@@ -33,9 +34,15 @@ async function notifyNoteReady(userId: string, mandalaId: string): Promise<void>
     });
     const to = mandala?.users?.email ?? '';
     if (!to) return;
+    // The learning route needs a videoId segment — link to the book's first
+    // video, or the mandala dashboard when none is extractable.
+    const book = await getPrismaClient().mandala_books.findUnique({
+      where: { mandala_id: mandalaId },
+      select: { book_json: true },
+    });
     await sendNoteReadyEmail(to, {
       mandalaName: mandala?.title ?? '내 만다라',
-      ctaUrl: `https://insighta.one/learning/${mandalaId}`,
+      ctaUrl: noteReadyCtaUrl(mandalaId, firstBookVideoId(book?.book_json)),
     });
   } catch (err) {
     log.warn('note-ready email skipped (non-fatal)', {
