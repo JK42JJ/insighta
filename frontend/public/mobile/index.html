@@ -940,10 +940,17 @@
   }
   async function loadEpisodeAudio(m){
     epAudio={tempo:1, ready:false};
-    if(m.sample||!window.crypto||!crypto.subtle) return; // 샘플·비보안 컨텍스트 = 브라우저 TTS
+    if(!window.crypto||!crypto.subtle) return; // 비보안 컨텍스트 = 브라우저 TTS
     try{
-      var r=await api('/mandalas/'+m.id+'/episode-audio'); // owner면 BE가 lazy 렌더 enqueue
-      var j=await r.json(); var d=(j&&j.data)||{};
+      var d;
+      if(m.sample){ // 샘플 = 동봉된 정적 프리렌더 (첫 인상 = 실보이스 보장)
+        var rs=await fetch('/mobile/sample-audio/manifest.json');
+        if(!rs.ok) return;
+        d={enabled:true, status:'ready', manifest:await rs.json()};
+      } else {
+        var r=await api('/mandalas/'+m.id+'/episode-audio'); // owner면 BE가 lazy 렌더 enqueue
+        var j=await r.json(); d=(j&&j.data)||{};
+      }
       if(!d.enabled||d.status!=='ready'||!d.manifest) return;
       var map={};
       (d.manifest.beats||[]).forEach(function(b){ map[b.i+':'+b.h]=b; });
