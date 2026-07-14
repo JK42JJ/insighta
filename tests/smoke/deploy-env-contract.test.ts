@@ -24,8 +24,28 @@ const ENV_SYNCED_VARS = [
   'NAVER_CLIENT_SECRET',
 ];
 
+// appleboy/ssh-action forwards ONLY variables named in `envs:` to the remote
+// shell — a sync line whose shell var is missing there silently writes nothing
+// (exactly how NAVER_* was dropped on 2026-07-14 despite a green deploy).
+// Shell-name mapping for vars whose step-env name differs from the .env name.
+const ENVS_LIST_SHELL_NAMES: Record<string, string> = {
+  OPENROUTER_API_KEY: 'OR_KEY',
+  COHERE_API_KEY: 'COHERE_KEY',
+  NAVER_CLIENT_ID: 'NAVER_ID',
+  NAVER_CLIENT_SECRET: 'NAVER_SECRET',
+};
+
 describe('deploy.yml env-injection contract', () => {
   const yml = fs.readFileSync(DEPLOY_YML, 'utf-8');
+  const envsLine = yml
+    .split('\n')
+    .filter((l) => l.trim().startsWith('envs:'))
+    .join(',');
+
+  it.each(ENV_SYNCED_VARS)('%s shell var is forwarded via the envs: list', (name) => {
+    const shellName = ENVS_LIST_SHELL_NAMES[name] ?? name;
+    expect(envsLine).toMatch(new RegExp(`[ ,]${shellName}(,|$)`));
+  });
 
   it.each(ENV_SYNCED_VARS)('%s has a .env sync line', (name) => {
     // The idempotent sync pattern: grep -q '^NAME=' .env ... || echo "NAME=..." >> .env
