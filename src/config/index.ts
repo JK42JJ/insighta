@@ -189,6 +189,9 @@ const envSchema = z.object({
   // Share v2 — public origin used to build short share URLs (/s/:code).
   PUBLIC_ORIGIN: z.string().default('https://insighta.one'),
 
+  // Invite tickets — default allowance per beta member.
+  INVITE_TICKETS_DEFAULT: z.coerce.number().default(2),
+
   // Observability Phase 2-A — ops alarm recipient (admin inbox). Empty = the
   // alarm job logs the count but sends NO email (inert until the operator sets a
   // real inbox). An email address is config, not a secret (CP392).
@@ -517,6 +520,10 @@ export const config = {
 
   share: {
     publicOrigin: env.PUBLIC_ORIGIN,
+  },
+
+  invites: {
+    defaultTickets: env.INVITE_TICKETS_DEFAULT,
   },
 
   // Observability Phase 2-A — ops alarms.

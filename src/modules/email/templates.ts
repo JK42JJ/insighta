@@ -116,6 +116,8 @@ export interface BetaInviteEmailParams {
   /** Learning-goal sentence from the beta application form (optional). */
   goal?: string | null;
   ctaUrl?: string;
+  /** Invite tickets (2026-07-15): member name shown as the inviter. */
+  inviterName?: string | null;
 }
 
 /**
@@ -160,7 +162,11 @@ export function buildBetaInviteEmail(params: BetaInviteEmailParams): {
     <tr><td style="padding:14px 26px 2px;text-align:center">${mascot('mascot-welcome.gif')}</td></tr>
     <tr><td style="padding:8px 30px 2px;text-align:center">
       ${heading('베타테스트에', '초대합니다')}
-      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">신청해 주셔서 감사해요. 자리가 준비됐어요 — 이 이메일로 로그인하면 바로 시작돼요.</div>
+      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">${
+        params.inviterName?.trim()
+          ? `${esc(params.inviterName.trim())}님이 초대권으로 자리를 마련했어요 — 이 이메일로 로그인하면 바로 시작돼요.`
+          : '신청해 주셔서 감사해요. 자리가 준비됐어요 — 이 이메일로 로그인하면 바로 시작돼요.'
+      }</div>
     </td></tr>
     <tr><td style="padding:4px 30px 30px">
       ${goalCard}
@@ -169,7 +175,9 @@ export function buildBetaInviteEmail(params: BetaInviteEmailParams): {
       <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">베타 기간 2026. 7. 13 – 8. 24 · 베타 기간에는 모든 기능이 무료예요</div>
     </td></tr>`;
   return {
-    subject: 'Insighta 클로즈드 베타에 초대합니다 — 자리가 준비됐어요',
+    subject: params.inviterName?.trim()
+      ? `${params.inviterName.trim()}님이 Insighta 베타에 초대했어요`
+      : 'Insighta 클로즈드 베타에 초대합니다 — 자리가 준비됐어요',
     html: shell(
       { label: 'INVITED', color: INDIGO },
       inner,
