@@ -410,13 +410,13 @@
     width:39%; aspect-ratio:1; border-radius:50%; border:none; cursor:pointer; position:relative; z-index:2;
     /* [클래식] 오목 접시(dish): 위 그늘·아래 빛받음 — 볼록 금지 (§1.1) */
     background:linear-gradient(178deg, var(--acc-lo) 0%, var(--acc) 55%, var(--acc-hi) 100%);
-    transition:transform var(--snap) var(--spring), background .6s, filter var(--snap); touch-action:manipulation;
+    transition:transform var(--snap) var(--spring), background .6s, filter var(--snap); touch-action:none;
     box-shadow:inset 0 2.5px 4px rgba(0,0,0,.20), inset 0 -1px 1.5px rgba(255,255,255,.35);
   }
   .core:active{transform:scale(.965); filter:brightness(.96)}
   .wbtn{position:absolute; border:none; background:none; cursor:pointer; padding:9px 11px; border-radius:12px;
     font-size:9px; font-weight:700; letter-spacing:.16em; color:rgba(var(--shade),.42); font-family:inherit;
-    transition:transform var(--snap) var(--spring), color .2s; touch-action:manipulation; z-index:2}
+    transition:transform var(--snap) var(--spring), color .2s; touch-action:none; z-index:2}
   .wbtn svg{display:block; fill:currentColor}
   .wbtn:active{transform:scale(.86); opacity:.55} /* [A] press */
   .wbtn.menu{top:14px; left:50%; transform:translateX(-50%)} .wbtn.menu:active{transform:translateX(-50%) scale(.86)}
@@ -759,7 +759,7 @@
           <button class="mrow" id="bFeedback"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11a7.5 7.5 0 01-7.9 7.5c-1.3 0-2.6-.3-3.7-.9L4 19l1.5-4.3A7.5 7.5 0 1121 11z"/></svg></span>의견 보내기<span class="sub">기능 제안 · 불편 신고</span></button>
           <button class="mrow" id="bLogout"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4H6.5A1.5 1.5 0 005 5.5v13A1.5 1.5 0 006.5 20H14"/><path d="M10 12h11M18 8.8L21 12l-3 3.2"/></svg></span>로그아웃</button>
         </div>
-        <div class="menu-note">MENU로 만다라·설정 전환</div>
+        <div class="menu-note">MENU 짧게 = 뒤로 · 길게 = 홈</div>
       </div>
 
       <!-- 새소식 -->
@@ -1787,79 +1787,101 @@
     runBeat();
   }
 
-  /* ================= 클릭휠 엔진 — §1.1a J1~J8 ================= */
+  /* ================= 클릭휠 엔진 v2 — 통합 입력 레이어 → 상태기계 (iPod 각색) =================
+     설계: 휠 위 모든 터치를 단일 핸들러가 소유(touch-action:none) → 의미 이벤트(tick/scrub/press/hold)
+     방출 → 컨텍스트 상태기계(home/menu/player)가 해석. 회전 하나에 속도로 미세/거시를 얹지 않고
+     '가운데 누른 채 회전=스크럽'으로 모드 분리 (실패한 조그/셔틀 대체). 멀티포인터·capture 소유로
+     버튼 시작 회전·leave 끊김·브라우저 팬 가로채기(주요 "종종 안 됨" 원인)를 구조적으로 제거. */
   var wheel=document.getElementById('wheel'), shade=document.getElementById('wheelShade');
-  var NOTCH=32; // [A] DETENT=32
+  var NOTCH=26;         // 회전 1노치 각도 (이동)
+  var SCRUB_NOTCH=10;   // 스크럽 미세 노치 각도 (더 촘촘)
+  var ROT_THRESH=6;     // 누적 회전각이 이 값 넘으면 '회전' 확정 (탭 아님)
+  var HOLD_MS=480;      // 롱프레스 (MENU 길게 = 홈)
+  var SCRUB_STEP_SEC=2; // 스크럽 미세 노치당 초
   (function(){
-    var dragging=false, lastAng=0, lastT=0, acc=0, visAngle=0, kick=0, rubber=0, rafId=null;
+    var visAngle=0, kick=0, rubber=0, rafId=null;
+    var ptr={};          // pointerId → 포인터 상태
+    var centerId=null;   // 코어를 누르고 있는 포인터 (스크럽 shift 키)
+    var touchN=0;
     function angOf(e){
       var r=wheel.getBoundingClientRect();
       var x=e.clientX-(r.left+r.width/2), y=e.clientY-(r.top+r.height/2);
       return {a:Math.atan2(y,x)*180/Math.PI+90, r:Math.hypot(x,y)/(r.width/2)};
     }
-    function frame(){ // J1: rAF 직결
+    function frame(){ // rAF 직결 — 음영 회전 + 디텐트/러버 감쇠
       shade.style.transform='rotate('+(visAngle-kick+rubber)+'deg)';
       kick*=0.72; rubber*=0.82;
-      if(Math.abs(kick)>0.05||Math.abs(rubber)>0.05||dragging){ rafId=requestAnimationFrame(frame); }
+      if(Math.abs(kick)>0.05||Math.abs(rubber)>0.05||touchN>0){ rafId=requestAnimationFrame(frame); }
       else rafId=null;
     }
     function kickFrame(){ if(!rafId) rafId=requestAnimationFrame(frame); }
-    var pendBtn=false, pendX=0, pendY=0, pendAng=0, pendId=null;
+
     wheel.addEventListener('pointerdown',function(e){
-      var onBtn=e.target.closest('.wbtn')||e.target.closest('.core');
       var p=angOf(e);
-      if(onBtn){ // 버튼 위 시작 = 지연 판정 — 회전 임계 넘으면 휠, 아니면 클릭 (J:07-14)
-        pendBtn=true; pendX=e.clientX; pendY=e.clientY; pendAng=p.a; pendId=e.pointerId;
-        return;
-      }
-      if(p.r<0.44||p.r>1.1) return; // J8: 허브 데드존 + 관용 존
-      dragging=true; lastAng=p.a; lastT=e.timeStamp; acc=0;
-      visAngle=p.a; // 음영이 손가락 위치에서 시작
-      wheel.classList.add('touching');
-      wheel.setPointerCapture(e.pointerId);
+      var onCore=!!e.target.closest('.core');
+      var wb=e.target.closest('.wbtn');
+      var zone=onCore?'center':(p.r<=1.14?'ring':'out'); // 허브=코어(별도), 링=회전, 바깥=무시
+      if(zone==='out') return;
+      try{ wheel.setPointerCapture(e.pointerId); }catch(err){}
+      var s={ang:p.a, x:e.clientX, y:e.clientY, lt:e.timeStamp, zone:zone,
+             btn:wb?wb.id:null, cum:0, acc:0, rotated:false, held:false, holdT:null};
+      ptr[e.pointerId]=s; touchN++;
+      if(zone==='center') centerId=e.pointerId;
+      visAngle=p.a; wheel.classList.add('touching');
+      // 롱프레스: MENU 길게 = 홈 (회전 없이 유지 시)
+      s.holdT=setTimeout(function(){
+        if(s.rotated) return;
+        s.held=true;
+        if(s.btn==='bMenu'){ if(navigator.vibrate)navigator.vibrate(12); goHome(); } // 길게=홈 (클릭 억제는 pointerup)
+      }, HOLD_MS);
       kickFrame();
     });
+
     wheel.addEventListener('pointermove',function(e){
-      if(pendBtn){
-        var p0=angOf(e);
-        var d0=p0.a-pendAng; if(d0>180)d0-=360; if(d0<-180)d0+=360;
-        if(Math.hypot(e.clientX-pendX,e.clientY-pendY)>10||Math.abs(d0)>6){
-          pendBtn=false; dragging=true; stealClick=true;
-          lastAng=p0.a; lastT=e.timeStamp; acc=0; visAngle=p0.a;
-          wheel.classList.add('touching');
-          try{ wheel.setPointerCapture(pendId) }catch(err){}
-          kickFrame();
-        }
-        return;
-      }
-      if(!dragging) return;
+      var s=ptr[e.pointerId]; if(!s) return;
       var p=angOf(e);
-      var d=p.a-lastAng; if(d>180)d-=360; if(d<-180)d+=360;
-      var dt=Math.max(e.timeStamp-lastT,1);
-      lastAng=p.a; lastT=e.timeStamp;
-      visAngle+=d; acc+=d;
-      var vel=Math.abs(d)/dt*1000; // J3: 가속
-      var units=vel>360?4:vel>180?2:1;
-      while(acc>=NOTCH){ acc-=NOTCH; notch(1,units); }
-      while(acc<=-NOTCH){ acc+=NOTCH; notch(-1,units); }
-      kickFrame();
+      var d=p.a-s.ang; if(d>180)d-=360; if(d<-180)d+=360;
+      s.ang=p.a; s.cum+=d; s.acc+=d;
+      if(!s.rotated && Math.abs(s.cum)>ROT_THRESH){ // 회전 확정 → 탭 무효화, 홀드 취소
+        s.rotated=true; clearTimeout(s.holdT); s.acc=0; // 클릭 억제는 pointerup 에서 (시간창)
+      }
+      if(s.rotated){
+        // 스크럽 판정: 이 포인터가 코어에서 시작했거나, 다른 손가락이 코어를 누르고 있음 (iPod hold-center+rotate)
+        var scrub=(s.zone==='center')||(centerId!=null&&centerId!==e.pointerId&&ptr[centerId]);
+        var step=scrub?SCRUB_NOTCH:NOTCH;
+        var vel=Math.abs(d)/Math.max(e.timeStamp-s.lt,1)*1000; s.lt=e.timeStamp;
+        var units=(!scrub&&vel>340)?3:(!scrub&&vel>170)?2:1; // 이동만 가속, 스크럽은 등속 정밀
+        while(s.acc>=step){ s.acc-=step; kick+=1.4; scrub?emitScrub(1):emitTick(1,units); }
+        while(s.acc<=-step){ s.acc+=step; kick-=1.4; scrub?emitScrub(-1):emitTick(-1,units); }
+      }
+      visAngle+=d; kickFrame();
     });
+
     ['pointerup','pointercancel','pointerleave'].forEach(function(ev){
-      wheel.addEventListener(ev,function(){ pendBtn=false; dragging=false; acc=0; wheel.classList.remove('touching'); kickFrame(); });
+      wheel.addEventListener(ev,function(e){
+        var s=ptr[e.pointerId]; if(!s) return;
+        clearTimeout(s.holdT);
+        if(ev==='pointerup' && (s.rotated || (s.held && s.btn==='bMenu'))) suppressClickUntil=Date.now()+350; // 회전/메뉴홀드 직후만 네이티브 클릭 억제
+        if(e.pointerId===centerId) centerId=null;
+        // 탭(회전·홀드 아님) → 네이티브 버튼 onclick 이 처리 (억제창 미설정). 링 갭 탭은 무동작.
+        delete ptr[e.pointerId]; touchN=Math.max(0,touchN-1);
+        if(touchN===0) wheel.classList.remove('touching');
+        kickFrame();
+      });
     });
-    function notch(dir,units){
-      kick+=1.5*dir; // J2: 시각 디텐트
-      if(navigator.vibrate) navigator.vibrate(8);
-      var n=(cur==='player')?(units||1):1; // 재생=가속 비트이동, 메뉴=1노치 1행 (조그/셔틀 micro-seek 은 실기기 튜닝 후 재도입)
+
+    function emitTick(dir,units){
+      if(navigator.vibrate) navigator.vibrate(7);
+      var n=(cur==='player')?(units||1):1; // 재생=가속 비트이동, 메뉴/홈=1노치 1행
       for(var u=0;u<n;u++) dispatchNotch(dir);
     }
-    window.wheelRubber=function(dir){ rubber+=15*dir; kickFrame(); }; // J4
-    window.wheelDemo=function(){ // J6: 첫 발견
-      wheel.classList.add('demo');
-      var t0=null;
-      function d(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/1200,1);
-        visAngle=Math.sin(p*Math.PI)*40; kickFrame();
-        if(p<1) requestAnimationFrame(d); else setTimeout(function(){wheel.classList.remove('demo')},250);
+    function emitScrub(dir){ if(navigator.vibrate) navigator.vibrate(5); dispatchScrub(dir); }
+    window.wheelRubber=function(dir){ rubber+=15*dir; kickFrame(); };
+    window.wheelDemo=function(){ // 첫 발견 데모 회전
+      wheel.classList.add('demo'); var t0=null;
+      function d(ts){ if(!t0)t0=ts; var pr=Math.min((ts-t0)/1200,1);
+        visAngle=Math.sin(pr*Math.PI)*40; kickFrame();
+        if(pr<1) requestAnimationFrame(d); else setTimeout(function(){wheel.classList.remove('demo')},250);
       }
       requestAnimationFrame(d);
     };
@@ -1877,8 +1899,8 @@
     var el=rows.children[selIdx];
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
   }
-  var stealClick=false;
-  function wheelStole(){ if(stealClick){ stealClick=false; return true; } return false; }
+  var suppressClickUntil=0;
+  function wheelStole(){ return Date.now()<suppressClickUntil; } // 시간창(350ms): sticky 플래그 잔류 → 후속 정상 탭 삼킴 버그 제거
   function dispatchNotch(dir){
     if(cur==='home'){
       var items=homeItems(); if(!items.length) return;
@@ -1902,15 +1924,41 @@
     }
   }
 
-  document.getElementById('bMenu').onclick=function(){
-    if(wheelStole()) return;
+  /* iPod 각색: MENU 짧게=뒤로(한 단계 위), 길게=홈(엔진 holdT 처리). 설정 진입=우상단 설정 아이콘. */
+  function menuBack(){
     if(cur==='login') return;
     if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
-    // MENU = 만다라 ↔ 설정 토글 [J:07-15 복원]. 하위 화면(새소식·초대권)은 허브로.
     if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('home'); renderRows(); }
-    else if(cur==='home'){ show('menu'); loadTicketsQuiet(); }
     else if(cur==='menu'){ show('home'); }
-    else{ show('home'); }
+    else if(window.wheelRubber){ wheelRubber(-1); } // home = 최상위, 부드러운 저항
+  }
+  function goHome(){
+    if(cur==='login'||cur==='home') return;
+    if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); }
+    show('home'); renderRows();
+  }
+  // 재생 중 '가운데 누른 채 휠 회전' = 현재 구간 내부 스크럽 (클립=seekTo · 노트=오디오 위치)
+  function dispatchScrub(dir){
+    if(cur!=='player'){ dispatchNotch(dir); return; } // 재생 아니면 이동으로 폴백
+    if(finished) return;
+    var beat=beats[bi]; if(!beat) return;
+    if(beat.t==='c'&&yt&&yt.getCurrentTime&&yt.seekTo){
+      var t=yt.getCurrentTime()||beat.from||0;
+      var from=(beat.from!=null)?beat.from:0, to=(beat.to!=null)?beat.to:(t+SCRUB_STEP_SEC);
+      var nt=Math.max(from, Math.min(to, t+dir*SCRUB_STEP_SEC));
+      try{ yt.seekTo(nt,true); }catch(e){}
+      msUpdate();
+    } else if(beat.t==='n'&&curAudio){
+      var dur=(beat.audio&&beat.audio.d)||curAudio.duration||0;
+      var cap=dur>0?dur:1e9;
+      var nt2=Math.max(0, Math.min(cap, (curAudio.currentTime||0)+dir*SCRUB_STEP_SEC));
+      try{ curAudio.currentTime=nt2; }catch(e){}
+      msUpdate();
+    }
+  }
+  document.getElementById('bMenu').onclick=function(){
+    if(wheelStole()) return;
+    menuBack();
   };
   document.getElementById('instClose').onclick=function(){ document.getElementById('instOv').hidden=true; };
   document.getElementById('instOv').addEventListener('click',function(e){ if(e.target===this) this.hidden=true; });
@@ -2142,9 +2190,9 @@
   /* ================= 코치마크 (C5) + 첫 발견 (J6) ================= */
   function coachOnce(){
     try{
-      if(localStorage.getItem('insighta-wheel-coach')) return;
-      localStorage.setItem('insighta-wheel-coach','1');
-      toast('휠을 돌리면 구간이 움직여요');
+      if(localStorage.getItem('insighta-wheel-coach-v2')) return;
+      localStorage.setItem('insighta-wheel-coach-v2','1');
+      toast('휠 돌리기 = 이동 · 가운데 누른 채 돌리기 = 구간 탐색');
     }catch(e){}
   }
   function wheelIntroOnce(){
