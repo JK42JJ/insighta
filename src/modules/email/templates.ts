@@ -229,3 +229,65 @@ export function buildNoteReadyEmail(params: NoteReadyEmailParams): {
     ),
   };
 }
+
+export interface ProUpgradeEmailParams {
+  name?: string | null;
+  ctaUrl?: string;
+}
+
+/**
+ * Beta-tester benefit email — sent when admin raises a beta tester to an
+ * unlimited tier (lifetime, per James 2026-07-15). Benefit lines are FEATURES
+ * the product actually ships (unlimited mandalas/cards via lifetime tier, AI
+ * summary, auto note, the new mobile app, early access) — NOT unenforced
+ * quota counts. No payment is attached to a manual tier change, so the copy
+ * states that explicitly.
+ */
+export function buildProUpgradeEmail(params: ProUpgradeEmailParams): {
+  subject: string;
+  html: string;
+} {
+  const url = params.ctaUrl ?? `${SITE_ORIGIN}/`;
+  const name = params.name?.trim() ? esc(params.name.trim()) : '';
+  const rows = [
+    ['만다라 · 카드 무제한', '베타 기간 동안 만다라도 카드도 제한 없이 만들고 담아요.'],
+    [
+      'AI 요약 · 노트 자동 완성',
+      '담은 영상의 핵심을 엮어 ‘10분만에 보는 책’ 노트를 만들어 드려요.',
+    ],
+    ['모바일 앱 — 다이얼', '새로 나온 다이얼로, 만든 노트를 어디서나 들으며 이어가요.'],
+    ['신규 기능 우선 제공', '새 기능이 열리면 베타 테스터가 가장 먼저 써요.'],
+  ]
+    .map(
+      ([t, d]) =>
+        `<tr><td style="padding:13px 2px;border-top:1px dashed #d7d3c6">
+          <table role="presentation"><tr>
+            <td style="width:28px;height:28px;border:2px solid ${INK};border-radius:9px;color:${GREEN};font-weight:800;font-size:14px;text-align:center;background:#fff">✓</td>
+            <td style="padding-left:14px">
+              <div style="font-size:14.5px;font-weight:800;color:${INK}">${t}</div>
+              <div style="font-size:12.5px;color:${MUTED};margin-top:2px">${d}</div>
+            </td>
+          </tr></table>
+        </td></tr>`
+    )
+    .join('');
+  const inner = `
+    <tr><td style="padding:14px 26px 2px;text-align:center">${mascot('mascot-welcome.gif')}</td></tr>
+    <tr><td style="padding:8px 30px 2px;text-align:center">
+      ${heading(name ? `${name}님, 이제` : '이제', '제한 없이')}
+      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">베타를 함께해 주셔서 감사해요. 베타 테스터 혜택으로 계정을 열어 드렸어요 — 베타 기간 동안 만다라도 카드도 마음껏 쓰세요.</div>
+    </td></tr>
+    <tr><td style="padding:16px 30px 30px">
+      <table role="presentation" width="100%">${rows}</table>
+      <div style="text-align:center;margin-top:24px">${cta('내 만다라 열기', url, INDIGO)}</div>
+      <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">결제 정보는 받지 않아요 · 베타가 끝나도 자동 결제되지 않아요</div>
+    </td></tr>`;
+  return {
+    subject: '베타 테스터 혜택 — 이제 제한 없이 쓰세요',
+    html: shell(
+      { label: 'PRO', color: GOLD },
+      inner,
+      '베타 기간 동안 만다라·카드 무제한 + 새 기능 우선.'
+    ),
+  };
+}
