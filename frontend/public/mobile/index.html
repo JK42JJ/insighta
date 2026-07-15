@@ -199,7 +199,8 @@
     background:var(--ui); color:#fff; font-family:inherit; font-size:13px; font-weight:800; letter-spacing:.02em}
   .tk-btn:disabled{background:rgba(0,0,0,.14); color:rgba(255,255,255,.85)}
   .tk-btn:active:not(:disabled){transform:scale(.98)}
-  .menu-list{margin-top:12px; display:flex; flex-direction:column; gap:8px}
+  .menu-list{margin-top:12px; display:flex; flex-direction:column; gap:8px;
+    overflow-y:auto; flex:1; min-height:0; padding-bottom:4px} /* 행 추가돼도 하단(로그아웃) 잘림 불가 */
   .mrow{display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.55); border:none; width:100%;
     font-family:inherit; text-align:left; cursor:pointer; color:var(--paper-ink);
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.10); border-radius:12px; padding:11px 12px; font-size:12px; font-weight:750;
@@ -647,7 +648,7 @@
       <!-- 초대권 -->
       <div class="scr" data-s="invite" id="scrInvite">
         <div class="top"><span class="tt">초대권</span></div>
-        <div id="tkList"></div>
+        <div id="tkList" style="overflow-y:auto;flex:1;min-height:0"></div>
         <input class="tk-inp" id="tkEmail" type="email" inputmode="email" autocomplete="off" placeholder="친구 이메일 주소">
         <button class="tk-btn" id="tkSend">초대 메일 보내기</button>
         <div class="menu-note">MENU를 누르면 내 만다라로</div>
