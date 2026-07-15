@@ -12,9 +12,11 @@ import {
   buildWelcomeEmail,
   buildNoteReadyEmail,
   buildBetaInviteEmail,
+  buildProUpgradeEmail,
   type WelcomeEmailParams,
   type NoteReadyEmailParams,
   type BetaInviteEmailParams,
+  type ProUpgradeEmailParams,
 } from './templates';
 
 const log = logger.child({ module: 'email/transactional' });
@@ -63,4 +65,12 @@ export async function sendBetaInviteEmail(
 export async function sendNoteReadyEmail(to: string, params: NoteReadyEmailParams): Promise<void> {
   const { subject, html } = buildNoteReadyEmail(params);
   await send(to, subject, html, 'note-ready-email');
+}
+
+export async function sendProUpgradeEmail(
+  to: string,
+  params: ProUpgradeEmailParams
+): Promise<void> {
+  const { subject, html } = buildProUpgradeEmail(params);
+  await send(to, subject, html, 'pro-upgrade-email');
 }
