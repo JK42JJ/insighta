@@ -254,7 +254,7 @@
   .clipbox .guard{position:absolute; inset:0; z-index:3; pointer-events:none} /* 네이티브 유튜브 컨트롤 노출 — 탭 통과 [J:07-15] */
   /* fit/fill 버튼 — 숨은 더블탭을 보이는 컨트롤로 승격 [J:07-15 우측잘림 리포트] */
   .clipfit{position:absolute; z-index:4; top:8px; right:8px; width:30px; height:30px; border:none; border-radius:9px;
-    background:rgba(8,9,14,.44); color:#fff; display:grid; place-items:center; cursor:pointer;
+    background:rgba(8,9,14,.44); color:#fff; display:none; place-items:center; cursor:pointer; /* [J:07-15 제거] 네이티브 유튜브 전체화면과 중복 · 인라인 기본=contain(무크롭) (c) */
     -webkit-tap-highlight-color:transparent; opacity:.9; transition:opacity .25s var(--soft), transform .12s}
   .clipfit:active{transform:scale(.9)}
   .clipfit .fit-b{display:none}
@@ -419,10 +419,13 @@
     transition:transform var(--snap) var(--spring), color .2s; touch-action:none; z-index:2}
   .wbtn svg{display:block; fill:currentColor}
   .wbtn:active{transform:scale(.86); opacity:.55} /* [A] press */
-  .wbtn.menu{top:14px; left:50%; transform:translateX(-50%)} .wbtn.menu:active{transform:translateX(-50%) scale(.86)}
-  .wbtn.prev{left:14px; top:50%; transform:translateY(-50%)} .wbtn.prev:active{transform:translateY(-50%) scale(.84)}
-  .wbtn.next{right:14px; top:50%; transform:translateY(-50%)} .wbtn.next:active{transform:translateY(-50%) scale(.84)}
-  .wbtn.play{bottom:14px; left:50%; transform:translateX(-50%)} .wbtn.play:active{transform:translateX(-50%) scale(.86)}
+  /* [J:07-15] 정규 비율 — 아이콘을 '박스 중심 기준' % 로 배치. translate(-50%,-50%) 로 중심을 고정해
+     padding/glyph 크기와 무관하게 풀/미니/읽기 어느 크기든 4개 모두 동일 반경(iPod 링 밴드)에 안착 (d).
+     17%/83% = 중심이 휠반경의 ~0.66R (코어 0.39R ~ 가장자리 1.0R 의 링 밴드). 고정 px 폐기. */
+  .wbtn.menu{top:17%; left:50%; transform:translate(-50%,-50%)} .wbtn.menu:active{transform:translate(-50%,-50%) scale(.86)}
+  .wbtn.prev{left:17%; top:50%; transform:translate(-50%,-50%)} .wbtn.prev:active{transform:translate(-50%,-50%) scale(.84)}
+  .wbtn.next{left:83%; top:50%; transform:translate(-50%,-50%)} .wbtn.next:active{transform:translate(-50%,-50%) scale(.84)}
+  .wbtn.play{top:83%; left:50%; transform:translate(-50%,-50%)} .wbtn.play:active{transform:translate(-50%,-50%) scale(.86)}
   .engrave{margin-top:7px; text-align:center; font-size:8px; font-weight:700; letter-spacing:.5em; flex:none;
     color:rgba(var(--shade),.28); text-shadow:0 1px 0 rgba(255,255,255,.8)}
 
@@ -565,6 +568,7 @@
   /* ── C1 탭 존 레이어 ── */
   .stagetap{display:none}
   body.stage .stagetap{display:block; position:absolute; inset:0; z-index:4} /* 유튜브 문법 탭 존 [J:07-14] */
+  body.stage.clipmode .stagetap{pointer-events:none} /* [J:07-15] 클립 = 유튜브가 표면 소유 → 탭이 네이티브 컨트롤로 통과 (b) */
 
 
   /* 클립 로딩 베일 — YT 기본 스피너 대체 (재생 시작 시 페이드아웃) */
@@ -1556,8 +1560,8 @@
       setTimeout(cueNext, 900); // 현재 클립이 안정된 뒤 다음 클립 프리큐
       var v=0, ramp=null, unmuted=false;
       function rampUp(){ if(unmuted) return; unmuted=true;
-        try{yt.unMute()}catch(e){}
-        ramp=setInterval(function(){ v+=12; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },40);
+        try{yt.unMute()}catch(e){}  // 즉시 언뮤트 = 안정 종료상태. 이후 재-뮤트/다운램프 없음 → 네이티브 전체화면 무음 근본수정 (k)
+        ramp=setInterval(function(){ v+=25; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },30);
       }
       if(ytPoll) clearInterval(ytPoll);
       var lastT=0, stallMs=0, nudged=false;
@@ -1567,7 +1571,7 @@
           var st=yt.getPlayerState();
           var t=yt.getCurrentTime?yt.getCurrentTime():0;
           var rem=beat.to-t;
-          if(t&&rem<0.9&&rem>0){ if(ramp) clearInterval(ramp); yt.setVolume(Math.max(0,Math.round(100*rem/0.9))); }
+          // [제거] 끝단 볼륨 다운램프 — 클립을 끝단에서 전체화면하면 볼륨 0으로 남던 무음버그 원인 (k)
           if(st===0 || (t&&t>=beat.to-0.4)){ clearInterval(ytPoll); ytPoll=null; addCharge(1.2); nextBeat(1,true); return; }
           if(st===1 && t>0.1){
             veilHide(); rampUp(); // 재생 확인 → 소리 개방
@@ -1578,7 +1582,7 @@
           }
           if(st===1 && t>lastT+0.2){ lastT=t; stallMs=0; } else { stallMs+=500; }
           if(stallMs>=4000 && !nudged){ nudged=true;
-            try{ yt.mute(); yt.seekTo(Math.max(beat.from,t||beat.from),true); yt.playVideo(); }catch(e){} }
+            try{ yt.seekTo(Math.max(beat.from,t||beat.from),true); yt.playVideo(); }catch(e){} } // 뮤트 없이 넛지 — 재-뮤트가 무음 유발하던 것 제거 (k)
           if(stallMs>=10000){ clearInterval(ytPoll); ytPoll=null; nextBeat(1,true); }
         }catch(e){}
       },500);
@@ -1925,11 +1929,18 @@
   }
 
   /* iPod 각색: MENU 짧게=뒤로(한 단계 위), 길게=홈(엔진 holdT 처리). 설정 진입=우상단 설정 아이콘. */
+  // 화면 부모맵 — 하위 화면은 breadcrumb data-back 을 그대로 사용(news/invite→menu), 나머지는 명시 (h)
+  function screenParent(s){
+    var el=scr[s], up=el&&el.querySelector('.bc .up[data-back]');
+    if(up) return up.getAttribute('data-back');
+    return ({menu:'home', player:'home'})[s]||null;
+  }
   function menuBack(){
     if(cur==='login') return;
     if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
-    if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('home'); renderRows(); }
-    else if(cur==='menu'){ show('home'); }
+    var parent=screenParent(cur);
+    if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); }
+    if(parent){ show(parent); if(parent==='home') renderRows(); if(parent==='menu') loadTicketsQuiet(); }
     else if(window.wheelRubber){ wheelRubber(-1); } // home = 최상위, 부드러운 저항
   }
   function goHome(){
