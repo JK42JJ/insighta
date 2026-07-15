@@ -283,10 +283,11 @@
   .readview{display:none !important} /* [J:07-15 정정] 스크롤 문서 폐기 */
   body.stage .rdtog{display:none !important}
   /* 읽기 모드 = 기본 모드 그대로 + 에페이퍼 전체화면 + 조그휠 플로팅 [J:07-15 정정] */
-  body.reading .wheelzone{position:absolute; left:0; right:0; bottom:calc(var(--sab,0px) + 6px);
+  /* [J:07-15] 미니휠 = 진행바 위로 올림(엄지존) + 3초 자동숨김 (e). 기본 투명 → 터치 시 표시 → 3초 뒤 소멸 */
+  body.reading .wheelzone{position:absolute; left:0; right:0; bottom:calc(var(--sab,0px) + 88px);
     z-index:40; padding:0; width:100%; pointer-events:none; place-items:center}
-  body.reading .wheel{width:min(40%,180px); opacity:.30; pointer-events:auto; transition:opacity .35s var(--soft)}
-  body.reading .wheel.touching,body.reading .wheel.demo,body.reading.wheelawake .wheel{opacity:.9}
+  body.reading .wheel{width:min(40%,168px); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)}
+  body.reading .wheel.touching,body.reading .wheel.demo,body.reading .wheel.awake,body.reading.wheelawake .wheel{opacity:.92}
   .rd-ch{font-size:11px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:22px 2px 10px; text-transform:none}
   .rd-ch:first-child{margin-top:2px}
   .rd-note{font-size:17px; line-height:1.85; color:var(--paper-ink); margin:0 0 4px; padding:8px 10px; border-radius:10px;
@@ -1254,6 +1255,7 @@
   }
   function toggleReading(){
     document.body.classList.toggle('reading'); // 에페이퍼 전체화면 + 조그휠 플로팅 (콘텐츠·조작 불변)
+    if(document.body.classList.contains('reading')){ wheelAwake(); wheelSleep(); } // 진입 시 휠을 잠깐 보여줌 → 3초 뒤 소멸 (e)
   }
 
   function renderChapters(){
@@ -1832,6 +1834,7 @@
       ptr[e.pointerId]=s; touchN++;
       if(zone==='center') centerId=e.pointerId;
       visAngle=p.a; wheel.classList.add('touching');
+      if(document.body.classList.contains('stage')||document.body.classList.contains('reading')) wheelAwake(); // 플로팅 휠 = 터치 시 표시 (e)
       // 롱프레스: MENU 길게 = 홈 (회전 없이 유지 시)
       s.holdT=setTimeout(function(){
         if(s.rotated) return;
@@ -1869,7 +1872,8 @@
         if(e.pointerId===centerId) centerId=null;
         // 탭(회전·홀드 아님) → 네이티브 버튼 onclick 이 처리 (억제창 미설정). 링 갭 탭은 무동작.
         delete ptr[e.pointerId]; touchN=Math.max(0,touchN-1);
-        if(touchN===0) wheel.classList.remove('touching');
+        if(touchN===0){ wheel.classList.remove('touching');
+          if(document.body.classList.contains('stage')||document.body.classList.contains('reading')) wheelSleep(); } // 손 뗀 뒤 3초 소멸 (e)
         kickFrame();
       });
     });
