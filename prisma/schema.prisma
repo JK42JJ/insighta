@@ -2638,3 +2638,18 @@ model share_links {
   @@index([created_by])
   @@schema("public")
 }
+
+/// In-app notices for the dial mobile player (2026-07-15): pull-based
+/// 새소식 feed — public read, admin publish. Unread state lives client-side
+/// (localStorage latest-seen timestamp).
+/// Raw SQL DDL: prisma/migrations/app-notices/001_create_app_notices.sql
+model app_notices {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title        String    @db.VarChar(120)
+  body         String
+  published_at DateTime  @default(now()) @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([published_at])
+  @@schema("public")
+}
