@@ -231,6 +231,7 @@
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.10); border-radius:12px; padding:11px 12px; font-size:12px; font-weight:750;
     transition:transform var(--snap) var(--spring); touch-action:manipulation}
   .mrow:active{transform:scale(.98)}
+  .mrow.sel{box-shadow:inset 0 0 0 1.5px var(--ui), 0 3px 8px -3px rgba(94,86,72,.4)}
   .mrow .sub{margin-left:auto; font-size:9px; color:var(--paper-sub); font-weight:600}
   .ways{display:flex; gap:8px; margin-left:auto}
   .way{width:24px; height:24px; border-radius:50%; border:none; cursor:pointer; padding:0;
@@ -940,6 +941,7 @@
     if(n===cur) return;
     scr[cur].classList.remove('active');
     cur=n; scr[cur].classList.add('active');
+    if(n==='menu'){ selMenu=0; setTimeout(updateSelMenu,0); } // 설정 진입 = 첫 행 선택 [J:07-15]
     syncStage();
   }
   function syncStage(){
@@ -1857,6 +1859,13 @@
       requestAnimationFrame(d);
     };
   })();
+  var selMenu=0;
+  function menuRows(){ return Array.prototype.filter.call(document.querySelectorAll('#scrMenu .mrow'), function(el){ return el.tagName==='BUTTON'; }); }
+  function updateSelMenu(){
+    var rows=menuRows();
+    rows.forEach(function(el,i){ el.classList.toggle('sel', i===selMenu); });
+    var el=rows[selMenu]; if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
+  }
   function updateSel(){
     var rows=document.getElementById('rows');
     for(var i=0;i<rows.children.length;i++) rows.children[i].classList.toggle('sel', i===selIdx);
@@ -1871,6 +1880,11 @@
       var nx=selIdx+dir;
       if(nx<0||nx>=items.length){ wheelRubber(dir); return; } // J4
       selIdx=nx; updateSel(); // J5: 1노치 1행, 선택만 이동 (아이팟 메뉴)
+    } else if(cur==='menu'){ // 설정도 조그휠 — 행 선택 이동 (홈과 동일)
+      var mr=menuRows(); if(!mr.length) return;
+      var nm=selMenu+dir;
+      if(nm<0||nm>=mr.length){ wheelRubber(dir); return; }
+      selMenu=nm; updateSelMenu();
     } else if(cur==='player'){
       if(finished){ // 완청 화면: 우측 = 더 진행 없음, 좌측 = 마지막 구간으로 복귀
         if(dir>0){ wheelRubber(1); return; }
@@ -1904,6 +1918,7 @@
     if(cur==='login'){ loginRedirect(); return; }
     if(cur==='home'){ var items=homeItems(); var m=items[selIdx];
       if(m){ var k=rowState(m).kind; if(k!=='making'&&k!=='loading') openNote(m); } return; }
+    if(cur==='menu'){ var mr=menuRows(); if(mr[selMenu]) mr[selMenu].click(); return; }
     if(cur==='player'){ setPlaying(!playing); }
   }
   document.getElementById('bCore').onclick=function(){ if(wheelStole()) return; corePress(); };
