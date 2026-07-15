@@ -178,7 +178,7 @@ async function targetMeta(
     case 'note_episode':
       return {
         title: `${noteTitle} — 다이얼`,
-        description: '가입 없이 48시간 무료 청취 · AI가 유튜브 핵심 구간만 이어 만든 지식 팟캐스트',
+        description: '가입 없이 48시간 무료 청취 · 내 유튜브의 핵심만 남긴 노트',
         redirectTo: `${origin}/mobile/?s=${encodeURIComponent(row.code)}`,
       };
     case 'learning_video': {
