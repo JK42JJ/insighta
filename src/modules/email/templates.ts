@@ -236,12 +236,12 @@ export interface ProUpgradeEmailParams {
 }
 
 /**
- * Beta-tester Pro upgrade — sent when admin raises a member's tier to pro.
- * Every benefit line must be an ENFORCED limit: mandala_limit
- * (mandala/manager.ts) and local_cards_limit (local-cards EF) only —
- * aiSummaries/richSummaries exist in TIER_LIMITS but nothing enforces them,
- * so they must not be promised here. No payment is attached to a manual
- * tier change, so the copy states that explicitly.
+ * Beta-tester benefit email — sent when admin raises a beta tester to an
+ * unlimited tier (lifetime, per James 2026-07-15). Benefit lines are FEATURES
+ * the product actually ships (unlimited mandalas/cards via lifetime tier, AI
+ * summary, auto note, the new mobile app, early access) — NOT unenforced
+ * quota counts. No payment is attached to a manual tier change, so the copy
+ * states that explicitly.
  */
 export function buildProUpgradeEmail(params: ProUpgradeEmailParams): {
   subject: string;
@@ -250,11 +250,12 @@ export function buildProUpgradeEmail(params: ProUpgradeEmailParams): {
   const url = params.ctaUrl ?? `${SITE_ORIGIN}/`;
   const name = params.name?.trim() ? esc(params.name.trim()) : '';
   const rows = [
+    ['만다라 · 카드 무제한', '베타 기간 동안 만다라도 카드도 제한 없이 만들고 담아요.'],
     [
-      '만다라 20개',
-      '동시에 키우는 목표가 3개에서 20개로. 만다라마다 ‘10분만에 보는 책’ 노트가 함께 늘어나요.',
+      'AI 요약 · 노트 자동 완성',
+      '담은 영상의 핵심을 엮어 ‘10분만에 보는 책’ 노트를 만들어 드려요.',
     ],
-    ['영상 카드 1,000장', '만다라에 담는 카드가 150장에서 1,000장으로.'],
+    ['모바일 앱 — 다이얼', '새로 나온 다이얼로, 만든 노트를 어디서나 들으며 이어가요.'],
     ['신규 기능 우선 제공', '새 기능이 열리면 베타 테스터가 가장 먼저 써요.'],
   ]
     .map(
@@ -273,8 +274,8 @@ export function buildProUpgradeEmail(params: ProUpgradeEmailParams): {
   const inner = `
     <tr><td style="padding:14px 26px 2px;text-align:center">${mascot('mascot-welcome.gif')}</td></tr>
     <tr><td style="padding:8px 30px 2px;text-align:center">
-      ${heading(name ? `${name}님, 계정이` : '계정이', 'Pro가 됐어요')}
-      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">베타를 함께해 주셔서 감사해요. 베타 테스터 혜택으로 계정에 Pro를 적용했어요 — 베타가 끝나는 8월 24일까지 그대로 쓰시면 돼요.</div>
+      ${heading(name ? `${name}님, 이제` : '이제', '제한 없이')}
+      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">베타를 함께해 주셔서 감사해요. 베타 테스터 혜택으로 계정을 열어 드렸어요 — 베타 기간 동안 만다라도 카드도 마음껏 쓰세요.</div>
     </td></tr>
     <tr><td style="padding:16px 30px 30px">
       <table role="presentation" width="100%">${rows}</table>
@@ -282,11 +283,11 @@ export function buildProUpgradeEmail(params: ProUpgradeEmailParams): {
       <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">결제 정보는 받지 않아요 · 베타가 끝나도 자동 결제되지 않아요</div>
     </td></tr>`;
   return {
-    subject: '베타 테스터 혜택 — 계정이 Pro가 됐어요',
+    subject: '베타 테스터 혜택 — 이제 제한 없이 쓰세요',
     html: shell(
       { label: 'PRO', color: GOLD },
       inner,
-      '베타 기간 동안 Pro예요 — 만다라 20개, 카드 1,000장, 신규 기능 우선 제공.'
+      '베타 기간 동안 만다라·카드 무제한 + 새 기능 우선.'
     ),
   };
 }

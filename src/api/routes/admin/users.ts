@@ -239,12 +239,14 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
           ${JSON.stringify(oldValues)}::jsonb, ${JSON.stringify(auditNewValue)}::jsonb)
       `;
 
-      // Beta-tester courtesy: announce the Pro upgrade to the member. Fires on
-      // the transition into pro; `notify: true` re-sends for an already-pro
-      // account. Flag-gated + non-fatal inside sendProUpgradeEmail.
-      const becamePro = String(newValues.tier ?? '') === 'pro';
-      const wasPro = String(oldValues['tier'] ?? '') === 'pro';
-      if (becamePro && (!wasPro || body.notify === true)) {
+      // Beta-tester courtesy: announce the benefit upgrade to the member.
+      // Fires on the transition into any premium tier (pro or lifetime — beta
+      // testers get lifetime per James 2026-07-15); `notify: true` re-sends for
+      // an account already on that tier. Flag-gated + non-fatal inside sender.
+      const PREMIUM_TIERS = new Set(['pro', 'lifetime']);
+      const becamePremium = PREMIUM_TIERS.has(String(newValues.tier ?? ''));
+      const wasPremium = PREMIUM_TIERS.has(String(oldValues['tier'] ?? ''));
+      if (becamePremium && (!wasPremium || body.notify === true)) {
         const emailRows = await db.$queryRaw<Array<{ email: string | null }>>`
           SELECT email FROM auth.users WHERE id = ${id}::uuid
         `;
