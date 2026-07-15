@@ -280,17 +280,7 @@
   body:not(.playing) #bVoice .v-on{display:none}
   body:not(.playing) #bVoice .v-off{display:block; color:var(--paper-sub)}
   body.playing.reading #bVoice{color:var(--ui)}
-  /* [J:07-15] 읽기 = 연속 스크롤 문서 재활성화 (renderReadView 골격 재사용) */
-  .readview{display:none}
-  body.reading .readview{display:block; position:absolute; left:0; right:0; top:calc(var(--sat,0px) + 48px); bottom:0;
-    overflow-y:auto; -webkit-overflow-scrolling:touch; padding:2px 22px calc(var(--sab,0px) + 132px); background:var(--paper)}
-  body.reading .readbox{display:none !important}   /* 구 단락뷰 → 연속 문서로 대체 */
-  body.reading .credit,body.reading .chcard{display:none !important}
-  /* 클립 = 진행바 위 인라인 카드 위치 (공유 iframe 재배치 회피) */
-  body.reading.clipmode .clipbox{position:absolute; left:16px; right:16px; top:calc(var(--sat,0px) + 60px); bottom:auto;
-    aspect-ratio:16/9; height:auto; margin:0; z-index:20; border-radius:14px; overflow:hidden; box-shadow:0 8px 24px -10px rgba(60,45,25,.45)}
-  body.reading #bVoice{display:none !important}   /* (f) 혼란스런 음소거 아이콘 제거 — 소리 on/off 는 설정으로(i, 별도 라운드) */
-  body.reading .ptrack{display:none !important}   /* 구 상단 진행바 제거 — atom 진행바(rd-foot)로 대체 (진행면 하나) */
+  .readview{display:none !important} /* [J:07-15 정정] 스크롤 문서 폐기 */
   body.stage .rdtog{display:none !important}
   /* 읽기 모드 = 기본 모드 그대로 + 에페이퍼 전체화면 + 조그휠 플로팅 [J:07-15 정정] */
   /* [J:07-15] 미니휠 = 진행바 위로 올림(엄지존) + 3초 자동숨김 (e). 기본 투명 → 터치 시 표시 → 3초 뒤 소멸 */
@@ -314,20 +304,6 @@
   .rd-clip .m{min-width:0}
   .rd-clip .t1{font-size:13px; font-weight:750; color:var(--paper-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .rd-clip .t2{font-size:10px; color:var(--paper-sub); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  /* 노트 문장 — 현재 문장만 버터 하이라이트 (목업 스타일, 문단 전체 강조 폐기) */
-  .rd-note .s{border-radius:5px; box-decoration-break:clone; -webkit-box-decoration-break:clone; transition:background .35s,color .35s}
-  .rd-note.on{background:transparent}
-  .rd-note .s.now{background:var(--butter); color:#3B372F; padding:1px 2px}
-  /* atom 내부 진행바 (읽기 하단 플로팅) — 노트=문장 눈금, 클립=초 눈금 */
-  .rd-foot{display:none}
-  body.reading .rd-foot{display:block; position:absolute; left:0; right:0; bottom:0; z-index:30;
-    padding:16px 22px calc(var(--sab,0px) + 12px); background:linear-gradient(rgba(246,242,231,0),var(--paper) 36%)}
-  .rd-foot .bar{position:relative; height:5px; border-radius:3px; background:rgba(94,86,72,.18)}
-  .rd-foot .bar i{position:absolute; left:0; top:0; bottom:0; width:0%; border-radius:3px; background:var(--ui); transition:width .2s linear}
-  .rd-foot .bar .tk{position:absolute; top:50%; width:1.5px; height:7px; transform:translate(-50%,-50%); background:rgba(94,86,72,.42); border-radius:1px}
-  .rd-foot .bar .kb{position:absolute; top:50%; left:0; transform:translate(-50%,-50%); width:12px; height:12px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.3); transition:left .2s linear}
-  .rd-foot .row{display:flex; align-items:center; justify-content:space-between; margin-top:9px; font-size:10.5px; color:var(--paper-sub); font-weight:700; font-variant-numeric:tabular-nums}
-  .rd-foot .row .u{color:var(--ui); font-weight:800}
   .readbox{flex:1; min-height:0; overflow-y:auto; margin-top:10px; font-size:17px; line-height:1.85;
     letter-spacing:-.005em; padding-right:2px;
     -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14px,#000 calc(100% - 22px),transparent 100%);
@@ -1243,20 +1219,15 @@
   var liveTick=null;
   function startLive(){ if(!liveTick) liveTick=setInterval(function(){ if(cur==='player'&&beats.length) renderLive(); },500); }
   /* 읽기 모드 [J:07-15] — beats 전체를 스크롤 문서로. 탭 = 그 atom부터 재생 */
-  function splitSents(t){ // 문장 분리 — 한/영 종결부호 뒤 (목업 수준 근사). 노트 editorial 구조화는 별도 태스크.
-    var parts=String(t||'').replace(/([.!?])\s+/g,'$1\n').split(/\n+/).map(function(s){return s.trim();}).filter(Boolean);
-    return parts.length?parts:[String(t||'').trim()];
-  }
   function renderReadView(){
     var box=document.getElementById('readview');
-    box.hidden=false; // [hidden]{display:none!important} 전역 트랩 해제 — 읽기 진입 시 표시
     var html='';
     for(var i=0;i<beats.length;i++){
       var b=beats[i];
       if(b.t==='ch'){ html+='<div class="rd-ch">'+esc((b.num||'')+'부 · '+(b.title||''))+'</div>'; }
       else if(b.t==='n'){
         var txt=stripMd(b.text||''); if(!txt) continue;
-        html+='<p class="rd-note" data-bi="'+i+'">'+splitSents(txt).map(function(s,k){ return '<span class="s" data-si="'+k+'">'+esc(s)+'</span>'; }).join(' ')+'</p>';
+        html+='<p class="rd-note" data-bi="'+i+'">'+esc(txt)+'</p>';
       } else if(b.t==='c'){
         html+='<div class="rd-clip" data-bi="'+i+'"><span class="th" style="background-image:url(https://i.ytimg.com/vi/'+esc(b.vid)+'/mqdefault.jpg)"></span><span class="m">'
           +'<span class="t1">'+esc(b.text||'유튜브 핵심 구간')+'</span>'
@@ -1267,9 +1238,9 @@
     Array.prototype.forEach.call(box.querySelectorAll('[data-bi]'), function(el){
       el.onclick=function(){
         var idx=+el.getAttribute('data-bi');
-        bi=Math.max(0,Math.min(idx,beats.length-1)); curSentIdx=0;
-        if(!playing) setPlaying(true); // 탭 = 그 atom부터 재생
-        runBeat(); syncReadHighlight();
+        bi=Math.max(0,Math.min(idx,beats.length-1));
+        if(!playing) setPlaying(true); // 탭 = 그 atom부터 듣기
+        runBeat();
       };
     });
     syncReadHighlight();
@@ -1277,64 +1248,14 @@
   function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function syncReadHighlight(){
     if(!document.body.classList.contains('reading')) return;
-    var box=document.getElementById('readview'); if(!box) return;
-    var prev=box.querySelector('.rd-note.on,.rd-clip.on'); if(prev) prev.classList.remove('on');
-    var el=box.querySelector('[data-bi="'+bi+'"]');
-    if(el){
-      el.classList.add('on');
-      var spans=el.querySelectorAll('.s');
-      if(spans.length){
-        var si=Math.max(0,Math.min(spans.length-1, curSentIdx));
-        Array.prototype.forEach.call(spans,function(sp,k){ sp.classList.toggle('now', k===si); });
-        var tgt=spans[si]||el; if(tgt.scrollIntoView) tgt.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'});
-      } else if(el.scrollIntoView){ el.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'}); }
-    }
-    updateAtomBar();
-  }
-  function ensureRdFoot(){
-    if(document.getElementById('rdFoot')) return;
-    var f=document.createElement('div'); f.className='rd-foot'; f.id='rdFoot';
-    f.innerHTML='<div class="bar"><i></i><span class="kb"></span></div>'
-      +'<div class="row"><span class="a-left"></span><span class="u a-unit"></span><span class="a-right"></span></div>';
-    (document.getElementById('scrPlayer')||document.body).appendChild(f);
-  }
-  function updateAtomBar(){
-    var foot=document.getElementById('rdFoot'); if(!foot) return;
-    var b=beats[bi]; if(!b) return;
-    var bar=foot.querySelector('.bar'), fill=bar.querySelector('i'), knob=bar.querySelector('.kb');
-    var left=foot.querySelector('.a-left'), unit=foot.querySelector('.a-unit'), right=foot.querySelector('.a-right');
-    var frac=0, n=1;
-    if(b.t==='n'){
-      var el=document.querySelector('#readview [data-bi="'+bi+'"]');
-      n=(el?el.querySelectorAll('.s').length:0)||1;
-      var si=Math.max(0,Math.min(n-1,curSentIdx));
-      frac=n>1?si/(n-1):(curSentIdx>0?1:0);
-      unit.textContent='노트 · 문장'; left.textContent='문장 '+(si+1)+' / '+n;
-    } else if(b.t==='c'){
-      var dur=Math.max(1,(b.to!=null&&b.from!=null)?(b.to-b.from):10);
-      n=Math.min(8,Math.max(2,Math.round(dur/10)));
-      var t=0; try{ if(yt&&yt.getCurrentTime) t=(yt.getCurrentTime()||0)-(b.from||0); }catch(e){}
-      frac=Math.max(0,Math.min(1,t/dur));
-      unit.textContent='클립 · 초'; left.textContent=Math.max(0,Math.round(t))+'s / '+Math.round(dur)+'s';
-    } else { unit.textContent='구간'; left.textContent=''; }
-    right.textContent=(bi+1)+' / '+beats.length;
-    Array.prototype.forEach.call(bar.querySelectorAll('.tk'),function(t){t.remove()});
-    for(var k=1;k<n;k++){ var tk=document.createElement('span'); tk.className='tk'; tk.style.left=(100*k/n)+'%'; bar.appendChild(tk); }
-    fill.style.width=(frac*100)+'%'; knob.style.left=(frac*100)+'%';
-  }
-  var readSyncT=null;
-  function startReadSync(){ if(readSyncT) return;
-    readSyncT=setInterval(function(){
-      if(document.body.classList.contains('reading')&&cur==='player') syncReadHighlight();
-      else { clearInterval(readSyncT); readSyncT=null; }
-    },300);
+    var box=document.getElementById('readview');
+    var prev=box.querySelector('.on'); if(prev) prev.classList.remove('on');
+    var cur=box.querySelector('[data-bi="'+bi+'"]');
+    if(cur){ cur.classList.add('on'); if(cur.scrollIntoView) cur.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'}); }
   }
   function toggleReading(){
-    document.body.classList.toggle('reading');
-    if(document.body.classList.contains('reading')){
-      ensureRdFoot(); renderReadView(); startReadSync();   // 연속 스크롤 문서 + atom 진행바 + 300ms 동기화
-      wheelAwake(); wheelSleep();
-    }
+    document.body.classList.toggle('reading'); // 에페이퍼 전체화면 + 조그휠 플로팅 (콘텐츠·조작 불변)
+    if(document.body.classList.contains('reading')){ wheelAwake(); wheelSleep(); } // 진입 시 휠을 잠깐 보여줌 → 3초 뒤 소멸 (e)
   }
 
   function renderChapters(){
