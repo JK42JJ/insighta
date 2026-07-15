@@ -1,7 +1,7 @@
 {
   "name": "다이얼 — Insighta",
   "short_name": "다이얼",
-  "description": "내 유튜브를 나만의 지식노트로 — 다이얼, Insighta 플레이어",
+  "description": "내 유튜브에서 필요한 정보만 — 다이얼, Insighta 플레이어",
   "start_url": "/mobile/",
   "scope": "/mobile/",
   "display": "standalone",
