@@ -181,6 +181,20 @@
   .gearBtn:active{transform:scale(.92)}
   .gearDot{position:absolute; top:4px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C)}
   .newsDot{width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C); margin-left:2px}
+  /* IA 재설계 [J:07-15] — 브레드크럼 내비 */
+  .bc{display:flex; align-items:center; font-size:11px; font-weight:800; letter-spacing:.02em; min-width:0}
+  .bc .up{color:var(--paper-sub); padding:5px 7px; margin:-5px -2px -5px -7px; border-radius:7px;
+    background:none; border:none; font:inherit; cursor:pointer; -webkit-tap-highlight-color:transparent}
+  .bc .up:active{background:rgba(94,86,72,.10)}
+  .bc .sep{color:var(--paper-sub); opacity:.55; padding:0 5px; font-weight:600}
+  .bc .cur{color:var(--paper-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  /* 설정 그룹 헤더 */
+  .ghd{font-size:9px; letter-spacing:.14em; font-weight:800; color:var(--paper-sub); opacity:.8;
+    margin:14px 4px 6px; text-transform:uppercase}
+  .ghd:first-child{margin-top:2px}
+  /* 행 선두 아이콘 */
+  .mrow .lic{flex:none; width:15px; height:15px; color:var(--paper-sub); display:grid; place-items:center}
+  .mrow .lic svg{display:block}
   .tk{position:relative; display:flex; align-items:center; gap:10px; margin-bottom:8px;
     background:linear-gradient(135deg, rgba(255,255,255,.75), rgba(255,255,255,.45));
     border:1px solid rgba(0,0,0,.07); border-radius:12px; padding:11px 12px}
@@ -623,7 +637,7 @@
 
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
-        <div class="top"><span class="tt">내 만다라</span><span style="display:flex;align-items:center;gap:10px;margin-left:auto"><button class="gearBtn" id="bGear" aria-label="설정"><svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="3.1"/><path d="M10 2.6v2.6M10 14.8v2.6M2.6 10h2.6M14.8 10h2.6M4.8 4.8l1.9 1.9M13.3 13.3l1.9 1.9M15.2 4.8l-1.9 1.9M6.7 13.3l-1.9 1.9"/></g></svg><span class="gearDot" id="gearDot" hidden></span></button><span class="batt" id="sigHome"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></span></div>
+        <div class="top"><span class="tt">내 만다라</span><span style="display:flex;align-items:center;gap:10px;margin-left:auto"><button class="gearBtn" id="bGear" aria-label="설정"><svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg><span class="gearDot" id="gearDot" hidden></span></button><span class="batt" id="sigHome"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></span></div>
         <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
         <div class="rows" id="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
       </div>
@@ -632,34 +646,37 @@
       <div class="scr" data-s="menu" id="scrMenu">
         <div class="top"><span class="tt">설정</span><span class="batt" id="sigMenu"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <div class="menu-list">
-          <button class="mrow" id="bNews">새소식<span class="newsDot" id="newsDot" hidden></span><span class="sub" id="newsSub">공지 · 업데이트</span></button>
-          <button class="mrow" id="bInvite">초대권 사용하기<span class="sub" id="invSub">친구를 베타에 초대</span></button>
+          <div class="ghd">소식 · 초대</div>
+          <button class="mrow" id="bNews"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 10-12 0c0 6-2.5 7.5-2.5 7.5h17S18 15 18 9"/><path d="M10.3 20a2 2 0 003.4 0"/></svg></span>새소식<span class="newsDot" id="newsDot" hidden></span><span class="sub" id="newsSub">공지 · 업데이트</span></button>
+          <button class="mrow" id="bInvite"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V7a1.5 1.5 0 011.5-1.5h15A1.5 1.5 0 0121 7v2a3 3 0 000 6v2a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 17v-2a3 3 0 000-6z"/><path d="M13.5 6.2v2.1M13.5 11v2M13.5 15.7V18" stroke-dasharray="1.6 2.4"/></svg></span>초대권 사용하기<span class="sub" id="invSub">친구를 베타에 초대</span></button>
+          <div class="ghd">앱</div>
           <div class="mrow" style="cursor:default">
-            컬러웨이
+            <span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="10" r="2.6"/><circle cx="15.5" cy="7.5" r="2.6"/><circle cx="14.5" cy="16" r="2.6"/></svg></span>컬러웨이
             <span class="ways">
               <button class="way way-cream on" data-th="th-cream" aria-label="크림"></button>
               <button class="way way-sage" data-th="th-sage" aria-label="세이지"></button>
               <button class="way way-mist" data-th="th-mist" aria-label="안개"></button>
             </span>
           </div>
-          <button class="mrow" id="bInstall">홈 화면에 설치<span class="sub">전체화면 앱</span></button>
-          <button class="mrow" id="bRefresh">새로고침<span class="sub">최신 버전 불러오기</span></button>
-          <button class="mrow" id="bFeedback">의견 보내기<span class="sub">기능 제안 · 불편 신고</span></button>
-          <button class="mrow" id="bLogout">로그아웃</button>
+          <button class="mrow" id="bInstall"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/></svg></span>홈 화면에 설치<span class="sub">전체화면 앱</span></button>
+          <button class="mrow" id="bRefresh"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 11-2.34-5.66"/><path d="M20 3v4h-4"/></svg></span>새로고침<span class="sub">최신 버전 불러오기</span></button>
+          <div class="ghd">계정</div>
+          <button class="mrow" id="bFeedback"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11a7.5 7.5 0 01-7.9 7.5c-1.3 0-2.6-.3-3.7-.9L4 19l1.5-4.3A7.5 7.5 0 1121 11z"/></svg></span>의견 보내기<span class="sub">기능 제안 · 불편 신고</span></button>
+          <button class="mrow" id="bLogout"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4H6.5A1.5 1.5 0 005 5.5v13A1.5 1.5 0 006.5 20H14"/><path d="M10 12h11M18 8.8L21 12l-3 3.2"/></svg></span>로그아웃</button>
         </div>
         <div class="menu-note">MENU를 누르면 내 만다라로</div>
       </div>
 
       <!-- 새소식 -->
       <div class="scr" data-s="news" id="scrNews">
-        <div class="top"><span class="tt">새소식</span></div>
+        <div class="top"><span class="bc"><button class="up" data-back="menu">설정</button><span class="sep">›</span><span class="cur">새소식</span></span></div>
         <div class="menu-list" id="newsList"><div class="menu-note" style="margin-top:20px">아직 공지가 없어요</div></div>
         <div class="menu-note">MENU를 누르면 내 만다라로</div>
       </div>
 
       <!-- 초대권 -->
       <div class="scr" data-s="invite" id="scrInvite">
-        <div class="top"><span class="tt">초대권</span></div>
+        <div class="top"><span class="bc"><button class="up" data-back="menu">설정</button><span class="sep">›</span><span class="cur">초대권</span></span></div>
         <div id="tkList" style="overflow-y:auto;flex:1;min-height:0"></div>
         <input class="tk-inp" id="tkEmail" type="email" inputmode="email" autocomplete="off" placeholder="친구 이메일 주소">
         <button class="tk-btn" id="tkSend">초대 메일 보내기</button>
@@ -2077,6 +2094,10 @@
     loadTickets();
   };
   document.getElementById('bGear').onclick=function(){ show('menu'); loadTicketsQuiet(); };
+  // 브레드크럼 "설정" 세그먼트 = 한 단계 위(설정)로 [J:07-15 IA]
+  Array.prototype.forEach.call(document.querySelectorAll('.bc .up[data-back]'), function(b){
+    b.onclick=function(){ show(b.getAttribute('data-back')); };
+  });
   function loadTicketsQuiet(){ // 설정 진입 시 잔여 장수만 미리 (조용히 실패)
     api('/invites').then(function(r){return r.json()}).then(function(j){
       if(j&&j.data) document.getElementById('invSub').textContent=j.data.remaining>0?('남은 '+j.data.remaining+'장'):'모두 사용';
