@@ -621,6 +621,55 @@
         font-size:9px;letter-spacing:.5em;color:#B4AC9B;font-weight:700;padding-left:.5em">INSIGHTA</div>
     </div>
   </div>
+
+  <!-- 부트 실패 폴백 — 흰 화면 방지 [J:07-15]. 워치독/에러 시에만 표시.
+       메인 스크립트와 독립: 앱 JS가 죽어도 이 인라인 스크립트가 띄운다. -->
+  <div id="bootfail" style="display:none;position:fixed;inset:0;z-index:100;flex-direction:column;
+    align-items:center;justify-content:center;background:linear-gradient(178deg,#FAF6EC,#EDE8DB);
+    font-family:'Apple SD Gothic Neo',system-ui,sans-serif;color:#4A443A;
+    padding:calc(env(safe-area-inset-top,0px) + 24px) 30px calc(env(safe-area-inset-bottom,0px) + 24px);text-align:center">
+    <svg width="118" height="118" viewBox="0 0 118 118" fill="none" style="margin-bottom:22px" aria-hidden="true">
+      <defs>
+        <radialGradient id="bfh" cx="50%" cy="38%" r="62%"><stop offset="0" stop-color="#FBFAF6"/><stop offset="62%" stop-color="#EFECE4"/><stop offset="1" stop-color="#E0DBCD"/></radialGradient>
+        <radialGradient id="bfc" cx="42%" cy="32%" r="70%"><stop offset="0" stop-color="#F2A672"/><stop offset="52%" stop-color="#E8804C"/><stop offset="1" stop-color="#C9591F"/></radialGradient>
+      </defs>
+      <circle cx="59" cy="59" r="55" fill="url(#bfh)" stroke="rgba(94,86,72,.14)"/>
+      <text x="59" y="26" text-anchor="middle" font-size="7.5" letter-spacing="1.6" font-weight="800" fill="#B4A98E">MENU</text>
+      <circle cx="59" cy="62" r="20" fill="url(#bfc)"/>
+      <path d="M52 62a7 7 0 1 1 2 5" stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+      <path d="M52 55v4h4" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    <div style="font-size:19px;font-weight:900;letter-spacing:-.01em">연결이 지연되고 있어요</div>
+    <div style="font-size:13.5px;line-height:1.75;color:#8A8271;margin:10px 0 24px;max-width:20em">
+      일시적인 지연이거나, 새 버전을 준비 중일 수 있어요.<br>아래 버튼으로 다시 불러오거나, 앱을 완전히 종료한 뒤 다시 열어주세요.</div>
+    <button onclick="bootHardReload()" style="border:none;cursor:pointer;background:#CE5F30;color:#fff;
+      font-family:inherit;font-size:15px;font-weight:800;border-radius:13px;padding:14px 40px;letter-spacing:.01em;
+      box-shadow:0 8px 18px -6px rgba(206,95,48,.6)">다시 불러오기</button>
+    <div style="font-size:11.5px;line-height:1.7;color:#B4AC9B;margin-top:18px;max-width:20em">
+      그래도 안 되면 — 화면을 <b style="color:#8A8271">위로 쓸어올려</b> 앱을 닫고 다시 열어주세요.</div>
+  </div>
+  <script>
+    /* 부트 워치독 — 메인 스크립트와 독립. 앱이 booted 신호를 못 주면(행/에러) 폴백 표시. */
+    (function(){
+      window.__booted=false;
+      function showBootFail(){ if(window.__booted) return; var el=document.getElementById('bootfail'); if(el) el.style.display='flex'; }
+      window.__bootWatch=setTimeout(showBootFail, 9000); // 9초 내 부팅 없으면 안내
+      window.__bootFail=showBootFail;
+      window.addEventListener('error', function(){ if(!window.__booted) setTimeout(showBootFail, 400); });
+      window.addEventListener('unhandledrejection', function(){ if(!window.__booted) setTimeout(showBootFail, 400); });
+      window.bootHardReload=function(){ // 스테일 SW/캐시가 흰 화면의 주범 → 지우고 새로 로드
+        try{
+          var done=function(){ location.reload(); };
+          var jobs=[];
+          if('serviceWorker' in navigator){ jobs.push(navigator.serviceWorker.getRegistrations().then(function(rs){ return Promise.all(rs.map(function(r){return r.unregister()})); }).catch(function(){})); }
+          if(window.caches){ jobs.push(caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){return caches.delete(k)})); }).catch(function(){})); }
+          Promise.all(jobs).then(done, done);
+          setTimeout(done, 2500); // 안전망
+        }catch(e){ location.reload(); }
+      };
+    })();
+  </script>
+
   <div class="device th-cream" id="dev">
     <div class="epaper">
 
@@ -839,6 +888,10 @@
   var scr={}; SCREENS.forEach(function(n){scr[n]=document.querySelector('.scr[data-s="'+n+'"]')});
   var cur='login';
   function bootDone(){
+    // 부팅 성공 신호 — 워치독 해제 + 실패 폴백 차단 [J:07-15]
+    window.__booted=true;
+    if(window.__bootWatch){ clearTimeout(window.__bootWatch); }
+    var f=document.getElementById('bootfail'); if(f) f.style.display='none';
     var b=document.getElementById('boot'); if(!b) return;
     b.style.opacity='0'; setTimeout(function(){ if(b.parentNode) b.parentNode.removeChild(b); },420);
   }
