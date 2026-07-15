@@ -15,7 +15,7 @@ https://insighta.one/dial/
 | 요소 | 값 | 바꾸려면 |
 |------|-----|---------|
 | 이미지 | `frontend/public/dial/og.png` (1200×630) | 파일 교체 후 배포 + 캐시 초기화(§3) |
-| 제목 | `og:title` — "다이얼 — 내 유튜브를 나만의 지식노트로" | index.html 메타 수정 |
+| 제목 | `og:title` — "다이얼 — 유튜브를 나만의 지식노트로" | index.html 메타 수정 |
 | 설명 | `og:description` | index.html 메타 수정 |
 
 모바일 플레이어의 48시간 게스트 링크(`insighta.one/mobile/?g=...`)도 동일 원리로 `/mobile`의 OG 메타 카드가 뜬다.
