@@ -251,7 +251,7 @@
   .clipwrap .ytp{position:absolute; inset:0}
   .clipwrap .ytp.off{opacity:0; pointer-events:none} /* 프리큐 슬롯 — 화면 밖이 아니라 뒤에서 버퍼 */
   .clipwrap iframe,#yt{position:absolute; inset:0; width:100%; height:100%; border:0}
-  .clipbox .guard{position:absolute; inset:0; z-index:3}
+  .clipbox .guard{position:absolute; inset:0; z-index:3; pointer-events:none} /* 네이티브 유튜브 컨트롤 노출 — 탭 통과 [J:07-15] */
   /* fit/fill 버튼 — 숨은 더블탭을 보이는 컨트롤로 승격 [J:07-15 우측잘림 리포트] */
   .clipfit{position:absolute; z-index:4; top:8px; right:8px; width:30px; height:30px; border:none; border-radius:9px;
     background:rgba(8,9,14,.44); color:#fff; display:grid; place-items:center; cursor:pointer;
@@ -941,6 +941,9 @@
   }
   function show(n){
     bootDone();
+    // 플레이어 이탈 = 재생 정지 [J:07-15 치명버그: 만다라/설정에서 노트 재생 지속].
+    // 나브 토글·MENU·브레드크럼 모든 경로를 한곳에서 커버 (백그라운드 재생 오용 차단).
+    if(cur==='player'&&n!=='player'&&typeof setPlaying==='function'){ try{ setPlaying(false); }catch(e){} }
     if(n!=='player'){ document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true; } // 읽기 모드 = 플레이어 전용
     if(n===cur) return;
     scr[cur].classList.remove('active');
@@ -1479,7 +1482,7 @@
   function mkPlayer(elId, first){
     return new YT.Player(elId,{
       width:'100%', height:'100%', videoId:'',
-      playerVars:{playsinline:1, rel:0, modestbranding:1, controls:0, disablekb:1},
+      playerVars:{playsinline:1, rel:0, modestbranding:1, controls:1, fs:1},
       events:{onReady:function(){
         if(first){ ytReady=true; if(ytPending){ playClipNow(ytPending); ytPending=null; } }
       }}
@@ -1847,15 +1850,8 @@
     function notch(dir,units){
       kick+=1.5*dir; // J2: 시각 디텐트
       if(navigator.vibrate) navigator.vibrate(8);
-      // 조그/셔틀 [J:07-15]: 느림=마이크로(클립 초·노트 문장), 중간=1 atom, 빠름=성큼
-      // (수치 임계값·MICRO_SEC 는 실기기 튜닝 — CP467)
-      if(cur==='player'){
-        if((units||1)<=1){ microStep(dir); return; }
-        var j=(units>=4)?2:1;
-        for(var u=0;u<j;u++) dispatchNotch(dir);
-        return;
-      }
-      dispatchNotch(dir); // 메뉴 = 1노치 1행
+      var n=(cur==='player')?(units||1):1; // 재생=가속 비트이동, 메뉴=1노치 1행 (조그/셔틀 micro-seek 은 실기기 튜닝 후 재도입)
+      for(var u=0;u<n;u++) dispatchNotch(dir);
     }
     window.wheelRubber=function(dir){ rubber+=15*dir; kickFrame(); }; // J4
     window.wheelDemo=function(){ // J6: 첫 발견
@@ -1880,29 +1876,6 @@
     for(var i=0;i<rows.children.length;i++) rows.children[i].classList.toggle('sel', i===selIdx);
     var el=rows.children[selIdx];
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
-  }
-  var MICRO_SEC=3; // 조그/셔틀 마이크로 초 단위 — 실기기 튜닝값
-  function microStep(dir){ // 현재 atom 내부 정밀 이동, 경계 넘으면 인접 atom으로 심리스
-    var beat=beats[bi]; if(!beat){ return; }
-    if(dir>0&&!guestFwdOk()){ guestFwdNotice(); return; } // 게스트 빨리감기 잠금 유지
-    if(beat.t==='c'){ // 클립 = 유튜브 초 단위 seek ([from~to] 안)
-      var t0; try{ t0=(yt&&yt.getCurrentTime)?yt.getCurrentTime():null; }catch(e){ t0=null; }
-      if(t0==null){ nextBeat(dir); return; }
-      var t=t0+dir*MICRO_SEC;
-      var lo=(beat.from!=null?beat.from:0), hi=(beat.to!=null?beat.to:t0+MICRO_SEC);
-      if(t<lo){ nextBeat(-1); return; }
-      if(t>hi){ nextBeat(1); return; }
-      try{ yt.seekTo(t,true); }catch(e){}
-      if(!playing){ playing=true; setCharging(true); document.body.classList.add('playing'); acquireWake(); }
-      msUpdate();
-    } else if(beat.t==='n'){ // 노트 = 문장 단위 이동
-      if(!curSents.length){ nextBeat(dir); return; }
-      var ni=curSentIdx+dir;
-      if(ni<0){ nextBeat(-1); return; }
-      if(ni>=curSents.length){ nextBeat(1); return; }
-      if(!playing){ playing=true; setCharging(true); document.body.classList.add('playing'); acquireWake(); }
-      if(beat.audio&&epAudio.ready) audioFrom(ni,beat); else speakFrom(ni);
-    } else { nextBeat(dir); }
   }
   var stealClick=false;
   function wheelStole(){ if(stealClick){ stealClick=false; return true; } return false; }
