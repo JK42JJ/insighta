@@ -226,6 +226,16 @@
   .clipwrap .ytp.off{opacity:0; pointer-events:none} /* 프리큐 슬롯 — 화면 밖이 아니라 뒤에서 버퍼 */
   .clipwrap iframe,#yt{position:absolute; inset:0; width:100%; height:100%; border:0}
   .clipbox .guard{position:absolute; inset:0; z-index:3}
+  /* fit/fill 버튼 — 숨은 더블탭을 보이는 컨트롤로 승격 [J:07-15 우측잘림 리포트] */
+  .clipfit{position:absolute; z-index:4; top:8px; right:8px; width:30px; height:30px; border:none; border-radius:9px;
+    background:rgba(8,9,14,.44); color:#fff; display:grid; place-items:center; cursor:pointer;
+    -webkit-tap-highlight-color:transparent; opacity:.9; transition:opacity .25s var(--soft), transform .12s}
+  .clipfit:active{transform:scale(.9)}
+  .clipfit .fit-b{display:none}
+  .clipbox.cover .clipfit .fit-a{display:none}
+  .clipbox.cover .clipfit .fit-b{display:block}
+  /* 세로 화면가득 = 좌우 풀블리드 (여전히 16:9, 잘림 없음) */
+  .clipbox.cover{margin:10px -16px 0}
   /* S1: 원본 크레딧 — 상시 표기 */
   .credit{flex:none; margin-top:8px; font-size:10px; color:var(--paper-sub); font-weight:600;
     display:flex; align-items:center; gap:5px; white-space:nowrap; min-width:0}
@@ -429,6 +439,8 @@
   body.stage .hairline i{display:block; height:100%; background:var(--ui); transition:width .3s var(--soft)}
   body.stage.clipmode .hairline{opacity:0; transition:opacity .3s}
   body.stage.clipmode.hud .hairline{opacity:1}
+  body.stage .clipfit{top:calc(var(--sat) + 12px); right:16px; opacity:0; pointer-events:none; transition:opacity .3s}
+  body.stage.clipmode.hud .clipfit{opacity:.92; pointer-events:auto}
   body.stage .ptrack{display:none}
   body.stage .player-state{position:absolute; inset:0; z-index:6} /* 완료 화면 버튼 = 탭레이어 위 */
 
@@ -666,6 +678,10 @@
           <div class="clipwrap" id="clipwrap"><div class="ytp" id="ytA"></div><div class="ytp off" id="ytB"></div></div>
           <div class="clipveil" id="clipVeil" aria-hidden="true"><i></i><span>INSIGHTA</span></div>
           <div class="guard" id="clipGuard" aria-hidden="true"></div>
+          <button class="clipfit" id="clipFit" aria-label="화면 맞춤 전환">
+            <svg class="fit-a" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
+            <svg class="fit-b" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V6a2 2 0 012-2h3M20 9V6a2 2 0 00-2-2h-3M4 15v3a2 2 0 002 2h3M20 15v3a2 2 0 01-2 2h-3"/></svg>
+          </button>
         </div>
         <div class="credit" id="credit" hidden></div>
         <div class="readbox" id="readbox" hidden></div>
@@ -1966,6 +1982,11 @@
   /* ================= 메뉴 항목 ================= */
   document.getElementById('bLogin').onclick=loginRedirect;
   document.getElementById('bSample').onclick=function(){ openNote(SAMPLE) };
+  document.getElementById('clipFit').onclick=function(e){
+    e.stopPropagation(); e.preventDefault();
+    var cover=clipbox.classList.toggle('cover');
+    toast(cover?'화면가득 — 가장자리가 잘릴 수 있어요':'정사이즈 — 전체 화면 표시');
+  };
   document.getElementById('bRefresh').onclick=function(){
     // 설치형(standalone)엔 브라우저 새로고침 UI가 없다. cache:'reload'로
     // HTTP 캐시를 강제 재검증해 최신 번들을 받은 뒤 리로드 (쿼리·게스트 토큰 보존).
