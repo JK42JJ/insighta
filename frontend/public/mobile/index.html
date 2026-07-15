@@ -260,6 +260,30 @@
     overflow:hidden; text-overflow:ellipsis}
   .credit .crng,.credit .crem{flex:none}
   /* read-along — §1.1b: 세로 17px/1.85 고정 */
+  /* 읽기 모드 [J:07-15] — 세로 = 읽기. 노트 전문 스크롤 + atom 탭 재생 */
+  .rdtog{display:grid; place-items:center; width:34px; height:30px; margin:-6px 0; border:none; background:none;
+    color:var(--paper-sub); cursor:pointer; -webkit-tap-highlight-color:transparent; border-radius:9px}
+  .rdtog:active{transform:scale(.9)}
+  body.reading .rdtog{color:var(--ui); background:rgba(94,86,72,.12)}
+  .readview{flex:1; min-height:0; overflow-y:auto; margin-top:10px; padding-bottom:24px; display:none}
+  body.reading .readview{display:block}
+  body.stage .rdtog,body.stage .readview{display:none !important}
+  body.reading .player-state,body.reading #clipbox,body.reading #readbox,body.reading #ptrack,body.reading #chcard{display:none !important}
+  .rd-ch{font-size:11px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:22px 2px 10px; text-transform:none}
+  .rd-ch:first-child{margin-top:2px}
+  .rd-note{font-size:17px; line-height:1.85; color:var(--paper-ink); margin:0 0 4px; padding:8px 10px; border-radius:10px;
+    cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .2s}
+  .rd-note:active{background:rgba(94,86,72,.06)}
+  .rd-note.on{background:var(--butter)}
+  .rd-clip{display:flex; align-items:center; gap:10px; margin:8px 0; padding:9px 10px; border-radius:12px;
+    background:rgba(255,255,255,.55); box-shadow:inset 0 0 0 1px rgba(94,86,72,.1); cursor:pointer}
+  .rd-clip:active{transform:scale(.99)}
+  .rd-clip.on{box-shadow:inset 0 0 0 2px var(--ui)}
+  .rd-clip .th{flex:none; width:52px; height:32px; border-radius:7px; background:linear-gradient(140deg,#2c2c34,#101014); position:relative; overflow:hidden}
+  .rd-clip .th::after{content:""; position:absolute; inset:0; margin:auto; width:0; height:0; border-left:9px solid rgba(255,255,255,.92); border-top:6px solid transparent; border-bottom:6px solid transparent; margin-left:22px}
+  .rd-clip .m{min-width:0}
+  .rd-clip .t1{font-size:13px; font-weight:750; color:var(--paper-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .rd-clip .t2{font-size:10px; color:var(--paper-sub); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .readbox{flex:1; min-height:0; overflow-y:auto; margin-top:10px; font-size:17px; line-height:1.85;
     letter-spacing:-.005em; padding-right:2px;
     -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 14px,#000 calc(100% - 22px),transparent 100%);
@@ -735,7 +759,7 @@
 
       <!-- 플레이어 -->
       <div class="scr" data-s="player" id="scrPlayer">
-        <div class="top"><span class="tt" id="pTitle">노트</span><button class="shr" id="bShareNote" aria-label="이 노트 공유" hidden><svg width="13" height="16" viewBox="0 0 15 18"><path d="M7.5 1v10M4.2 4.2 7.5 1l3.3 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7.4" width="11" height="9.4" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><span class="batt" id="sigPlay"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
+        <div class="top"><span class="tt" id="pTitle">노트</span><button class="rdtog" id="bRead" aria-label="읽기 모드"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2 2 0 016 4h5v15H6a2 2 0 00-2 1.5zM20 5.5A2 2 0 0018 4h-5v15h5a2 2 0 012 1.5z"/></svg></button><button class="shr" id="bShareNote" aria-label="이 노트 공유" hidden><svg width="13" height="16" viewBox="0 0 15 18"><path d="M7.5 1v10M4.2 4.2 7.5 1l3.3 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7.4" width="11" height="9.4" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><span class="batt" id="sigPlay"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <div class="player-state" id="pState">
           <div class="pulse"></div>
           <div class="big" id="pStateBig">노트를 여는 중…</div>
@@ -752,6 +776,7 @@
         </div>
         <div class="credit" id="credit" hidden></div>
         <div class="readbox" id="readbox" hidden></div>
+        <div class="readview" id="readview" hidden></div>
         <div class="chcard" id="chcard"><div class="n" id="chNum"></div><div class="t" id="chTitle"></div></div>
         <div class="ptrack" id="ptrack" hidden>
           <div class="chapters" id="pchap"></div>
@@ -897,6 +922,7 @@
   }
   function show(n){
     bootDone();
+    if(n!=='player'){ document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true; } // 읽기 모드 = 플레이어 전용
     if(n===cur) return;
     scr[cur].classList.remove('active');
     cur=n; scr[cur].classList.add('active');
@@ -1164,6 +1190,47 @@
   }
   var liveTick=null;
   function startLive(){ if(!liveTick) liveTick=setInterval(function(){ if(cur==='player'&&beats.length) renderLive(); },500); }
+  /* 읽기 모드 [J:07-15] — beats 전체를 스크롤 문서로. 탭 = 그 atom부터 재생 */
+  function renderReadView(){
+    var box=document.getElementById('readview');
+    var html='';
+    for(var i=0;i<beats.length;i++){
+      var b=beats[i];
+      if(b.t==='ch'){ html+='<div class="rd-ch">'+esc((b.num||'')+'부 · '+(b.title||''))+'</div>'; }
+      else if(b.t==='n'){
+        var txt=stripMd(b.text||''); if(!txt) continue;
+        html+='<p class="rd-note" data-bi="'+i+'">'+esc(txt)+'</p>';
+      } else if(b.t==='c'){
+        html+='<div class="rd-clip" data-bi="'+i+'"><span class="th"></span><span class="m">'
+          +'<span class="t1">'+esc(b.text||'유튜브 핵심 구간')+'</span>'
+          +'<span class="t2">'+esc(b.src||'유튜브 영상')+'</span></span></div>';
+      }
+    }
+    box.innerHTML=html||'<div class="menu-note" style="margin-top:24px">읽을 내용이 없어요</div>';
+    Array.prototype.forEach.call(box.querySelectorAll('[data-bi]'), function(el){
+      el.onclick=function(){
+        var idx=+el.getAttribute('data-bi');
+        bi=Math.max(0,Math.min(idx,beats.length-1));
+        if(!playing) setPlaying(true); // 탭 = 그 atom부터 듣기
+        runBeat();
+      };
+    });
+    syncReadHighlight();
+  }
+  function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function syncReadHighlight(){
+    if(!document.body.classList.contains('reading')) return;
+    var box=document.getElementById('readview');
+    var prev=box.querySelector('.on'); if(prev) prev.classList.remove('on');
+    var cur=box.querySelector('[data-bi="'+bi+'"]');
+    if(cur){ cur.classList.add('on'); if(cur.scrollIntoView) cur.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'}); }
+  }
+  function toggleReading(){
+    var on=document.body.classList.toggle('reading');
+    document.getElementById('readview').hidden=!on; // [hidden]{display:none!important} 우회
+    if(on){ renderReadView(); }
+  }
+
   function renderChapters(){
     var el=document.getElementById('pchap'); el.innerHTML='';
     var curCh=chapterOfBeat[bi]||0;
@@ -1573,7 +1640,7 @@
     bi=Math.max(0,Math.min(bi,beats.length-1));
     pState.style.display='none'; ptrack.hidden=false; chcard.classList.remove('show');
     var beat=beats[bi];
-    renderChapters(); msUpdate();
+    renderChapters(); msUpdate(); syncReadHighlight();
     document.getElementById('pCh').textContent=(beat.t!=='ch'&&beat.title)?beat.title:'';
     // 백그라운드 + 실보이스 노트: 클립 비트는 건너뛰고 내레이션으로 (iframe 영상은 백그라운드 재생 불가)
     if(document.hidden&&beat.t==='c'&&epAudio.ready){
@@ -1654,6 +1721,7 @@
 
   async function openNote(m){
     unlockAudio(); // 탭 제스처 안에서 오디오 세션 활성화 (iOS)
+    document.body.classList.remove('reading'); var _rv0=document.getElementById('readview'); if(_rv0) _rv0.hidden=true; // 새 노트 = 듣기로 시작
     curNote=m; show('player');
     document.getElementById('bShareNote').hidden=!!(m.sample||m.guest);
     if(!m.sample&&!m.guest&&!m._shareUrl){ // 공유 링크 선발급 — 탭 시점엔 동기 공유 (iOS 제스처 보존)
@@ -2171,6 +2239,7 @@
     try{localStorage.removeItem(OWN_KEY)}catch(e){}
     setPlaying(false); show('login');
   };
+  document.getElementById('bRead').onclick=toggleReading;
   document.getElementById('bShareNote').onclick=function(){
     if(!curNote||curNote.sample||curNote.guest) return;
     var url=curNote._shareUrl;
