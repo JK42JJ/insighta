@@ -20,6 +20,7 @@ import { mandalaEpisodeAudioRoutes } from './routes/mandala-episode-audio';
 import { guestNoteRoutes } from './routes/guest-share';
 import { shareLinkMintRoutes, shareLinkResolverRoutes } from './routes/share-links';
 import { appNoticeRoutes } from './routes/app-notices';
+import { inviteRoutes } from './routes/invites';
 import { imageRoutes } from './routes/images';
 import { ontologyRoutes } from './routes/ontology';
 import { searchRoutes } from './routes/search';
@@ -319,6 +320,9 @@ export async function buildServer() {
 
       // In-app notices (새소식) — public read feed for the mobile player
       await instance.register(appNoticeRoutes, { prefix: '/app-notices' });
+
+      // Invite tickets (초대권) — member-delegated beta invitations
+      await instance.register(inviteRoutes, { prefix: '/invites' });
 
       // Register image proxy routes
       await instance.register(imageRoutes, { prefix: '/images' });

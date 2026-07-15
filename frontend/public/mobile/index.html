@@ -181,6 +181,24 @@
   .gearBtn:active{transform:scale(.92)}
   .gearDot{position:absolute; top:4px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C)}
   .newsDot{width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C); margin-left:2px}
+  .tk{position:relative; display:flex; align-items:center; gap:10px; margin-bottom:8px;
+    background:linear-gradient(135deg, rgba(255,255,255,.75), rgba(255,255,255,.45));
+    border:1px solid rgba(0,0,0,.07); border-radius:12px; padding:11px 12px}
+  .tk::before{content:""; position:absolute; left:40px; top:6px; bottom:6px; border-left:1.5px dashed rgba(0,0,0,.13)}
+  .tk .no{flex:none; width:28px; text-align:center; font-size:13px; font-weight:900; color:var(--ui); font-variant-numeric:tabular-nums}
+  .tk .lab{font-size:11.5px; font-weight:800; color:var(--paper-ink)}
+  .tk .st{font-size:9px; color:var(--paper-sub); margin-top:2px}
+  .tk.used{opacity:.55}
+  .tk .stamp{position:absolute; right:10px; top:50%; transform:translateY(-50%) rotate(-8deg);
+    font-size:9px; font-weight:900; color:var(--ui); border:1.5px solid var(--ui); border-radius:6px; padding:2px 6px; letter-spacing:.1em}
+  .tk-inp{display:block; width:100%; box-sizing:border-box; margin:12px 0 8px; padding:11px 12px;
+    background:rgba(255,255,255,.8); border:1px solid rgba(0,0,0,.1); border-radius:11px;
+    font-family:inherit; font-size:13px; color:var(--paper-ink); -webkit-appearance:none}
+  .tk-inp::placeholder{color:var(--paper-sub)}
+  .tk-btn{display:block; width:100%; border:none; cursor:pointer; padding:12px; border-radius:11px;
+    background:var(--ui); color:#fff; font-family:inherit; font-size:13px; font-weight:800; letter-spacing:.02em}
+  .tk-btn:disabled{background:rgba(0,0,0,.14); color:rgba(255,255,255,.85)}
+  .tk-btn:active:not(:disabled){transform:scale(.98)}
   .menu-list{margin-top:12px; display:flex; flex-direction:column; gap:8px}
   .mrow{display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.55); border:none; width:100%;
     font-family:inherit; text-align:left; cursor:pointer; color:var(--paper-ink);
@@ -602,6 +620,7 @@
         <div class="top"><span class="tt">설정</span><span class="batt" id="sigMenu"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <div class="menu-list">
           <button class="mrow" id="bNews">새소식<span class="newsDot" id="newsDot" hidden></span><span class="sub" id="newsSub">공지 · 업데이트</span></button>
+          <button class="mrow" id="bInvite">초대권 사용하기<span class="sub" id="invSub">친구를 베타에 초대</span></button>
           <div class="mrow" style="cursor:default">
             컬러웨이
             <span class="ways">
@@ -622,6 +641,15 @@
       <div class="scr" data-s="news" id="scrNews">
         <div class="top"><span class="tt">새소식</span></div>
         <div class="menu-list" id="newsList"><div class="menu-note" style="margin-top:20px">아직 공지가 없어요</div></div>
+        <div class="menu-note">MENU를 누르면 내 만다라로</div>
+      </div>
+
+      <!-- 초대권 -->
+      <div class="scr" data-s="invite" id="scrInvite">
+        <div class="top"><span class="tt">초대권</span></div>
+        <div id="tkList"></div>
+        <input class="tk-inp" id="tkEmail" type="email" inputmode="email" autocomplete="off" placeholder="친구 이메일 주소">
+        <button class="tk-btn" id="tkSend">초대 메일 보내기</button>
         <div class="menu-note">MENU를 누르면 내 만다라로</div>
       </div>
 
@@ -772,7 +800,7 @@
   }
 
   /* ================= 화면 상태 ================= */
-  var SCREENS=['login','home','menu','news','player'];
+  var SCREENS=['login','home','menu','news','invite','player'];
   var scr={}; SCREENS.forEach(function(n){scr[n]=document.querySelector('.scr[data-s="'+n+'"]')});
   var cur='login';
   function bootDone(){
@@ -1980,7 +2008,58 @@
       d.appendChild(h); d.appendChild(b); box.appendChild(d);
     });
   }
-  document.getElementById('bGear').onclick=function(){ show('menu'); };
+  /* ── 초대권 (v1: 검증된 베타 초대 메일 위임, 잔여 = 파생값) ── */
+  function maskEmail(e){ var a=e.split('@'); return (a[0]||'').slice(0,3)+'***@'+(a[1]||''); }
+  function renderTickets(d){
+    var box=document.getElementById('tkList'); box.innerHTML='';
+    for(var i=0;i<d.total;i++){
+      var inv=d.invites[i];
+      var el=document.createElement('div');
+      el.className='tk'+(inv?' used':'');
+      el.innerHTML='<span class="no">'+(i+1)+'</span><span><span class="lab">베타 초대권</span><div class="st"></div></span>'
+        +(inv?'<span class="stamp"></span>':'');
+      el.querySelector('.st').textContent=inv?(maskEmail(inv.email)+' · '+(inv.joined?'가입 완료':'가입 대기')):'친구를 베타에 초대합니다';
+      if(inv) el.querySelector('.stamp').textContent=inv.joined?'가입 완료':'사용됨';
+      box.appendChild(el);
+    }
+    var left=d.remaining>0;
+    document.getElementById('tkEmail').hidden=!left;
+    var btn=document.getElementById('tkSend');
+    btn.disabled=!left;
+    btn.textContent=left?'초대 메일 보내기':'초대권을 모두 사용했어요';
+    document.getElementById('invSub').textContent=left?('남은 '+d.remaining+'장'):'모두 사용';
+  }
+  async function loadTickets(){
+    try{
+      var r=await api('/invites'); var j=await r.json();
+      if(j&&j.data) renderTickets(j.data);
+    }catch(e){ document.getElementById('tkList').innerHTML='<div class="menu-note" style="margin-top:20px">불러오지 못했어요 — 연결 확인 후 다시</div>'; }
+  }
+  document.getElementById('bInvite').onclick=function(){ show('invite'); loadTickets(); };
+  document.getElementById('tkSend').onclick=async function(){
+    var inp=document.getElementById('tkEmail'), em=(inp.value||'').trim();
+    if(!em||em.indexOf('@')<1){ toast('이메일 주소를 확인해주세요'); return; }
+    var btn=this; btn.disabled=true; btn.textContent='보내는 중…';
+    try{
+      var r=await api('/invites',{method:'POST',body:JSON.stringify({email:em})});
+      var j=await r.json();
+      inp.value='';
+      toast('초대 메일을 보냈어요'+(j&&j.data?' — 남은 '+j.data.remaining+'장':''));
+    }catch(e){
+      var msg='보내지 못했어요 — 잠시 후 다시';
+      if(e&&e.status===409) msg='이미 초대됐거나 가입한 이메일이에요';
+      if(e&&e.status===400) msg='이메일 주소를 확인해주세요';
+      toast(msg);
+    }
+    btn.disabled=false; btn.textContent='초대 메일 보내기';
+    loadTickets();
+  };
+  document.getElementById('bGear').onclick=function(){ show('menu'); loadTicketsQuiet(); };
+  function loadTicketsQuiet(){ // 설정 진입 시 잔여 장수만 미리 (조용히 실패)
+    api('/invites').then(function(r){return r.json()}).then(function(j){
+      if(j&&j.data) document.getElementById('invSub').textContent=j.data.remaining>0?('남은 '+j.data.remaining+'장'):'모두 사용';
+    }).catch(function(){});
+  }
   document.getElementById('bNews').onclick=function(){
     show('news');
     fetchNews().then(function(ns){
