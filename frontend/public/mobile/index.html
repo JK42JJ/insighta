@@ -606,6 +606,7 @@
           </div>
           <button class="mrow" id="bInstall">홈 화면에 설치<span class="sub">전체화면 앱</span></button>
           <button class="mrow" id="bRefresh">새로고침<span class="sub">최신 버전 불러오기</span></button>
+          <button class="mrow" id="bFeedback">의견 보내기<span class="sub">기능 제안 · 불편 신고</span></button>
           <button class="mrow" id="bLogout">로그아웃</button>
         </div>
         <div class="menu-note">MENU를 다시 누르면 돌아갑니다</div>
@@ -1929,6 +1930,11 @@
     toast('새로고침 중…');
     fetch(location.pathname,{cache:'reload'}).catch(function(){})
       .finally(function(){ location.reload(); });
+  };
+  document.getElementById('bFeedback').onclick=function(){
+    // 메일 앱으로 — 별도 서버 없이 support 공식 주소로 전달
+    location.href='mailto:support@insighta.one?subject='+encodeURIComponent('다이얼 의견')
+      +'&body='+encodeURIComponent('기능 제안이나 불편한 점을 적어주세요.\n\n');
   };
   document.getElementById('bLogout').onclick=function(){
     try{localStorage.removeItem(OWN_KEY)}catch(e){}
