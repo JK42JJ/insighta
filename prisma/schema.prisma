@@ -2657,3 +2657,21 @@ model app_notices {
   @@index([published_at])
   @@schema("public")
 }
+
+/// Invite tickets v2 (2026-07-15): each member gets N shareable invite links
+/// (nanoid code, resolved via /s/:code). Consumed when someone signs up
+/// through the link (redeemed), not when shared — so a link can be re-shared
+/// until it lands a signup.
+/// Raw SQL DDL: prisma/migrations/invite-links/001_create_invite_links.sql
+model invite_links {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String    @unique @db.VarChar(16)
+  inviter_id  String    @db.Uuid
+  invitee_id  String?   @db.Uuid
+  redeemed_at DateTime? @db.Timestamptz(6)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([inviter_id])
+  @@index([invitee_id])
+  @@schema("public")
+}

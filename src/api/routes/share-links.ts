@@ -23,6 +23,7 @@ import {
   type ShareTargetType,
 } from '@/modules/share-links/manager';
 import { resolveOgMeta } from './og';
+import { inviteInviterId, inviterName } from '@/modules/invites/manager';
 
 function escapeHtml(s: string): string {
   return s
@@ -136,6 +137,26 @@ export async function shareLinkResolverRoutes(fastify: FastifyInstance): Promise
     const origin = config.share.publicOrigin;
     const pageUrl = `${origin}/s/${encodeURIComponent(request.params.code)}`;
     const brandImage = `${origin}/dial/og.png`;
+
+    // Invite links live in invite_links (v2). Check them first.
+    const inviterId = await inviteInviterId(request.params.code);
+    if (inviterId) {
+      const name = await inviterName(inviterId);
+      const who = name ? `${name}님이` : '친구가';
+      return reply
+        .header('Content-Type', 'text/html; charset=utf-8')
+        .header('Cache-Control', 'no-store')
+        .send(
+          ogPage({
+            title: `${who} 다이얼 베타에 초대했어요`,
+            description:
+              '내 유튜브에서 필요한 정보만 — 초대로 클로즈드 베타에 바로 참여할 수 있어요.',
+            image: brandImage,
+            pageUrl,
+            redirectTo: `${origin}/mobile/?invite=${encodeURIComponent(request.params.code)}`,
+          })
+        );
+    }
 
     const { state, row } = await resolveShareLink(request.params.code);
 
