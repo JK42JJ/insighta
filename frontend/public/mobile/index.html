@@ -280,10 +280,13 @@
   body:not(.playing) #bVoice .v-on{display:none}
   body:not(.playing) #bVoice .v-off{display:block; color:var(--paper-sub)}
   body.playing.reading #bVoice{color:var(--ui)}
-  .readview{flex:1; min-height:0; overflow-y:auto; margin-top:10px; padding-bottom:24px; display:none}
-  body.reading .readview{display:block}
-  body.stage .rdtog,body.stage .readview{display:none !important}
-  body.reading .player-state,body.reading #clipbox,body.reading #readbox,body.reading #ptrack,body.reading #chcard{display:none !important}
+  .readview{display:none !important} /* [J:07-15 정정] 스크롤 문서 폐기 */
+  body.stage .rdtog{display:none !important}
+  /* 읽기 모드 = 기본 모드 그대로 + 에페이퍼 전체화면 + 조그휠 플로팅 [J:07-15 정정] */
+  body.reading .wheelzone{position:absolute; left:0; right:0; bottom:calc(var(--sab,0px) + 6px);
+    z-index:40; padding:0; width:100%; pointer-events:none; place-items:center}
+  body.reading .wheel{width:min(40%,180px); opacity:.30; pointer-events:auto; transition:opacity .35s var(--soft)}
+  body.reading .wheel.touching,body.reading .wheel.demo,body.reading.wheelawake .wheel{opacity:.9}
   .rd-ch{font-size:11px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:22px 2px 10px; text-transform:none}
   .rd-ch:first-child{margin-top:2px}
   .rd-note{font-size:17px; line-height:1.85; color:var(--paper-ink); margin:0 0 4px; padding:8px 10px; border-radius:10px;
@@ -1243,9 +1246,7 @@
     if(cur){ cur.classList.add('on'); if(cur.scrollIntoView) cur.scrollIntoView({block:'center',behavior:reduce?'auto':'smooth'}); }
   }
   function toggleReading(){
-    var on=document.body.classList.toggle('reading');
-    document.getElementById('readview').hidden=!on; // [hidden]{display:none!important} 우회
-    if(on){ renderReadView(); }
+    document.body.classList.toggle('reading'); // 에페이퍼 전체화면 + 조그휠 플로팅 (콘텐츠·조작 불변)
   }
 
   function renderChapters(){
@@ -1657,7 +1658,7 @@
     bi=Math.max(0,Math.min(bi,beats.length-1));
     pState.style.display='none'; ptrack.hidden=false; chcard.classList.remove('show');
     var beat=beats[bi];
-    renderChapters(); msUpdate(); syncReadHighlight();
+    renderChapters(); msUpdate();
     document.getElementById('pCh').textContent=(beat.t!=='ch'&&beat.title)?beat.title:'';
     // 백그라운드 + 실보이스 노트: 클립 비트는 건너뛰고 내레이션으로 (iframe 영상은 백그라운드 재생 불가)
     if(document.hidden&&beat.t==='c'&&epAudio.ready){
@@ -1901,7 +1902,6 @@
       if(ni>=curSents.length){ nextBeat(1); return; }
       if(!playing){ playing=true; setCharging(true); document.body.classList.add('playing'); acquireWake(); }
       if(beat.audio&&epAudio.ready) audioFrom(ni,beat); else speakFrom(ni);
-      syncReadHighlight&&syncReadHighlight();
     } else { nextBeat(dir); }
   }
   var stealClick=false;
