@@ -202,6 +202,9 @@
   .tk .no{flex:none; width:28px; text-align:center; font-size:13px; font-weight:900; color:var(--ui); font-variant-numeric:tabular-nums}
   .tk .lab{font-size:11.5px; font-weight:800; color:var(--paper-ink)}
   .tk .st{font-size:9px; color:var(--paper-sub); margin-top:2px}
+  .tk .tkshr{margin-left:auto; flex:none; width:30px; height:30px; border-radius:9px; border:none; cursor:pointer;
+    background:var(--ui); color:#fff; display:grid; place-items:center; -webkit-tap-highlight-color:transparent}
+  .tk .tkshr:active{transform:scale(.9)}
   .tk.used{opacity:.55}
   .tk .stamp{position:absolute; right:10px; top:50%; transform:translateY(-50%) rotate(-8deg);
     font-size:9px; font-weight:900; color:var(--ui); border:1.5px solid var(--ui); border-radius:6px; padding:2px 6px; letter-spacing:.1em}
@@ -678,9 +681,7 @@
       <div class="scr" data-s="invite" id="scrInvite">
         <div class="top"><span class="bc"><button class="up" data-back="menu">설정</button><span class="sep">›</span><span class="cur">초대권</span></span></div>
         <div id="tkList" style="overflow-y:auto;flex:1;min-height:0"></div>
-        <input class="tk-inp" id="tkEmail" type="email" inputmode="email" autocomplete="off" placeholder="친구 이메일 주소">
-        <button class="tk-btn" id="tkSend">초대 메일 보내기</button>
-        <div class="menu-note">MENU를 누르면 내 만다라로</div>
+        <div class="menu-note">친구가 가입하면 초대권이 사용돼요 · 그 전엔 몇 번이든 다시 보낼 수 있어요</div>
       </div>
 
       <!-- 플레이어 -->
@@ -2047,26 +2048,39 @@
       d.appendChild(h); d.appendChild(b); box.appendChild(d);
     });
   }
-  /* ── 초대권 (v1: 검증된 베타 초대 메일 위임, 잔여 = 파생값) ── */
-  function maskEmail(e){ var a=e.split('@'); return (a[0]||'').slice(0,3)+'***@'+(a[1]||''); }
+  /* ── 초대권 v2 [J:07-15]: 공유 아이콘 → OS 공유 시트, 가입 시 소진 ── */
+  var _tickets=[]; // 화면 진입 시 링크 선발급 완료분 (탭 즉시 동기 공유 = iOS 제스처)
   function renderTickets(d){
+    _tickets=d.tickets||[];
     var box=document.getElementById('tkList'); box.innerHTML='';
-    for(var i=0;i<d.total;i++){
-      var inv=d.invites[i];
+    _tickets.forEach(function(t,i){
       var el=document.createElement('div');
-      el.className='tk'+(inv?' used':'');
-      el.innerHTML='<span class="no">'+(i+1)+'</span><span><span class="lab">베타 초대권</span><div class="st"></div></span>'
-        +(inv?'<span class="stamp"></span>':'');
-      el.querySelector('.st').textContent=inv?(maskEmail(inv.email)+' · '+(inv.joined?'가입 완료':'가입 대기')):'친구를 베타에 초대합니다';
-      if(inv) el.querySelector('.stamp').textContent=inv.joined?'가입 완료':'사용됨';
+      el.className='tk'+(t.redeemed?' used':'');
+      var st=t.redeemed?((t.inviteeMasked||'친구')+' · 가입 완료'):'아이콘을 눌러 어디로든 전달';
+      el.innerHTML='<span class="no">'+(i+1)+'</span><span><span class="lab">베타 초대권</span><div class="st"></div></span>';
+      el.querySelector('.st').textContent=st;
+      if(t.redeemed){ var s=document.createElement('span'); s.className='stamp'; s.textContent='가입 완료'; el.appendChild(s); }
+      else{
+        var b=document.createElement('button'); b.className='tkshr'; b.setAttribute('aria-label','초대 링크 공유');
+        b.innerHTML='<svg width="13" height="15" viewBox="0 0 15 18"><path d="M7.5 1v10M4.2 4.2 7.5 1l3.3 3.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7.4" width="11" height="9.4" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>';
+        (function(url){ b.onclick=function(e){ e.stopPropagation(); shareInvite(url); }; })(t.url);
+        el.appendChild(b);
+      }
       box.appendChild(el);
-    }
-    var left=d.remaining>0;
-    document.getElementById('tkEmail').hidden=!left;
-    var btn=document.getElementById('tkSend');
-    btn.disabled=!left;
-    btn.textContent=left?'초대 메일 보내기':'초대권을 모두 사용했어요';
-    document.getElementById('invSub').textContent=left?('남은 '+d.remaining+'장'):'모두 사용';
+    });
+    var used=_tickets.filter(function(t){return t.redeemed}).length;
+    var left=d.total-used;
+    document.getElementById('invSub').textContent=left>0?('남은 '+left+'장'):'모두 사용';
+  }
+  function shareInvite(url){
+    var data={title:'다이얼 베타 초대', text:'내 유튜브에서 필요한 정보만 — 다이얼 베타에 초대할게요.', url:url};
+    if(navigator.share){ navigator.share(data).catch(function(e){ if(!(e&&e.name==='AbortError')) copyInvite(url); }); return; }
+    copyInvite(url);
+  }
+  function copyInvite(url){
+    (navigator.clipboard?navigator.clipboard.writeText(url):Promise.reject())
+      .then(function(){ toast('초대 링크가 복사됐어요'); })
+      .catch(function(){ prompt('이 링크를 복사하세요', url); });
   }
   async function loadTickets(){
     try{
@@ -2075,24 +2089,6 @@
     }catch(e){ document.getElementById('tkList').innerHTML='<div class="menu-note" style="margin-top:20px">불러오지 못했어요 — 연결 확인 후 다시</div>'; }
   }
   document.getElementById('bInvite').onclick=function(){ show('invite'); loadTickets(); };
-  document.getElementById('tkSend').onclick=async function(){
-    var inp=document.getElementById('tkEmail'), em=(inp.value||'').trim();
-    if(!em||em.indexOf('@')<1){ toast('이메일 주소를 확인해주세요'); return; }
-    var btn=this; btn.disabled=true; btn.textContent='보내는 중…';
-    try{
-      var r=await api('/invites',{method:'POST',body:JSON.stringify({email:em})});
-      var j=await r.json();
-      inp.value='';
-      toast('초대 메일을 보냈어요'+(j&&j.data?' — 남은 '+j.data.remaining+'장':''));
-    }catch(e){
-      var msg='보내지 못했어요 — 잠시 후 다시';
-      if(e&&e.status===409) msg='이미 초대됐거나 가입한 이메일이에요';
-      if(e&&e.status===400) msg='이메일 주소를 확인해주세요';
-      toast(msg);
-    }
-    btn.disabled=false; btn.textContent='초대 메일 보내기';
-    loadTickets();
-  };
   document.getElementById('bGear').onclick=function(){ show('menu'); loadTicketsQuiet(); };
   // 브레드크럼 "설정" 세그먼트 = 한 단계 위(설정)로 [J:07-15 IA]
   Array.prototype.forEach.call(document.querySelectorAll('.bc .up[data-back]'), function(b){
@@ -2100,7 +2096,9 @@
   });
   function loadTicketsQuiet(){ // 설정 진입 시 잔여 장수만 미리 (조용히 실패)
     api('/invites').then(function(r){return r.json()}).then(function(j){
-      if(j&&j.data) document.getElementById('invSub').textContent=j.data.remaining>0?('남은 '+j.data.remaining+'장'):'모두 사용';
+      if(j&&j.data){ var used=(j.data.tickets||[]).filter(function(t){return t.redeemed}).length;
+        var left=j.data.total-used;
+        document.getElementById('invSub').textContent=left>0?('남은 '+left+'장'):'모두 사용'; }
     }).catch(function(){});
   }
   document.getElementById('bNews').onclick=function(){
@@ -2229,8 +2227,23 @@
   };
 
   /* ================= 부팅 ================= */
-  if(new URLSearchParams(location.search).get('invite')==='1'){
-    document.getElementById('loginSub').textContent='친구가 공유한 인사이타 — Google로 3초 만에 시작';
+  var INVITE_KEY='insighta-invite';
+  (function(){ // 초대 링크로 진입 — 코드를 로그인 왕복 전 보존 (OAuth 후 쿼리 소실)
+    var inv=new URLSearchParams(location.search).get('invite');
+    if(inv){
+      if(inv.length>=6){ try{ localStorage.setItem(INVITE_KEY, inv); }catch(e){} }
+      document.getElementById('loginSub').textContent='친구가 초대했어요 — Google로 3초 만에 시작';
+    }
+  })();
+  async function redeemPendingInvite(){ // 로그인 후 1회 리딤 (조용히)
+    var code; try{ code=localStorage.getItem(INVITE_KEY); }catch(e){}
+    if(!code) return;
+    try{ localStorage.removeItem(INVITE_KEY); }catch(e){}
+    try{
+      var r=await api('/invites/redeem',{method:'POST',body:JSON.stringify({code:code})});
+      var j=await r.json();
+      if(j&&j.data&&j.data.result==='redeemed') toast('초대로 시작했어요 — 환영해요!');
+    }catch(e){}
   }
   if(navigator.standalone===true || matchMedia('(display-mode: standalone)').matches){
     document.body.classList.add('standalone');
@@ -2256,7 +2269,7 @@
       }catch(e){ GUEST=null; show('login'); toast('링크를 열지 못했어요'); return; }
     }
     var tok=await freshToken();
-    if(tok){ show('home'); loadList(); wheelIntroOnce(); checkNewsUnread(); }
+    if(tok){ show('home'); loadList(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite(); }
     else { show('login'); }
   })();
 </script>

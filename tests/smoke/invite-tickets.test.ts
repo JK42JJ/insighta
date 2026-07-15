@@ -1,23 +1,21 @@
 /**
- * Invite tickets (초대권) — pure derivation tests (2026-07-15).
- * remaining is DERIVED (default − sent count), never stored.
+ * Invite tickets v2 — pure code validation (2026-07-15).
+ * (v1 computeRemaining retired with the email-delegation flow.)
  */
 process.env['ENCRYPTION_SECRET'] ??=
   'test-secret-test-secret-test-secret-test-secret-test-secret-1234';
 
-import { computeRemaining } from '@/api/routes/invites';
+import { isValidInviteCode } from '@/modules/invites/manager';
 
-describe('computeRemaining', () => {
-  it('starts at the default allowance', () => {
-    expect(computeRemaining(2, 0)).toBe(2);
+describe('isValidInviteCode', () => {
+  it('accepts an 8-char unambiguous-alphabet code', () => {
+    expect(isValidInviteCode('aB3xYz9k')).toBe(true);
   });
-  it('decrements per sent invite and floors at 0', () => {
-    expect(computeRemaining(2, 1)).toBe(1);
-    expect(computeRemaining(2, 2)).toBe(0);
-    expect(computeRemaining(2, 5)).toBe(0);
-  });
-  it('ignores negative/fractional noise', () => {
-    expect(computeRemaining(2, -1)).toBe(2);
-    expect(computeRemaining(2.9, 0)).toBe(2);
+  it('rejects wrong length and ambiguous/forbidden chars', () => {
+    expect(isValidInviteCode('short')).toBe(false);
+    expect(isValidInviteCode('aB3xYz9kX')).toBe(false);
+    expect(isValidInviteCode('aB3xYz0O')).toBe(false); // 0/O excluded
+    expect(isValidInviteCode('')).toBe(false);
+    expect(isValidInviteCode('1')).toBe(false);
   });
 });
