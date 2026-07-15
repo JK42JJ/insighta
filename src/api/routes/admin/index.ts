@@ -7,6 +7,7 @@ import { adminPromotionRoutes } from './promotions';
 import { adminAuditRoutes } from './audit';
 import { adminChannelBlocklistRoutes } from './channel-blocklist';
 import { adminBetaApplicationRoutes } from './beta-applications';
+import { adminNoticeRoutes } from './notices';
 import { adminPerformanceRoutes } from './performance';
 import { adminRedemptionRoutes, adminBulkRoutes } from './redemption';
 // Stripe scaffold moved to payments.legacy.ts on 2026-05-13 (superseded by
@@ -53,6 +54,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminAuditRoutes, { prefix: '/audit-log' });
   await fastify.register(adminChannelBlocklistRoutes, { prefix: '/channel-blocklist' });
   await fastify.register(adminBetaApplicationRoutes);
+  await fastify.register(adminNoticeRoutes);
   await fastify.register(adminAnalyticsRoutes, { prefix: '/analytics' });
   await fastify.register(adminContentRoutes, { prefix: '/content' });
   await fastify.register(adminReportRoutes, { prefix: '/reports' });

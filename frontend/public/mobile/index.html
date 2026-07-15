@@ -176,6 +176,11 @@
   @media (prefers-reduced-motion: reduce){ .sk,.skt{animation:none} }
 
   /* ---- MENU ---- */
+  .gearBtn{position:relative; display:grid; place-items:center; width:30px; height:30px; margin:-8px -6px;
+    border:none; background:none; color:var(--paper-sub); cursor:pointer; -webkit-tap-highlight-color:transparent}
+  .gearBtn:active{transform:scale(.92)}
+  .gearDot{position:absolute; top:4px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C)}
+  .newsDot{width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C); margin-left:2px}
   .menu-list{margin-top:12px; display:flex; flex-direction:column; gap:8px}
   .mrow{display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.55); border:none; width:100%;
     font-family:inherit; text-align:left; cursor:pointer; color:var(--paper-ink);
@@ -587,15 +592,16 @@
 
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
-        <div class="top"><span class="tt">내 만다라</span><span class="batt" id="sigHome"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
+        <div class="top"><span class="tt">내 만다라</span><span style="display:flex;align-items:center;gap:10px;margin-left:auto"><button class="gearBtn" id="bGear" aria-label="설정"><svg width="15" height="15" viewBox="0 0 20 20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="3.1"/><path d="M10 2.6v2.6M10 14.8v2.6M2.6 10h2.6M14.8 10h2.6M4.8 4.8l1.9 1.9M13.3 13.3l1.9 1.9M15.2 4.8l-1.9 1.9M6.7 13.3l-1.9 1.9"/></g></svg><span class="gearDot" id="gearDot" hidden></span></button><span class="batt" id="sigHome"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></span></div>
         <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
         <div class="rows" id="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
       </div>
 
       <!-- MENU -->
       <div class="scr" data-s="menu" id="scrMenu">
-        <div class="top"><span class="tt">MENU</span><span class="batt" id="sigMenu"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
+        <div class="top"><span class="tt">설정</span><span class="batt" id="sigMenu"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <div class="menu-list">
+          <button class="mrow" id="bNews">새소식<span class="newsDot" id="newsDot" hidden></span><span class="sub" id="newsSub">공지 · 업데이트</span></button>
           <div class="mrow" style="cursor:default">
             컬러웨이
             <span class="ways">
@@ -609,7 +615,14 @@
           <button class="mrow" id="bFeedback">의견 보내기<span class="sub">기능 제안 · 불편 신고</span></button>
           <button class="mrow" id="bLogout">로그아웃</button>
         </div>
-        <div class="menu-note">MENU를 다시 누르면 돌아갑니다</div>
+        <div class="menu-note">MENU를 누르면 내 만다라로</div>
+      </div>
+
+      <!-- 새소식 -->
+      <div class="scr" data-s="news" id="scrNews">
+        <div class="top"><span class="tt">새소식</span></div>
+        <div class="menu-list" id="newsList"><div class="menu-note" style="margin-top:20px">아직 공지가 없어요</div></div>
+        <div class="menu-note">MENU를 누르면 내 만다라로</div>
       </div>
 
       <!-- 플레이어 -->
@@ -759,7 +772,7 @@
   }
 
   /* ================= 화면 상태 ================= */
-  var SCREENS=['login','home','menu','player'];
+  var SCREENS=['login','home','menu','news','player'];
   var scr={}; SCREENS.forEach(function(n){scr[n]=document.querySelector('.scr[data-s="'+n+'"]')});
   var cur='login';
   function bootDone(){
@@ -1675,9 +1688,9 @@
     if(wheelStole()) return;
     if(cur==='login') return;
     if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
+    // MENU = 언제나 "내 만다라"로 (설정 진입은 리스트의 기어 아이콘만)
     if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('home'); renderRows(); }
-    else if(cur==='menu'){ show('home'); }
-    else{ show('menu'); }
+    else if(cur!=='home'){ show('home'); }
   };
   document.getElementById('instClose').onclick=function(){ document.getElementById('instOv').hidden=true; };
   document.getElementById('instOv').addEventListener('click',function(e){ if(e.target===this) this.hidden=true; });
@@ -1931,6 +1944,51 @@
     fetch(location.pathname,{cache:'reload'}).catch(function(){})
       .finally(function(){ location.reload(); });
   };
+  /* ── 새소식 (Stage 1: pull 피드 + 클라이언트 언리드) ── */
+  var NEWS_SEEN='insighta-news-seen'; var newsCache=null;
+  function fmtNoticeDate(iso){ try{ var d=new Date(iso); return (d.getMonth()+1)+'월 '+d.getDate()+'일'; }catch(e){ return ''; } }
+  async function fetchNews(){
+    if(newsCache) return newsCache;
+    var r=await fetch('/api/v1/app-notices?limit=20');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var j=await r.json();
+    newsCache=(j&&j.data&&j.data.notices)||[];
+    return newsCache;
+  }
+  function newsSeenTs(){ try{ return localStorage.getItem(NEWS_SEEN)||''; }catch(e){ return ''; } }
+  function updateNewsDots(latest){
+    var unread=!!(latest&&latest>newsSeenTs());
+    document.getElementById('gearDot').hidden=!unread;
+    document.getElementById('newsDot').hidden=!unread;
+  }
+  function checkNewsUnread(){ // 부팅 시 1회 — 기어에 점만 표시 (조용히 실패)
+    fetchNews().then(function(ns){ updateNewsDots(ns[0]&&ns[0].published_at); }).catch(function(){});
+  }
+  function renderNews(ns){
+    var box=document.getElementById('newsList');
+    if(!ns.length){ box.innerHTML='<div class="menu-note" style="margin-top:20px">아직 공지가 없어요</div>'; return; }
+    box.innerHTML='';
+    ns.forEach(function(n){
+      var d=document.createElement('div');
+      d.className='mrow'; d.style.cssText='flex-direction:column;align-items:flex-start;gap:4px;cursor:default';
+      var h=document.createElement('div'); h.style.cssText='display:flex;gap:8px;align-items:baseline;width:100%';
+      var t=document.createElement('span'); t.textContent=n.title; t.style.fontWeight='700';
+      var dt=document.createElement('span'); dt.className='sub'; dt.textContent=fmtNoticeDate(n.published_at);
+      h.appendChild(t); h.appendChild(dt);
+      var b=document.createElement('div'); b.textContent=n.body;
+      b.style.cssText='font-size:11px;line-height:1.65;color:var(--paper-sub);white-space:pre-wrap';
+      d.appendChild(h); d.appendChild(b); box.appendChild(d);
+    });
+  }
+  document.getElementById('bGear').onclick=function(){ show('menu'); };
+  document.getElementById('bNews').onclick=function(){
+    show('news');
+    fetchNews().then(function(ns){
+      renderNews(ns);
+      if(ns[0]) try{ localStorage.setItem(NEWS_SEEN, ns[0].published_at); }catch(e){}
+      updateNewsDots(null); // 읽음 처리
+    }).catch(function(){ document.getElementById('newsList').innerHTML='<div class="menu-note" style="margin-top:20px">불러오지 못했어요 — 연결 확인 후 다시</div>'; });
+  };
   document.getElementById('bFeedback').onclick=function(){
     // 메일 앱으로 — 별도 서버 없이 support 공식 주소로 전달
     location.href='mailto:support@insighta.one?subject='+encodeURIComponent('다이얼 의견')
@@ -2076,7 +2134,7 @@
       }catch(e){ GUEST=null; show('login'); toast('링크를 열지 못했어요'); return; }
     }
     var tok=await freshToken();
-    if(tok){ show('home'); loadList(); wheelIntroOnce(); }
+    if(tok){ show('home'); loadList(); wheelIntroOnce(); checkNewsUnread(); }
     else { show('login'); }
   })();
 </script>
