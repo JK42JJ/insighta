@@ -237,9 +237,11 @@ export interface ProUpgradeEmailParams {
 
 /**
  * Beta-tester Pro upgrade — sent when admin raises a member's tier to pro.
- * The numbers below quote TIER_LIMITS (src/config/quota.ts) — keep them in
- * sync if tier limits change. No payment is attached to a manual tier change,
- * so the copy states that explicitly.
+ * Every benefit line must be an ENFORCED limit: mandala_limit
+ * (mandala/manager.ts) and local_cards_limit (local-cards EF) only —
+ * aiSummaries/richSummaries exist in TIER_LIMITS but nothing enforces them,
+ * so they must not be promised here. No payment is attached to a manual
+ * tier change, so the copy states that explicitly.
  */
 export function buildProUpgradeEmail(params: ProUpgradeEmailParams): {
   subject: string;
@@ -248,9 +250,11 @@ export function buildProUpgradeEmail(params: ProUpgradeEmailParams): {
   const url = params.ctaUrl ?? `${SITE_ORIGIN}/`;
   const name = params.name?.trim() ? esc(params.name.trim()) : '';
   const rows = [
-    ['만다라 20개', '동시에 키우는 목표가 3개에서 20개로 늘어나요.'],
+    [
+      '만다라 20개',
+      '동시에 키우는 목표가 3개에서 20개로. 만다라마다 ‘10분만에 보는 책’ 노트가 함께 늘어나요.',
+    ],
     ['영상 카드 1,000장', '만다라에 담는 카드가 150장에서 1,000장으로.'],
-    ['AI 요약 1,000회 · 노트 200권', '핵심 요약과 ‘10분만에 보는 책’ 노트를 넉넉하게.'],
     ['신규 기능 우선 제공', '새 기능이 열리면 베타 테스터가 가장 먼저 써요.'],
   ]
     .map(
