@@ -1845,8 +1845,15 @@
     function notch(dir,units){
       kick+=1.5*dir; // J2: 시각 디텐트
       if(navigator.vibrate) navigator.vibrate(8);
-      var n=(cur==='player')?(units||1):1; // J3: 가속은 재생 구간만 — 메뉴는 1노치 1행 (아이팟)
-      for(var u=0;u<n;u++) dispatchNotch(dir);
+      // 조그/셔틀 [J:07-15]: 느림=마이크로(클립 초·노트 문장), 중간=1 atom, 빠름=성큼
+      // (수치 임계값·MICRO_SEC 는 실기기 튜닝 — CP467)
+      if(cur==='player'){
+        if((units||1)<=1){ microStep(dir); return; }
+        var j=(units>=4)?2:1;
+        for(var u=0;u<j;u++) dispatchNotch(dir);
+        return;
+      }
+      dispatchNotch(dir); // 메뉴 = 1노치 1행
     }
     window.wheelRubber=function(dir){ rubber+=15*dir; kickFrame(); }; // J4
     window.wheelDemo=function(){ // J6: 첫 발견
@@ -1871,6 +1878,30 @@
     for(var i=0;i<rows.children.length;i++) rows.children[i].classList.toggle('sel', i===selIdx);
     var el=rows.children[selIdx];
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
+  }
+  var MICRO_SEC=3; // 조그/셔틀 마이크로 초 단위 — 실기기 튜닝값
+  function microStep(dir){ // 현재 atom 내부 정밀 이동, 경계 넘으면 인접 atom으로 심리스
+    var beat=beats[bi]; if(!beat){ return; }
+    if(dir>0&&!guestFwdOk()){ guestFwdNotice(); return; } // 게스트 빨리감기 잠금 유지
+    if(beat.t==='c'){ // 클립 = 유튜브 초 단위 seek ([from~to] 안)
+      var t0; try{ t0=(yt&&yt.getCurrentTime)?yt.getCurrentTime():null; }catch(e){ t0=null; }
+      if(t0==null){ nextBeat(dir); return; }
+      var t=t0+dir*MICRO_SEC;
+      var lo=(beat.from!=null?beat.from:0), hi=(beat.to!=null?beat.to:t0+MICRO_SEC);
+      if(t<lo){ nextBeat(-1); return; }
+      if(t>hi){ nextBeat(1); return; }
+      try{ yt.seekTo(t,true); }catch(e){}
+      if(!playing){ playing=true; setCharging(true); document.body.classList.add('playing'); acquireWake(); }
+      msUpdate();
+    } else if(beat.t==='n'){ // 노트 = 문장 단위 이동
+      if(!curSents.length){ nextBeat(dir); return; }
+      var ni=curSentIdx+dir;
+      if(ni<0){ nextBeat(-1); return; }
+      if(ni>=curSents.length){ nextBeat(1); return; }
+      if(!playing){ playing=true; setCharging(true); document.body.classList.add('playing'); acquireWake(); }
+      if(beat.audio&&epAudio.ready) audioFrom(ni,beat); else speakFrom(ni);
+      syncReadHighlight&&syncReadHighlight();
+    } else { nextBeat(dir); }
   }
   var stealClick=false;
   function wheelStole(){ if(stealClick){ stealClick=false; return true; } return false; }
