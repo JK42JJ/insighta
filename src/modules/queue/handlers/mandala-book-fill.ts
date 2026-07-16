@@ -18,6 +18,7 @@ import { JOB_NAMES, MANDALA_BOOK_FILL_OPTIONS, type MandalaBookFillPayload } fro
 import { richSummaryWorkOptions } from './rich-summary-work-options';
 import { sendNoteReadyEmail } from '@/modules/email/transactional';
 import { noteReadyCtaUrl } from '@/modules/email/note-ready-cta';
+import { isBookFillBarrierEnabled } from '@/config/book-gate';
 
 const log = logger.child({ module: 'queue/mandala-book-fill' });
 
@@ -161,7 +162,12 @@ export async function handleMandalaBookFill(
   // Note-ready email — first successful note build for this mandala, regardless
   // of trigger (deadlock fix 2026-07-16: 'completion-barrier' never fired, so no
   // user was ever notified). Deduped one-shot; only 'filled' builds a note.
-  if (result.ok && result.action === 'filled') {
+  //
+  // Flag-combo guard (supervisor): the barrier is what guarantees the note is
+  // COMPLETE (all videos settled) before the first build. With the barrier OFF,
+  // fills are per-video legacy re-fills that can be 1-video stubs — emailing a
+  // stub-note is worse than no email. So only notify when the barrier is on.
+  if (result.ok && result.action === 'filled' && isBookFillBarrierEnabled()) {
     await notifyNoteReadyOnce(userId, mandalaId);
   }
 
