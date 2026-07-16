@@ -2391,6 +2391,7 @@
   }
   function nbCTA(n){ var u=n&&n.cta_url; if(!u) return;
     if(/^https?:/i.test(u)) return;                       // internal routes only (no external nav)
+    if(u==='invite'){ show('invite'); if(typeof loadTickets==='function') loadTickets(); return; }
     if(u==='/mobile/'||u==='/mobile'||u==='home'){ show('home'); return; }
     location.href=u;
   }

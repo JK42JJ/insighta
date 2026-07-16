@@ -189,6 +189,7 @@ APPLY_FILES=(
   "prisma/migrations/app-notices/001_create_app_notices.sql"
   "prisma/migrations/app-notices/002_add_kind_cta.sql"
   "prisma/migrations/app-notices/003_seed_beta_notices.sql"
+  "prisma/migrations/app-notices/004_align_cta_urls.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
