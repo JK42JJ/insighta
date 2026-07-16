@@ -286,8 +286,11 @@
   /* [J:07-15] 미니휠 = 진행바 위로 올림(엄지존) + 3초 자동숨김 (e). 기본 투명 → 터치 시 표시 → 3초 뒤 소멸 */
   body.reading .wheelzone{position:absolute; left:0; right:0; top:auto; bottom:36%;
     z-index:40; padding:0 24px 0 0; width:100%; pointer-events:none; place-items:center end} /* [J:07-16] right-center (right-thumb) per device guide box */
-  body.reading .wheel{width:min(40%,168px); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)}
+  body.reading .wheel{width:min(40%,168px); transform:translateX(-40%); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)} /* [J:07-16] shift left by 40% of wheel size (one-hand reach) */
   body.reading .wheel.touching,body.reading .wheel.demo,body.reading .wheel.awake,body.reading.wheelawake .wheel{opacity:.70} /* [J:07-15] 더 투명하게 — 읽기 콘텐츠 가림 완화 */
+  /* Fine (scrub) mode = a toggle; same palette, signalled by a dim tone + pressed core. */
+  body.finemode .wheel{filter:brightness(.7) contrast(1.03) saturate(.97); transition:filter .3s var(--soft)}
+  body.finemode #bCore{box-shadow:inset 0 4px 8px rgba(120,40,0,.55), 0 1px 3px rgba(80,30,0,.4)}
   .rd-ch{font-size:11px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:22px 2px 10px; text-transform:none}
   .rd-ch:first-child{margin-top:2px}
   .rd-note{font-size:17px; line-height:1.85; color:var(--paper-ink); margin:0 0 4px; padding:8px 10px; border-radius:10px;
@@ -1071,10 +1074,35 @@
 
   /* 차임 (§0-8) — pre-produce에서 정식 사운드로 대체 예정 */
   var actx=null;
+  // Short dry click for fine-scrub notches (iPod-wheel feel), guarded off when muted.
+  function wheelTick(){
+    try{
+      actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+      var o=actx.createOscillator(), g=actx.createGain();
+      o.type='square'; o.frequency.value=2100; o.connect(g); g.connect(actx.destination);
+      var st=actx.currentTime;
+      g.gain.setValueAtTime(0.0001,st);
+      g.gain.exponentialRampToValueAtTime(0.045,st+0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001,st+0.03);
+      o.start(st); o.stop(st+0.035);
+    }catch(e){}
+  }
+  // Low soft bounce when a rotation hits the start/end boundary.
+  function wheelEnd(){
+    try{
+      actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+      var o=actx.createOscillator(), g=actx.createGain(), st=actx.currentTime;
+      o.type='sine'; o.frequency.setValueAtTime(320,st); o.frequency.exponentialRampToValueAtTime(175,st+0.13);
+      o.connect(g); g.connect(actx.destination);
+      g.gain.setValueAtTime(0.0001,st); g.gain.exponentialRampToValueAtTime(0.11,st+0.012); g.gain.exponentialRampToValueAtTime(0.0001,st+0.2);
+      o.start(st); o.stop(st+0.22);
+    }catch(e){}
+  }
   function chime(kind){
     try{
       actx=actx||new (window.AudioContext||window.webkitAudioContext)();
-      var notes=kind==='start'?[523.25,783.99]:kind==='ch'?[659.25]:[783.99,523.25];
+      var notes=kind==='start'?[523.25,783.99]:kind==='ch'?[659.25]
+        :kind==='fineon'?[523.25,880]:kind==='fineoff'?[880,523.25]:[783.99,523.25];
       notes.forEach(function(f,i){
         var o=actx.createOscillator(), g=actx.createGain();
         o.type='sine'; o.frequency.value=f; o.connect(g); g.connect(actx.destination);
@@ -1911,7 +1939,42 @@
   var SCRUB_NOTCH=10;   // 스크럽 미세 노치 각도 (더 촘촘)
   var ROT_THRESH=6;     // 누적 회전각이 이 값 넘으면 '회전' 확정 (탭 아님)
   var HOLD_MS=480;      // 롱프레스 (MENU 길게 = 홈)
+  var FINE_TOGGLE_MS=800; // center long-press toggles fine mode (tunable — spec asks ~2s)
   var SCRUB_STEP_SEC=2; // 스크럽 미세 노치당 초
+
+  // Fine (scrub) mode is a persistent TOGGLE: long-press center to switch. Wheel
+  // rotation then does within-beat seek instead of beat navigation. Signalled by a
+  // dim tone (CSS body.finemode) + rising/falling chime + haptic.
+  var fineMode=false;
+  function setFineMode(on){
+    if(fineMode===on) return;
+    fineMode=on;
+    document.body.classList.toggle('finemode', on);
+    if(navigator.vibrate) navigator.vibrate(on?[9,26,9]:12);
+    chime(on?'fineon':'fineoff');
+  }
+  function toggleFine(){ setFineMode(!fineMode); }
+
+  // Wheel navigation pauses playback while moving and restores the START state when
+  // it settles: was-playing -> resume at the new position; was-paused -> stay paused.
+  var navHold={active:false, was:false, t:null};
+  function navBegin(){
+    if(cur!=='player'||finished) return;
+    if(!navHold.active){ navHold.active=true; navHold.was=playing;
+      if(playing){ stopSpeech(); stopClip(); markPlaying(false); } }
+    clearTimeout(navHold.t); navHold.t=setTimeout(navEnd, 260);
+  }
+  function navEnd(){
+    if(!navHold.active) return;
+    navHold.active=false;
+    if(navHold.was){ setPlaying(true); }        // resume at the settled position
+    else { previewBeat(); }                      // stay paused, show where we landed
+  }
+  function previewBeat(){                         // static view of current beat (no audio)
+    var b=beats[bi]; if(!b) return;
+    renderChapters(); if(typeof msUpdate==='function') msUpdate();
+    if(b.t==='n'){ try{ curSents=sentences(b.text); renderSents(b.title||'', curSents); }catch(e){} }
+  }
   (function(){
     var visAngle=0, kick=0, rubber=0, rafId=null;
     var ptr={};          // pointerId → 포인터 상태
@@ -1948,7 +2011,8 @@
         if(s.rotated) return;
         s.held=true;
         if(s.btn==='bMenu'){ if(navigator.vibrate)navigator.vibrate(12); goHome(); } // 길게=홈 (클릭 억제는 pointerup)
-      }, HOLD_MS);
+        else if(s.zone==='center' && cur==='player'){ toggleFine(); } // center long-press = toggle fine mode (short press = play/pause)
+      }, s.zone==='center' ? FINE_TOGGLE_MS : HOLD_MS);
       kickFrame();
     });
 
@@ -1961,13 +2025,14 @@
         s.rotated=true; clearTimeout(s.holdT); s.acc=0; // 클릭 억제는 pointerup 에서 (시간창)
       }
       if(s.rotated){
-        // 스크럽 판정: 이 포인터가 코어에서 시작했거나, 다른 손가락이 코어를 누르고 있음 (hold-center+rotate)
-        var scrub=(s.zone==='center')||(centerId!=null&&centerId!==e.pointerId&&ptr[centerId]);
+        // Mode is explicit: fine (toggle ON) = within-beat scrub, else = beat navigation.
+        // Deterministic 1 notch = 1 step (no velocity acceleration — the source of the
+        // "unit changes for no reason" defect).
+        var scrub=fineMode;
         var step=scrub?SCRUB_NOTCH:NOTCH;
-        var vel=Math.abs(d)/Math.max(e.timeStamp-s.lt,1)*1000; s.lt=e.timeStamp;
-        var units=(!scrub&&vel>340)?3:(!scrub&&vel>170)?2:1; // 이동만 가속, 스크럽은 등속 정밀
-        while(s.acc>=step){ s.acc-=step; kick+=1.4; scrub?emitScrub(1):emitTick(1,units); }
-        while(s.acc<=-step){ s.acc+=step; kick-=1.4; scrub?emitScrub(-1):emitTick(-1,units); }
+        s.lt=e.timeStamp;
+        while(s.acc>=step){ s.acc-=step; kick+=1.4; scrub?emitScrub(1):emitTick(1); }
+        while(s.acc<=-step){ s.acc+=step; kick-=1.4; scrub?emitScrub(-1):emitTick(-1); }
       }
       visAngle+=d; kickFrame();
     });
@@ -1976,7 +2041,7 @@
       wheel.addEventListener(ev,function(e){
         var s=ptr[e.pointerId]; if(!s) return;
         clearTimeout(s.holdT);
-        if(ev==='pointerup' && (s.rotated || (s.held && s.btn==='bMenu'))) suppressClickUntil=Date.now()+350; // 회전/메뉴홀드 직후만 네이티브 클릭 억제
+        if(ev==='pointerup' && (s.rotated || (s.held && (s.btn==='bMenu' || s.zone==='center')))) suppressClickUntil=Date.now()+350; // suppress native click only right after rotate / menu-hold / fine-toggle
         if(e.pointerId===centerId) centerId=null;
         // 탭(회전·홀드 아님) → 네이티브 버튼 onclick 이 처리 (억제창 미설정). 링 갭 탭은 무동작.
         delete ptr[e.pointerId]; touchN=Math.max(0,touchN-1);
@@ -1986,12 +2051,11 @@
       });
     });
 
-    function emitTick(dir,units){
+    function emitTick(dir){ // 1 notch = 1 step, always (deterministic)
       if(navigator.vibrate) navigator.vibrate(7);
-      var n=(cur==='player')?(units||1):1; // 재생=가속 비트이동, 메뉴/홈=1노치 1행
-      for(var u=0;u<n;u++) dispatchNotch(dir);
+      dispatchNotch(dir);
     }
-    function emitScrub(dir){ if(navigator.vibrate) navigator.vibrate(5); dispatchScrub(dir); }
+    function emitScrub(dir){ if(navigator.vibrate) navigator.vibrate(5); wheelTick(); dispatchScrub(dir); }
     window.wheelRubber=function(dir){ rubber+=15*dir; kickFrame(); };
     window.wheelDemo=function(){ // 첫 발견 데모 회전
       wheel.classList.add('demo'); var t0=null;
@@ -2029,14 +2093,18 @@
       if(nm<0||nm>=mr.length){ wheelRubber(dir); return; }
       selMenu=nm; updateSelMenu();
     } else if(cur==='player'){
-      if(finished){ // 완청 화면: 우측 = 더 진행 없음, 좌측 = 마지막 구간으로 복귀
-        if(dir>0){ wheelRubber(1); return; }
+      if(finished){ // finished screen: right = no further, left = back to last segment
+        if(dir>0){ wheelRubber(1); wheelEnd(); return; }
         finished=false; bi=Math.max(0,beats.length-1);
         pState.style.display='none'; ptrack.hidden=false; renderChapters(); return;
       }
       if(dir>0&&!guestFwdOk()){ guestFwdNotice(); return; }
-      if(bi+dir>=beats.length){ wheelRubber(1); finishNote(); return; }
-      nextBeat(dir); if(!playing){ markPlaying(true); setCharging(true); acquireWake(); runBeat(); }
+      if(bi+dir>=beats.length){ wheelRubber(1); wheelEnd(); finishNote(); return; }
+      if(bi+dir<0){ wheelRubber(-1); wheelEnd(); return; }
+      // Navigation pauses playback while moving and restores the start state on settle
+      // (navEnd): was-playing -> resume at new position; was-paused -> stay paused. No auto-play.
+      navBegin();
+      bi=bi+dir; renderChapters(); if(typeof msUpdate==='function') msUpdate();
     }
   }
 
