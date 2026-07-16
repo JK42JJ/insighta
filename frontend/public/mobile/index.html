@@ -647,7 +647,7 @@
 
   /* ── 새소식 애니메이션 배너 (closed_beta / dial_launch) — CTA 전환 표면 ── */
   #newsList{--nb-berry:#8E7DE4; --nb-berry-mid:#6E5DC8; --nb-berry-lo:#5A4BB0}
-  .nb-card{position:relative; border-radius:18px; overflow:hidden; contain:layout paint style;
+  .nb-card{position:relative; flex:none; border-radius:18px; overflow:hidden; contain:layout paint;
     opacity:0; transform:translateY(14px); animation:nbIn .6s cubic-bezier(.2,.8,.2,1) forwards;
     cursor:pointer; -webkit-tap-highlight-color:transparent; touch-action:manipulation}
   .nb-card:active{transform:scale(.986)}
