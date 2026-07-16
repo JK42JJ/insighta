@@ -1417,6 +1417,7 @@
   var PREFETCH_AHEAD=2, BLOB_CACHE_MAX=8;
   var SILENT_WAV='data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
   function unlockAudio(){ // 사용자 제스처 안에서 1회 — 이후 프로그래매틱 재생 허용
+    ytPrime(); // prime YT iframes on any play gesture (self-guarded, retries until players ready)
     if(narrUnlocked) return;
     try{
       narrEl=narrEl||new Audio();
@@ -1590,6 +1591,17 @@
     ytP[1]=mkPlayer('ytB', false);
     yt=ytP[0];
   };
+  // iOS blocks programmatic playVideo() on a YT iframe that a user gesture never
+  // activated -> auto-transition clips get stuck cued/paused and skipped. Prime
+  // both players once inside a gesture (mute -> play -> pause) so later auto plays.
+  var ytPrimed=false;
+  function ytPrime(){
+    if(ytPrimed || !ytP[0] || !ytP[0].playVideo) return;
+    try{
+      [ytP[0], ytP[1]].forEach(function(p){ if(p&&p.playVideo){ p.mute(); p.playVideo(); p.pauseVideo(); } });
+      ytPrimed=true;
+    }catch(e){}
+  }
   function ytSwap(){ // 유휴 슬롯을 활성으로
     ytAct=1-ytAct; yt=ytP[ytAct];
     document.getElementById('ytA').classList.toggle('off', ytAct!==0);
