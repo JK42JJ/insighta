@@ -18,6 +18,7 @@ import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { apiClient } from '@/shared/lib/api-client';
+import { isMobileDevice } from '@/shared/lib/mobile-gate';
 
 // ── SVG Brand Icons ────────────────────────────────────────
 
@@ -106,6 +107,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && isLoggedIn) {
+      // Mobile users get the dial, not the desktop-only app. The mobile gate
+      // blocks app routes, so a react-router navigate to '/' would bounce to
+      // /landing; send them to the static dial via a full navigation instead
+      // (2026-07-16 incident: mobile login bounced to the landing page).
+      if (isMobileDevice()) {
+        window.location.assign('/mobile');
+        return;
+      }
       const returnTo = searchParams.get('returnTo');
       const safeReturnTo =
         returnTo && returnTo.startsWith('/') && returnTo !== '/login' ? returnTo : '/';
