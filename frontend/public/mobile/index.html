@@ -281,8 +281,8 @@
   body.stage .rdtog{display:none !important}
   /* 읽기 모드 = 기본 모드 그대로 + 에페이퍼 전체화면 + 조그휠 플로팅 [J:07-15 정정] */
   /* [J:07-15] 미니휠 = 진행바 위로 올림(엄지존) + 3초 자동숨김 (e). 기본 투명 → 터치 시 표시 → 3초 뒤 소멸 */
-  body.reading .wheelzone{position:absolute; left:0; right:0; bottom:calc(var(--sab,0px) + 88px);
-    z-index:40; padding:0; width:100%; pointer-events:none; place-items:center}
+  body.reading .wheelzone{position:absolute; left:0; right:0; top:auto; bottom:36%;
+    z-index:40; padding:0 24px 0 0; width:100%; pointer-events:none; place-items:center end} /* [J:07-16] right-center (right-thumb) per device guide box */
   body.reading .wheel{width:min(40%,168px); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)}
   body.reading .wheel.touching,body.reading .wheel.demo,body.reading .wheel.awake,body.reading.wheelawake .wheel{opacity:.70} /* [J:07-15] 더 투명하게 — 읽기 콘텐츠 가림 완화 */
   .rd-ch{font-size:11px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:22px 2px 10px; text-transform:none}
