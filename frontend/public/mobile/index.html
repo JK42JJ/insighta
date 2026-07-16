@@ -586,13 +586,16 @@
 
 
   /* 클립 로딩 베일 — YT 기본 스피너 대체 (재생 시작 시 페이드아웃) */
-  .clipveil{position:absolute; inset:0; z-index:3; background:#000; display:flex; flex-direction:column;
+  /* Loading cover shows the clip's thumbnail poster (instant) instead of a black box,
+     so navigating to a not-yet-buffered clip never flashes an empty spinner screen. */
+  .clipveil{position:absolute; inset:0; z-index:3; background:#0d0d10 center/cover no-repeat; display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:14px; opacity:1;
     transition:opacity .45s var(--soft); pointer-events:none}
+  .clipveil::before{content:""; position:absolute; inset:0; background:rgba(10,10,14,.5); transition:background .3s}
   .clipveil.off{opacity:0}
-  .clipveil i{width:30px; height:30px; border-radius:50%; border:2px solid rgba(255,255,255,.14);
+  .clipveil i{position:relative; width:30px; height:30px; border-radius:50%; border:2px solid rgba(255,255,255,.2);
     border-top-color:var(--acc); animation:veilspin 1s linear infinite}
-  .clipveil span{font-size:9px; letter-spacing:.5em; color:rgba(237,231,220,.34); font-weight:700; padding-left:.5em}
+  .clipveil span{position:relative; font-size:9px; letter-spacing:.5em; color:rgba(237,231,220,.6); font-weight:700; padding-left:.5em; text-shadow:0 1px 4px rgba(0,0,0,.6)}
   .clipveil.hold{background:rgba(6,6,8,.88)}
   .clipveil.hold i{display:none}
   @keyframes veilspin{to{transform:rotate(360deg)}}
@@ -1660,7 +1663,10 @@
   }
   (function(){ var s=document.createElement('script'); s.src='https://www.youtube.com/iframe_api'; document.head.appendChild(s); })();
   var clipVeil=document.getElementById('clipVeil');
-  function veilShow(){ clipVeil.classList.remove('off'); clipVeil.classList.remove('hold'); clearTimeout(veilShow._t);
+  function veilShow(beat){
+    // Instant thumbnail poster (YouTube CDN, no API) so the box is never blank while buffering.
+    try{ clipVeil.style.backgroundImage=(beat&&beat.vid)?("url(https://i.ytimg.com/vi/"+beat.vid+"/hqdefault.jpg)"):''; }catch(e){}
+    clipVeil.classList.remove('off'); clipVeil.classList.remove('hold'); clearTimeout(veilShow._t);
     veilShow._t=setTimeout(function(){ clipVeil.classList.add('off') },8000); } // failsafe
   function veilHide(){ clearTimeout(veilShow._t); clipVeil.classList.add('off'); clipVeil.classList.remove('hold'); }
   function veilHold(on){ // 일시정지 커버 — YT 잔여 UI 가림
@@ -1670,7 +1676,7 @@
   function stopClip(){ if(ytPoll){clearInterval(ytPoll); ytPoll=null;} try{ if(yt&&yt.pauseVideo) yt.pauseVideo(); }catch(e){} }
   var curClipKey=null;
   function playClipNow(beat){
-    veilShow();
+    veilShow(beat);
     try{
       // 같은 클립의 일시정지 재개 = 이어서 재생 [J:07-14 중대결함 — 처음부터 재로드 금지]
       var key=bi+':'+beat.vid, resume=false;
