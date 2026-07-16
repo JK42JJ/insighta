@@ -1030,7 +1030,13 @@
     bootDone();
     // 플레이어 이탈 = 재생 정지 [J:07-15 치명버그: 만다라/설정에서 노트 재생 지속].
     // 나브 토글·MENU·브레드크럼 모든 경로를 한곳에서 커버 (백그라운드 재생 오용 차단).
-    if(cur==='player'&&n!=='player'&&typeof setPlaying==='function'){ try{ setPlaying(false); }catch(e){} }
+    if(cur==='player'&&n!=='player'){
+      if(typeof setPlaying==='function'){ try{ setPlaying(false); }catch(e){} }
+      // Fine mode is player-only: reset it (and any in-flight nav hold) on leaving the note,
+      // otherwise the dim wheel + scrub mode persist on home/menu and can't be exited.
+      try{ fineMode=false; document.body.classList.remove('finemode'); }catch(e){}
+      try{ if(navHold){ navHold.active=false; clearTimeout(navHold.t); } }catch(e){}
+    }
     if(cur==='news'&&n!=='news'&&typeof clearNewsTimers==='function'){ clearNewsTimers(); } // stop countdown intervals on leave (no leak)
     if(n!=='player'){ document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true; } // 읽기 모드 = 플레이어 전용
     if(n===cur) return;
