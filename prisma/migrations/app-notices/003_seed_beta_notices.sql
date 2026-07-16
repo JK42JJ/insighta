@@ -4,7 +4,7 @@
 INSERT INTO app_notices (title, body, kind, event_at, cta_label, cta_url, published_at)
 SELECT '클로즈드 베타가 열렸어요',
        '지금, 초대받은 분들만 · 6주 무료로 Pro 전 기능을 써보세요.',
-       'closed_beta', TIMESTAMPTZ '2026-08-24 23:59:59+09', '지금 참여하기', 'invite', now()
+       'closed_beta', TIMESTAMPTZ '2026-08-24 23:59:59+09', '지금 참여하기', 'https://insighta.one/beta/', now()
 WHERE NOT EXISTS (SELECT 1 FROM app_notices WHERE kind = 'closed_beta');
 
 INSERT INTO app_notices (title, body, kind, cta_label, cta_url, published_at)
