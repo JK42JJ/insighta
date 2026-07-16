@@ -588,18 +588,26 @@
   /* 클립 로딩 베일 — YT 기본 스피너 대체 (재생 시작 시 페이드아웃) */
   /* Loading cover shows the clip's thumbnail poster (instant) instead of a black box,
      so navigating to a not-yet-buffered clip never flashes an empty spinner screen. */
-  .clipveil{position:absolute; inset:0; z-index:3; background:#0d0d10 center/cover no-repeat; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:14px; opacity:1;
-    transition:opacity .45s var(--soft); pointer-events:none}
-  .clipveil::before{content:""; position:absolute; inset:0; background:rgba(10,10,14,.5); transition:background .3s}
+  /* Loading cover: the clip's own thumbnail poster (instant) + center play affordance +
+     bottom-left segment chip + bottom-right progress ring. Video fades in when buffered,
+     so the box is never blank and the wait reads as intentional, not broken. */
+  .clipveil{position:absolute; inset:0; z-index:3; background:#0d0d10 center/cover no-repeat;
+    opacity:1; transition:opacity .45s var(--soft); pointer-events:none}
+  .clipveil::before{content:""; position:absolute; inset:0; background:rgba(10,10,14,.42); transition:background .3s}
   .clipveil.off{opacity:0}
-  .clipveil i{position:relative; width:30px; height:30px; border-radius:50%; border:2px solid rgba(255,255,255,.2);
-    border-top-color:var(--acc); animation:veilspin 1s linear infinite}
-  .clipveil span{position:relative; font-size:9px; letter-spacing:.5em; color:rgba(237,231,220,.6); font-weight:700; padding-left:.5em; text-shadow:0 1px 4px rgba(0,0,0,.6)}
+  .cv-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:56px; height:56px;
+    border-radius:50%; background:rgba(255,255,255,.92); box-shadow:0 4px 14px -4px rgba(0,0,0,.5)}
+  .cv-play::after{content:""; position:absolute; left:54%; top:50%; transform:translate(-50%,-50%);
+    border-left:16px solid var(--acc); border-top:10px solid transparent; border-bottom:10px solid transparent}
+  .cv-chip{position:absolute; left:10px; bottom:10px; max-width:70%; font-size:10px; font-weight:800; letter-spacing:.02em;
+    color:#fff; background:rgba(0,0,0,.45); border-radius:7px; padding:4px 9px; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; backdrop-filter:blur(3px)}
+  .cv-ring{position:absolute; right:12px; bottom:12px; width:24px; height:24px; border-radius:50%;
+    border:2.5px solid rgba(255,255,255,.28); border-top-color:#fff; animation:veilspin .9s linear infinite}
   .clipveil.hold{background:rgba(6,6,8,.88)}
-  .clipveil.hold i{display:none}
+  .clipveil.hold .cv-ring,.clipveil.hold .cv-play,.clipveil.hold .cv-chip{display:none}
   @keyframes veilspin{to{transform:rotate(360deg)}}
-  @media (prefers-reduced-motion: reduce){ .clipveil i{animation:none} }
+  @media (prefers-reduced-motion: reduce){ .cv-ring{animation:none} }
   /* iOS 설치 가이드 시트 */
   .inst-ov{position:absolute; inset:0; z-index:60; background:rgba(30,27,22,.45);
     display:flex; align-items:flex-end; justify-content:center; padding:18px}
@@ -873,7 +881,7 @@
         </div>
         <div class="clipbox" id="clipbox" hidden>
           <div class="clipwrap" id="clipwrap"><div class="ytp" id="ytA"></div><div class="ytp off" id="ytB"></div></div>
-          <div class="clipveil" id="clipVeil" aria-hidden="true"><i></i><span>INSIGHTA</span></div>
+          <div class="clipveil" id="clipVeil" aria-hidden="true"><span class="cv-play"></span><span class="cv-chip" id="clipVeilChip"></span><i class="cv-ring"></i></div>
           <div class="guard" id="clipGuard" aria-hidden="true"></div>
           <button class="clipfit" id="clipFit" aria-label="화면 맞춤 전환">
             <svg class="fit-a" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg>
@@ -1651,21 +1659,21 @@
     document.getElementById('ytB').classList.toggle('off', ytAct!==1);
   }
   function ytIdle(){ return ytP[1-ytAct]; }
-  function nextClipBeat(from){ // from 이후 첫 클립 비트 (경계 확보된 것만)
-    for(var k=from;k<beats.length;k++){
-      var b=beats[k];
-      if(b.t==='c'){
-        if(b.from==null&&!boundsFromCache(b)) return null; // 경계 미해결 — 큐 불가
-        return b;
-      }
-    }
+  function nextClipBeat(from, dir){ // nearest clip beat from 'from' in direction dir (bounds-resolved only)
+    dir=dir||1;
+    if(dir>0){ for(var k=from;k<beats.length;k++){ var b=beats[k];
+      if(b.t==='c'){ if(b.from==null&&!boundsFromCache(b)) return null; return b; } } }
+    else { for(var j=from;j>=0;j--){ var b2=beats[j];
+      if(b2.t==='c'){ if(b2.from==null&&!boundsFromCache(b2)) return null; return b2; } } }
     return null;
   }
   var cuedKey=null;
-  function cueNext(){ // 유휴 슬롯에 다음 클립 프리큐 (버퍼)
+  var lastNavDir=1; // last wheel/nav direction, used to pre-cue the clip the user is heading toward
+  function cueNext(dir){ // pre-cue the nearest upcoming clip (in travel direction) into the idle slot
     try{
+      dir=dir||1;
       var idle=ytIdle(); if(!idle||!idle.cueVideoById) return;
-      var b=nextClipBeat(bi+1); if(!b){ cuedKey=null; return; }
+      var b=nextClipBeat(bi+dir, dir); if(!b){ cuedKey=null; return; }
       var key=b.vid+':'+b.from;
       if(cuedKey===key) return;
       idle.cueVideoById({videoId:b.vid, startSeconds:b.from, endSeconds:b.to});
@@ -1678,6 +1686,10 @@
   function veilShow(beat){
     // Instant thumbnail poster (YouTube CDN, no API) so the box is never blank while buffering.
     try{ clipVeil.style.backgroundImage=(beat&&beat.vid)?("url(https://i.ytimg.com/vi/"+beat.vid+"/hqdefault.jpg)"):''; }catch(e){}
+    try{ var chip=document.getElementById('clipVeilChip');
+      if(chip){ var label=(beat&&(beat.src||(segCache[beat.vid]&&segCache[beat.vid].credit)))||'원본 핵심구간';
+        chip.textContent=(beat&&beat.from!=null&&beat.to!=null)?(label+' · '+fmtSec(beat.from)+'–'+fmtSec(beat.to)):label; }
+    }catch(e){}
     clipVeil.classList.remove('off'); clipVeil.classList.remove('hold'); clearTimeout(veilShow._t);
     veilShow._t=setTimeout(function(){ clipVeil.classList.add('off') },8000); } // failsafe
   function veilHide(){ clearTimeout(veilShow._t); clipVeil.classList.add('off'); clipVeil.classList.remove('hold'); }
@@ -1998,6 +2010,7 @@
     if(!navHold.active) return;
     var was=navHold.was, mode=navHold.mode;
     navHold.active=false; navHold.mode=null; clearTimeout(navHold.t);
+    if(ytReady) cueNext(lastNavDir);              // settle: keep the next clip in travel direction warm
     if(!was){ previewBeat(); return; }            // was paused -> stay paused, show the landing
     if(mode==='scrub'){                            // resume the SAME media from the seeked position
       markPlaying(true); acquireWake();
@@ -2144,8 +2157,9 @@
       if(bi+dir<0){ wheelRubber(-1); wheelEnd(); return; }
       // Navigation pauses playback while moving and restores the start state on settle
       // (navEnd on pointer-up): was-playing -> resume at new position; was-paused -> stay paused.
-      navBegin('notch');
+      navBegin('notch'); lastNavDir=dir>0?1:-1;
       bi=bi+dir; renderChapters(); if(typeof msUpdate==='function') msUpdate();
+      if(ytReady) cueNext(lastNavDir); // warm the next clip in travel direction as we move
     }
   }
 
