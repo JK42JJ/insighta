@@ -654,7 +654,7 @@
   @keyframes nbIn{to{opacity:1; transform:none}}
   .nb-body{position:relative; color:#fff}
   .nb-eyebrow{font-size:9.5px; font-weight:800; letter-spacing:.2em; opacity:.85}
-  .nb-cta{display:inline-flex; align-items:center; gap:6px; margin-top:15px; position:relative; z-index:2;
+  .nb-cta{display:inline-flex; align-items:center; gap:6px; margin-top:15px; position:relative; z-index:2; white-space:nowrap;
     background:#fff; border-radius:99px; padding:10px 17px; font-size:12.5px; font-weight:900; box-shadow:0 4px 12px -4px rgba(0,0,0,.28)}
   .nb-cta svg{width:13px; height:13px}
   /* beta */
@@ -2390,8 +2390,8 @@
     tick(); _newsTimers.push(setInterval(tick,1000));
   }
   function nbCTA(n){ var u=n&&n.cta_url; if(!u) return;
-    if(/^https?:/i.test(u)) return;                       // internal routes only (no external nav)
-    if(u==='invite'){ show('invite'); if(typeof loadTickets==='function') loadTickets(); return; }
+    if(/^https:\/\/(www\.)?insighta\.one\//i.test(u)){ location.href=u; return; } // admin-set external page (e.g. /beta/)
+    if(/^https?:/i.test(u)) return;                       // block other external
     if(u==='/mobile/'||u==='/mobile'||u==='home'){ show('home'); return; }
     location.href=u;
   }
