@@ -12,8 +12,7 @@
 
 import { getPrismaClient } from '@/modules/database/client';
 import { enqueueEnrichVideo } from '@/modules/queue/handlers/enrich-video';
-import { enqueueMandalaBookFill } from '@/modules/queue/handlers/mandala-book-fill';
-import { bookRefillEnqueueOptions } from '@/modules/queue/handlers/book-refill-debounce';
+import { maybeTriggerBookFill } from '@/modules/queue/handlers/book-fill-gate';
 import { enqueueJudgeDeboost } from '@/modules/queue/handlers/judge-deboost';
 import { isJudgeDeboostEnabled } from '@/config/judge-deboost';
 import { isV2AutoEnrichEnabled } from '@/config/v2-auto-enrich';
@@ -146,15 +145,19 @@ export async function enqueueRichSummaryForMandalaCards(params: {
     );
   }
   if (uniqueByVideo.size > 0 && v2Enabled) {
-    await enqueueMandalaBookFill(
-      { userId: params.userId, mandalaId: params.mandalaId, trigger: 'enrich-complete' },
-      bookRefillEnqueueOptions(params.mandalaId)
-    ).catch((err) => {
-      log.warn('trigger-level book fill enqueue failed (non-fatal)', {
-        mandalaId: params.mandalaId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
+    // Route through the completion gate (2026-07-16): this used to enqueue a
+    // book-fill DIRECTLY, bypassing the barrier — one of two ungated emitters
+    // that caused early stub notes + uncontrolled Sonnet re-fills. maybeTrigger
+    // keeps the exact legacy behavior when the barrier flag is off, and honors
+    // the barrier when on, so all book-fill emission has a single choke point.
+    await maybeTriggerBookFill({ userId: params.userId, mandalaId: params.mandalaId }).catch(
+      (err) => {
+        log.warn('trigger-level book fill gate failed (non-fatal)', {
+          mandalaId: params.mandalaId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    );
   }
 
   return { enqueued, skipped };

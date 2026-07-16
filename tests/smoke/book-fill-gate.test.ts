@@ -30,7 +30,14 @@ interface V2Row {
   updated_at: Date | null;
 }
 
-function mockPrisma(opts: { videoIds: string[]; v2Rows: V2Row[]; lastFill: Date | null }) {
+function mockPrisma(opts: {
+  videoIds: string[];
+  v2Rows: V2Row[];
+  lastFill: Date | null;
+  /** video ids that STILL have a live enrich job (default: none settled). */
+  liveEnrich?: string[];
+}) {
+  const live = opts.liveEnrich ?? [];
   return {
     user_local_cards: { findMany: jest.fn().mockResolvedValue([]) },
     userVideoState: {
@@ -39,7 +46,14 @@ function mockPrisma(opts: { videoIds: string[]; v2Rows: V2Row[]; lastFill: Date 
         .mockResolvedValue(opts.videoIds.map((id) => ({ video: { youtube_video_id: id } }))),
     },
     video_rich_summaries: { findMany: jest.fn().mockResolvedValue(opts.v2Rows) },
-    $queryRawUnsafe: jest.fn().mockResolvedValue([{ completedon: opts.lastFill }]),
+    // Two distinct raw queries now: liveEnrichVideoIds (selects `AS vid`) and
+    // lastBookFillAt (selects `completedon`). Branch on the SQL text.
+    $queryRawUnsafe: jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes('AS vid')) {
+        return Promise.resolve(live.map((v) => ({ vid: v })));
+      }
+      return Promise.resolve([{ completedon: opts.lastFill }]);
+    }),
   };
 }
 
@@ -63,13 +77,28 @@ describe('maybeTriggerBookFill', () => {
     );
   });
 
-  it('flag ON, some videos still missing a v2 row → no enqueue', async () => {
+  it('flag ON, a video still enriching (no row + live job) → no enqueue', async () => {
     flag.mockReturnValue(true);
     getPrisma.mockReturnValue(
-      mockPrisma({ videoIds: ['a', 'b'], v2Rows: [row('a')], lastFill: null })
+      mockPrisma({ videoIds: ['a', 'b'], v2Rows: [row('a')], lastFill: null, liveEnrich: ['b'] })
     );
     await maybeTriggerBookFill({ userId: 'u', mandalaId: 'm' });
     expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  // DEADLOCK FIX (2026-07-16): a rowless video whose enrich FAILED/never ran has
+  // no live job → it is settled → must NOT stall the gate forever. Old code
+  // counted "no row" as pending and never fired the initial barrier.
+  it('flag ON, rowless video with NO live enrich job → settled → fires barrier', async () => {
+    flag.mockReturnValue(true);
+    getPrisma.mockReturnValue(
+      mockPrisma({ videoIds: ['a', 'b'], v2Rows: [row('a')], lastFill: null, liveEnrich: [] })
+    );
+    await maybeTriggerBookFill({ userId: 'u', mandalaId: 'm' });
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ trigger: 'completion-barrier' }),
+      expect.objectContaining({ singletonKey: 'book-fill-barrier-m' })
+    );
   });
 
   it('flag ON, all attempted + no prior fill → completion-barrier once', async () => {

@@ -675,6 +675,19 @@ model mandala_books {
   @@schema("public")
 }
 
+/// Note-ready email dedup + send log (2026-07-16 deadlock fix). One row per
+/// mandala = the note-ready email was sent once. mandala_id PK makes the send
+/// at-most-once (evergreen). Also the durable send log (container logs are lost
+/// on deploy, so delivery was previously unverifiable).
+/// Raw DDL: prisma/migrations/note-ready-email/001_create_note_ready_email_sends.sql
+model note_ready_email_sends {
+  mandala_id String   @id @db.Uuid
+  to_email   String?
+  sent_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
 /// Episode narration audio (ElevenLabs pre-produce, 2026-07-13) — one row per
 /// mandala. manifest_json maps player beat indices (index + text hash) to
 /// cached mp3 URLs + sentence timings. Re-rendered when book version moves;

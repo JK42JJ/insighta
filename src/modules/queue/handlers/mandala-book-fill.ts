@@ -22,18 +22,65 @@ import { noteReadyCtaUrl } from '@/modules/email/note-ready-cta';
 const log = logger.child({ module: 'queue/mandala-book-fill' });
 
 /**
- * Notify the mandala owner that the note is ready — only on the initial
- * completion-barrier fill (not on every ≥5 update, to avoid inbox spam).
- * Internally flag-gated + non-fatal (email must never fail the fill).
+ * Send the note-ready email AT MOST ONCE per mandala (2026-07-16 deadlock fix).
+ *
+ * The old gate fired only on `trigger === 'completion-barrier'` — a trigger that
+ * (given the barrier deadlock) never actually occurred for real mandalas, so NO
+ * beta user ever got a note-ready email. Now it fires on the first successful
+ * note build regardless of which trigger built it, deduped by a claim row so an
+ * update-fill never re-notifies. The claim table (`note_ready_email_sends`) also
+ * serves as the send log — previously sends existed only in container logs
+ * (lost on deploy), so delivery was unverifiable.
+ *
+ * Race-safe: the INSERT ... ON CONFLICT DO NOTHING RETURNING wins exactly once.
  */
-async function notifyNoteReady(userId: string, mandalaId: string): Promise<void> {
+async function notifyNoteReadyOnce(userId: string, mandalaId: string): Promise<void> {
+  let claimed: Array<{ mandala_id: string }> = [];
+  try {
+    claimed = await getPrismaClient().$queryRawUnsafe<Array<{ mandala_id: string }>>(
+      `INSERT INTO note_ready_email_sends (mandala_id)
+       VALUES ($1::uuid)
+       ON CONFLICT (mandala_id) DO NOTHING
+       RETURNING mandala_id`,
+      mandalaId
+    );
+  } catch (err) {
+    // If the claim table is missing/unavailable, do NOT send (avoid unbounded
+    // re-sends) — surface loudly so the DDL gap is caught.
+    log.warn('note-ready claim failed — email skipped', {
+      mandalaId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+  if (claimed.length === 0) return; // already sent for this mandala
+  const to = await notifyNoteReady(userId, mandalaId);
+  if (to) {
+    await getPrismaClient()
+      .$executeRawUnsafe(
+        `UPDATE note_ready_email_sends SET to_email = $2 WHERE mandala_id = $1::uuid`,
+        mandalaId,
+        to
+      )
+      .catch(() => {
+        /* best-effort log annotation */
+      });
+  }
+}
+
+/**
+ * Build + send the note-ready email to the mandala owner. Returns the recipient
+ * address (or '' when unsent). Non-fatal — email must never fail the fill.
+ * Dedup/one-shot is the caller's job (notifyNoteReadyOnce).
+ */
+async function notifyNoteReady(userId: string, mandalaId: string): Promise<string> {
   try {
     const mandala = await getPrismaClient().user_mandalas.findFirst({
       where: { id: mandalaId, user_id: userId },
       select: { title: true, users: { select: { email: true } } },
     });
     const to = mandala?.users?.email ?? '';
-    if (!to) return;
+    if (!to) return '';
     // Focus video from the SAME sources the learning page renders
     // (useMandalaCards = user_video_states ∪ user_local_cards, placed only).
     // uvs is the dominant table (auto-add/wizard cards) and is video-UUID
@@ -66,11 +113,13 @@ async function notifyNoteReady(userId: string, mandalaId: string): Promise<void>
       mandalaName: mandala?.title ?? '내 만다라',
       ctaUrl: noteReadyCtaUrl(mandalaId, focusVideoId),
     });
+    return to;
   } catch (err) {
     log.warn('note-ready email skipped (non-fatal)', {
       mandalaId,
       error: err instanceof Error ? err.message : String(err),
     });
+    return '';
   }
 }
 
@@ -109,9 +158,11 @@ export async function handleMandalaBookFill(
     throw new Error(`mandala-book-fill failed for ${mandalaId}: ${result.reason ?? 'unknown'}`);
   }
 
-  // Note-ready email — only the first (barrier) build, owner-addressed.
-  if (result.ok && trigger === 'completion-barrier') {
-    await notifyNoteReady(userId, mandalaId);
+  // Note-ready email — first successful note build for this mandala, regardless
+  // of trigger (deadlock fix 2026-07-16: 'completion-barrier' never fired, so no
+  // user was ever notified). Deduped one-shot; only 'filled' builds a note.
+  if (result.ok && result.action === 'filled') {
+    await notifyNoteReadyOnce(userId, mandalaId);
   }
 
   log.info('mandala-book-fill done', { jobId: job.id, ...result });
