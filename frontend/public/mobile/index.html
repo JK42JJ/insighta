@@ -240,8 +240,11 @@
   .way-cream{background:radial-gradient(circle at 50% 32%, #FBFAF6 30%, #E2DDD1)}
   .way-sage{background:radial-gradient(circle at 50% 32%, #D5DECB 30%, #93A788)}
   .way-mist{background:radial-gradient(circle at 50% 32%, #D7E2EA 30%, #90A7B8)}
-  /* share-settings segmented control */
-  /* share settings live on wheel-navigable .mrow buttons; value shown in .sub, cycled on activation */
+  /* iOS-style on/off switch for share rows — visual only; the wheel-navigable .mrow button owns the toggle */
+  .iosw{position:relative; flex:none; width:38px; height:22px; border-radius:22px; background:rgba(94,86,72,.28); transition:background .22s ease; pointer-events:none}
+  .iosw::after{content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(60,45,25,.3); transition:transform .22s cubic-bezier(.3,.8,.3,1)}
+  .iosw.on{background:var(--ui)}
+  .iosw.on::after{transform:translateX(16px)}
   .menu-note{font-size:9px; color:var(--paper-sub); font-weight:600; text-align:center; margin-top:auto; padding-top:8px}
 
   /* ---- 플레이어 (세로) ---- */
@@ -757,8 +760,8 @@
           <button class="mrow" id="bNews"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 10-12 0c0 6-2.5 7.5-2.5 7.5h17S18 15 18 9"/><path d="M10.3 20a2 2 0 003.4 0"/></svg></span>새소식<span class="newsDot" id="newsDot" hidden></span><span class="sub" id="newsSub">공지 · 업데이트</span></button>
           <button class="mrow" id="bInvite"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V7a1.5 1.5 0 011.5-1.5h15A1.5 1.5 0 0121 7v2a3 3 0 000 6v2a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 17v-2a3 3 0 000-6z"/><path d="M13.5 6.2v2.1M13.5 11v2M13.5 15.7V18" stroke-dasharray="1.6 2.4"/></svg></span>초대권 사용하기<span class="sub" id="invSub">친구를 베타에 초대</span></button>
           <div class="ghd">공유</div>
-          <button class="mrow" id="bShExpiry"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 6.5 12 3l4 3.5"/><rect x="5" y="10" width="14" height="10" rx="2"/></svg></span>링크 유효기간<span class="sub" id="shExpiryVal">48시간</span></button>
-          <button class="mrow" id="bShSeq"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h11M4 12h16M4 17h8"/><path d="M17.5 5.5 20 8l-2.5 2.5"/></svg></span>순서대로 듣기<span class="sub" id="shSeqVal">끔</span></button>
+          <button class="mrow" id="bShExpiry" role="switch" aria-checked="true"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 6.5 12 3l4 3.5"/><rect x="5" y="10" width="14" height="10" rx="2"/></svg></span>링크 유효기간<span class="sub" id="shExpiryVal">48시간</span><span class="iosw" id="shExpirySw" aria-hidden="true"></span></button>
+          <button class="mrow" id="bShSeq" role="switch" aria-checked="false"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h11M4 12h16M4 17h8"/><path d="M17.5 5.5 20 8l-2.5 2.5"/></svg></span>순서대로 듣기<span class="iosw" id="shSeqSw" aria-hidden="true" style="margin-left:auto"></span></button>
           <div class="ghd">앱</div>
           <div class="mrow" style="cursor:default">
             <span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="10" r="2.6"/><circle cx="15.5" cy="7.5" r="2.6"/><circle cx="14.5" cy="16" r="2.6"/></svg></span>컬러웨이
@@ -1038,12 +1041,12 @@
     }
   }catch(e){}
 
-  // share settings = wheel-navigable .mrow buttons; center-press (or tap) cycles the value shown in .sub
+  // share settings = wheel-navigable .mrow switch rows; center-press (or tap) toggles the iOS-style switch
   (function(){
-    var expRow=document.getElementById('bShExpiry'), expVal=document.getElementById('shExpiryVal');
-    var seqRow=document.getElementById('bShSeq'), seqVal=document.getElementById('shSeqVal');
-    function renderExp(){ if(expVal) expVal.textContent=(shareExpiryDays()*24)+'시간'; }
-    function renderSeq(){ if(seqVal) seqVal.textContent=shareSeqLock()?'켬':'끔'; }
+    var expRow=document.getElementById('bShExpiry'), expVal=document.getElementById('shExpiryVal'), expSw=document.getElementById('shExpirySw');
+    var seqRow=document.getElementById('bShSeq'), seqSw=document.getElementById('shSeqSw');
+    function renderExp(){ var on=shareExpiryDays()===2; if(expSw) expSw.classList.toggle('on',on); if(expVal) expVal.textContent=(shareExpiryDays()*24)+'시간'; if(expRow) expRow.setAttribute('aria-checked',on); }
+    function renderSeq(){ var on=shareSeqLock(); if(seqSw) seqSw.classList.toggle('on',on); if(seqRow) seqRow.setAttribute('aria-checked',on); }
     renderExp(); renderSeq();
     if(expRow) expRow.onclick=function(){ try{ localStorage.setItem('insighta-share-expiry', shareExpiryDays()===2?'1':'2'); }catch(e){} renderExp(); };
     if(seqRow) seqRow.onclick=function(){ try{ localStorage.setItem('insighta-share-seq', shareSeqLock()?'0':'1'); }catch(e){} renderSeq(); };
