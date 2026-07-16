@@ -321,6 +321,7 @@
   .ptrack{flex:none; margin-top:10px}
   /* [J:07-16] play/pause embedded at left of bottom progress (option C) — shared by basic+reading; replaces top mute icon */
   .ptrack .prow{display:flex; align-items:center; gap:10px}
+  .ptrack .prow .chapters{flex:1; min-width:0}  /* fill row — without this the bar collapses next to the play button */
   .ppbtn{flex:none; width:26px; height:26px; border-radius:50%; border:none; background:rgba(206,95,48,.12);
     display:grid; place-items:center; cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent;
     transition:transform .12s ease}
