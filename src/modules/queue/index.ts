@@ -36,6 +36,8 @@ import { registerPoolServeFillWorker } from './handlers/pool-serve-fill';
 import { registerMandalaActionsFillWorker } from './handlers/mandala-actions-fill';
 import { registerMandalaPipelineWorker } from './handlers/mandala-pipeline';
 import { registerMandalaBookFillWorker } from './handlers/mandala-book-fill';
+import { registerCurationBuildWorker } from './handlers/curation-build';
+import { registerCurationWeeklyWorker } from './handlers/curation-weekly';
 import { registerEpisodeNarrationRenderWorker } from './handlers/episode-narration-render';
 import { registerJudgeDeboostWorker } from './handlers/judge-deboost';
 import { registerTranslateMandalaBulkWorker } from './handlers/translate-mandala-bulk';
@@ -69,6 +71,8 @@ export async function initJobQueue(): Promise<void> {
   await registerMandalaActionsFillWorker();
   await registerMandalaPipelineWorker();
   await registerMandalaBookFillWorker();
+  await registerCurationBuildWorker();
+  await registerCurationWeeklyWorker();
   await registerEpisodeNarrationRenderWorker();
   await registerJudgeDeboostWorker();
   await registerTranslateMandalaBulkWorker();

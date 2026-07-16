@@ -634,6 +634,57 @@ model mandala_subscriptions {
   @@schema("public")
 }
 
+/// Weekly curation subscription (Growth Hub, 2026-07-16). SEPARATE from
+/// `mandala_subscriptions` (that is a social follow graph). A curation is a
+/// lightweight consumption feed: relevance-ordered videos, core-segment /
+/// full toggle, bookmarks — NO note (book_json) pipeline, so it never touches
+/// book-fill-gate (no barrier risk). user_id kept as a plain column; the FK
+/// lives in the raw DDL (prisma/migrations/curation/001_*.sql).
+model curation_subscriptions {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String           @db.Uuid
+  topic       String
+  cadence     String           @default("weekly") @db.VarChar(12)
+  /// discover | youtube_subs | hybrid — D5, default discover (flag-expandable)
+  source      String           @default("discover") @db.VarChar(16)
+  /// optional container mandala (kind='curation') if D1(a) is later chosen; null = standalone
+  mandala_id  String?          @db.Uuid
+  is_active   Boolean          @default(true)
+  next_run_at DateTime?        @db.Timestamptz(6)
+  last_run_at DateTime?        @db.Timestamptz(6)
+  created_at  DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
+  items       curation_items[]
+
+  @@index([user_id], map: "idx_curation_subscriptions_user_id")
+  @@index([next_run_at], map: "idx_curation_subscriptions_next_run_at")
+  @@schema("public")
+}
+
+/// One video in a weekly curation build (Growth Hub, 2026-07-16). Relevance
+/// comes from rich_summary (segment relevance_pct is INLINE — no separate
+/// backfill). `week_of` keeps each week's build (D2: snapshot, not overwrite —
+/// data-reversibility hard rule). Source videos are gated by passesBookGate
+/// upstream (off-topic drop).
+model curation_items {
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscription_id String                 @db.Uuid
+  video_id        String                 @db.VarChar(11)
+  /// video-level relevance_pct (video_mandala_relevance / rich_summary), drives ordering
+  relevance_pct   Int
+  /// 0-based rank within the week's build (relevance order)
+  position        Int
+  bookmarked_at   DateTime?              @db.Timestamptz(6)
+  /// which weekly build this row belongs to (snapshot key)
+  week_of         DateTime               @db.Date
+  added_at        DateTime               @default(now()) @db.Timestamptz(6)
+  subscription    curation_subscriptions @relation(fields: [subscription_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([subscription_id], map: "idx_curation_items_subscription_id")
+  @@index([subscription_id, week_of], map: "idx_curation_items_sub_week")
+  @@schema("public")
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model mandala_activity_log {
   id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
