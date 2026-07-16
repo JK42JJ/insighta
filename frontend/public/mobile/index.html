@@ -274,12 +274,7 @@
     color:var(--paper-sub); cursor:pointer; -webkit-tap-highlight-color:transparent; border-radius:9px}
   .rdtog:active{transform:scale(.9)}
   body.reading .rdtog{color:var(--ui); background:rgba(94,86,72,.12)}
-  #bVoice{display:none}
-  body.reading #bVoice{display:grid; background:none; color:var(--paper-sub)}
-  #bVoice .v-off{display:none}
-  body:not(.playing) #bVoice .v-on{display:none}
-  body:not(.playing) #bVoice .v-off{display:block; color:var(--paper-sub)}
-  body.playing.reading #bVoice{color:var(--ui)}
+  /* [J:07-16] bVoice (mute-looking play/pause) removed → moved to bottom-progress play/pause button */
   .readview{display:none !important} /* [J:07-15 정정] 스크롤 문서 폐기 */
   body.stage .rdtog{display:none !important}
   /* 읽기 모드 = 기본 모드 그대로 + 에페이퍼 전체화면 + 조그휠 플로팅 [J:07-15 정정] */
@@ -320,6 +315,17 @@
   .chcard .n{font-size:11px; letter-spacing:.3em; font-weight:800; color:var(--ui)}
   .chcard .t{font-size:19px; font-weight:750; letter-spacing:-.01em; padding:0 24px; line-height:1.5}
   .ptrack{flex:none; margin-top:10px}
+  /* [J:07-16] play/pause embedded at left of bottom progress (option C) — shared by basic+reading; replaces top mute icon */
+  .ptrack .prow{display:flex; align-items:center; gap:10px}
+  .ppbtn{flex:none; width:26px; height:26px; border-radius:50%; border:none; background:rgba(206,95,48,.12);
+    display:grid; place-items:center; cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+    transition:transform .12s ease}
+  .ppbtn:active{transform:scale(.9)}
+  .ppbtn svg{width:13px; height:13px; fill:var(--ui); display:block}
+  .ppbtn .pp-pause{display:none}
+  body.playing .ppbtn .pp-play{display:none}
+  body.playing .ppbtn .pp-pause{display:block}
+  .ptrack .ptimes{margin-left:36px}   /* indent by play button(26)+gap(10) to align with bar start */
   .chapters{display:flex; gap:4px}
   /* 필름 트랙 [J:07-14] — 내레이션=실선, 유튜브 클립=필름 칩, 현재 위치=글라이딩 재생 헤드 */
   .chapters{padding:3px 0} /* 칩·헤드가 바 위로 살짝 걸치는 여유 */
@@ -783,7 +789,7 @@
 
       <!-- 플레이어 -->
       <div class="scr" data-s="player" id="scrPlayer">
-        <div class="top"><span class="tt" id="pTitle">노트</span><button class="rdtog" id="bRead" aria-label="읽기 모드"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2 2 0 016 4h5v15H6a2 2 0 00-2 1.5zM20 5.5A2 2 0 0018 4h-5v15h5a2 2 0 012 1.5z"/></svg></button><button class="rdtog voicebtn" id="bVoice" aria-label="소리 켜기/끄기"><svg class="v-on" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 6a9 9 0 010 12"/></svg><svg class="v-off" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M22 9l-6 6M16 9l6 6"/></svg></button><button class="shr" id="bShareNote" aria-label="이 노트 공유" hidden><svg width="13" height="16" viewBox="0 0 15 18"><path d="M7.5 1v10M4.2 4.2 7.5 1l3.3 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7.4" width="11" height="9.4" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><span class="batt" id="sigPlay"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
+        <div class="top"><span class="tt" id="pTitle">노트</span><button class="rdtog" id="bRead" aria-label="읽기 모드"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2 2 0 016 4h5v15H6a2 2 0 00-2 1.5zM20 5.5A2 2 0 0018 4h-5v15h5a2 2 0 012 1.5z"/></svg></button><button class="shr" id="bShareNote" aria-label="이 노트 공유" hidden><svg width="13" height="16" viewBox="0 0 15 18"><path d="M7.5 1v10M4.2 4.2 7.5 1l3.3 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7.4" width="11" height="9.4" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button><span class="batt" id="sigPlay"><svg class="ksig" width="15" height="15" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></div>
         <div class="player-state" id="pState">
           <div class="pulse"></div>
           <div class="big" id="pStateBig">노트를 여는 중…</div>
@@ -803,7 +809,10 @@
         <div class="readview" id="readview" hidden></div>
         <div class="chcard" id="chcard"><div class="n" id="chNum"></div><div class="t" id="chTitle"></div></div>
         <div class="ptrack" id="ptrack" hidden>
-          <div class="chapters" id="pchap"></div>
+          <div class="prow">
+            <button class="ppbtn" id="ppBtn" aria-label="재생/정지"><svg class="pp-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><svg class="pp-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+            <div class="chapters" id="pchap"></div>
+          </div>
           <div class="ptimes"><span id="pPos" class="num">1 / 1</span><span id="pCh"></span><span class="pclock num" id="pClock"></span><button class="spd num" id="spdBtn" aria-label="재생 속도">1×</button></div>
         </div>
         <div class="hairline" id="hairline"><i id="hairFill" style="width:0%"></i></div>
@@ -2343,7 +2352,7 @@
     setPlaying(false); show('login');
   };
   document.getElementById('bRead').onclick=toggleReading;
-  document.getElementById('bVoice').onclick=function(){ setPlaying(!playing); }; // 소리 켜기/끄기 = 재생/정지
+  document.getElementById('ppBtn').onclick=function(){ if(cur==='player') setPlaying(!playing); }; // bottom-progress play/pause
   document.getElementById('bShareNote').onclick=function(){
     if(!curNote||curNote.sample||curNote.guest) return;
     var url=curNote._shareUrl;
