@@ -289,7 +289,7 @@
   body.reading .wheel{width:min(40%,168px); transform:translateX(-40%); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)} /* [J:07-16] shift left by 40% of wheel size (one-hand reach) */
   body.reading .wheel.touching,body.reading .wheel.demo,body.reading .wheel.awake,body.reading.wheelawake .wheel{opacity:.70} /* [J:07-15] 더 투명하게 — 읽기 콘텐츠 가림 완화 */
   /* Fine (scrub) mode = a toggle; same palette, signalled by a dim tone + pressed core. */
-  body.finemode .wheel{filter:brightness(.7) contrast(1.03) saturate(.97); transition:filter .3s var(--soft)}
+  body.finemode .wheel{filter:brightness(.84) contrast(1.02) saturate(.98); transition:filter .3s var(--soft)}
   body.finemode #bCore{box-shadow:inset 0 4px 8px rgba(120,40,0,.55), 0 1px 3px rgba(80,30,0,.4)}
   .rd-ch{font-size:11px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:22px 2px 10px; text-transform:none}
   .rd-ch:first-child{margin-top:2px}
@@ -1033,7 +1033,13 @@
     bootDone();
     // 플레이어 이탈 = 재생 정지 [J:07-15 치명버그: 만다라/설정에서 노트 재생 지속].
     // 나브 토글·MENU·브레드크럼 모든 경로를 한곳에서 커버 (백그라운드 재생 오용 차단).
-    if(cur==='player'&&n!=='player'&&typeof setPlaying==='function'){ try{ setPlaying(false); }catch(e){} }
+    if(cur==='player'&&n!=='player'){
+      if(typeof setPlaying==='function'){ try{ setPlaying(false); }catch(e){} }
+      // Fine mode is player-only: reset it (and any in-flight nav hold) on leaving the note,
+      // otherwise the dim wheel + scrub mode persist on home/menu and can't be exited.
+      try{ fineMode=false; document.body.classList.remove('finemode'); }catch(e){}
+      try{ if(navHold){ navHold.active=false; clearTimeout(navHold.t); } }catch(e){}
+    }
     if(cur==='news'&&n!=='news'&&typeof clearNewsTimers==='function'){ clearNewsTimers(); } // stop countdown intervals on leave (no leak)
     if(n!=='player'){ document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true; } // 읽기 모드 = 플레이어 전용
     if(n===cur) return;
@@ -1078,16 +1084,22 @@
   /* 차임 (§0-8) — pre-produce에서 정식 사운드로 대체 예정 */
   var actx=null;
   // Short dry click for fine-scrub notches (iPod-wheel feel), guarded off when muted.
-  function wheelTick(){
+  // Soft sine tick — hi=true is a slightly brighter click (fine scrub), else a lower,
+  // warmer detent (beat nav). Throttled so accelerated rotation can't stack clicks into
+  // a loud harsh burst; gentle envelope keeps rapid movement pleasant.
+  var _lastTick=-1;
+  function wheelTick(hi){
     try{
       actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+      if(actx.currentTime-_lastTick<0.022) return; // cap click rate (~45/s) to avoid stacking
+      _lastTick=actx.currentTime;
       var o=actx.createOscillator(), g=actx.createGain();
-      o.type='square'; o.frequency.value=2100; o.connect(g); g.connect(actx.destination);
+      o.type='sine'; o.frequency.value=hi?1150:780; o.connect(g); g.connect(actx.destination);
       var st=actx.currentTime;
       g.gain.setValueAtTime(0.0001,st);
-      g.gain.exponentialRampToValueAtTime(0.045,st+0.002);
-      g.gain.exponentialRampToValueAtTime(0.0001,st+0.03);
-      o.start(st); o.stop(st+0.035);
+      g.gain.exponentialRampToValueAtTime(hi?0.028:0.032,st+0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001,st+(hi?0.05:0.06));
+      o.start(st); o.stop(st+(hi?0.06:0.07));
     }catch(e){}
   }
   // Low soft bounce when a rotation hits the start/end boundary.
@@ -1947,7 +1959,10 @@
   var ROT_THRESH=6;     // 누적 회전각이 이 값 넘으면 '회전' 확정 (탭 아님)
   var HOLD_MS=480;      // 롱프레스 (MENU 길게 = 홈)
   var FINE_TOGGLE_MS=800; // center long-press toggles fine mode (tunable — spec asks ~2s)
-  var SCRUB_STEP_SEC=2; // 스크럽 미세 노치당 초
+  var SCRUB_STEP_SEC=2; // seconds per fine-scrub notch
+  var ACCEL_V0=280;   // deg/s where wheel acceleration begins (core feel: faster spin = faster)
+  var ACCEL_SPAN=280; // deg/s of extra rotation speed per +1x
+  var ACCEL_MAX=4.5;  // max acceleration multiplier (both nav + scrub)
 
   // Fine (scrub) mode is a persistent TOGGLE: long-press center to switch. Wheel
   // rotation then does within-beat seek instead of beat navigation. Signalled by a
@@ -1964,18 +1979,31 @@
 
   // Wheel navigation pauses playback while moving and restores the START state when
   // it settles: was-playing -> resume at the new position; was-paused -> stay paused.
-  var navHold={active:false, was:false, t:null};
-  function navBegin(){
+  var navHold={active:false, was:false, mode:null, t:null};
+  function navBegin(mode){
     if(cur!=='player'||finished) return;
-    if(!navHold.active){ navHold.active=true; navHold.was=playing;
-      if(playing){ stopSpeech(); stopClip(); markPlaying(false); } }
-    clearTimeout(navHold.t); navHold.t=setTimeout(navEnd, 260);
+    if(!navHold.active){
+      navHold.active=true; navHold.was=playing; navHold.mode=mode;
+      if(playing){
+        markPlaying(false);
+        // Pause but KEEP the media handle so scrub can seek it (and reverse works); the
+        // resume happens on pointer-up so slow rotation never stutters play/pause.
+        try{ if(curAudio) curAudio.pause(); }catch(e){}
+        try{ if(yt&&yt.pauseVideo) yt.pauseVideo(); }catch(e){}
+      }
+    } else if(mode){ navHold.mode=mode; }
+    clearTimeout(navHold.t); navHold.t=setTimeout(navEnd, 1400); // safety fallback; primary trigger = pointerup
   }
   function navEnd(){
     if(!navHold.active) return;
-    navHold.active=false;
-    if(navHold.was){ setPlaying(true); }        // resume at the settled position
-    else { previewBeat(); }                      // stay paused, show where we landed
+    var was=navHold.was, mode=navHold.mode;
+    navHold.active=false; navHold.mode=null; clearTimeout(navHold.t);
+    if(!was){ previewBeat(); return; }            // was paused -> stay paused, show the landing
+    if(mode==='scrub'){                            // resume the SAME media from the seeked position
+      markPlaying(true); acquireWake();
+      try{ if(curAudio){ var pr=curAudio.play(); if(pr&&pr.catch) pr.catch(function(){}); }
+        else if(yt&&yt.playVideo) yt.playVideo(); }catch(e){}
+    } else { setPlaying(true); }                   // beat nav -> play the landed beat
   }
   function previewBeat(){                         // static view of current beat (no audio)
     var b=beats[bi]; if(!b) return;
@@ -2008,7 +2036,7 @@
       if(zone==='out') return;
       try{ wheel.setPointerCapture(e.pointerId); }catch(err){}
       var s={ang:p.a, x:e.clientX, y:e.clientY, lt:e.timeStamp, zone:zone,
-             btn:wb?wb.id:null, cum:0, acc:0, rotated:false, held:false, holdT:null};
+             btn:wb?wb.id:null, cum:0, acc:0, vel:0, rotated:false, held:false, holdT:null};
       ptr[e.pointerId]=s; touchN++;
       if(zone==='center') centerId=e.pointerId;
       visAngle=p.a; wheel.classList.add('touching');
@@ -2028,15 +2056,19 @@
       var p=angOf(e);
       var d=p.a-s.ang; if(d>180)d-=360; if(d<-180)d+=360;
       s.ang=p.a; s.cum+=d; s.acc+=d;
-      if(!s.rotated && Math.abs(s.cum)>ROT_THRESH){ // 회전 확정 → 탭 무효화, 홀드 취소
-        s.rotated=true; clearTimeout(s.holdT); s.acc=0; // 클릭 억제는 pointerup 에서 (시간창)
+      if(!s.rotated && Math.abs(s.cum)>ROT_THRESH){ // rotation confirmed -> cancel tap + hold
+        s.rotated=true; clearTimeout(s.holdT); s.acc=0; s.vel=0; // click suppression handled on pointerup
       }
       if(s.rotated){
-        // Mode is explicit: fine (toggle ON) = within-beat scrub, else = beat navigation.
-        // Deterministic 1 notch = 1 step (no velocity acceleration — the source of the
-        // "unit changes for no reason" defect).
+        // Mode is explicit (fine toggle = within-beat scrub, else beat navigation). Unpredictable
+        // mode-switching came from touch-zone coupling, not from acceleration; so acceleration is
+        // kept as a core feel: faster rotation shrinks the step -> more notches fire -> movement
+        // speeds up smoothly (no discrete tiers), in BOTH modes.
         var scrub=fineMode;
-        var step=scrub?SCRUB_NOTCH:NOTCH;
+        var inst=Math.abs(d)/Math.max(e.timeStamp-s.lt,1)*1000; // deg/s
+        s.vel=s.vel*0.6+inst*0.4;                                // smoothed angular velocity
+        var accel=1+Math.min(ACCEL_MAX-1, Math.max(0,(s.vel-ACCEL_V0)/ACCEL_SPAN));
+        var step=(scrub?SCRUB_NOTCH:NOTCH)/accel;
         s.lt=e.timeStamp;
         while(s.acc>=step){ s.acc-=step; kick+=1.4; scrub?emitScrub(1):emitTick(1); }
         while(s.acc<=-step){ s.acc+=step; kick-=1.4; scrub?emitScrub(-1):emitTick(-1); }
@@ -2053,16 +2085,18 @@
         // 탭(회전·홀드 아님) → 네이티브 버튼 onclick 이 처리 (억제창 미설정). 링 갭 탭은 무동작.
         delete ptr[e.pointerId]; touchN=Math.max(0,touchN-1);
         if(touchN===0){ wheel.classList.remove('touching');
-          if(document.body.classList.contains('stage')||document.body.classList.contains('reading')) wheelSleep(); } // 손 뗀 뒤 3초 소멸 (e)
+          if(navHold.active) navEnd(); // fingers up -> settle: resume (or stay paused) per start state
+          if(document.body.classList.contains('stage')||document.body.classList.contains('reading')) wheelSleep(); } // float wheel hides 3s after release
         kickFrame();
       });
     });
 
     function emitTick(dir){ // 1 notch = 1 step, always (deterministic)
       if(navigator.vibrate) navigator.vibrate(7);
+      if(cur==='player') wheelTick(false); // detent click while navigating beats (was lost when nav stopped auto-play)
       dispatchNotch(dir);
     }
-    function emitScrub(dir){ if(navigator.vibrate) navigator.vibrate(5); wheelTick(); dispatchScrub(dir); }
+    function emitScrub(dir){ if(navigator.vibrate) navigator.vibrate(5); wheelTick(true); dispatchScrub(dir); }
     window.wheelRubber=function(dir){ rubber+=15*dir; kickFrame(); };
     window.wheelDemo=function(){ // 첫 발견 데모 회전
       wheel.classList.add('demo'); var t0=null;
@@ -2109,8 +2143,8 @@
       if(bi+dir>=beats.length){ wheelRubber(1); wheelEnd(); finishNote(); return; }
       if(bi+dir<0){ wheelRubber(-1); wheelEnd(); return; }
       // Navigation pauses playback while moving and restores the start state on settle
-      // (navEnd): was-playing -> resume at new position; was-paused -> stay paused. No auto-play.
-      navBegin();
+      // (navEnd on pointer-up): was-playing -> resume at new position; was-paused -> stay paused.
+      navBegin('notch');
       bi=bi+dir; renderChapters(); if(typeof msUpdate==='function') msUpdate();
     }
   }
@@ -2137,8 +2171,9 @@
   }
   // 재생 중 '가운데 누른 채 휠 회전' = 현재 구간 내부 스크럽 (클립=seekTo · 노트=오디오 위치)
   function dispatchScrub(dir){
-    if(cur!=='player'){ dispatchNotch(dir); return; } // 재생 아니면 이동으로 폴백
+    if(cur!=='player'){ dispatchNotch(dir); return; } // outside player -> fall back to navigation
     if(finished) return;
+    navBegin('scrub'); // pause (keep handle) so the seek isn't fought by live playback; resume on release
     var beat=beats[bi]; if(!beat) return;
     if(beat.t==='c'&&yt&&yt.getCurrentTime&&yt.seekTo){
       var t=yt.getCurrentTime()||beat.from||0;
