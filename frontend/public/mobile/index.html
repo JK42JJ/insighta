@@ -240,7 +240,7 @@
   .way-cream{background:radial-gradient(circle at 50% 32%, #FBFAF6 30%, #E2DDD1)}
   .way-sage{background:radial-gradient(circle at 50% 32%, #D5DECB 30%, #93A788)}
   .way-mist{background:radial-gradient(circle at 50% 32%, #D7E2EA 30%, #90A7B8)}
-  /* iOS-style on/off switch for share rows — visual only; the wheel-navigable .mrow button owns the toggle */
+  /* on/off toggle switch for share rows — visual only; the wheel-navigable .mrow button owns the toggle */
   .iosw{position:relative; flex:none; width:38px; height:22px; border-radius:22px; background:rgba(94,86,72,.28); transition:background .22s ease; pointer-events:none}
   .iosw::after{content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(60,45,25,.3); transition:transform .22s cubic-bezier(.3,.8,.3,1)}
   .iosw.on{background:var(--ui)}
@@ -388,7 +388,7 @@
   .go-msg{font-size:11.5px; font-weight:700; text-align:center; line-height:1.7}
   .go-msg small{display:block; font-size:9px; color:var(--paper-sub); font-weight:600}
 
-  /* ================= 클릭휠 — §1.1 + §1.1a ================= */
+  /* ================= 조그휠 — §1.1 + §1.1a ================= */
   /* [J:07-13 설치앱 판정] 휠 = 하단 고정 — 화면 공간 최우선 (정사각 필드 폐기) */
   .wheelzone{display:grid; place-items:center; flex:none; width:100%; padding-top:12px}
   .wheel{
@@ -431,7 +431,7 @@
   .wbtn svg{display:block; fill:currentColor}
   .wbtn:active{transform:scale(.86); opacity:.55} /* [A] press */
   /* [J:07-15] 정규 비율 — 아이콘을 '박스 중심 기준' % 로 배치. translate(-50%,-50%) 로 중심을 고정해
-     padding/glyph 크기와 무관하게 풀/미니/읽기 어느 크기든 4개 모두 동일 반경(iPod 링 밴드)에 안착 (d).
+     padding/glyph 크기와 무관하게 풀/미니/읽기 어느 크기든 4개 모두 동일 반경(같은 링 밴드)에 안착 (d).
      17%/83% = 중심이 휠반경의 ~0.66R (코어 0.39R ~ 가장자리 1.0R 의 링 밴드). 고정 px 폐기. */
   .wbtn.menu{top:17%; left:50%; transform:translate(-50%,-50%)} .wbtn.menu:active{transform:translate(-50%,-50%) scale(.86)}
   .wbtn.prev{left:17%; top:50%; transform:translate(-50%,-50%)} .wbtn.prev:active{transform:translate(-50%,-50%) scale(.84)}
@@ -462,7 +462,7 @@
   body.stage .device{max-width:none; max-height:none; border-radius:0; padding:0; gap:0; background:#0D0D10; box-shadow:none}
   body.stage .device::after{display:none}
   body.stage .engrave{display:none}
-  /* [J pick 07-14] C3 미니 휠 — 세로 클릭휠의 미니어처, 반투명 상주 */
+  /* [J pick 07-14] C3 미니 휠 — 세로 조그휠의 미니어처, 반투명 상주 */
   body.stage .wheelzone{display:block; position:absolute; z-index:7; width:176px; padding:0;
     right:calc(env(safe-area-inset-right, 0px) + 14px); bottom:calc(var(--sab) + 14px); left:auto; top:auto}
   /* A-기록 핸들 문법 [J:07-14]: 평시 투명 → 터치 시 저투명(시청 무방해) → 3초 머문 뒤 소멸 */
@@ -1041,7 +1041,7 @@
     }
   }catch(e){}
 
-  // share settings = wheel-navigable .mrow switch rows; center-press (or tap) toggles the iOS-style switch
+  // share settings = wheel-navigable .mrow switch rows; center-press (or tap) toggles the switch
   (function(){
     var expRow=document.getElementById('bShExpiry'), expVal=document.getElementById('shExpiryVal'), expSw=document.getElementById('shExpirySw');
     var seqRow=document.getElementById('bShSeq'), seqSw=document.getElementById('shSeqSw');
@@ -1825,7 +1825,7 @@
     setPlaying(true); // single start path — syncs body.playing / dock / mediaSession
   }
 
-  /* ================= 클릭휠 엔진 v2 — 통합 입력 레이어 → 상태기계 (iPod 각색) =================
+  /* ================= 조그휠 엔진 v2 — 통합 입력 레이어 → 상태기계 (다이얼 조작 모델) =================
      설계: 휠 위 모든 터치를 단일 핸들러가 소유(touch-action:none) → 의미 이벤트(tick/scrub/press/hold)
      방출 → 컨텍스트 상태기계(home/menu/player)가 해석. 회전 하나에 속도로 미세/거시를 얹지 않고
      '가운데 누른 채 회전=스크럽'으로 모드 분리 (실패한 조그/셔틀 대체). 멀티포인터·capture 소유로
@@ -1885,7 +1885,7 @@
         s.rotated=true; clearTimeout(s.holdT); s.acc=0; // 클릭 억제는 pointerup 에서 (시간창)
       }
       if(s.rotated){
-        // 스크럽 판정: 이 포인터가 코어에서 시작했거나, 다른 손가락이 코어를 누르고 있음 (iPod hold-center+rotate)
+        // 스크럽 판정: 이 포인터가 코어에서 시작했거나, 다른 손가락이 코어를 누르고 있음 (hold-center+rotate)
         var scrub=(s.zone==='center')||(centerId!=null&&centerId!==e.pointerId&&ptr[centerId]);
         var step=scrub?SCRUB_NOTCH:NOTCH;
         var vel=Math.abs(d)/Math.max(e.timeStamp-s.lt,1)*1000; s.lt=e.timeStamp;
@@ -1946,7 +1946,7 @@
       var items=homeItems(); if(!items.length) return;
       var nx=selIdx+dir;
       if(nx<0||nx>=items.length){ wheelRubber(dir); return; } // J4
-      selIdx=nx; updateSel(); // J5: 1노치 1행, 선택만 이동 (아이팟 메뉴)
+      selIdx=nx; updateSel(); // J5: 1노치 1행, 선택만 이동 (메뉴 이동)
     } else if(cur==='menu'){ // 설정도 조그휠 — 행 선택 이동 (홈과 동일)
       var mr=menuRows(); if(!mr.length) return;
       var nm=selMenu+dir;
@@ -1964,7 +1964,7 @@
     }
   }
 
-  /* iPod 각색: MENU 짧게=뒤로(한 단계 위), 길게=홈(엔진 holdT 처리). 설정 진입=우상단 설정 아이콘. */
+  /* MENU 짧게=뒤로(한 단계 위), 길게=홈(엔진 holdT 처리). 설정 진입=우상단 설정 아이콘. */
   // 화면 부모맵 — 하위 화면은 breadcrumb data-back 을 그대로 사용(news/invite→menu), 나머지는 명시 (h)
   function screenParent(s){
     var el=scr[s], up=el&&el.querySelector('.bc .up[data-back]');
