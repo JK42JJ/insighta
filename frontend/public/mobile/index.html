@@ -1685,13 +1685,14 @@
         ytSwap(); cuedKey=null;
       }
       else if(!resume) yt.loadVideoById({videoId:beat.vid, startSeconds:beat.from, endSeconds:beat.to});
-      try{yt.setPlaybackRate(Math.min(spd,2))}catch(e){} // YT 상한 2× (플랫폼 한계)
-      // iOS: 제스처 없는 소리-영상 자동재생 차단 → 뮤트로 시작(허용됨), 재생 확인 후 언뮤트+램프
-      try{yt.mute()}catch(e){}
-      try{yt.setVolume(0)}catch(e){}
+      try{yt.setPlaybackRate(Math.min(spd,2))}catch(e){} // YT caps at 2x (platform limit)
+      // iOS blocks gesture-less audio autoplay -> a FRESH clip starts muted then unmutes
+      // once playing. A RESUME keeps the video's existing (already-unmuted) audio: re-muting
+      // it here and relying on the delayed poll-unmute is what left manual pause/resume silent.
+      if(!resume){ try{yt.mute()}catch(e){} try{yt.setVolume(0)}catch(e){} }
       yt.playVideo();
-      setTimeout(cueNext, 900); // 현재 클립이 안정된 뒤 다음 클립 프리큐
-      var v=0, ramp=null, unmuted=false;
+      setTimeout(cueNext, 900); // pre-cue the next clip once this one is stable
+      var v=0, ramp=null, unmuted=resume; // resume is already unmuted -> skip the ramp
       function rampUp(){ if(unmuted) return; unmuted=true;
         try{yt.unMute()}catch(e){}  // 즉시 언뮤트 = 안정 종료상태. 이후 재-뮤트/다운램프 없음 → 네이티브 전체화면 무음 근본수정 (k)
         ramp=setInterval(function(){ v+=25; if(v>=100){v=100; clearInterval(ramp);} try{yt.setVolume(v)}catch(e){} },30);
