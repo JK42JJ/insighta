@@ -1743,7 +1743,7 @@
     // 완청(학습) 인정 = 자연 재생 도달 또는 전 구간을 실제로 들은 경우만 — 빨리감기 종점은 화면만
     var learned=!!auto||learnedBi>=beats.length-1;
     if(learned&&curNote&&curNote.guest){ try{ localStorage.setItem(guestKey(),'1') }catch(e){} } // 완청 = 빨리감기 해제
-    playing=false; stopSpeech(); stopClip(); setCharging(false); chime('end');
+    markPlaying(false); stopSpeech(); stopClip(); setCharging(false); chime('end');
     if(learned){ charge=100; renderBatt(); }
     releaseWake();
     if(curNote&&!curNote.sample) saveResume(curNote.id,0,beats.length,learned);
@@ -1761,15 +1761,20 @@
       pState.querySelector('#finNext').onclick=function(){ openNote(nextM); }; }
     bi=0;
   }
+  // Single source of truth for the playing flag — keeps body.playing (ppInd / voice
+  // icon) and mediaSession synced at every start / resume / end site (was setPlaying-only).
+  function markPlaying(on){
+    playing=on;
+    document.body.classList.toggle('playing', on);
+    try{ if('mediaSession' in navigator) navigator.mediaSession.playbackState=on?'playing':'paused'; }catch(e){}
+  }
   function setPlaying(on){
     if(on){ unlockAudio(); finished=false; }
-    playing=on; setCharging(on);
-    document.body.classList.toggle('playing', on); // 보이스 아이콘
+    markPlaying(on); setCharging(on);
     if(on){ acquireWake(); runBeat(); }
     else{ stopSpeech(); stopClip(); releaseWake();
       if(document.body.classList.contains('clipmode')) veilHold(true); }
     updateDock();
-    try{ if('mediaSession' in navigator) navigator.mediaSession.playbackState=on?'playing':'paused'; }catch(e){}
   }
 
   async function openNote(m){
@@ -1812,10 +1817,9 @@
     var res=m.sample?null:loadResume(m.id);
     bi=(res&&!res.done&&res.bi>0&&res.bi<beats.length)?res.bi:0;
     learnedBi=(res&&res.lb)?Math.min(res.lb,beats.length):0;
-    playing=true; setCharging(true); acquireWake();
     if(bi===0) chime('start');
     coachOnce();
-    runBeat();
+    setPlaying(true); // single start path — syncs body.playing / dock / mediaSession
   }
 
   /* ================= 클릭휠 엔진 v2 — 통합 입력 레이어 → 상태기계 (iPod 각색) =================
@@ -1953,7 +1957,7 @@
       }
       if(dir>0&&!guestFwdOk()){ guestFwdNotice(); return; }
       if(bi+dir>=beats.length){ wheelRubber(1); finishNote(); return; }
-      nextBeat(dir); if(!playing){ playing=true; setCharging(true); acquireWake(); runBeat(); }
+      nextBeat(dir); if(!playing){ markPlaying(true); setCharging(true); acquireWake(); runBeat(); }
     }
   }
 
@@ -2138,7 +2142,7 @@
     document.body.classList.remove('railopen');
     setTimeout(function(){ updateStream(true) },380);
   }
-  function stageResume(){ if(!playing){ playing=true; setCharging(true); acquireWake(); } runBeat(); }
+  function stageResume(){ if(!playing){ markPlaying(true); setCharging(true); acquireWake(); } runBeat(); }
   function stageJump(dir){ // dispatchNotch와 동일 계약
     if(finished){
       if(dir>0){ hudWake(); return; }
@@ -2148,7 +2152,7 @@
     if(dir>0&&!guestFwdOk()){ guestFwdNotice(); hudWake(); return; }
     if(bi+dir>=beats.length){ finishNote(); return; }
     nextBeat(dir);
-    if(!playing){ playing=true; setCharging(true); acquireWake(); runBeat(); }
+    if(!playing){ markPlaying(true); setCharging(true); acquireWake(); runBeat(); }
     hudWake();
   }
   /* 탭 존 = 유튜브 문법, 내레이션·클립 동일 [J:07-14 "기존 사용성을 막지 않아야"]
