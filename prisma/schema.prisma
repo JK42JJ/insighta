@@ -2651,6 +2651,10 @@ model app_notices {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   title        String    @db.VarChar(120)
   body         String
+  kind         String    @default("plain") @db.VarChar(24)
+  event_at     DateTime? @db.Timestamptz(6)
+  cta_label    String?   @db.VarChar(40)
+  cta_url      String?   @db.VarChar(400)
   published_at DateTime  @default(now()) @db.Timestamptz(6)
   created_at   DateTime  @default(now()) @db.Timestamptz(6)
 
