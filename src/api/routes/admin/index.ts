@@ -35,6 +35,7 @@ import { adminSegmentRelevanceFillRoutes } from './segment-relevance-fill';
 import { adminPoolServeRoutes } from './pool-serve';
 import { adminSearchTraceExplorerRoutes } from './search-trace-explorer';
 import { adminEvalHarnessRoutes } from './eval-harness';
+import { adminEmailRoutes } from './email';
 
 /**
  * Admin routes plugin.
@@ -96,5 +97,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Observability G2-b — Phase 3 Eval Harness (golden-cohort gc baseline).
   // gc miss-scoring is prod-only Haiku (admin-triggered); cacheOnly=safe verify.
   await fastify.register(adminEvalHarnessRoutes, { prefix: '/eval-harness' });
+  // Sample-only email trigger (owner-allowlisted; no broadcast).
+  await fastify.register(adminEmailRoutes);
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }
