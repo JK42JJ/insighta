@@ -25,7 +25,16 @@ export async function appNoticeRoutes(fastify: FastifyInstance): Promise<void> {
     const rows = await getPrismaClient().app_notices.findMany({
       orderBy: { published_at: 'desc' },
       take: limit,
-      select: { id: true, title: true, body: true, published_at: true },
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        published_at: true,
+        kind: true,
+        event_at: true,
+        cta_label: true,
+        cta_url: true,
+      },
     });
     return reply
       .header('Cache-Control', 'public, max-age=60')

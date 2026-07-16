@@ -644,6 +644,69 @@
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.001s !important; transition-duration:.001s !important}
   }
+
+  /* ── 새소식 애니메이션 배너 (closed_beta / dial_launch) — CTA 전환 표면 ── */
+  #newsList{--nb-berry:#8E7DE4; --nb-berry-mid:#6E5DC8; --nb-berry-lo:#5A4BB0}
+  .nb-card{position:relative; border-radius:18px; overflow:hidden; contain:layout paint style;
+    opacity:0; transform:translateY(14px); animation:nbIn .6s cubic-bezier(.2,.8,.2,1) forwards;
+    cursor:pointer; -webkit-tap-highlight-color:transparent; touch-action:manipulation}
+  .nb-card:active{transform:scale(.986)}
+  @keyframes nbIn{to{opacity:1; transform:none}}
+  .nb-body{position:relative; color:#fff}
+  .nb-eyebrow{font-size:9.5px; font-weight:800; letter-spacing:.2em; opacity:.85}
+  .nb-cta{display:inline-flex; align-items:center; gap:6px; margin-top:15px; position:relative; z-index:2;
+    background:#fff; border-radius:99px; padding:10px 17px; font-size:12.5px; font-weight:900; box-shadow:0 4px 12px -4px rgba(0,0,0,.28)}
+  .nb-cta svg{width:13px; height:13px}
+  /* beta */
+  .nb-beta{background:radial-gradient(120% 90% at 82% 18%, var(--nb-berry) 0%, var(--nb-berry-mid) 45%, var(--nb-berry-lo) 100%)}
+  .nb-beta .nb-body{padding:22px 20px 20px; min-height:230px}
+  .nb-beta .nb-cta{color:var(--nb-berry-lo)}
+  .nb-rings{position:absolute; inset:0; overflow:hidden}
+  .nb-rings i{position:absolute; border-radius:50%; border:1.5px solid rgba(255,255,255,.14); will-change:transform,opacity}
+  .nb-rings i:nth-child(1){width:230px; height:230px; right:-70px; top:-70px; animation:nbBreathe 5s ease-in-out infinite}
+  .nb-rings i:nth-child(2){width:150px; height:150px; right:-24px; top:-10px; animation:nbBreathe 5s ease-in-out .6s infinite}
+  @keyframes nbBreathe{0%,100%{transform:scale(1); opacity:.7}50%{transform:scale(1.06); opacity:1}}
+  .nb-badge{position:absolute; right:18px; top:18px; transform:rotate(8deg)}
+  .nb-badge span{display:block; border:2px solid #fff; border-radius:9px; padding:6px 9px; text-align:center;
+    font-size:10px; font-weight:900; letter-spacing:.14em; line-height:1.25}
+  .nb-badge span b{font-size:8px; font-weight:800; opacity:.85; letter-spacing:.1em}
+  .nb-beta h3{font-size:22px; font-weight:900; letter-spacing:-.02em; line-height:1.22; margin:12px 0 0; word-break:keep-all}
+  .nb-period{display:block; font-size:11.5px; font-weight:700; color:rgba(255,255,255,.9); margin-top:9px}
+  .nb-period b{font-weight:900; color:#FFE7A6; font-variant-numeric:tabular-nums; margin-left:3px}
+  .nb-pills{display:flex; gap:7px; margin-top:14px; flex-wrap:wrap}
+  .nb-pill{background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28); border-radius:99px;
+    padding:5px 11px; font-size:10.5px; font-weight:800}
+  .nb-pill.hot{background:#fff; color:var(--nb-berry-lo)}
+  .nb-mascot{position:absolute; right:6px; bottom:-4px; width:82px; height:90px; pointer-events:none}
+  .nb-mascot svg{width:100%; height:100%; overflow:visible; filter:drop-shadow(0 6px 10px rgba(40,24,90,.28))}
+  .nb-bob{animation:nbBob 3s ease-in-out infinite; transform-origin:50% 100%; will-change:transform}
+  @keyframes nbBob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-4px) rotate(2deg)}}
+  /* dial */
+  .nb-dial{background:radial-gradient(120% 100% at 20% 20%, #F2A672 0%, var(--acc,#E8804C) 40%, var(--acc-lo,#CE5F30) 100%)}
+  .nb-dial .nb-body{padding:22px 20px; min-height:184px; display:flex; gap:14px; align-items:center}
+  .nb-dial .nb-txt{flex:1; min-width:0; z-index:2}
+  .nb-dial h3{font-size:21px; font-weight:900; letter-spacing:-.02em; line-height:1.24; margin:9px 0 0; word-break:keep-all}
+  .nb-dial p{font-size:12px; line-height:1.62; opacity:.94; margin:8px 0 0}
+  .nb-dial .nb-cta{color:var(--acc-lo,#CE5F30); margin-top:13px}
+  .nb-dev{flex:none; width:94px; height:142px; border-radius:18px; position:relative; transform:rotate(-4deg);
+    background:linear-gradient(150deg,#FEFCF7 0%,#F6F1E6 44%,#E9E1D0 100%);
+    box-shadow:0 14px 26px -10px rgba(60,40,20,.5), inset 0 1.5px 0 rgba(255,255,255,.95), inset 0 -3px 6px rgba(120,100,70,.16), inset 0 0 0 1px rgba(120,100,70,.14)}
+  .nb-win{position:absolute; left:9px; right:9px; top:9px; height:52px; border-radius:9px; overflow:hidden;
+    background:linear-gradient(158deg,#FFF 0%,#F7F2E7 60%,#F0EADC 100%); box-shadow:inset 0 0 0 1px rgba(94,86,72,.14)}
+  .nb-ln{height:5px; border-radius:3px; background:linear-gradient(90deg,#E6DCC6,#EFE7D5); margin:9px 9px 0}
+  .nb-ln.s{width:52%}
+  .nb-wheel{position:absolute; left:50%; bottom:11px; transform:translateX(-50%); width:62px; height:62px; border-radius:50%;
+    background:radial-gradient(circle at 50% 30%,#FFF 0%,#F5EFE1 58%,#E4DAC6 100%);
+    box-shadow:0 3px 7px rgba(60,40,20,.18), inset 0 2px 4px rgba(255,255,255,.9), inset 0 -3px 6px rgba(120,100,70,.18)}
+  .nb-ring{position:absolute; inset:6px; border-radius:50%; border:2px dashed rgba(206,95,48,.3); animation:nbSpin 8s linear infinite; will-change:transform}
+  @keyframes nbSpin{to{transform:rotate(360deg)}}
+  .nb-ctr{position:absolute; inset:0; margin:auto; width:23px; height:23px; border-radius:50%;
+    background:radial-gradient(circle at 42% 32%,#F2A672,#E8804C 50%,#C9591F); animation:nbPulse 2.6s ease-in-out infinite; will-change:transform}
+  @keyframes nbPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+  @media (prefers-reduced-motion:reduce){
+    .nb-card{opacity:1 !important; transform:none !important}
+    .nb-rings i,.nb-bob,.nb-ring,.nb-ctr{animation:none !important}
+  }
 </style>
 </head>
 <body>
@@ -965,6 +1028,7 @@
     // 플레이어 이탈 = 재생 정지 [J:07-15 치명버그: 만다라/설정에서 노트 재생 지속].
     // 나브 토글·MENU·브레드크럼 모든 경로를 한곳에서 커버 (백그라운드 재생 오용 차단).
     if(cur==='player'&&n!=='player'&&typeof setPlaying==='function'){ try{ setPlaying(false); }catch(e){} }
+    if(cur==='news'&&n!=='news'&&typeof clearNewsTimers==='function'){ clearNewsTimers(); } // stop countdown intervals on leave (no leak)
     if(n!=='player'){ document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true; } // 읽기 모드 = 플레이어 전용
     if(n===cur) return;
     scr[cur].classList.remove('active');
@@ -2285,20 +2349,84 @@
   function checkNewsUnread(){ // 부팅 시 1회 — 기어에 점만 표시 (조용히 실패)
     fetchNews().then(function(ns){ updateNewsDots(ns[0]&&ns[0].published_at); }).catch(function(){});
   }
+  var _newsTimers=[];
+  function clearNewsTimers(){ for(var i=0;i<_newsTimers.length;i++) clearInterval(_newsTimers[i]); _newsTimers=[]; }
+  var NB_ARROW='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  var NB_MASCOT='<svg viewBox="0 0 150 164" fill="none" aria-hidden="true"><defs>'
+    +'<radialGradient id="nbBody" cx="36%" cy="26%" r="82%"><stop offset="0" stop-color="#B9AEF2"/><stop offset="42%" stop-color="#8E7DE4"/><stop offset="82%" stop-color="#6E5DC8"/><stop offset="1" stop-color="#5A4BB0"/></radialGradient>'
+    +'<radialGradient id="nbGloss" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset="70%" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>'
+    +'<linearGradient id="nbLeaf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9BD6A6"/><stop offset="1" stop-color="#6BB47C"/></linearGradient>'
+    +'<radialGradient id="nbBlush" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#F7ABAB" stop-opacity=".85"/><stop offset="1" stop-color="#F7ABAB" stop-opacity="0"/></radialGradient>'
+    +'</defs><ellipse cx="76" cy="156" rx="42" ry="7" fill="rgba(24,16,54,.22)"/><g class="nb-bob">'
+    +'<path d="M78 44C74 30 78 16 90 12" stroke="#6BB47C" stroke-width="4.5" stroke-linecap="round"/>'
+    +'<path d="M90 12c9-4 19-1 24 6-8 6-17 7-24 2-1-3-1-6 0-8z" fill="url(#nbLeaf)"/>'
+    +'<circle cx="76" cy="90" r="52" fill="url(#nbBody)"/>'
+    +'<ellipse cx="56" cy="62" rx="26" ry="20" fill="url(#nbGloss)" transform="rotate(-18 56 62)"/>'
+    +'<ellipse cx="46" cy="100" rx="10" ry="7" fill="url(#nbBlush)"/><ellipse cx="106" cy="100" rx="10" ry="7" fill="url(#nbBlush)"/>'
+    +'<ellipse cx="60" cy="88" rx="7" ry="8.5" fill="#2E2740"/><ellipse cx="92" cy="88" rx="7" ry="8.5" fill="#2E2740"/>'
+    +'<circle cx="62.6" cy="84.6" r="2.4" fill="#fff"/><circle cx="94.6" cy="84.6" r="2.4" fill="#fff"/>'
+    +'<path d="M66 100c4 4.5 14 4.5 18 0" stroke="#2E2740" stroke-width="3.4" stroke-linecap="round" fill="none"/>'
+    +'</g></svg>';
+  function nbCountdown(el, iso){
+    function tick(){
+      var ms=new Date(iso).getTime()-Date.now();
+      if(ms<=0){ el.textContent='베타 종료'; return; }
+      var d=Math.floor(ms/86400000), h=Math.floor(ms%86400000/3600000), m=Math.floor(ms%3600000/60000), s=Math.floor(ms%60000/1000);
+      function p(x){ return (x<10?'0':'')+x; }
+      el.textContent='D-'+d+' '+p(h)+':'+p(m)+':'+p(s);
+    }
+    tick(); _newsTimers.push(setInterval(tick,1000));
+  }
+  function nbCTA(n){ var u=n&&n.cta_url; if(!u) return;
+    if(/^https?:/i.test(u)) return;                       // internal routes only (no external nav)
+    if(u==='/mobile/'||u==='/mobile'||u==='home'){ show('home'); return; }
+    location.href=u;
+  }
+  function betaBanner(n){
+    var el=document.createElement('div'); el.className='nb-card nb-beta';
+    el.innerHTML='<div class="nb-body"><div class="nb-rings"><i></i><i></i></div>'
+      +'<div class="nb-badge"><span><b>CLOSED</b>BETA</span></div>'
+      +'<div class="nb-eyebrow">지금, 초대받은 분들만</div><h3>'+esc(n.title).replace(/\n/g,'<br>')+'</h3>'
+      +(n.event_at?'<span class="nb-period">종료까지<b class="nb-cd"></b></span>':'')
+      +'<div class="nb-pills"><span class="nb-pill hot">6주 무료</span><span class="nb-pill">Pro 전 기능</span></div>'
+      +(n.cta_label?'<span class="nb-cta">'+esc(n.cta_label)+' '+NB_ARROW+'</span>':'')
+      +'<div class="nb-mascot">'+NB_MASCOT+'</div></div>';
+    if(n.event_at) nbCountdown(el.querySelector('.nb-cd'), n.event_at);
+    el.onclick=function(){ nbCTA(n); };
+    return el;
+  }
+  function dialBanner(n){
+    var el=document.createElement('div'); el.className='nb-card nb-dial';
+    el.innerHTML='<div class="nb-body"><div class="nb-txt"><div class="nb-eyebrow">모바일 앱 출시</div>'
+      +'<h3>'+esc(n.title).replace(/\n/g,'<br>')+'</h3>'+(n.body?'<p>'+esc(n.body)+'</p>':'')
+      +(n.cta_label?'<span class="nb-cta">'+esc(n.cta_label)+' '+NB_ARROW+'</span>':'')
+      +'</div><div class="nb-dev"><div class="nb-win"><div class="nb-ln"></div><div class="nb-ln s"></div></div>'
+      +'<div class="nb-wheel"><span class="nb-ring"></span><span class="nb-ctr"></span></div></div></div>';
+    el.onclick=function(){ nbCTA(n); };
+    return el;
+  }
+  function plainNotice(n){
+    var d=document.createElement('div');
+    d.className='mrow'; d.style.cssText='flex-direction:column;align-items:flex-start;gap:4px;cursor:default';
+    var h=document.createElement('div'); h.style.cssText='display:flex;gap:8px;align-items:baseline;width:100%';
+    var t=document.createElement('span'); t.textContent=n.title; t.style.fontWeight='700';
+    var dt=document.createElement('span'); dt.className='sub'; dt.textContent=fmtNoticeDate(n.published_at);
+    h.appendChild(t); h.appendChild(dt);
+    var b=document.createElement('div'); b.textContent=n.body;
+    b.style.cssText='font-size:11px;line-height:1.65;color:var(--paper-sub);white-space:pre-wrap';
+    d.appendChild(h); d.appendChild(b); return d;
+  }
   function renderNews(ns){
+    clearNewsTimers();
     var box=document.getElementById('newsList');
     if(!ns.length){ box.innerHTML='<div class="menu-note" style="margin-top:20px">아직 공지가 없어요</div>'; return; }
     box.innerHTML='';
-    ns.forEach(function(n){
-      var d=document.createElement('div');
-      d.className='mrow'; d.style.cssText='flex-direction:column;align-items:flex-start;gap:4px;cursor:default';
-      var h=document.createElement('div'); h.style.cssText='display:flex;gap:8px;align-items:baseline;width:100%';
-      var t=document.createElement('span'); t.textContent=n.title; t.style.fontWeight='700';
-      var dt=document.createElement('span'); dt.className='sub'; dt.textContent=fmtNoticeDate(n.published_at);
-      h.appendChild(t); h.appendChild(dt);
-      var b=document.createElement('div'); b.textContent=n.body;
-      b.style.cssText='font-size:11px;line-height:1.65;color:var(--paper-sub);white-space:pre-wrap';
-      d.appendChild(h); d.appendChild(b); box.appendChild(d);
+    ns.forEach(function(n,i){
+      var el = n.kind==='closed_beta' ? betaBanner(n)
+             : n.kind==='dial_launch' ? dialBanner(n)
+             : plainNotice(n);
+      el.style.animationDelay=(i*0.1)+'s';
+      box.appendChild(el);
     });
   }
   /* ── 초대권 v2 [J:07-15]: 공유 아이콘 → OS 공유 시트, 가입 시 소진 ── */

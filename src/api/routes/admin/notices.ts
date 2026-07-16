@@ -8,22 +8,43 @@ import { getPrismaClient } from '../../../modules/database/client';
 export async function adminNoticeRoutes(fastify: FastifyInstance) {
   const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };
 
-  fastify.post<{ Body: { title?: string; body?: string } }>(
-    '/notices',
-    adminAuth,
-    async (request, reply) => {
-      const { title, body } = request.body ?? {};
-      if (!title?.trim() || title.length > 120 || !body?.trim()) {
-        return reply.code(400).send({ status: 'error', error: 'title (≤120) and body required' });
-      }
-      const row = await getPrismaClient().app_notices.create({
-        data: { title: title.trim(), body: body.trim() },
-      });
-      return reply
-        .code(200)
-        .send({ status: 'ok', data: { id: row.id, publishedAt: row.published_at } });
+  const KINDS = new Set(['plain', 'closed_beta', 'dial_launch']);
+
+  fastify.post<{
+    Body: {
+      title?: string;
+      body?: string;
+      kind?: string;
+      event_at?: string;
+      cta_label?: string;
+      cta_url?: string;
+    };
+  }>('/notices', adminAuth, async (request, reply) => {
+    const { title, body, kind, event_at, cta_label, cta_url } = request.body ?? {};
+    if (!title?.trim() || title.length > 120 || !body?.trim()) {
+      return reply.code(400).send({ status: 'error', error: 'title (≤120) and body required' });
     }
-  );
+    if (kind !== undefined && !KINDS.has(kind)) {
+      return reply.code(400).send({ status: 'error', error: 'invalid kind' });
+    }
+    const eventAt = event_at ? new Date(event_at) : null;
+    if (eventAt && Number.isNaN(eventAt.getTime())) {
+      return reply.code(400).send({ status: 'error', error: 'invalid event_at' });
+    }
+    const row = await getPrismaClient().app_notices.create({
+      data: {
+        title: title.trim(),
+        body: body.trim(),
+        kind: kind ?? 'plain',
+        event_at: eventAt,
+        cta_label: cta_label?.trim() || null,
+        cta_url: cta_url?.trim() || null,
+      },
+    });
+    return reply
+      .code(200)
+      .send({ status: 'ok', data: { id: row.id, publishedAt: row.published_at } });
+  });
 
   fastify.delete<{ Params: { id: string } }>('/notices/:id', adminAuth, async (request, reply) => {
     const { id } = request.params;

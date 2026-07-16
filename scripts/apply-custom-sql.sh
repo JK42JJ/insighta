@@ -182,6 +182,13 @@ APPLY_FILES=(
   # Closed-beta application inbox (2026-07-08) — CREATE TABLE IF NOT EXISTS, idempotent.
   "prisma/migrations/beta/001_beta_applications.sql"
   "prisma/migrations/beta/002_add_goal.sql"
+  # In-app 새소식 (2026-07-15/16) — 001 created the table (was applied manually,
+  # now tracked here); 002 adds banner kind/event_at/cta columns; 003 seeds the
+  # two launch notices. All CREATE/ALTER ... IF NOT EXISTS + INSERT ... WHERE NOT
+  # EXISTS — fully idempotent.
+  "prisma/migrations/app-notices/001_create_app_notices.sql"
+  "prisma/migrations/app-notices/002_add_kind_cta.sql"
+  "prisma/migrations/app-notices/003_seed_beta_notices.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
