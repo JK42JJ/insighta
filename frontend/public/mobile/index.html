@@ -240,6 +240,10 @@
   .way-cream{background:radial-gradient(circle at 50% 32%, #FBFAF6 30%, #E2DDD1)}
   .way-sage{background:radial-gradient(circle at 50% 32%, #D5DECB 30%, #93A788)}
   .way-mist{background:radial-gradient(circle at 50% 32%, #D7E2EA 30%, #90A7B8)}
+  /* share-settings segmented control */
+  .segset{margin-left:auto; display:inline-flex; background:rgba(94,86,72,.10); border-radius:20px; padding:2px; flex:none}
+  .segbtn{border:none; background:none; font-family:inherit; font-size:11.5px; font-weight:700; color:var(--paper-sub); padding:4px 11px; border-radius:16px; cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+  .segbtn.on{background:var(--ui); color:#fff}
   .menu-note{font-size:9px; color:var(--paper-sub); font-weight:600; text-align:center; margin-top:auto; padding-top:8px}
 
   /* ---- 플레이어 (세로) ---- */
@@ -752,6 +756,14 @@
       <div class="scr" data-s="menu" id="scrMenu">
         <div class="top"><span class="tt">설정</span><div class="navtog"><button class="ntb" data-nav="home" aria-label="내 만다라"><span class="batt" id="sigMenu"><svg class="ksig" width="16" height="16" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></button><button class="ntb on" data-nav="menu" aria-label="설정"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg></button></div></div>
         <div class="menu-list">
+          <div class="ghd">공유</div>
+          <div class="mrow" style="cursor:default">
+            <span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 6.5 12 3l4 3.5"/><rect x="5" y="10" width="14" height="10" rx="2"/></svg></span>링크 유효기간
+            <span class="segset" id="shExpiry">
+              <button class="segbtn" data-days="1">24시간</button>
+              <button class="segbtn on" data-days="2">48시간</button>
+            </span>
+          </div>
           <div class="ghd">소식 · 초대</div>
           <button class="mrow" id="bNews"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 10-12 0c0 6-2.5 7.5-2.5 7.5h17S18 15 18 9"/><path d="M10.3 20a2 2 0 003.4 0"/></svg></span>새소식<span class="newsDot" id="newsDot" hidden></span><span class="sub" id="newsSub">공지 · 업데이트</span></button>
           <button class="mrow" id="bInvite"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V7a1.5 1.5 0 011.5-1.5h15A1.5 1.5 0 0121 7v2a3 3 0 000 6v2a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 17v-2a3 3 0 000-6z"/><path d="M13.5 6.2v2.1M13.5 11v2M13.5 15.7V18" stroke-dasharray="1.6 2.4"/></svg></span>초대권 사용하기<span class="sub" id="invSub">친구를 베타에 초대</span></button>
@@ -1033,6 +1045,19 @@
       document.querySelectorAll('.way').forEach(function(w){w.classList.toggle('on',w.dataset.th===savedTh)});
     }
   }catch(e){}
+
+  // share-link expiry segmented control (24h/48h) — stored pref, applied at mint via shareBody()
+  (function(){
+    var seg=document.getElementById('shExpiry'); if(!seg) return;
+    var curSel; try{ curSel=localStorage.getItem('insighta-share-expiry')==='1'?'1':'2'; }catch(e){ curSel='2'; }
+    Array.prototype.forEach.call(seg.querySelectorAll('.segbtn'),function(b){
+      b.classList.toggle('on', b.getAttribute('data-days')===curSel);
+      b.addEventListener('click',function(){
+        try{ localStorage.setItem('insighta-share-expiry', b.getAttribute('data-days')); }catch(e){}
+        Array.prototype.forEach.call(seg.querySelectorAll('.segbtn'),function(x){ x.classList.toggle('on', x===b); });
+      });
+    });
+  })();
 
   /* ================= 이어 듣기 (C1) ================= */
   function resumeKey(id){ return 'insighta-resume-'+id }
@@ -1657,13 +1682,14 @@
   }
 
   var runSeq=0, finished=false, learnedBi=0; // 학습 진도 = 자연 재생으로 통과한 비트만 [J:07-14]
-  /* 게스트 정책 [J:07-14]: 첫 완청 전 빨리감기 잠금 (학습 흐름 보전) */
+  /* guest policy: free playback by default; sequential seek-lock only for seqLock shares (BE flag, later) */
   var GUEST_MID=null; // 게스트 book 응답의 mandalaId — 완청 localStorage 키
   function guestKey(){
     return 'insighta-guest-done-'+(GUEST_MID||GUEST||'');
   }
   function guestFwdOk(){
-    if(!curNote||!curNote.guest) return true;
+    // share default = free playback (no seek lock). Sequential lock applies only to seqLock shares (BE flag, later).
+    if(!curNote||!curNote.guest||!curNote.seqLock) return true;
     try{ return localStorage.getItem(guestKey())==='1'; }catch(e){ return false; }
   }
   var gfNoticeAt=0;
@@ -1761,8 +1787,8 @@
     document.body.classList.remove('reading'); var _rv0=document.getElementById('readview'); if(_rv0) _rv0.hidden=true; // 새 노트 = 듣기로 시작
     curNote=m; show('player');
     document.getElementById('bShareNote').hidden=!!(m.sample||m.guest);
-    if(!m.sample&&!m.guest&&!m._shareUrl){ // 공유 링크 선발급 — 탭 시점엔 동기 공유 (iOS 제스처 보존)
-      api('/share-links',{method:'POST',body:JSON.stringify({targetType:'note_episode',targetId:m.id})})
+    if(!m.sample&&!m.guest&&!m._shareUrl){ // pre-mint share link on open (sync mint preserves iOS gesture)
+      api('/share-links',{method:'POST',body:shareBody(m.id)})
         .then(function(r){return r.json()})
         .then(function(j){ if(j&&j.data&&j.data.url) m._shareUrl=j.data.url; })
         .catch(function(){});
@@ -2353,19 +2379,22 @@
   };
   document.getElementById('bRead').onclick=toggleReading;
   document.getElementById('ppBtn').onclick=function(){ if(cur==='player') setPlaying(!playing); }; // bottom-progress play/pause
+  // share-link expiry preference (24h/48h), applied at mint; BE createShareLink supports expiresInDays
+  function shareExpiryDays(){ try{ return localStorage.getItem('insighta-share-expiry')==='1' ? 1 : 2; }catch(e){ return 2; } }
+  function shareBody(id){ return JSON.stringify({ targetType:'note_episode', targetId:id, expiresInDays:shareExpiryDays() }); }
   document.getElementById('bShareNote').onclick=function(){
     if(!curNote||curNote.sample||curNote.guest) return;
     var url=curNote._shareUrl;
-    if(!url){ // 선발급 미완 — 재발급 후 안내 (제스처 밖 공유 시트는 iOS가 차단)
+    if(!url){ // pre-mint incomplete — remint then guide (iOS blocks share sheet outside a gesture)
       toast('공유 링크 준비 중 — 잠시 후 다시 탭해주세요');
-      api('/share-links',{method:'POST',body:JSON.stringify({targetType:'note_episode',targetId:curNote.id})})
+      api('/share-links',{method:'POST',body:shareBody(curNote.id)})
         .then(function(r){return r.json()})
         .then(function(j){ if(j&&j.data&&j.data.url) curNote._shareUrl=j.data.url; })
         .catch(function(){ toast('링크를 만들지 못했어요'); });
       return;
     }
     var data={title:'다이얼 — '+(curNote.title||'노트'),
-      text:(curNote.title||'노트')+' — 48시간 무료 청취 · 첫 회차는 순서대로 이어집니다', url:url};
+      text:(curNote.title||'노트')+' — '+(shareExpiryDays()*24)+'시간 무료 청취', url:url};
     if(navigator.share){
       navigator.share(data).catch(function(e){
         if(e&&e.name==='AbortError') return;
