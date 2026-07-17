@@ -57,18 +57,20 @@ export async function registerCurationBuildWorker(): Promise<void> {
       return;
     }
 
-    // TODO(build-1) discover candidates by sub.source ('discover' | 'youtube_subs' | 'hybrid').
-    //   'discover' → reuse video-discover executor with sub.topic.
-    //   'youtube_subs' → user's youtube_subscriptions (sync_new_videos) new uploads.
-    // TODO(build-2) compute-card-relevance → per-video relevance_pct.
-    // TODO(build-3) passesBookGate (src/config/book-gate.ts) — drop off-topic cards.
-    // TODO(build-4) pick top CURATION_TARGET_VIDEOS by relevance (order → position).
-    // TODO(build-5) ensure rich_summary v2 exists per picked video so segment
-    //   relevance_pct is present (enqueueEnrichRichSummary) — powers useHighlightReel.
-    // TODO(build-6) write curation_items rows: { subscription_id, video_id,
-    //   relevance_pct, position, week_of } (snapshot; do NOT delete prior weeks).
-    // TODO(build-7) sub.last_run_at = now, next_run_at += cadence (7d for weekly).
-    // TODO(notify)  user-scoped "this week curation arrived" (D3 — email reuse candidate).
+    // Build pipeline — see design doc §12. Relevance depends on a centerGoal STRING,
+    // not a mandala object: computeCardRelevance takes input.centerGoal directly
+    // (compute-card-relevance.ts:88), so passing sub.topic AS the center goal reuses
+    // the whole relevance path — NO mandala needed. (Earlier "blocker / create a
+    // curation mandala" note was wrong.)
+    //
+    // TODO(build-1) discover: topic → videos (video-discover topic leg / video_pool), by sub.source.
+    // TODO(build-2) computeCardRelevance({ centerGoal: sub.topic, title, ... }) → relevance_pct.
+    // TODO(build-3) pick top by relevance, MIN 15 ~ TARGET 20 (floor at MIN).
+    // TODO(build-4) rich_summary v2 with centerGoal=topic (segment relevance_pct → useHighlightReel).
+    //   §12.3: enrich-rich-summary needs a centerGoal-direct path (currently mandalaId→lookup).
+    // TODO(build-5) write curation_items { subscription_id, video_id, relevance_pct, position, week_of }
+    //   (snapshot; keep prior weeks). No mandala_books → book-fill-gate untouched (no barrier risk).
+    // TODO(build-6) sub.last_run_at = now, next_run_at += 7d. notify (D3 — email reuse candidate).
 
     log.info('curation build (SCAFFOLD — steps TODO)', { subscriptionId, weekOf, topic: sub.topic });
   });
