@@ -162,6 +162,10 @@
   .cur-props .cp-dom{font-size:10.5px; font-weight:800; color:var(--ui); background:rgba(206,95,48,.1); border-radius:8px; padding:3px 8px}
   .cur-props .cp-t{font-size:15px; font-weight:750; color:var(--paper-ink); line-height:1.4}
   .cur-props .cp-go{font-size:11.5px; font-weight:700; color:var(--paper-sub)}
+  .cur-connect .cur-prog{width:160px; max-width:62%; height:5px; border-radius:99px; background:rgba(94,86,72,.12); overflow:hidden; margin-top:14px; position:relative}
+  .cur-connect .cur-prog span{position:absolute; top:0; height:100%; width:42%; border-radius:99px; background:var(--ui); animation:curslide 1.25s cubic-bezier(.4,0,.2,1) infinite}
+  @keyframes curslide{0%{left:-42%}100%{left:100%}}
+  .cur-connect .cur-note{margin-top:10px; font-size:11px; font-weight:600; color:var(--acc)}
   .cur-connect .cbtn:active{transform:scale(.97)}
   .rows{margin-top:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; min-height:0; padding-bottom:4px}
   .row{display:flex; gap:10px; align-items:center; background:rgba(255,255,255,.55); flex:none;
@@ -1297,7 +1301,8 @@
       if(r.status===202){ // profile building — analyze then retry
         el.className='cur-connect';
         el.innerHTML='<span class="cic">'+CUR_STAR+'</span><span class="t1">관심사 분석 중</span>'
-          +'<span class="t2">유튜브 활동을 살펴보고 있어요<br>잠시 후 추천이 준비돼요</span>';
+          +'<span class="t2">유튜브 활동을 살펴보고 있어요<br>잠시 후 추천이 준비돼요</span>'
+          +'<div class="cur-prog"><span></span></div>';
         setTimeout(function(){ if(homeTab==='curation') renderCuration(); },4000);
         return;
       }
@@ -1307,22 +1312,30 @@
       renderProposals(props);
     }catch(e){ curConnectGate(); }   // 401/403/not-connected → connect gate
   }
-  function curConnectGate(){
+  function curConnectGate(note){
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-connect';
     el.innerHTML='<span class="cic">'+CUR_STAR+'</span>'
       +'<span class="t1">매주 나를 위한 영상</span>'
       +'<span class="t2">유튜브 계정을 연결하면<br>관심사에 맞는 영상을 큐레이션해 드려요</span>'
-      +'<button class="cbtn" id="bCurConnect">유튜브 연결</button>';
+      +'<button class="cbtn" id="bCurConnect">유튜브 연결</button>'
+      +(note?'<span class="cur-note">'+curEsc(note)+'</span>':'');
     var b=document.getElementById('bCurConnect'); if(b) b.onclick=curConnect;
   }
+  // Full-page redirect — NO popup. origin=mobile marks the state so the EF callback
+  // returns to /mobile/?youtube=connected (the dial), not the PC settings page. The
+  // app session persists in localStorage, so we come back logged in + connected.
   async function curConnect(){
+    var btn=document.getElementById('bCurConnect');
     try{
       var tok=await freshToken(); if(!tok){ show('login'); return; }
-      var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=auth-url',{headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
+      if(btn){ btn.disabled=true; btn.textContent='연결 중…'; }
+      var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=auth-url&origin=mobile',{headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
+      if(!r.ok) throw new Error('auth-url '+r.status);
       var j=await r.json();
-      if(j&&j.authUrl){ location.href=j.authUrl; }
-    }catch(e){}
+      if(!j||!j.authUrl) throw new Error('no authUrl');
+      location.href=j.authUrl;
+    }catch(e){ curConnectGate('연결에 실패했어요. 다시 시도해주세요'); }
   }
   function renderProposals(props){
     var el=document.getElementById('curBody'); if(!el) return;
@@ -1343,7 +1356,8 @@
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-connect';
     el.innerHTML='<span class="cic">'+CUR_STAR+'</span><span class="t1">큐레이션 만드는 중</span>'
-      +'<span class="t2">'+curEsc(topic)+'<br>관련 영상을 모으고 있어요</span>';
+      +'<span class="t2">'+curEsc(topic)+'<br>관련 영상을 모으고 있어요</span>'
+      +'<div class="cur-prog"><span></span></div>';
     try{
       var r=await api('/curations',{method:'POST',body:JSON.stringify({topic:topic,source:'youtube_subs'})});
       var j=await r.json(); var id=j&&j.data&&j.data.id; if(!id) throw new Error('no id');
@@ -2960,7 +2974,13 @@
       }catch(e){ GUEST=null; show('login'); toast('링크를 열지 못했어요'); return; }
     }
     var tok=await freshToken();
-    if(tok){ show('home'); loadList(); renderCuration(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite(); }
+    // Return from YouTube OAuth (EF callback → /mobile/?youtube=connected|error). Clean
+    // the param; renderCuration() below re-checks (connected→analyzing, error→gate via P1).
+    var ytParam=new URLSearchParams(location.search).get('youtube');
+    if(ytParam) history.replaceState(null,'',location.pathname);
+    if(tok){ show('home'); loadList(); renderCuration(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite();
+      if(ytParam==='connected') toast('유튜브 계정을 연결했어요');
+      else if(ytParam==='error') toast('유튜브 연결에 실패했어요. 다시 시도해주세요'); }
     else { show('login'); }
   })();
 </script>
