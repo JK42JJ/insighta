@@ -23,9 +23,8 @@ import { getPrismaClient } from '@/modules/database/client';
 import { JOB_NAMES, QUEUE_CONFIG } from '../types';
 import { getJobQueue } from '../manager';
 import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
-import { computeCardRelevance } from '@/modules/relevance/compute-card-relevance';
 import { MS_PER_DAY } from '@/utils/time-constants';
-import { CURATION_RELEVANCE_FLOOR, CURATION_PUBLISHED_AFTER_DAYS } from '@/modules/curation/config';
+import { CURATION_PUBLISHED_AFTER_DAYS } from '@/modules/curation/config';
 
 const log = logger.child({ module: 'queue/curation-build' });
 
@@ -80,25 +79,16 @@ export async function registerCurationBuildWorker(): Promise<void> {
       publishedAfter,
     });
 
-    // build-2/3 — relevance per card (centerGoal=topic) → off-topic floor → rank → TARGET.
-    // v5 already applies trust/channel/book gating, so this floor is the topic-fit cut.
-    const scored: Array<{ videoId: string; relevancePct: number }> = [];
-    for (const card of v5.cards) {
-      try {
-        const r = await computeCardRelevance({
-          videoId: card.videoId,
-          title: card.title,
-          centerGoal: sub.topic,
-        });
-        if (r.ok && r.relevancePct >= CURATION_RELEVANCE_FLOOR) {
-          scored.push({ videoId: card.videoId, relevancePct: r.relevancePct });
-        }
-      } catch (err) {
-        log.warn('curation relevance failed', { subscriptionId, videoId: card.videoId, err });
-      }
-    }
-    scored.sort((a, b) => b.relevancePct - a.relevancePct);
-    const picked = scored.slice(0, QUEUE_CONFIG.CURATION_TARGET_VIDEOS);
+    // build-2/3 — v5 already ranks by relevance (score 0-1, sorted desc) and applies
+    // trust/channel/book gating. Use that ranking DIRECTLY — no per-card relevance
+    // re-computation. The old per-card computeCardRelevance (an extra LLM call per
+    // video) stalled the build for minutes; the existing search path returns in ~6s.
+    const picked: Array<{ videoId: string; relevancePct: number }> = v5.cards
+      .slice(0, QUEUE_CONFIG.CURATION_TARGET_VIDEOS)
+      .map((card) => ({
+        videoId: card.videoId,
+        relevancePct: Math.max(1, Math.min(100, Math.round((card.score ?? 0) * 100))),
+      }));
 
     // build-4 — rich-summary is REUSE-ONLY for P0. video_rich_summaries is a
     // video-keyed GLOBAL table (leaks across goals), so the build never writes it
