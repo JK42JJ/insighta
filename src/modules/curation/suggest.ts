@@ -123,11 +123,12 @@ export async function suggestTopics(userId: string): Promise<SuggestResult> {
   }
   const profile = (profileRow.profile as unknown as InterestProfile) ?? [];
 
-  const now = new Date();
+  // Use the freshest trends by fetch time, NOT an expires_at gate: the trend-collector's
+  // TTL can lapse (all rows "expired") between runs, which would leave zero candidates and
+  // wrongly show the connect gate to a connected user. Recency + norm_score is the signal.
   const trends = await prisma.trend_signals.findMany({
-    where: { expires_at: { gt: now } },
-    orderBy: { norm_score: 'desc' },
-    take: 200,
+    orderBy: [{ fetched_at: 'desc' }, { norm_score: 'desc' }],
+    take: 300,
     select: { keyword: true, norm_score: true },
   });
   const candidates: TrendCandidate[] = trends.map((t) => ({
