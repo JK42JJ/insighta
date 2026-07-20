@@ -22,7 +22,12 @@ import {
 } from '@/modules/youtube/api';
 import { extractKeywordsBatch } from '@/skills/plugins/trend-collector/sources/llm-extract';
 import { mapKeywordToDomain, type CurationDomain } from './domain-taxonomy';
-import { INTEREST_WEIGHTS, COLLECT_CAPS, KEYWORD_LEARNING_FLOOR } from './config';
+import {
+  INTEREST_WEIGHTS,
+  COLLECT_CAPS,
+  KEYWORD_LEARNING_FLOOR,
+  PROFILE_ERROR_RETRY_COOLDOWN_MS,
+} from './config';
 
 const log = logger.child({ module: 'curation/interest-profile' });
 
@@ -210,6 +215,16 @@ export async function maybeTriggerProfileBuild(
   const prisma = getPrismaClient();
   const row = await prisma.curation_interest_profile.findUnique({ where: { user_id: userId } });
   if (row && (row.status === 'building' || row.status === 'ready')) return;
+  // Back off on a recently-errored build — otherwise every suggest poll re-fires a
+  // doomed build (P1: token-less users, or a transient YouTube/LLM failure).
+  if (
+    row &&
+    row.status === 'error' &&
+    row.built_at &&
+    Date.now() - row.built_at.getTime() < PROFILE_ERROR_RETRY_COOLDOWN_MS
+  ) {
+    return;
+  }
   // mark building first so concurrent suggests don't double-fire, then run detached.
   await prisma.curation_interest_profile.upsert({
     where: { user_id: userId },

@@ -27,7 +27,7 @@ async function signState(nonce: string, userId: string, secret: string): Promise
   return `${nonce}:${userId}:${sig}`;
 }
 
-async function verifyState(state: string, secret: string): Promise<{ valid: boolean; userId?: string }> {
+async function verifyState(state: string, secret: string): Promise<{ valid: boolean; userId?: string; nonce?: string }> {
   const parts = state.split(':');
   if (parts.length < 3) return { valid: false };
   const [nonce, userId, sig] = [parts[0], parts[1], parts.slice(2).join(':')];
@@ -38,7 +38,7 @@ async function verifyState(state: string, secret: string): Promise<{ valid: bool
   // Reconstruct signature bytes from base64
   const sigBytes = Uint8Array.from(atob(sig), c => c.charCodeAt(0));
   const valid = await crypto.subtle.verify('HMAC', key, sigBytes, encoder.encode(`${nonce}:${userId}`));
-  return { valid, userId: valid ? userId : undefined };
+  return { valid, userId: valid ? userId : undefined, nonce: valid ? nonce : undefined };
 }
 
 // YouTube OAuth 2.0 endpoints
@@ -88,8 +88,10 @@ Deno.serve(async (req) => {
   try {
     switch (action) {
       case 'auth-url': {
-        // Generate OAuth authorization URL
-        const state = crypto.randomUUID();
+        // Generate OAuth authorization URL. origin=mobile marks the (HMAC-signed)
+        // state so the callback returns to /mobile/ instead of the PC /settings page.
+        const isMobile = url.searchParams.get('origin') === 'mobile';
+        const state = (isMobile ? 'm_' : '') + crypto.randomUUID();
 
         // Get user from authorization header
         const authHeader = req.headers.get('Authorization');
@@ -139,28 +141,36 @@ Deno.serve(async (req) => {
         const state = url.searchParams.get('state');
         const error = url.searchParams.get('error');
 
+        // Mobile connects (state nonce 'm_…') must be sent BACK to the dial on every
+        // exit — a raw JSON error page would strand them on supabase.co (the incident
+        // class this flow fixes). Checking the prefix unverified only picks between two
+        // of our own error pages, so it leaks nothing.
+        const frontendOrigin = Deno.env.get('FRONTEND_URL') || 'https://insighta.one';
+        const isMobileState = (state || '').startsWith('m_');
+        const errExit = (msg: string) =>
+          isMobileState
+            ? new Response(null, {
+                status: 302,
+                headers: { 'Location': `${frontendOrigin}/mobile/?youtube=error`, 'Cache-Control': 'no-store' },
+              })
+            : new Response(
+                JSON.stringify({ error: msg }),
+                { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+              );
+
         if (error) {
           console.error('OAuth error:', error);
-          return new Response(
-            JSON.stringify({ error: `OAuth error: ${error}` }),
-            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
-          );
+          return errExit(`OAuth error: ${error}`);
         }
 
         if (!code || !state) {
-          return new Response(
-            JSON.stringify({ error: 'Missing code or state parameter' }),
-            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
-          );
+          return errExit('Missing code or state parameter');
         }
 
         // Verify HMAC-signed state to prevent CSRF
-        const { valid, userId } = await verifyState(state, supabaseServiceKey);
+        const { valid, userId, nonce } = await verifyState(state, supabaseServiceKey);
         if (!valid || !userId) {
-          return new Response(
-            JSON.stringify({ error: 'Invalid or tampered state parameter' }),
-            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
-          );
+          return errExit('Invalid or tampered state parameter');
         }
 
         // Exchange code for tokens
@@ -181,10 +191,7 @@ Deno.serve(async (req) => {
         if (!tokenResponse.ok) {
           const errorText = await tokenResponse.text();
           console.error('Token exchange failed:', errorText);
-          return new Response(
-            JSON.stringify({ error: 'Failed to exchange code for tokens' }),
-            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
-          );
+          return errExit('Failed to exchange code for tokens');
         }
 
         const tokens: TokenResponse = await tokenResponse.json();
@@ -222,20 +229,21 @@ Deno.serve(async (req) => {
 
         if (upsertError) {
           console.error('Failed to save tokens:', upsertError);
-          return new Response(
-            JSON.stringify({ error: 'Failed to save authentication' }),
-            { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
-          );
+          return errExit('Failed to save authentication');
         }
 
         // Redirect to frontend — let the app handle popup close + UI refresh.
         // Supabase Edge Functions gateway doesn't reliably pass Content-Type: text/html,
         // so returning HTML directly causes source code to display instead of rendering.
-        const frontendOrigin = Deno.env.get('FRONTEND_URL') || 'https://insighta.one';
+        // Mobile-initiated connects (state nonce prefixed 'm_') return to the dial;
+        // PC connects keep the settings page + its popup postMessage close path.
+        const dest = (nonce || '').startsWith('m_')
+          ? `${frontendOrigin}/mobile/?youtube=connected`
+          : `${frontendOrigin}/settings?tab=services&youtube=connected`;
         return new Response(null, {
           status: 302,
           headers: {
-            'Location': `${frontendOrigin}/settings?tab=services&youtube=connected`,
+            'Location': dest,
             'Cache-Control': 'no-store',
           },
         });

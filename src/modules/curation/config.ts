@@ -61,3 +61,7 @@ export const CURATION_RELEVANCE_FLOOR = 40;
 
 /** recency window (days) for the discovery leg's publishedAfter — the rising bias (§4-B5). */
 export const CURATION_PUBLISHED_AFTER_DAYS = 365;
+
+/** cooldown before re-attempting a failed interest-profile build — avoids the
+ * suggest poll re-firing a doomed build every few seconds (P1). */
+export const PROFILE_ERROR_RETRY_COOLDOWN_MS = 5 * 60 * 1000;

@@ -18,6 +18,7 @@ import { enqueueCurationBuild } from '../../modules/queue/handlers/curation-buil
 import { MS_PER_DAY } from '../../utils/time-constants';
 import { suggestTopics } from '../../modules/curation/suggest';
 import { maybeTriggerProfileBuild } from '../../modules/curation/interest-profile';
+import { getAccessToken } from '../../modules/youtube/api';
 
 /** ISO date (YYYY-MM-DD) of this week's Monday — curation_items.week_of key. */
 function mondayOf(d: Date): string {
@@ -99,6 +100,13 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const userId = request.user.userId;
     const result = await suggestTopics(userId);
     if (result.status === 'building') {
+      // Not connected (no YouTube token) → return empty so the FE shows the connect
+      // gate, instead of spinning "analyzing" forever and re-firing a doomed build
+      // every poll (P1: getUserSubscriptions throws YOUTUBE_NOT_CONNECTED for token-less users).
+      const connected = (await getAccessToken(userId)) !== null;
+      if (!connected) {
+        return reply.send({ status: 'ok', data: { proposals: [] } });
+      }
       await maybeTriggerProfileBuild(userId);
       return reply.code(202).send({ status: 'building' });
     }
