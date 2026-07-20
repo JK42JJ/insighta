@@ -155,6 +155,13 @@
   .cur-connect .t1{font-size:15px; font-weight:750; color:var(--paper-ink)}
   .cur-connect .t2{font-size:11.5px; font-weight:600; color:var(--paper-sub); line-height:1.7}
   .cur-connect .cbtn{margin-top:4px; border:none; background:var(--ui); color:#fff; font-family:inherit; font-size:13px; font-weight:800; padding:11px 22px; border-radius:12px; cursor:pointer; -webkit-tap-highlight-color:transparent; box-shadow:0 4px 10px -4px rgba(0,0,0,.3)}
+  .cur-props{flex:1; display:flex; flex-direction:column; gap:10px; padding:15px 15px 20px; overflow-y:auto}
+  .cur-props .cp-h{font-size:12px; font-weight:800; color:var(--paper-sub); letter-spacing:.02em; padding:2px 2px 3px}
+  .cur-props .cp-card{display:flex; flex-direction:column; align-items:flex-start; gap:6px; text-align:left; border:1px solid rgba(94,86,72,.14); background:rgba(255,255,255,.5); border-radius:15px; padding:13px 15px; cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent; transition:transform .12s ease}
+  .cur-props .cp-card:active{transform:scale(.985)}
+  .cur-props .cp-dom{font-size:10.5px; font-weight:800; color:var(--ui); background:rgba(206,95,48,.1); border-radius:8px; padding:3px 8px}
+  .cur-props .cp-t{font-size:15px; font-weight:750; color:var(--paper-ink); line-height:1.4}
+  .cur-props .cp-go{font-size:11.5px; font-weight:700; color:var(--paper-sub)}
   .cur-connect .cbtn:active{transform:scale(.97)}
   .rows{margin-top:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; min-height:0; padding-bottom:4px}
   .row{display:flex; gap:10px; align-items:center; background:rgba(255,255,255,.55); flex:none;
@@ -1277,16 +1284,96 @@
     if(t==='curation') renderCuration();
     else renderRows();   // video/note share the mandala list; click behaviour differs by homeTab
   }
-  // Curation — weekly personalized recs gated by the (existing) YouTube connection. P0 = gate shell.
-  function renderCuration(){
+  // Curation — YouTube connect gate → analyzing → 3 personalized proposals →
+  // select → async build → weekly video feed (reuses the beat player).
+  var CUR_STAR='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg>';
+  function curEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  var CUR_DOM_LABEL={ai_ml:'AI·기술',career:'취업·커리어',investment:'투자·경제',startup:'창업',language:'어학',exam:'시험·입시',other:'추천'};
+  // Entry point for the curation tab. Detects connection → analyzing → 3 proposals.
+  async function renderCuration(){
+    var el=document.getElementById('curBody'); if(!el) return;
+    try{
+      var r=await api('/curations/suggest');
+      if(r.status===202){ // profile building — analyze then retry
+        el.className='cur-connect';
+        el.innerHTML='<span class="cic">'+CUR_STAR+'</span><span class="t1">관심사 분석 중</span>'
+          +'<span class="t2">유튜브 활동을 살펴보고 있어요<br>잠시 후 추천이 준비돼요</span>';
+        setTimeout(function(){ if(homeTab==='curation') renderCuration(); },4000);
+        return;
+      }
+      var j=await r.json();
+      var props=(j&&j.data&&j.data.proposals)||[];
+      if(!props.length){ curConnectGate(); return; }
+      renderProposals(props);
+    }catch(e){ curConnectGate(); }   // 401/403/not-connected → connect gate
+  }
+  function curConnectGate(){
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-connect';
-    el.innerHTML='<span class="cic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg></span>'
+    el.innerHTML='<span class="cic">'+CUR_STAR+'</span>'
       +'<span class="t1">매주 나를 위한 영상</span>'
-      +'<span class="t2">유튜브 계정을 연결하면<br>매주 관심사에 맞는 영상을 큐레이션해 드려요</span>'
+      +'<span class="t2">유튜브 계정을 연결하면<br>관심사에 맞는 영상을 큐레이션해 드려요</span>'
       +'<button class="cbtn" id="bCurConnect">유튜브 연결</button>';
-    var b=document.getElementById('bCurConnect');
-    if(b) b.onclick=function(){ show('menu'); };   // connect via Settings for now; OAuth wiring is a follow-up
+    var b=document.getElementById('bCurConnect'); if(b) b.onclick=curConnect;
+  }
+  async function curConnect(){
+    try{
+      var tok=await freshToken(); if(!tok){ show('login'); return; }
+      var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=auth-url',{headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
+      var j=await r.json();
+      if(j&&j.authUrl){ location.href=j.authUrl; }
+    }catch(e){}
+  }
+  function renderProposals(props){
+    var el=document.getElementById('curBody'); if(!el) return;
+    el.className='cur-props';
+    var h='<div class="cp-h">이번 주 관심사</div>';
+    props.forEach(function(p){
+      h+='<button class="cp-card" data-topic="'+curEsc(p.topic)+'">'
+        +'<span class="cp-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
+        +'<span class="cp-t">'+curEsc(p.topic)+'</span>'
+        +'<span class="cp-go">큐레이션 받기</span></button>';
+    });
+    el.innerHTML=h;
+    [].forEach.call(el.querySelectorAll('.cp-card'),function(b){
+      b.onclick=function(){ selectCuration(b.getAttribute('data-topic')); };
+    });
+  }
+  async function selectCuration(topic){
+    var el=document.getElementById('curBody'); if(!el) return;
+    el.className='cur-connect';
+    el.innerHTML='<span class="cic">'+CUR_STAR+'</span><span class="t1">큐레이션 만드는 중</span>'
+      +'<span class="t2">'+curEsc(topic)+'<br>관련 영상을 모으고 있어요</span>';
+    try{
+      var r=await api('/curations',{method:'POST',body:JSON.stringify({topic:topic,source:'youtube_subs'})});
+      var j=await r.json(); var id=j&&j.data&&j.data.id; if(!id) throw new Error('no id');
+      pollCurationItems(id,topic,0);
+    }catch(e){ el.innerHTML='<span class="cic">'+CUR_STAR+'</span><span class="t1">잠시 후 다시 시도해주세요</span>'; }
+  }
+  async function pollCurationItems(id,topic,tries){
+    try{
+      var r=await api('/curations/'+id+'/items');
+      var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
+      if(items.length){ openCurationVideos(topic,items); return; }
+    }catch(e){}
+    if(tries<20 && homeTab==='curation'){ setTimeout(function(){ pollCurationItems(id,topic,tries+1); },3000); }
+    else{
+      var el=document.getElementById('curBody');
+      if(el) el.innerHTML='<span class="cic">'+CUR_STAR+'</span><span class="t1">영상을 모으는 중이에요</span>'
+        +'<span class="t2">잠시 후 큐레이션 탭에서 다시 확인해주세요</span>';
+    }
+  }
+  // Curation videos — reuse the beat player (same machinery as openMandalaVideos).
+  function openCurationVideos(topic,items){
+    unlockAudio();
+    document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true;
+    curNote={ id:null, title:topic, videoMode:true }; show('player');
+    var sh=document.getElementById('bShareNote'); if(sh) sh.hidden=true;
+    document.getElementById('pTitle').textContent=topic||'큐레이션';
+    pShowSkeleton('영상을 여는 중');
+    beats=[]; chapterOfBeat=[];
+    items.forEach(function(it){ beats.push({ t:'c', vid:it.video_id, from:0, to:99999, text:'', src:null }); chapterOfBeat.push(0); });
+    bi=0; buildRail(); setPlaying(true);
   }
   // Video tab — select a mandala → continuous watch of its videos, reusing the existing beat player.
   async function openMandalaVideos(m){

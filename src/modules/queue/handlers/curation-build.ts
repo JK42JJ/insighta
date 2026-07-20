@@ -1,27 +1,31 @@
 /**
- * Weekly curation build — durable worker (Growth Hub, 2026-07-16). SCAFFOLD.
+ * Weekly curation build — durable worker (Growth Hub, 2026-07-20).
+ * Design: docs/design/growth-hub-curation-personalized-2026-07-20.md (§6).
  *
- * Flow (all reused parts, no note/book_json/Sonnet):
- *   subscription → discover candidates (by source) → compute-card-relevance
- *   → passesBookGate (off-topic drop) → pick CURATION_TARGET_VIDEOS by relevance
- *   → ensure rich_summary v2 (segment relevance_pct is INLINE → useHighlightReel
- *   works, no separate backfill) → write curation_items with a week_of snapshot
- *   (D2: snapshot not overwrite — data-reversibility hard rule).
+ * Flow (video-only, no note/book_json):
+ *   subscription → runV5Executor(centerGoal=topic, mandala-free) → computeCardRelevance
+ *   per card (centerGoal=topic) → relevance floor (off-topic drop) → top TARGET
+ *   → write curation_items with a week_of snapshot (replace this week only —
+ *   data-reversibility hard rule).
  *
- * SEPARATE from mandala_books → never touches book-fill-gate (no barrier risk).
- *
- * The step bodies are TODO on purpose: each wires an existing module
- * (video-discover executor / relevance/compute-card-relevance / config/book-gate
- * passesBookGate / enrich-rich-summary) whose interface must be read before use
- * (CLAUDE.md read-source-before-guessing). Left for a fresh session to implement against
- * the real signatures rather than guessed ones.
+ * P0 scope decisions (§6):
+ *   - Discovery = runV5Executor with empty subGoals (B1: validated by one live run
+ *     before flag-on). Legacy video-discover/executor needs a mandala → unusable.
+ *   - rich_summary is REUSE-ONLY: video_rich_summaries is a video-keyed GLOBAL table
+ *     (leaks across goals), so this build NEVER writes it (B2). Existing segments =
+ *     core clips; absent = full-video playback (N4). Generation-if-absent = P1.
+ *   - SEPARATE from mandala_books → never touches book-fill-gate (no barrier risk).
  */
 
 import type PgBoss from 'pg-boss';
 import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database/client';
-import { JOB_NAMES } from '../types';
+import { JOB_NAMES, QUEUE_CONFIG } from '../types';
 import { getJobQueue } from '../manager';
+import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
+import { computeCardRelevance } from '@/modules/relevance/compute-card-relevance';
+import { MS_PER_DAY } from '@/utils/time-constants';
+import { CURATION_RELEVANCE_FLOOR, CURATION_PUBLISHED_AFTER_DAYS } from '@/modules/curation/config';
 
 const log = logger.child({ module: 'queue/curation-build' });
 
@@ -57,25 +61,85 @@ export async function registerCurationBuildWorker(): Promise<void> {
       return;
     }
 
-    // Build pipeline — see design doc §12. Relevance depends on a centerGoal STRING,
-    // not a mandala object: computeCardRelevance takes input.centerGoal directly
-    // (compute-card-relevance.ts:88), so passing sub.topic AS the center goal reuses
-    // the whole relevance path — NO mandala needed. (Earlier "blocker / create a
-    // curation mandala" note was wrong.)
-    //
-    // TODO(build-1) discover: topic → videos (video-discover topic leg / video_pool), by sub.source.
-    // TODO(build-2) computeCardRelevance({ centerGoal: sub.topic, title, ... }) → relevance_pct.
-    // TODO(build-3) pick top by relevance, MIN 15 ~ TARGET 20 (floor at MIN).
-    // TODO(build-4) rich_summary v2 with centerGoal=topic (segment relevance_pct → useHighlightReel).
-    //   §12.3: enrich-rich-summary needs a centerGoal-direct path (currently mandalaId→lookup).
-    // TODO(build-5) write curation_items { subscription_id, video_id, relevance_pct, position, week_of }
-    //   (snapshot; keep prior weeks). No mandala_books → book-fill-gate untouched (no barrier risk).
-    // TODO(build-6) sub.last_run_at = now, next_run_at += 7d. notify (D3 — email reuse candidate).
+    // build-1 — discover topic → videos, mandala-free. runV5Executor takes a
+    // centerGoal STRING (no mandala). subGoals empty → v5 generates queries from
+    // centerGoal alone (B1: the empty-subGoals path is validated by one live run
+    // before flag-on). publishedAfter biases recent supply = the P0 rising signal.
+    const publishedAfter = new Date(Date.now() - CURATION_PUBLISHED_AFTER_DAYS * MS_PER_DAY)
+      .toISOString()
+      .slice(0, 10);
+    const v5 = await runV5Executor({
+      centerGoal: sub.topic,
+      subGoals: [],
+      focusTags: [],
+      targetLevel: '',
+      language: 'ko',
+      includeEnCards: false,
+      excludeVideoIds: new Set<string>(),
+      env: process.env,
+      publishedAfter,
+    });
 
-    log.info('curation build (SCAFFOLD — steps TODO)', {
+    // build-2/3 — relevance per card (centerGoal=topic) → off-topic floor → rank → TARGET.
+    // v5 already applies trust/channel/book gating, so this floor is the topic-fit cut.
+    const scored: Array<{ videoId: string; relevancePct: number }> = [];
+    for (const card of v5.cards) {
+      try {
+        const r = await computeCardRelevance({
+          videoId: card.videoId,
+          title: card.title,
+          centerGoal: sub.topic,
+        });
+        if (r.ok && r.relevancePct >= CURATION_RELEVANCE_FLOOR) {
+          scored.push({ videoId: card.videoId, relevancePct: r.relevancePct });
+        }
+      } catch (err) {
+        log.warn('curation relevance failed', { subscriptionId, videoId: card.videoId, err });
+      }
+    }
+    scored.sort((a, b) => b.relevancePct - a.relevancePct);
+    const picked = scored.slice(0, QUEUE_CONFIG.CURATION_TARGET_VIDEOS);
+
+    // build-4 — rich-summary is REUSE-ONLY for P0. video_rich_summaries is a
+    // video-keyed GLOBAL table (leaks across goals), so the build never writes it
+    // (B2): existing segments serve as core clips, absent → full-video playback
+    // (N4). centerGoal-direct generation-if-absent = P1.
+
+    // build-5 — snapshot this week's items. Replace THIS week only (idempotent
+    // re-run); prior weeks are kept (data-reversibility). No mandala_books touched.
+    const weekDate = new Date(weekOf);
+    await prisma.$transaction([
+      prisma.curation_items.deleteMany({
+        where: { subscription_id: subscriptionId, week_of: weekDate },
+      }),
+      ...(picked.length
+        ? [
+            prisma.curation_items.createMany({
+              data: picked.map((p, i) => ({
+                subscription_id: subscriptionId,
+                video_id: p.videoId,
+                relevance_pct: p.relevancePct,
+                position: i,
+                week_of: weekDate,
+              })),
+            }),
+          ]
+        : []),
+    ]);
+
+    // build-6 — advance the weekly cadence.
+    await prisma.curation_subscriptions.update({
+      where: { id: subscriptionId },
+      data: { last_run_at: new Date(), next_run_at: new Date(Date.now() + 7 * MS_PER_DAY) },
+    });
+
+    log.info('curation build complete', {
       subscriptionId,
       weekOf,
       topic: sub.topic,
+      discovered: v5.cards.length,
+      picked: picked.length,
+      belowMin: picked.length < QUEUE_CONFIG.CURATION_MIN_VIDEOS,
     });
   });
 }

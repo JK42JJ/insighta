@@ -5,17 +5,19 @@
  * feed (NO note/book_json). Create → enqueue an immediate build ("immediate", James)
  * plus the recurring weekly job refreshes it.
  *
- * NOTE: the build worker's source selection is still a scaffold — creating a
- * curation persists the subscription and enqueues a build, but the build's
- * discover source (topic → videos, mandala-independent) is D5-pending. The
- * subscription/list endpoints below are complete and safe to ship behind the
- * Growth Hub flag; the build fills in once the source path lands.
+ * Personalized flow (2026-07-20): GET /suggest returns 3 topics scored from the
+ * user's YouTube interest profile × trend pool; POST / creates the chosen curation
+ * (immediate build) and records the selection in the append-only proposal log
+ * (reinforcement). The build worker discovers a topic's videos mandala-free via
+ * runV5Executor. Design: docs/design/growth-hub-curation-personalized-2026-07-20.md.
  */
 
 import { FastifyPluginCallback } from 'fastify';
 import { getPrismaClient } from '../../modules/database';
 import { enqueueCurationBuild } from '../../modules/queue/handlers/curation-build';
 import { MS_PER_DAY } from '../../utils/time-constants';
+import { suggestTopics } from '../../modules/curation/suggest';
+import { maybeTriggerProfileBuild } from '../../modules/curation/interest-profile';
 
 /** ISO date (YYYY-MM-DD) of this week's Monday — curation_items.week_of key. */
 function mondayOf(d: Date): string {
@@ -71,10 +73,46 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       weekOf: mondayOf(now),
     });
 
+    // Reinforcement (N1): mark this topic SELECTED in the current week's proposal log
+    // if it came from a suggestion. updateMany no-ops when absent (manually typed topic)
+    // — the append-only log stays the reinforcement SSOT; nothing mutable to roll back.
+    await prisma.curation_proposals.updateMany({
+      where: { user_id: userId, week_of: new Date(mondayOf(now)) },
+      data: { selected_topic: topic },
+    });
+
     return reply.code(201).send({
       status: 'ok',
       data: { id: sub.id, topic: sub.topic, source: sub.source, buildJobId: jobId },
     });
+  });
+
+  /**
+   * GET /curations/suggest — personalized 3-topic proposals (interest × trend).
+   * Reads the async-built interest profile (never builds inline — B4). If the
+   * profile isn't ready, kicks a build off in the background and returns 202.
+   */
+  fastify.get('/suggest', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    if (!request.user || !('userId' in request.user)) {
+      return reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
+    }
+    const userId = request.user.userId;
+    const result = await suggestTopics(userId);
+    if (result.status === 'building') {
+      await maybeTriggerProfileBuild(userId);
+      return reply.code(202).send({ status: 'building' });
+    }
+
+    // Log the proposals (dedup by user_id + week_of) — the reinforcement input.
+    // Revisits no-op (do NOT overwrite an existing week's proposals/selection).
+    const prisma = getPrismaClient();
+    const weekOf = new Date(mondayOf(new Date()));
+    await prisma.curation_proposals.upsert({
+      where: { user_id_week_of: { user_id: userId, week_of: weekOf } },
+      create: { user_id: userId, week_of: weekOf, proposed: result.proposals as object },
+      update: {},
+    });
+    return reply.send({ status: 'ok', data: { proposals: result.proposals } });
   });
 
   /** GET /curations — list the caller's active curations. */
@@ -90,6 +128,56 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     });
     return reply.send({ status: 'ok', data: { curations: rows } });
   });
+
+  /**
+   * GET /curations/:id/items?week=YYYY-MM-DD — this curation's weekly video feed
+   * (video-only). Defaults to the latest built week. Ownership-checked.
+   */
+  fastify.get<{ Params: { id: string }; Querystring: { week?: string } }>(
+    '/:id/items',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
+      }
+      const prisma = getPrismaClient();
+      const sub = await prisma.curation_subscriptions.findUnique({
+        where: { id: request.params.id },
+        select: { user_id: true },
+      });
+      if (!sub || sub.user_id !== request.user.userId) {
+        return reply.code(404).send({ status: 'error', code: 'CURATION_NOT_FOUND' });
+      }
+
+      // Resolve the target week: explicit ?week, else the newest built snapshot.
+      let weekOf: Date | null = null;
+      if (request.query.week) {
+        const d = new Date(request.query.week);
+        if (!Number.isNaN(d.getTime())) weekOf = d;
+      }
+      if (!weekOf) {
+        const latest = await prisma.curation_items.findFirst({
+          where: { subscription_id: request.params.id },
+          orderBy: { week_of: 'desc' },
+          select: { week_of: true },
+        });
+        weekOf = latest?.week_of ?? null;
+      }
+      if (!weekOf) {
+        return reply.send({ status: 'ok', data: { week_of: null, items: [] } });
+      }
+
+      const items = await prisma.curation_items.findMany({
+        where: { subscription_id: request.params.id, week_of: weekOf },
+        orderBy: { position: 'asc' },
+        select: { video_id: true, relevance_pct: true, position: true },
+      });
+      return reply.send({
+        status: 'ok',
+        data: { week_of: weekOf.toISOString().slice(0, 10), items },
+      });
+    }
+  );
 
   fastify.log.info('curation routes registered');
   done();
