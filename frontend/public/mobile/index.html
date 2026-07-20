@@ -142,6 +142,20 @@
   .gp-plus{width:13px; height:13px; border-radius:50%; background:var(--ui); position:relative; flex:none}
   .gp-plus::before,.gp-plus::after{content:""; position:absolute; background:#fff; left:50%; top:50%; transform:translate(-50%,-50%)}
   .gp-plus::before{width:7px; height:1.7px} .gp-plus::after{width:1.7px; height:7px}
+  .htabs{display:flex; gap:5px; margin-top:11px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
+  .htab{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; border:none; background:none; font-family:inherit; font-size:10.5px; font-weight:800; letter-spacing:.01em; color:var(--paper-sub); padding:7px 0 6px; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
+  .htab svg{display:block}
+  .htab.on{color:var(--paper-ink); background:var(--paper); box-shadow:0 1px 2px rgba(94,86,72,.18)}
+  .htab:active{transform:scale(.97)}
+  .pane{flex:1; min-height:0; display:flex; flex-direction:column}
+  .pane[hidden]{display:none}
+  .cur-body{flex:1; min-height:0; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:8px}
+  .cur-connect{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:11px; padding:0 22px}
+  .cur-connect .cic{width:44px; height:44px; border-radius:13px; display:grid; place-items:center; background:rgba(94,86,72,.08); color:var(--ui)}
+  .cur-connect .t1{font-size:15px; font-weight:750; color:var(--paper-ink)}
+  .cur-connect .t2{font-size:11.5px; font-weight:600; color:var(--paper-sub); line-height:1.7}
+  .cur-connect .cbtn{margin-top:4px; border:none; background:var(--ui); color:#fff; font-family:inherit; font-size:13px; font-weight:800; padding:11px 22px; border-radius:12px; cursor:pointer; -webkit-tap-highlight-color:transparent; box-shadow:0 4px 10px -4px rgba(0,0,0,.3)}
+  .cur-connect .cbtn:active{transform:scale(.97)}
   .rows{margin-top:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; min-height:0; padding-bottom:4px}
   .row{display:flex; gap:10px; align-items:center; background:rgba(255,255,255,.55); flex:none;
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.10); border-radius:12px; padding:9px 10px;
@@ -825,8 +839,18 @@
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
         <div class="top"><span class="tt">내 만다라</span><div class="navtog"><button class="ntb on" data-nav="home" aria-label="내 만다라"><span class="batt" id="sigHome"><svg class="ksig" width="16" height="16" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></button><button class="ntb" data-nav="menu" aria-label="설정"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg><span class="gearDot" id="gearDot" hidden></span></button></div></div>
-        <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
-        <div class="rows" id="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
+        <div class="htabs" id="htabs">
+          <button class="htab on" data-htab="curation" aria-label="큐레이션"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg><span>큐레이션</span></button>
+          <button class="htab" data-htab="video" aria-label="영상"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M10.5 9.5l4 2.5-4 2.5z" fill="currentColor" stroke="none"/></svg><span>영상</span></button>
+          <button class="htab" data-htab="note" aria-label="노트"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h8L18.5 7.5v12a1 1 0 01-1 1h-11a1 1 0 01-1-1V4.5a1 1 0 011-1z"/><path d="M8.8 11h6.4M8.8 14.5h4.6"/></svg><span>노트</span></button>
+        </div>
+        <div class="pane" id="paneCuration">
+          <div class="cur-body" id="curBody"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
+        </div>
+        <div class="pane" id="paneList" hidden>
+          <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
+          <div class="rows" id="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
+        </div>
       </div>
 
       <!-- MENU -->
@@ -1234,11 +1258,60 @@
       d.querySelector('.bt').textContent=st.line;
       if(st.skt) d.querySelector('.bt').classList.add('skt');
       if(st.kind!=='making'&&st.kind!=='loading'){
-        d.addEventListener('click',function(){ selIdx=i; renderRows(); openNote(m); });
+        d.addEventListener('click',function(){ selIdx=i; renderRows(); if(homeTab==='video'){ openMandalaVideos(m); } else { openNote(m); } });
       }
       rows.appendChild(d);
     });
     var selEl=rows.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
+  }
+  /* ============ Home tabs (curation / video / note) [J:07-20] ============ */
+  var homeTab='curation';   // default (James)
+  function setHomeTab(t){
+    homeTab=t;
+    Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'),function(b){
+      b.classList.toggle('on', b.getAttribute('data-htab')===t);
+    });
+    var pc=document.getElementById('paneCuration'), pl=document.getElementById('paneList');
+    if(pc) pc.hidden=(t!=='curation');
+    if(pl) pl.hidden=(t==='curation');
+    if(t==='curation') renderCuration();
+    else renderRows();   // video/note share the mandala list; click behaviour differs by homeTab
+  }
+  // Curation — weekly personalized recs gated by the (existing) YouTube connection. P0 = gate shell.
+  function renderCuration(){
+    var el=document.getElementById('curBody'); if(!el) return;
+    el.className='cur-connect';
+    el.innerHTML='<span class="cic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg></span>'
+      +'<span class="t1">매주 나를 위한 영상</span>'
+      +'<span class="t2">유튜브 계정을 연결하면<br>매주 관심사에 맞는 영상을 큐레이션해 드려요</span>'
+      +'<button class="cbtn" id="bCurConnect">유튜브 연결</button>';
+    var b=document.getElementById('bCurConnect');
+    if(b) b.onclick=function(){ show('menu'); };   // connect via Settings for now; OAuth wiring is a follow-up
+  }
+  // Video tab — select a mandala → continuous watch of its videos, reusing the existing beat player.
+  async function openMandalaVideos(m){
+    unlockAudio();
+    document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true;
+    curNote={ id:m.id, title:m.title, videoMode:true }; show('player');
+    var sh=document.getElementById('bShareNote'); if(sh) sh.hidden=true;
+    document.getElementById('pTitle').textContent=m.title||'영상';
+    pShowSkeleton('영상을 여는 중');
+    var recs=[];
+    try{
+      var r=await api('/mandalas/'+m.id+'/recommendations');
+      var j=await r.json(); recs=(j&&j.items)||[];
+    }catch(e){ pShowState('영상을 불러오지 못했어요','연결 확인 후 다시 시도해주세요'); return; }
+    recs=recs.filter(function(it){ return it && it.videoId; });
+    if(!recs.length){ pShowState('영상이 아직 없어요','추천 영상이 모이면 여기서 이어봐요'); return; }
+    // video beats — full playback (core-segment seek = follow-up); nextBeat auto-advances = continuous watch
+    beats=[]; chapterOfBeat=[];
+    recs.forEach(function(it){
+      beats.push({ t:'c', vid:it.videoId, from:0, to:(it.durationSec||99999), text:it.title||'', src:it.channel||null });
+      chapterOfBeat.push(0);
+    });
+    bi=0;
+    buildRail();
+    setPlaying(true);
   }
   async function fetchBookStatus(m){
     if(m.sample||bookCache[m.id]) return;
@@ -2611,6 +2684,10 @@
   Array.prototype.forEach.call(document.querySelectorAll('.ntb[data-nav]'), function(b){
     b.onclick=function(){ var t=b.getAttribute('data-nav'); show(t); if(t==='menu') loadTicketsQuiet(); };
   });
+  // [J:07-20] home tabs (curation/video/note) wiring
+  Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'), function(b){
+    b.onclick=function(){ setHomeTab(b.getAttribute('data-htab')); };
+  });
   // 브레드크럼 "설정" 세그먼트 = 한 단계 위(설정)로 [J:07-15 IA]
   Array.prototype.forEach.call(document.querySelectorAll('.bc .up[data-back]'), function(b){
     b.onclick=function(){ show(b.getAttribute('data-back')); };
@@ -2796,7 +2873,7 @@
       }catch(e){ GUEST=null; show('login'); toast('링크를 열지 못했어요'); return; }
     }
     var tok=await freshToken();
-    if(tok){ show('home'); loadList(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite(); }
+    if(tok){ show('home'); loadList(); renderCuration(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite(); }
     else { show('login'); }
   })();
 </script>
