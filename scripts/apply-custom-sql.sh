@@ -190,6 +190,13 @@ APPLY_FILES=(
   "prisma/migrations/app-notices/002_add_kind_cta.sql"
   "prisma/migrations/app-notices/003_seed_beta_notices.sql"
   "prisma/migrations/app-notices/004_align_cta_urls.sql"
+  # Growth Hub curation (2026-07-16 / 2026-07-20). Weekly personalized curation:
+  # 001 = curation_subscriptions + curation_items (feed, applied manually at CP521,
+  # now tracked here). 002 = curation_interest_profile (async YouTube interest vector)
+  # + curation_proposals (append-only reinforcement log). All CREATE TABLE/INDEX
+  # IF NOT EXISTS + NOTIFY pgrst — fully idempotent.
+  "prisma/migrations/curation/001_create_curation_tables.sql"
+  "prisma/migrations/curation/002_curation_personalization.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
