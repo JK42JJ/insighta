@@ -169,3 +169,29 @@ export function mapKeywordToDomain(keyword: string): CurationDomain {
   }
   return 'other';
 }
+
+/**
+ * Extract interest keywords from a title by matching the taxonomy patterns —
+ * a LOCAL, LLM-free substitute for the interest-profile build (prod's LLM
+ * extractor was too slow: hundreds of titles × sequential calls stalled the
+ * "analyzing" state). Returns every matched pattern with its domain; empty when
+ * the title matches no known interest area.
+ */
+export function extractTaxonomyKeywords(
+  text: string
+): Array<{ kw: string; domain: CurationDomain }> {
+  const lower = text.toLowerCase();
+  const out: Array<{ kw: string; domain: CurationDomain }> = [];
+  const seen = new Set<string>();
+  for (const rule of DOMAIN_RULES) {
+    for (const p of rule.patterns) {
+      // Require ≥2 chars so single-letter noise (ml/ai are intentional) is bounded,
+      // and dedupe so a repeated pattern in one title counts once.
+      if (p.length >= 2 && lower.includes(p) && !seen.has(p)) {
+        seen.add(p);
+        out.push({ kw: p, domain: rule.domain });
+      }
+    }
+  }
+  return out;
+}
