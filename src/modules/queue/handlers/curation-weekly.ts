@@ -31,7 +31,7 @@ export async function registerCurationWeeklyWorker(): Promise<void> {
   const boss = getJobQueue().getInstance();
   await boss.schedule(JOB_NAMES.CURATION_WEEKLY, QUEUE_CONFIG.CURATION_WEEKLY_CRON);
 
-  boss.work(JOB_NAMES.CURATION_WEEKLY, async () => {
+  await boss.work(JOB_NAMES.CURATION_WEEKLY, async () => {
     const prisma = getPrismaClient();
     const now = new Date();
     const due = await prisma.curation_subscriptions.findMany({

@@ -48,7 +48,7 @@ export async function enqueueCurationBuild(
 
 export async function registerCurationBuildWorker(): Promise<void> {
   const boss = getJobQueue().getInstance();
-  boss.work<CurationBuildPayload>(JOB_NAMES.CURATION_BUILD, WORKER, async (job) => {
+  await boss.work<CurationBuildPayload>(JOB_NAMES.CURATION_BUILD, WORKER, async (job) => {
     const { subscriptionId, weekOf } = job.data;
     const prisma = getPrismaClient();
     const sub = await prisma.curation_subscriptions.findUnique({ where: { id: subscriptionId } });
@@ -72,6 +72,10 @@ export async function registerCurationBuildWorker(): Promise<void> {
     //   (snapshot; keep prior weeks). No mandala_books → book-fill-gate untouched (no barrier risk).
     // TODO(build-6) sub.last_run_at = now, next_run_at += 7d. notify (D3 — email reuse candidate).
 
-    log.info('curation build (SCAFFOLD — steps TODO)', { subscriptionId, weekOf, topic: sub.topic });
+    log.info('curation build (SCAFFOLD — steps TODO)', {
+      subscriptionId,
+      weekOf,
+      topic: sub.topic,
+    });
   });
 }

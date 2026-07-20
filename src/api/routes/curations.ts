@@ -15,6 +15,7 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getPrismaClient } from '../../modules/database';
 import { enqueueCurationBuild } from '../../modules/queue/handlers/curation-build';
+import { MS_PER_DAY } from '../../utils/time-constants';
 
 /** ISO date (YYYY-MM-DD) of this week's Monday — curation_items.week_of key. */
 function mondayOf(d: Date): string {
@@ -60,7 +61,7 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         mandala_id: mandalaId,
         is_active: true,
         // recurring weekly refresh starts a week out; the FIRST build runs now.
-        next_run_at: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+        next_run_at: new Date(now.getTime() + 7 * MS_PER_DAY),
       },
     });
 
