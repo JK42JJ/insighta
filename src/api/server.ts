@@ -27,6 +27,7 @@ import { searchRoutes } from './routes/search';
 import { llmRoutes } from './routes/llm';
 import { adminRoutes } from './routes/admin';
 import { subscriptionRoutes } from './routes/subscriptions';
+import { curationRoutes } from './routes/curations';
 import { snapshotRoutes } from './routes/snapshots';
 import { botRoutes } from './routes/bot';
 import { settingsRoutes } from './routes/settings';
@@ -338,6 +339,7 @@ export async function buildServer() {
 
       // Register subscription routes (mandala subscription graph)
       await instance.register(subscriptionRoutes, { prefix: '/subscriptions' });
+      await instance.register(curationRoutes, { prefix: '/curations' });
 
       // Register snapshot routes (card state backup/rollback for bot safety)
       await instance.register(snapshotRoutes, { prefix: '/snapshots' });

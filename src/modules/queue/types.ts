@@ -106,6 +106,14 @@ export const JOB_NAMES = {
   MANDALA_PIPELINE: 'mandala-pipeline',
   /** Re-enqueues pipeline runs stuck at status=running (orphaned by restart). */
   MANDALA_PIPELINE_WATCHDOG: 'mandala-pipeline-watchdog',
+  /**
+   * Growth Hub weekly curation (2026-07-16). CURATION_WEEKLY scans due
+   * subscriptions and fans out one CURATION_BUILD per subscription (singletonKey
+   * = subscription id). CURATION_BUILD discovers relevance-ordered videos
+   * (passesBookGate) and writes a week's curation_items snapshot. NO note/Sonnet.
+   */
+  CURATION_WEEKLY: 'curation-weekly',
+  CURATION_BUILD: 'curation-build',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -480,6 +488,12 @@ export const QUEUE_CONFIG = {
   MANDALA_PIPELINE_WATCHDOG_CRON: '*/10 * * * *',
   /** A pipeline run stuck at status=running past this age is treated orphaned. */
   MANDALA_PIPELINE_STALE_MINUTES: 10,
+  /** Weekly curation scan: Mondays 08:17 KST (Sun 23:17 UTC), off-minute. */
+  CURATION_WEEKLY_CRON: '17 23 * * 0',
+  /** Weekly curation build — a full week's feed = 15~20 videos (James 2026-07-17).
+   *  Build aims for TARGET; ships if it can gather at least MIN after passesBookGate. */
+  CURATION_MIN_VIDEOS: 15,
+  CURATION_TARGET_VIDEOS: 20,
   /** Max concurrent enrichment workers */
   ENRICH_CONCURRENCY: 1,
   /**
