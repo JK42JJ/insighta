@@ -142,15 +142,6 @@
   .gp-plus{width:13px; height:13px; border-radius:50%; background:var(--ui); position:relative; flex:none}
   .gp-plus::before,.gp-plus::after{content:""; position:absolute; background:#fff; left:50%; top:50%; transform:translate(-50%,-50%)}
   .gp-plus::before{width:7px; height:1.7px} .gp-plus::after{width:1.7px; height:7px}
-  .htabs{display:flex; gap:5px; margin-top:11px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
-  .htab{flex:1; border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:800; letter-spacing:.02em; color:var(--paper-sub); padding:8px 0; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
-  .htab.on{color:var(--paper-ink); background:var(--paper); box-shadow:0 1px 2px rgba(94,86,72,.18)}
-  .htab.dis{opacity:.42; cursor:default; pointer-events:none}
-  .pane{flex:1; min-height:0; display:flex; flex-direction:column}
-  .pane[hidden]{display:none}
-  .vth{width:44px; height:44px; border-radius:10px; flex:none; background:#101014 center/cover no-repeat; position:relative; overflow:hidden; box-shadow:inset 0 0 0 1px rgba(0,0,0,.06), 0 2px 5px -2px rgba(0,0,0,.4)}
-  .vth::before{content:""; position:absolute; inset:0; background:rgba(0,0,0,.2)}
-  .vth::after{content:""; position:absolute; inset:0; margin:auto; width:0; height:0; border-left:8px solid rgba(255,255,255,.92); border-top:5px solid transparent; border-bottom:5px solid transparent; filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
   .rows{margin-top:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; min-height:0; padding-bottom:4px}
   .row{display:flex; gap:10px; align-items:center; background:rgba(255,255,255,.55); flex:none;
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.10); border-radius:12px; padding:9px 10px;
@@ -325,40 +316,6 @@
     transition:background-color .35s var(--soft), color .35s var(--soft)}
   .readbox .sent.on{background:var(--butter); color:#3B372F}
   .readbox .sec-title{font-size:11px; letter-spacing:.12em; font-weight:800; color:var(--paper-sub); margin:2px 0 8px}
-  /* ============ Video filmstrip (Part B) [J:07-20] — dark video player ============ */
-  .vfilm{background:#0e0d0c; padding:0}
-  .vf-top{position:absolute; top:0; left:0; right:0; z-index:6; display:flex; align-items:center; gap:9px; padding:16px 15px 10px}
-  .vf-ic{border:none; background:none; color:#B8AE9E; display:grid; place-items:center; width:30px; height:30px; cursor:pointer; -webkit-tap-highlight-color:transparent; flex:none}
-  .vf-ic:active{transform:scale(.9)}
-  .vf-seg{display:inline-flex; padding:3px; border-radius:11px; background:rgba(255,255,255,.09)}
-  .vf-tg{border:none; background:none; font-family:inherit; font-size:12px; font-weight:800; letter-spacing:.02em; color:rgba(207,199,184,.6); padding:5px 13px; border-radius:8px; cursor:pointer; -webkit-tap-highlight-color:transparent}
-  .vf-tg.on{color:#20160e; background:var(--acc)}
-  .vf-pos{margin-left:auto; font-size:11px; font-weight:650; color:rgba(207,199,184,.62); font-variant-numeric:tabular-nums; flex:none}
-  .vf-stack{position:absolute; inset:0; display:flex; flex-direction:column; align-items:stretch; justify-content:center; gap:13px; padding:50px 16px 18px; overflow:hidden}
-  .vf-nb{width:100%; aspect-ratio:16/9; border-radius:14px; overflow:hidden; flex:none; background:#101014 center/cover no-repeat; filter:blur(6px) brightness(.62); transform:scale(.97); opacity:.94; cursor:pointer}
-  .vf-nb[style*="hidden"]{visibility:hidden}
-  .vf-mid{flex:none; display:flex; flex-direction:column}
-  .vf-vid{width:100%; aspect-ratio:16/9; border-radius:14px; overflow:hidden; position:relative; background:#000 center/cover no-repeat; box-shadow:0 14px 36px -16px rgba(0,0,0,.85)}
-  .vf-embed{position:absolute; inset:0}
-  .vf-embed iframe{position:absolute; inset:0; width:100%; height:100%; border:0}
-  .vf-veil{position:absolute; inset:0; z-index:2; display:grid; place-items:center; background:rgba(10,9,8,.28); transition:opacity .3s; cursor:pointer}
-  .vf-veil.off{opacity:0; pointer-events:none}
-  .vf-play{width:0; height:0; margin-left:5px; border-left:20px solid rgba(255,244,231,.95); border-top:13px solid transparent; border-bottom:13px solid transparent; filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))}
-  .vf-cap{position:absolute; left:12px; right:12px; bottom:10px; z-index:3; text-shadow:0 1px 6px rgba(0,0,0,.6); pointer-events:none}
-  .vf-t1{display:block; font-size:13.5px; font-weight:800; letter-spacing:-.01em; color:#FCF5EA; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .vf-t2{display:block; font-size:10px; font-weight:650; color:rgba(252,245,234,.82); margin-top:2px}
-  .vf-rel{padding:10px 2px 0}
-  .vf-relsvg{width:100%; height:38px; display:block; overflow:visible}
-  .vf-scrub{height:3px; border-radius:2px; background:rgba(255,255,255,.14); margin-top:7px; overflow:hidden}
-  .vf-scrub i{display:block; height:100%; width:32%; background:var(--acc); border-radius:2px}
-  .vf-jog{position:absolute; right:16px; bottom:20px; width:88px; height:88px; border-radius:50%; z-index:7; opacity:.9;
-    background:radial-gradient(circle at 50% 38%, var(--wheel-a) 0%, var(--wheel-b) 60%, var(--wheel-c) 100%);
-    box-shadow:0 8px 20px -8px rgba(0,0,0,.5), inset 0 1px 1.5px rgba(255,255,255,.75), 0 0 0 1px rgba(var(--shade),.1); display:grid; place-items:center}
-  .vf-jlabel{position:absolute; top:9px; left:0; right:0; text-align:center; font-size:8px; letter-spacing:.18em; font-weight:800; color:rgba(var(--shade),.42)}
-  .vf-core{width:39%; aspect-ratio:1; border-radius:50%; border:none; cursor:pointer; position:relative; z-index:2;
-    background:linear-gradient(178deg, var(--acc-lo) 0%, var(--acc) 55%, var(--acc-hi) 100%);
-    box-shadow:inset 0 2.5px 4px rgba(0,0,0,.2), inset 0 -1px 1.5px rgba(255,255,255,.35); transition:transform .2s}
-  .vf-core:active{transform:scale(.94)}
   /* M3: 챕터 타이틀 카드 */
   .chcard{position:absolute; inset:0; z-index:6; display:none; flex-direction:column; align-items:center; justify-content:center;
     text-align:center; background:linear-gradient(175deg,#FAF6EC,#F0EBDD); gap:8px}
@@ -868,18 +825,8 @@
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
         <div class="top"><span class="tt">내 만다라</span><div class="navtog"><button class="ntb on" data-nav="home" aria-label="내 만다라"><span class="batt" id="sigHome"><svg class="ksig" width="16" height="16" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></button><button class="ntb" data-nav="menu" aria-label="설정"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg><span class="gearDot" id="gearDot" hidden></span></button></div></div>
-        <div class="htabs" id="htabs">
-          <button class="htab on" data-htab="video">영상</button>
-          <button class="htab" data-htab="note">노트</button>
-          <button class="htab dis" data-htab="community" aria-disabled="true">커뮤니티</button>
-        </div>
-        <div class="pane" id="paneVideo">
-          <div class="rows" id="vrows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
-        </div>
-        <div class="pane" id="paneNote" hidden>
-          <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
-          <div class="rows" id="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
-        </div>
+        <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
+        <div class="rows" id="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
       </div>
 
       <!-- MENU -->
@@ -959,28 +906,6 @@
         <div class="stream" id="stream" hidden><div class="col" id="strCol"></div></div>
         <div class="grip" id="grip" aria-hidden="true"></div>
         <div class="stagetap" id="stageTap" aria-hidden="true"></div>
-      </div>
-
-      <!-- [J:07-20] Video filmstrip — recommended-video playback (Part B): stack + jog + curve -->
-      <div class="scr vfilm" data-s="vfilm" id="scrVFilm">
-        <div class="vf-top">
-          <button class="vf-ic" id="vfBack" aria-label="뒤로"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
-          <div class="vf-seg"><button class="vf-tg on" data-vf="core">핵심만</button><button class="vf-tg" data-vf="full">전체</button></div>
-          <span class="vf-pos num" id="vfPos">1 / 1</span>
-        </div>
-        <div class="vf-stack" id="vfStack">
-          <div class="vf-nb" id="vfPrev" aria-label="이전 영상"></div>
-          <div class="vf-mid" id="vfCur">
-            <div class="vf-vid">
-              <div class="vf-embed" id="vfEmbed"></div>
-              <div class="vf-veil" id="vfVeil"><span class="vf-play"></span></div>
-              <div class="vf-cap"><span class="vf-t1" id="vfT1"></span><span class="vf-t2" id="vfT2"></span></div>
-            </div>
-            <div class="vf-rel" id="vfRel" hidden><svg class="vf-relsvg" id="vfRelSvg" viewBox="0 0 300 38" preserveAspectRatio="none" aria-hidden="true"></svg><div class="vf-scrub"><i id="vfScrub"></i></div></div>
-          </div>
-          <div class="vf-nb" id="vfNext" aria-label="다음 영상"></div>
-        </div>
-        <div class="vf-jog" id="vfJog"><span class="vf-jlabel">MENU</span><button class="vf-core" id="vfCore" aria-label="재생/일시정지"></button></div>
       </div>
 
       <!-- 푸시 레일 — epaper 직속 (무대 transform 비종속) -->
@@ -1101,7 +1026,7 @@
   }
 
   /* ================= 화면 상태 ================= */
-  var SCREENS=['login','home','menu','news','invite','player','vfilm'];
+  var SCREENS=['login','home','menu','news','invite','player'];
   var scr={}; SCREENS.forEach(function(n){scr[n]=document.querySelector('.scr[data-s="'+n+'"]')});
   var cur='login';
   function bootDone(){
@@ -1125,7 +1050,6 @@
     }
     if(cur==='news'&&n!=='news'&&typeof clearNewsTimers==='function'){ clearNewsTimers(); } // stop countdown intervals on leave (no leak)
     if(n!=='player'){ document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true; } // 읽기 모드 = 플레이어 전용
-    if(cur==='vfilm'&&n!=='vfilm'){ var _vfe=document.getElementById('vfEmbed'); if(_vfe) _vfe.innerHTML=''; } // leaving filmstrip = stop video [J:07-20]
     if(n===cur) return;
     scr[cur].classList.remove('active');
     cur=n; scr[cur].classList.add('active');
@@ -1316,117 +1240,6 @@
     });
     var selEl=rows.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
   }
-  /* ============ Home tabs (video / note / community) [J:07-20] ============ */
-  var homeTab='video';                 // video is default (James)
-  var vrecs=null, vrecsLoading=false;   // merged mandala recommendations
-  function setHomeTab(t){
-    if(t==='community') return;         // coming-soon
-    homeTab=t;
-    Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'),function(b){
-      b.classList.toggle('on', b.getAttribute('data-htab')===t);
-    });
-    var pv=document.getElementById('paneVideo'), pn=document.getElementById('paneNote');
-    if(pv) pv.hidden=(t!=='video');
-    if(pn) pn.hidden=(t!=='note');
-    if(t==='note') renderRows();
-    if(t==='video') renderVideoRows();
-  }
-  async function loadVideoRecs(){
-    if(vrecsLoading) return; vrecsLoading=true;
-    try{
-      var items=homeItems().filter(function(m){ return m && m.id && !m.sample; });
-      var lists=await Promise.all(items.map(function(m){
-        return api('/mandalas/'+m.id+'/recommendations')
-          .then(function(r){ return r.json(); })
-          .then(function(j){ return (j && j.items) || []; })
-          .catch(function(){ return []; });
-      }));
-      var seen={}, merged=[];
-      lists.forEach(function(arr){ arr.forEach(function(it){
-        if(it && it.videoId && !seen[it.videoId]){ seen[it.videoId]=1; merged.push(it); }
-      }); });
-      merged.sort(function(a,b){ return (b.recScore||0)-(a.recScore||0); });
-      vrecs=merged;
-    }catch(e){ vrecs=[]; }
-    vrecsLoading=false;
-    if(homeTab==='video') renderVideoRows();
-  }
-  function renderVideoRows(){
-    var el=document.getElementById('vrows'); if(!el) return;
-    if(vrecs==null){ if(!vrecsLoading) loadVideoRecs(); return; } // loading = keep skeleton
-    if(!vrecs.length){ el.innerHTML='<div class="row-empty">추천 영상이 아직 없어요<br>목표를 추가하면 영상이 모여요</div>'; return; }
-    el.innerHTML='';
-    vrecs.forEach(function(it,i){
-      var d=document.createElement('div'); d.className='row';
-      var thumb=it.thumbnail||('https://i.ytimg.com/vi/'+esc(it.videoId)+'/mqdefault.jpg');
-      d.innerHTML='<span class="vth" style="background-image:url('+esc(thumb)+')"></span>'
-        +'<span class="m"><span class="a"></span><span class="b"><span class="bt"></span></span></span>';
-      d.querySelector('.a').textContent=it.title||'(제목 없음)';
-      d.querySelector('.bt').textContent=it.channel||'';
-      d.addEventListener('click',function(){ openFilm(i); });
-      el.appendChild(d);
-    });
-  }
-  function playRecVideo(it){
-    // (legacy) open the video on YouTube — superseded by the inline filmstrip (openFilm).
-    if(!it||!it.videoId) return;
-    var t=(it.startSec!=null)?('&t='+Math.floor(it.startSec)+'s'):'';
-    var url='https://www.youtube.com/watch?v='+it.videoId+t;
-    try{ window.open(url,'_blank'); }catch(e){ location.href=url; }
-  }
-  /* ---- Filmstrip (Part B) [J:07-20] : inline playback of recommended videos ---- */
-  var vfList=[], vfIdx=0, vfPlaying=false;
-  function vfThumb(id){ return 'https://i.ytimg.com/vi/'+id+'/hqdefault.jpg'; }
-  function openFilm(startIndex){
-    vfList = vrecs || [];
-    if(!vfList.length) return;
-    vfIdx = Math.max(0, Math.min(startIndex||0, vfList.length-1));
-    show('vfilm');
-    renderFilm(true);
-  }
-  function renderFilm(load){
-    var cur=vfList[vfIdx], prev=vfList[vfIdx-1], next=vfList[vfIdx+1];
-    if(!cur) return;
-    document.getElementById('vfPos').textContent=(vfIdx+1)+' / '+vfList.length;
-    document.getElementById('vfT1').textContent=cur.title||'';
-    document.getElementById('vfT2').textContent=cur.channel||'';
-    var pv=document.getElementById('vfPrev'), nx=document.getElementById('vfNext');
-    if(prev){ pv.style.backgroundImage='url('+vfThumb(prev.videoId)+')'; pv.style.visibility='visible'; } else { pv.style.visibility='hidden'; }
-    if(next){ nx.style.backgroundImage='url('+vfThumb(next.videoId)+')'; nx.style.visibility='visible'; } else { nx.style.visibility='hidden'; }
-    if(load){
-      var vid=document.querySelector('#vfCur .vf-vid');
-      if(vid) vid.style.backgroundImage='url('+vfThumb(cur.videoId)+')'; // clean poster before tap
-      document.getElementById('vfEmbed').innerHTML='';
-      var veil=document.getElementById('vfVeil'); veil.classList.remove('off'); vfPlaying=false;
-      fetchFilmCurve(cur.videoId);
-    }
-  }
-  function filmMove(dir){ var n=vfIdx+dir; if(n<0||n>=vfList.length) return; vfIdx=n; renderFilm(true); }
-  function vfPlay(){
-    var cur=vfList[vfIdx]; if(!cur) return;
-    document.getElementById('vfEmbed').innerHTML='<iframe src="https://www.youtube.com/embed/'+encodeURIComponent(cur.videoId)+'?rel=0&modestbranding=1&playsinline=1&autoplay=1&enablejsapi=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>';
-    document.getElementById('vfVeil').classList.add('off'); vfPlaying=true;
-  }
-  function vfPost(func){ try{ var f=document.querySelector('#vfEmbed iframe'); if(f) f.contentWindow.postMessage(JSON.stringify({event:'command',func:func,args:[]}),'*'); }catch(e){} }
-  function vfRelPct(s){ var v=(s&&(s.relevance_pct!=null?s.relevance_pct:s.relevancePct)); return Math.max(0,Math.min(100, v||0)); }
-  async function fetchFilmCurve(vid){
-    var rel=document.getElementById('vfRel'); rel.hidden=true;
-    try{
-      var r=await api('/videos/'+vid+'/rich-summary'); var j=await r.json();
-      var segs=(j&&j.data&&j.data.segments)||null;
-      if(!segs||!segs.length) return; // best-effort: no enrich data -> curve hidden
-      drawFilmCurve(segs); rel.hidden=false;
-    }catch(e){ /* 404 = no rich-summary -> curve stays hidden */ }
-  }
-  function drawFilmCurve(segs){
-    var W=300,H=38, n=segs.length;
-    var pts=segs.map(function(s,i){ var x=n>1?(i/(n-1))*W:W/2; var y=H-2-(vfRelPct(s)/100)*(H-6); return [x,y]; });
-    function tier(v){ return v>=70?'#7FB69A':(v>=40?'#C9A36A':'#8C887E'); }
-    var area='M'+pts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1)}).join(' L')+' L'+W+','+H+' L0,'+H+' Z';
-    var svg='<path d="'+area+'" fill="rgba(224,112,63,.06)"/>';
-    for(var i=0;i<pts.length-1;i++){ svg+='<polyline points="'+pts[i][0].toFixed(1)+','+pts[i][1].toFixed(1)+' '+pts[i+1][0].toFixed(1)+','+pts[i+1][1].toFixed(1)+'" fill="none" stroke="'+tier(vfRelPct(segs[i]))+'" stroke-width="2.2" stroke-linecap="round"/>'; }
-    document.getElementById('vfRelSvg').innerHTML=svg;
-  }
   async function fetchBookStatus(m){
     if(m.sample||bookCache[m.id]) return;
     try{
@@ -1446,7 +1259,6 @@
       var j=await r.json();
       mandalas=(j.mandalas||[]);
       selIdx=0; renderRows();
-      if(homeTab==='video'){ vrecs=null; loadVideoRecs(); } // [J:07-20] video tab = merged mandala recommendations
       mandalas.slice(0,8).forEach(function(m){ fetchBookStatus(m) }); // S2: 병렬 상태 조회 + 캐시 재사용
     }catch(e){
       document.getElementById('rows').innerHTML='<div class="row-empty">'+(navigator.onLine===false?'오프라인이에요 — 연결 후 다시':'목록을 불러오지 못했어요 — 다시 시도해주세요')+'</div>';
@@ -2799,21 +2611,6 @@
   Array.prototype.forEach.call(document.querySelectorAll('.ntb[data-nav]'), function(b){
     b.onclick=function(){ var t=b.getAttribute('data-nav'); show(t); if(t==='menu') loadTicketsQuiet(); };
   });
-  // [J:07-20] home tabs (video/note/community) wiring
-  Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'), function(b){
-    b.onclick=function(){ setHomeTab(b.getAttribute('data-htab')); };
-  });
-  // [J:07-20] filmstrip controls wiring
-  (function(){
-    var back=document.getElementById('vfBack'); if(back) back.onclick=function(){ var e=document.getElementById('vfEmbed'); if(e) e.innerHTML=''; show('home'); };
-    var core=document.getElementById('vfCore'); if(core) core.onclick=function(){ if(!vfPlaying){ vfPlay(); } else { vfPost('pauseVideo'); vfPlaying=false; } };
-    var veil=document.getElementById('vfVeil'); if(veil) veil.onclick=function(){ vfPlay(); };
-    var pv=document.getElementById('vfPrev'); if(pv) pv.onclick=function(){ filmMove(-1); };
-    var nx=document.getElementById('vfNext'); if(nx) nx.onclick=function(){ filmMove(1); };
-    Array.prototype.forEach.call(document.querySelectorAll('.vf-tg[data-vf]'), function(b){
-      b.onclick=function(){ Array.prototype.forEach.call(document.querySelectorAll('.vf-tg'),function(x){x.classList.remove('on')}); b.classList.add('on'); };
-    });
-  })();
   // 브레드크럼 "설정" 세그먼트 = 한 단계 위(설정)로 [J:07-15 IA]
   Array.prototype.forEach.call(document.querySelectorAll('.bc .up[data-back]'), function(b){
     b.onclick=function(){ show(b.getAttribute('data-back')); };
