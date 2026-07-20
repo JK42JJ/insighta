@@ -20,14 +20,8 @@ import {
   getPlaylistItems,
   getVideosMetadata,
 } from '@/modules/youtube/api';
-import { extractKeywordsBatch } from '@/skills/plugins/trend-collector/sources/llm-extract';
-import { mapKeywordToDomain, type CurationDomain } from './domain-taxonomy';
-import {
-  INTEREST_WEIGHTS,
-  COLLECT_CAPS,
-  KEYWORD_LEARNING_FLOOR,
-  PROFILE_ERROR_RETRY_COOLDOWN_MS,
-} from './config';
+import { extractTaxonomyKeywords, type CurationDomain } from './domain-taxonomy';
+import { INTEREST_WEIGHTS, COLLECT_CAPS, PROFILE_ERROR_RETRY_COOLDOWN_MS } from './config';
 
 const log = logger.child({ module: 'curation/interest-profile' });
 
@@ -52,7 +46,6 @@ export interface InterestProfileDeps {
   getUserPlaylists: typeof getUserPlaylists;
   getPlaylistItems: typeof getPlaylistItems;
   getVideosMetadata: typeof getVideosMetadata;
-  extractKeywordsBatch: typeof extractKeywordsBatch;
 }
 
 const defaultDeps: InterestProfileDeps = {
@@ -60,7 +53,6 @@ const defaultDeps: InterestProfileDeps = {
   getUserPlaylists,
   getPlaylistItems,
   getVideosMetadata,
-  extractKeywordsBatch,
 };
 
 /** Merge a title at `weight`, keeping the stronger source if it repeats. */
@@ -152,30 +144,25 @@ export async function buildInterestProfile(
   deps: InterestProfileDeps = defaultDeps
 ): Promise<InterestProfile> {
   const signals = await collectAccountSignals(userId, deps);
-  const titles = [...signals.titleWeights.keys()];
-  if (titles.length === 0) return [];
+  if (signals.titleWeights.size === 0) return [];
 
-  const extracted = await deps.extractKeywordsBatch({ titles });
-
-  // kw → accumulated raw weight (source weight × per-title keywords, learning-gated).
-  const raw = new Map<string, number>();
-  for (const r of extracted) {
-    if (r.learning_score < KEYWORD_LEARNING_FLOOR) continue;
-    const w = signals.titleWeights.get(r.title) ?? INTEREST_WEIGHTS.sub;
-    for (const kw of r.keywords) {
-      const key = kw.trim().toLowerCase();
-      if (key.length < 2) continue;
-      raw.set(key, (raw.get(key) ?? 0) + w);
+  // LOCAL taxonomy extraction (no LLM) — the prod LLM extractor stalled the build
+  // (hundreds of titles × sequential qwen calls). kw → accumulated source weight + domain.
+  const raw = new Map<string, { weight: number; domain: CurationDomain }>();
+  for (const [title, w] of signals.titleWeights) {
+    for (const { kw, domain } of extractTaxonomyKeywords(title)) {
+      const prev = raw.get(kw);
+      raw.set(kw, { weight: (prev?.weight ?? 0) + w, domain });
     }
   }
   if (raw.size === 0) return [];
 
-  const max = Math.max(...raw.values());
+  const max = Math.max(...[...raw.values()].map((v) => v.weight));
   const profile: InterestProfile = [...raw.entries()]
-    .map(([kw, weight]) => ({
+    .map(([kw, v]) => ({
       kw,
-      domain: mapKeywordToDomain(kw),
-      weight: Math.round((weight / max) * 100) / 100,
+      domain: v.domain,
+      weight: Math.round((v.weight / max) * 100) / 100,
     }))
     .sort((a, b) => b.weight - a.weight);
 
