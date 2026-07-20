@@ -685,6 +685,40 @@ model curation_items {
   @@schema("public")
 }
 
+/// Async-built YouTube interest profile (one per user). Read by GET /curations/suggest.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model curation_interest_profile {
+  user_id    String   @id @db.Uuid
+  /// [{ kw, domain, weight }] — normalized interest vector from subs + playlists + saved videos
+  profile    Json     @default("[]")
+  /// building | ready | stale | error
+  status     String   @default("building") @db.VarChar(12)
+  built_at   DateTime? @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+/// Append-only proposal log = reinforcement input. No topic_affinity column; reinforce() derived at read time.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model curation_proposals {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  /// Monday of the proposal week (dedup + reinforcement horizon)
+  week_of        DateTime @db.Date
+  /// the 3 proposed topics: [{ topic, domain, score, rising, hook }]
+  proposed       Json
+  /// which topic the user chose (null = not yet selected / abandoned)
+  selected_topic String?
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([user_id, week_of], map: "uq_curation_proposals_user_week")
+  @@index([user_id], map: "idx_curation_proposals_user_id")
+  @@schema("public")
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model mandala_activity_log {
   id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
