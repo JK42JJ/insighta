@@ -722,50 +722,48 @@
   .cd-title{flex:1; text-align:center; font-size:14px; font-weight:800; color:#EDE7DC; min-width:0;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .cd-count{flex:none; font-size:10.5px; font-weight:700; color:#8F887A; letter-spacing:.12em; text-align:right}
-  /* Layout (James device review 2): PLAYING card at the TOP, next two below —
-     three near-equal cards, no empty prev slot. focus 36 / next 32 / next 32. */
-  .cd-strip{flex:1; min-height:0; position:relative; display:flex; flex-direction:column; gap:8px; align-items:stretch}
+  /* Layout v2 (device review 3: "low-frame = cheap"): EQUAL-height 3-card TRACK.
+     Cards physically travel the full pitch via transform-only transitions (GPU,
+     60fps, zero distortion because heights are uniform). The PLAYBACK STAGE is a
+     separate layer pinned over the TOP card; during wheel travel only posters
+     slide (stage hidden), playback starts on settle — control feel, no load storm. */
+  .cd-strip{flex:1; min-height:0; position:relative; overflow:hidden}
+  #cdTrack{position:absolute; left:0; right:0; top:0; will-change:transform}
+  #cdTrack.gliding{transition:transform .21s cubic-bezier(.25,.8,.3,1)}
   .cd-card{position:relative; border-radius:16px; overflow:hidden; background:#1E1B17 center/cover no-repeat;
-    min-height:0; -webkit-tap-highlight-color:transparent}
+    -webkit-tap-highlight-color:transparent; margin-bottom:8px}
   .cd-card::after{content:''; position:absolute; inset:0;
-    background:linear-gradient(180deg, rgba(10,9,8,.15), rgba(10,9,8,.58) 80%)}
-  .cd-focus{flex:36 1 0; opacity:1; box-shadow:0 14px 40px rgba(0,0,0,.5)}
-  .cd-side{flex:32 1 0; opacity:.55; cursor:pointer}
-  .cd-side.empty{opacity:.12; cursor:default; background:#181512}
-  /* compact one-line meta (poster state only) — the embed shows its own header while playing */
-  .cd-meta{position:absolute; left:14px; right:14px; bottom:22px; z-index:2; display:flex; flex-direction:column; gap:2px}
+    background:linear-gradient(180deg, rgba(10,9,8,.15), rgba(10,9,8,.55) 82%)}
+  .cd-card.upnext::after{background:rgba(10,9,8,.45)}
+  .cd-card.empty{background:#181512; opacity:.35}
+  /* stage = playback layer over the top card (same rect) */
+  .cd-stage{position:absolute; left:0; right:0; top:0; z-index:4; border-radius:16px; overflow:hidden;
+    box-shadow:0 14px 40px rgba(0,0,0,.5); transition:opacity .14s}
+  body.cdnav .cd-stage{opacity:0; pointer-events:none}   /* wheel travel: posters only */
+  .cd-meta{position:absolute; left:14px; right:14px; bottom:22px; z-index:2; display:flex; flex-direction:column; gap:2px; pointer-events:none}
   .cd-vt{font-size:14.5px; font-weight:800; color:#F5F2EC; line-height:1.3;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .cd-vs{font-size:10.5px; font-weight:650; color:#B8AE9E; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  /* progress = the note's segmented chapters bar, meaning PROGRESS only (one segment
-     per video, done=filled, current=partial fill) — attached to the focus card bottom */
+  body.cdplaying .cd-meta{display:none}
   .cd-chap{position:absolute; left:12px; right:12px; bottom:8px; z-index:3; display:flex; gap:4px; pointer-events:none}
   .cd-chap i{flex:1; height:4px; border-radius:2.5px; background:rgba(237,231,220,.22); position:relative; overflow:hidden}
   .cd-chap i.done{background:var(--ui)}
   .cd-chap i.now b{position:absolute; left:0; top:0; bottom:0; background:var(--ui); border-radius:2.5px;
     transition:width .45s linear; display:block}
-  .cd-side .cd-meta,.cd-side .cd-chap{display:none}
   .cd-yt{position:absolute; inset:0; z-index:1}
   .cd-yt.off{visibility:hidden}
-  /* Loading = the note's veil pattern: poster stays + small ring bottom-right until
-     PLAYING (hides the embed's center spinner). Same geometry as .cv-ring. */
+  /* Loading = note veil: top-card poster shows through + bottom-right ring until PLAYING */
   .cd-ring{position:absolute; right:12px; bottom:20px; z-index:4; width:24px; height:24px; border-radius:50%;
     border:2.5px solid rgba(255,255,255,.28); border-top-color:#fff; animation:veilspin .9s linear infinite; display:none}
-  body.cdloading .cd-focus .cd-ring{display:block}
-  body.cdloading .cd-focus .cd-yt{visibility:hidden}
-  /* card advance animation — slide, no snap (device review: jarring) */
-  .cd-strip.anim-up{animation:cdup .26s var(--soft)}
-  .cd-strip.anim-down{animation:cddown .26s var(--soft)}
-  @keyframes cdup{from{transform:translateY(6%); opacity:.55}to{transform:none; opacity:1}}
-  @keyframes cddown{from{transform:translateY(-6%); opacity:.55}to{transform:none; opacity:1}}
-  @media (prefers-reduced-motion:reduce){ .cd-strip.anim-up,.cd-strip.anim-down{animation:none} .cd-ring{animation:none} }
+  body.cdloading .cd-stage .cd-ring{display:block}
+  body.cdloading .cd-stage .cd-yt{visibility:hidden}
+  @media (prefers-reduced-motion:reduce){ #cdTrack.gliding{transition:none} .cd-ring{animation:none} }
   .cd-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2;
     width:56px; height:56px; border-radius:50%; border:none; cursor:pointer;
     background:rgba(245,242,236,.92); color:#2C2925; display:grid; place-items:center;
     box-shadow:0 8px 24px rgba(0,0,0,.4); touch-action:manipulation}
   .cd-play:active{transform:translate(-50%,-50%) scale(.94)}
   body.cdplaying .cd-play{display:none}
-  body.cdplaying .cd-focus .cd-meta{display:none}
   /* jog wheel = existing #wheel in floating-mini mode — SAME coordinates as the note's
      reading mode (James: identical position, second request): bottom 36%, right-aligned,
      shifted left by 40% of wheel size, width min(40%,168px), opacity .70. */
@@ -773,13 +771,12 @@
     z-index:76; padding:0 24px 0 0; width:100%; pointer-events:none; display:grid; place-items:center end}
   body.curdeck .wheel{width:min(40%,168px); transform:translateX(-40%); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)}
   body.curdeck .wheel.touching,body.curdeck .wheel.demo,body.curdeck .wheel.awake,body.curdeck.wheelawake .wheel{opacity:.70}
-  /* Landscape = the mockup's fullscreen contract: focus card fills the viewport */
+  /* Landscape = the mockup's fullscreen contract: the stage fills the viewport */
   @media (orientation:landscape){
     body.curdeck.cdplaying #curDeck{padding:0}
-    body.curdeck.cdplaying .cd-top,body.curdeck.cdplaying .cd-side{display:none}
-    body.curdeck.cdplaying .cd-strip{gap:0}
-    body.curdeck.cdplaying .cd-focus{flex:100 1 0; border-radius:0}
-    body.curdeck.cdplaying .cd-wave{display:none}
+    body.curdeck.cdplaying .cd-top,body.curdeck.cdplaying #cdTrack{display:none}
+    body.curdeck.cdplaying .cd-stage{height:100% !important; border-radius:0}
+    body.curdeck.cdplaying .cd-chap{display:none}
   }
 
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
@@ -1141,7 +1138,8 @@
       <span class="cd-count num" id="cdCount"></span>
     </div>
     <div class="cd-strip" id="cdStrip">
-      <div class="cd-card cd-focus" id="cdFocus">
+      <div id="cdTrack"></div>
+      <div class="cd-stage" id="cdStage">
         <div class="cd-yt off" id="cdYtA"></div>
         <div class="cd-yt off" id="cdYtB"></div>
         <span class="cd-ring" aria-hidden="true"></span>
@@ -1149,8 +1147,6 @@
         <div class="cd-meta"><span class="cd-vt" id="cdVt"></span><span class="cd-vs" id="cdVs"></span></div>
         <div class="cd-chap" id="cdChap" aria-hidden="true"></div>
       </div>
-      <div class="cd-card cd-side" id="cdNext"></div>
-      <div class="cd-card cd-side" id="cdNext2"></div>
     </div>
     <div class="cd-fin" id="cdFin">
       <div class="cd-fin-t">이번 주 편성,<br>끝까지 들었어요</div>
@@ -1801,16 +1797,32 @@
     setHomeTab('curation');
   }
   function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
-  // Layout: focus (playing) on TOP, the next two below — no empty prev slot (R8).
+  /* Track renderer (motion v2): equal-height cards laid on a translating track.
+     Window = [idx-1 .. idx+2]; resting transform hides the buffer card above, so a
+     glide of exactly one pitch (transform-only, GPU) moves every card its real
+     distance — no snap, no distortion. */
+  var cdGAP=8;
+  function cdPitch(){
+    var s=document.getElementById('cdStrip');
+    var h=(s&&s.clientHeight)||480;
+    var card=Math.max(80, Math.floor((h - 2*cdGAP)/3));
+    return {card:card, pitch:card+cdGAP};
+  }
   function cdRender(){
     var n=cdItems.length; if(!n) return;
-    var cur=cdItems[cdIdx], n1=cdItems[cdIdx+1], n2=cdItems[cdIdx+2];
-    var fc=document.getElementById('cdFocus'), x1=document.getElementById('cdNext'), x2=document.getElementById('cdNext2');
-    x1.className='cd-card cd-side'+(n1?'':' empty');
-    x2.className='cd-card cd-side'+(n2?'':' empty');
-    x1.style.backgroundImage=n1?('url('+cdThumb(n1)+')'):'none';
-    x2.style.backgroundImage=n2?('url('+cdThumb(n2)+')'):'none';
-    fc.style.backgroundImage='url('+cdThumb(cur)+')';
+    var g=cdPitch();
+    var tr=document.getElementById('cdTrack');
+    var html='';
+    for(var k=cdIdx-1;k<=cdIdx+2;k++){
+      var it=cdItems[k];
+      html+='<div class="cd-card'+(it?(k>cdIdx?' upnext':''):' empty')+'" data-k="'+k+'"'
+        +' style="height:'+g.card+'px'+(it?(';background-image:url(\''+cdThumb(it)+'\')'):'')+'"></div>';
+    }
+    tr.innerHTML=html;
+    tr.classList.remove('gliding');
+    tr.style.transform='translateY('+(-g.pitch)+'px)';
+    var st=document.getElementById('cdStage'); if(st) st.style.height=g.card+'px';
+    var cur=cdItems[cdIdx];
     document.getElementById('cdVt').textContent=cur.title||'제목 없음';
     var bits=[];
     if(cur.channel) bits.push(cur.channel);
@@ -1948,25 +1960,73 @@
     document.body.classList.remove('cdhint');
     try{ localStorage.setItem('insighta-cd-hint','1'); }catch(e){}
   }
-  // Advance the deck — slide animation (device review: snapping causes dizziness).
-  function cdAnimStrip(d){
-    var s=document.getElementById('cdStrip'); if(!s) return;
-    s.classList.remove('anim-up','anim-down'); void s.offsetWidth;
-    s.classList.add(d>0?'anim-up':'anim-down');
+  /* Wheel-coupled navigation (note navBegin/navEnd grammar): each detent = exactly
+     one card glide, queued; a burst fast-forwards the running glide so motion stays
+     1:1 with the wheel. During travel the stage hides (posters only, playback
+     paused); playback resumes ONLY on settle (wheel release / 280ms idle). */
+  var cdNavActive=false, cdWasPlaying=false, cdSettleT=null, cdAnimBusy=false, cdQueue=[], cdFinCur=null;
+  function cdGlide(d){
+    cdAnimBusy=true;
+    var g=cdPitch(); var tr=document.getElementById('cdTrack');
+    tr.classList.add('gliding');
+    tr.style.transform='translateY('+(-g.pitch - d*g.pitch)+'px)';
+    var done=false;
+    var fin=function(){
+      if(done) return; done=true; cdFinCur=null;
+      tr.removeEventListener('transitionend',fin);
+      cdAnimBusy=false; cdRender();
+      if(cdQueue.length) cdPump();
+    };
+    cdFinCur=fin;
+    tr.addEventListener('transitionend',fin);
+    setTimeout(fin, 250); // safety: transitionend can be swallowed
   }
+  function cdPump(){
+    if(cdAnimBusy) return;
+    var d=cdQueue.shift(); if(d==null) return;
+    cdGlide(d);
+  }
+  function cdStep(d){
+    var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
+    cdIdx=ni; cdEndRolled=false;
+    if(!cdNavActive){
+      cdNavActive=true;
+      cdWasPlaying=document.body.classList.contains('cdplaying');
+      cdPause();
+      document.body.classList.add('cdnav');
+    }
+    if(cdAnimBusy&&cdFinCur) cdFinCur();   // fast-forward: stay 1:1 with the wheel
+    cdQueue.push(d); cdPump();
+    clearTimeout(cdSettleT); cdSettleT=setTimeout(cdSettle, 280);
+  }
+  function cdSettle(){
+    if(!cdNavActive) return;
+    clearTimeout(cdSettleT);
+    cdNavActive=false;
+    document.body.classList.remove('cdnav');
+    if(cdWasPlaying){ cdPlay(); }
+    else { cdWarmInto(1-cdAct, cdIdx); } // browse: keep the new focus warm for an instant play tap
+    cdWasPlaying=false;
+  }
+  // called by the wheel engine on pointer-up (fingers off = settle now)
+  function cdWheelRelease(){
+    if(!cdNavActive) return;
+    clearTimeout(cdSettleT);
+    var wait=(cdAnimBusy||cdQueue.length)?230:0;   // let the last glide land first
+    cdSettleT=setTimeout(cdSettle, wait);
+  }
+  // Auto-advance (ended, zero-gap): glide + immediate warm-swap play, stage stays up.
   function cdAdvance(d, keepPlaying){
     var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
     cdIdx=ni; cdEndRolled=false;
-    cdAnimStrip(d); cdRender();
+    if(cdAnimBusy&&cdFinCur) cdFinCur();
+    cdQueue.push(d); cdPump();
     if(keepPlaying||document.body.classList.contains('cdplaying')) cdPlay();
   }
   function cdNav(d){
     cdHintDismiss();
-    if(document.body.classList.contains('cdfin')){ document.body.classList.remove('cdfin'); } // any nav leaves the fin card
-    if(document.body.classList.contains('cdplaying')){ cdAdvance(d,true); return; }
-    var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
-    cdIdx=ni; cdAnimStrip(d); cdRender();
-    cdWarmInto(1-cdAct, cdIdx); // keep the new focus warm for an instant play tap
+    if(document.body.classList.contains('cdfin')){ document.body.classList.remove('cdfin'); }
+    cdStep(d);
   }
   // Video tab — select a mandala → continuous watch of its videos, reusing the existing beat player.
   async function openMandalaVideos(m){
@@ -2852,6 +2912,7 @@
         delete ptr[e.pointerId]; touchN=Math.max(0,touchN-1);
         if(touchN===0){ wheel.classList.remove('touching');
           if(navHold.active) navEnd(); // fingers up -> settle: resume (or stay paused) per start state
+          if(document.body.classList.contains('curdeck')&&typeof cdWheelRelease==='function') cdWheelRelease(); // deck settle on release
           if(document.body.classList.contains('stage')||document.body.classList.contains('reading')||document.body.classList.contains('curdeck')) wheelSleep(); } // float wheel hides 3s after release
         kickFrame();
       });
@@ -2996,8 +3057,15 @@
     g('cdFinList').onclick=closeCurationDeck;                    // D4: back to the lineup
     g('cdFinReplay').onclick=function(){ document.body.classList.remove('cdfin'); cdIdx=0; cdRender(); cdPlay(); };
     g('cdPlayBtn').onclick=function(e){ e.stopPropagation(); cdPlay(); };
-    g('cdNext').onclick=function(){ cdNav(1); };
-    g('cdNext2').onclick=function(){ cdNav(2); };
+    // track tap: upcoming card = travel there; top card handled by the stage layer
+    g('cdTrack').addEventListener('click',function(e){
+      var c=e.target.closest('.cd-card'); if(!c) return;
+      var k=parseInt(c.getAttribute('data-k'),10);
+      if(isNaN(k)||k===cdIdx) return;
+      var d=k>cdIdx?1:-1, steps=Math.abs(k-cdIdx);
+      for(var s2=0;s2<steps;s2++) cdNav(d);
+    });
+    window.addEventListener('orientationchange',function(){ if(document.body.classList.contains('curdeck')) setTimeout(cdRender,120); });
     // vertical swipe on the strip = prev/next (same grammar as wheel rotation)
     var sy=null;
     g('cdStrip').addEventListener('touchstart',function(e){ sy=e.touches[0].clientY; },{passive:true});
