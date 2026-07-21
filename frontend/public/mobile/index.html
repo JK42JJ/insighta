@@ -3066,13 +3066,55 @@
       for(var s2=0;s2<steps;s2++) cdNav(d);
     });
     window.addEventListener('orientationchange',function(){ if(document.body.classList.contains('curdeck')) setTimeout(cdRender,120); });
-    // vertical swipe on the strip = prev/next (same grammar as wheel rotation)
-    var sy=null;
-    g('cdStrip').addEventListener('touchstart',function(e){ sy=e.touches[0].clientY; },{passive:true});
-    g('cdStrip').addEventListener('touchend',function(e){
-      if(sy==null) return; var dy=e.changedTouches[0].clientY-sy; sy=null;
-      if(Math.abs(dy)>44) cdNav(dy<0?1:-1);
-    },{passive:true});
+    // Finger-follow drag (YouTube grammar): the track tracks the finger 1:1 live;
+    // release snaps by displacement/velocity — next/prev glide or spring back.
+    (function(){
+      var y0=null, t0=0, dy=0, active=false;
+      function tr(){ return document.getElementById('cdTrack'); }
+      function rest(){ return -cdPitch().pitch; }
+      g('cdStrip').addEventListener('touchstart',function(e){
+        if(document.body.classList.contains('cdfin')) return;
+        if(cdAnimBusy&&cdFinCur) cdFinCur();
+        y0=e.touches[0].clientY; t0=Date.now(); dy=0; active=true;
+        tr().classList.remove('gliding');
+        if(!cdNavActive){
+          cdNavActive=true;
+          cdWasPlaying=document.body.classList.contains('cdplaying');
+          cdPause(); document.body.classList.add('cdnav');
+        }
+        clearTimeout(cdSettleT);
+        cdHintDismiss();
+      },{passive:true});
+      g('cdStrip').addEventListener('touchmove',function(e){
+        if(!active) return;
+        dy=e.touches[0].clientY - y0;
+        var p=cdPitch().pitch;
+        // edge resistance: first/last card drags at 0.35x instead of hard stop
+        var lim=((dy>0&&cdIdx===0)||(dy<0&&cdIdx>=cdItems.length-1))?0.35:1;
+        var d2=Math.max(-p, Math.min(p, dy*lim));
+        tr().style.transform='translateY('+(rest()+d2)+'px)';
+      },{passive:true});
+      g('cdStrip').addEventListener('touchend',function(){
+        if(!active) return; active=false;
+        var p=cdPitch().pitch, dt=Math.max(1,Date.now()-t0), v=dy/dt; // px/ms
+        var dir=0;
+        if((dy<-p*0.28||v<-0.45)&&cdIdx<cdItems.length-1) dir=1;
+        else if((dy>p*0.28||v>0.45)&&cdIdx>0) dir=-1;
+        var t=tr(); t.classList.add('gliding');
+        if(dir!==0){
+          cdIdx+=dir; cdEndRolled=false; cdAnimBusy=true;
+          t.style.transform='translateY('+(rest()-dir*p)+'px)';
+          var done=false;
+          var fin=function(){ if(done) return; done=true; cdFinCur=null; cdAnimBusy=false; cdRender(); if(cdQueue.length) cdPump(); };
+          cdFinCur=fin;
+          t.addEventListener('transitionend',function h(){ t.removeEventListener('transitionend',h); fin(); });
+          setTimeout(fin,250);
+        } else {
+          t.style.transform='translateY('+rest()+'px)'; // spring back
+        }
+        clearTimeout(cdSettleT); cdSettleT=setTimeout(cdSettle, 260);
+      },{passive:true});
+    })();
   })();
   document.getElementById('spdBtn').onclick=cycleSpd;
   document.getElementById('spdStage').onclick=cycleSpd;
