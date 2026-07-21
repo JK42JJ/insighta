@@ -148,6 +148,27 @@
   .htab.on{color:var(--paper-ink); background:var(--paper); box-shadow:0 1px 2px rgba(94,86,72,.18)}
   .htab:active{transform:scale(.97)}
   .pane{flex:1; min-height:0; display:flex; flex-direction:column}
+  /* Home carousel: curation/video/note as one connected strip dragged by the
+     bottom slider (James). Panes scroll vertically; the strip translates
+     horizontally — no gesture conflict since the drag lives on the slider only. */
+  /* overflow:clip (not hidden) so a row's scrollIntoView can't horizontally
+     scroll the clip and reveal the wrong pane; older Safari keeps the hidden
+     fallback + the scroll-reset listener below. */
+  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip}
+  .hstrip{display:flex; width:300%; height:100%; transition:transform .42s var(--spring); will-change:transform}
+  .hstrip.drag{transition:none}
+  .hpane{width:33.3333%; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden}
+  .hsl{flex:none; padding:11px 6px 3px}
+  .hsl-track{position:relative; height:9px; border-radius:99px; background:rgba(94,86,72,.13); box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
+  .hsl-fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:rgba(94,86,72,.09); transition:width .42s var(--spring)}
+  .hsl-thumb{position:absolute; left:0; top:50%; width:56px; height:23px; transform:translate(-50%,-50%);
+    border:none; border-radius:99px; background:var(--paper); cursor:grab; touch-action:none;
+    box-shadow:0 2px 6px -1px rgba(94,86,72,.4), inset 0 0 0 1px rgba(94,86,72,.12); transition:left .42s var(--spring)}
+  .hsl-thumb::before{content:''; position:absolute; left:50%; top:50%; width:3px; height:3px; border-radius:50%;
+    background:rgba(94,86,72,.4); transform:translate(-50%,-50%); box-shadow:-6px 0 0 rgba(94,86,72,.4), 6px 0 0 rgba(94,86,72,.4)}
+  .hsl.drag .hsl-thumb{cursor:grabbing}
+  .hsl.drag .hsl-thumb,.hsl.drag .hsl-fill{transition:none}
+  @media (prefers-reduced-motion:reduce){ .hstrip,.hsl-thumb,.hsl-fill{transition:none} }
   .pane[hidden]{display:none}
   .cur-body{flex:1; min-height:0; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:8px}
   /* Ambient background: a soft wash in the focused row's topic color, fading in
@@ -1080,13 +1101,23 @@
           <button class="htab" data-htab="video" aria-label="영상"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M10.5 9.5l4 2.5-4 2.5z" fill="currentColor" stroke="none"/></svg><span>영상</span></button>
           <button class="htab" data-htab="note" aria-label="노트"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h8L18.5 7.5v12a1 1 0 01-1 1h-11a1 1 0 01-1-1V4.5a1 1 0 011-1z"/><path d="M8.8 11h6.4M8.8 14.5h4.6"/></svg><span>노트</span></button>
         </div>
-        <div class="pane" id="paneCuration">
-          <div class="cur-amb" id="curAmb" aria-hidden="true"></div>
-          <div class="cur-body" id="curBody"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
+        <div class="hstrip-clip" id="hstripClip">
+          <div class="hstrip" id="hstrip">
+            <div class="hpane" id="paneCuration">
+              <div class="cur-amb" id="curAmb" aria-hidden="true"></div>
+              <div class="cur-body" id="curBody"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
+            </div>
+            <div class="hpane" id="paneVideo">
+              <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
+              <div class="rows" id="rowsV"></div>
+            </div>
+            <div class="hpane" id="paneNote">
+              <div class="rows" id="rowsN"></div>
+            </div>
+          </div>
         </div>
-        <div class="pane" id="paneList" hidden>
-          <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
-          <div class="rows" id="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
+        <div class="hsl" id="hsl">
+          <div class="hsl-track" id="hslTrack"><div class="hsl-fill" id="hslFill"></div><button class="hsl-thumb" id="hslThumb" type="button" aria-label="큐레이션·영상·노트 이동"></button></div>
         </div>
       </div>
 
@@ -1517,8 +1548,10 @@
     return {kind:'new', line:'새 노트', dot:true};
   }
   function homeItems(){ return mandalas }
-  function renderRows(){
-    var rows=document.getElementById('rows');
+  // The video and note panels share the mandala list; each is painted with its
+  // own tap action so the connected strip shows a distinct panel per slider stop.
+  function paintMandalaList(rows, mode){
+    if(!rows) return;
     var items=homeItems();
     if(!items.length){
       rows.innerHTML='<div class="row-empty">아직 만다라가 없어요<br>첫 목표를 적어보세요</div>';
@@ -1540,25 +1573,48 @@
       d.querySelector('.bt').textContent=st.line;
       if(st.skt) d.querySelector('.bt').classList.add('skt');
       if(st.kind!=='making'&&st.kind!=='loading'){
-        d.addEventListener('click',function(){ selIdx=i; renderRows(); if(homeTab==='video'){ openMandalaVideos(m); } else { openNote(m); } });
+        d.addEventListener('click',function(){ selIdx=i; renderRows(); if(mode==='video'){ openMandalaVideos(m); } else { openNote(m); } });
       }
       rows.appendChild(d);
     });
-    var selEl=rows.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
+  }
+  function renderRows(){
+    paintMandalaList(document.getElementById('rowsV'),'video');
+    paintMandalaList(document.getElementById('rowsN'),'note');
+    var active=document.getElementById(homeTab==='note'?'rowsN':'rowsV');
+    var selEl=active&&active.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
   }
   /* ============ Home tabs (curation / video / note) [J:07-20] ============ */
   var homeTab='curation';   // default (James)
-  function setHomeTab(t){
-    homeTab=t;
-    Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'),function(b){
-      b.classList.toggle('on', b.getAttribute('data-htab')===t);
-    });
-    var pc=document.getElementById('paneCuration'), pl=document.getElementById('paneList');
-    if(pc) pc.hidden=(t!=='curation');
-    if(pl) pl.hidden=(t==='curation');
-    if(t==='curation') renderCuration();
-    else renderRows();   // video/note share the mandala list; click behaviour differs by homeTab
+  // Home carousel: the strip and the bottom slider both express the same index.
+  var HTABS=['curation','video','note'], homeIdx=0;
+  function homeMetrics(){
+    var tr=document.getElementById('hslTrack'), th=document.getElementById('hslThumb');
+    var w=(tr&&tr.clientWidth)||0, tw=(th&&th.offsetWidth)||56;
+    return {w:w, tw:tw, half:tw/2, usable:Math.max(1, w-tw)};
   }
+  // cont = continuous position 0..2 (0=curation … 2=note). animate=false while dragging.
+  function homePaintPos(cont, animate){
+    var strip=document.getElementById('hstrip'), th=document.getElementById('hslThumb'),
+        fill=document.getElementById('hslFill'), hsl=document.getElementById('hsl');
+    if(!strip) return;
+    if(animate){ strip.classList.remove('drag'); hsl.classList.remove('drag'); }
+    else { strip.classList.add('drag'); hsl.classList.add('drag'); }
+    strip.style.transform='translateX('+(-cont*(100/3))+'%)';
+    var m=homeMetrics(), left=m.half+(cont/2)*m.usable;
+    if(th) th.style.left=left+'px';
+    if(fill) fill.style.width=left+'px';
+  }
+  function homeGo(idx){
+    idx=Math.max(0, Math.min(2, idx|0)); homeIdx=idx; homeTab=HTABS[idx];
+    Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'),function(b){
+      b.classList.toggle('on', b.getAttribute('data-htab')===homeTab);
+    });
+    homePaintPos(idx, true);
+    selIdx=0;
+    if(homeTab==='curation') renderCuration(); else renderRows();
+  }
+  function setHomeTab(t){ homeGo(HTABS.indexOf(t)>=0?HTABS.indexOf(t):0); } // back-compat alias
   // Curation — YouTube connect gate → analyzing → 3 personalized proposals →
   // select → async build → weekly video feed (reuses the beat player).
   var CUR_STAR='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg>';
@@ -2344,8 +2400,9 @@
     renderRows();
   }
   var SK_ROW='<div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div>';
+  function listPanes(){ return [document.getElementById('rowsV'), document.getElementById('rowsN')]; }
   async function loadList(){
-    document.getElementById('rows').innerHTML=SK_ROW+SK_ROW+SK_ROW;
+    listPanes().forEach(function(el){ if(el) el.innerHTML=SK_ROW+SK_ROW+SK_ROW; });
     try{
       var r=await api('/mandalas/list?limit=12');
       var j=await r.json();
@@ -2353,7 +2410,8 @@
       selIdx=0; renderRows();
       mandalas.slice(0,8).forEach(function(m){ fetchBookStatus(m) }); // S2: 병렬 상태 조회 + 캐시 재사용
     }catch(e){
-      document.getElementById('rows').innerHTML='<div class="row-empty">'+(navigator.onLine===false?'오프라인이에요 — 연결 후 다시':'목록을 불러오지 못했어요 — 다시 시도해주세요')+'</div>';
+      var msg='<div class="row-empty">'+(navigator.onLine===false?'오프라인이에요 — 연결 후 다시':'목록을 불러오지 못했어요 — 다시 시도해주세요')+'</div>';
+      listPanes().forEach(function(el){ if(el) el.innerHTML=msg; });
     }
   }
 
@@ -3226,7 +3284,7 @@
     var el=rows[selMenu]; if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
   }
   function updateSel(){
-    var rows=document.getElementById('rows');
+    var rows=document.getElementById(homeTab==='note'?'rowsN':'rowsV'); if(!rows) return;
     for(var i=0;i<rows.children.length;i++) rows.children[i].classList.toggle('sel', i===selIdx);
     var el=rows.children[selIdx];
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
@@ -3836,35 +3894,37 @@
   Array.prototype.forEach.call(document.querySelectorAll('.ntb[data-nav]'), function(b){
     b.onclick=function(){ var t=b.getAttribute('data-nav'); show(t); if(t==='menu') loadTicketsQuiet(); };
   });
-  // [J:07-20] home tabs (curation/video/note) wiring
+  // [J:07-20] home tabs = labels + tap fallback -> jump to that panel
   Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'), function(b){
-    b.onclick=function(){ setHomeTab(b.getAttribute('data-htab')); };
+    b.onclick=function(){ homeGo(HTABS.indexOf(b.getAttribute('data-htab'))); };
   });
-  // [J:07-21] Horizontal swipe on the home content = prev/next tab. The skip
-  // buttons stay item-nav (James); tab switching rides a gesture, not a button.
-  // Angle guard separates it from vertical list scroll; no wrap (edge stop).
+  // [J:07-22] Bottom slider drags the connected curation/video/note strip. The thumb
+  // follows the finger 1:1 (strip translates with it); release snaps to the
+  // nearest stop. Lives on its own control -> no conflict with list scroll.
   (function(){
-    var HTAB_ORDER=['curation','video','note'];
-    var sh=document.getElementById('scrHome'); if(!sh) return;
-    var x0=null, y0=null, dx=0, dy=0, lock=null;
-    sh.addEventListener('touchstart',function(e){
-      if(cur!=='home'||document.body.classList.contains('ytsheet')){ x0=null; return; }
-      x0=e.touches[0].clientX; y0=e.touches[0].clientY; dx=0; dy=0; lock=null;
-    },{passive:true});
-    sh.addEventListener('touchmove',function(e){
-      if(x0==null) return;
-      dx=e.touches[0].clientX-x0; dy=e.touches[0].clientY-y0;
-      if(lock==null && (Math.abs(dx)>10||Math.abs(dy)>10)) lock=(Math.abs(dx)>Math.abs(dy)*1.4)?'x':'y';
-    },{passive:true});
-    sh.addEventListener('touchend',function(){
-      if(x0==null) return;
-      if(lock==='x' && Math.abs(dx)>45){
-        var i=HTAB_ORDER.indexOf(homeTab), ni=dx<0?i+1:i-1;
-        if(ni>=0 && ni<HTAB_ORDER.length){ if(navigator.vibrate)navigator.vibrate(7); setHomeTab(HTAB_ORDER[ni]); }
-        else if(window.wheelRubber){ wheelRubber(dx<0?1:-1); } // edge feedback, no wrap
-      }
-      x0=null; y0=null; dx=0; dy=0; lock=null;
-    },{passive:true});
+    var hsl=document.getElementById('hsl'), track=document.getElementById('hslTrack'),
+        thumb=document.getElementById('hslThumb'), clip=document.getElementById('hstripClip');
+    if(!hsl||!track||!thumb) return;
+    // Fallback for browsers without overflow:clip — a row's scrollIntoView must
+    // never leave the clip horizontally scrolled (the transform owns position).
+    if(clip) clip.addEventListener('scroll',function(){ if(clip.scrollLeft){ clip.scrollLeft=0; } if(clip.scrollTop){ clip.scrollTop=0; } },{passive:true});
+    var dragging=false, lastCont=0;
+    function contFromClientX(cx){
+      var r=track.getBoundingClientRect(), m=homeMetrics();
+      var px=Math.max(m.half, Math.min(r.width-m.half, cx-r.left)); // clamp to thumb travel
+      return ((px-m.half)/m.usable)*2; // 0..2
+    }
+    function down(cx){ dragging=true; lastCont=contFromClientX(cx); homePaintPos(lastCont, false); if(navigator.vibrate)navigator.vibrate(4); }
+    function move(cx){ if(!dragging) return; lastCont=contFromClientX(cx); homePaintPos(lastCont, false);
+      // live tab identity as it crosses a stop (highlight + homeTab follow)
+      var near=Math.round(lastCont); if(HTABS[near]&&homeTab!==HTABS[near]){ homeTab=HTABS[near];
+        Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'),function(b){ b.classList.toggle('on', b.getAttribute('data-htab')===homeTab); }); }
+    }
+    function up(){ if(!dragging) return; dragging=false; homeGo(Math.round(lastCont)); }
+    // pointer events cover touch + mouse; track tap also moves (down at that x)
+    hsl.addEventListener('pointerdown',function(e){ e.preventDefault(); try{thumb.setPointerCapture(e.pointerId);}catch(_){} down(e.clientX); });
+    hsl.addEventListener('pointermove',function(e){ move(e.clientX); });
+    ['pointerup','pointercancel'].forEach(function(ev){ hsl.addEventListener(ev, up); });
   })();
   // 브레드크럼 "설정" 세그먼트 = 한 단계 위(설정)로 [J:07-15 IA]
   Array.prototype.forEach.call(document.querySelectorAll('.bc .up[data-back]'), function(b){
@@ -4061,6 +4121,8 @@
       var wiz = ytParam ? ytTryRestore(ytParam) : false;
       show('home'); loadList(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite();
       if(!wiz) renderCuration();
+      requestAnimationFrame(function(){ homePaintPos(homeIdx, true); }); // slider position once laid out
+      window.addEventListener('resize', function(){ if(cur==='home') homePaintPos(homeIdx, true); }); // keep thumb px in sync
       if(!wiz && ytParam==='connected') toast('유튜브 계정을 연결했어요');
       else if(!wiz && ytParam==='error') toast('유튜브 연결에 실패했어요. 다시 시도해주세요');
     }
