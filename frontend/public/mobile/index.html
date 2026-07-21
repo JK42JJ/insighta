@@ -2996,8 +2996,8 @@
     g('cdFinList').onclick=closeCurationDeck;                    // D4: back to the lineup
     g('cdFinReplay').onclick=function(){ document.body.classList.remove('cdfin'); cdIdx=0; cdRender(); cdPlay(); };
     g('cdPlayBtn').onclick=function(e){ e.stopPropagation(); cdPlay(); };
-    g('cdPrev').onclick=function(){ cdNav(-1); };
     g('cdNext').onclick=function(){ cdNav(1); };
+    g('cdNext2').onclick=function(){ cdNav(2); };
     // vertical swipe on the strip = prev/next (same grammar as wheel rotation)
     var sy=null;
     g('cdStrip').addEventListener('touchstart',function(e){ sy=e.touches[0].clientY; },{passive:true});
