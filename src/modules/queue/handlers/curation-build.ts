@@ -24,6 +24,7 @@ import { JOB_NAMES, QUEUE_CONFIG } from '../types';
 import { getJobQueue } from '../manager';
 import { matchFromVideoPoolByCenterGoal } from '@/skills/plugins/video-discover/v3/cache-matcher';
 import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
+import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
 import { MS_PER_DAY } from '@/utils/time-constants';
 
 const log = logger.child({ module: 'queue/curation-build' });
@@ -32,6 +33,50 @@ export interface CurationBuildPayload {
   subscriptionId: string;
   /** ISO date (Monday) this build belongs to — the curation_items.week_of key. */
   weekOf: string;
+  /** Background live-search enrichment for thin-pool topics (serve-first, §fallback). */
+  deep?: boolean;
+}
+
+/**
+ * Background enrichment for thin-pool (niche) topics: the fast pool-cosine result was
+ * already served; this runs the (slow but async) live v5 search and APPENDS new videos
+ * to the week — never blocks the user. Serve-first pattern.
+ */
+async function deepEnrichCuration(
+  subscriptionId: string,
+  topic: string,
+  weekDate: Date,
+  prisma: ReturnType<typeof getPrismaClient>
+): Promise<void> {
+  const v5 = await runV5Executor({
+    centerGoal: topic,
+    subGoals: [],
+    focusTags: [],
+    targetLevel: '',
+    language: 'ko',
+    includeEnCards: false,
+    excludeVideoIds: new Set<string>(),
+    env: process.env,
+  });
+  const existing = await prisma.curation_items.findMany({
+    where: { subscription_id: subscriptionId, week_of: weekDate },
+    select: { video_id: true },
+  });
+  const room = QUEUE_CONFIG.CURATION_TARGET_VIDEOS - existing.length;
+  if (room <= 0) return;
+  const have = new Set(existing.map((e) => e.video_id));
+  const additions = v5.cards
+    .filter((c) => !have.has(c.videoId))
+    .slice(0, room)
+    .map((c, i) => ({
+      subscription_id: subscriptionId,
+      video_id: c.videoId,
+      relevance_pct: Math.max(1, Math.min(100, Math.round((c.score ?? 0) * 100))),
+      position: existing.length + i,
+      week_of: weekDate,
+    }));
+  if (additions.length) await prisma.curation_items.createMany({ data: additions });
+  log.info('curation deep enrich complete', { subscriptionId, topic, added: additions.length });
 }
 
 /** teamSize per the pg-boss trap (CP498) — explicit, low concurrency. */
@@ -57,6 +102,13 @@ export async function registerCurationBuildWorker(): Promise<void> {
     const sub = await prisma.curation_subscriptions.findUnique({ where: { id: subscriptionId } });
     if (!sub || !sub.is_active) {
       log.info('curation build skipped (missing/inactive)', { subscriptionId });
+      return;
+    }
+
+    // Background enrichment pass (thin-pool topics) — append live-search results, don't
+    // touch cadence or replace the week. The fast pool result is already live.
+    if (job.data.deep) {
+      await deepEnrichCuration(subscriptionId, sub.topic, new Date(weekOf), prisma);
       return;
     }
 
@@ -107,6 +159,16 @@ export async function registerCurationBuildWorker(): Promise<void> {
           ]
         : []),
     ]);
+
+    // Thin pool (niche topic) → enqueue a background live-search enrichment (serve-first:
+    // the fast pool result is already served; v5 appends more behind). Separate singleton
+    // key so it doesn't collide with the weekly/immediate fast build.
+    if (picked.length < QUEUE_CONFIG.CURATION_MIN_VIDEOS) {
+      await enqueueCurationBuild(
+        { subscriptionId, weekOf, deep: true },
+        { singletonKey: `${subscriptionId}:deep` }
+      );
+    }
 
     // build-6 — advance the weekly cadence.
     await prisma.curation_subscriptions.update({
