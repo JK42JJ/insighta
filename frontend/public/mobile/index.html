@@ -165,6 +165,18 @@
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.10); border-radius:12px; padding:9px 10px;
     transition:transform var(--snap) var(--spring), box-shadow var(--snap) var(--soft); cursor:pointer; touch-action:manipulation}
   .row.sel{box-shadow:inset 0 0 0 1.5px var(--ui), 0 3px 8px -3px rgba(94,86,72,.4)}
+  /* Row overflow: quiet '...' glyph → action sheet (replaces the dead-end inline
+     long-press morph). 44px hit target, tertiary tone, no border. */
+  .row .rmore{flex:none; width:40px; height:40px; margin:-6px -4px -6px -2px; display:flex; align-items:center;
+    justify-content:center; border:none; background:none; cursor:pointer; color:var(--paper-sub); opacity:.42;
+    border-radius:10px; touch-action:manipulation}
+  .row .rmore:active{opacity:.85; background:rgba(94,86,72,.08)}
+  .row .rmore svg{display:block}
+  /* Action sheet body (reuses #ytSheet): title + destructive buttons (S5 grammar). */
+  .ras-actions{display:flex; flex-direction:column; gap:9px; margin-top:14px}
+  .ras-btn{width:100%; justify-content:center}
+  body.rasheet #ytsBack{display:none}   /* action sheet closes via backdrop / grip / MENU */
+  body.rasheet #ytsBody{justify-content:flex-start}  /* action menu reads top-aligned, not centered */
   .row:active{transform:scale(.98)}
   .row.making{opacity:.55; cursor:default; filter:saturate(.15)}
   .row.making:active{transform:none}
@@ -1621,9 +1633,13 @@
       d.querySelector('.jk b').textContent=(s.topic||'?').trim().charAt(0);
       d.querySelector('.a').textContent=s.topic||'(제목 없음)';
       d.querySelector('.bt').textContent=st.line;
-      // tap = open existing week; long-press = inline 2-step unsubscribe (no confirm())
+      // overflow '...' -> action sheet (unsubscribe); long-press = alias trigger for the same sheet
+      var more=document.createElement('button');
+      more.className='rmore'; more.type='button'; more.setAttribute('aria-label','메뉴'); more.innerHTML=RMORE_SVG;
+      more.addEventListener('click',function(ev){ ev.stopPropagation(); rowActionSheet('curation', s); });
+      d.appendChild(more);
       var lp=null, fired=false;
-      d.addEventListener('pointerdown',function(){ fired=false; lp=setTimeout(function(){ fired=true; curRowUnsub(d,s); },600); });
+      d.addEventListener('pointerdown',function(){ fired=false; lp=setTimeout(function(){ fired=true; rowActionSheet('curation', s); },600); });
       d.addEventListener('pointerup',function(){ clearTimeout(lp); });
       d.addEventListener('pointerleave',function(){ clearTimeout(lp); });
       d.addEventListener('click',function(){ if(fired) return; openExistingCuration(s); });
@@ -1634,20 +1650,6 @@
     curUpdateSel();
   }
   // Long-press: row expands inline into a 2-step unsubscribe action.
-  function curRowUnsub(rowEl, s){
-    var bt=rowEl.querySelector('.bt'); if(!bt) return;
-    bt.innerHTML='<button class="yts-danger" style="font-size:11px;padding:5px 10px" type="button">구독을 끊을까요? · 끊기</button>';
-    var b=bt.querySelector('button');
-    b.onclick=function(ev){
-      ev.stopPropagation();
-      b.disabled=true; b.textContent='끊는 중…';
-      api('/curations/'+s.id,{method:'DELETE'}).then(function(){
-        if(Array.isArray(curCache)) curCache=curCache.filter(function(x){ return x.id!==s.id; }); // optimistic: no deleted-row flash
-        renderCuration();
-      }).catch(function(){ toast('끊지 못했어요 — 다시 시도해주세요'); renderCuration(); });
-    };
-    setTimeout(function(){ if(!b.disabled){ renderCuration(); } },4000); // auto-revert
-  }
   // Open an EXISTING curation week — read-only, never triggers a rebuild.
   async function openExistingCuration(sub){
     try{
@@ -1683,7 +1685,43 @@
   // YouTube play glyph — the G logo pairs only with Google sign-in copy, not a YouTube connect CTA.
   var YT_TUBE_SVG='<svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="4.5" width="21" height="15" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg>';
   function openYtSheet(){ document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
-  function closeYtSheet(){ document.body.classList.remove('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true'); }
+  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true'); }
+  var RMORE_SVG='<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
+  // Per-surface row actions — RELOCATION of existing actions, never invention.
+  // New actions are James-gated (video/note mandala rows have no existing action yet).
+  var ROW_ACTIONS={
+    curation:[{ label:'구독 끊기', confirm:'구독을 끊을까요? · 끊기', running:'끊는 중…', err:'끊지 못했어요 — 다시 시도해주세요',
+      run:function(s){ return api('/curations/'+s.id,{method:'DELETE'}).then(function(){
+        if(Array.isArray(curCache)) curCache=curCache.filter(function(x){ return x.id!==s.id; }); }); },
+      after:function(){ renderCuration(); } }]
+  };
+  // Generic overflow sheet (reuses #ytSheet: backdrop/grip/MENU close come free).
+  // Destructive confirm = in-sheet 2-step morph (S5 grammar); no dead-end.
+  function rowActionSheet(surface, item){
+    var acts=ROW_ACTIONS[surface]; if(!acts||!acts.length) return;
+    var body=document.getElementById('ytsBody'); if(!body) return;
+    body.innerHTML='';
+    var h=document.createElement('div'); h.className='yts-h2';
+    h.textContent=item.topic||item.title||'항목'; body.appendChild(h);
+    var wrap=document.createElement('div'); wrap.className='ras-actions'; body.appendChild(wrap);
+    function disarmAll(except){ wrap.querySelectorAll('.ras-btn.confirm').forEach(function(b){
+      if(b===except) return; b.classList.remove('confirm'); b.textContent=b.__label; }); }
+    acts.forEach(function(a){
+      var btn=document.createElement('button'); btn.className='yts-danger ras-btn'; btn.type='button';
+      btn.textContent=a.label; btn.__label=a.label;
+      btn.onclick=function(ev){ ev.stopPropagation();
+        if(!btn.classList.contains('confirm')){ disarmAll(); btn.classList.add('confirm'); btn.textContent=a.confirm; return; }
+        btn.disabled=true; btn.textContent=a.running;
+        a.run(item).then(function(){ closeYtSheet(); if(a.after) a.after(item); })
+          .catch(function(){ toast(a.err); btn.disabled=false; btn.classList.remove('confirm'); btn.textContent=a.label; });
+      };
+      wrap.appendChild(btn);
+    });
+    // cancel path: tap anywhere in the sheet body (not the armed button) reverts it
+    body.onclick=function(e){ if(!e.target.closest('.ras-btn.confirm')) disarmAll(); };
+    document.body.classList.add('rasheet');
+    openYtSheet();
+  }
 
   // S1 — connect. Content keeps playing behind; the top-left back button dismisses at every step.
   function ytRenderConnect(){
@@ -3200,6 +3238,7 @@
     return ({menu:'home', player:'home'})[s]||null;
   }
   function menuBack(){
+    if(document.body.classList.contains('ytsheet')){ closeYtSheet(); return; } // sheet MENU = close (wheel parity)
     if(document.body.classList.contains('curdeck')){ closeCurationDeck(); return; } // deck MENU = back to tab
     if(cur==='login') return;
     if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
