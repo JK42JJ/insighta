@@ -3761,6 +3761,32 @@
   Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'), function(b){
     b.onclick=function(){ setHomeTab(b.getAttribute('data-htab')); };
   });
+  // [J:07-21] Horizontal swipe on the home content = prev/next tab. The skip
+  // buttons stay item-nav (James); tab switching rides a gesture, not a button.
+  // Angle guard separates it from vertical list scroll; no wrap (edge stop).
+  (function(){
+    var HTAB_ORDER=['curation','video','note'];
+    var sh=document.getElementById('scrHome'); if(!sh) return;
+    var x0=null, y0=null, dx=0, dy=0, lock=null;
+    sh.addEventListener('touchstart',function(e){
+      if(cur!=='home'||document.body.classList.contains('ytsheet')){ x0=null; return; }
+      x0=e.touches[0].clientX; y0=e.touches[0].clientY; dx=0; dy=0; lock=null;
+    },{passive:true});
+    sh.addEventListener('touchmove',function(e){
+      if(x0==null) return;
+      dx=e.touches[0].clientX-x0; dy=e.touches[0].clientY-y0;
+      if(lock==null && (Math.abs(dx)>10||Math.abs(dy)>10)) lock=(Math.abs(dx)>Math.abs(dy)*1.4)?'x':'y';
+    },{passive:true});
+    sh.addEventListener('touchend',function(){
+      if(x0==null) return;
+      if(lock==='x' && Math.abs(dx)>45){
+        var i=HTAB_ORDER.indexOf(homeTab), ni=dx<0?i+1:i-1;
+        if(ni>=0 && ni<HTAB_ORDER.length){ if(navigator.vibrate)navigator.vibrate(7); setHomeTab(HTAB_ORDER[ni]); }
+        else if(window.wheelRubber){ wheelRubber(dx<0?1:-1); } // edge feedback, no wrap
+      }
+      x0=null; y0=null; dx=0; dy=0; lock=null;
+    },{passive:true});
+  })();
   // 브레드크럼 "설정" 세그먼트 = 한 단계 위(설정)로 [J:07-15 IA]
   Array.prototype.forEach.call(document.querySelectorAll('.bc .up[data-back]'), function(b){
     b.onclick=function(){ show(b.getAttribute('data-back')); };
