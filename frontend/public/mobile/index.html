@@ -304,7 +304,7 @@
   /* [J:07-15] 미니휠 = 진행바 위로 올림(엄지존) + 3초 자동숨김 (e). 기본 투명 → 터치 시 표시 → 3초 뒤 소멸 */
   body.reading .wheelzone{position:absolute; left:0; right:0; top:auto; bottom:36%;
     z-index:40; padding:0 24px 0 0; width:100%; pointer-events:none; place-items:center end} /* [J:07-16] right-center (right-thumb) per device guide box */
-  body.reading .wheel{width:min(40%,168px); transform:translateX(-40%); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)} /* [J:07-16] shift left by 40% of wheel size (one-hand reach) */
+  body.reading .wheel{width:var(--miniwheel); transform:translateX(-40%); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)} /* [J:07-16] shift left by 40% of wheel size (one-hand reach) */
   body.reading .wheel.touching,body.reading .wheel.demo,body.reading .wheel.awake,body.reading.wheelawake .wheel{opacity:.70} /* [J:07-15] 더 투명하게 — 읽기 콘텐츠 가림 완화 */
   /* Fine (scrub) mode = a toggle; same palette, signalled by a dim tone + pressed core. */
   body.finemode .wheel{filter:brightness(.84) contrast(1.02) saturate(.98); transition:filter .3s var(--soft)}
@@ -484,7 +484,7 @@
   body.stage .device::after{display:none}
   body.stage .engrave{display:none}
   /* [J pick 07-14] C3 미니 휠 — 세로 조그휠의 미니어처, 반투명 상주 */
-  body.stage .wheelzone{display:block; position:absolute; z-index:7; width:176px; padding:0;
+  body.stage .wheelzone{display:block; position:absolute; z-index:7; width:var(--miniwheel); padding:0;
     right:calc(env(safe-area-inset-right, 0px) + 14px); bottom:calc(var(--sab) + 14px); left:auto; top:auto}
   /* A-기록 핸들 문법 [J:07-14]: 평시 투명 → 터치 시 저투명(시청 무방해) → 3초 머문 뒤 소멸 */
   body.stage .wheel{width:100%; opacity:0; transition:opacity .35s var(--soft)}
@@ -750,6 +750,13 @@
   .cd-chap i.done{background:var(--ui)}
   .cd-chap i.now b{position:absolute; left:0; top:0; bottom:0; background:var(--ui); border-radius:2.5px;
     transition:width .45s linear; display:block}
+  /* stage poster (device review: landscape pre-play thumbnail was crop-zoomed and
+     cheap-looking) — premium standard: blurred cover fill behind + contained
+     original in front; works for any viewport aspect with zero cropping. */
+  .cd-poster{position:absolute; inset:0; z-index:0; overflow:hidden}
+  .cd-poster .cp-back{position:absolute; inset:-8%; background:#181512 center/cover no-repeat;
+    filter:blur(26px) saturate(1.15) brightness(.75); transform:scale(1.12)}
+  .cd-poster .cp-front{position:absolute; inset:0; background:transparent center/contain no-repeat}
   .cd-yt{position:absolute; inset:0; z-index:1}
   .cd-yt.off{visibility:hidden}
   /* Loading = note veil: top-card poster shows through + bottom-right ring until PLAYING */
@@ -765,12 +772,38 @@
   .cd-play:active{transform:translate(-50%,-50%) scale(.94)}
   body.cdplaying .cd-play{display:none}
   /* jog wheel = existing #wheel in floating-mini mode — SAME coordinates as the note's
-     reading mode (James: identical position, second request): bottom 36%, right-aligned,
-     shifted left by 40% of wheel size, width min(40%,168px), opacity .70. */
+     reading mode (bottom 36%, right-aligned, shifted left 40%, width min(40%,168px)).
+     Device review 4: APPLE GLASS finish + summon-anywhere fade (own cdwheel state,
+     not the stage/reading awake path): any deck touch fades it in (220ms), 3s idle
+     fades it out (500ms); pointer-events only while visible. */
+  :root{--cd-glass: blur(18px) saturate(1.6)}   /* tunable if warm-swap playback drops frames */
+  /* mini wheel size token — vmin keeps it IDENTICAL in portrait and landscape
+     (James: same size in landscape; shared by deck / note-reading / video-stage) */
+  :root{--miniwheel: min(40vmin, 168px)}
   body.curdeck .wheelzone{position:fixed; left:0; right:0; top:auto; bottom:36%;
     z-index:76; padding:0 24px 0 0; width:100%; pointer-events:none; display:grid; place-items:center end}
-  body.curdeck .wheel{width:min(40%,168px); transform:translateX(-40%); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)}
-  body.curdeck .wheel.touching,body.curdeck .wheel.demo,body.curdeck .wheel.awake,body.curdeck.wheelawake .wheel{opacity:.70}
+  body.curdeck .wheel{width:var(--miniwheel); transform:translateX(-40%) scale(.98); opacity:0; pointer-events:none;
+    transition:opacity .5s ease, transform .5s ease;
+    background:rgba(245,242,236,.34);
+    -webkit-backdrop-filter:var(--cd-glass); backdrop-filter:var(--cd-glass);
+    border:1px solid rgba(255,255,255,.38);
+    box-shadow:0 10px 34px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.45)}
+  body.curdeck.cdwheel .wheel{opacity:.95; transform:translateX(-40%) scale(1); pointer-events:auto;
+    transition:opacity .22s ease, transform .22s ease}
+  @media (prefers-reduced-motion:reduce){ body.curdeck .wheel,body.curdeck.cdwheel .wheel{transition:none} }
+  /* journey bar (reusable unit — the video tab adopts this pattern later, R12):
+     continuous slim bar at the very bottom = position within the lineup; thickens
+     + shows a transient "7 / 20" label while the wheel/drag is travelling. */
+  .jbar{position:absolute; left:14px; right:14px; bottom:calc(var(--sab) + 6px); z-index:5;
+    height:3px; border-radius:99px; background:rgba(237,231,220,.18); transition:height .18s ease; pointer-events:none}
+  .jbar .jb-fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--acc); transition:width .25s ease}
+  .jbar .jb-mark{position:absolute; top:50%; width:9px; height:9px; border-radius:50%; background:#F5D48A;
+    transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(18,16,14,.8)}
+  .jbar .jb-label{position:absolute; bottom:12px; transform:translateX(-50%); font-size:10.5px; font-weight:800;
+    color:#EDE7DC; background:rgba(30,27,22,.78); border-radius:99px; padding:3px 9px; white-space:nowrap;
+    opacity:0; transition:opacity .18s ease}
+  body.cdnav .jbar{height:5px}
+  body.cdnav .jbar .jb-label{opacity:1}
   /* Landscape = the mockup's fullscreen contract: the stage fills the viewport */
   @media (orientation:landscape){
     body.curdeck.cdplaying #curDeck{padding:0}
@@ -1140,6 +1173,7 @@
     <div class="cd-strip" id="cdStrip">
       <div id="cdTrack"></div>
       <div class="cd-stage" id="cdStage">
+        <div class="cd-poster" id="cdPoster" aria-hidden="true"><div class="cp-back" id="cdPosterB"></div><div class="cp-front" id="cdPosterF"></div></div>
         <div class="cd-yt off" id="cdYtA"></div>
         <div class="cd-yt off" id="cdYtB"></div>
         <span class="cd-ring" aria-hidden="true"></span>
@@ -1155,6 +1189,7 @@
       <button id="cdFinReplay" type="button">처음부터 다시</button>
     </div>
     <span class="cd-hint" id="cdHint">돌려서 고르고, 눌러서 재생</span>
+    <div class="jbar" id="cdJbar" aria-hidden="true"><div class="jb-fill" id="cdJbFill"></div><span class="jb-mark" id="cdJbMark"></span><span class="jb-label num" id="cdJbLabel"></span></div>
   </div>
 
   <!-- YouTube connect wizard sheet [J:07-21] — TRUE bottom sheet: body-level, rises from the
@@ -1792,11 +1827,33 @@
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null];
-    document.body.classList.remove('curdeck','cdplaying','cdloading','cdin','cdfin','cdhint');
+    clearTimeout(cdWheelT);
+    document.body.classList.remove('curdeck','cdplaying','cdloading','cdin','cdfin','cdhint','cdwheel','cdnav');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
     setHomeTab('curation');
   }
   function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
+  // Best-poster probe: try maxresdefault (true 16:9, 1280w); YouTube serves a 120x90
+  // placeholder when absent -> fall back to hqdefault. Cached per video.
+  var cdPosterCache={};
+  function cdBestPoster(vid, cb){
+    if(cdPosterCache[vid]){ cb(cdPosterCache[vid]); return; }
+    var maxres='https://i.ytimg.com/vi/'+vid+'/maxresdefault.jpg';
+    var img=new Image();
+    img.onload=function(){ var u=(img.naturalWidth>320)?maxres:('https://i.ytimg.com/vi/'+vid+'/hqdefault.jpg'); cdPosterCache[vid]=u; cb(u); };
+    img.onerror=function(){ var u='https://i.ytimg.com/vi/'+vid+'/hqdefault.jpg'; cdPosterCache[vid]=u; cb(u); };
+    img.src=maxres;
+  }
+  function cdPosterSync(){
+    var it=cdItems[cdIdx]; if(!it) return;
+    var vid=it.video_id;
+    cdBestPoster(vid, function(u){
+      if(!cdItems[cdIdx]||cdItems[cdIdx].video_id!==vid) return; // stale guard
+      var b=document.getElementById('cdPosterB'), f=document.getElementById('cdPosterF');
+      if(b) b.style.backgroundImage='url("'+u+'")';
+      if(f) f.style.backgroundImage='url("'+u+'")';
+    });
+  }
   /* Track renderer (motion v2): equal-height cards laid on a translating track.
      Window = [idx-1 .. idx+2]; resting transform hides the buffer card above, so a
      glide of exactly one pitch (transform-only, GPU) moves every card its real
@@ -1829,7 +1886,9 @@
     if(cur.duration_sec) bits.push(fmtSec(cur.duration_sec));
     document.getElementById('cdVs').textContent=bits.join(' · ');
     document.getElementById('cdCount').textContent=(cdIdx+1)+' / '+n;
+    cdPosterSync();
     cdDrawChap(0);
+    cdJbarSync(0);
   }
   // Progress = note chapters grammar: one segment per video, done/now(partial)/todo (R9).
   function cdDrawChap(frac){
@@ -1846,6 +1905,28 @@
   function cdUpdateChapFill(frac){
     var b=document.querySelector('#cdChap i.now b');
     if(b) b.style.width=Math.round(Math.max(0,Math.min(1,frac))*100)+'%';
+    cdJbarSync(frac);
+  }
+  // Journey bar (bottom): position within the lineup = (idx + within-video frac) / N.
+  function cdJbarSync(frac){
+    var n=cdItems.length; if(!n) return;
+    var pos=Math.max(0, Math.min(1, (cdIdx + Math.max(0,Math.min(1,frac||0))) / n));
+    var pct=(pos*100).toFixed(2)+'%';
+    var f=document.getElementById('cdJbFill'), m=document.getElementById('cdJbMark'), l=document.getElementById('cdJbLabel');
+    if(f) f.style.width=pct;
+    if(m) m.style.left=pct;
+    if(l){ l.style.left=pct; l.textContent=(cdIdx+1)+' / '+n; }
+  }
+  /* Wheel summon (glass): ANY deck touch fades the wheel in; 3s idle fades out.
+     Supervisor boundary: when the wheel is NOT visible, the summoning tap is
+     CONSUMED — it must not fall through as a card tap / play toggle. */
+  var cdWheelT=null, cdConsumeUntil=0;
+  function cdWheelShow(){
+    var was=document.body.classList.contains('cdwheel');
+    document.body.classList.add('cdwheel');
+    clearTimeout(cdWheelT);
+    cdWheelT=setTimeout(function(){ document.body.classList.remove('cdwheel'); },3000);
+    return was;
   }
   function cdEnsurePlayers(){
     if(!window.YT||!YT.Player) return;
@@ -1989,6 +2070,7 @@
   function cdStep(d){
     var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
     cdIdx=ni; cdEndRolled=false;
+    if(typeof cdWheelShow==='function') cdWheelShow(); // keep the wheel alive while turning
     if(!cdNavActive){
       cdNavActive=true;
       cdWasPlaying=document.body.classList.contains('cdplaying');
@@ -2866,7 +2948,7 @@
       ptr[e.pointerId]=s; touchN++;
       if(zone==='center') centerId=e.pointerId;
       visAngle=p.a; wheel.classList.add('touching');
-      if(document.body.classList.contains('stage')||document.body.classList.contains('reading')||document.body.classList.contains('curdeck')) wheelAwake(); // 플로팅 휠 = 터치 시 표시 (e)
+      if(document.body.classList.contains('stage')||document.body.classList.contains('reading')) wheelAwake(); // 플로팅 휠 = 터치 시 표시 (e)
       // 롱프레스: MENU 길게 = 홈 (회전 없이 유지 시)
       s.holdT=setTimeout(function(){
         if(s.rotated) return;
@@ -2913,7 +2995,7 @@
         if(touchN===0){ wheel.classList.remove('touching');
           if(navHold.active) navEnd(); // fingers up -> settle: resume (or stay paused) per start state
           if(document.body.classList.contains('curdeck')&&typeof cdWheelRelease==='function') cdWheelRelease(); // deck settle on release
-          if(document.body.classList.contains('stage')||document.body.classList.contains('reading')||document.body.classList.contains('curdeck')) wheelSleep(); } // float wheel hides 3s after release
+          if(document.body.classList.contains('stage')||document.body.classList.contains('reading')) wheelSleep(); } // float wheel hides 3s after release
         kickFrame();
       });
     });
@@ -3053,6 +3135,15 @@
   (function(){
     var g=function(id){ return document.getElementById(id); };
     if(!g('curDeck')) return;
+    // summon-anywhere: any deck touch shows the wheel; if it was hidden, CONSUME
+    // this tap (capture-phase click block) so it can't fall through as card tap.
+    g('curDeck').addEventListener('touchstart',function(){
+      var was=cdWheelShow();
+      if(!was) cdConsumeUntil=Date.now()+450;
+    },{passive:true, capture:true});
+    g('curDeck').addEventListener('click',function(e){
+      if(Date.now()<cdConsumeUntil){ e.stopPropagation(); e.preventDefault(); }
+    },true);
     g('cdBack').onclick=closeCurationDeck;
     g('cdFinList').onclick=closeCurationDeck;                    // D4: back to the lineup
     g('cdFinReplay').onclick=function(){ document.body.classList.remove('cdfin'); cdIdx=0; cdRender(); cdPlay(); };
@@ -3168,7 +3259,7 @@
   }
   (function(){
     var wz=document.querySelector('.wheelzone'); if(!wz) return;
-    wz.addEventListener('pointerdown',function(){ if(document.body.classList.contains('stage')||document.body.classList.contains('curdeck')) wheelAwake(); });
+    wz.addEventListener('pointerdown',function(){ if(document.body.classList.contains('stage')) wheelAwake(); if(document.body.classList.contains('curdeck')&&typeof cdWheelShow==='function') cdWheelShow(); });
     ['pointerup','pointercancel'].forEach(function(ev){
       wz.addEventListener(ev,function(){ if(document.body.classList.contains('stage')) wheelSleep(); });
     });
