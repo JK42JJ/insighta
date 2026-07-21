@@ -55,6 +55,21 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
 
     const prisma = getPrismaClient();
     const now = new Date();
+    // Dedup (normalized exact match ONLY — trim/lowercase; no similarity matching:
+    // two similar-but-different topics stay separate). Re-picking an existing
+    // topic returns the existing subscription instead of stacking duplicates.
+    const allActive = await prisma.curation_subscriptions.findMany({
+      where: { user_id: userId, is_active: true },
+      select: { id: true, topic: true, source: true },
+    });
+    const norm = (s: string) => s.trim().toLowerCase();
+    const dup = allActive.find((s) => norm(s.topic) === norm(topic));
+    if (dup) {
+      return reply.send({
+        status: 'ok',
+        data: { id: dup.id, topic: dup.topic, source: dup.source, buildJobId: null },
+      });
+    }
     const sub = await prisma.curation_subscriptions.create({
       data: {
         user_id: userId,
@@ -93,12 +108,21 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
    * Reads the async-built interest profile (never builds inline — B4). If the
    * profile isn't ready, kicks a build off in the background and returns 202.
    */
-  fastify.get('/suggest', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get<{ Querystring: { exclude?: string } }>(
+    '/suggest',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
     if (!request.user || !('userId' in request.user)) {
       return reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
     }
     const userId = request.user.userId;
-    const result = await suggestTopics(userId);
+    // "re-tune" support: exclude the previously proposed topics and RE-SCORE
+    // (client-side filtering would just surface ranks 4-6 without re-scoring).
+    const exclude = (request.query.exclude ?? '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const result = await suggestTopics(userId, exclude);
     if (result.status === 'building') {
       // Not connected (no YouTube token) → return empty so the FE shows the connect
       // gate, instead of spinning "analyzing" forever and re-firing a doomed build
@@ -121,7 +145,8 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       update: {},
     });
     return reply.send({ status: 'ok', data: { proposals: result.proposals } });
-  });
+    }
+  );
 
   /** GET /curations — list the caller's active curations. */
   fastify.get('/', { onRequest: [fastify.authenticate] }, async (request, reply) => {
@@ -134,7 +159,34 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       orderBy: { created_at: 'desc' },
       select: { id: true, topic: true, source: true, last_run_at: true, next_run_at: true },
     });
-    return reply.send({ status: 'ok', data: { curations: rows } });
+    // Display-dedup by normalized topic (newest wins) — legacy duplicate rows stay in
+    // the DB untouched (reversible); POST now prevents new ones.
+    const seen = new Set<string>();
+    const deduped = rows.filter((r) => {
+      const k = r.topic.trim().toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    // Latest-week item count + week key per subscription — the row meta
+    // (new-N / M-of-N) needs N without N extra item calls.
+    const counts = await prisma.curation_items.groupBy({
+      by: ['subscription_id', 'week_of'],
+      where: { subscription_id: { in: deduped.map((r) => r.id) } },
+      _count: { video_id: true },
+    });
+    const latest = new Map<string, { week: string; count: number }>();
+    for (const c of counts) {
+      const wk = c.week_of.toISOString().slice(0, 10);
+      const cur = latest.get(c.subscription_id);
+      if (!cur || wk > cur.week) latest.set(c.subscription_id, { week: wk, count: c._count.video_id });
+    }
+    const withCounts = deduped.map((r) => ({
+      ...r,
+      week_of: latest.get(r.id)?.week ?? null,
+      item_count: latest.get(r.id)?.count ?? 0,
+    }));
+    return reply.send({ status: 'ok', data: { curations: withCounts } });
   });
 
   /**
@@ -207,6 +259,30 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         status: 'ok',
         data: { week_of: weekOf.toISOString().slice(0, 10), items: enriched },
       });
+    }
+  );
+
+  /** DELETE /curations/:id — unsubscribe (is_active=false; reversible, items kept). */
+  fastify.delete<{ Params: { id: string } }>(
+    '/:id',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
+      }
+      const prisma = getPrismaClient();
+      const sub = await prisma.curation_subscriptions.findUnique({
+        where: { id: request.params.id },
+        select: { user_id: true },
+      });
+      if (!sub || sub.user_id !== request.user.userId) {
+        return reply.code(404).send({ status: 'error', code: 'CURATION_NOT_FOUND' });
+      }
+      await prisma.curation_subscriptions.update({
+        where: { id: request.params.id },
+        data: { is_active: false },
+      });
+      return reply.send({ status: 'ok', data: { id: request.params.id } });
     }
   );
 
