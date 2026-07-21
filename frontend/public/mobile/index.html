@@ -150,6 +150,14 @@
   .pane{flex:1; min-height:0; display:flex; flex-direction:column}
   .pane[hidden]{display:none}
   .cur-body{flex:1; min-height:0; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:8px}
+  /* Ambient background: a soft wash in the focused row's topic color, fading in
+     behind the (translucent) row cards to fill the list and cue selection. */
+  #paneCuration{position:relative}
+  #paneCuration>.cur-body{position:relative; z-index:1}
+  .cur-amb{position:absolute; inset:-20px -20px 0; z-index:0; pointer-events:none; opacity:0;
+    background-repeat:no-repeat; transition:opacity .55s var(--soft), background-image .55s var(--soft)}
+  .cur-amb.on{opacity:1}
+  @media (prefers-reduced-motion:reduce){ .cur-amb{transition:none} }
   .cur-connect{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:11px; padding:0 22px}
   .cur-connect .cic{width:44px; height:44px; border-radius:13px; display:grid; place-items:center; background:rgba(94,86,72,.08); color:var(--ui)}
   .cur-connect .t1{font-size:15px; font-weight:750; color:var(--paper-ink)}
@@ -1059,6 +1067,7 @@
           <button class="htab" data-htab="note" aria-label="노트"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h8L18.5 7.5v12a1 1 0 01-1 1h-11a1 1 0 01-1-1V4.5a1 1 0 011-1z"/><path d="M8.8 11h6.4M8.8 14.5h4.6"/></svg><span>노트</span></button>
         </div>
         <div class="pane" id="paneCuration">
+          <div class="cur-amb" id="curAmb" aria-hidden="true"></div>
           <div class="cur-body" id="curBody"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
         </div>
         <div class="pane" id="paneList" hidden>
@@ -1556,7 +1565,8 @@
     if(haveCache){
       curPaint(curCache); // instant — no skeleton on re-entry / revalidate
     } else {
-      curRowEls=[]; curRenderedSig=''; // cold: skeleton, and drop stale wheel targets
+      curRowEls=[]; curRowColors=[]; curRenderedSig=''; // cold: skeleton, and drop stale wheel targets
+      var amb0=document.getElementById('curAmb'); if(amb0) amb0.classList.remove('on'); // no ambient during skeleton/gate
       el.className='cur-body';
       el.innerHTML='<div class="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>';
     }
@@ -1597,11 +1607,23 @@
   }
   // Wheel selection state for the curation list (the home wheel branch was
   // mandala-list-only — new tab must be recognized by every global input surface).
-  var curSelIdx=0, curRowEls=[];
+  var curSelIdx=0, curRowEls=[], curRowColors=[];
+  function hexA(hex, a){
+    var n=parseInt(hex.slice(1),16);
+    return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+  }
   function curUpdateSel(){
     curRowEls.forEach(function(el,i){ el.classList.toggle('sel', i===curSelIdx); });
     var el=curRowEls[curSelIdx];
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
+    // Ambient background follows the focused row's topic color (YouTube hover-color
+    // grammar) — fills the empty list, and encodes the current selection.
+    var amb=document.getElementById('curAmb');
+    if(amb){
+      var col=curRowColors[curSelIdx];
+      if(col){ amb.style.backgroundImage='radial-gradient(135% 72% at 50% -8%, '+hexA(col[0],.30)+', '+hexA(col[1],.12)+' 46%, transparent 76%)'; amb.classList.add('on'); }
+      else amb.classList.remove('on'); // add-row / no selection = no ambient
+    }
   }
   // Same .rows/.row markup as the mandala lists (format parity is the contract).
   function renderCurationRows(subs){
@@ -1609,14 +1631,14 @@
     el.className='cur-body';
     el.innerHTML='<div class="rows" id="curRows"></div>';
     var rows=document.getElementById('curRows');
-    curRowEls=[];
+    curRowEls=[]; curRowColors=[];
     // add-row at the TOP of the list (same convention as the goal pill on video/note)
     var add=document.createElement('div');
     add.className='row';
     add.innerHTML='<span class="jk" style="background:rgba(94,86,72,.10)"><b style="color:var(--ui)">+</b></span>'
       +'<span class="m"><span class="a">새 주파수</span><span class="b"><span class="bt">관심 주제 고르기</span></span></span>';
     add.addEventListener('click',function(){ openYtSheet(); ytRenderTuning(); });
-    rows.appendChild(add); curRowEls.push(add);
+    rows.appendChild(add); curRowEls.push(add); curRowColors.push(null); // add-row = no ambient
     // sort: new > in-progress > complete, newest first inside each group
     var sorted=subs.map(function(s){ return {s:s, st:curRowState(s)}; });
     sorted.sort(function(a,b){
@@ -1643,7 +1665,7 @@
       d.addEventListener('pointerup',function(){ clearTimeout(lp); });
       d.addEventListener('pointerleave',function(){ clearTimeout(lp); });
       d.addEventListener('click',function(){ if(fired) return; openExistingCuration(s); });
-      rows.appendChild(d); curRowEls.push(d);
+      rows.appendChild(d); curRowEls.push(d); curRowColors.push(c);
     });
     if(curSelIdx>=curRowEls.length) curSelIdx=curRowEls.length-1;
     if(curSelIdx<0) curSelIdx=0;
