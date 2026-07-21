@@ -112,39 +112,39 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     '/suggest',
     { onRequest: [fastify.authenticate] },
     async (request, reply) => {
-    if (!request.user || !('userId' in request.user)) {
-      return reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
-    }
-    const userId = request.user.userId;
-    // "re-tune" support: exclude the previously proposed topics and RE-SCORE
-    // (client-side filtering would just surface ranks 4-6 without re-scoring).
-    const exclude = (request.query.exclude ?? '')
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-    const result = await suggestTopics(userId, exclude);
-    if (result.status === 'building') {
-      // Not connected (no YouTube token) → return empty so the FE shows the connect
-      // gate, instead of spinning "analyzing" forever and re-firing a doomed build
-      // every poll (P1: getUserSubscriptions throws YOUTUBE_NOT_CONNECTED for token-less users).
-      const connected = (await getAccessToken(userId)) !== null;
-      if (!connected) {
-        return reply.send({ status: 'ok', data: { proposals: [] } });
+      if (!request.user || !('userId' in request.user)) {
+        return reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
       }
-      await maybeTriggerProfileBuild(userId);
-      return reply.code(202).send({ status: 'building' });
-    }
+      const userId = request.user.userId;
+      // "re-tune" support: exclude the previously proposed topics and RE-SCORE
+      // (client-side filtering would just surface ranks 4-6 without re-scoring).
+      const exclude = (request.query.exclude ?? '')
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const result = await suggestTopics(userId, exclude);
+      if (result.status === 'building') {
+        // Not connected (no YouTube token) → return empty so the FE shows the connect
+        // gate, instead of spinning "analyzing" forever and re-firing a doomed build
+        // every poll (P1: getUserSubscriptions throws YOUTUBE_NOT_CONNECTED for token-less users).
+        const connected = (await getAccessToken(userId)) !== null;
+        if (!connected) {
+          return reply.send({ status: 'ok', data: { proposals: [] } });
+        }
+        await maybeTriggerProfileBuild(userId);
+        return reply.code(202).send({ status: 'building' });
+      }
 
-    // Log the proposals (dedup by user_id + week_of) — the reinforcement input.
-    // Revisits no-op (do NOT overwrite an existing week's proposals/selection).
-    const prisma = getPrismaClient();
-    const weekOf = new Date(mondayOf(new Date()));
-    await prisma.curation_proposals.upsert({
-      where: { user_id_week_of: { user_id: userId, week_of: weekOf } },
-      create: { user_id: userId, week_of: weekOf, proposed: result.proposals as object },
-      update: {},
-    });
-    return reply.send({ status: 'ok', data: { proposals: result.proposals } });
+      // Log the proposals (dedup by user_id + week_of) — the reinforcement input.
+      // Revisits no-op (do NOT overwrite an existing week's proposals/selection).
+      const prisma = getPrismaClient();
+      const weekOf = new Date(mondayOf(new Date()));
+      await prisma.curation_proposals.upsert({
+        where: { user_id_week_of: { user_id: userId, week_of: weekOf } },
+        create: { user_id: userId, week_of: weekOf, proposed: result.proposals as object },
+        update: {},
+      });
+      return reply.send({ status: 'ok', data: { proposals: result.proposals } });
     }
   );
 
@@ -179,7 +179,8 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     for (const c of counts) {
       const wk = c.week_of.toISOString().slice(0, 10);
       const cur = latest.get(c.subscription_id);
-      if (!cur || wk > cur.week) latest.set(c.subscription_id, { week: wk, count: c._count.video_id });
+      if (!cur || wk > cur.week)
+        latest.set(c.subscription_id, { week: wk, count: c._count.video_id });
     }
     const withCounts = deduped.map((r) => ({
       ...r,
