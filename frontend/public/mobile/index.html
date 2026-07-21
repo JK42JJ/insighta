@@ -647,9 +647,11 @@
     pointer-events:none; opacity:0; transition:opacity .34s var(--soft)}
   #ytSheet .yts-bd{position:absolute; inset:0; background:rgba(30,27,22,.42)}
   #ytSheet .yts-card{position:relative; width:100%; max-width:480px; background:var(--paper-hi,#FAF6EC);
-    border-radius:22px 22px 0 0; padding:12px 24px calc(14px + var(--sab)); box-shadow:0 -14px 44px rgba(30,27,22,.30);
-    transform:translateY(103%); transition:transform .42s var(--spring); display:flex; flex-direction:column; gap:12px;
-    text-align:center; max-height:78vh; overflow-y:auto}
+    border-radius:22px 22px 0 0; padding:12px 24px calc(16px + var(--sab)); box-shadow:0 -14px 44px rgba(30,27,22,.30);
+    transform:translateY(103%); transition:transform .42s var(--spring); display:flex; flex-direction:column; gap:15px;
+    text-align:center; min-height:48vh; max-height:78vh; overflow-y:auto; justify-content:flex-start}
+  #ytSheet .yts-card.dragging{transition:none}
+  #ytsBody{display:flex; flex-direction:column; gap:15px; flex:1; justify-content:center}
   body.ytsheet #ytSheet{opacity:1; pointer-events:auto}
   body.ytsheet #ytSheet .yts-card{transform:translateY(0)}
   #ytSheet .yts-grip{width:38px; height:4px; border-radius:99px; background:rgba(94,86,72,.22); margin:0 auto; flex:none}
@@ -702,37 +704,44 @@
     cursor:pointer; padding:7px 4px; touch-action:manipulation; flex:none}
   .cd-title{flex:1; text-align:center; font-size:14px; font-weight:800; color:#EDE7DC; min-width:0;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .cd-mode{flex:none; display:inline-flex; border:1px solid rgba(237,231,220,.22); border-radius:99px; overflow:hidden}
-  .cd-mode button{border:none; background:none; color:#8F887A; font-family:inherit; font-size:10.5px; font-weight:800;
-    padding:4px 9px; cursor:pointer; touch-action:manipulation}
-  .cd-mode button.on{background:var(--acc); color:#fff}
-  .cd-mode.disabled{opacity:.35; pointer-events:none}
   .cd-count{flex:none; font-size:10.5px; font-weight:700; color:#8F887A; letter-spacing:.12em; text-align:right}
+  /* Layout (James device review 2): PLAYING card at the TOP, next two below —
+     three near-equal cards, no empty prev slot. focus 36 / next 32 / next 32. */
   .cd-strip{flex:1; min-height:0; position:relative; display:flex; flex-direction:column; gap:8px; align-items:stretch}
   .cd-card{position:relative; border-radius:16px; overflow:hidden; background:#1E1B17 center/cover no-repeat;
-    min-height:0; transition:flex .35s var(--soft), opacity .35s; -webkit-tap-highlight-color:transparent}
+    min-height:0; -webkit-tap-highlight-color:transparent}
   .cd-card::after{content:''; position:absolute; inset:0;
     background:linear-gradient(180deg, rgba(10,9,8,.15), rgba(10,9,8,.58) 80%)}
-  /* numeric contract: 24 / 42 / 24 — three full cards, no viewport overflow */
-  .cd-side{flex:24 1 0; opacity:.55; cursor:pointer}
+  .cd-focus{flex:36 1 0; opacity:1; box-shadow:0 14px 40px rgba(0,0,0,.5)}
+  .cd-side{flex:32 1 0; opacity:.55; cursor:pointer}
   .cd-side.empty{opacity:.12; cursor:default; background:#181512}
-  .cd-focus{flex:42 1 0; opacity:1; box-shadow:0 14px 40px rgba(0,0,0,.5)}
   /* compact one-line meta (poster state only) — the embed shows its own header while playing */
-  .cd-meta{position:absolute; left:14px; right:14px; bottom:30px; z-index:2; display:flex; flex-direction:column; gap:2px}
+  .cd-meta{position:absolute; left:14px; right:14px; bottom:22px; z-index:2; display:flex; flex-direction:column; gap:2px}
   .cd-vt{font-size:14.5px; font-weight:800; color:#F5F2EC; line-height:1.3;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .cd-vs{font-size:10.5px; font-weight:650; color:#B8AE9E; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .cd-vs .rel{color:#E8A76B; font-weight:800}
-  /* relevance wave — ALWAYS visible inside the focus card (mockup contract) */
-  .cd-wave{position:absolute; left:12px; right:12px; bottom:8px; z-index:3; height:24px; width:calc(100% - 24px);
-    pointer-events:none}
-  .cd-wave polyline{fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round}
-  .cd-wave .w-all{stroke:rgba(237,231,220,.30)}
-  .cd-wave .w-done{stroke:#E0703F}
-  .cd-wave circle{fill:#F5D48A}
-  .cd-side .cd-meta,.cd-side .cd-wave{display:none}
+  /* progress = the note's segmented chapters bar, meaning PROGRESS only (one segment
+     per video, done=filled, current=partial fill) — attached to the focus card bottom */
+  .cd-chap{position:absolute; left:12px; right:12px; bottom:8px; z-index:3; display:flex; gap:4px; pointer-events:none}
+  .cd-chap i{flex:1; height:4px; border-radius:2.5px; background:rgba(237,231,220,.22); position:relative; overflow:hidden}
+  .cd-chap i.done{background:var(--ui)}
+  .cd-chap i.now b{position:absolute; left:0; top:0; bottom:0; background:var(--ui); border-radius:2.5px;
+    transition:width .45s linear; display:block}
+  .cd-side .cd-meta,.cd-side .cd-chap{display:none}
   .cd-yt{position:absolute; inset:0; z-index:1}
   .cd-yt.off{visibility:hidden}
+  /* Loading = the note's veil pattern: poster stays + small ring bottom-right until
+     PLAYING (hides the embed's center spinner). Same geometry as .cv-ring. */
+  .cd-ring{position:absolute; right:12px; bottom:20px; z-index:4; width:24px; height:24px; border-radius:50%;
+    border:2.5px solid rgba(255,255,255,.28); border-top-color:#fff; animation:veilspin .9s linear infinite; display:none}
+  body.cdloading .cd-focus .cd-ring{display:block}
+  body.cdloading .cd-focus .cd-yt{visibility:hidden}
+  /* card advance animation — slide, no snap (device review: jarring) */
+  .cd-strip.anim-up{animation:cdup .26s var(--soft)}
+  .cd-strip.anim-down{animation:cddown .26s var(--soft)}
+  @keyframes cdup{from{transform:translateY(6%); opacity:.55}to{transform:none; opacity:1}}
+  @keyframes cddown{from{transform:translateY(-6%); opacity:.55}to{transform:none; opacity:1}}
+  @media (prefers-reduced-motion:reduce){ .cd-strip.anim-up,.cd-strip.anim-down{animation:none} .cd-ring{animation:none} }
   .cd-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2;
     width:56px; height:56px; border-radius:50%; border:none; cursor:pointer;
     background:rgba(245,242,236,.92); color:#2C2925; display:grid; place-items:center;
@@ -740,11 +749,13 @@
   .cd-play:active{transform:translate(-50%,-50%) scale(.94)}
   body.cdplaying .cd-play{display:none}
   body.cdplaying .cd-focus .cd-meta{display:none}
-  /* jog wheel = existing #wheel in floating-mini mode (same machinery as reading/stage) */
-  body.curdeck .wheelzone{position:fixed; left:auto; right:6px; top:auto; bottom:calc(var(--sab) + 40px);
-    width:min(46%,190px); z-index:76; padding:0; pointer-events:none}
-  body.curdeck .wheel{width:100%; opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)}
-  body.curdeck .wheel.touching,body.curdeck .wheel.demo,body.curdeck .wheel.awake,body.curdeck.wheelawake .wheel{opacity:.72}
+  /* jog wheel = existing #wheel in floating-mini mode — SAME coordinates as the note's
+     reading mode (James: identical position, second request): bottom 36%, right-aligned,
+     shifted left by 40% of wheel size, width min(40%,168px), opacity .70. */
+  body.curdeck .wheelzone{position:fixed; left:0; right:0; top:auto; bottom:36%;
+    z-index:76; padding:0 24px 0 0; width:100%; pointer-events:none; display:grid; place-items:center end}
+  body.curdeck .wheel{width:min(40%,168px); transform:translateX(-40%); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)}
+  body.curdeck .wheel.touching,body.curdeck .wheel.demo,body.curdeck .wheel.awake,body.curdeck.wheelawake .wheel{opacity:.70}
   /* Landscape = the mockup's fullscreen contract: focus card fills the viewport */
   @media (orientation:landscape){
     body.curdeck.cdplaying #curDeck{padding:0}
@@ -1110,19 +1121,19 @@
     <div class="cd-top">
       <button class="cd-back" id="cdBack" type="button">← 큐레이션</button>
       <span class="cd-title" id="cdTitle"></span>
-      <span class="cd-mode" id="cdMode"><button id="cdModeCore" type="button" class="on">핵심만</button><button id="cdModeFull" type="button">전체</button></span>
       <span class="cd-count num" id="cdCount"></span>
     </div>
     <div class="cd-strip" id="cdStrip">
-      <div class="cd-card cd-side" id="cdPrev"></div>
       <div class="cd-card cd-focus" id="cdFocus">
         <div class="cd-yt off" id="cdYtA"></div>
         <div class="cd-yt off" id="cdYtB"></div>
+        <span class="cd-ring" aria-hidden="true"></span>
         <button class="cd-play" id="cdPlayBtn" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button>
         <div class="cd-meta"><span class="cd-vt" id="cdVt"></span><span class="cd-vs" id="cdVs"></span></div>
-        <svg class="cd-wave" id="cdWave" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="cd-chap" id="cdChap" aria-hidden="true"></div>
       </div>
       <div class="cd-card cd-side" id="cdNext"></div>
+      <div class="cd-card cd-side" id="cdNext2"></div>
     </div>
   </div>
 
@@ -1440,6 +1451,9 @@
      (first curation / "+ new"). Model fix per James + supervisor A. */
   async function renderCuration(){
     var el=document.getElementById('curBody'); if(!el) return;
+    // T3 — row skeletons while loading (existing skeleton pattern)
+    el.className='cur-body';
+    el.innerHTML='<div class="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>';
     try{
       var r=await api('/curations');
       var j=await r.json();
@@ -1451,12 +1465,28 @@
         renderCurationRows([]);
         if(!ytAutoRaised){ ytAutoRaised=true; openYtSheet(); ytRenderTuning(); }
       } else curConnectGate();
-    }catch(e){ curConnectGate(); }   // 401/403 -> connect gate
+    }catch(e){
+      if(e&&(e.status===401||e.status===403)){ curConnectGate(); return; }
+      // T4 — inline one-liner + retry (no full-screen error)
+      el.innerHTML='<div class="rows"><div class="row-empty">편성표를 불러오지 못했어요<br><button class="yts-ghost" id="curRetry" style="margin-top:6px">다시 시도</button></div></div>';
+      var b=document.getElementById('curRetry'); if(b) b.onclick=renderCuration;
+    }
   }
-  function curAgeLine(sub){
-    if(!sub.last_run_at) return '주간 큐레이션';
-    var d=Math.floor((Date.now()-new Date(sub.last_run_at).getTime())/86400000);
-    return '주간 큐레이션 · '+(d<=0?'오늘':d+'일 전');
+  /* Row meta (interim, supervisor-approved): item_count-based only. M-of-N and
+     weekly-complete arrive with the watched_at DDL (server-side, cross-device —
+     James gate). localStorage watch-state was REJECTED (per-device drift). */
+  var CUR_DOW=['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
+  function curRowState(s){
+    var n=s.item_count||0;
+    var watched=(typeof s.watched_count==='number')?s.watched_count:null;
+    var nextDow=s.next_run_at?CUR_DOW[new Date(s.next_run_at).getDay()]:'월요일';
+    if(n>0&&watched!=null){ // server watch-state present (post-DDL)
+      if(watched<=0) return {rank:0, dot:true, line:'새 영상 '+n+'편'};
+      if(watched<n) return {rank:1, dot:false, line:Math.min(watched,n)+'/'+n+' 들음'};
+      return {rank:2, dot:false, line:'이번 주 완청 · 다음 편성 '+nextDow};
+    }
+    if(n>0) return {rank:0, dot:true, line:'새 영상 '+n+'편'};
+    return {rank:1, dot:false, line:'영상을 모으는 중'};
   }
   // Same .rows/.row markup as the mandala lists (format parity is the contract).
   function renderCurationRows(subs){
@@ -1464,32 +1494,58 @@
     el.className='cur-body';
     el.innerHTML='<div class="rows" id="curRows"></div>';
     var rows=document.getElementById('curRows');
-    subs.forEach(function(s){
+    // add-row at the TOP of the list (same convention as the goal pill on video/note)
+    var add=document.createElement('div');
+    add.className='row';
+    add.innerHTML='<span class="jk" style="background:rgba(94,86,72,.10)"><b style="color:var(--ui)">+</b></span>'
+      +'<span class="m"><span class="a">새 주파수</span><span class="b"><span class="bt">관심 주제 고르기</span></span></span>';
+    add.addEventListener('click',function(){ openYtSheet(); ytRenderTuning(); });
+    rows.appendChild(add);
+    // sort: new > in-progress > complete, newest first inside each group
+    var sorted=subs.map(function(s){ return {s:s, st:curRowState(s)}; });
+    sorted.sort(function(a,b){
+      if(a.st.rank!==b.st.rank) return a.st.rank-b.st.rank;
+      return (b.s.last_run_at||'').localeCompare(a.s.last_run_at||'');
+    });
+    sorted.forEach(function(e){
+      var s=e.s, st=e.st;
       var c=jkColor(s.topic||'?');
       var d=document.createElement('div');
       d.className='row';
       d.innerHTML='<span class="jk" style="background:linear-gradient(150deg,'+c[0]+','+c[1]+')"><b></b></span>'
-        +'<span class="m"><span class="a"></span><span class="b"><span class="bt"></span></span></span>';
+        +'<span class="m"><span class="a"></span><span class="b">'+(st.dot?'<span class="dotnew"></span>':'')+'<span class="bt"></span></span></span>';
       d.querySelector('.jk b').textContent=(s.topic||'?').trim().charAt(0);
       d.querySelector('.a').textContent=s.topic||'(제목 없음)';
-      d.querySelector('.bt').textContent=curAgeLine(s);
-      d.addEventListener('click',function(){ openExistingCuration(s); });
+      d.querySelector('.bt').textContent=st.line;
+      // tap = open existing week; long-press = inline 2-step unsubscribe (no confirm())
+      var lp=null, fired=false;
+      d.addEventListener('pointerdown',function(){ fired=false; lp=setTimeout(function(){ fired=true; curRowUnsub(d,s); },600); });
+      d.addEventListener('pointerup',function(){ clearTimeout(lp); });
+      d.addEventListener('pointerleave',function(){ clearTimeout(lp); });
+      d.addEventListener('click',function(){ if(fired) return; openExistingCuration(s); });
       rows.appendChild(d);
     });
-    // "+ new curation" — same row form, opens the proposal wizard (no new screen)
-    var add=document.createElement('div');
-    add.className='row';
-    add.innerHTML='<span class="jk" style="background:rgba(94,86,72,.10)"><b style="color:var(--ui)">+</b></span>'
-      +'<span class="m"><span class="a">새 큐레이션</span><span class="b"><span class="bt">관심 주제 고르기</span></span></span>';
-    add.addEventListener('click',function(){ openYtSheet(); ytRenderTuning(); });
-    rows.appendChild(add);
+  }
+  // Long-press: row expands inline into a 2-step unsubscribe action.
+  function curRowUnsub(rowEl, s){
+    var bt=rowEl.querySelector('.bt'); if(!bt) return;
+    bt.innerHTML='<button class="yts-danger" style="font-size:11px;padding:5px 10px" type="button">구독을 끊을까요? · 끊기</button>';
+    var b=bt.querySelector('button');
+    b.onclick=function(ev){
+      ev.stopPropagation();
+      b.disabled=true; b.textContent='끊는 중…';
+      api('/curations/'+s.id,{method:'DELETE'}).then(function(){ renderCuration(); })
+        .catch(function(){ toast('끊지 못했어요 — 다시 시도해주세요'); renderCuration(); });
+    };
+    setTimeout(function(){ if(!b.disabled){ renderCuration(); } },4000); // auto-revert
   }
   // Open an EXISTING curation week — read-only, never triggers a rebuild.
   async function openExistingCuration(sub){
     try{
       var r=await api('/curations/'+sub.id+'/items');
       var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
-      if(items.length){ openCurationDeck(sub.topic, items); return; }
+      var week=(j&&j.data&&j.data.week_of)||null;
+      if(items.length){ openCurationDeck(sub.topic, items, {subId:sub.id, week:week}); return; }
       toast('영상을 모으는 중이에요 — 잠시 후 다시 열어주세요');
     }catch(e){ toast('열지 못했어요 — 연결 확인 후 다시 시도해주세요'); }
   }
@@ -1500,9 +1556,8 @@
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-connect';
     el.innerHTML='<span class="cic">'+CUR_STAR+'</span>'
-      +'<span class="t1">매주 나를 위한 영상</span>'
-      +'<span class="t2">유튜브를 연결하면<br>관심사에 맞는 영상을 큐레이션해 드려요</span>'
-      +'<button class="cbtn" id="bCurConnect">유튜브 연결</button>'
+      +'<span class="t1">주파수를 맞추면,<br>매주 새 편성이 도착해요</span>'
+      +'<button class="cbtn" id="bCurConnect">잇기</button>'
       +(note?'<span class="cur-note">'+curEsc(note)+'</span>':'');
     var b=document.getElementById('bCurConnect'); if(b) b.onclick=function(){ openYtSheet(); ytRenderConnect(); };
     if(!ytAutoRaised && !note){ ytAutoRaised=true; openYtSheet(); ytRenderConnect(); }
@@ -1550,43 +1605,56 @@
   // S3 — return + tuning. Called on boot when we come back from OAuth with a snapshot.
   // Background is already restored to the curation tab; float the sheet with the tuning
   // interstitial, then poll for proposals (profile builds async right after connect).
-  function ytRenderTuning(){
+  // Re-tune passes the previously shown topics as a server-side exclude (re-score,
+  // not rank 4-6). 12s honest timeout — never an endless spinner (device review R6).
+  var ytLastProps=[], ytRetuneSpent=false;
+  function ytRenderTuning(excludeTopics){
     var b=document.getElementById('ytsBody'); if(!b) return;
     b.innerHTML='<div class="yts-tune"><div class="yts-dial"></div><div class="yts-tune-t" id="ytsTuneT">다이얼을 맞추는 중…</div></div>';
     var lines=['다이얼을 맞추는 중…','주파수가 잡히고 있어요'];
-    var i=0, el=document.getElementById('ytsTuneT');
+    var i=0;
     var iv=setInterval(function(){ i=(i+1)%lines.length; var e=document.getElementById('ytsTuneT'); if(e){ e.textContent=lines[i]; } else { clearInterval(iv); } },1500);
-    ytPollProposals(0,function(props){ clearInterval(iv); ytRenderProposals(props); });
+    ytPollProposals(0,function(props){ clearInterval(iv); ytRenderProposals(props, !!excludeTopics); }, excludeTopics);
   }
-  function ytPollProposals(tries,done){
-    api('/curations/suggest').then(function(r){
-      if(r.status===202){ if(tries<20){ setTimeout(function(){ ytPollProposals(tries+1,done); },2500); } else { done([]); } return null; }
+  function ytPollProposals(tries,done,excludeTopics){
+    var q=(excludeTopics&&excludeTopics.length)?('?exclude='+encodeURIComponent(excludeTopics.join(','))):'';
+    api('/curations/suggest'+q).then(function(r){
+      if(r.status===202){ if(tries<4){ setTimeout(function(){ ytPollProposals(tries+1,done,excludeTopics); },2500); } else { done([]); } return null; } // ~12s cap
       return r.json();
     }).then(function(j){ if(j){ done((j&&j.data&&j.data.proposals)||[]); } }).catch(function(){ done([]); });
   }
 
   // S4 — proposals inside the sheet (full-screen C dropped). Select → build → curation tab.
-  function ytRenderProposals(props){
+  function ytRenderProposals(props, wasRetune){
     var b=document.getElementById('ytsBody'); if(!b) return;
     if(!props.length){
+      if(wasRetune){
+        // Honest ending (R6): no better re-score available — say so, disable re-tap.
+        ytRetuneSpent=true;
+        ytRenderProposals(ytLastProps, false);
+        return;
+      }
       b.innerHTML='<div class="yts-h2">잠시만요</div>'
         +'<div class="yts-sub">세 갈래를 고르는 중이에요.<br>큐레이션 탭에서 곧 확인할 수 있어요.</div>'
         +'<button class="yts-ghost" id="ytsDone">계속 보기</button>';
       var c=document.getElementById('ytsDone'); if(c) c.onclick=closeYtSheet;
       return;
     }
+    ytLastProps=props;
     var h='<div class="yts-h2">세 갈래가 잡혔어요.<br>하나 골라볼까요.</div><div class="yts-props">';
     props.forEach(function(p){
       h+='<button class="yts-prop" data-topic="'+curEsc(p.topic)+'">'
         +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
         +'<span class="yts-prop-t">'+curEsc(p.topic)+'</span></button>';
     });
-    h+='</div><button class="yts-ghost" id="ytsRetune">다른 주파수 듣기</button>';
+    h+='</div><button class="yts-ghost" id="ytsRetune"'+(ytRetuneSpent?' disabled style="opacity:.4"':'')+'>'
+      +(ytRetuneSpent?'지금은 이 세 갈래가 최선이에요':'다른 주파수 듣기')+'</button>';
     b.innerHTML=h;
     [].forEach.call(b.querySelectorAll('.yts-prop'),function(btn){
       btn.onclick=function(){ var t=btn.getAttribute('data-topic'); closeYtSheet(); setHomeTab('curation'); selectCuration(t); };
     });
-    var rt=document.getElementById('ytsRetune'); if(rt) rt.onclick=ytRenderTuning;
+    var rt=document.getElementById('ytsRetune');
+    if(rt&&!ytRetuneSpent) rt.onclick=function(){ ytRenderTuning(ytLastProps.map(function(p){ return p.topic; })); };
   }
 
   // (c) — connected state (disconnect). Same sheet; entry = curation-tab account chip.
@@ -1669,51 +1737,29 @@
     if(tries<20 && homeTab==='curation'){ setTimeout(function(){ pollCurationItems(id,topic,tries+1); },3000); }
     else{ renderCuration(); toast('영상을 모으는 중이에요 — 잠시 후 목록에서 열어주세요'); }
   }
-  /* ============ Curation deck — WARM PRE-ROLL dual-player engine [B+C'] ============
+  /* ============ Curation deck — WARM PRE-ROLL dual-player engine [B+C'+R] ============
      Seamless-consumption contract (James): transition <= 0.3s / imperceptible,
-     benchmark = the YouTube app. cueVideoById does NOT buffer media, so warm =
-     mute -> play -> (PLAYING) -> pause on the idle slot; advance = visibility swap
-     + seek + unmute. ~2s before ended the idle slot resumes muted -> zero-gap
-     auto-advance. iOS/low-power: if warm play never reaches PLAYING, quiet cue
-     fallback (poster stays, no spinner). Core mode plays rich-summary sections
-     sequentially (shared segCache); videos without sections disable the toggle.
-     Beat-player pair is released on deck entry (memory, supervisor caveat). */
-  var cdItems=[], cdIdx=0, cdTopic='';
+     benchmark = the YouTube app. Warm = mute -> play -> (PLAYING) -> pause on the
+     idle slot; advance = visibility swap + seek + unmute. ~2s before ended the idle
+     slot resumes muted -> zero-gap auto-advance. iOS/low-power: quiet cue fallback.
+     Device review 2 (R8/R9/R11): PLAYING card at the TOP + two upcoming below
+     (near-equal, no empty prev slot); curation = FULL-PLAY ONLY (no relevance, no
+     core/full toggle — those belong to the video mode, separate track); progress =
+     the note's segmented chapters bar (one segment per video, progress meaning only);
+     loading = note veil pattern (poster + bottom-right ring until PLAYING). */
+  var cdItems=[], cdIdx=0, cdTopic='', cdCtx=null;
   var cdP=[null,null], cdAct=0, cdWarmKey=[null,null], cdWarmT=[null,null];
   var cdReadySlots=[false,false], cdPendingWarm=[null,null];
-  var cdMode='core', cdSegIdx=0, cdPollT=null, cdEndRolled=false;
+  var cdPollT=null, cdEndRolled=false;
   function cdEl(i){ return document.getElementById(i===0?'cdYtA':'cdYtB'); }
-  function cdSlotOf(p){ return p===cdP[0]?0:1; }
-  function cdSecs(it){ var e=segCache[it.video_id]; return (e&&e.sections)||null; }
-  async function cdFetchSegs(vid){
-    if(vid in segCache) return (segCache[vid].sections||[]);
-    var entry={sections:[],credit:null};
-    try{
-      var r=await api('/videos/'+vid+'/rich-summary');
-      var j=await r.json();
-      entry.sections=(j.data&&j.data.segments&&j.data.segments.sections)||[];
-      entry.credit=(j.data&&j.data.oneLiner)||null;
-    }catch(e){}
-    segCache[vid]=entry; return entry.sections;
-  }
-  // Playback bounds for an item under the current mode (core = section window).
-  function cdBounds(it, segIdx){
-    var ss=cdSecs(it);
-    if(cdMode==='core'&&ss&&ss.length){
-      var s=ss[Math.min(segIdx||0, ss.length-1)];
-      if(typeof s.from_sec==='number'&&s.to_sec>s.from_sec) return {start:s.from_sec, end:s.to_sec, segs:ss.length};
-    }
-    return {start:0, end:null, segs:0};
-  }
-  function openCurationDeck(topic, items){
+  function openCurationDeck(topic, items, ctx){
     unlockAudio();
-    cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdSegIdx=0; cdEndRolled=false;
+    cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
     document.getElementById('cdTitle').textContent=cdTopic;
     document.body.classList.add('curdeck');
     // release the note/beat player pair — never two dual-player pairs alive (memory)
     try{ ytP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdEnsurePlayers();               // inside the row-tap gesture: prime allowed
-    cdPrefetchSegs();
     cdRender();
     cdWarmInto(1-cdAct, cdIdx);      // warm the FIRST video before the user taps play
   }
@@ -1721,56 +1767,44 @@
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null];
-    document.body.classList.remove('curdeck','cdplaying');
+    document.body.classList.remove('curdeck','cdplaying','cdloading');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
     setHomeTab('curation');
   }
-  // Prefetch sections for the first few items so core-mode bounds are ready pre-warm.
-  function cdPrefetchSegs(){
-    cdItems.slice(0,4).forEach(function(it){ cdFetchSegs(it.video_id).then(function(){ if(cdItems[cdIdx]===it) cdSyncModeUI(); }); });
-  }
   function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
+  // Layout: focus (playing) on TOP, the next two below — no empty prev slot (R8).
   function cdRender(){
     var n=cdItems.length; if(!n) return;
-    var cur=cdItems[cdIdx], prev=cdItems[cdIdx-1], next=cdItems[cdIdx+1];
-    var pv=document.getElementById('cdPrev'), nx=document.getElementById('cdNext'), fc=document.getElementById('cdFocus');
-    pv.className='cd-card cd-side'+(prev?'':' empty');
-    nx.className='cd-card cd-side'+(next?'':' empty');
-    pv.style.backgroundImage=prev?('url('+cdThumb(prev)+')'):'none';
-    nx.style.backgroundImage=next?('url('+cdThumb(next)+')'):'none';
+    var cur=cdItems[cdIdx], n1=cdItems[cdIdx+1], n2=cdItems[cdIdx+2];
+    var fc=document.getElementById('cdFocus'), x1=document.getElementById('cdNext'), x2=document.getElementById('cdNext2');
+    x1.className='cd-card cd-side'+(n1?'':' empty');
+    x2.className='cd-card cd-side'+(n2?'':' empty');
+    x1.style.backgroundImage=n1?('url('+cdThumb(n1)+')'):'none';
+    x2.style.backgroundImage=n2?('url('+cdThumb(n2)+')'):'none';
     fc.style.backgroundImage='url('+cdThumb(cur)+')';
     document.getElementById('cdVt').textContent=cur.title||'제목 없음';
     var bits=[];
     if(cur.channel) bits.push(cur.channel);
     if(cur.duration_sec) bits.push(fmtSec(cur.duration_sec));
-    document.getElementById('cdVs').innerHTML=
-      '<span class="rel">'+(cur.relevance_pct!=null?(cur.relevance_pct+'%'):'')+'</span>'
-      +(bits.length?(' · '+curEsc(bits.join(' · '))):'');
+    document.getElementById('cdVs').textContent=bits.join(' · ');
     document.getElementById('cdCount').textContent=(cdIdx+1)+' / '+n;
-    cdDrawWave(); cdSyncModeUI();
+    cdDrawChap(0);
   }
-  function cdSyncModeUI(){
-    var it=cdItems[cdIdx]; if(!it) return;
-    var ss=cdSecs(it);
-    var wrap=document.getElementById('cdMode');
-    var hasCore=!!(ss&&ss.length);
-    wrap.classList.toggle('disabled', !hasCore);
-    if(!hasCore&&cdMode==='core'){ /* honest disable: this video plays full */ }
-    document.getElementById('cdModeCore').classList.toggle('on', cdMode==='core'&&hasCore);
-    document.getElementById('cdModeFull').classList.toggle('on', cdMode==='full'||!hasCore);
+  // Progress = note chapters grammar: one segment per video, done/now(partial)/todo (R9).
+  function cdDrawChap(frac){
+    var el=document.getElementById('cdChap'); if(!el) return;
+    var n=cdItems.length; if(n<1){ el.innerHTML=''; return; }
+    var h='';
+    for(var i=0;i<n;i++){
+      if(i<cdIdx) h+='<i class="done"></i>';
+      else if(i===cdIdx) h+='<i class="now"><b style="width:'+Math.round((frac||0)*100)+'%"></b></i>';
+      else h+='<i></i>';
+    }
+    el.innerHTML=h;
   }
-  // Relevance journey: one point per card (y=relevance), done-portion + marker in accent.
-  function cdDrawWave(){
-    var svg=document.getElementById('cdWave'); if(!svg) return;
-    var n=cdItems.length; if(n<1){ svg.innerHTML=''; return; }
-    function pt(i){ var x=n===1?50:(i/(n-1))*100; var pct=cdItems[i].relevance_pct||0;
-      return x.toFixed(1)+','+(22-(pct/100)*17).toFixed(1); }
-    var all=[], done=[];
-    for(var i=0;i<n;i++){ all.push(pt(i)); if(i<=cdIdx) done.push(pt(i)); }
-    var mk=pt(cdIdx).split(',');
-    svg.innerHTML='<polyline class="w-all" points="'+all.join(' ')+'"/>'
-      +'<polyline class="w-done" points="'+done.join(' ')+'"/>'
-      +'<circle cx="'+mk[0]+'" cy="'+mk[1]+'" r="2.4"/>';
+  function cdUpdateChapFill(frac){
+    var b=document.querySelector('#cdChap i.now b');
+    if(b) b.style.width=Math.round(Math.max(0,Math.min(1,frac))*100)+'%';
   }
   function cdEnsurePlayers(){
     if(!window.YT||!YT.Player) return;
@@ -1795,6 +1829,7 @@
       if(st===1 && cdWarmKey[slot]==='warming'){ try{cdP[slot].pauseVideo();}catch(e){} cdWarmKey[slot]=cdP[slot].__warmTarget||null; }
       return;
     }
+    if(st===1){ document.body.classList.remove('cdloading'); } // veil off: reveal the iframe (D2)
     if(st===0){ cdEnded(); }
   }
   // Warm an item into a slot: muted load -> PLAYING -> pause. Quiet cue fallback (iOS/low-power).
@@ -1802,19 +1837,18 @@
   function cdWarmInto(slot, itemIdx){
     if(!cdReadySlots[slot]){ cdPendingWarm[slot]=itemIdx; return; }
     var it=cdItems[itemIdx]; if(!it||!cdP[slot]||!cdP[slot].loadVideoById) return;
-    var b=cdBounds(it, 0);
-    var key=it.video_id+':'+b.start;
+    var key=it.video_id;                       // full-play only (contract: curation has no sections)
     if(cdWarmKey[slot]===key) return;
     clearTimeout(cdWarmT[slot]);
     cdP[slot].__warmTarget=key;
     cdWarmKey[slot]='warming';
     try{
       cdP[slot].mute();
-      cdP[slot].loadVideoById(b.end!=null?{videoId:it.video_id,startSeconds:b.start,endSeconds:b.end}:{videoId:it.video_id,startSeconds:b.start});
+      cdP[slot].loadVideoById({videoId:it.video_id});
     }catch(e){ cdWarmKey[slot]=null; return; }
     cdWarmT[slot]=setTimeout(function(){
       if(cdWarmKey[slot]==='warming'){ // never reached PLAYING: quiet cue fallback, poster stays
-        try{ cdP[slot].cueVideoById(b.end!=null?{videoId:it.video_id,startSeconds:b.start,endSeconds:b.end}:{videoId:it.video_id,startSeconds:b.start}); }catch(e){}
+        try{ cdP[slot].cueVideoById({videoId:it.video_id}); }catch(e){}
         cdWarmKey[slot]=null;
       }
     },3500);
@@ -1824,21 +1858,22 @@
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.toggle('off', i!==cdAct); });
   }
   // Start/resume playback of the current item on the active slot.
+  // Loading = note veil (D2): poster + bottom-right ring until PLAYING reveals the iframe.
   function cdPlay(){
-    document.body.classList.add('cdplaying');
+    document.body.classList.add('cdplaying','cdloading');
     cdEnsurePlayers();
     var it=cdItems[cdIdx]; if(!it) return;
-    var b=cdBounds(it, cdSegIdx);
-    var key=it.video_id+':'+b.start;
+    var key=it.video_id;
     var idle=1-cdAct;
     if(cdWarmKey[idle]===key){ cdAct=idle; }         // warm slot has it: swap
     cdShowActive();
     var p=cdP[cdAct]; if(!p||!p.loadVideoById) return;
     try{
-      if(cdWarmKey[cdAct]===key){ p.seekTo(b.start,true); p.unMute(); p.playVideo(); } // <=0.3s
-      else { p.unMute(); p.loadVideoById(b.end!=null?{videoId:it.video_id,startSeconds:b.start,endSeconds:b.end}:{videoId:it.video_id,startSeconds:b.start}); }
+      if(cdWarmKey[cdAct]===key){ p.seekTo(0,true); p.unMute(); p.playVideo(); } // <=0.3s
+      else { p.unMute(); p.loadVideoById({videoId:it.video_id}); }
     }catch(e){}
     cdWarmKey[cdAct]=null; cdEndRolled=false;
+    // watch marking (server-side) wires in with the watched_at DDL (James gate); cdCtx kept.
     cdWarmInto(1-cdAct, cdIdx+1<cdItems.length?cdIdx+1:cdIdx); // keep travel-direction neighbor warm
     cdStartPoll();
   }
@@ -1850,17 +1885,17 @@
       if(st===1) p.pauseVideo(); else p.playVideo();
     }catch(e){}
   }
-  // ~2s before the end, resume the warmed idle slot muted => zero-gap handoff at ended.
+  // ~2s before the end, resume the warmed idle slot muted (zero-gap) + drive the
+  // now-segment fill of the progress bar (note chapters grammar).
   function cdStartPoll(){
     cdStopPoll();
     cdPollT=setInterval(function(){
       try{
         var p=cdP[cdAct]; if(!p||!p.getCurrentTime) return;
-        var it=cdItems[cdIdx]; if(!it) return;
-        var b=cdBounds(it, cdSegIdx);
-        var end=(b.end!=null)?b.end:(p.getDuration()||0);
-        if(!end) return;
-        var rem=end-p.getCurrentTime();
+        var end=p.getDuration()||0; if(!end) return;
+        var t=p.getCurrentTime();
+        cdUpdateChapFill(t/end);
+        var rem=end-t;
         if(rem<2&&!cdEndRolled){
           cdEndRolled=true;
           var idle=1-cdAct;
@@ -1870,36 +1905,27 @@
     },500);
   }
   function cdStopPoll(){ if(cdPollT){ clearInterval(cdPollT); cdPollT=null; } }
-  // Ended on the active slot: next section (core) or next video — swap path, no spinner.
+  // Ended on the active slot: next video via the warm-swap path (no spinner).
   function cdEnded(){
-    var it=cdItems[cdIdx]; if(!it) return;
-    var ss=cdSecs(it);
-    if(cdMode==='core'&&ss&&ss.length&&cdSegIdx<ss.length-1){
-      cdSegIdx++;
-      var b=cdBounds(it, cdSegIdx);
-      try{ cdP[cdAct].loadVideoById({videoId:it.video_id,startSeconds:b.start,endSeconds:b.end}); }catch(e){}
-      return;
-    }
     if(cdIdx<cdItems.length-1){ cdAdvance(1,true); } else { cdStopPoll(); }
   }
-  // Advance the deck. auto/playing => seamless swap into the warmed slot.
+  // Advance the deck — slide animation (device review: snapping causes dizziness).
+  function cdAnimStrip(d){
+    var s=document.getElementById('cdStrip'); if(!s) return;
+    s.classList.remove('anim-up','anim-down'); void s.offsetWidth;
+    s.classList.add(d>0?'anim-up':'anim-down');
+  }
   function cdAdvance(d, keepPlaying){
     var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
-    cdIdx=ni; cdSegIdx=0; cdEndRolled=false;
-    cdRender();
+    cdIdx=ni; cdEndRolled=false;
+    cdAnimStrip(d); cdRender();
     if(keepPlaying||document.body.classList.contains('cdplaying')) cdPlay();
   }
   function cdNav(d){
     if(document.body.classList.contains('cdplaying')){ cdAdvance(d,true); return; }
     var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
-    cdIdx=ni; cdSegIdx=0; cdRender();
+    cdIdx=ni; cdAnimStrip(d); cdRender();
     cdWarmInto(1-cdAct, cdIdx); // keep the new focus warm for an instant play tap
-  }
-  function cdSetMode(m){
-    if(cdMode===m) return;
-    cdMode=m; cdSegIdx=0; cdWarmKey=[null,null]; cdSyncModeUI();
-    if(document.body.classList.contains('cdplaying')) cdPlay(); // reload under new bounds
-    else cdWarmInto(1-cdAct, cdIdx);
   }
   // Video tab — select a mandala → continuous watch of its videos, reusing the existing beat player.
   async function openMandalaVideos(m){
@@ -2897,9 +2923,29 @@
   };
   document.getElementById('instClose').onclick=function(){ document.getElementById('instOv').hidden=true; };
   document.getElementById('instOv').addEventListener('click',function(e){ if(e.target===this) this.hidden=true; });
-  // YouTube connect sheet — the back button and backdrop tap both dismiss to the content behind.
-  (function(){ var bk=document.getElementById('ytsBack'), bd=document.getElementById('ytsBd');
-    if(bk) bk.onclick=closeYtSheet; if(bd) bd.onclick=closeYtSheet; })();
+  // YouTube connect sheet — back button, backdrop tap, AND grip swipe-down all dismiss
+  // to the content behind (R5: drag-following with a release threshold).
+  (function(){
+    var bk=document.getElementById('ytsBack'), bd=document.getElementById('ytsBd');
+    if(bk) bk.onclick=closeYtSheet; if(bd) bd.onclick=closeYtSheet;
+    var card=document.querySelector('#ytSheet .yts-card'); if(!card) return;
+    var y0=null, dy=0;
+    card.addEventListener('touchstart',function(e){
+      if(card.scrollTop>2) return;           // only when scrolled to top
+      y0=e.touches[0].clientY; dy=0;
+    },{passive:true});
+    card.addEventListener('touchmove',function(e){
+      if(y0==null) return;
+      dy=e.touches[0].clientY-y0;
+      if(dy>0){ card.classList.add('dragging'); card.style.transform='translateY('+dy+'px)'; }
+    },{passive:true});
+    card.addEventListener('touchend',function(){
+      if(y0==null) return;
+      card.classList.remove('dragging'); card.style.transform='';
+      if(dy>90) closeYtSheet();
+      y0=null; dy=0;
+    },{passive:true});
+  })();
   // Curation deck controls — every visible control is live (no dead controls).
   // Wheel bindings (rotate/center/MENU) live in the EXISTING #wheel dispatcher.
   (function(){
@@ -2909,8 +2955,6 @@
     g('cdPlayBtn').onclick=function(e){ e.stopPropagation(); cdPlay(); };
     g('cdPrev').onclick=function(){ cdNav(-1); };
     g('cdNext').onclick=function(){ cdNav(1); };
-    g('cdModeCore').onclick=function(){ cdSetMode('core'); };
-    g('cdModeFull').onclick=function(){ cdSetMode('full'); };
     // vertical swipe on the strip = prev/next (same grammar as wheel rotation)
     var sy=null;
     g('cdStrip').addEventListener('touchstart',function(e){ sy=e.touches[0].clientY; },{passive:true});

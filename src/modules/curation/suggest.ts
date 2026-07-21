@@ -111,8 +111,15 @@ export type SuggestResult =
   | { status: 'building' }
   | { status: 'ready'; proposals: TopicProposal[] };
 
-/** Read interest profile → fresh trends → reinforcement → 3 proposals. */
-export async function suggestTopics(userId: string): Promise<SuggestResult> {
+/**
+ * Read interest profile → fresh trends → reinforcement → 3 proposals.
+ * excludeTopics (normalized lowercase) drops candidates BEFORE scoring — the
+ * "re-tune" path re-scores the remaining pool instead of surfacing ranks 4-6.
+ */
+export async function suggestTopics(
+  userId: string,
+  excludeTopics: string[] = []
+): Promise<SuggestResult> {
   const prisma = getPrismaClient();
 
   const profileRow = await prisma.curation_interest_profile.findUnique({
@@ -131,10 +138,13 @@ export async function suggestTopics(userId: string): Promise<SuggestResult> {
     take: 300,
     select: { keyword: true, norm_score: true },
   });
-  const candidates: TrendCandidate[] = trends.map((t) => ({
-    keyword: t.keyword,
-    norm_score: t.norm_score,
-  }));
+  const excluded = new Set(excludeTopics.map((t) => t.trim().toLowerCase()));
+  const candidates: TrendCandidate[] = trends
+    .filter((t) => !excluded.has(t.keyword.trim().toLowerCase()))
+    .map((t) => ({
+      keyword: t.keyword,
+      norm_score: t.norm_score,
+    }));
 
   const sig = await loadReinforceSignals(userId);
   const proposals = scoreAndSelect(profile, candidates, sig);
