@@ -772,6 +772,15 @@
     pointer-events:none} /* visual only — must never shadow the stage touch guard */
   body.cdloading .cd-stage .cd-ring{display:block}
   body.cdloading .cd-stage .cd-yt{visibility:hidden}
+  /* Pause veil: while paused the iframe (and YouTube's related-video overlay) is
+     hidden behind the poster; a quiet play glyph signals "center resumes". */
+  body.cdpaused .cd-stage .cd-yt{visibility:hidden}
+  .cd-resume{display:none; position:absolute; left:50%; top:50%; z-index:3; width:54px; height:54px;
+    transform:translate(-50%,-50%); border-radius:50%; background:rgba(18,16,14,.5);
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.22); pointer-events:none;
+    align-items:center; justify-content:center}
+  body.curdeck.cdpaused .cd-resume{display:flex}
   @media (prefers-reduced-motion:reduce){ #cdTrack.gliding{transition:none} .cd-ring{animation:none} }
   .cd-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2;
     width:56px; height:56px; border-radius:50%; border:none; cursor:pointer;
@@ -819,11 +828,8 @@
   .jbar .jb-fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--acc); transition:width .25s ease}
   .jbar .jb-mark{position:absolute; top:50%; width:9px; height:9px; border-radius:50%; background:#F5D48A;
     transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(18,16,14,.8)}
-  .jbar .jb-label{position:absolute; bottom:12px; transform:translateX(-50%); font-size:10.5px; font-weight:800;
-    color:#EDE7DC; background:rgba(30,27,22,.78); border-radius:99px; padding:3px 9px; white-space:nowrap;
-    opacity:0; transition:opacity .18s ease}
+  /* jb-label retired (P1-4): header keeps the persistent N/20 — one meaning, one place */
   body.cdnav .jbar{height:5px}
-  body.cdnav .jbar .jb-label{opacity:1}
   /* Landscape = the mockup's fullscreen contract: the stage fills the viewport */
   @media (orientation:landscape){
     body.curdeck.cdplaying #curDeck{padding:0}
@@ -1197,6 +1203,7 @@
         <div class="cd-yt off" id="cdYtA"></div>
         <div class="cd-yt off" id="cdYtB"></div>
         <div class="cd-guard" id="cdGuard" aria-hidden="true"></div>
+        <span class="cd-resume" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="#EDE7DC"><path d="M8 5.5v13l11-6.5z"/></svg></span>
         <span class="cd-ring" aria-hidden="true"></span>
         <button class="cd-play" id="cdPlayBtn" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button>
         <div class="cd-meta"><span class="cd-vt" id="cdVt"></span><span class="cd-vs" id="cdVs"></span></div>
@@ -1210,7 +1217,7 @@
       <button id="cdFinReplay" type="button">처음부터 다시</button>
     </div>
     <span class="cd-hint" id="cdHint">돌려서 고르고, 눌러서 재생</span>
-    <div class="jbar" id="cdJbar" aria-hidden="true"><div class="jb-fill" id="cdJbFill"></div><span class="jb-mark" id="cdJbMark"></span><span class="jb-label num" id="cdJbLabel"></span></div>
+    <div class="jbar" id="cdJbar" aria-hidden="true"><div class="jb-fill" id="cdJbFill"></div><span class="jb-mark" id="cdJbMark"></span></div>
   </div>
 
   <!-- YouTube connect wizard sheet [J:07-21] — TRUE bottom sheet: body-level, rises from the
@@ -1855,6 +1862,9 @@
     try{ ytP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdEnsurePlayers();               // inside the row-tap gesture: prime allowed
     cdRender();
+    // re-measure once the entry crossfade settles — an entry-time measure can
+    // read pre-layout strip height and leave the track clipped (P1-3 class)
+    setTimeout(function(){ if(document.body.classList.contains('curdeck')&&!cdFollow.on&&!cdAnimBusy) cdRender(); },420);
     cdWarmInto(1-cdAct, cdIdx);      // warm the FIRST video before the user taps play
   }
   function closeCurationDeck(){
@@ -1862,7 +1872,7 @@
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null];
     clearTimeout(cdWheelT);
-    document.body.classList.remove('curdeck','cdplaying','cdloading','cdin','cdfin','cdhint','cdwheel','cdnav');
+    document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
     setHomeTab('curation');
   }
@@ -1881,9 +1891,15 @@
   function cdPosterSync(){
     var it=cdItems[cdIdx]; if(!it) return;
     var vid=it.video_id;
+    var b=document.getElementById('cdPosterB'), f=document.getElementById('cdPosterF');
+    // paint instantly (hq/known thumb) — the maxres probe upgrade lands async;
+    // waiting for the probe left the stage dark for a network round-trip
+    var now=cdPosterCache[vid]||cdThumb(it);
+    if(b) b.style.backgroundImage='url("'+now+'")';
+    if(f) f.style.backgroundImage='url("'+now+'")';
     cdBestPoster(vid, function(u){
+      if(u===now) return;
       if(!cdItems[cdIdx]||cdItems[cdIdx].video_id!==vid) return; // stale guard
-      var b=document.getElementById('cdPosterB'), f=document.getElementById('cdPosterF');
       if(b) b.style.backgroundImage='url("'+u+'")';
       if(f) f.style.backgroundImage='url("'+u+'")';
     });
@@ -1946,10 +1962,9 @@
     var n=cdItems.length; if(!n) return;
     var pos=Math.max(0, Math.min(1, (cdIdx + Math.max(0,Math.min(1,frac||0))) / n));
     var pct=(pos*100).toFixed(2)+'%';
-    var f=document.getElementById('cdJbFill'), m=document.getElementById('cdJbMark'), l=document.getElementById('cdJbLabel');
+    var f=document.getElementById('cdJbFill'), m=document.getElementById('cdJbMark');
     if(f) f.style.width=pct;
     if(m) m.style.left=pct;
-    if(l){ l.style.left=pct; l.textContent=(cdIdx+1)+' / '+n; }
   }
   /* Wheel summon (glass): ANY deck touch fades the wheel in; 3s idle fades out.
      Supervisor boundary: when the wheel is NOT visible, the summoning tap is
@@ -1985,7 +2000,11 @@
       if(st===1 && cdWarmKey[slot]==='warming'){ try{cdP[slot].pauseVideo();}catch(e){} cdWarmKey[slot]=cdP[slot].__warmTarget||null; }
       return;
     }
-    if(st===1){ document.body.classList.remove('cdloading'); } // veil off: reveal the iframe (D2)
+    if(st===1){ document.body.classList.remove('cdloading','cdpaused'); } // veil off: reveal the iframe (D2)
+    // Pause veil (deck isolation, James pick 07-21): YouTube's paused 'More videos'
+    // overlay surfaces OUTSIDE videos with no player param to disable it — cover the
+    // iframe with our poster while paused; center press resumes (deck grammar).
+    if(st===2){ document.body.classList.add('cdpaused'); }
     if(st===0){ cdEnded(); }
   }
   // Warm an item into a slot: muted load -> PLAYING -> pause. Quiet cue fallback (iOS/low-power).
@@ -2017,7 +2036,7 @@
   // Loading = note veil (D2): poster + bottom-right ring until PLAYING reveals the iframe.
   function cdPlay(){
     cdHintDismiss();
-    document.body.classList.remove('cdfin');
+    document.body.classList.remove('cdfin','cdpaused');
     document.body.classList.add('cdplaying','cdloading');
     cdEnsurePlayers();
     var it=cdItems[cdIdx]; if(!it) return;
@@ -2068,7 +2087,7 @@
   // Last video -> D4 weekly-complete card (list row updates on return via re-fetch).
   function cdEnded(){
     if(cdIdx<cdItems.length-1){ cdAdvance(1,true); }
-    else { cdStopPoll(); document.body.classList.remove('cdplaying','cdloading'); document.body.classList.add('cdfin'); }
+    else { cdStopPoll(); document.body.classList.remove('cdplaying','cdloading','cdpaused'); document.body.classList.add('cdfin'); }
   }
   function cdHintDismiss(){
     if(!document.body.classList.contains('cdhint')) return;
@@ -2124,8 +2143,61 @@
     else { cdWarmInto(1-cdAct, cdIdx); } // browse: keep the new focus warm for an instant play tap
     cdWasPlaying=false;
   }
-  // called by the wheel engine on pointer-up (fingers off = settle now)
+  // Pixel-follow (device directive: detent jumps feel cheap — the track must ride
+  // the wheel continuously). Raw wheel degrees -> px; whole-card crossings commit
+  // live (vibrate per boundary); release snaps by displacement/velocity.
+  var CD_DEG_PER_CARD=140;   // wheel degrees per full card of travel
+  var cdFollow={on:false, off:0, v:0, lt:0};
+  function cdWheelMove(deg){
+    if(!cdItems.length) return;
+    document.body.classList.remove('cdfin');
+    cdWheelShow();
+    if(!cdNavActive){
+      cdNavActive=true;
+      cdWasPlaying=document.body.classList.contains('cdplaying');
+      cdPause();
+      document.body.classList.add('cdnav');
+    }
+    if(cdAnimBusy&&cdFinCur) cdFinCur();          // land any running glide first
+    var g=cdPitch(), tr=document.getElementById('cdTrack');
+    var now=performance.now();
+    if(!cdFollow.on){ cdFollow.on=true; cdFollow.off=0; cdFollow.v=0; cdFollow.lt=now; tr.classList.remove('gliding'); }
+    var px=-deg*(g.pitch/CD_DEG_PER_CARD);        // clockwise = forward = track up
+    var dt=Math.max(1, now-cdFollow.lt); cdFollow.lt=now;
+    cdFollow.v=cdFollow.v*0.7+(px/dt)*0.3;        // smoothed px/ms
+    // edge resistance (drag parity), overhang capped at half a pitch
+    if((cdIdx===0&&px>0&&cdFollow.off>=0)||(cdIdx>=cdItems.length-1&&px<0&&cdFollow.off<=0)) px*=0.35;
+    cdFollow.off+=px;
+    while(cdFollow.off<=-g.pitch&&cdIdx<cdItems.length-1){ cdFollow.off+=g.pitch; cdIdx++; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(7); cdRender(); }
+    while(cdFollow.off>=g.pitch&&cdIdx>0){ cdFollow.off-=g.pitch; cdIdx--; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(7); cdRender(); }
+    var cap=g.pitch*0.5;
+    if(cdIdx===0&&cdFollow.off>cap) cdFollow.off=cap;
+    if(cdIdx>=cdItems.length-1&&cdFollow.off<-cap) cdFollow.off=-cap;
+    tr.style.transform='translateY('+(-g.pitch+cdFollow.off)+'px)';
+    cdJbarSync(Math.max(0, -cdFollow.off/g.pitch));
+  }
+  // called by the wheel engine on pointer-up (fingers off = snap + settle)
   function cdWheelRelease(){
+    if(cdFollow.on){
+      cdFollow.on=false;
+      var g=cdPitch(), tr=document.getElementById('cdTrack');
+      var off=cdFollow.off, v=cdFollow.v; cdFollow.off=0; cdFollow.v=0;
+      var dir=0;
+      if((off<-g.pitch*0.28||v<-0.45)&&cdIdx<cdItems.length-1) dir=1;
+      else if((off>g.pitch*0.28||v>0.45)&&cdIdx>0) dir=-1;
+      tr.classList.add('gliding');
+      if(dir!==0){
+        cdIdx+=dir; cdEndRolled=false; cdAnimBusy=true;
+        tr.style.transform='translateY('+(-g.pitch-dir*g.pitch)+'px)';
+        var done=false;
+        var fin=function(){ if(done) return; done=true; cdFinCur=null; cdAnimBusy=false; cdRender(); if(cdQueue.length) cdPump(); };
+        cdFinCur=fin;
+        tr.addEventListener('transitionend',function h(){ tr.removeEventListener('transitionend',h); fin(); });
+        setTimeout(fin,250);
+      } else {
+        tr.style.transform='translateY('+(-g.pitch)+'px)';
+      }
+    }
     if(!cdNavActive) return;
     clearTimeout(cdSettleT);
     var wait=(cdAnimBusy||cdQueue.length)?230:0;   // let the last glide land first
@@ -3001,7 +3073,12 @@
       if(!s.rotated && Math.abs(s.cum)>ROT_THRESH){ // rotation confirmed -> cancel tap + hold
         s.rotated=true; clearTimeout(s.holdT); s.acc=0; s.vel=0; // click suppression handled on pointerup
       }
-      if(s.rotated){
+      if(s.rotated&&document.body.classList.contains('curdeck')&&!fineMode){
+        // Deck = pixel-follow: raw degrees drive the track 1:1 (no detent quantization —
+        // stepped card jumps read as cheap; boundary crossings vibrate instead).
+        if(typeof cdWheelMove==='function') cdWheelMove(d);
+        s.lt=e.timeStamp;
+      } else if(s.rotated){
         // Mode is explicit (fine toggle = within-beat scrub, else beat navigation). Unpredictable
         // mode-switching came from touch-zone coupling, not from acceleration; so acceleration is
         // kept as a core feel: faster rotation shrinks the step -> more notches fire -> movement
@@ -3198,7 +3275,17 @@
       var d=k>cdIdx?1:-1, steps=Math.abs(k-cdIdx);
       for(var s2=0;s2<steps;s2++) cdNav(d);
     });
-    window.addEventListener('orientationchange',function(){ if(document.body.classList.contains('curdeck')) setTimeout(cdRender,120); });
+    // Re-measure on ANY viewport change (rotation, browser chrome, PWA insets) —
+    // stale card heights left the track clipped at rest (device review P1-3).
+    var cdRszT=null;
+    function cdRemeasure(){
+      if(!document.body.classList.contains('curdeck')) return;
+      if(cdFollow.on||cdAnimBusy){ clearTimeout(cdRszT); cdRszT=setTimeout(cdRemeasure,180); return; }
+      cdRender();
+    }
+    ['resize','orientationchange'].forEach(function(ev){
+      window.addEventListener(ev,function(){ clearTimeout(cdRszT); cdRszT=setTimeout(cdRemeasure,150); });
+    });
     // Finger-follow drag (YouTube grammar): the track tracks the finger 1:1 live;
     // release snaps by displacement/velocity — next/prev glide or spring back.
     (function(){
