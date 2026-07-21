@@ -180,9 +180,32 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         orderBy: { position: 'asc' },
         select: { video_id: true, relevance_pct: true, position: true },
       });
+      // Join pool metadata (title/channel/duration/thumbnail) for the deck UI —
+      // items carry only ids; the deck must never fabricate durations (99999 bug).
+      const metas = await prisma.video_pool.findMany({
+        where: { video_id: { in: items.map((i) => i.video_id) } },
+        select: {
+          video_id: true,
+          title: true,
+          channel_name: true,
+          duration_seconds: true,
+          thumbnail_url: true,
+        },
+      });
+      const metaById = new Map(metas.map((m) => [m.video_id, m]));
+      const enriched = items.map((i) => {
+        const m = metaById.get(i.video_id);
+        return {
+          ...i,
+          title: m?.title ?? null,
+          channel: m?.channel_name ?? null,
+          duration_sec: m?.duration_seconds ?? null,
+          thumbnail: m?.thumbnail_url ?? null,
+        };
+      });
       return reply.send({
         status: 'ok',
-        data: { week_of: weekOf.toISOString().slice(0, 10), items },
+        data: { week_of: weekOf.toISOString().slice(0, 10), items: enriched },
       });
     }
   );
