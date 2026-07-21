@@ -697,8 +697,25 @@
        - jog wheel = the EXISTING #wheel floating-mini mode (reading/stage pattern),
          NOT a bespoke widget. */
   #curDeck{position:fixed; inset:0; z-index:70; background:#12100E; display:none; flex-direction:column;
-    padding:calc(var(--sat) + 8px) 14px calc(var(--sab) + 10px); color:#EDE7DC; overflow:hidden}
+    padding:calc(var(--sat) + 8px) 14px calc(var(--sab) + 10px); color:#EDE7DC; overflow:hidden;
+    opacity:0; transition:opacity .25s var(--soft)}
   body.curdeck #curDeck{display:flex}
+  body.curdeck.cdin #curDeck{opacity:1}   /* D0: cream->dark crossfade (studio entry) */
+  /* D4 — weekly complete card (slides into the deck position) */
+  .cd-fin{position:absolute; inset:0; z-index:6; background:#12100E; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:14px; text-align:center; padding:0 30px}
+  body.cdfin .cd-fin{display:flex}
+  body.cdfin .cd-strip,body.cdfin .cd-top .cd-count{visibility:hidden}
+  .cd-fin-t{font-size:19px; font-weight:850; color:#F5F2EC; line-height:1.45}
+  .cd-fin-s{font-size:12.5px; font-weight:650; color:#B8AE9E}
+  .cd-fin button{border:1px solid rgba(237,231,220,.25); background:none; color:#EDE7DC; font-family:inherit;
+    font-size:13px; font-weight:750; padding:11px 20px; border-radius:12px; cursor:pointer; touch-action:manipulation; width:min(78%,260px)}
+  .cd-fin button.primary{background:var(--acc); border-color:var(--acc); color:#fff}
+  /* D6 — one-time wheel coachmark */
+  .cd-hint{position:fixed; right:8px; bottom:calc(36% + 6px); z-index:77; background:rgba(245,242,236,.95);
+    color:#2C2925; font-size:11.5px; font-weight:750; border-radius:99px; padding:8px 14px;
+    box-shadow:0 6px 18px rgba(0,0,0,.35); display:none; pointer-events:none}
+  body.curdeck.cdhint .cd-hint{display:block}
   .cd-top{display:flex; align-items:center; gap:8px; padding:2px 4px 8px}
   .cd-back{border:none; background:none; color:#B8AE9E; font-family:inherit; font-size:13px; font-weight:750;
     cursor:pointer; padding:7px 4px; touch-action:manipulation; flex:none}
@@ -1135,6 +1152,13 @@
       <div class="cd-card cd-side" id="cdNext"></div>
       <div class="cd-card cd-side" id="cdNext2"></div>
     </div>
+    <div class="cd-fin" id="cdFin">
+      <div class="cd-fin-t">이번 주 편성,<br>끝까지 들었어요</div>
+      <div class="cd-fin-s">새 편성은 월요일에 도착해요</div>
+      <button class="primary" id="cdFinList" type="button">다른 주파수 듣기</button>
+      <button id="cdFinReplay" type="button">처음부터 다시</button>
+    </div>
+    <span class="cd-hint" id="cdHint">돌려서 고르고, 눌러서 재생</span>
   </div>
 
   <!-- YouTube connect wizard sheet [J:07-21] — TRUE bottom sheet: body-level, rises from the
@@ -1673,11 +1697,13 @@
     var sub=document.getElementById('ytConnSub');
     if(sub) sub.textContent=(st&&st.isConnected)?((st.youtubeEmail||'연결됨')+' · 관리'):'계정 연결 · 관리';
   }
+  // S5 — structured manage state: account row / divider / disconnect row (contract S5).
   function ytRenderConnected(status){
     var b=document.getElementById('ytsBody'); if(!b) return;
     var acct=(status&&status.youtubeEmail)||'연결된 계정';
     b.innerHTML='<div class="yts-h2">유튜브 연결됨</div>'
-      +'<div class="yts-acct">'+curEsc(acct)+'</div>'
+      +'<div class="yts-acct">'+YT_TUBE_SVG+' <span style="vertical-align:2px">'+curEsc(acct)+'</span></div>'
+      +'<div style="height:1px;background:rgba(94,86,72,.14);margin:2px 6px"></div>'
       +'<button class="yts-danger" id="ytsDisc">연결 해제</button>'
       +'<div class="yts-safe">해제해도 만든 큐레이션은 남아요</div>';
     var d=document.getElementById('ytsDisc'); if(d) d.onclick=ytDiscConfirm;
@@ -1757,6 +1783,9 @@
     cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
     document.getElementById('cdTitle').textContent=cdTopic;
     document.body.classList.add('curdeck');
+    setTimeout(function(){ document.body.classList.add('cdin'); },20); // D0 crossfade (timeout: rAF throttles in bg tabs)
+    // D6 — one-time coachmark until the first wheel/center interaction
+    try{ if(!localStorage.getItem('insighta-cd-hint')) document.body.classList.add('cdhint'); }catch(e){}
     // release the note/beat player pair — never two dual-player pairs alive (memory)
     try{ ytP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdEnsurePlayers();               // inside the row-tap gesture: prime allowed
@@ -1767,7 +1796,7 @@
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null];
-    document.body.classList.remove('curdeck','cdplaying','cdloading');
+    document.body.classList.remove('curdeck','cdplaying','cdloading','cdin','cdfin','cdhint');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
     setHomeTab('curation');
   }
@@ -1860,6 +1889,8 @@
   // Start/resume playback of the current item on the active slot.
   // Loading = note veil (D2): poster + bottom-right ring until PLAYING reveals the iframe.
   function cdPlay(){
+    cdHintDismiss();
+    document.body.classList.remove('cdfin');
     document.body.classList.add('cdplaying','cdloading');
     cdEnsurePlayers();
     var it=cdItems[cdIdx]; if(!it) return;
@@ -1907,8 +1938,15 @@
   }
   function cdStopPoll(){ if(cdPollT){ clearInterval(cdPollT); cdPollT=null; } }
   // Ended on the active slot: next video via the warm-swap path (no spinner).
+  // Last video -> D4 weekly-complete card (list row updates on return via re-fetch).
   function cdEnded(){
-    if(cdIdx<cdItems.length-1){ cdAdvance(1,true); } else { cdStopPoll(); }
+    if(cdIdx<cdItems.length-1){ cdAdvance(1,true); }
+    else { cdStopPoll(); document.body.classList.remove('cdplaying','cdloading'); document.body.classList.add('cdfin'); }
+  }
+  function cdHintDismiss(){
+    if(!document.body.classList.contains('cdhint')) return;
+    document.body.classList.remove('cdhint');
+    try{ localStorage.setItem('insighta-cd-hint','1'); }catch(e){}
   }
   // Advance the deck — slide animation (device review: snapping causes dizziness).
   function cdAnimStrip(d){
@@ -1923,6 +1961,8 @@
     if(keepPlaying||document.body.classList.contains('cdplaying')) cdPlay();
   }
   function cdNav(d){
+    cdHintDismiss();
+    if(document.body.classList.contains('cdfin')){ document.body.classList.remove('cdfin'); } // any nav leaves the fin card
     if(document.body.classList.contains('cdplaying')){ cdAdvance(d,true); return; }
     var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
     cdIdx=ni; cdAnimStrip(d); cdRender();
@@ -2953,6 +2993,8 @@
     var g=function(id){ return document.getElementById(id); };
     if(!g('curDeck')) return;
     g('cdBack').onclick=closeCurationDeck;
+    g('cdFinList').onclick=closeCurationDeck;                    // D4: back to the lineup
+    g('cdFinReplay').onclick=function(){ document.body.classList.remove('cdfin'); cdIdx=0; cdRender(); cdPlay(); };
     g('cdPlayBtn').onclick=function(e){ e.stopPropagation(); cdPlay(); };
     g('cdPrev').onclick=function(){ cdNav(-1); };
     g('cdNext').onclick=function(){ cdNav(1); };
