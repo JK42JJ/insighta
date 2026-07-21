@@ -1873,7 +1873,8 @@
       else { p.unMute(); p.loadVideoById({videoId:it.video_id}); }
     }catch(e){}
     cdWarmKey[cdAct]=null; cdEndRolled=false;
-    // watch marking (server-side) wires in with the watched_at DDL (James gate); cdCtx kept.
+    // server-side watch mark (cross-device row meta) — fire-and-forget, idempotent
+    if(cdCtx&&cdCtx.subId){ api('/curations/'+cdCtx.subId+'/items/'+it.video_id+'/watched',{method:'PATCH'}).catch(function(){}); }
     cdWarmInto(1-cdAct, cdIdx+1<cdItems.length?cdIdx+1:cdIdx); // keep travel-direction neighbor warm
     cdStartPoll();
   }

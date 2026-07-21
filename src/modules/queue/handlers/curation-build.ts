@@ -140,7 +140,18 @@ export async function registerCurationBuildWorker(): Promise<void> {
 
     // build-5 — snapshot this week's items. Replace THIS week only (idempotent
     // re-run); prior weeks are kept (data-reversibility). No mandala_books touched.
+    // Same-week rebuild PRESERVES watched_at for retained video_ids (supervisor
+    // caveat: delete-recreate must not turn "in progress" back into "new") — a
+    // NEW week's rows are born NULL, which is the intended weekly reset.
     const weekDate = new Date(weekOf);
+    const prevWatched = new Map(
+      (
+        await prisma.curation_items.findMany({
+          where: { subscription_id: subscriptionId, week_of: weekDate, watched_at: { not: null } },
+          select: { video_id: true, watched_at: true },
+        })
+      ).map((r) => [r.video_id, r.watched_at])
+    );
     await prisma.$transaction([
       prisma.curation_items.deleteMany({
         where: { subscription_id: subscriptionId, week_of: weekDate },
@@ -154,6 +165,7 @@ export async function registerCurationBuildWorker(): Promise<void> {
                 relevance_pct: p.relevancePct,
                 position: i,
                 week_of: weekDate,
+                watched_at: prevWatched.get(p.videoId) ?? null,
               })),
             }),
           ]

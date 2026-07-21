@@ -175,6 +175,17 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       where: { subscription_id: { in: deduped.map((r) => r.id) } },
       _count: { video_id: true },
     });
+    const watched = await prisma.curation_items.groupBy({
+      by: ['subscription_id', 'week_of'],
+      where: { subscription_id: { in: deduped.map((r) => r.id) }, watched_at: { not: null } },
+      _count: { video_id: true },
+    });
+    const watchedBy = new Map(
+      watched.map((w) => [
+        w.subscription_id + ':' + w.week_of.toISOString().slice(0, 10),
+        w._count.video_id,
+      ])
+    );
     const latest = new Map<string, { week: string; count: number }>();
     for (const c of counts) {
       const wk = c.week_of.toISOString().slice(0, 10);
@@ -182,11 +193,15 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       if (!cur || wk > cur.week)
         latest.set(c.subscription_id, { week: wk, count: c._count.video_id });
     }
-    const withCounts = deduped.map((r) => ({
-      ...r,
-      week_of: latest.get(r.id)?.week ?? null,
-      item_count: latest.get(r.id)?.count ?? 0,
-    }));
+    const withCounts = deduped.map((r) => {
+      const l = latest.get(r.id);
+      return {
+        ...r,
+        week_of: l?.week ?? null,
+        item_count: l?.count ?? 0,
+        watched_count: l ? (watchedBy.get(r.id + ':' + l.week) ?? 0) : 0,
+      };
+    });
     return reply.send({ status: 'ok', data: { curations: withCounts } });
   });
 
@@ -260,6 +275,37 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         status: 'ok',
         data: { week_of: weekOf.toISOString().slice(0, 10), items: enriched },
       });
+    }
+  );
+
+  /**
+   * PATCH /curations/:id/items/:videoId/watched — mark this week's item watched
+   * (watched_at=now, idempotent: an existing mark is kept). Ownership-checked.
+   */
+  fastify.patch<{ Params: { id: string; videoId: string } }>(
+    '/:id/items/:videoId/watched',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
+      }
+      const prisma = getPrismaClient();
+      const sub = await prisma.curation_subscriptions.findUnique({
+        where: { id: request.params.id },
+        select: { user_id: true },
+      });
+      if (!sub || sub.user_id !== request.user.userId) {
+        return reply.code(404).send({ status: 'error', code: 'CURATION_NOT_FOUND' });
+      }
+      const updated = await prisma.curation_items.updateMany({
+        where: {
+          subscription_id: request.params.id,
+          video_id: request.params.videoId,
+          watched_at: null,
+        },
+        data: { watched_at: new Date() },
+      });
+      return reply.send({ status: 'ok', data: { marked: updated.count > 0 } });
     }
   );
 

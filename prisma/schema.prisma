@@ -675,6 +675,12 @@ model curation_items {
   /// 0-based rank within the week's build (relevance order)
   position        Int
   bookmarked_at   DateTime?              @db.Timestamptz(6)
+  /// Derived-only watch mark (write-guard type (a): original fields untouched).
+  /// Set when playback of this item starts in the deck; NULL = unwatched.
+  /// Same-week rebuild PRESERVES watched_at for retained video_ids (see
+  /// curation-build); a NEW week's rows are born NULL = natural weekly reset.
+  /// Raw SQL DDL: prisma/migrations/curation-watched/001_watched_at.sql
+  watched_at      DateTime?              @db.Timestamptz(6)
   /// which weekly build this row belongs to (snapshot key)
   week_of         DateTime               @db.Date
   added_at        DateTime               @default(now()) @db.Timestamptz(6)
