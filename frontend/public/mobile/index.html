@@ -691,6 +691,66 @@
   @keyframes ytspin{to{transform:rotate(360deg)}}
   .yts-tune-t{font-size:13.5px; font-weight:700; color:var(--paper-ink)}
   @media (prefers-reduced-motion:reduce){ .yts-dial{animation:none} #ytSheet .yts-card{transition-duration:.001s} }
+  /* Curation deck [J:07-21] — full-bleed dark player, port of the approved design
+     (project ef4fae07: vertical 3-card filmstrip + relevance curve + floating jog wheel). */
+  #curDeck{position:fixed; inset:0; z-index:70; background:#12100E; display:none; flex-direction:column;
+    padding:calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px); color:#EDE7DC; overflow:hidden}
+  body.curdeck #curDeck{display:flex}
+  .cd-top{display:flex; align-items:center; gap:10px; padding:2px 4px 8px}
+  .cd-back{border:none; background:none; color:#B8AE9E; font-family:inherit; font-size:13px; font-weight:750;
+    cursor:pointer; padding:7px; touch-action:manipulation; flex:none}
+  .cd-title{flex:1; text-align:center; font-size:14.5px; font-weight:800; color:#EDE7DC;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .cd-count{flex:none; font-size:11px; font-weight:700; color:#8F887A; letter-spacing:.14em; min-width:44px; text-align:right}
+  .cd-strip{flex:1; min-height:0; position:relative; display:flex; flex-direction:column; gap:10px;
+    align-items:stretch; justify-content:center}
+  .cd-card{position:relative; border-radius:18px; overflow:hidden; background:#1E1B17 center/cover no-repeat;
+    flex:none; transition:flex-basis .35s var(--soft), opacity .35s, transform .35s var(--soft);
+    -webkit-tap-highlight-color:transparent}
+  .cd-card::after{content:''; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(10,9,8,.18), rgba(10,9,8,.62) 78%)}
+  .cd-side{flex-basis:15%; opacity:.5; cursor:pointer}
+  .cd-side.empty{opacity:.14; cursor:default; background:#181512}
+  .cd-focus{flex-basis:62%; opacity:1; box-shadow:0 16px 44px rgba(0,0,0,.5)}
+  .cd-meta{position:absolute; left:16px; right:16px; bottom:34px; z-index:2; display:flex; flex-direction:column; gap:3px}
+  .cd-vt{font-size:16.5px; font-weight:850; color:#F5F2EC; line-height:1.35;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .cd-vs{font-size:11px; font-weight:650; color:#B8AE9E}
+  .cd-vs .rel{color:#E8A76B; font-weight:800}
+  .cd-wave{position:absolute; left:12px; right:12px; bottom:12px; z-index:2; height:26px; width:calc(100% - 24px)}
+  .cd-wave polyline{fill:none; stroke-width:1.6}
+  .cd-wave .w-all{stroke:rgba(237,231,220,.28)}
+  .cd-wave .w-done{stroke:#E0703F}
+  .cd-wave circle{fill:#F5D48A}
+  .cd-side .cd-meta,.cd-side .cd-wave{display:none}
+  .cd-yt{position:absolute; inset:0; z-index:1}
+  .cd-yt.off{display:none}
+  .cd-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2;
+    width:58px; height:58px; border-radius:50%; border:none; cursor:pointer;
+    background:rgba(245,242,236,.92); color:#2C2925; display:grid; place-items:center;
+    box-shadow:0 8px 24px rgba(0,0,0,.4); touch-action:manipulation}
+  .cd-play:active{transform:translate(-50%,-50%) scale(.94)}
+  body.cdplaying .cd-play{display:none}
+  body.cdplaying .cd-focus .cd-meta{display:none}
+  /* Floating jog wheel — all controls live (MENU=back, sides=prev/next, center=play/pause) */
+  .cd-wheel{position:absolute; right:16px; bottom:calc(var(--sab) + 16px); z-index:5; width:104px; height:104px;
+    border-radius:50%; background:rgba(245,242,236,.94); box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  .cd-wheel button{position:absolute; border:none; background:none; cursor:pointer; font-family:inherit;
+    color:#837D72; touch-action:manipulation; padding:6px; -webkit-tap-highlight-color:transparent}
+  .cd-w-menu{top:2px; left:50%; transform:translateX(-50%); font-size:8.5px; font-weight:800; letter-spacing:.18em}
+  .cd-w-prev{left:4px; top:50%; transform:translateY(-50%)}
+  .cd-w-next{right:4px; top:50%; transform:translateY(-50%)}
+  .cd-w-center{left:50%; top:50%; transform:translate(-50%,-50%); width:44px; height:44px; border-radius:50%;
+    background:var(--acc); color:#fff; display:grid; place-items:center; box-shadow:inset 0 1px 3px rgba(0,0,0,.2)}
+  .cd-w-center:active{transform:translate(-50%,-50%) scale(.93)}
+  /* Landscape = the mockup's fullscreen contract: focus card fills the viewport */
+  @media (orientation:landscape){
+    body.curdeck.cdplaying #curDeck{padding:0}
+    body.curdeck.cdplaying .cd-top,body.curdeck.cdplaying .cd-side{display:none}
+    body.curdeck.cdplaying .cd-strip{gap:0}
+    body.curdeck.cdplaying .cd-focus{flex-basis:100%; border-radius:0}
+    body.curdeck.cdplaying .cd-wave{display:none}
+  }
   /* Curation account chip (connected) — opens the manage sheet */
   .cur-chip{align-self:flex-start; display:inline-flex; align-items:center; gap:6px; border:1px solid rgba(94,86,72,.16);
     background:rgba(255,255,255,.5); color:var(--paper-sub); font-family:inherit; font-size:11px; font-weight:750;
@@ -1007,6 +1067,31 @@
           <div class="inst-step"><span class="inst-n num">2</span>목록을 내려 <b>"홈 화면에 추가"</b></div>
           <div class="inst-step"><span class="inst-n num">3</span>오른쪽 위 <b>추가</b> — 끝</div>
           <button class="inst-x" id="instClose">닫기</button>
+        </div>
+      </div>
+
+      <!-- Curation deck [J:07-21] — full-bleed player, approved-design port (filmstrip + wave + wheel) -->
+      <div id="curDeck" aria-hidden="true">
+        <div class="cd-top">
+          <button class="cd-back" id="cdBack" type="button">← 큐레이션</button>
+          <span class="cd-title" id="cdTitle"></span>
+          <span class="cd-count num" id="cdCount"></span>
+        </div>
+        <div class="cd-strip" id="cdStrip">
+          <div class="cd-card cd-side" id="cdPrev"></div>
+          <div class="cd-card cd-focus" id="cdFocus">
+            <div class="cd-yt off" id="cdYt"></div>
+            <button class="cd-play" id="cdPlayBtn" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button>
+            <div class="cd-meta"><span class="cd-vt" id="cdVt"></span><span class="cd-vs" id="cdVs"></span></div>
+            <svg class="cd-wave" id="cdWave" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"></svg>
+          </div>
+          <div class="cd-card cd-side" id="cdNext"></div>
+        </div>
+        <div class="cd-wheel" id="cdWheel">
+          <button class="cd-w-menu" id="cdWMenu" type="button">MENU</button>
+          <button class="cd-w-prev" id="cdWPrev" type="button" aria-label="이전"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.5 5.5v13l-8-6.5zM10 5.5v13l-8-6.5z"/></svg></button>
+          <button class="cd-w-next" id="cdWNext" type="button" aria-label="다음"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5v13l8-6.5zM14 5.5v13l8-6.5z"/></svg></button>
+          <button class="cd-w-center" id="cdWCenter" type="button" aria-label="재생/일시정지"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path id="cdWCIcon" d="M8 5.5v13l11-6.5z"/></svg></button>
         </div>
       </div>
 
@@ -1554,7 +1639,7 @@
     try{
       var r=await api('/curations/'+id+'/items');
       var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
-      if(items.length){ openCurationVideos(topic,items); return; }
+      if(items.length){ openCurationDeck(topic,items); return; }
     }catch(e){}
     if(tries<20 && homeTab==='curation'){ setTimeout(function(){ pollCurationItems(id,topic,tries+1); },3000); }
     else{
@@ -1563,17 +1648,98 @@
         +'<span class="t2">잠시 후 큐레이션 탭에서 다시 확인해주세요</span>';
     }
   }
-  // Curation videos — reuse the beat player (same machinery as openMandalaVideos).
-  function openCurationVideos(topic,items){
+  /* ============ Curation deck (#curDeck) [J:07-21] ============
+     Port of the APPROVED design (project ef4fae07 "큐레이션 플레이어"): full-bleed
+     dark player, vertical 3-card filmstrip (prev/focus/next), relevance wave with
+     journey marker, floating jog wheel, ended -> auto-advance (lean-back loop).
+     The old note/beat-player reuse (openCurationVideos, to:99999 fake durations)
+     is REMOVED — the deck owns its own YT.Player and uses real pool metadata. */
+  var cdItems=[], cdIdx=0, cdTopic='', cdPlayer=null, cdPlayerReady=false, cdWantPlay=false;
+  function openCurationDeck(topic, items){
     unlockAudio();
-    document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true;
-    curNote={ id:null, title:topic, videoMode:true }; show('player');
-    var sh=document.getElementById('bShareNote'); if(sh) sh.hidden=true;
-    document.getElementById('pTitle').textContent=topic||'큐레이션';
-    pShowSkeleton('영상을 여는 중');
-    beats=[]; chapterOfBeat=[];
-    items.forEach(function(it){ beats.push({ t:'c', vid:it.video_id, from:0, to:99999, text:'', src:null }); chapterOfBeat.push(0); });
-    bi=0; buildRail(); setPlaying(true);
+    cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdWantPlay=false;
+    document.getElementById('cdTitle').textContent=cdTopic;
+    document.body.classList.add('curdeck');
+    cdRender();
+  }
+  function closeCurationDeck(){
+    cdPause(); document.body.classList.remove('curdeck','cdplaying');
+    var w=document.getElementById('cdYt'); if(w) w.classList.add('off');
+    setHomeTab('curation');
+  }
+  function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
+  function cdRender(){
+    var n=cdItems.length; if(!n) return;
+    var cur=cdItems[cdIdx], prev=cdItems[cdIdx-1], next=cdItems[cdIdx+1];
+    var pv=document.getElementById('cdPrev'), nx=document.getElementById('cdNext'), fc=document.getElementById('cdFocus');
+    pv.className='cd-card cd-side'+(prev?'':' empty');
+    nx.className='cd-card cd-side'+(next?'':' empty');
+    pv.style.backgroundImage=prev?('url('+cdThumb(prev)+')'):'none';
+    nx.style.backgroundImage=next?('url('+cdThumb(next)+')'):'none';
+    fc.style.backgroundImage='url('+cdThumb(cur)+')';
+    document.getElementById('cdVt').textContent=cur.title||'제목 없음';
+    var bits=[];
+    if(cur.channel) bits.push(cur.channel);
+    if(cur.duration_sec) bits.push(fmtSec(cur.duration_sec));
+    document.getElementById('cdVs').innerHTML=
+      '<span class="rel">'+(cur.relevance_pct!=null?(cur.relevance_pct+'%'):'')+'</span>'
+      +(bits.length?(' · '+curEsc(bits.join(' · '))):'');
+    document.getElementById('cdCount').textContent=(cdIdx+1)+' / '+n;
+    cdDrawWave();
+    // keep the iframe only on the focus card while playing; paused nav shows posters
+    if(document.body.classList.contains('cdplaying')) cdLoadCurrent(true);
+  }
+  // Relevance journey: one point per card (y=relevance), done-portion + marker in accent.
+  function cdDrawWave(){
+    var svg=document.getElementById('cdWave'); if(!svg) return;
+    var n=cdItems.length; if(n<1){ svg.innerHTML=''; return; }
+    function pt(i){ var x=n===1?50:(i/(n-1))*100; var pct=cdItems[i].relevance_pct||0;
+      return x.toFixed(1)+','+(23-(pct/100)*18).toFixed(1); }
+    var all=[], done=[];
+    for(var i=0;i<n;i++){ all.push(pt(i)); if(i<=cdIdx) done.push(pt(i)); }
+    var mk=pt(cdIdx).split(',');
+    svg.innerHTML='<polyline class="w-all" points="'+all.join(' ')+'"/>'
+      +'<polyline class="w-done" points="'+done.join(' ')+'"/>'
+      +'<circle cx="'+mk[0]+'" cy="'+mk[1]+'" r="2.2"/>';
+  }
+  function cdEnsurePlayer(){
+    if(cdPlayer||!window.YT||!YT.Player) return;
+    cdPlayer=new YT.Player('cdYt',{
+      width:'100%', height:'100%', videoId:cdItems[cdIdx].video_id,
+      playerVars:{playsinline:1, rel:0, modestbranding:1, controls:1, fs:1, autoplay:1},
+      events:{
+        onReady:function(){ cdPlayerReady=true; if(cdWantPlay){ try{cdPlayer.playVideo()}catch(e){} } },
+        onStateChange:function(ev){
+          if(ev.data===0){ // ended -> lean-back auto-advance
+            if(cdIdx<cdItems.length-1){ cdIdx++; cdRender(); }
+            else { cdPause(); }
+          }
+          var ic=document.getElementById('cdWCIcon');
+          if(ic) ic.setAttribute('d', ev.data===1 ? 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z' : 'M8 5.5v13l11-6.5z');
+        }
+      }
+    });
+  }
+  function cdLoadCurrent(play){
+    var w=document.getElementById('cdYt'); if(w) w.classList.remove('off');
+    if(!cdPlayer){ cdWantPlay=!!play; cdEnsurePlayer(); return; }
+    try{ if(play) cdPlayer.loadVideoById(cdItems[cdIdx].video_id); else cdPlayer.cueVideoById(cdItems[cdIdx].video_id); }catch(e){}
+  }
+  function cdPlay(){
+    document.body.classList.add('cdplaying');
+    cdLoadCurrent(true);
+  }
+  function cdPause(){ try{ if(cdPlayer&&cdPlayer.pauseVideo) cdPlayer.pauseVideo(); }catch(e){} }
+  function cdToggle(){
+    if(!document.body.classList.contains('cdplaying')){ cdPlay(); return; }
+    try{
+      var st=cdPlayer&&cdPlayer.getPlayerState?cdPlayer.getPlayerState():-1;
+      if(st===1) cdPlayer.pauseVideo(); else cdPlayer.playVideo();
+    }catch(e){}
+  }
+  function cdNav(d){
+    var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
+    cdIdx=ni; cdRender();
   }
   // Video tab — select a mandala → continuous watch of its videos, reusing the existing beat player.
   async function openMandalaVideos(m){
@@ -2572,6 +2738,26 @@
   // YouTube connect sheet — the back button and backdrop tap both dismiss to the content behind.
   (function(){ var bk=document.getElementById('ytsBack'), bd=document.getElementById('ytsBd');
     if(bk) bk.onclick=closeYtSheet; if(bd) bd.onclick=closeYtSheet; })();
+  // Curation deck controls — every visible control is live (no dead controls).
+  (function(){
+    var g=function(id){ return document.getElementById(id); };
+    if(!g('curDeck')) return;
+    g('cdBack').onclick=closeCurationDeck;
+    g('cdWMenu').onclick=closeCurationDeck;
+    g('cdWPrev').onclick=function(){ cdNav(-1); };
+    g('cdWNext').onclick=function(){ cdNav(1); };
+    g('cdWCenter').onclick=cdToggle;
+    g('cdPlayBtn').onclick=function(e){ e.stopPropagation(); cdPlay(); };
+    g('cdPrev').onclick=function(){ cdNav(-1); };
+    g('cdNext').onclick=function(){ cdNav(1); };
+    // vertical swipe on the strip = prev/next (same grammar as wheel taps)
+    var sy=null;
+    g('cdStrip').addEventListener('touchstart',function(e){ sy=e.touches[0].clientY; },{passive:true});
+    g('cdStrip').addEventListener('touchend',function(e){
+      if(sy==null) return; var dy=e.changedTouches[0].clientY-sy; sy=null;
+      if(Math.abs(dy)>44) cdNav(dy<0?1:-1);
+    },{passive:true});
+  })();
   document.getElementById('spdBtn').onclick=cycleSpd;
   document.getElementById('spdStage').onclick=cycleSpd;
   renderSpd();
