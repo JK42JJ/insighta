@@ -22,9 +22,9 @@ import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database/client';
 import { JOB_NAMES, QUEUE_CONFIG } from '../types';
 import { getJobQueue } from '../manager';
-import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
+import { matchFromVideoPoolByCenterGoal } from '@/skills/plugins/video-discover/v3/cache-matcher';
+import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 import { MS_PER_DAY } from '@/utils/time-constants';
-import { CURATION_PUBLISHED_AFTER_DAYS } from '@/modules/curation/config';
 
 const log = logger.child({ module: 'queue/curation-build' });
 
@@ -60,35 +60,26 @@ export async function registerCurationBuildWorker(): Promise<void> {
       return;
     }
 
-    // build-1 — discover topic → videos, mandala-free. runV5Executor takes a
-    // centerGoal STRING (no mandala). subGoals empty → v5 generates queries from
-    // centerGoal alone (B1: the empty-subGoals path is validated by one live run
-    // before flag-on). publishedAfter biases recent supply = the P0 rising signal.
-    const publishedAfter = new Date(Date.now() - CURATION_PUBLISHED_AFTER_DAYS * MS_PER_DAY)
-      .toISOString()
-      .slice(0, 10);
-    const v5 = await runV5Executor({
-      centerGoal: sub.topic,
+    // build-1/2/3 — INSTANT pool-cosine KNN (reuses add-cards Layer1,
+    // matchFromVideoPoolByCenterGoal). Embed the topic ONCE (~0.5s) → pgvector cosine
+    // on video_pool_embeddings → top-N. NO live search / candidate embed / LLM picker;
+    // runV5Executor's full pipeline (LLM×2 + search.list fanout + bulk embed) stalled
+    // the build 20s+. ~1-2s. Thin-pool niche topics → async v5 enrichment = follow-up.
+    const [centerEmbedding] = await embedBatch([sub.topic]);
+    if (!centerEmbedding) {
+      log.warn('curation build: topic embed failed', { subscriptionId, topic: sub.topic });
+      return;
+    }
+    const matches = await matchFromVideoPoolByCenterGoal({
+      centerEmbedding,
       subGoals: [],
-      focusTags: [],
-      targetLevel: '',
       language: 'ko',
-      includeEnCards: false,
-      excludeVideoIds: new Set<string>(),
-      env: process.env,
-      publishedAfter,
+      limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
     });
-
-    // build-2/3 — v5 already ranks by relevance (score 0-1, sorted desc) and applies
-    // trust/channel/book gating. Use that ranking DIRECTLY — no per-card relevance
-    // re-computation. The old per-card computeCardRelevance (an extra LLM call per
-    // video) stalled the build for minutes; the existing search path returns in ~6s.
-    const picked: Array<{ videoId: string; relevancePct: number }> = v5.cards
-      .slice(0, QUEUE_CONFIG.CURATION_TARGET_VIDEOS)
-      .map((card) => ({
-        videoId: card.videoId,
-        relevancePct: Math.max(1, Math.min(100, Math.round((card.score ?? 0) * 100))),
-      }));
+    const picked: Array<{ videoId: string; relevancePct: number }> = matches.map((m) => ({
+      videoId: m.videoId,
+      relevancePct: Math.max(1, Math.min(100, Math.round((m.score ?? 0) * 100))),
+    }));
 
     // build-4 — rich-summary is REUSE-ONLY for P0. video_rich_summaries is a
     // video-keyed GLOBAL table (leaks across goals), so the build never writes it
@@ -127,7 +118,7 @@ export async function registerCurationBuildWorker(): Promise<void> {
       subscriptionId,
       weekOf,
       topic: sub.topic,
-      discovered: v5.cards.length,
+      poolMatches: matches.length,
       picked: picked.length,
       belowMin: picked.length < QUEUE_CONFIG.CURATION_MIN_VIDEOS,
     });
