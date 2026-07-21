@@ -759,9 +759,17 @@
   .cd-poster .cp-front{position:absolute; inset:0; background:transparent center/contain no-repeat}
   .cd-yt{position:absolute; inset:0; z-index:1}
   .cd-yt.off{visibility:hidden}
+  /* Touch guard over the player iframe: touches on an iframe never reach the
+     parent DOM, so wheel summon was impossible wherever the stage covers the
+     screen (landscape = 100%). Guard is a parent-DOM surface while the wheel
+     is hidden; once the wheel is awake it steps aside so YouTube UI stays
+     reachable (summon-consume contract unchanged). */
+  .cd-guard{position:absolute; inset:0; z-index:2; background:transparent; -webkit-tap-highlight-color:transparent}
+  body.curdeck.cdwheel .cd-guard{pointer-events:none}
   /* Loading = note veil: top-card poster shows through + bottom-right ring until PLAYING */
   .cd-ring{position:absolute; right:12px; bottom:20px; z-index:4; width:24px; height:24px; border-radius:50%;
-    border:2.5px solid rgba(255,255,255,.28); border-top-color:#fff; animation:veilspin .9s linear infinite; display:none}
+    border:2.5px solid rgba(255,255,255,.28); border-top-color:#fff; animation:veilspin .9s linear infinite; display:none;
+    pointer-events:none} /* visual only — must never shadow the stage touch guard */
   body.cdloading .cd-stage .cd-ring{display:block}
   body.cdloading .cd-stage .cd-yt{visibility:hidden}
   @media (prefers-reduced-motion:reduce){ #cdTrack.gliding{transition:none} .cd-ring{animation:none} }
@@ -776,7 +784,14 @@
      Device review 4: APPLE GLASS finish + summon-anywhere fade (own cdwheel state,
      not the stage/reading awake path): any deck touch fades it in (220ms), 3s idle
      fades it out (500ms); pointer-events only while visible. */
-  :root{--cd-glass: blur(18px) saturate(1.6)}   /* tunable if warm-swap playback drops frames */
+  :root{--cd-glass: blur(18px) saturate(1.6);   /* tunable if warm-swap playback drops frames */
+    /* quiet state while a video PLAYS — lower saturation, more transparency
+       (device directive: the wheel must not compete with the picture) */
+    --cd-glass-quiet: blur(18px) saturate(1.1);
+    --cd-wheel-fill: rgba(245,242,236,.34);
+    --cd-wheel-fill-quiet: rgba(245,242,236,.20);
+    --cd-wheel-awake:.95;
+    --cd-wheel-awake-quiet:.6}
   /* mini wheel size token — vmin keeps it IDENTICAL in portrait and landscape
      (James: same size in landscape; shared by deck / note-reading / video-stage) */
   :root{--miniwheel: min(40vmin, 168px)}
@@ -784,12 +799,17 @@
     z-index:76; padding:0 24px 0 0; width:100%; pointer-events:none; display:grid; place-items:center end}
   body.curdeck .wheel{width:var(--miniwheel); transform:translateX(-40%) scale(.98); opacity:0; pointer-events:none;
     transition:opacity .5s ease, transform .5s ease;
-    background:rgba(245,242,236,.34);
+    background:var(--cd-wheel-fill);
     -webkit-backdrop-filter:var(--cd-glass); backdrop-filter:var(--cd-glass);
     border:1px solid rgba(255,255,255,.38);
     box-shadow:0 10px 34px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.45)}
-  body.curdeck.cdwheel .wheel{opacity:.95; transform:translateX(-40%) scale(1); pointer-events:auto;
+  body.curdeck.cdplaying .wheel{background:var(--cd-wheel-fill-quiet);
+    -webkit-backdrop-filter:var(--cd-glass-quiet); backdrop-filter:var(--cd-glass-quiet);
+    border-color:rgba(255,255,255,.24);
+    box-shadow:0 8px 26px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.28)}
+  body.curdeck.cdwheel .wheel{opacity:var(--cd-wheel-awake); transform:translateX(-40%) scale(1); pointer-events:auto;
     transition:opacity .22s ease, transform .22s ease}
+  body.curdeck.cdplaying.cdwheel .wheel{opacity:var(--cd-wheel-awake-quiet)}
   @media (prefers-reduced-motion:reduce){ body.curdeck .wheel,body.curdeck.cdwheel .wheel{transition:none} }
   /* journey bar (reusable unit — the video tab adopts this pattern later, R12):
      continuous slim bar at the very bottom = position within the lineup; thickens
@@ -1176,6 +1196,7 @@
         <div class="cd-poster" id="cdPoster" aria-hidden="true"><div class="cp-back" id="cdPosterB"></div><div class="cp-front" id="cdPosterF"></div></div>
         <div class="cd-yt off" id="cdYtA"></div>
         <div class="cd-yt off" id="cdYtB"></div>
+        <div class="cd-guard" id="cdGuard" aria-hidden="true"></div>
         <span class="cd-ring" aria-hidden="true"></span>
         <button class="cd-play" id="cdPlayBtn" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button>
         <div class="cd-meta"><span class="cd-vt" id="cdVt"></span><span class="cd-vs" id="cdVs"></span></div>
