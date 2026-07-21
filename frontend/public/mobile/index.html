@@ -1506,6 +1506,7 @@
      (first curation / "+ new"). Model fix per James + supervisor A. */
   async function renderCuration(){
     var el=document.getElementById('curBody'); if(!el) return;
+    curRowEls=[]; // non-row states (gate/skeleton/error) must not keep stale wheel targets
     // T3 — row skeletons while loading (existing skeleton pattern)
     el.className='cur-body';
     el.innerHTML='<div class="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>';
@@ -1543,19 +1544,28 @@
     if(n>0) return {rank:0, dot:true, line:'새 영상 '+n+'편'};
     return {rank:1, dot:false, line:'영상을 모으는 중'};
   }
+  // Wheel selection state for the curation list (the home wheel branch was
+  // mandala-list-only — new tab must be recognized by every global input surface).
+  var curSelIdx=0, curRowEls=[];
+  function curUpdateSel(){
+    curRowEls.forEach(function(el,i){ el.classList.toggle('sel', i===curSelIdx); });
+    var el=curRowEls[curSelIdx];
+    if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
+  }
   // Same .rows/.row markup as the mandala lists (format parity is the contract).
   function renderCurationRows(subs){
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-body';
     el.innerHTML='<div class="rows" id="curRows"></div>';
     var rows=document.getElementById('curRows');
+    curRowEls=[];
     // add-row at the TOP of the list (same convention as the goal pill on video/note)
     var add=document.createElement('div');
     add.className='row';
     add.innerHTML='<span class="jk" style="background:rgba(94,86,72,.10)"><b style="color:var(--ui)">+</b></span>'
       +'<span class="m"><span class="a">새 주파수</span><span class="b"><span class="bt">관심 주제 고르기</span></span></span>';
     add.addEventListener('click',function(){ openYtSheet(); ytRenderTuning(); });
-    rows.appendChild(add);
+    rows.appendChild(add); curRowEls.push(add);
     // sort: new > in-progress > complete, newest first inside each group
     var sorted=subs.map(function(s){ return {s:s, st:curRowState(s)}; });
     sorted.sort(function(a,b){
@@ -1578,8 +1588,11 @@
       d.addEventListener('pointerup',function(){ clearTimeout(lp); });
       d.addEventListener('pointerleave',function(){ clearTimeout(lp); });
       d.addEventListener('click',function(){ if(fired) return; openExistingCuration(s); });
-      rows.appendChild(d);
+      rows.appendChild(d); curRowEls.push(d);
     });
+    if(curSelIdx>=curRowEls.length) curSelIdx=curRowEls.length-1;
+    if(curSelIdx<0) curSelIdx=0;
+    curUpdateSel();
   }
   // Long-press: row expands inline into a 2-step unsubscribe action.
   function curRowUnsub(rowEl, s){
@@ -3034,6 +3047,14 @@
   function dispatchNotch(dir){
     if(document.body.classList.contains('curdeck')){ cdNav(dir); return; } // deck: 1 detent = 1 card
     if(cur==='home'){
+      // Curation tab has its own row list — the wheel must follow the ACTIVE tab,
+      // not silently drive the hidden mandala list (focus bug, 2026-07-21).
+      if(homeTab==='curation'){
+        if(!curRowEls.length) return;
+        var cx=curSelIdx+dir;
+        if(cx<0||cx>=curRowEls.length){ wheelRubber(dir); return; }
+        curSelIdx=cx; curUpdateSel(); return;
+      }
       var items=homeItems(); if(!items.length) return;
       var nx=selIdx+dir;
       if(nx<0||nx>=items.length){ wheelRubber(dir); return; } // J4
@@ -3073,13 +3094,13 @@
     if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
     var parent=screenParent(cur);
     if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); }
-    if(parent){ show(parent); if(parent==='home') renderRows(); if(parent==='menu') loadTicketsQuiet(); }
+    if(parent){ show(parent); if(parent==='home'){ if(homeTab==='curation') renderCuration(); else renderRows(); } if(parent==='menu') loadTicketsQuiet(); }
     else if(window.wheelRubber){ wheelRubber(-1); } // home = 최상위, 부드러운 저항
   }
   function goHome(){
     if(cur==='login'||cur==='home') return;
     if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); }
-    show('home'); renderRows();
+    show('home'); if(homeTab==='curation') renderCuration(); else renderRows();
   }
   // 재생 중 '가운데 누른 채 휠 회전' = 현재 구간 내부 스크럽 (클립=seekTo · 노트=오디오 위치)
   function dispatchScrub(dir){
@@ -3214,7 +3235,9 @@
   document.getElementById('bNext').onclick=function(){ if(wheelStole()) return; dispatchNotch(1) };
   function corePress(){
     if(cur==='login'){ loginRedirect(); return; }
-    if(cur==='home'){ var items=homeItems(); var m=items[selIdx];
+    if(cur==='home'){
+      if(homeTab==='curation'){ var ce=curRowEls[curSelIdx]; if(ce) ce.click(); return; }
+      var items=homeItems(); var m=items[selIdx];
       if(m){ var k=rowState(m).kind; if(k!=='making'&&k!=='loading') openNote(m); } return; }
     if(cur==='menu'){ var mr=menuRows(); if(mr[selMenu]) mr[selMenu].click(); return; }
     if(cur==='player'){ setPlaying(!playing); }
