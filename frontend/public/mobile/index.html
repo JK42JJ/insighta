@@ -647,6 +647,56 @@
   .inst-x{border:none; background:none; cursor:pointer; font-family:inherit; font-size:13px; font-weight:750;
     color:var(--paper-sub); padding:9px; margin-top:2px; touch-action:manipulation}
 
+  /* YouTube connect wizard sheet [J:07-21] — bottom sheet OVER content, playback preserved behind.
+     Overlay is orthogonal to screens (body.ytsheet toggle); the back button lowers it, never navigates. */
+  #ytSheet{position:absolute; inset:0; z-index:64; display:flex; align-items:flex-end; justify-content:center;
+    pointer-events:none; opacity:0; transition:opacity .34s var(--soft)}
+  #ytSheet .yts-bd{position:absolute; inset:0; background:rgba(30,27,22,.42)}
+  #ytSheet .yts-card{position:relative; width:100%; max-width:360px; background:var(--paper-hi,#FAF6EC);
+    border-radius:22px 22px 0 0; padding:14px 22px calc(20px + var(--sab)); box-shadow:0 -14px 44px rgba(30,27,22,.30);
+    transform:translateY(103%); transition:transform .42s var(--spring); display:flex; flex-direction:column; gap:12px; text-align:center}
+  body.ytsheet #ytSheet{opacity:1; pointer-events:auto}
+  body.ytsheet #ytSheet .yts-card{transform:translateY(0)}
+  #ytSheet .yts-grip{width:38px; height:4px; border-radius:99px; background:rgba(94,86,72,.22); margin:0 auto}
+  #ytSheet .yts-back{position:absolute; left:12px; top:11px; border:none; background:none; font-family:inherit;
+    font-size:12.5px; font-weight:750; color:var(--paper-sub); cursor:pointer; padding:7px; touch-action:manipulation; z-index:2}
+  .yts-h{font-size:20px; font-weight:850; color:var(--paper-ink); line-height:1.35; letter-spacing:-.01em; margin-top:4px}
+  .yts-h2{font-size:17px; font-weight:800; color:var(--paper-ink); line-height:1.4; margin-top:2px}
+  .yts-sub{font-size:12.5px; font-weight:600; color:var(--paper-sub); line-height:1.7}
+  .yts-cta{display:inline-flex; align-items:center; justify-content:center; gap:9px; background:#fff; color:#3B372F;
+    font-family:inherit; font-size:14px; font-weight:800; padding:13px 20px; border-radius:14px; cursor:pointer;
+    -webkit-tap-highlight-color:transparent; box-shadow:0 4px 14px -4px rgba(0,0,0,.22); border:1px solid rgba(94,86,72,.16)}
+  .yts-cta:active{transform:scale(.98)}
+  .yts-cta[disabled]{opacity:.6; pointer-events:none}
+  .yts-safe{font-size:11px; font-weight:600; color:var(--paper-sub)}
+  .yts-props{display:flex; flex-direction:column; gap:8px; margin-top:2px}
+  .yts-prop{display:flex; flex-direction:column; align-items:flex-start; gap:5px; text-align:left;
+    border:1px solid rgba(94,86,72,.14); background:rgba(255,255,255,.6); border-radius:15px; padding:13px 15px;
+    cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent; transition:transform .12s ease}
+  .yts-prop:active{transform:scale(.985)}
+  .yts-prop-dom{font-size:10px; font-weight:800; letter-spacing:.04em; color:var(--acc-ink);
+    background:rgba(206,95,48,.10); padding:2px 8px; border-radius:99px}
+  .yts-prop-t{font-size:15px; font-weight:750; color:var(--paper-ink)}
+  .yts-ghost{border:none; background:none; font-family:inherit; font-size:12px; font-weight:700;
+    color:var(--paper-sub); cursor:pointer; padding:8px; touch-action:manipulation}
+  .yts-acct{font-size:13px; font-weight:700; color:var(--paper-ink); background:rgba(94,86,72,.06);
+    border-radius:12px; padding:11px 14px; word-break:break-all}
+  .yts-danger{border:1px solid var(--acc-lo); background:none; color:var(--acc-ink); font-family:inherit;
+    font-size:13px; font-weight:800; padding:11px 18px; border-radius:12px; cursor:pointer; touch-action:manipulation}
+  .yts-danger.confirm{background:var(--acc); color:#fff; border-color:var(--acc)}
+  .yts-danger[disabled]{opacity:.6; pointer-events:none}
+  .yts-tune{display:flex; flex-direction:column; align-items:center; gap:16px; padding:20px 0}
+  .yts-dial{width:54px; height:54px; border-radius:50%; border:3px solid rgba(94,86,72,.14);
+    border-top-color:var(--ui); animation:ytspin 1s linear infinite}
+  @keyframes ytspin{to{transform:rotate(360deg)}}
+  .yts-tune-t{font-size:13.5px; font-weight:700; color:var(--paper-ink)}
+  @media (prefers-reduced-motion:reduce){ .yts-dial{animation:none} #ytSheet .yts-card{transition-duration:.001s} }
+  /* Curation account chip (connected) — opens the manage sheet */
+  .cur-chip{align-self:flex-start; display:inline-flex; align-items:center; gap:6px; border:1px solid rgba(94,86,72,.16);
+    background:rgba(255,255,255,.5); color:var(--paper-sub); font-family:inherit; font-size:11px; font-weight:750;
+    padding:5px 11px; border-radius:99px; cursor:pointer; -webkit-tap-highlight-color:transparent; margin-bottom:2px}
+  .cur-chip:active{transform:scale(.97)}
+
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
   .shr{border:none; background:none; cursor:pointer; touch-action:manipulation; color:var(--paper-sub);
     padding:4px 8px; margin-left:auto; flex:none; line-height:0}
@@ -957,6 +1007,16 @@
           <div class="inst-step"><span class="inst-n num">2</span>목록을 내려 <b>"홈 화면에 추가"</b></div>
           <div class="inst-step"><span class="inst-n num">3</span>오른쪽 위 <b>추가</b> — 끝</div>
           <button class="inst-x" id="instClose">닫기</button>
+        </div>
+      </div>
+
+      <!-- YouTube connect wizard sheet [J:07-21] — overlay over content, playback preserved, back returns -->
+      <div id="ytSheet" aria-hidden="true">
+        <div class="yts-bd" id="ytsBd"></div>
+        <div class="yts-card" role="dialog" aria-modal="true" aria-label="유튜브 연결">
+          <button class="yts-back" id="ytsBack" type="button">← 계속 보기</button>
+          <div class="yts-grip"></div>
+          <div id="ytsBody"></div>
         </div>
       </div>
 
@@ -1312,35 +1372,160 @@
       renderProposals(props);
     }catch(e){ curConnectGate(); }   // 401/403/not-connected → connect gate
   }
+  // Not-connected gate (behind-content, never a dead end): slim invite in the tab body +
+  // auto-raise the connect sheet once per session. Tapping the button re-opens the sheet.
+  var ytAutoRaised=false;
   function curConnectGate(note){
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-connect';
     el.innerHTML='<span class="cic">'+CUR_STAR+'</span>'
       +'<span class="t1">매주 나를 위한 영상</span>'
-      +'<span class="t2">유튜브 계정을 연결하면<br>관심사에 맞는 영상을 큐레이션해 드려요</span>'
+      +'<span class="t2">유튜브를 연결하면<br>관심사에 맞는 영상을 큐레이션해 드려요</span>'
       +'<button class="cbtn" id="bCurConnect">유튜브 연결</button>'
       +(note?'<span class="cur-note">'+curEsc(note)+'</span>':'');
-    var b=document.getElementById('bCurConnect'); if(b) b.onclick=curConnect;
+    var b=document.getElementById('bCurConnect'); if(b) b.onclick=function(){ openYtSheet(); ytRenderInvite(); };
+    if(!ytAutoRaised && !note){ ytAutoRaised=true; openYtSheet(); ytRenderInvite(); }
   }
-  // Full-page redirect — NO popup. origin=mobile marks the state so the EF callback
-  // returns to /mobile/?youtube=connected (the dial), not the PC settings page. The
-  // app session persists in localStorage, so we come back logged in + connected.
-  async function curConnect(){
-    var btn=document.getElementById('bCurConnect');
+
+  /* ============ YouTube connect wizard sheet (#ytSheet) [J:07-21] ============
+     Bottom-sheet overlay orthogonal to screens: rises OVER the current content
+     (playback preserved behind), the back button lowers it — never navigates away.
+     Wizard: S1 invite -> S2 handoff (snapshot + OAuth redirect) -> S3 tuning -> S4
+     proposals. (c) disconnect = the sheet's connected state. EF/BE unchanged —
+     the redirect round-trip is sealed FE-side via a sessionStorage snapshot.
+     Design: supervisor 0709 (Fable 5), guest-sheet pattern. */
+  var YTS_SNAP='insighta-yt-wizard-snap';
+  var YT_GOOGLE_SVG='<svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.5 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.6a14.5 14.5 0 0 1 0-9.2l-7.9-6.2a24 24 0 0 0 0 21.6l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.6-5.8l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-4-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>';
+  function openYtSheet(){ document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
+  function closeYtSheet(){ document.body.classList.remove('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true'); }
+
+  // S1 — invite. Content keeps playing behind; the top-left back button dismisses at every step.
+  function ytRenderInvite(){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    b.innerHTML='<div class="yts-h">보던 유튜브가,<br>나만의 목표 지도로</div>'
+      +'<div class="yts-sub">자주 머무는 주제 세 갈래를<br>다이얼에 맞춰 드려요.</div>'
+      +'<button class="yts-cta" id="ytsGo">'+YT_GOOGLE_SVG+'<span>Google로 시작하기</span></button>'
+      +'<div class="yts-safe">지금은 그냥 계속 봐도 좋아요</div>';
+    var g=document.getElementById('ytsGo'); if(g) g.onclick=ytHandoff;
+  }
+
+  // S2 — handoff. Snapshot the background (so S3 can restore it), then OAuth redirect.
+  // The redirect is inevitable, so we announce it in the button rather than hide it.
+  async function ytHandoff(){
+    var g=document.getElementById('ytsGo');
     try{
       var tok=await freshToken(); if(!tok){ show('login'); return; }
-      if(btn){ btn.disabled=true; btn.textContent='연결 중…'; }
+      if(g){ g.setAttribute('disabled','disabled'); var lbl=g.querySelector('span'); if(lbl) lbl.textContent='Google로 이동합니다…'; }
+      var snap={ returnTo:'yt-wizard', screen:cur, ts:Date.now() };
+      try{ sessionStorage.setItem(YTS_SNAP, JSON.stringify(snap)); }catch(e){}
       var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=auth-url&origin=mobile',{headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
       if(!r.ok) throw new Error('auth-url '+r.status);
-      var j=await r.json();
-      if(!j||!j.authUrl) throw new Error('no authUrl');
+      var j=await r.json(); if(!j||!j.authUrl) throw new Error('no authUrl');
       location.href=j.authUrl;
-    }catch(e){ curConnectGate('연결에 실패했어요. 다시 시도해주세요'); }
+    }catch(e){ try{ sessionStorage.removeItem(YTS_SNAP); }catch(_){} if(g){ g.removeAttribute('disabled'); } ytRenderInvite(); toast('연결을 시작하지 못했어요 — 다시 시도해주세요'); }
+  }
+
+  // S3 — return + tuning. Called on boot when we come back from OAuth with a snapshot.
+  // Background is already restored to the curation tab; float the sheet with the tuning
+  // interstitial, then poll for proposals (profile builds async right after connect).
+  function ytRenderTuning(){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    b.innerHTML='<div class="yts-tune"><div class="yts-dial"></div><div class="yts-tune-t" id="ytsTuneT">다이얼을 맞추는 중…</div></div>';
+    var lines=['다이얼을 맞추는 중…','주파수가 잡히고 있어요'];
+    var i=0, el=document.getElementById('ytsTuneT');
+    var iv=setInterval(function(){ i=(i+1)%lines.length; var e=document.getElementById('ytsTuneT'); if(e){ e.textContent=lines[i]; } else { clearInterval(iv); } },1500);
+    ytPollProposals(0,function(props){ clearInterval(iv); ytRenderProposals(props); });
+  }
+  function ytPollProposals(tries,done){
+    api('/curations/suggest').then(function(r){
+      if(r.status===202){ if(tries<20){ setTimeout(function(){ ytPollProposals(tries+1,done); },2500); } else { done([]); } return null; }
+      return r.json();
+    }).then(function(j){ if(j){ done((j&&j.data&&j.data.proposals)||[]); } }).catch(function(){ done([]); });
+  }
+
+  // S4 — proposals inside the sheet (full-screen C dropped). Select → build → curation tab.
+  function ytRenderProposals(props){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    if(!props.length){
+      b.innerHTML='<div class="yts-h2">잠시만요</div>'
+        +'<div class="yts-sub">세 갈래를 고르는 중이에요.<br>큐레이션 탭에서 곧 확인할 수 있어요.</div>'
+        +'<button class="yts-ghost" id="ytsDone">계속 보기</button>';
+      var c=document.getElementById('ytsDone'); if(c) c.onclick=closeYtSheet;
+      return;
+    }
+    var h='<div class="yts-h2">세 갈래가 잡혔어요.<br>하나 골라볼까요.</div><div class="yts-props">';
+    props.forEach(function(p){
+      h+='<button class="yts-prop" data-topic="'+curEsc(p.topic)+'">'
+        +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
+        +'<span class="yts-prop-t">'+curEsc(p.topic)+'</span></button>';
+    });
+    h+='</div><button class="yts-ghost" id="ytsRetune">다른 주파수 듣기</button>';
+    b.innerHTML=h;
+    [].forEach.call(b.querySelectorAll('.yts-prop'),function(btn){
+      btn.onclick=function(){ var t=btn.getAttribute('data-topic'); closeYtSheet(); setHomeTab('curation'); selectCuration(t); };
+    });
+    var rt=document.getElementById('ytsRetune'); if(rt) rt.onclick=ytRenderTuning;
+  }
+
+  // (c) — connected state (disconnect). Same sheet; entry = curation-tab account chip.
+  async function ytFetchStatus(){
+    try{
+      var tok=await freshToken(); if(!tok) return null;
+      var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=status',{headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
+      if(!r.ok) return null; return await r.json();
+    }catch(e){ return null; }
+  }
+  async function ytOpenManage(){
+    openYtSheet(); ytRenderConnected(null);
+    var st=await ytFetchStatus(); ytRenderConnected(st);
+  }
+  function ytRenderConnected(status){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    var acct=(status&&status.youtubeEmail)||'연결된 계정';
+    b.innerHTML='<div class="yts-h2">유튜브 연결됨</div>'
+      +'<div class="yts-acct">'+curEsc(acct)+'</div>'
+      +'<button class="yts-danger" id="ytsDisc">연결 해제</button>'
+      +'<div class="yts-safe">해제해도 만든 큐레이션은 남아요</div>';
+    var d=document.getElementById('ytsDisc'); if(d) d.onclick=ytDiscConfirm;
+  }
+  function ytDiscConfirm(){
+    var d=document.getElementById('ytsDisc'); if(!d) return;
+    d.classList.add('confirm'); d.textContent='정말 해제할까요? · 해제하기';
+    d.onclick=ytDisconnect;
+  }
+  async function ytDisconnect(){
+    var d=document.getElementById('ytsDisc'); if(d){ d.setAttribute('disabled','disabled'); d.textContent='해제하는 중…'; }
+    try{
+      var tok=await freshToken(); if(!tok){ show('login'); return; }
+      var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=disconnect',{method:'POST',headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
+      if(!r.ok) throw new Error('disconnect '+r.status);
+      toast('유튜브 연결을 해제했어요');
+      ytAutoRaised=true;               // don't auto-pop the invite right after a manual disconnect
+      ytRenderInvite();                // soft transition back to S1 within the same sheet
+      setHomeTab('curation'); renderCuration();
+    }catch(e){ if(d){ d.removeAttribute('disabled'); } toast('해제하지 못했어요 — 다시 시도해주세요'); ytRenderConnected(null); }
+  }
+
+  // On boot after the OAuth round-trip: consume the snapshot, restore the background
+  // (curation tab), and re-raise the sheet at the tuning step. Returns true if handled.
+  function ytTryRestore(ytParam){
+    var raw; try{ raw=sessionStorage.getItem(YTS_SNAP); }catch(e){}
+    if(!raw) return false;
+    try{ sessionStorage.removeItem(YTS_SNAP); }catch(e){}
+    var snap; try{ snap=JSON.parse(raw); }catch(e){}
+    if(!snap || snap.returnTo!=='yt-wizard') return false;
+    show('home'); setHomeTab('curation');
+    ytAutoRaised=true;   // the wizard sheet is taking over; suppress the gate auto-raise
+    if(ytParam==='error'){ openYtSheet(); ytRenderInvite(); toast('연결에 실패했어요 — 다시 시도해주세요'); return true; }
+    openYtSheet(); ytRenderTuning();
+    return true;
   }
   function renderProposals(props){
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-props';
-    var h='<div class="cp-h">이번 주 관심사</div>';
+    // Connected → account chip (tap = manage/disconnect sheet) above this week's topics.
+    var h='<button class="cur-chip" id="curAcctChip">유튜브 연결됨 · 관리</button>';
+    h+='<div class="cp-h">이번 주 관심사</div>';
     props.forEach(function(p){
       h+='<button class="cp-card" data-topic="'+curEsc(p.topic)+'">'
         +'<span class="cp-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
@@ -1348,6 +1533,7 @@
         +'<span class="cp-go">큐레이션 받기</span></button>';
     });
     el.innerHTML=h;
+    var chip=document.getElementById('curAcctChip'); if(chip) chip.onclick=ytOpenManage;
     [].forEach.call(el.querySelectorAll('.cp-card'),function(b){
       b.onclick=function(){ selectCuration(b.getAttribute('data-topic')); };
     });
@@ -2383,6 +2569,9 @@
   };
   document.getElementById('instClose').onclick=function(){ document.getElementById('instOv').hidden=true; };
   document.getElementById('instOv').addEventListener('click',function(e){ if(e.target===this) this.hidden=true; });
+  // YouTube connect sheet — the back button and backdrop tap both dismiss to the content behind.
+  (function(){ var bk=document.getElementById('ytsBack'), bd=document.getElementById('ytsBd');
+    if(bk) bk.onclick=closeYtSheet; if(bd) bd.onclick=closeYtSheet; })();
   document.getElementById('spdBtn').onclick=cycleSpd;
   document.getElementById('spdStage').onclick=cycleSpd;
   renderSpd();
@@ -2974,13 +3163,19 @@
       }catch(e){ GUEST=null; show('login'); toast('링크를 열지 못했어요'); return; }
     }
     var tok=await freshToken();
-    // Return from YouTube OAuth (EF callback → /mobile/?youtube=connected|error). Clean
-    // the param; renderCuration() below re-checks (connected→analyzing, error→gate via P1).
+    // Return from YouTube OAuth (EF callback → /mobile/?youtube=connected|error). Clean the
+    // param. If a wizard snapshot exists, ytTryRestore rebuilds the sheet (S3 tuning →
+    // proposals) over the restored curation tab — the redirect looks seamless. Otherwise
+    // renderCuration re-checks (connected→analyzing, error→gate).
     var ytParam=new URLSearchParams(location.search).get('youtube');
     if(ytParam) history.replaceState(null,'',location.pathname);
-    if(tok){ show('home'); loadList(); renderCuration(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite();
-      if(ytParam==='connected') toast('유튜브 계정을 연결했어요');
-      else if(ytParam==='error') toast('유튜브 연결에 실패했어요. 다시 시도해주세요'); }
+    if(tok){
+      var wiz = ytParam ? ytTryRestore(ytParam) : false;
+      show('home'); loadList(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite();
+      if(!wiz) renderCuration();
+      if(!wiz && ytParam==='connected') toast('유튜브 계정을 연결했어요');
+      else if(!wiz && ytParam==='error') toast('유튜브 연결에 실패했어요. 다시 시도해주세요');
+    }
     else { show('login'); }
   })();
 </script>
