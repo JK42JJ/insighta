@@ -719,6 +719,18 @@
   #curDeck{position:fixed; inset:0; z-index:70; background:#12100E; display:none; flex-direction:column;
     padding:calc(var(--sat) + 8px) 14px calc(var(--sab) + 10px); color:#EDE7DC; overflow:hidden;
     opacity:0; transition:opacity .25s var(--soft)}
+  /* Ambient background (YouTube ambient-mode grammar): the current poster,
+     heavily blurred + dimmed, fills the whole deck so the empty area below the
+     video card carries the video's colors instead of a flat black void. */
+  .cd-amb{position:absolute; inset:-14%; z-index:0; background:#12100E center/cover no-repeat;
+    -webkit-filter:blur(var(--cd-amb-blur)) saturate(1.3) brightness(.5);
+    filter:blur(var(--cd-amb-blur)) saturate(1.3) brightness(.5);
+    opacity:0; transition:opacity .6s var(--soft)}
+  .cd-amb.on{opacity:.5}
+  /* keep the wheel/text legible: darken the lower half where the wheel lives */
+  .cd-amb::after{content:''; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(18,16,14,.15) 0%, rgba(18,16,14,.55) 58%, rgba(18,16,14,.82) 100%)}
+  @media (prefers-reduced-motion:reduce){ .cd-amb{transition:none} }
   body.curdeck #curDeck{display:flex}
   body.curdeck.cdin #curDeck{opacity:1}   /* D0: cream->dark crossfade (studio entry) */
   /* D4 — weekly complete card (slides into the deck position) */
@@ -813,6 +825,8 @@
      Device review 4: APPLE GLASS finish + summon-anywhere fade (own cdwheel state,
      not the stage/reading awake path): any deck touch fades it in (220ms), 3s idle
      fades it out (500ms); pointer-events only while visible. */
+  :root{--cd-amb-blur: 46px;   /* deck ambient blur — lower if fullscreen blur drops frames on low-end iOS */
+  }
   :root{--cd-glass: blur(18px) saturate(1.6);   /* tunable if warm-swap playback drops frames */
     /* quiet state while a video PLAYS — lower saturation, more transparency
        (device directive: the wheel must not compete with the picture) */
@@ -1212,6 +1226,7 @@
   <!-- Curation deck [J:07-21] — full-bleed player, approved-design port (filmstrip + wave + wheel).
        Body-level so it truly covers the viewport (never trapped inside the screen area). -->
   <div id="curDeck" aria-hidden="true">
+    <div class="cd-amb" id="cdAmb" aria-hidden="true"></div>
     <div class="cd-top">
       <button class="cd-back" id="cdBack" type="button">← 큐레이션</button>
       <span class="cd-title" id="cdTitle"></span>
@@ -1947,6 +1962,7 @@
     clearTimeout(cdWheelT);
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
+    var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
     setHomeTab('curation');
   }
   function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
@@ -1964,17 +1980,19 @@
   function cdPosterSync(){
     var it=cdItems[cdIdx]; if(!it) return;
     var vid=it.video_id;
-    var b=document.getElementById('cdPosterB'), f=document.getElementById('cdPosterF');
+    var b=document.getElementById('cdPosterB'), f=document.getElementById('cdPosterF'), amb=document.getElementById('cdAmb');
     // paint instantly (hq/known thumb) — the maxres probe upgrade lands async;
     // waiting for the probe left the stage dark for a network round-trip
     var now=cdPosterCache[vid]||cdThumb(it);
     if(b) b.style.backgroundImage='url("'+now+'")';
     if(f) f.style.backgroundImage='url("'+now+'")';
+    if(amb){ amb.style.backgroundImage='url("'+now+'")'; amb.classList.add('on'); } // deck ambient bg
     cdBestPoster(vid, function(u){
       if(u===now) return;
       if(!cdItems[cdIdx]||cdItems[cdIdx].video_id!==vid) return; // stale guard
       if(b) b.style.backgroundImage='url("'+u+'")';
       if(f) f.style.backgroundImage='url("'+u+'")';
+      if(amb) amb.style.backgroundImage='url("'+u+'")';
     });
   }
   /* Track renderer (motion v2): equal-height cards laid on a translating track.
