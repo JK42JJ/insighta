@@ -197,6 +197,9 @@ APPLY_FILES=(
   # IF NOT EXISTS + NOTIFY pgrst — fully idempotent.
   "prisma/migrations/curation/001_create_curation_tables.sql"
   "prisma/migrations/curation/002_curation_personalization.sql"
+  # curation-watched (2026-07-21): watched_at derived-only column for lineup row
+  # meta (M/N listened / weekly complete). ADD COLUMN IF NOT EXISTS = idempotent.
+  "prisma/migrations/curation-watched/001_watched_at.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
