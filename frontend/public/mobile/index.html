@@ -2216,6 +2216,7 @@
     var idle=1-cdAct;
     if(cdWarmKey[idle]===key){ cdAct=idle; }         // warm slot has it: swap
     cdShowActive();
+    try{ var q=cdP[1-cdAct]; if(q&&q.pauseVideo) q.pauseVideo(); }catch(e){} // single audio owner: silence the slot we just left
     var p=cdP[cdAct]; if(!p||!p.loadVideoById) return;
     // A1 state machine: load (+ dark veil) ONLY on a true cold slot. A warm-buffered
     // or already-loaded slot just plays — no cdloading veil, so no black flicker on
@@ -2232,7 +2233,11 @@
     cdWarmInto(1-cdAct, cdIdx+1<cdItems.length?cdIdx+1:cdIdx); // keep travel-direction neighbor warm
     cdStartPoll();
   }
-  function cdPause(){ try{ var p=cdP[cdAct]; if(p&&p.pauseVideo) p.pauseVideo(); }catch(e){} }
+  // Nav freeze = pause EVERY slot, not just the active one. Playback focus can sit on a
+  // slot cdAct does not point to (end-of-video rolling-start plays the idle slot; a warm-swap
+  // moves cdAct while the old slot's pauseVideo() is still in flight on iOS). Pausing only
+  // cdAct let the other slot keep sounding under the hidden stage = the "ghost". Freeze both.
+  function cdPause(){ [0,1].forEach(function(i){ try{ var p=cdP[i]; if(p&&p.pauseVideo) p.pauseVideo(); }catch(e){} }); }
   function cdToggle(){
     if(!document.body.classList.contains('cdplaying')){ cdPlay(); return; }
     try{
