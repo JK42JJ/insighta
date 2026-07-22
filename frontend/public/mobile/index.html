@@ -915,18 +915,24 @@
     transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(18,16,14,.8)}
   /* jb-label retired (P1-4): header keeps the persistent N/20 — one meaning, one place */
   body.cdnav .jbar{height:5px}
-  /* Landscape = the mockup's fullscreen contract: the stage fills the viewport */
+  /* Landscape = the mockup's fullscreen contract: the stage fills the viewport.
+     These are gated on body.curdeck ONLY (NOT .cdplaying) — supervisor L1: "stage size
+     only changes on rotation". Gating on .cdplaying let nav/pause frames drop the stage
+     to the portrait card size (cdRender's inline g.card height) + reveal the in-flow
+     .cd-top = the size "seesaw" (pump① 69% posters, pump② 15% height). Now the full-stage
+     layout is invariant across play/pause/nav; only rotation changes it. */
   @media (orientation:landscape){
-    body.curdeck.cdplaying #curDeck{padding:0}
-    body.curdeck.cdplaying .cd-top,body.curdeck.cdplaying #cdTrack{display:none}
+    body.curdeck #curDeck{padding:0}
+    body.curdeck .cd-top,body.curdeck #cdTrack{display:none}   /* landscape = no portrait header / card track; chrome is overlay-only */
     /* Pin the stage to the raw viewport so no ancestor padding can offset it. */
-    body.curdeck.cdplaying .cd-stage{position:fixed; inset:0; height:100% !important; width:100% !important; border-radius:0; box-shadow:none}
-    /* Landscape shift root cause (device: "안에서 더 넓어서 왔다갔다"): the poster
-       bleed (.cp-back inset:-8%) and ambient (inset:-14%) become huge on the wide
-       full-screen stage (measured 1858px vs 1430 viewport). Clip them to the stage. */
-    body.curdeck.cdplaying .cd-poster .cp-back{inset:0; transform:none}
-    body.curdeck.cdplaying .cd-amb{display:none} /* ambient = portrait-only decoration; the stage fills landscape */
-    body.curdeck.cdplaying .cd-chap{display:none}
+    body.curdeck .cd-stage{position:fixed; inset:0; height:100% !important; width:100% !important; border-radius:0; box-shadow:none}
+    body.curdeck.cdnav .cd-stage{opacity:1}   /* nav = keep the video full-size in place (crossfade), never fade to the (hidden) poster track */
+    /* Poster/veil inherits the full stage rect (ride-along ①: no small poster on black).
+       Also clips the poster bleed (.cp-back inset:-8%) / ambient (-14%) that ballooned on
+       the wide full-screen stage (measured 1858px vs 1430 viewport). */
+    body.curdeck .cd-poster .cp-back{inset:0; transform:none}
+    body.curdeck .cd-amb{display:none} /* ambient = portrait-only decoration; the stage fills landscape */
+    body.curdeck .cd-chap{display:none}
   }
 
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
@@ -1364,7 +1370,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-22-08';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-22-09';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2198,7 +2204,12 @@
     tr.innerHTML=html;
     tr.classList.remove('gliding');
     tr.style.transform='translateY('+(-g.pitch)+'px)';
-    var st=document.getElementById('cdStage'); if(st) st.style.height=g.card+'px';
+    // Portrait: the stage is one card tall (inline height). Landscape: CSS owns the height
+    // (100% of the fixed viewport) — an inline card-height here fights the !important rule and
+    // collapses the stage mid-nav (the size pump). Clear it in landscape so CSS wins; cdRemeasure
+    // re-runs cdRender on orientationchange, so returning to portrait restores the card height.
+    var st=document.getElementById('cdStage');
+    if(st) st.style.height = matchMedia('(orientation:landscape)').matches ? '' : (g.card+'px');
     var cur=cdItems[cdIdx];
     document.getElementById('cdVt').textContent=cur.title||'제목 없음';
     var bits=[];
