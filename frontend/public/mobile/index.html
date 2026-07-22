@@ -2334,11 +2334,18 @@
   // the wheel continuously). Raw wheel degrees -> px; whole-card crossings commit
   // live (vibrate per boundary); release snaps by displacement/velocity.
   var CD_DEG_PER_CARD=140;   // wheel degrees per full card of travel
-  var cdFollow={on:false, off:0, v:0, lt:0};
+  var CD_OMEGA_REF=210;      // deg/s where wheel acceleration kicks in (tunable)
+  var CD_ACCEL_MAX=3;        // extra multiplier cap -> total up to 4x (fast spin = multi-card)
+  var CD_FRICTION=0.94;      // per-16ms momentum decay (release inertia)
+  var CD_FLING_MIN=0.5;      // px/ms release velocity above which momentum kicks in
+  var CD_MOM_MINV=0.055;     // px/ms momentum stop threshold
+  var CD_MOM_MAXV=5.0;       // px/ms fling velocity clamp
+  var cdFollow={on:false, off:0, v:0, lt:0, raf:0};
   function cdWheelMove(deg){
     if(!cdItems.length) return;
     document.body.classList.remove('cdfin');
     cdWheelShow();
+    if(cdFollow.raf){ cancelAnimationFrame(cdFollow.raf); cdFollow.raf=0; } // grab back from momentum
     if(!cdNavActive){
       cdNavActive=true;
       cdWasPlaying=document.body.classList.contains('cdplaying');
@@ -2349,8 +2356,12 @@
     var g=cdPitch(), tr=document.getElementById('cdTrack');
     var now=performance.now();
     if(!cdFollow.on){ cdFollow.on=true; cdFollow.off=0; cdFollow.v=0; cdFollow.lt=now; tr.classList.remove('gliding'); }
-    var px=-deg*(g.pitch/CD_DEG_PER_CARD);        // clockwise = forward = track up
     var dt=Math.max(1, now-cdFollow.lt); cdFollow.lt=now;
+    // Acceleration: faster spin -> more px per degree, so a quick flick crosses
+    // several cards instead of crawling one-by-one (device directive).
+    var omega=Math.abs(deg)/dt*1000; // deg/s
+    var mult=1+Math.min(CD_ACCEL_MAX, Math.pow(omega/CD_OMEGA_REF, 1.2));
+    var px=-deg*(g.pitch/CD_DEG_PER_CARD)*mult;   // clockwise = forward = track up
     cdFollow.v=cdFollow.v*0.7+(px/dt)*0.3;        // smoothed px/ms
     // edge resistance (drag parity), overhang capped at half a pitch
     if((cdIdx===0&&px>0&&cdFollow.off>=0)||(cdIdx>=cdItems.length-1&&px<0&&cdFollow.off<=0)) px*=0.35;
@@ -2363,15 +2374,52 @@
     tr.style.transform='translateY('+(-g.pitch+cdFollow.off)+'px)';
     cdJbarSync(Math.max(0, -cdFollow.off/g.pitch));
   }
-  // called by the wheel engine on pointer-up (fingers off = snap + settle)
+  // Release inertia (device directive: no acceleration/momentum -> "the app gets
+  // abandoned"). A real fling decays with friction and carries through several
+  // cards; only posters render mid-glide (never play/warm), settle fires on land.
+  function cdMomentum(v0){
+    var g=cdPitch(), tr=document.getElementById('cdTrack');
+    tr.classList.remove('gliding');
+    var v=Math.max(-CD_MOM_MAXV, Math.min(CD_MOM_MAXV, v0)); // px/ms, negative=forward
+    var last=performance.now();
+    if(cdFollow.raf) cancelAnimationFrame(cdFollow.raf);
+    function step(now){
+      var dt=Math.min(40, now-last); last=now;
+      v*=Math.pow(CD_FRICTION, dt/16.67);
+      cdFollow.off+=v*dt;
+      while(cdFollow.off<=-g.pitch&&cdIdx<cdItems.length-1){ cdFollow.off+=g.pitch; cdIdx++; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(5); cdRender(); }
+      while(cdFollow.off>=g.pitch&&cdIdx>0){ cdFollow.off-=g.pitch; cdIdx--; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(5); cdRender(); }
+      if((cdIdx===0&&cdFollow.off>0)||(cdIdx>=cdItems.length-1&&cdFollow.off<0)){ cdFollow.off*=0.55; v*=0.4; } // edge rubber-band
+      tr.style.transform='translateY('+(-g.pitch+cdFollow.off)+'px)';
+      cdJbarSync(Math.max(0,-cdFollow.off/g.pitch));
+      if(Math.abs(v)>CD_MOM_MINV){ cdFollow.raf=requestAnimationFrame(step); }
+      else { cdFollow.raf=0; cdMomentumLand(); }
+    }
+    cdFollow.raf=requestAnimationFrame(step);
+  }
+  // Destination land: ease the small leftover onto the nearest card boundary
+  // (decelerate onto a card, not stop-then-snap), then settle playback.
+  function cdMomentumLand(){
+    var g=cdPitch(), tr=document.getElementById('cdTrack');
+    if(cdFollow.off<=-g.pitch*0.5&&cdIdx<cdItems.length-1){ cdIdx++; cdFollow.off+=g.pitch; cdRender(); }
+    else if(cdFollow.off>=g.pitch*0.5&&cdIdx>0){ cdIdx--; cdFollow.off-=g.pitch; cdRender(); }
+    cdFollow.off=0; cdFollow.v=0;
+    tr.classList.add('gliding');
+    tr.style.transform='translateY('+(-g.pitch)+'px)';
+    clearTimeout(cdSettleT);
+    cdSettleT=setTimeout(function(){ tr.classList.remove('gliding'); cdSettle(); }, 200);
+  }
+  // called by the wheel engine on pointer-up (fingers off = fling->momentum, else snap)
   function cdWheelRelease(){
     if(cdFollow.on){
       cdFollow.on=false;
       var g=cdPitch(), tr=document.getElementById('cdTrack');
-      var off=cdFollow.off, v=cdFollow.v; cdFollow.off=0; cdFollow.v=0;
+      var off=cdFollow.off, v=cdFollow.v;
+      if(Math.abs(v)>=CD_FLING_MIN){ cdMomentum(v); return; }   // fling -> inertial multi-card glide + settle
+      cdFollow.off=0; cdFollow.v=0;
       var dir=0;
-      if((off<-g.pitch*0.28||v<-0.45)&&cdIdx<cdItems.length-1) dir=1;
-      else if((off>g.pitch*0.28||v>0.45)&&cdIdx>0) dir=-1;
+      if((off<-g.pitch*0.28)&&cdIdx<cdItems.length-1) dir=1;
+      else if((off>g.pitch*0.28)&&cdIdx>0) dir=-1;
       tr.classList.add('gliding');
       if(dir!==0){
         cdIdx+=dir; cdEndRolled=false; cdAnimBusy=true;
@@ -3486,7 +3534,7 @@
     // Finger-follow drag (YouTube grammar): the track tracks the finger 1:1 live;
     // release snaps by displacement/velocity — next/prev glide or spring back.
     (function(){
-      var y0=null, t0=0, dy=0, active=false, navGated=false;
+      var y0=null, t0=0, dy=0, yPrev=0, active=false, navGated=false;
       var TAP_GATE=8; // px of movement before this becomes a drag (a tap only summons)
       function tr(){ return document.getElementById('cdTrack'); }
       function rest(){ return -cdPitch().pitch; }
@@ -3510,25 +3558,41 @@
       },{passive:true});
       g('cdStrip').addEventListener('touchmove',function(e){
         if(!active) return;
-        dy=e.touches[0].clientY - y0;
-        if(!navGated){ if(Math.abs(dy)<TAP_GATE) return; enterNav(); } // real drag -> now enter nav
-        var p=cdPitch().pitch;
-        // edge resistance: first/last card drags at 0.35x instead of hard stop
-        var lim=((dy>0&&cdIdx===0)||(dy<0&&cdIdx>=cdItems.length-1))?0.35:1;
-        var d2=Math.max(-p, Math.min(p, dy*lim));
-        tr().style.transform='translateY('+(rest()+d2)+'px)';
+        var y=e.touches[0].clientY; dy=y - y0;
+        if(!navGated){
+          if(Math.abs(dy)<TAP_GATE) return;
+          enterNav();                       // real drag -> now enter nav
+          cdFollow.off=0; cdFollow.v=0; cdFollow.lt=Date.now(); yPrev=y;
+        }
+        // Stick to the finger through as many cards as it travels (device directive:
+        // "grip the video and move it up/down freely") -- no +-1 clamp; whole-card
+        // crossings commit live, release carries momentum.
+        var g2=cdPitch(), now=Date.now(), delta=y - yPrev; yPrev=y;
+        if((cdIdx===0&&delta>0&&cdFollow.off>=0)||(cdIdx>=cdItems.length-1&&delta<0&&cdFollow.off<=0)) delta*=0.35; // edge resistance
+        var dt=Math.max(1, now-cdFollow.lt); cdFollow.lt=now;
+        cdFollow.v=cdFollow.v*0.7+(delta/dt)*0.3;     // smoothed px/ms (negative = forward)
+        cdFollow.off+=delta;
+        while(cdFollow.off<=-g2.pitch&&cdIdx<cdItems.length-1){ cdFollow.off+=g2.pitch; cdIdx++; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(6); cdRender(); }
+        while(cdFollow.off>=g2.pitch&&cdIdx>0){ cdFollow.off-=g2.pitch; cdIdx--; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(6); cdRender(); }
+        var cap=g2.pitch*0.5;
+        if(cdIdx===0&&cdFollow.off>cap) cdFollow.off=cap;
+        if(cdIdx>=cdItems.length-1&&cdFollow.off<-cap) cdFollow.off=-cap;
+        tr().style.transform='translateY('+(rest()+cdFollow.off)+'px)';
+        cdJbarSync(Math.max(0,-cdFollow.off/g2.pitch));
       },{passive:true});
       g('cdStrip').addEventListener('touchend',function(){
         if(!active) return; active=false;
         if(!navGated){ return; } // a tap (never crossed the gate) -> summon only, no snap/restart
-        var p=cdPitch().pitch, dt=Math.max(1,Date.now()-t0), v=dy/dt; // px/ms
+        var g2=cdPitch(), off=cdFollow.off, v=cdFollow.v; // px/ms from the drag
+        if(Math.abs(v)>=CD_FLING_MIN){ cdMomentum(v); return; } // fling -> inertial multi-card glide + settle
+        cdFollow.off=0; cdFollow.v=0;
         var dir=0;
-        if((dy<-p*0.28||v<-0.45)&&cdIdx<cdItems.length-1) dir=1;
-        else if((dy>p*0.28||v>0.45)&&cdIdx>0) dir=-1;
+        if(off<-g2.pitch*0.28&&cdIdx<cdItems.length-1) dir=1;
+        else if(off>g2.pitch*0.28&&cdIdx>0) dir=-1;
         var t=tr(); t.classList.add('gliding');
         if(dir!==0){
           cdIdx+=dir; cdEndRolled=false; cdAnimBusy=true;
-          t.style.transform='translateY('+(rest()-dir*p)+'px)';
+          t.style.transform='translateY('+(rest()-dir*g2.pitch)+'px)';
           var done=false;
           var fin=function(){ if(done) return; done=true; cdFinCur=null; cdAnimBusy=false; cdRender(); if(cdQueue.length) cdPump(); };
           cdFinCur=fin;
