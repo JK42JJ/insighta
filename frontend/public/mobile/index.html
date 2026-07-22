@@ -154,20 +154,22 @@
   /* overflow:clip (not hidden) so a row's scrollIntoView can't horizontally
      scroll the clip and reveal the wrong pane; older Safari keeps the hidden
      fallback + the scroll-reset listener below. */
-  /* The window's OWN bottom edge is the slider rail (supervisor diagram, panel 3):
-     a visible border-bottom line; the thumb is a bead threaded on it (half inside
-     the window, half below). No padding band above it — content clips right at the
-     line, which reads as the window's natural bottom edge. */
-  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip; border-bottom:1.5px solid rgba(94,86,72,.28)}
+  /* Slider rail = the .epaper CARD's own bottom edge (supervisor final patch): the
+     thumb is a bead threaded on that edge, moved OUT of this clip container into
+     .device — epaper has overflow:hidden, so a half-outside thumb clips here. No
+     hairline drawn inside the window; the card's natural edge is the line. */
+  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip}
   .hstrip{display:flex; width:300%; height:100%; transition:transform .42s var(--spring); will-change:transform}
   .hstrip.drag{transition:none}
   .hpane{width:33.3333%; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden}
-  /* Slider (James, redo): the list window's own bottom edge IS the boundary line
-     (.hstrip-clip border-bottom above) — a straight full-width hairline, NOT the
-     card's rounded corner. The thumb rides centered on that hairline; the row
-     collapses to 0 so the list reclaims the space and the line sits low. */
-  .hsl{flex:none; position:relative; height:0; padding:0; z-index:5}
-  .hsl-track{position:absolute; left:16px; right:16px; top:-1px; height:0; background:transparent} /* invisible width ref, on the hairline */
+  /* Slider = a bead on the .epaper card's bottom edge (supervisor final patch).
+     #hsl is a SIBLING of .epaper inside .device (flex column, no gap): with height:0
+     its top sits exactly on the card's bottom edge. .device has no overflow clip, so
+     the half-outside thumb shows. Home-only (see show()); portrait-only (landscape
+     uses a row layout). Track inset 24px = epaper corner radius → straight run only. */
+  .hsl{flex:none; position:relative; height:0; padding:0; z-index:30; visibility:hidden}
+  .hsl-track{position:absolute; left:24px; right:24px; top:0; height:0; background:transparent} /* width ref on the card edge */
+  @media (orientation:landscape){ .hsl{display:none} } /* landscape home = row layout; the bottom-edge bead is a portrait affordance */
   .hsl-fill{display:none}
   .hsl-thumb{position:absolute; left:0; top:0; width:13px; height:13px; transform:translate(-50%,-50%);
     border:none; border-radius:50%; background:var(--paper); cursor:grab; touch-action:none;
@@ -1162,9 +1164,6 @@
             </div>
           </div>
         </div>
-        <div class="hsl" id="hsl">
-          <div class="hsl-track" id="hslTrack"><div class="hsl-fill" id="hslFill"></div><button class="hsl-thumb" id="hslThumb" type="button" aria-label="큐레이션·영상·노트 이동"></button></div>
-        </div>
       </div>
 
       <!-- MENU -->
@@ -1281,6 +1280,12 @@
       </div>
     </div>
 
+    <!-- Slider bead on the epaper card's bottom edge — sibling of .epaper so the
+         half-outside half is not clipped by epaper's overflow:hidden. Home-only. -->
+    <div class="hsl" id="hsl">
+      <div class="hsl-track" id="hslTrack"><div class="hsl-fill" id="hslFill"></div><button class="hsl-thumb" id="hslThumb" type="button" aria-label="큐레이션·영상·노트 이동"></button></div>
+    </div>
+
     <div class="wheelzone">
       <div class="wheel" id="wheel">
         <span class="shade" id="wheelShade" aria-hidden="true"></span>
@@ -1359,7 +1364,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-22-06';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-22-07';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1471,6 +1476,8 @@
     if(n===cur) return;
     scr[cur].classList.remove('active');
     cur=n; scr[cur].classList.add('active');
+    // Slider bead lives outside .scr now (sibling of .epaper); show it home-only.
+    var _hsl=document.getElementById('hsl'); if(_hsl) _hsl.style.visibility=(n==='home')?'visible':'hidden';
     if(n==='menu'){ selMenu=0; setTimeout(updateSelMenu,0); } // 설정 진입 = 첫 행 선택 [J:07-15]
     syncStage();
   }
