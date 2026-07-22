@@ -877,6 +877,7 @@
     -webkit-backdrop-filter:var(--cd-glass-quiet); backdrop-filter:var(--cd-glass-quiet);
     border-color:rgba(255,255,255,.24);
     box-shadow:0 8px 26px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.28)}
+  body.curdeck.cdsummon .wheel{pointer-events:none !important} /* A2: summon touch reveals only; operable next touch (overrides cdwheel below) */
   body.curdeck.cdwheel .wheel{opacity:var(--cd-wheel-awake); transform:translateX(-40%) scale(1); pointer-events:auto;
     transition:opacity .22s ease, transform .22s ease}
   body.curdeck.cdplaying.cdwheel .wheel{opacity:var(--cd-wheel-awake-quiet)}
@@ -1998,6 +1999,7 @@
      loading = note veil pattern (poster + bottom-right ring until PLAYING). */
   var cdItems=[], cdIdx=0, cdTopic='', cdCtx=null;
   var cdP=[null,null], cdAct=0, cdWarmKey=[null,null], cdWarmT=[null,null];
+  var cdLoadedKey=[null,null]; // video_id currently loaded per slot — lets settle RESUME vs restart (A3)
   var cdReadySlots=[false,false], cdPendingWarm=[null,null];
   var cdPollT=null, cdEndRolled=false;
   function cdEl(i){ return document.getElementById(i===0?'cdYtA':'cdYtB'); }
@@ -2021,9 +2023,9 @@
   function closeCurationDeck(){
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
-    cdWarmKey=[null,null];
+    cdWarmKey=[null,null]; cdLoadedKey=[null,null];
     clearTimeout(cdWheelT);
-    document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav');
+    document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
     var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
     setHomeTab('curation');
@@ -2173,7 +2175,7 @@
     cdWarmKey[slot]='warming';
     try{
       cdP[slot].mute();
-      cdP[slot].loadVideoById({videoId:it.video_id});
+      cdP[slot].loadVideoById({videoId:it.video_id}); cdLoadedKey[slot]=key;
     }catch(e){ cdWarmKey[slot]=null; return; }
     cdWarmT[slot]=setTimeout(function(){
       if(cdWarmKey[slot]==='warming'){ // never reached PLAYING: quiet cue fallback, poster stays
@@ -2203,6 +2205,7 @@
       if(cdWarmKey[cdAct]===key){ p.seekTo(0,true); p.unMute(); p.playVideo(); } // <=0.3s
       else { p.unMute(); p.loadVideoById({videoId:it.video_id}); }
     }catch(e){}
+    cdLoadedKey[cdAct]=key; // this slot now holds this video (A3 resume detection)
     cdWarmKey[cdAct]=null; cdEndRolled=false;
     // server-side watch mark (cross-device row meta) — fire-and-forget, idempotent
     if(cdCtx&&cdCtx.subId){ api('/curations/'+cdCtx.subId+'/items/'+it.video_id+'/watched',{method:'PATCH'}).catch(function(){}); }
@@ -2293,7 +2296,17 @@
     clearTimeout(cdSettleT);
     cdNavActive=false;
     document.body.classList.remove('cdnav');
-    if(cdWasPlaying){ cdPlay(); }
+    if(cdWasPlaying){
+      // A3: settling on the SAME card the active slot already holds = RESUME at
+      // the current position (playVideo only) — never reload/seek(0). Only a
+      // genuinely different card goes through cdPlay's load path.
+      var cur=cdItems[cdIdx];
+      if(cur && cdLoadedKey[cdAct]===cur.video_id){
+        document.body.classList.remove('cdfin','cdpaused'); document.body.classList.add('cdplaying');
+        try{ cdP[cdAct].playVideo(); }catch(e){}
+        cdStartPoll();
+      } else cdPlay();
+    }
     else { cdWarmInto(1-cdAct, cdIdx); } // browse: keep the new focus warm for an instant play tap
     cdWasPlaying=false;
   }
@@ -3415,8 +3428,14 @@
     // this tap (capture-phase click block) so it can't fall through as card tap.
     g('curDeck').addEventListener('touchstart',function(){
       var was=cdWheelShow();
-      if(!was) cdConsumeUntil=Date.now()+450;
+      // A2: a fresh summon touch only REVEALS the wheel — it must not operate it.
+      // Hold the wheel non-interactive until this touch releases (portrait parity);
+      // the wheel becomes operable from the NEXT touch.
+      if(!was){ cdConsumeUntil=Date.now()+450; document.body.classList.add('cdsummon'); }
     },{passive:true, capture:true});
+    ['touchend','touchcancel'].forEach(function(ev){
+      g('curDeck').addEventListener(ev,function(){ document.body.classList.remove('cdsummon'); },{passive:true, capture:true});
+    });
     g('curDeck').addEventListener('click',function(e){
       if(Date.now()<cdConsumeUntil){ e.stopPropagation(); e.preventDefault(); }
     },true);
