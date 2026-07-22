@@ -158,16 +158,18 @@
   .hstrip{display:flex; width:300%; height:100%; transition:transform .42s var(--spring); will-change:transform}
   .hstrip.drag{transition:none}
   .hpane{width:33.3333%; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden}
-  .hsl{flex:none; padding:11px 6px 3px}
-  .hsl-track{position:relative; height:9px; border-radius:99px; background:rgba(94,86,72,.13); box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
-  .hsl-fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:rgba(94,86,72,.09); transition:width .42s var(--spring)}
-  .hsl-thumb{position:absolute; left:0; top:50%; width:56px; height:23px; transform:translate(-50%,-50%);
-    border:none; border-radius:99px; background:var(--paper); cursor:grab; touch-action:none;
-    box-shadow:0 2px 6px -1px rgba(94,86,72,.4), inset 0 0 0 1px rgba(94,86,72,.12); transition:left .42s var(--spring)}
-  .hsl-thumb::before{content:''; position:absolute; left:50%; top:50%; width:3px; height:3px; border-radius:50%;
-    background:rgba(94,86,72,.4); transform:translate(-50%,-50%); box-shadow:-6px 0 0 rgba(94,86,72,.4), 6px 0 0 rgba(94,86,72,.4)}
+  /* Slider (James redesign): a 1px hairline track hugging the bottom boundary +
+     a small circular thumb with a larger invisible hit area — space-efficient,
+     not a chunky band. */
+  .hsl{flex:none; padding:9px 10px 2px}
+  .hsl-track{position:relative; height:1px; border-radius:1px; background:rgba(94,86,72,.22)}
+  .hsl-fill{display:none}
+  .hsl-thumb{position:absolute; left:0; top:50%; width:13px; height:13px; transform:translate(-50%,-50%);
+    border:none; border-radius:50%; background:var(--paper); cursor:grab; touch-action:none;
+    box-shadow:0 1px 4px -1px rgba(94,86,72,.5), inset 0 0 0 1px rgba(94,86,72,.18); transition:left .42s var(--spring)}
+  .hsl-thumb::after{content:''; position:absolute; inset:-13px} /* enlarge the touch target ~40px, visual stays 13px */
   .hsl.drag .hsl-thumb{cursor:grabbing}
-  .hsl.drag .hsl-thumb,.hsl.drag .hsl-fill{transition:none}
+  .hsl.drag .hsl-thumb{transition:none}
   @media (prefers-reduced-motion:reduce){ .hstrip,.hsl-thumb,.hsl-fill{transition:none} }
   .pane[hidden]{display:none}
   .cur-body{flex:1; min-height:0; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:8px}
@@ -1700,7 +1702,7 @@
     var amb=document.getElementById('curAmb');
     if(amb){
       var col=curRowColors[curSelIdx];
-      if(col){ amb.style.backgroundImage='radial-gradient(135% 72% at 50% -8%, '+hexA(col[0],.30)+', '+hexA(col[1],.12)+' 46%, transparent 76%)'; amb.classList.add('on'); }
+      if(col){ amb.style.backgroundImage='radial-gradient(140% 78% at 50% -6%, '+hexA(col[0],.42)+', '+hexA(col[1],.16)+' 48%, transparent 90%)'; amb.classList.add('on'); }
       else amb.classList.remove('on'); // add-row / no selection = no ambient
     }
   }
