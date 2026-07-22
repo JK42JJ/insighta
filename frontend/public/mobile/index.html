@@ -154,20 +154,20 @@
   /* overflow:clip (not hidden) so a row's scrollIntoView can't horizontally
      scroll the clip and reveal the wrong pane; older Safari keeps the hidden
      fallback + the scroll-reset listener below. */
-  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip}
+  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip; border-bottom:1px solid rgba(94,86,72,.22)}
   .hstrip{display:flex; width:300%; height:100%; transition:transform .42s var(--spring); will-change:transform}
   .hstrip.drag{transition:none}
   .hpane{width:33.3333%; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden}
-  /* Slider (James redesign): a 1px hairline track hugging the bottom boundary +
-     a small circular thumb with a larger invisible hit area — space-efficient,
-     not a chunky band. */
-  .hsl{flex:none; padding:9px 10px 2px}
-  .hsl-track{position:relative; height:1px; border-radius:1px; background:rgba(94,86,72,.22)}
+  /* Slider (James, 3rd request): the LIST WINDOW's own bottom boundary IS the line
+     (.hstrip-clip border-bottom above) — no separate track floating over it. The
+     thumb rides centered ON that boundary; the row collapses to reclaim space. */
+  .hsl{flex:none; position:relative; height:8px; padding:0}
+  .hsl-track{position:absolute; left:10px; right:10px; top:-0.5px; height:0; background:transparent} /* invisible width ref; -0.5px centers thumb on the 1px boundary */
   .hsl-fill{display:none}
-  .hsl-thumb{position:absolute; left:0; top:50%; width:13px; height:13px; transform:translate(-50%,-50%);
+  .hsl-thumb{position:absolute; left:0; top:0; width:13px; height:13px; transform:translate(-50%,-50%);
     border:none; border-radius:50%; background:var(--paper); cursor:grab; touch-action:none;
     box-shadow:0 1px 4px -1px rgba(94,86,72,.5), inset 0 0 0 1px rgba(94,86,72,.18); transition:left .42s var(--spring)}
-  .hsl-thumb::after{content:''; position:absolute; inset:-13px} /* enlarge the touch target ~40px, visual stays 13px */
+  .hsl-thumb::after{content:''; position:absolute; left:-14px; right:-14px; top:-16px; bottom:-8px} /* ~40px touch target, expanded upward */
   .hsl.drag .hsl-thumb{cursor:grabbing}
   .hsl.drag .hsl-thumb{transition:none}
   @media (prefers-reduced-motion:reduce){ .hstrip,.hsl-thumb,.hsl-fill{transition:none} }
@@ -182,6 +182,7 @@
   #paneVideo{position:relative}
   #paneVideo>.goal-pill,#paneVideo>.rows{position:relative; z-index:1}
   .cur-amb{position:absolute; inset:-20px -20px 0; z-index:0; pointer-events:none; opacity:0;
+    -webkit-filter:saturate(1.45); filter:saturate(1.45); /* vivid glow, not a washed-out gray band */
     background-repeat:no-repeat; transition:opacity .55s var(--soft), background-image .55s var(--soft)}
   .cur-amb.on{opacity:1}
   @media (prefers-reduced-motion:reduce){ .cur-amb{transition:none} }
@@ -727,7 +728,10 @@
     border-radius:12px; padding:11px 14px; word-break:break-all}
   .yts-danger{border:1px solid var(--acc-lo); background:none; color:var(--acc-ink); font-family:inherit;
     font-size:13px; font-weight:800; padding:11px 18px; border-radius:12px; cursor:pointer; touch-action:manipulation}
-  .yts-danger.confirm{background:var(--acc); color:#fff; border-color:var(--acc)}
+  /* confirm bg must stay dark regardless of theme: --acc is a per-theme token that
+     can resolve light (e.g. cream/gold), which made white text vanish. --acc-ink is
+     always dark, so white text stays legible on every mandala theme. */
+  .yts-danger.confirm{background:var(--acc-ink); color:#fff; border-color:var(--acc-ink)}
   .yts-danger[disabled]{opacity:.6; pointer-events:none}
   .yts-tune{display:flex; flex-direction:column; align-items:center; gap:16px; padding:20px 0}
   .yts-dial{width:54px; height:54px; border-radius:50%; border:3px solid rgba(94,86,72,.14);
@@ -823,6 +827,11 @@
      16:9 video in an ultra-wide landscape letterboxes to black, never bleeding
      the deck ambient (or any layer) through the side bars. */
   .cd-yt{position:absolute; inset:0; z-index:1; background:#000}
+  /* YouTube's iframe must fill the stage exactly. Left unstyled it keeps the pixel
+     size the YT API gave it at creation (portrait width), so after rotation the
+     video sits off-center and appears to slide left/right (device: landscape video
+     shift, James P0). Force it to the container on every axis. */
+  .cd-yt iframe, iframe.cd-yt, #cdStage iframe{position:absolute; inset:0; width:100% !important; height:100% !important; border:0}
   .cd-yt.off{visibility:hidden}
   /* Touch guard over the player iframe: touches on an iframe never reach the
      parent DOM, so wheel summon was impossible wherever the stage covers the
@@ -902,9 +911,14 @@
   @media (orientation:landscape){
     body.curdeck.cdplaying #curDeck{padding:0}
     body.curdeck.cdplaying .cd-top,body.curdeck.cdplaying #cdTrack{display:none}
-    body.curdeck.cdplaying .cd-stage{height:100% !important; border-radius:0}
-    body.curdeck.cdplaying .cd-chap{display:none}
+    /* Pin the stage to the raw viewport so no ancestor padding can offset it. */
+    body.curdeck.cdplaying .cd-stage{position:fixed; inset:0; height:100% !important; width:100% !important; border-radius:0; box-shadow:none}
+    /* Landscape shift root cause (device: "안에서 더 넓어서 왔다갔다"): the poster
+       bleed (.cp-back inset:-8%) and ambient (inset:-14%) become huge on the wide
+       full-screen stage (measured 1858px vs 1430 viewport). Clip them to the stage. */
+    body.curdeck.cdplaying .cd-poster .cp-back{inset:0; transform:none}
     body.curdeck.cdplaying .cd-amb{display:none} /* ambient = portrait-only decoration; the stage fills landscape */
+    body.curdeck.cdplaying .cd-chap{display:none}
   }
 
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
@@ -1295,7 +1309,7 @@
     <div class="cd-fin" id="cdFin">
       <div class="cd-fin-t">이번 주 편성,<br>끝까지 들었어요</div>
       <div class="cd-fin-s">새 편성은 월요일에 도착해요</div>
-      <button class="primary" id="cdFinList" type="button">다른 주파수 듣기</button>
+      <button class="primary" id="cdFinList" type="button">다른 주제 보기</button>
       <button id="cdFinReplay" type="button">처음부터 다시</button>
     </div>
     <span class="cd-hint" id="cdHint">돌려서 고르고, 눌러서 재생</span>
@@ -1309,7 +1323,7 @@
     <div class="yts-card" role="dialog" aria-modal="true" aria-label="유튜브 연결">
       <div class="yts-grip"></div>
       <div id="ytsBody"></div>
-      <button class="yts-exit" id="ytsBack" type="button">← 계속 보기</button>
+      <button class="yts-exit" id="ytsBack" type="button">← 돌아가기</button>
     </div>
   </div>
 
@@ -1605,7 +1619,7 @@
   function setVideoAmbient(){
     var amb=document.getElementById('vidAmb'); if(!amb) return;
     var m=homeItems()[selIdx];
-    if(m){ var c=jkColor(m.title||'?'); amb.style.backgroundImage='radial-gradient(140% 78% at 50% -6%, '+hexA(c[0],.42)+', '+hexA(c[1],.16)+' 48%, transparent 90%)'; amb.classList.add('on'); }
+    if(m){ var c=jkColor(m.title||'?'); amb.style.backgroundImage='radial-gradient(140% 80% at 50% -6%, '+hexA(c[0],.55)+', '+hexA(c[1],.24)+' 42%, transparent 76%)'; amb.classList.add('on'); }
     else amb.classList.remove('on');
   }
   /* ============ Home tabs (curation / video / note) [J:07-20] ============ */
@@ -1716,7 +1730,7 @@
     var amb=document.getElementById('curAmb');
     if(amb){
       var col=curRowColors[curSelIdx];
-      if(col){ amb.style.backgroundImage='radial-gradient(140% 78% at 50% -6%, '+hexA(col[0],.42)+', '+hexA(col[1],.16)+' 48%, transparent 90%)'; amb.classList.add('on'); }
+      if(col){ amb.style.backgroundImage='radial-gradient(140% 80% at 50% -6%, '+hexA(col[0],.55)+', '+hexA(col[1],.24)+' 42%, transparent 76%)'; amb.classList.add('on'); }
       else amb.classList.remove('on'); // add-row / no selection = no ambient
     }
   }
@@ -1731,7 +1745,7 @@
     var add=document.createElement('div');
     add.className='row';
     add.innerHTML='<span class="jk" style="background:rgba(94,86,72,.10)"><b style="color:var(--ui)">+</b></span>'
-      +'<span class="m"><span class="a">새 주파수</span><span class="b"><span class="bt">관심 주제 고르기</span></span></span>';
+      +'<span class="m"><span class="a">새 큐레이션</span><span class="b"><span class="bt">관심 주제 고르기</span></span></span>';
     add.addEventListener('click',function(){ openYtSheet(); ytRenderTuning(); });
     rows.appendChild(add); curRowEls.push(add); curRowColors.push(null); // add-row = no ambient
     // sort: new > in-progress > complete, newest first inside each group
@@ -1784,8 +1798,8 @@
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-connect';
     el.innerHTML='<span class="cic">'+CUR_STAR+'</span>'
-      +'<span class="t1">주파수를 맞추면,<br>매주 새 편성이 도착해요</span>'
-      +'<button class="cbtn" id="bCurConnect">잇기</button>'
+      +'<span class="t1">관심 주제를 고르면<br>매주 큐레이션을 보내 드려요</span>'
+      +'<button class="cbtn" id="bCurConnect">유튜브 연결하기</button>'
       +(note?'<span class="cur-note">'+curEsc(note)+'</span>':'');
     var b=document.getElementById('bCurConnect'); if(b) b.onclick=function(){ openYtSheet(); ytRenderConnect(); };
     if(!ytAutoRaised && !note){ ytAutoRaised=true; openYtSheet(); ytRenderConnect(); }
@@ -1900,7 +1914,7 @@
       }
       b.innerHTML='<div class="yts-h2">잠시만요</div>'
         +'<div class="yts-sub">세 갈래를 고르는 중이에요.<br>큐레이션 탭에서 곧 확인할 수 있어요.</div>'
-        +'<button class="yts-ghost" id="ytsDone">계속 보기</button>';
+        +'<button class="yts-ghost" id="ytsDone">돌아가기</button>';
       var c=document.getElementById('ytsDone'); if(c) c.onclick=closeYtSheet;
       return;
     }
@@ -1912,7 +1926,7 @@
         +'<span class="yts-prop-t">'+curEsc(p.topic)+'</span></button>';
     });
     h+='</div><button class="yts-ghost" id="ytsRetune"'+(ytRetuneSpent?' disabled style="opacity:.4"':'')+'>'
-      +(ytRetuneSpent?'지금은 이 세 갈래가 최선이에요':'다른 주파수 듣기')+'</button>';
+      +(ytRetuneSpent?'지금은 이 세 갈래가 최선이에요':'다른 주제 보기')+'</button>';
     b.innerHTML=h;
     [].forEach.call(b.querySelectorAll('.yts-prop'),function(btn){
       btn.onclick=function(){ var t=btn.getAttribute('data-topic'); closeYtSheet(); setHomeTab('curation'); selectCuration(t); };
