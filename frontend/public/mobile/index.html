@@ -154,16 +154,17 @@
   /* overflow:clip (not hidden) so a row's scrollIntoView can't horizontally
      scroll the clip and reveal the wrong pane; older Safari keeps the hidden
      fallback + the scroll-reset listener below. */
-  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip}
+  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip; border-bottom:1px solid rgba(94,86,72,.16)}
+  #scrHome{padding-bottom:7px} /* pull the list boundary (slider hairline) down near the card bottom edge */
   .hstrip{display:flex; width:300%; height:100%; transition:transform .42s var(--spring); will-change:transform}
   .hstrip.drag{transition:none}
   .hpane{width:33.3333%; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden}
-  /* Slider (James, 4th request): the thumb must ride the CARD's own bottom boundary
-     (the .epaper edge James marked), not a line inside the card. Pin the row
-     absolutely to the card bottom so it takes no in-flow height (the list reclaims
-     the space) and the thumb rests right on that boundary. */
-  .hsl{position:absolute; left:0; right:0; bottom:0; height:15px; padding:0; z-index:5}
-  .hsl-track{position:absolute; left:16px; right:16px; top:50%; height:0; background:transparent} /* invisible width ref, centered in the bottom zone */
+  /* Slider (James, redo): the list window's own bottom edge IS the boundary line
+     (.hstrip-clip border-bottom above) — a straight full-width hairline, NOT the
+     card's rounded corner. The thumb rides centered on that hairline; the row
+     collapses to 0 so the list reclaims the space and the line sits low. */
+  .hsl{flex:none; position:relative; height:0; padding:0; z-index:5}
+  .hsl-track{position:absolute; left:16px; right:16px; top:-1px; height:0; background:transparent} /* invisible width ref, on the hairline */
   .hsl-fill{display:none}
   .hsl-thumb{position:absolute; left:0; top:0; width:13px; height:13px; transform:translate(-50%,-50%);
     border:none; border-radius:50%; background:var(--paper); cursor:grab; touch-action:none;
@@ -1355,7 +1356,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-22-02';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-22-03';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
