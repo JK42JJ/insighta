@@ -154,15 +154,16 @@
   /* overflow:clip (not hidden) so a row's scrollIntoView can't horizontally
      scroll the clip and reveal the wrong pane; older Safari keeps the hidden
      fallback + the scroll-reset listener below. */
-  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip; border-bottom:1px solid rgba(94,86,72,.22)}
+  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip}
   .hstrip{display:flex; width:300%; height:100%; transition:transform .42s var(--spring); will-change:transform}
   .hstrip.drag{transition:none}
   .hpane{width:33.3333%; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden}
-  /* Slider (James, 3rd request): the LIST WINDOW's own bottom boundary IS the line
-     (.hstrip-clip border-bottom above) — no separate track floating over it. The
-     thumb rides centered ON that boundary; the row collapses to reclaim space. */
-  .hsl{flex:none; position:relative; height:8px; padding:0}
-  .hsl-track{position:absolute; left:10px; right:10px; top:-0.5px; height:0; background:transparent} /* invisible width ref; -0.5px centers thumb on the 1px boundary */
+  /* Slider (James, 4th request): the thumb must ride the CARD's own bottom boundary
+     (the .epaper edge James marked), not a line inside the card. Pin the row
+     absolutely to the card bottom so it takes no in-flow height (the list reclaims
+     the space) and the thumb rests right on that boundary. */
+  .hsl{position:absolute; left:0; right:0; bottom:0; height:15px; padding:0; z-index:5}
+  .hsl-track{position:absolute; left:16px; right:16px; top:50%; height:0; background:transparent} /* invisible width ref, centered in the bottom zone */
   .hsl-fill{display:none}
   .hsl-thumb{position:absolute; left:0; top:0; width:13px; height:13px; transform:translate(-50%,-50%);
     border:none; border-radius:50%; background:var(--paper); cursor:grab; touch-action:none;
@@ -181,10 +182,9 @@
      a different consumption unit, so a focused-mandala color has no subject there). */
   #paneVideo{position:relative}
   #paneVideo>.goal-pill,#paneVideo>.rows{position:relative; z-index:1}
-  .cur-amb{position:absolute; inset:-20px -20px 0; z-index:0; pointer-events:none; opacity:0;
-    -webkit-filter:saturate(1.45); filter:saturate(1.45); /* vivid glow, not a washed-out gray band */
-    background-repeat:no-repeat; transition:opacity .55s var(--soft), background-image .55s var(--soft)}
-  .cur-amb.on{opacity:1}
+  /* List ambient REMOVED (James, repeated): the curation/video LIST must carry no
+     colour wash behind the rows — ambient belongs only to the deck player (.cd-amb). */
+  .cur-amb{display:none !important}
   @media (prefers-reduced-motion:reduce){ .cur-amb{transition:none} }
   .cur-connect{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:11px; padding:0 22px}
   .cur-connect .cic{width:44px; height:44px; border-radius:13px; display:grid; place-items:center; background:rgba(94,86,72,.08); color:var(--ui)}
@@ -829,9 +829,11 @@
   .cd-yt{position:absolute; inset:0; z-index:1; background:#000}
   /* YouTube's iframe must fill the stage exactly. Left unstyled it keeps the pixel
      size the YT API gave it at creation (portrait width), so after rotation the
-     video sits off-center and appears to slide left/right (device: landscape video
-     shift, James P0). Force it to the container on every axis. */
-  .cd-yt iframe, iframe.cd-yt, #cdStage iframe{position:absolute; inset:0; width:100% !important; height:100% !important; border:0}
+     video sits off-center and slides left/right, and its focus ring paints a
+     shifting purple box (James: "왔다갔다"). Pin it to the container on every axis
+     and kill the focus outline. Target #cdYtA/#cdYtB by id too — the YT API drops
+     the .cd-yt class when it swaps the div for the iframe. */
+  .cd-yt iframe, iframe.cd-yt, #cdStage iframe, #cdYtA, #cdYtB{position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; border:0 !important; outline:none !important}
   .cd-yt.off{visibility:hidden}
   /* Touch guard over the player iframe: touches on an iframe never reach the
      parent DOM, so wheel summon was impossible wherever the stage covers the
@@ -1353,7 +1355,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-22-01';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-22-02';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
