@@ -743,7 +743,10 @@
   /* Ambient background (YouTube ambient-mode grammar): the current poster,
      heavily blurred + dimmed, fills the whole deck so the empty area below the
      video card carries the video's colors instead of a flat black void. */
-  .cd-amb{position:absolute; inset:-14%; z-index:0; background:#12100E center/cover no-repeat;
+  /* Background decoration MUST NOT intercept touches (convention: every ambient
+     layer needs pointer-events:none — the deck one was missed, killing the back
+     button since a z0 positioned layer paints above the static top bar). */
+  .cd-amb{position:absolute; inset:-14%; z-index:0; pointer-events:none; background:#12100E center/cover no-repeat;
     -webkit-filter:blur(var(--cd-amb-blur)) saturate(1.3) brightness(.5);
     filter:blur(var(--cd-amb-blur)) saturate(1.3) brightness(.5);
     opacity:0; transition:opacity .6s var(--soft)}
@@ -791,7 +794,7 @@
   .cd-card.empty{background:#181512; opacity:.35}
   /* stage = playback layer over the top card (same rect) */
   .cd-stage{position:absolute; left:0; right:0; top:0; z-index:4; border-radius:16px; overflow:hidden;
-    box-shadow:0 14px 40px rgba(0,0,0,.5); transition:opacity .14s}
+    background:#000; box-shadow:0 14px 40px rgba(0,0,0,.5); transition:opacity .14s}
   body.cdnav .cd-stage{opacity:0; pointer-events:none}   /* wheel travel: posters only */
   .cd-meta{position:absolute; left:14px; right:14px; bottom:22px; z-index:2; display:flex; flex-direction:column; gap:2px; pointer-events:none}
   .cd-vt{font-size:14.5px; font-weight:800; color:#F5F2EC; line-height:1.3;
@@ -810,7 +813,10 @@
   .cd-poster .cp-back{position:absolute; inset:-8%; background:#181512 center/cover no-repeat;
     filter:blur(26px) saturate(1.15) brightness(.75); transform:scale(1.12)}
   .cd-poster .cp-front{position:absolute; inset:0; background:transparent center/contain no-repeat}
-  .cd-yt{position:absolute; inset:0; z-index:1}
+  /* Letterbox invariant: the video stage is ALWAYS black behind the iframe, so a
+     16:9 video in an ultra-wide landscape letterboxes to black, never bleeding
+     the deck ambient (or any layer) through the side bars. */
+  .cd-yt{position:absolute; inset:0; z-index:1; background:#000}
   .cd-yt.off{visibility:hidden}
   /* Touch guard over the player iframe: touches on an iframe never reach the
      parent DOM, so wheel summon was impossible wherever the stage covers the
@@ -891,6 +897,7 @@
     body.curdeck.cdplaying .cd-top,body.curdeck.cdplaying #cdTrack{display:none}
     body.curdeck.cdplaying .cd-stage{height:100% !important; border-radius:0}
     body.curdeck.cdplaying .cd-chap{display:none}
+    body.curdeck.cdplaying .cd-amb{display:none} /* ambient = portrait-only decoration; the stage fills landscape */
   }
 
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
