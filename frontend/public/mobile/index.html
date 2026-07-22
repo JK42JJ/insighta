@@ -1364,7 +1364,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-22-07';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-22-08';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1478,6 +1478,7 @@
     cur=n; scr[cur].classList.add('active');
     // Slider bead lives outside .scr now (sibling of .epaper); show it home-only.
     var _hsl=document.getElementById('hsl'); if(_hsl) _hsl.style.visibility=(n==='home')?'visible':'hidden';
+    if(n==='home'){ requestAnimationFrame(function(){ if(typeof homePaintPos==='function') homePaintPos(homeIdx, true); }); } // re-align slider to tab centers
     if(n==='menu'){ selMenu=0; setTimeout(updateSelMenu,0); } // 설정 진입 = 첫 행 선택 [J:07-15]
     syncStage();
   }
@@ -1699,12 +1700,27 @@
     var w=(tr&&tr.clientWidth)||0, tw=(th&&th.offsetWidth)||56;
     return {w:w, tw:tw, half:tw/2, usable:Math.max(1, w-tw)};
   }
+  // Thumb travel = curation-tab center → note-tab center (James: one-thumb reach, so the
+  // range is narrower than the full card). Align the track BOX to the outer tab centers;
+  // with the half-thumb inset the thumb CENTER then lands exactly on each tab center
+  // (cont0=curation, cont1=video=midpoint, cont2=note). Re-run on layout changes only.
+  function syncSliderToTabs(){
+    var track=document.getElementById('hslTrack'), hsl=document.getElementById('hsl'),
+        th=document.getElementById('hslThumb'), tabs=document.querySelectorAll('.htab[data-htab]');
+    if(!track||!hsl||tabs.length<3) return;
+    var hR=hsl.getBoundingClientRect(); if(!hR.width) return;
+    var half=((th&&th.offsetWidth)||13)/2;
+    var c0=tabs[0].getBoundingClientRect(), c2=tabs[tabs.length-1].getBoundingClientRect();
+    var curC=(c0.left+c0.width/2)-hR.left, noteC=(c2.left+c2.width/2)-hR.left;
+    track.style.left=(curC-half)+'px';
+    track.style.right=(hR.width-(noteC+half))+'px';
+  }
   // cont = continuous position 0..2 (0=curation … 2=note). animate=false while dragging.
   function homePaintPos(cont, animate){
     var strip=document.getElementById('hstrip'), th=document.getElementById('hslThumb'),
         fill=document.getElementById('hslFill'), hsl=document.getElementById('hsl');
     if(!strip) return;
-    if(animate){ strip.classList.remove('drag'); hsl.classList.remove('drag'); }
+    if(animate){ strip.classList.remove('drag'); hsl.classList.remove('drag'); syncSliderToTabs(); }
     else { strip.classList.add('drag'); hsl.classList.add('drag'); }
     strip.style.transform='translateX('+(-cont*(100/3))+'%)';
     var m=homeMetrics(), left=m.half+(cont/2)*m.usable;
