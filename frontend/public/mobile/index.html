@@ -177,6 +177,10 @@
      behind the (translucent) row cards to fill the list and cue selection. */
   #paneCuration{position:relative}
   #paneCuration>.cur-body{position:relative; z-index:1}
+  /* Video tab shares the same ambient (curation+video only; NOT note — a note is
+     a different consumption unit, so a focused-mandala color has no subject there). */
+  #paneVideo{position:relative}
+  #paneVideo>.goal-pill,#paneVideo>.rows{position:relative; z-index:1}
   .cur-amb{position:absolute; inset:-20px -20px 0; z-index:0; pointer-events:none; opacity:0;
     background-repeat:no-repeat; transition:opacity .55s var(--soft), background-image .55s var(--soft)}
   .cur-amb.on{opacity:1}
@@ -1118,6 +1122,7 @@
               <div class="cur-body" id="curBody"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
             </div>
             <div class="hpane" id="paneVideo">
+              <div class="cur-amb" id="vidAmb" aria-hidden="true"></div>
               <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
               <div class="rows" id="rowsV"></div>
             </div>
@@ -1591,8 +1596,17 @@
   function renderRows(){
     paintMandalaList(document.getElementById('rowsV'),'video');
     paintMandalaList(document.getElementById('rowsN'),'note');
+    setVideoAmbient();
     var active=document.getElementById(homeTab==='note'?'rowsN':'rowsV');
     var selEl=active&&active.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
+  }
+  // Ambient for the VIDEO tab only — the focused mandala's topic color (same
+  // pattern/values as curation). Bound to the #paneVideo DOM, so note never gets it.
+  function setVideoAmbient(){
+    var amb=document.getElementById('vidAmb'); if(!amb) return;
+    var m=homeItems()[selIdx];
+    if(m){ var c=jkColor(m.title||'?'); amb.style.backgroundImage='radial-gradient(140% 78% at 50% -6%, '+hexA(c[0],.42)+', '+hexA(c[1],.16)+' 48%, transparent 90%)'; amb.classList.add('on'); }
+    else amb.classList.remove('on');
   }
   /* ============ Home tabs (curation / video / note) [J:07-20] ============ */
   var homeTab='curation';   // default (James)
@@ -3310,6 +3324,7 @@
     for(var i=0;i<rows.children.length;i++) rows.children[i].classList.toggle('sel', i===selIdx);
     var el=rows.children[selIdx];
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
+    setVideoAmbient(); // wheel selection moves the mandala focus -> update the video ambient color
   }
   var suppressClickUntil=0;
   function wheelStole(){ return Date.now()<suppressClickUntil; } // 시간창(350ms): sticky 플래그 잔류 → 후속 정상 탭 삼킴 버그 제거
