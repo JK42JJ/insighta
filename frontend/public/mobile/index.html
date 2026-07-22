@@ -154,7 +154,9 @@
   /* overflow:clip (not hidden) so a row's scrollIntoView can't horizontally
      scroll the clip and reveal the wrong pane; older Safari keeps the hidden
      fallback + the scroll-reset listener below. */
-  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip; border-bottom:1px solid rgba(94,86,72,.16)}
+  /* padding-bottom = breathing room so list rows clip ABOVE the slider hairline
+     (not right on it), otherwise the last scrolled row reads as sliced by the slider. */
+  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip; border-bottom:1px solid rgba(94,86,72,.16); padding-bottom:10px}
   #scrHome{padding-bottom:7px} /* pull the list boundary (slider hairline) down near the card bottom edge */
   .hstrip{display:flex; width:300%; height:100%; transition:transform .42s var(--spring); will-change:transform}
   .hstrip.drag{transition:none}
@@ -1356,7 +1358,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-22-03';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-22-04';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
