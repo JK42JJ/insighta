@@ -2209,7 +2209,7 @@
   function cdPlay(){
     cdHintDismiss();
     document.body.classList.remove('cdfin','cdpaused');
-    document.body.classList.add('cdplaying','cdloading');
+    document.body.classList.add('cdplaying');
     cdEnsurePlayers();
     var it=cdItems[cdIdx]; if(!it) return;
     var key=it.video_id;
@@ -2217,9 +2217,13 @@
     if(cdWarmKey[idle]===key){ cdAct=idle; }         // warm slot has it: swap
     cdShowActive();
     var p=cdP[cdAct]; if(!p||!p.loadVideoById) return;
+    // A1 state machine: load (+ dark veil) ONLY on a true cold slot. A warm-buffered
+    // or already-loaded slot just plays — no cdloading veil, so no black flicker on
+    // transitions or resume. Cold path paints the poster BEFORE the veil.
+    var ready=(cdWarmKey[cdAct]===key)||(cdLoadedKey[cdAct]===key);
     try{
-      if(cdWarmKey[cdAct]===key){ p.seekTo(0,true); p.unMute(); p.playVideo(); } // <=0.3s
-      else { p.unMute(); p.loadVideoById({videoId:it.video_id}); }
+      if(ready){ p.unMute(); p.playVideo(); }                       // warm / loaded -> play, no veil
+      else { cdPosterSync(); document.body.classList.add('cdloading'); p.unMute(); p.loadVideoById({videoId:it.video_id}); } // cold: poster first, then veil
     }catch(e){}
     cdLoadedKey[cdAct]=key; // this slot now holds this video (A3 resume detection)
     cdWarmKey[cdAct]=null; cdEndRolled=false;
@@ -3482,13 +3486,12 @@
     // Finger-follow drag (YouTube grammar): the track tracks the finger 1:1 live;
     // release snaps by displacement/velocity — next/prev glide or spring back.
     (function(){
-      var y0=null, t0=0, dy=0, active=false;
+      var y0=null, t0=0, dy=0, active=false, navGated=false;
+      var TAP_GATE=8; // px of movement before this becomes a drag (a tap only summons)
       function tr(){ return document.getElementById('cdTrack'); }
       function rest(){ return -cdPitch().pitch; }
-      g('cdStrip').addEventListener('touchstart',function(e){
-        if(document.body.classList.contains('cdfin')) return;
-        if(cdAnimBusy&&cdFinCur) cdFinCur();
-        y0=e.touches[0].clientY; t0=Date.now(); dy=0; active=true;
+      function enterNav(){
+        if(navGated) return; navGated=true;
         tr().classList.remove('gliding');
         if(!cdNavActive){
           cdNavActive=true;
@@ -3496,11 +3499,19 @@
           cdPause(); document.body.classList.add('cdnav');
         }
         clearTimeout(cdSettleT);
+      }
+      g('cdStrip').addEventListener('touchstart',function(e){
+        if(document.body.classList.contains('cdfin')) return;
+        if(cdAnimBusy&&cdFinCur) cdFinCur();
+        y0=e.touches[0].clientY; t0=Date.now(); dy=0; active=true; navGated=false;
         cdHintDismiss();
+        // A1 tap-gate: do NOT enter nav / pause / hide the stage yet — a tap that
+        // was only meant to summon the wheel must not blink the video to black.
       },{passive:true});
       g('cdStrip').addEventListener('touchmove',function(e){
         if(!active) return;
         dy=e.touches[0].clientY - y0;
+        if(!navGated){ if(Math.abs(dy)<TAP_GATE) return; enterNav(); } // real drag -> now enter nav
         var p=cdPitch().pitch;
         // edge resistance: first/last card drags at 0.35x instead of hard stop
         var lim=((dy>0&&cdIdx===0)||(dy<0&&cdIdx>=cdItems.length-1))?0.35:1;
@@ -3509,6 +3520,7 @@
       },{passive:true});
       g('cdStrip').addEventListener('touchend',function(){
         if(!active) return; active=false;
+        if(!navGated){ return; } // a tap (never crossed the gate) -> summon only, no snap/restart
         var p=cdPitch().pitch, dt=Math.max(1,Date.now()-t0), v=dy/dt; // px/ms
         var dir=0;
         if((dy<-p*0.28||v<-0.45)&&cdIdx<cdItems.length-1) dir=1;
