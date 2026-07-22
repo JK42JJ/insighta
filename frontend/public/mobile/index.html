@@ -1358,7 +1358,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-22-04';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-22-05';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1637,6 +1637,7 @@
       rows.innerHTML='<div class="row-empty">아직 만다라가 없어요<br>첫 목표를 적어보세요</div>';
       return;
     }
+    var keepScroll=rows.scrollTop; // scroll-inviolable: a background refresh (book status) must not move the list under the user
     rows.innerHTML='';
     if(selIdx>=items.length) selIdx=items.length-1;
     items.forEach(function(m,i){
@@ -1657,14 +1658,22 @@
       }
       rows.appendChild(d);
     });
+    rows.scrollTop=keepScroll; // restore scroll after the innerHTML rebuild (else it snaps to 0 = jitter)
   }
-  function renderRows(){
+  // renderRows(userSel): only a real user selection may re-anchor the scroll (scrollIntoView).
+  // A background refresh (fetchBookStatus) passes no arg, so it never moves the list.
+  function renderRows(userSel){
     paintMandalaList(document.getElementById('rowsV'),'video');
     paintMandalaList(document.getElementById('rowsN'),'note');
     setVideoAmbient();
-    var active=document.getElementById(homeTab==='note'?'rowsN':'rowsV');
-    var selEl=active&&active.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
+    if(userSel){
+      var active=document.getElementById(homeTab==='note'?'rowsN':'rowsV');
+      var selEl=active&&active.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
+    }
   }
+  // Coalesce the 8 parallel book-status arrivals into one refresh (was: full renderRows per arrival = jitter).
+  var _rowsRefreshT=null;
+  function scheduleRowsRefresh(){ clearTimeout(_rowsRefreshT); _rowsRefreshT=setTimeout(function(){ renderRows(); },120); }
   // Ambient for the VIDEO tab only — the focused mandala's topic color (same
   // pattern/values as curation). Bound to the #paneVideo DOM, so note never gets it.
   function setVideoAmbient(){
@@ -2555,7 +2564,7 @@
       if(book&&book.chapters&&book.chapters.length) bookCache[m.id]={book:book, sourceVideos:(j.data.sourceVideos||0)};
       else bookCache[m.id]={making:true};
     }catch(e){ bookCache[m.id]={making:true}; }
-    renderRows();
+    scheduleRowsRefresh(); // debounced + scroll-preserving (no per-arrival full re-render)
   }
   var SK_ROW='<div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div>';
   function listPanes(){ return [document.getElementById('rowsV'), document.getElementById('rowsN')]; }
