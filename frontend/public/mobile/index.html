@@ -728,10 +728,10 @@
     border-radius:12px; padding:11px 14px; word-break:break-all}
   .yts-danger{border:1px solid var(--acc-lo); background:none; color:var(--acc-ink); font-family:inherit;
     font-size:13px; font-weight:800; padding:11px 18px; border-radius:12px; cursor:pointer; touch-action:manipulation}
-  /* confirm bg must stay dark regardless of theme: --acc is a per-theme token that
-     can resolve light (e.g. cream/gold), which made white text vanish. --acc-ink is
-     always dark, so white text stays legible on every mandala theme. */
-  .yts-danger.confirm{background:var(--acc-ink); color:#fff; border-color:var(--acc-ink)}
+  /* confirm bg: #ytSheet lives OUTSIDE the themed #dev, so every --acc* token is
+     undefined here and resolved to transparent (white text vanished). Use --ink,
+     which is defined on :root and always dark, so white text stays legible. */
+  .yts-danger.confirm{background:var(--ink); color:#fff; border-color:var(--ink)}
   .yts-danger[disabled]{opacity:.6; pointer-events:none}
   .yts-tune{display:flex; flex-direction:column; align-items:center; gap:16px; padding:20px 0}
   .yts-dial{width:54px; height:54px; border-radius:50%; border:3px solid rgba(94,86,72,.14);
@@ -947,6 +947,17 @@
     opacity:0; transition:opacity .3s, transform .3s var(--spring); pointer-events:none; z-index:50; white-space:nowrap;
     max-width:86vw; overflow:hidden; text-overflow:ellipsis}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  /* App-version update toast: persistent + tappable (unlike the transient .toast). */
+  /* background uses --ink (:root, always defined) not --acc-ink (theme-scoped to
+     #dev): the toast is appended to <body>, outside the themed device, and can show
+     before login, so a theme-only token would render transparent. */
+  .uptoast{position:fixed; left:50%; bottom:calc(var(--sab) + 26px); transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:#F5F2EC; font-size:12px; font-weight:750; border-radius:99px; padding:10px 16px;
+    opacity:0; transition:opacity .3s, transform .3s var(--spring); z-index:60; white-space:nowrap; cursor:pointer;
+    box-shadow:0 6px 20px rgba(0,0,0,.28); display:flex; align-items:center; gap:9px; -webkit-tap-highlight-color:transparent}
+  .uptoast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .uptoast:active{transform:translateX(-50%) translateY(0) scale(.97)}
+  .uptoast .upbtn{background:rgba(245,242,236,.20); border-radius:99px; padding:3px 11px; font-weight:800}
 
   /* §5: 세로 짧은 뷰포트 — 하단 트림 압축, 회수분은 스크린이 흡수 */
   @media (max-height: 820px) and (orientation: portrait){
@@ -1336,6 +1347,41 @@
     var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
     clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show')},2400);
   }
+
+  /* ===== App-version update toast (standalone PWA has no address bar, so a stale
+     home-screen build can't be hard-reloaded by hand). The running build compares
+     itself to /mobile/version.json (fetched no-store) on load + every foreground
+     return; on mismatch it offers a one-tap update that clears caches and reloads
+     to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
+  var APP_BUILD='2026-07-22-01';   // bump every mobile deploy (deploy writes version.json to match)
+  var upShown=false, upLast=0;
+  function checkAppVersion(){
+    var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
+    fetch('/mobile/version.json?t='+now,{cache:'no-store'})
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(v){ if(v&&v.build&&v.build!==APP_BUILD&&!upShown){ upShown=true; showUpdateToast(); } })
+      .catch(function(){});
+  }
+  function showUpdateToast(){
+    var el=document.getElementById('upToast');
+    if(!el){
+      el=document.createElement('div'); el.id='upToast'; el.className='uptoast'; el.setAttribute('role','button');
+      el.innerHTML='<span>새 버전이 있어요</span><span class="upbtn">업데이트</span>';
+      el.addEventListener('click', doAppUpdate);
+      document.body.appendChild(el);
+    }
+    requestAnimationFrame(function(){ el.classList.add('show'); });
+  }
+  function doAppUpdate(){
+    var el=document.getElementById('upToast'); if(el){ var b=el.querySelector('.upbtn'); if(b) b.textContent='업데이트 중…'; }
+    var go=function(){ location.replace('/mobile/?u='+Date.now()); }; // fresh URL bypasses the standalone HTTP cache
+    try{
+      if(window.caches&&caches.keys){ caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); }).then(go, go); return; }
+    }catch(e){}
+    go();
+  }
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden) checkAppVersion(); });
+  setTimeout(checkAppVersion, 4000);
   function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]}) }
 
   /* ================= 인증 ================= */
