@@ -959,6 +959,50 @@
     body.curdeck .cd-chap{display:none}
   }
 
+  /* ===== Portrait deck = native-scroll YouTube-style feed (supervisor handoff 2026-07-23) =====
+     Full-bleed 16:9 cards + bottom meta block; native scroll + IntersectionObserver autoplay.
+     Landscape keeps the stage/track/wheel path above (frozen). Portrait hides the track,
+     wheel, hint and journey bar; the feed owns the whole area under the header. */
+  #cdFeed{display:none}
+  @media (orientation:portrait){
+    body.curdeck #cdTrack,body.curdeck .cd-hint,body.curdeck .jbar{display:none !important}
+    body.curdeck .wheelzone{display:none !important}   /* W: wheel hidden in portrait deck only (kept in landscape/home/note) */
+    /* .cd-strip stays (it holds the stage overlay) but yields the area to the feed */
+    body.curdeck .cd-strip{position:absolute; inset:0; flex:none; overflow:visible; z-index:0}
+    body.curdeck #cdFeed{display:block; z-index:1}
+    /* the stage becomes a fixed overlay placed over the dominant card (cfPlaceStage);
+       its portrait overlay meta/chap/play are hidden — the feed card owns the meta */
+    body.curdeck .cd-stage .cd-meta,body.curdeck .cd-stage .cd-chap,body.curdeck .cd-stage .cd-play{display:none !important}
+  }
+  #cdFeed{position:absolute; left:0; right:0; top:0; bottom:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain; background:#0D0D10; scroll-behavior:auto}
+  #cdFeed::after{content:''; display:block; height:34vh}   /* tail spacer: last card can settle as dominant */
+  .cf-card{position:relative; width:100%; background:#0D0D10; padding-bottom:14px}
+  .cf-media{position:relative; width:100%; aspect-ratio:16/9; background:#000 center/cover no-repeat; overflow:hidden;
+    transition:filter .3s ease}
+  body.curdeck .cf-card:not(.cf-focus) .cf-media{filter:brightness(.5)}   /* A2: brightness tier replaces width tier */
+  .cf-slot{position:absolute; inset:0; z-index:1; background:#000}   /* active/warm iframe mounts here; empty = poster shows */
+  .cf-slot:empty{display:none}
+  .cf-slot iframe{position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; border:0 !important}
+  .cf-prog{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:2; background:rgba(237,231,220,.16)}
+  .cf-prog b{display:block; height:100%; width:0; background:#FF3B30}
+  .cf-prog.none{display:none}   /* unwatched or duration-less = no line (A3/A4 rule) */
+  .cf-durchip{position:absolute; right:8px; bottom:8px; z-index:2; background:rgba(10,9,8,.8); color:#EDE7DC;
+    font-size:11px; font-weight:700; border-radius:4px; padding:1px 5px; letter-spacing:.02em}
+  body.curdeck .cf-focus .cf-durchip{display:none}   /* focus shows remaining in meta, not the chip */
+  .cf-meta{padding:14px 20px 6px}
+  .cf-vt{font-size:16px; font-weight:650; color:#EDE7DC; line-height:1.35;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .cf-sub{margin-top:7px; font-size:12.5px; font-weight:600; color:rgba(237,231,220,.55); line-height:1.4;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .cf-card:not(.cf-focus) .cf-vt{-webkit-line-clamp:1; font-size:14.5px; font-weight:600}
+  .cf-card:not(.cf-focus) .cf-sub{display:none}
+  .cf-card:not(.cf-focus) .cf-meta{padding:9px 20px 4px}
+  .cf-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3;
+    width:54px; height:54px; border-radius:50%; border:none; cursor:pointer; background:rgba(245,242,236,.92);
+    color:#2C2925; display:none; place-items:center; box-shadow:0 8px 24px rgba(0,0,0,.4); touch-action:manipulation}
+  body.curdeck .cf-focus:not(.cf-playing) .cf-play{display:grid}
+
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
   .shr{border:none; background:none; cursor:pointer; touch-action:manipulation; color:var(--paper-sub);
     padding:4px 8px; margin-left:auto; flex:none; line-height:0}
@@ -1358,6 +1402,7 @@
         <div class="cd-chap" id="cdChap" aria-hidden="true"></div>
       </div>
     </div>
+    <div id="cdFeed"></div>
     <div class="cd-fin" id="cdFin">
       <div class="cd-fin-t">이번 주 편성,<br>끝까지 들었어요</div>
       <div class="cd-fin-s">새 편성은 월요일에 도착해요</div>
@@ -1395,7 +1440,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-19';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-20';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2181,11 +2226,23 @@
     // read pre-layout strip height and leave the track clipped (P1-3 class)
     setTimeout(function(){ if(document.body.classList.contains('curdeck')&&!cdFollow.on&&!cdAnimBusy) cdRender(); },420);
     cdWarmInto(1-cdAct, cdIdx);      // warm the FIRST video before the user taps play
+    // Portrait feed (D): observe cards, tap a card's play glyph to commit it, and
+    // auto-commit the top card on open (YouTube-feed grammar). Landscape ignores this.
+    cfManualPause=false; cfPlayIdx=-1;
+    var _feed=document.getElementById('cdFeed');
+    if(_feed) _feed.onclick=function(ev){ var pb=ev.target.closest&&ev.target.closest('.cf-play'); if(!pb) return;
+      var card=pb.closest('.cf-card'); if(!card) return; var i=+card.getAttribute('data-i');
+      cdIdx=i; cfSetFocus(i); cfPlaceStage(i); cfManualPause=false; cfCommitPlay(i); };
+    if(cfIsFeed()){ cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()){ cfPlaceStage(cdIdx); cfSettle(); } },180); }
   }
   function closeCurationDeck(){
+    if(cfIsFeed()) cfCaptureActive(); // A4: save position before stopVideo resets it
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null]; cdLoadedKey=[null,null];
+    if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfRatios={}; clearTimeout(cfScrollT);
+    var _st=document.getElementById('cdStage'); if(_st) _st.style.cssText='';   // clear feed-overlay placement (landscape/next-open reset)
+    var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; }
     clearTimeout(cdWheelT);
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
@@ -2262,7 +2319,127 @@
     cdPosterSync();
     cdDrawChap(0);
     cdJbarSync(0);
+    cfRender();
   }
+  function cfEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];}); }
+  // Portrait feed renderer (native scroll). Each item = one full-bleed 16:9 card
+  // (poster + a .cf-slot the active iframe mounts into on autoplay) + a bottom meta
+  // block. Landscape ignores this DOM (CSS hides #cdFeed there). Progress line is
+  // painted per card by the A4 watch-state pass; static render leaves it hidden.
+  function cfRender(){
+    var feed=document.getElementById('cdFeed'); if(!feed) return;
+    var n=cdItems.length; if(!n){ feed.innerHTML=''; return; }
+    var html='';
+    for(var i=0;i<n;i++){
+      var it=cdItems[i]; if(!it||!it.title) continue; // A3: never serve a text-less card
+      var durTxt=it.duration_sec?fmtSec(it.duration_sec):'';
+      var sub=[]; if(it.channel) sub.push(it.channel); if(durTxt) sub.push(durTxt);
+      var w=cfWatch[it.video_id], pc=(w&&w.dur>0)?Math.round(Math.min(1,w.pos/w.dur)*100):0; // A4 progress line
+      html+='<div class="cf-card'+(i===cdIdx?' cf-focus':'')+'" data-i="'+i+'">'
+        +'<div class="cf-media" style="background-image:url(\''+cdThumb(it)+'\')">'
+          +'<div class="cf-slot"></div>'
+          +(durTxt?'<span class="cf-durchip">'+cfEsc(durTxt)+'</span>':'')
+          +'<div class="cf-prog'+((w&&w.dur>0)?'':' none')+'"><b style="width:'+pc+'%"></b></div>'
+          +'<button class="cf-play" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button>'
+        +'</div>'
+        +'<div class="cf-meta"><div class="cf-vt">'+cfEsc(it.title)+'</div>'
+        +(sub.length?'<div class="cf-sub">'+cfEsc(sub.join(' · '))+'</div>':'')+'</div>'
+      +'</div>';
+    }
+    feed.innerHTML=html;
+  }
+  // ===== D: native-scroll dominant-card autoplay (portrait feed) =====
+  // No iframe reparent (= no reload): the dual-player STAGE is placed as a fixed
+  // overlay over the dominant card on settle; during scroll it hides (posters only,
+  // audio paused). Dominant = IntersectionObserver max-ratio (>=0.5), +0.15
+  // hysteresis vs the current player, committed 150ms after the last scroll.
+  var cfRatios={}, cfObs=null, cfScrollT=null, cfManualPause=false, cfPlayIdx=-1;
+  function cfIsFeed(){ return document.body.classList.contains('curdeck') && matchMedia('(orientation:portrait)').matches; }
+  function cfCards(){ var f=document.getElementById('cdFeed'); return f?f.querySelectorAll('.cf-card'):[]; }
+  function cfSetupObserver(){
+    var feed=document.getElementById('cdFeed'); if(!feed) return;
+    if(cfObs) cfObs.disconnect();
+    cfRatios={};
+    cfObs=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ var i=+e.target.getAttribute('data-i'); cfRatios[i]=e.isIntersecting?e.intersectionRatio:0; });
+    },{root:feed, threshold:[0,.2,.35,.5,.6,.7,.85,1]});
+    Array.prototype.forEach.call(cfCards(),function(c){ cfObs.observe(c); });
+    feed.onscroll=cfOnScroll;
+  }
+  function cfDominant(){ // max visible ratio; tie -> upper (lower index)
+    var best=-1, bestR=-1;
+    for(var i=0;i<cdItems.length;i++){ var r=cfRatios[i]||0; if(r>bestR+1e-4){ bestR=r; best=i; } }
+    return {idx:best, ratio:bestR};
+  }
+  function cfOnScroll(){
+    if(!cfIsFeed()) return;
+    document.body.classList.add('cdnav');   // hide the overlay stage while moving (posters only)
+    cdPause();                              // no ghost audio under a scrolled-away card
+    clearTimeout(cfScrollT); cfScrollT=setTimeout(cfSettle,150);
+  }
+  function cfPlaceStage(i){
+    var cards=cfCards(), c=cards[i]; if(!c) return;
+    var media=c.querySelector('.cf-media'); if(!media) return;
+    var r=media.getBoundingClientRect(), st=document.getElementById('cdStage'); if(!st) return;
+    st.style.cssText='position:fixed;top:'+r.top+'px;left:'+r.left+'px;width:'+r.width+'px;height:'+r.height+'px;z-index:60;border-radius:0;box-shadow:none';
+  }
+  function cfSetFocus(i){
+    Array.prototype.forEach.call(cfCards(),function(c){ c.classList.toggle('cf-focus', +c.getAttribute('data-i')===i); });
+  }
+  function cfSettle(){
+    if(!cfIsFeed()) return;
+    var d=cfDominant();
+    document.body.classList.remove('cdnav');
+    if(d.idx<0 || d.ratio<0.5){ if(cfPlayIdx>=0) cfPlaceStage(cfPlayIdx); return; } // no dominant: keep current (no silent gap)
+    if(cfPlayIdx>=0 && d.idx!==cfPlayIdx){                    // hysteresis: replace only on a clear lead
+      if(d.ratio < (cfRatios[cfPlayIdx]||0)+0.15){ cfPlaceStage(cfPlayIdx); if(!cfManualPause){ try{ cdP[cdAct]&&cdP[cdAct].playVideo&&cdP[cdAct].playVideo(); }catch(e){} } return; }
+    }
+    cdIdx=d.idx; cfSetFocus(cdIdx); cfPlaceStage(cdIdx);
+    if(cfManualPause && d.idx===cfPlayIdx) return;            // user paused this card: don't resurrect
+    cfManualPause=false;
+    cfCommitPlay(cdIdx);
+  }
+  function cfCommitPlay(i){
+    if(cfPlayIdx>=0 && cfPlayIdx!==i){ cfCaptureActive(); cfPaintProg(cfPlayIdx); } // A4: save the card we leave
+    cfPlayIdx=i; cdIdx=i;
+    Array.prototype.forEach.call(cfCards(),function(c){ c.classList.toggle('cf-playing', +c.getAttribute('data-i')===i); });
+    cdPlay(); // reuse: play active slot at position, silence the other slot (single voice owner), warm neighbour
+  }
+  // A4: paint one card's progress line in place (no innerHTML rebuild = no scroll/observer reset).
+  function cfPaintProg(i){
+    var c=cfCards()[i]; if(!c) return; var it=cdItems[i]; if(!it) return;
+    var w=cfWatch[it.video_id], prog=c.querySelector('.cf-prog'); if(!prog) return;
+    var b=prog.querySelector('b');
+    if(w&&w.dur>0){ prog.classList.remove('none'); if(b) b.style.width=Math.round(Math.min(1,w.pos/w.dur)*100)+'%'; }
+    else prog.classList.add('none');
+  }
+  function cfToggle(){
+    if(!cfIsFeed()) return;
+    try{
+      var p=cdP[cdAct], st=p&&p.getPlayerState?p.getPlayerState():-1;
+      if(st===1){ p.pauseVideo(); cfManualPause=true; cfCaptureActive(); }
+      else { p.playVideo(); cfManualPause=false; }
+    }catch(e){}
+  }
+  // ===== A4: watch position + per-card progress line + resume =====
+  // Session store now; the server PATCH wires in when the DDL lands (2 derived cols
+  // on curation_items). Duration is captured from the PLAYER (pool duration is 86%
+  // NULL), so a watched card always has a ratio for its line. cfSaveWatch is the
+  // single no-op-now / server-later seam.
+  var cfWatch={}, cfCapTick=0;
+  function cfSaveWatch(vid, pos, dur){
+    if(!vid||!(dur>0)) return;
+    cfWatch[vid]={pos:Math.max(0, Math.min(pos||0, dur)), dur:dur};
+    // TODO(A4 DDL): PATCH /curations/:subId/items/:vid/watched {position,duration} — position-only, must NOT touch watched_at.
+  }
+  function cfCaptureActive(){
+    try{ var p=cdP[cdAct]; if(!p||!p.getCurrentTime) return;
+      var it=cdItems[cfPlayIdx>=0?cfPlayIdx:cdIdx]; if(!it) return;
+      var dur=p.getDuration()||0, pos=p.getCurrentTime()||0; if(dur>0) cfSaveWatch(it.video_id, pos, dur);
+    }catch(e){}
+  }
+  document.addEventListener('visibilitychange', function(){ if(document.hidden && cfIsFeed()) cfCaptureActive(); });
+  window.addEventListener('pagehide', function(){ if(cfIsFeed()) cfCaptureActive(); });
   // Progress = note chapters grammar: one segment per video, done/now(partial)/todo (R9).
   function cdDrawChap(frac){
     var el=document.getElementById('cdChap'); if(!el) return;
@@ -2323,11 +2500,12 @@
       if(st===1 && cdWarmKey[slot]==='warming'){ try{cdP[slot].pauseVideo();}catch(e){} cdWarmKey[slot]=cdP[slot].__warmTarget||null; }
       return;
     }
-    if(st===1){ document.body.classList.remove('cdloading','cdpaused'); } // veil off: reveal the iframe (D2)
+    if(st===1){ document.body.classList.remove('cdloading','cdpaused'); if(cfIsFeed()) cfManualPause=false; } // veil off: reveal the iframe (D2)
     // Pause veil (deck isolation, James pick 07-21): YouTube's paused 'More videos'
     // overlay surfaces OUTSIDE videos with no player param to disable it — cover the
     // iframe with our poster while paused; center press resumes (deck grammar).
-    if(st===2){ document.body.classList.add('cdpaused'); }
+    // In the feed, a pause while settled (not mid-scroll) = an explicit user pause -> respect it.
+    if(st===2){ document.body.classList.add('cdpaused'); if(cfIsFeed() && !document.body.classList.contains('cdnav')) cfManualPause=true; }
     if(st===0){ cdEnded(); }
   }
   // Warm an item into a slot: muted load -> PLAYING -> pause. Quiet cue fallback (iOS/low-power).
@@ -2375,7 +2553,9 @@
     var ready=(cdWarmKey[cdAct]===key)||(cdLoadedKey[cdAct]===key);
     try{
       if(ready){ p.unMute(); p.playVideo(); }                       // warm / loaded -> play, no veil
-      else { cdPosterSync(); document.body.classList.add('cdloading'); p.unMute(); p.loadVideoById({videoId:it.video_id}); } // cold: poster first, then veil
+      else { cdPosterSync(); document.body.classList.add('cdloading'); p.unMute();
+        var _w=cfWatch[it.video_id], _ss=(_w&&_w.dur>0&&_w.pos<_w.dur*0.95)?_w.pos:0; // A4 resume from saved position
+        p.loadVideoById({videoId:it.video_id, startSeconds:_ss}); } // cold: poster first, then veil
     }catch(e){}
     cdLoadedKey[cdAct]=key; // this slot now holds this video (A3 resume detection)
     cdWarmKey[cdAct]=null; cdEndRolled=false;
@@ -2406,6 +2586,7 @@
         var end=p.getDuration()||0; if(!end) return;
         var t=p.getCurrentTime();
         cdUpdateChapFill(t/end);
+        if(cfIsFeed() && ++cfCapTick>=24){ cfCapTick=0; var _pi=cfPlayIdx>=0?cfPlayIdx:cdIdx, _it=cdItems[_pi]; if(_it){ cfSaveWatch(_it.video_id, t, end); cfPaintProg(_pi); } } // A4: ~12s throttle
         var rem=end-t;
         if(rem<2&&!cdEndRolled){
           cdEndRolled=true;
@@ -2419,6 +2600,12 @@
   // Ended on the active slot: next video via the warm-swap path (no spinner).
   // Last video -> D4 weekly-complete card (list row updates on return via re-fetch).
   function cdEnded(){
+    if(cfIsFeed()){ // feed: scroll to the next card; the settle commits + plays it
+      cfCaptureActive(); cfPaintProg(cfPlayIdx>=0?cfPlayIdx:cdIdx); // A4: ended = complete (pos≈dur)
+      if(cdIdx<cdItems.length-1){ var c=cfCards()[cdIdx+1]; if(c) c.querySelector('.cf-media').scrollIntoView({behavior:reduce?'auto':'smooth', block:'start'}); }
+      else { cdStopPoll(); document.body.classList.remove('cdplaying','cdloading','cdpaused'); document.body.classList.add('cdfin'); }
+      return;
+    }
     if(cdIdx<cdItems.length-1){ cdAdvance(1,true); }
     else { cdStopPoll(); document.body.classList.remove('cdplaying','cdloading','cdpaused'); document.body.classList.add('cdfin'); }
   }
