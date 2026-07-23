@@ -1001,6 +1001,9 @@
   .cf-prog.none{display:none}   /* unwatched or duration-less = no line (A3/A4 rule) */
   .cf-durchip{position:absolute; right:8px; bottom:8px; z-index:2; background:rgba(10,9,8,.8); color:#EDE7DC;
     font-size:11px; font-weight:700; border-radius:4px; padding:1px 5px; letter-spacing:.02em}
+  /* unavailable video (embed disabled / deleted): card-internal label + dim, never a toast */
+  .cf-na{position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center;
+    background:rgba(13,13,16,.72); color:#B8AE9E; font-size:13px; font-weight:650; letter-spacing:.01em}
   body.curdeck .cf-focus .cf-durchip{display:none}   /* focus shows remaining in meta, not the chip */
   .cf-meta{padding:14px 20px 6px}
   .cf-vt{font-size:16px; font-weight:650; color:#EDE7DC; line-height:1.35;
@@ -1014,6 +1017,15 @@
     width:54px; height:54px; border-radius:50%; border:none; cursor:pointer; background:rgba(245,242,236,.92);
     color:#2C2925; display:none; place-items:center; box-shadow:0 8px 24px rgba(0,0,0,.4); touch-action:manipulation}
   body.curdeck .cf-focus:not(.cf-playing) .cf-play{display:grid}
+  /* muted-autoplay affordance: shown while the feed plays muted; a tap unmutes (gesture) */
+  .cf-mutechip{display:none; position:fixed; left:50%; bottom:calc(var(--sab) + 18px); transform:translateX(-50%); z-index:9;
+    align-items:center; gap:6px; border:none; cursor:pointer; -webkit-tap-highlight-color:transparent;
+    background:rgba(18,16,14,.82); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    color:#EDE7DC; font-family:inherit; font-size:12.5px; font-weight:750; letter-spacing:.01em;
+    border-radius:99px; padding:8px 15px; box-shadow:0 6px 18px rgba(0,0,0,.42)}
+  .cf-mutechip svg{display:block}
+  body.curdeck.cffeedmuted .cf-mutechip{display:inline-flex}
+  body.curdeck.cffeedmuted .cf-mutechip:active{transform:translateX(-50%) scale(.96)}
 
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
   .shr{border:none; background:none; cursor:pointer; touch-action:manipulation; color:var(--paper-sub);
@@ -1423,6 +1435,7 @@
     </div>
     <span class="cd-hint" id="cdHint">돌려서 고르고, 눌러서 재생</span>
     <div class="jbar" id="cdJbar" aria-hidden="true"><div class="jb-fill" id="cdJbFill"></div><span class="jb-mark" id="cdJbMark"></span></div>
+    <button class="cf-mutechip" id="cfMute" type="button" aria-label="소리 켜기"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9.5v5h3.5L12 19V5L7.5 9.5H4z"/><path d="M15.5 9l4 6M19.5 9l-4 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span>소리 켜기</span></button>
   </div>
 
   <!-- YouTube connect wizard sheet [J:07-21] — TRUE bottom sheet: body-level, rises from the
@@ -1452,7 +1465,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-21';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-22';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2240,11 +2253,13 @@
     cdWarmInto(1-cdAct, cdIdx);      // warm the FIRST video before the user taps play
     // Portrait feed (D): observe cards, tap a card's play glyph to commit it, and
     // auto-commit the top card on open (YouTube-feed grammar). Landscape ignores this.
-    cfManualPause=false; cfPlayIdx=-1;
+    cfManualPause=false; cfPlayIdx=-1; cfMuteFallback=false; cfScrolling=false; clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
     var _feed=document.getElementById('cdFeed');
     if(_feed) _feed.onclick=function(ev){ var pb=ev.target.closest&&ev.target.closest('.cf-play'); if(!pb) return;
       var card=pb.closest('.cf-card'); if(!card) return; var i=+card.getAttribute('data-i');
-      cdIdx=i; cfSetFocus(i); cfPlaceStage(i); cfManualPause=false; cfCommitPlay(i); };
+      cdPrime(); cfMuteFallback=false; cdIdx=i; cfSetFocus(i); cfPlaceStage(i); cfManualPause=false; cfShowMuteHint(); cfCommitPlay(i); }; // explicit play tap = sound (gesture)
+    var _mute=document.getElementById('cfMute'); if(_mute) _mute.onclick=function(){ cfToggle(); };
+    var _guard=document.getElementById('cdGuard'); if(_guard) _guard.onclick=function(){ if(cfIsFeed()) cfToggle(); }; // tap the video: unmute / pause
     if(cfIsFeed()){ cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()){ cfPlaceStage(cdIdx); cfSettle(); } },180); }
   }
   function closeCurationDeck(){
@@ -2252,7 +2267,7 @@
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null]; cdLoadedKey=[null,null];
-    if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfRatios={}; clearTimeout(cfScrollT);
+    if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfMuteFallback=false; cfScrolling=false; cfRatios={}; clearTimeout(cfScrollT); clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
     var _st=document.getElementById('cdStage'); if(_st) _st.style.cssText='';   // clear feed-overlay placement (landscape/next-open reset)
     var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; }
     clearTimeout(cdWheelT);
@@ -2366,6 +2381,17 @@
   // audio paused). Dominant = IntersectionObserver max-ratio (>=0.5), +0.15
   // hysteresis vs the current player, committed 150ms after the last scroll.
   var cfRatios={}, cfObs=null, cfScrollT=null, cfManualPause=false, cfPlayIdx=-1;
+  // Feed autoplay is OFF-gesture (a settle timer, not a tap), and the deck players are
+  // never gesture-primed, so an unmuted programmatic playVideo() is blocked by iOS/
+  // browsers and YouTube surfaces "An error occurred" (the app documents this at ytPrime).
+  // YouTube's own feed grammar sidesteps it: dominant card autoplays MUTED (muted play
+  // needs no gesture — the warm engine already relies on it), and the first user tap
+  // unmutes (inside a gesture; that interaction also unlocks the audio context so later
+  // Supervisor #4: SOUND-FIRST. Attempt UNMUTED autoplay (cdPrime unlocks the players);
+  // only if that's blocked (onError 2/5, or no PLAYING within a watchdog) fall back to
+  // MUTED + a "tap for sound" affordance. A tap turns sound on inside the gesture. Muted
+  // is the fallback, never the default — this is a weekly-radio product, it needs sound.
+  var cfMuteFallback=false, cfSoundWatch=null;
   function cfIsFeed(){ return document.body.classList.contains('curdeck') && matchMedia('(orientation:portrait)').matches; }
   function cfCards(){ var f=document.getElementById('cdFeed'); return f?f.querySelectorAll('.cf-card'):[]; }
   function cfSetupObserver(){
@@ -2383,11 +2409,16 @@
     for(var i=0;i<cdItems.length;i++){ var r=cfRatios[i]||0; if(r>bestR+1e-4){ bestR=r; best=i; } }
     return {idx:best, ratio:bestR};
   }
+  var cfScrolling=false;
   function cfOnScroll(){
     if(!cfIsFeed()) return;
-    document.body.classList.add('cdnav');   // hide the overlay stage while moving (posters only)
-    cdPause();                              // no ghost audio under a scrolled-away card
-    clearTimeout(cfScrollT); cfScrollT=setTimeout(cfSettle,150);
+    // Supervisor #5: do NOT pause on scroll — the current card keeps playing (sound stays
+    // continuous). Its video is kept glued to its card as it moves; the ONLY pause is a
+    // commit that changes the dominant card (cfSettle -> cfCommitPlay). This removes the
+    // "sound cuts every time you touch" feel and converges pause calls to one-per-commit.
+    cfScrolling=true;
+    if(cfPlayIdx>=0) cfPlaceStage(cfPlayIdx);
+    clearTimeout(cfScrollT); cfScrollT=setTimeout(function(){ cfScrolling=false; cfSettle(); },150);
   }
   function cfPlaceStage(i){
     var cards=cfCards(), c=cards[i]; if(!c) return;
@@ -2403,12 +2434,10 @@
     var d=cfDominant();
     document.body.classList.remove('cdnav');
     if(d.idx<0 || d.ratio<0.5){ if(cfPlayIdx>=0) cfPlaceStage(cfPlayIdx); return; } // no dominant: keep current (no silent gap)
-    if(cfPlayIdx>=0 && d.idx!==cfPlayIdx){                    // hysteresis: replace only on a clear lead
-      if(d.ratio < (cfRatios[cfPlayIdx]||0)+0.15){ cfPlaceStage(cfPlayIdx); if(!cfManualPause){ try{ cdP[cdAct]&&cdP[cdAct].playVideo&&cdP[cdAct].playVideo(); }catch(e){} } return; }
-    }
+    if(d.idx===cfPlayIdx){ cfPlaceStage(cfPlayIdx); return; }  // same card already playing: no pause/play/seek (A3 resume-not-restart, supervisor #5)
+    if(cfPlayIdx>=0 && d.ratio < (cfRatios[cfPlayIdx]||0)+0.15){ cfPlaceStage(cfPlayIdx); return; } // hysteresis: not a clear enough lead -> keep current
     cdIdx=d.idx; cfSetFocus(cdIdx); cfPlaceStage(cdIdx);
-    if(cfManualPause && d.idx===cfPlayIdx) return;            // user paused this card: don't resurrect
-    cfManualPause=false;
+    if(cfManualPause) return;                                  // user explicitly paused: no autoplay until a re-tap (handoff)
     cfCommitPlay(cdIdx);
   }
   function cfCommitPlay(i){
@@ -2425,12 +2454,18 @@
     if(w&&w.dur>0){ prog.classList.remove('none'); if(b) b.style.width=Math.round(Math.min(1,w.pos/w.dur)*100)+'%'; }
     else prog.classList.add('none');
   }
+  function cfShowMuteHint(){ document.body.classList.toggle('cffeedmuted', cfIsFeed() && cfMuteFallback); }
+  // Tap on the playing video: the FIRST tap unmutes (inside a gesture — this also
+  // unlocks the audio context so later commits can autoplay with sound); after that a
+  // tap toggles play/pause (a settled pause = manualPause, respected on scroll).
   function cfToggle(){
     if(!cfIsFeed()) return;
+    cdPrime(); // this tap is a gesture — unlock the deck players so later autoplays work
     try{
-      var p=cdP[cdAct], st=p&&p.getPlayerState?p.getPlayerState():-1;
+      var p=cdP[cdAct]; if(!p) return; var st=p.getPlayerState?p.getPlayerState():-1;
+      if(cfMuteFallback){ cfMuteFallback=false; try{ p.unMute(); }catch(e){} cfShowMuteHint(); if(st!==1){ try{ p.playVideo(); }catch(e){} } return; } // tap turns sound on (gesture)
       if(st===1){ p.pauseVideo(); cfManualPause=true; cfCaptureActive(); }
-      else { p.playVideo(); cfManualPause=false; }
+      else { try{ p.unMute(); }catch(e){} p.playVideo(); cfManualPause=false; }
     }catch(e){}
   }
   // ===== A4: watch position + per-card progress line + resume =====
@@ -2501,10 +2536,29 @@
             cdReadySlots[slot]=true;
             if(cdPendingWarm[slot]!=null){ var ix=cdPendingWarm[slot]; cdPendingWarm[slot]=null; cdWarmInto(slot, ix); }
           }; })(i),
-          onStateChange:(function(slot){ return function(ev){ cdOnState(slot, ev.data); }; })(i)
+          onStateChange:(function(slot){ return function(ev){ cdOnState(slot, ev.data); }; })(i),
+          onError:(function(slot){ return function(ev){ cdOnError(slot, ev.data); }; })(i)
         }
       });
     });
+  }
+  // YT error codes: 2 invalid param, 5 HTML5 error, 100 not found, 101/150 embedding
+  // disabled by the owner. Never leave YouTube's raw error visible — cover it with our
+  // poster; tell the user only when the video genuinely can't play here.
+  function cdOnError(slot, code){
+    if(slot!==cdAct) return;
+    if((code===2||code===5) && cfIsFeed() && !cfMuteFallback){ // playback error on an unmuted attempt -> muted fallback, keep playing (supervisor #4)
+      cfMuteFallback=true; try{ var p=cdP[cdAct]; p.mute(); p.playVideo(); }catch(e){} cfShowMuteHint(); return;
+    }
+    // 100=deleted/private (most common in the pool), 101/150=embedding disabled: cover with
+    // the poster + a CARD-INTERNAL label, never a global toast (a toast vanishes with its info).
+    document.body.classList.remove('cdplaying','cdloading'); document.body.classList.add('cdpaused');
+    if(cfIsFeed()) cfMarkCardUnavailable(cdIdx);
+  }
+  function cfMarkCardUnavailable(i){
+    var c=cfCards()[i]; if(!c) return; var m=c.querySelector('.cf-media'); if(!m||m.querySelector('.cf-na')) return;
+    var d=document.createElement('div'); d.className='cf-na'; d.textContent='재생할 수 없는 영상';
+    m.appendChild(d);
   }
   function cdOnState(slot, st){
     if(slot!==cdAct){
@@ -2512,7 +2566,7 @@
       if(st===1 && cdWarmKey[slot]==='warming'){ try{cdP[slot].pauseVideo();}catch(e){} cdWarmKey[slot]=cdP[slot].__warmTarget||null; }
       return;
     }
-    if(st===1){ document.body.classList.remove('cdloading','cdpaused'); if(cfIsFeed()) cfManualPause=false; } // veil off: reveal the iframe (D2)
+    if(st===1){ document.body.classList.remove('cdloading','cdpaused'); if(cfIsFeed()){ cfManualPause=false; clearTimeout(cfSoundWatch); } } // veil off + unmuted play confirmed (cancel the mute-fallback watchdog)
     // Pause veil (deck isolation, James pick 07-21): YouTube's paused 'More videos'
     // overlay surfaces OUTSIDE videos with no player param to disable it — cover the
     // iframe with our poster while paused; center press resumes (deck grammar).
@@ -2564,10 +2618,17 @@
     // transitions or resume. Cold path paints the poster BEFORE the veil.
     var ready=(cdWarmKey[cdAct]===key)||(cdLoadedKey[cdAct]===key);
     try{
-      if(ready){ p.unMute(); p.playVideo(); }                       // warm / loaded -> play, no veil
-      else { cdPosterSync(); document.body.classList.add('cdloading'); p.unMute();
+      var feedMuted = cfIsFeed() && cfMuteFallback;                 // sound-first; muted only after a detected block (supervisor #4)
+      if(ready){ if(feedMuted) p.mute(); else p.unMute(); p.playVideo(); }   // warm / loaded -> play, no veil
+      else { cdPosterSync(); document.body.classList.add('cdloading'); if(feedMuted) p.mute(); else p.unMute();
         var _w=cfWatch[it.video_id], _ss=(_w&&_w.dur>0&&_w.pos<_w.dur*0.95)?_w.pos:0; // A4 resume from saved position
         p.loadVideoById({videoId:it.video_id, startSeconds:_ss}); } // cold: poster first, then veil
+      cfShowMuteHint();
+      // sound-first watchdog: if the unmuted attempt doesn't reach PLAYING, iOS blocked it
+      // -> fall back to muted + affordance so the video still plays (supervisor #4).
+      if(cfIsFeed() && !feedMuted){ clearTimeout(cfSoundWatch); cfSoundWatch=setTimeout(function(){
+        try{ var pp=cdP[cdAct]; if(pp&&pp.getPlayerState&&pp.getPlayerState()!==1){ cfMuteFallback=true; pp.mute(); pp.playVideo(); cfShowMuteHint(); } }catch(e){}
+      },1500); }
     }catch(e){}
     cdLoadedKey[cdAct]=key; // this slot now holds this video (A3 resume detection)
     cdWarmKey[cdAct]=null; cdEndRolled=false;
@@ -2581,6 +2642,22 @@
   // moves cdAct while the old slot's pauseVideo() is still in flight on iOS). Pausing only
   // cdAct let the other slot keep sounding under the hidden stage = the "ghost". Freeze both.
   function cdPause(){ [0,1].forEach(function(i){ try{ var p=cdP[i]; if(p&&p.pauseVideo) p.pauseVideo(); }catch(e){} }); }
+  // Prime the DECK players inside a user gesture (mute->play->pause) so later OFF-gesture
+  // autoplays are allowed. The feed autoplays on scroll-settle (not a tap), and cdP was
+  // never primed — only the note players ytP are (via ytPrime). This was the missing
+  // invariant behind "An error occurred" / cards not activating. Self-guarded + idempotent.
+  var cdPrimed=false;
+  function cdPrime(){
+    if(cdPrimed) return; var ok=false;
+    // Supervisor review: prime ONLY empty slots (no loaded/warm video). Priming a slot
+    // that already holds a video would (a) advance its currentTime (pollution) and (b)
+    // race a real play whose playVideo() could land before this pause(). Muted throughout
+    // (no unmute here) so it can never leak audio — unmute happens only on a user tap.
+    [0,1].forEach(function(i){ var p=cdP[i]; if(!p||!p.playVideo) return;
+      if(cdLoadedKey[i]||cdWarmKey[i]) return;      // skip slots that hold a video
+      try{ p.mute(); p.playVideo(); p.pauseVideo(); ok=true; }catch(e){} });
+    if(ok) cdPrimed=true;                            // only latch once we actually primed an empty slot in a gesture
+  }
   function cdToggle(){
     if(!document.body.classList.contains('cdplaying')){ cdPlay(); return; }
     try{
@@ -3061,7 +3138,7 @@
   var PREFETCH_AHEAD=2, BLOB_CACHE_MAX=8;
   var SILENT_WAV='data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
   function unlockAudio(){ // 사용자 제스처 안에서 1회 — 이후 프로그래매틱 재생 허용
-    ytPrime(); // prime YT iframes on any play gesture (self-guarded, retries until players ready)
+    ytPrime(); cdPrime(); // prime note + deck iframes on any play gesture (self-guarded, retries until players ready)
     if(narrUnlocked) return;
     try{
       narrEl=narrEl||new Audio();
