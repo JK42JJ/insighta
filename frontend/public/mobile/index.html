@@ -263,7 +263,7 @@
   .plusfab{position:absolute; left:8px; bottom:2px; visibility:hidden; width:40px; height:40px; display:grid; place-items:center; border:none; border-radius:50%; background:rgba(232,128,76,.14); color:var(--acc,#E8804C); cursor:pointer; -webkit-tap-highlight-color:transparent; transition:transform var(--snap) ease, background var(--snap) ease}
   .plusfab:active{transform:scale(.9)}
   .wheel.touching ~ .plusfab,.wheel.touching ~ .gearfab{pointer-events:none} /* C3: no corner mis-touch during wheel rotation */
-  #ytsBody .mrow{margin-top:8px} #ytsBody .mrow:first-of-type{margin-top:2px}
+  #ytsBody .mrow{margin-top:9px; padding:17px 16px; font-size:15px; border-radius:14px} #ytsBody .mrow:first-of-type{margin-top:2px}
   #ytsBody .mrow.sel{box-shadow:inset 0 0 0 1.5px var(--acc,#E8804C), 0 3px 8px -3px rgba(94,86,72,.4)}
   #ytsBody .mrow .sub{max-width:52%; text-align:right; line-height:1.25}
   body.stage .gearfab,body.curdeck .gearfab,body.reading .gearfab,body.stage .plusfab,body.curdeck .plusfab,body.reading .plusfab{visibility:hidden !important}
@@ -459,6 +459,12 @@
     font-size:16px; font-weight:600; color:var(--paper-ink); background:#fff;
     box-shadow:inset 0 0 0 1.5px rgba(94,86,72,.22)}
   #goalInput:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
+  .yts-custom{display:flex; gap:8px; margin-top:6px}
+  .yts-custom input{flex:1; min-width:0; border:none; border-radius:12px; padding:12px 13px; font-family:inherit; font-size:14px; font-weight:600; color:var(--paper-ink); background:rgba(94,86,72,.08); box-shadow:inset 0 0 0 1.5px rgba(94,86,72,.16)}
+  .yts-custom input:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
+  .yts-custom input::placeholder{color:var(--paper-sub)}
+  .yts-cadd{flex:none; border:none; border-radius:12px; padding:0 17px; font-family:inherit; font-size:13.5px; font-weight:700; background:var(--acc); color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:transform var(--snap) ease}
+  .yts-cadd:active{transform:scale(.95)}
   .go-actions{display:flex; gap:10px; margin-top:12px}
   .go-cancel,.go-make{flex:1; border:none; cursor:pointer; font-family:inherit; border-radius:12px; padding:12px;
     font-size:12.5px; font-weight:750; transition:transform var(--snap) var(--spring); touch-action:manipulation}
@@ -1378,7 +1384,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-14';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-16';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2020,12 +2026,18 @@
         +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
         +'<span class="yts-prop-t">'+curEsc(p.topic)+'</span></button>';
     });
-    h+='</div><button class="yts-ghost" id="ytsRetune"'+(ytRetuneSpent?' disabled style="opacity:.4"':'')+'>'
+    h+='</div>';
+    h+='<div class="yts-custom"><input type="text" id="ytCustomTopic" maxlength="40" placeholder="직접 주제 입력" autocomplete="off"><button class="yts-cadd" id="ytCustomAdd" type="button">추가</button></div>';
+    h+='<button class="yts-ghost" id="ytsRetune"'+(ytRetuneSpent?' disabled style="opacity:.4"':'')+'>'
       +(ytRetuneSpent?'지금은 이 세 갈래가 최선이에요':'다른 주제 보기')+'</button>';
     b.innerHTML=h;
     [].forEach.call(b.querySelectorAll('.yts-prop'),function(btn){
       btn.onclick=function(){ var t=btn.getAttribute('data-topic'); closeYtSheet(); setHomeTab('curation'); selectCuration(t); };
     });
+    var ci=document.getElementById('ytCustomTopic'), ca=document.getElementById('ytCustomAdd');
+    function ytCustomSubmit(){ var t=(ci&&ci.value||'').trim(); if(t.length<2){ if(ci) ci.focus(); return; } closeYtSheet(); setHomeTab('curation'); selectCuration(t); }
+    if(ca) ca.onclick=ytCustomSubmit;
+    if(ci) ci.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); ytCustomSubmit(); } });
     var rt=document.getElementById('ytsRetune');
     if(rt&&!ytRetuneSpent) rt.onclick=function(){ ytRenderTuning(ytLastProps.map(function(p){ return p.topic; })); };
   }
@@ -3502,6 +3514,7 @@
   function dispatchNotch(dir){
     if(document.body.classList.contains('curdeck')){ cdNav(dir); return; } // deck: 1 detent = 1 card
     if(document.body.classList.contains('hubsheet')){ var hr=hubRows(); if(!hr.length) return; var hx=selHub+dir; if(hx<0||hx>=hr.length){ wheelRubber(dir); return; } selHub=hx; updateSelHub(); return; }
+    if(cur==='news'||cur==='invite'){ var sl=document.getElementById(cur==='news'?'newsList':'tkList'); if(sl){ var mx=sl.scrollHeight-sl.clientHeight; if((dir>0&&sl.scrollTop>=mx-1)||(dir<0&&sl.scrollTop<=0)){ wheelRubber(dir); } else { sl.scrollBy({top:dir*Math.max(140, sl.clientHeight*0.7), behavior:'auto'}); } } return; } // sub-screen wheel = scroll the list (instant per notch)
     if(cur==='home'){
       // Curation tab has its own row list — the wheel must follow the ACTIVE tab,
       // not silently drive the hidden mandala list (focus bug, 2026-07-21).
