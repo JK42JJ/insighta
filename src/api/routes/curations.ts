@@ -258,6 +258,7 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           channel_name: true,
           duration_seconds: true,
           thumbnail_url: true,
+          view_count: true,
         },
       });
       const metaById = new Map(metas.map((m) => [m.video_id, m]));
@@ -269,6 +270,7 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           channel: m?.channel_name ?? null,
           duration_sec: m?.duration_seconds ?? null,
           thumbnail: m?.thumbnail_url ?? null,
+          views: m?.view_count != null ? Number(m.view_count) : null, // BigInt -> number for the meta line
         };
       });
       return reply.send({

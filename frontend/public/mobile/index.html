@@ -1004,15 +1004,15 @@
   /* unavailable video (embed disabled / deleted): card-internal label + dim, never a toast */
   .cf-na{position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center;
     background:rgba(13,13,16,.72); color:#B8AE9E; font-size:13px; font-weight:650; letter-spacing:.01em}
-  body.curdeck .cf-focus .cf-durchip{display:none}   /* focus shows remaining in meta, not the chip */
+  .cf-durchip{display:none}   /* duration lives in the meta sub uniformly; no per-card chip (avoids focus-change flicker) */
   .cf-meta{padding:14px 20px 6px}
   .cf-vt{font-size:16px; font-weight:650; color:#EDE7DC; line-height:1.35;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
   .cf-sub{margin-top:7px; font-size:12.5px; font-weight:600; color:rgba(237,231,220,.55); line-height:1.4;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .cf-card:not(.cf-focus) .cf-vt{-webkit-line-clamp:1; font-size:14.5px; font-weight:600}
-  .cf-card:not(.cf-focus) .cf-sub{display:none}
-  .cf-card:not(.cf-focus) .cf-meta{padding:9px 20px 4px}
+  /* Every card carries the SAME meta (2-line title + channel/time/views) so card heights
+     are identical and NEVER change when a card becomes the playing one — that height
+     change was the feed "wobble" (꿀렁거림) on scroll. Uniform = zero reflow. */
   .cf-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3;
     width:54px; height:54px; border-radius:50%; border:none; cursor:pointer; background:rgba(245,242,236,.92);
     color:#2C2925; display:none; place-items:center; box-shadow:0 8px 24px rgba(0,0,0,.4); touch-action:manipulation}
@@ -1480,7 +1480,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-24';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-24-25';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2267,7 +2267,7 @@
     setTimeout(function(){ if(document.body.classList.contains('curdeck')&&!cdFollow.on&&!cdAnimBusy) cdRender(); },420);
     // In-card feed players: observe cards, tap a card's play glyph to play it, and
     // auto-play the top card on open (YouTube-feed grammar). Each card owns its player.
-    cfManualPause=false; cfPlayIdx=-1; cfMuteFallback=false; clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
+    cfManualPause=false; cfPlayIdx=-1; cfMuteFallback=false; cfSoundOn=false; clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
     var _feed=document.getElementById('cdFeed');
     if(_feed) _feed.onclick=function(ev){ var pb=ev.target.closest&&ev.target.closest('.cf-play'); if(!pb) return;
       var card=pb.closest('.cf-card'); if(!card) return; var i=+card.getAttribute('data-i');
@@ -2280,7 +2280,7 @@
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null]; cdLoadedKey=[null,null];
-    if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfMuteFallback=false; cfRatios={}; clearTimeout(cfScrollT); clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
+    if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfMuteFallback=false; cfSoundOn=false; cfRatios={}; clearTimeout(cfScrollT); clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
     Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} }); cfPlayers={}; // tear down the in-card players
     var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; _fd.innerHTML=''; } // drop cards+players so re-open builds fresh
     clearTimeout(cdWheelT);
@@ -2366,6 +2366,7 @@
     var _fd=document.getElementById('cdFeed'); if(cfIsFeed() && _fd && !_fd.firstChild) cfRender();
   }
   function cfEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];}); }
+  function cfViews(n){ n=+n||0; if(n>=1e8) return (n/1e8).toFixed(1).replace(/\.0$/,'')+'억'; if(n>=1e4) return Math.round(n/1e4)+'만'; if(n>=1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'')+'천'; return String(n); }
   // Portrait feed renderer (native scroll). Each item = one full-bleed 16:9 card
   // (poster + a .cf-slot the active iframe mounts into on autoplay) + a bottom meta
   // block. Landscape ignores this DOM (CSS hides #cdFeed there). Progress line is
@@ -2377,7 +2378,7 @@
     for(var i=0;i<n;i++){
       var it=cdItems[i]; if(!it||!it.title) continue; // A3: never serve a text-less card
       var durTxt=it.duration_sec?fmtSec(it.duration_sec):'';
-      var sub=[]; if(it.channel) sub.push(it.channel); if(durTxt) sub.push(durTxt);
+      var sub=[]; if(it.channel) sub.push(it.channel); if(it.views>0) sub.push('조회수 '+cfViews(it.views)); if(durTxt) sub.push(durTxt);
       var w=cfWatch[it.video_id], pc=(w&&w.dur>0)?Math.round(Math.min(1,w.pos/w.dur)*100):0; // A4 progress line
       html+='<div class="cf-card'+(i===cdIdx?' cf-focus':'')+'" data-i="'+i+'">'
         +'<div class="cf-media" style="background-image:url(\''+cdThumb(it)+'\')">'
@@ -2408,7 +2409,7 @@
   // only if that's blocked (onError 2/5, or no PLAYING within a watchdog) fall back to
   // MUTED + a "tap for sound" affordance. A tap turns sound on inside the gesture. Muted
   // is the fallback, never the default — this is a weekly-radio product, it needs sound.
-  var cfMuteFallback=false, cfSoundWatch=null;
+  var cfMuteFallback=false, cfSoundWatch=null, cfSoundOn=false; // cfSoundOn: user enabled sound ONCE -> every later card plays with sound (no per-video re-prompt)
   function cfIsFeed(){ return document.body.classList.contains('curdeck') && matchMedia('(orientation:portrait)').matches; }
   function cfCards(){ var f=document.getElementById('cdFeed'); return f?f.querySelectorAll('.cf-card'):[]; }
   function cfSetupObserver(){
@@ -2483,12 +2484,13 @@
     cfPlayIdx=i; cdIdx=i; cfSetFocus(i);
     var p=cfEnsurePlayer(i); if(!p) return;
     try{
-      if(gesture){ cfMuteFallback=false; cfShowMuteHint(); if(p.unMute) p.unMute(); }
-      else { if(cfMuteFallback){ if(p.mute) p.mute(); } else if(p.unMute){ p.unMute(); } }
+      if(gesture){ cfSoundOn=true; cfMuteFallback=false; cfShowMuteHint(); if(p.unMute) p.unMute(); }
+      else if(cfSoundOn){ cfMuteFallback=false; if(p.unMute) p.unMute(); }  // sound enabled ONCE -> stays on for every card, never re-prompt
+      else { if(p.unMute) p.unMute(); }                                     // sound-first attempt (watchdog below, only until sound is enabled once)
       if(p.playVideo) p.playVideo();
     }catch(e){}
     Array.prototype.forEach.call(cfCards(),function(c){ c.classList.toggle('cf-playing', +c.getAttribute('data-i')===i); });
-    if(!gesture && !cfMuteFallback){ clearTimeout(cfSoundWatch); cfSoundWatch=setTimeout(function(){ // sound-first watchdog (supervisor #4)
+    if(!gesture && !cfSoundOn){ clearTimeout(cfSoundWatch); cfSoundWatch=setTimeout(function(){ // sound never enabled + blocked -> muted fallback + chip (once)
       try{ var pp=cfPlayers[i]; if(pp&&pp.getPlayerState&&pp.getPlayerState()!==1){ cfMuteFallback=true; pp.mute(); pp.playVideo(); cfShowMuteHint(); } }catch(e){} },1500); }
     if(i+1<cdItems.length) cfEnsurePlayer(i+1);                          // pre-create the next card's player (instant on scroll)
     cfDestroyFar(i);
@@ -2501,7 +2503,7 @@
     if(w&&w.dur>0){ prog.classList.remove('none'); if(b) b.style.width=Math.round(Math.min(1,w.pos/w.dur)*100)+'%'; }
     else prog.classList.add('none');
   }
-  function cfShowMuteHint(){ document.body.classList.toggle('cffeedmuted', cfIsFeed() && cfMuteFallback); }
+  function cfShowMuteHint(){ document.body.classList.toggle('cffeedmuted', cfIsFeed() && cfMuteFallback && !cfSoundOn); }
   // Tap on the playing video: the FIRST tap unmutes (inside a gesture — this also
   // unlocks the audio context so later commits can autoplay with sound); after that a
   // tap toggles play/pause (a settled pause = manualPause, respected on scroll).
@@ -2509,9 +2511,9 @@
     if(!cfIsFeed()||cfPlayIdx<0) return;
     var p=cfPlayers[cfPlayIdx]; if(!p) return;
     try{ var st=p.getPlayerState?p.getPlayerState():-1;
-      if(cfMuteFallback){ cfMuteFallback=false; if(p.unMute) p.unMute(); cfShowMuteHint(); if(st!==1&&p.playVideo) p.playVideo(); return; } // tap turns sound on
+      if(cfMuteFallback){ cfMuteFallback=false; cfSoundOn=true; if(p.unMute) p.unMute(); cfShowMuteHint(); if(st!==1&&p.playVideo) p.playVideo(); return; } // tap turns sound on for the whole session
       if(st===1){ p.pauseVideo(); cfManualPause=true; cfSaveCard(cfPlayIdx); }
-      else { if(p.unMute) p.unMute(); p.playVideo(); cfManualPause=false; }
+      else { cfSoundOn=true; if(p.unMute) p.unMute(); p.playVideo(); cfManualPause=false; }
     }catch(e){}
   }
   // ===== A4: watch position + per-card progress line + resume =====
