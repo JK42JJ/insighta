@@ -1026,6 +1026,21 @@
   .cf-mutechip svg{display:block}
   body.curdeck.cffeedmuted .cf-mutechip{display:inline-flex}
   body.curdeck.cffeedmuted .cf-mutechip:active{transform:translateX(-50%) scale(.96)}
+  /* The deck now uses in-card players (video lives in .cf-slot, scrolls natively). The old
+     fixed-overlay stage is scrapped — hide it in the deck so nothing floats over the feed. */
+  body.curdeck .cd-stage{display:none !important}
+  /* Landscape = rotate-to-fullscreen: the current (playing) card fills the viewport, feed
+     hidden, same in-card player (no reload). Rotate back to portrait returns to the feed. */
+  @media (orientation:landscape){
+    body.curdeck #curDeck{padding:0}
+    body.curdeck .cd-top{display:flex !important; position:fixed; top:0; left:0; right:0; z-index:10;
+      padding:10px 14px; background:linear-gradient(180deg,rgba(0,0,0,.6),transparent)}
+    body.curdeck #cdFeed{display:block !important; position:absolute; inset:0; overflow:hidden}
+    body.curdeck .cf-card:not(.cf-playing){display:none}
+    body.curdeck .cf-playing{position:fixed; inset:0; z-index:4; padding:0; background:#000}
+    body.curdeck .cf-playing .cf-media{width:100%; height:100%; aspect-ratio:auto}
+    body.curdeck .cf-playing .cf-meta,body.curdeck .cf-mutechip{display:none}
+  }
 
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
   .shr{border:none; background:none; cursor:pointer; touch-action:manipulation; color:var(--paper-sub);
@@ -1465,7 +1480,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-23';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-24';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2250,26 +2265,24 @@
     // re-measure once the entry crossfade settles — an entry-time measure can
     // read pre-layout strip height and leave the track clipped (P1-3 class)
     setTimeout(function(){ if(document.body.classList.contains('curdeck')&&!cdFollow.on&&!cdAnimBusy) cdRender(); },420);
-    cdWarmInto(1-cdAct, cdIdx);      // warm the FIRST video before the user taps play
-    // Portrait feed (D): observe cards, tap a card's play glyph to commit it, and
-    // auto-commit the top card on open (YouTube-feed grammar). Landscape ignores this.
-    cfManualPause=false; cfPlayIdx=-1; cfMuteFallback=false; cfScrolling=false; clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
+    // In-card feed players: observe cards, tap a card's play glyph to play it, and
+    // auto-play the top card on open (YouTube-feed grammar). Each card owns its player.
+    cfManualPause=false; cfPlayIdx=-1; cfMuteFallback=false; clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
     var _feed=document.getElementById('cdFeed');
     if(_feed) _feed.onclick=function(ev){ var pb=ev.target.closest&&ev.target.closest('.cf-play'); if(!pb) return;
       var card=pb.closest('.cf-card'); if(!card) return; var i=+card.getAttribute('data-i');
-      cdPrime(); cfMuteFallback=false; cdIdx=i; cfSetFocus(i); cfPlaceStage(i); cfManualPause=false; cfShowMuteHint(); cfCommitPlay(i); }; // explicit play tap = sound (gesture)
+      cfMuteFallback=false; cfManualPause=false; cfCommitPlay(i, true); }; // explicit play tap = sound (gesture)
     var _mute=document.getElementById('cfMute'); if(_mute) _mute.onclick=function(){ cfToggle(); };
-    var _guard=document.getElementById('cdGuard'); if(_guard) _guard.onclick=function(){ if(cfIsFeed()) cfToggle(); }; // tap the video: unmute / pause
-    if(cfIsFeed()){ if(_feed && !_feed.firstChild) cfRender(); cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()){ cfPlaceStage(cdIdx); cfSettle(); } },180); }
+    if(cfIsFeed()){ if(_feed && !_feed.firstChild) cfRender(); cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()) cfCommitPlay(0, false); },160); }
   }
   function closeCurationDeck(){
     if(cfIsFeed()) cfCaptureActive(); // A4: save position before stopVideo resets it
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null]; cdLoadedKey=[null,null];
-    if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfMuteFallback=false; cfScrolling=false; cfRatios={}; clearTimeout(cfScrollT); clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
-    var _st=document.getElementById('cdStage'); if(_st) _st.style.cssText='';   // clear feed-overlay placement (landscape/next-open reset)
-    var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; }
+    if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfMuteFallback=false; cfRatios={}; clearTimeout(cfScrollT); clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
+    Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} }); cfPlayers={}; // tear down the in-card players
+    var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; _fd.innerHTML=''; } // drop cards+players so re-open builds fresh
     clearTimeout(cdWheelT);
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
@@ -2413,42 +2426,72 @@
     for(var i=0;i<cdItems.length;i++){ var r=cfRatios[i]||0; if(r>bestR+1e-4){ bestR=r; best=i; } }
     return {idx:best, ratio:bestR};
   }
-  var cfScrolling=false;
-  function cfOnScroll(){
-    if(!cfIsFeed()) return;
-    // Supervisor #5: do NOT pause on scroll — the current card keeps playing (sound stays
-    // continuous). Its video is kept glued to its card as it moves; the ONLY pause is a
-    // commit that changes the dominant card (cfSettle -> cfCommitPlay). This removes the
-    // "sound cuts every time you touch" feel and converges pause calls to one-per-commit.
-    cfScrolling=true;
-    if(cfPlayIdx>=0) cfPlaceStage(cfPlayIdx);
-    clearTimeout(cfScrollT); cfScrollT=setTimeout(function(){ cfScrolling=false; cfSettle(); },150);
+  // Native scroll: the video is IN the card, so it moves with the scroll automatically —
+  // no reposition, no pause. We only wait for the scroll to settle, then hand the dominant
+  // card the player. Sound stays continuous while scrolling (supervisor #5).
+  function cfOnScroll(){ if(!cfIsFeed()) return; clearTimeout(cfScrollT); cfScrollT=setTimeout(cfSettle,140); }
+  // ===== In-card players (commercial rebuild) =====
+  // The old fixed-overlay stage repositioned one video over the scrolling feed via JS on
+  // every scroll event — it could never scroll-sync with native momentum, so the video
+  // floated/jittered over the header + meta. SCRAPPED. Each card now owns its OWN YT
+  // player INSIDE the card (.cf-slot) → the video scrolls natively with the card (YouTube-
+  // feed smoothness, zero JS reposition). A small pool (dominant +/- neighbours) is created
+  // lazily and recycled; the dominant plays, the rest pause (single voice owner).
+  var cfPlayers={};
+  function cfEnsurePlayer(i){
+    if(cfPlayers[i]) return cfPlayers[i];
+    var card=cfCards()[i]; if(!card) return null;
+    var slot=card.querySelector('.cf-slot'); if(!slot||!window.YT||!YT.Player) return null;
+    var it=cdItems[i]; if(!it) return null;
+    var w=cfWatch[it.video_id], startAt=(w&&w.dur>0&&w.pos<w.dur*0.95)?Math.floor(w.pos):0; // A4 resume
+    var host=document.createElement('div'); slot.appendChild(host);
+    try{ cfPlayers[i]=new YT.Player(host,{width:'100%',height:'100%',videoId:it.video_id,
+      playerVars:{playsinline:1,rel:0,modestbranding:1,controls:1,fs:1,start:startAt},
+      events:{onStateChange:(function(x){return function(ev){cfPlayerState(x,ev.data);};})(i),
+              onError:(function(x){return function(ev){cfPlayerError(x,ev.data);};})(i)}});
+      card.classList.add('cf-live'); return cfPlayers[i];
+    }catch(e){ return null; }
   }
-  function cfPlaceStage(i){
-    var cards=cfCards(), c=cards[i]; if(!c) return;
-    var media=c.querySelector('.cf-media'); if(!media) return;
-    var r=media.getBoundingClientRect(), st=document.getElementById('cdStage'); if(!st) return;
-    st.style.cssText='position:fixed;top:'+r.top+'px;left:'+r.left+'px;width:'+r.width+'px;height:'+r.height+'px;z-index:60;border-radius:0;box-shadow:none';
+  function cfDestroyFar(i){ // keep only dominant +/- 2; recycle the rest (memory + one-voice)
+    Object.keys(cfPlayers).forEach(function(k){ var j=+k; if(Math.abs(j-i)>2){
+      try{ cfPlayers[j]&&cfPlayers[j].destroy&&cfPlayers[j].destroy(); }catch(e){} delete cfPlayers[j];
+      var c=cfCards()[j]; if(c){ c.classList.remove('cf-live','cf-playing'); var s=c.querySelector('.cf-slot'); if(s) s.innerHTML=''; } } });
   }
+  function cfSaveCard(i){ try{ var p=cfPlayers[i], it=cdItems[i]; if(!p||!it||!p.getCurrentTime) return;
+    var dur=p.getDuration()||0,pos=p.getCurrentTime()||0; if(dur>0){ cfSaveWatch(it.video_id,pos,dur); cfPaintProg(i); } }catch(e){} }
+  function cfPlayerState(i, st){ if(st===1){ if(i===cfPlayIdx) clearTimeout(cfSoundWatch); var c=cfCards()[i]; if(c) c.classList.add('cf-playing'); } else if(st===0){ cfCardEnded(i); } }
+  function cfPlayerError(i, code){
+    if((code===2||code===5) && i===cfPlayIdx && !cfMuteFallback){ cfMuteFallback=true; try{ cfPlayers[i].mute(); cfPlayers[i].playVideo(); }catch(e){} cfShowMuteHint(); return; }
+    if(code===100||code===101||code===150){ var c=cfCards()[i], m=c&&c.querySelector('.cf-media'); if(m&&!m.querySelector('.cf-na')){ var d=document.createElement('div'); d.className='cf-na'; d.textContent='재생할 수 없는 영상'; m.appendChild(d); } }
+  }
+  function cfCardEnded(i){ if(i>=cdItems.length-1) return; var c=cfCards()[i+1]; if(c) c.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'}); }
   function cfSetFocus(i){
     Array.prototype.forEach.call(cfCards(),function(c){ c.classList.toggle('cf-focus', +c.getAttribute('data-i')===i); });
   }
   function cfSettle(){
     if(!cfIsFeed()) return;
-    var d=cfDominant();
-    document.body.classList.remove('cdnav');
-    if(d.idx<0 || d.ratio<0.5){ if(cfPlayIdx>=0) cfPlaceStage(cfPlayIdx); return; } // no dominant: keep current (no silent gap)
-    if(d.idx===cfPlayIdx){ cfPlaceStage(cfPlayIdx); return; }  // same card already playing: no pause/play/seek (A3 resume-not-restart, supervisor #5)
-    if(cfPlayIdx>=0 && d.ratio < (cfRatios[cfPlayIdx]||0)+0.15){ cfPlaceStage(cfPlayIdx); return; } // hysteresis: not a clear enough lead -> keep current
-    cdIdx=d.idx; cfSetFocus(cdIdx); cfPlaceStage(cdIdx);
-    if(cfManualPause) return;                                  // user explicitly paused: no autoplay until a re-tap (handoff)
-    cfCommitPlay(cdIdx);
+    var d=cfDominant(); if(d.idx<0 || d.ratio<0.5) return;
+    if(d.idx===cfPlayIdx) return;                                        // already the playing card
+    if(cfPlayIdx>=0 && d.ratio < (cfRatios[cfPlayIdx]||0)+0.15) return;  // hysteresis: not a clear enough lead
+    cfSetFocus(d.idx);
+    if(cfManualPause){ cfPlayIdx=d.idx; return; }                        // user paused: focus only, no autoplay
+    cfCommitPlay(d.idx, false);
   }
-  function cfCommitPlay(i){
-    if(cfPlayIdx>=0 && cfPlayIdx!==i){ cfCaptureActive(); cfPaintProg(cfPlayIdx); } // A4: save the card we leave
-    cfPlayIdx=i; cdIdx=i;
+  function cfCommitPlay(i, gesture){
+    if(i<0||i>=cdItems.length) return;
+    if(cfPlayIdx>=0 && cfPlayIdx!==i){ cfSaveCard(cfPlayIdx); try{ var pv=cfPlayers[cfPlayIdx]; if(pv&&pv.pauseVideo) pv.pauseVideo(); }catch(e){} } // single voice owner
+    cfPlayIdx=i; cdIdx=i; cfSetFocus(i);
+    var p=cfEnsurePlayer(i); if(!p) return;
+    try{
+      if(gesture){ cfMuteFallback=false; cfShowMuteHint(); if(p.unMute) p.unMute(); }
+      else { if(cfMuteFallback){ if(p.mute) p.mute(); } else if(p.unMute){ p.unMute(); } }
+      if(p.playVideo) p.playVideo();
+    }catch(e){}
     Array.prototype.forEach.call(cfCards(),function(c){ c.classList.toggle('cf-playing', +c.getAttribute('data-i')===i); });
-    cdPlay(); // reuse: play active slot at position, silence the other slot (single voice owner), warm neighbour
+    if(!gesture && !cfMuteFallback){ clearTimeout(cfSoundWatch); cfSoundWatch=setTimeout(function(){ // sound-first watchdog (supervisor #4)
+      try{ var pp=cfPlayers[i]; if(pp&&pp.getPlayerState&&pp.getPlayerState()!==1){ cfMuteFallback=true; pp.mute(); pp.playVideo(); cfShowMuteHint(); } }catch(e){} },1500); }
+    if(i+1<cdItems.length) cfEnsurePlayer(i+1);                          // pre-create the next card's player (instant on scroll)
+    cfDestroyFar(i);
   }
   // A4: paint one card's progress line in place (no innerHTML rebuild = no scroll/observer reset).
   function cfPaintProg(i){
@@ -2463,13 +2506,12 @@
   // unlocks the audio context so later commits can autoplay with sound); after that a
   // tap toggles play/pause (a settled pause = manualPause, respected on scroll).
   function cfToggle(){
-    if(!cfIsFeed()) return;
-    cdPrime(); // this tap is a gesture — unlock the deck players so later autoplays work
-    try{
-      var p=cdP[cdAct]; if(!p) return; var st=p.getPlayerState?p.getPlayerState():-1;
-      if(cfMuteFallback){ cfMuteFallback=false; try{ p.unMute(); }catch(e){} cfShowMuteHint(); if(st!==1){ try{ p.playVideo(); }catch(e){} } return; } // tap turns sound on (gesture)
-      if(st===1){ p.pauseVideo(); cfManualPause=true; cfCaptureActive(); }
-      else { try{ p.unMute(); }catch(e){} p.playVideo(); cfManualPause=false; }
+    if(!cfIsFeed()||cfPlayIdx<0) return;
+    var p=cfPlayers[cfPlayIdx]; if(!p) return;
+    try{ var st=p.getPlayerState?p.getPlayerState():-1;
+      if(cfMuteFallback){ cfMuteFallback=false; if(p.unMute) p.unMute(); cfShowMuteHint(); if(st!==1&&p.playVideo) p.playVideo(); return; } // tap turns sound on
+      if(st===1){ p.pauseVideo(); cfManualPause=true; cfSaveCard(cfPlayIdx); }
+      else { if(p.unMute) p.unMute(); p.playVideo(); cfManualPause=false; }
     }catch(e){}
   }
   // ===== A4: watch position + per-card progress line + resume =====
@@ -2483,12 +2525,7 @@
     cfWatch[vid]={pos:Math.max(0, Math.min(pos||0, dur)), dur:dur};
     // TODO(A4 DDL): PATCH /curations/:subId/items/:vid/watched {position,duration} — position-only, must NOT touch watched_at.
   }
-  function cfCaptureActive(){
-    try{ var p=cdP[cdAct]; if(!p||!p.getCurrentTime) return;
-      var it=cdItems[cfPlayIdx>=0?cfPlayIdx:cdIdx]; if(!it) return;
-      var dur=p.getDuration()||0, pos=p.getCurrentTime()||0; if(dur>0) cfSaveWatch(it.video_id, pos, dur);
-    }catch(e){}
-  }
+  function cfCaptureActive(){ if(cfIsFeed() && cfPlayIdx>=0) cfSaveCard(cfPlayIdx); } // in-card: save the current card's player position
   document.addEventListener('visibilitychange', function(){ if(document.hidden && cfIsFeed()) cfCaptureActive(); });
   window.addEventListener('pagehide', function(){ if(cfIsFeed()) cfCaptureActive(); });
   // Progress = note chapters grammar: one segment per video, done/now(partial)/todo (R9).
