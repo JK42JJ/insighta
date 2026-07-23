@@ -1465,7 +1465,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-22';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-23';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2260,7 +2260,7 @@
       cdPrime(); cfMuteFallback=false; cdIdx=i; cfSetFocus(i); cfPlaceStage(i); cfManualPause=false; cfShowMuteHint(); cfCommitPlay(i); }; // explicit play tap = sound (gesture)
     var _mute=document.getElementById('cfMute'); if(_mute) _mute.onclick=function(){ cfToggle(); };
     var _guard=document.getElementById('cdGuard'); if(_guard) _guard.onclick=function(){ if(cfIsFeed()) cfToggle(); }; // tap the video: unmute / pause
-    if(cfIsFeed()){ cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()){ cfPlaceStage(cdIdx); cfSettle(); } },180); }
+    if(cfIsFeed()){ if(_feed && !_feed.firstChild) cfRender(); cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()){ cfPlaceStage(cdIdx); cfSettle(); } },180); }
   }
   function closeCurationDeck(){
     if(cfIsFeed()) cfCaptureActive(); // A4: save position before stopVideo resets it
@@ -2346,7 +2346,11 @@
     cdPosterSync();
     cdDrawChap(0);
     cdJbarSync(0);
-    cfRender();
+    // Build the portrait feed ONCE. cdRender re-runs (the 420ms entry re-measure, nav)
+    // would rebuild feed.innerHTML and ORPHAN the IntersectionObserver (it keeps observing
+    // the removed cards) -> cfRatios never updates -> only card 0 ever becomes dominant ->
+    // "only the top card plays + play button dead on the rest". Rebuild only when empty.
+    var _fd=document.getElementById('cdFeed'); if(cfIsFeed() && _fd && !_fd.firstChild) cfRender();
   }
   function cfEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];}); }
   // Portrait feed renderer (native scroll). Each item = one full-bleed 16:9 card
