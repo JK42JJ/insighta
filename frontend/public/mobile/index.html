@@ -1390,7 +1390,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-17';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-18';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1847,9 +1847,23 @@
       else amb.classList.remove('on'); // add-row / no selection = no ambient
     }
   }
+  // Connected but no subscription yet -> onboarding CTA, never a blank list.
+  // Mirrors curConnectGate; the CTA opens the topic picker instead of connect.
+  function curEmptyState(){
+    var el=document.getElementById('curBody'); if(!el) return;
+    curRowEls=[]; curRowColors=[]; curSelIdx=0;
+    var amb=document.getElementById('curAmb'); if(amb) amb.classList.remove('on');
+    el.className='cur-connect';
+    el.innerHTML='<span class="cic">'+CUR_STAR+'</span>'
+      +'<span class="t1">관심 주제를 고르면<br>매주 큐레이션을 보내 드려요</span>'
+      +'<span class="t2">트렌드·리서치·관심 분야까지<br>매주 새 영상만 골라 드려요</span>'
+      +'<button class="cbtn" id="bCurPick" type="button">관심 주제 고르기</button>';
+    var b=document.getElementById('bCurPick'); if(b) b.onclick=function(){ openYtSheet(); ytRenderTuning(); };
+  }
   // Same .rows/.row markup as the mandala lists (format parity is the contract).
   function renderCurationRows(subs){
     var el=document.getElementById('curBody'); if(!el) return;
+    if(!subs || !subs.length){ curEmptyState(); return; } // 0 subs (connected): onboarding, never blank
     el.className='cur-body';
     el.innerHTML='<div class="rows" id="curRows"></div>';
     var rows=document.getElementById('curRows');
