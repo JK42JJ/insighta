@@ -192,7 +192,7 @@
      colour wash behind the rows — ambient belongs only to the deck player (.cd-amb). */
   .cur-amb{display:none !important}
   @media (prefers-reduced-motion:reduce){ .cur-amb{transition:none} }
-  .cur-connect{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:11px; padding:0 22px}
+  .cur-connect{flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:11px; padding:14px 22px; overflow-y:auto}
   .cur-connect .cic{width:44px; height:44px; border-radius:13px; display:grid; place-items:center; background:rgba(94,86,72,.08); color:var(--ui)}
   .cur-connect .t1{font-size:15px; font-weight:750; color:var(--paper-ink)}
   .cur-connect .t2{font-size:11.5px; font-weight:600; color:var(--paper-sub); line-height:1.7}
@@ -266,6 +266,11 @@
   #ytsBody .mrow{margin-top:9px; padding:17px 16px; font-size:15px; border-radius:14px} #ytsBody .mrow:first-of-type{margin-top:2px}
   #ytsBody .mrow.sel{box-shadow:inset 0 0 0 1.5px var(--acc,#E8804C), 0 3px 8px -3px rgba(94,86,72,.4)}
   #ytsBody .mrow .sub{max-width:52%; text-align:right; line-height:1.25}
+  #ytsBody .mrow{align-items:center; gap:12px}
+  #ytsBody .mrow .lic{width:20px; height:20px}
+  #ytsBody .mrow .mtx{display:flex; flex-direction:column; gap:2px; text-align:left; min-width:0; flex:1}
+  #ytsBody .mrow .mtt{font-size:15px; font-weight:750; color:var(--paper-ink)}
+  #ytsBody .mrow .msb{font-size:11.5px; font-weight:600; color:var(--paper-sub); line-height:1.35}
   body.stage .gearfab,body.curdeck .gearfab,body.reading .gearfab,body.stage .plusfab,body.curdeck .plusfab,body.reading .plusfab{visibility:hidden !important}
   .gearDot{position:absolute; top:4px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C)}
   .newsDot{width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C); margin-left:2px}
@@ -1390,7 +1395,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-18';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-19';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1854,7 +1859,7 @@
     curRowEls=[]; curRowColors=[]; curSelIdx=0;
     var amb=document.getElementById('curAmb'); if(amb) amb.classList.remove('on');
     el.className='cur-connect';
-    el.innerHTML='<span class="cic">'+CUR_STAR+'</span>'
+    el.innerHTML=''
       +'<span class="t1">관심 주제를 고르면<br>매주 큐레이션을 보내 드려요</span>'
       +'<span class="t2">트렌드·리서치·관심 분야까지<br>매주 새 영상만 골라 드려요</span>'
       +'<button class="cbtn" id="bCurPick" type="button">관심 주제 고르기</button>';
@@ -1918,7 +1923,7 @@
   function curConnectGate(note){
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-connect';
-    el.innerHTML='<span class="cic">'+CUR_STAR+'</span>'
+    el.innerHTML=''
       +'<span class="t1">관심 주제를 고르면<br>매주 큐레이션을 보내 드려요</span>'
       +'<button class="cbtn" id="bCurConnect">유튜브 연결하기</button>'
       +(note?'<span class="cur-note">'+curEsc(note)+'</span>':'');
@@ -4290,9 +4295,9 @@
   function updateSelHub(){ var rows=hubRows(); rows.forEach(function(el,i){ el.classList.toggle('sel', i===selHub); }); var el=rows[selHub]; if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'}); }
   function openHub(){
     var b=document.getElementById('ytsBody'); if(!b) return;
-    b.innerHTML='<div class="yts-h" style="margin-bottom:16px">무엇을 시작할까요?</div>'
-      +'<button class="mrow" id="hubCur"><span class="lic"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg></span>주간 큐레이션<span class="sub">따끈따끈 필요한 영상만 매주</span></button>'
-      +'<button class="mrow" id="hubGoal"><span class="lic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg></span>목표 만들기<span class="sub">핵심만 골라 학습 노트</span></button>';
+    b.innerHTML='<div class="yts-h" style="margin-bottom:14px">무엇을 시작할까요?</div>'
+      +'<button class="mrow" id="hubCur"><span class="lic"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg></span><span class="mtx"><span class="mtt">주간 큐레이션</span><span class="msb">따끈따끈 필요한 영상만 매주</span></span></button>'
+      +'<button class="mrow" id="hubGoal"><span class="lic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.6"/></svg></span><span class="mtx"><span class="mtt">목표 만들기</span><span class="msb">핵심만 골라 학습 노트</span></span></button>';
     document.getElementById('hubGoal').onclick=function(){ closeYtSheet(); openGoalWizard(); };
     document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet');
       ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderTuning(); } else { ytRenderConnect(); } }).catch(function(){ ytRenderConnect(); }); };
