@@ -963,19 +963,31 @@
      Full-bleed 16:9 cards + bottom meta block; native scroll + IntersectionObserver autoplay.
      Landscape keeps the stage/track/wheel path above (frozen). Portrait hides the track,
      wheel, hint and journey bar; the feed owns the whole area under the header. */
-  #cdFeed{display:none}
+  #cdFeed{display:none; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+    background:#0D0D10; scroll-behavior:auto; min-height:0}
   @media (orientation:portrait){
+    /* Portrait curation deck = full-bleed native-scroll feed. #curDeck is a flex column:
+       header (flex:none) sits above, the feed (flex:1) fills below, the stage is a fixed
+       overlay hosted by .cd-strip ABOVE the feed. The old #cdFeed{position:absolute}
+       covered the header (no back button) and .cd-strip z:0 trapped the video behind the
+       feed (thumbnails only) — both fixed here. */
+    body.curdeck #curDeck{padding:calc(var(--sat) + 6px) 0 0}          /* feed edge-to-edge (A1) */
+    body.curdeck .cd-top{padding:2px 14px 9px; position:relative; z-index:8}  /* header/back above feed + stage */
     body.curdeck #cdTrack,body.curdeck .cd-hint,body.curdeck .jbar{display:none !important}
-    body.curdeck .wheelzone{display:none !important}   /* W: wheel hidden in portrait deck only (kept in landscape/home/note) */
-    /* .cd-strip stays (it holds the stage overlay) but yields the area to the feed */
-    body.curdeck .cd-strip{position:absolute; inset:0; flex:none; overflow:visible; z-index:0}
-    body.curdeck #cdFeed{display:block; z-index:1}
-    /* the stage becomes a fixed overlay placed over the dominant card (cfPlaceStage);
-       its portrait overlay meta/chap/play are hidden — the feed card owns the meta */
+    body.curdeck .wheelzone{display:none !important}                   /* W: wheel hidden in portrait deck only */
+    body.curdeck .cd-strip{position:absolute; left:0; right:0; top:0; bottom:0; flex:none; overflow:visible; z-index:6; pointer-events:none}
+    body.curdeck #cdFeed{display:block; flex:1; min-height:0; position:relative; z-index:1}
+    body.curdeck .cd-stage{pointer-events:auto}                        /* video is the tap target */
     body.curdeck .cd-stage .cd-meta,body.curdeck .cd-stage .cd-chap,body.curdeck .cd-stage .cd-play{display:none !important}
+    body.curdeck .cd-ring{display:none !important}                     /* A5: no spinner in the deck */
+    /* A5: static thumbnail -> live video reads as "coming alive". The poster starts dim
+       and the iframe crossfades in on PLAYING with a tone ramp (0.80 -> 1.00) slightly
+       longer than the fade, so brightening continues after the crossfade = "서서히 밝아진다". */
+    body.curdeck .cd-poster{--deck-dim:.8; filter:brightness(var(--deck-dim)); transition:filter .26s cubic-bezier(.2,.6,.2,1)}
+    body.curdeck .cd-stage .cd-yt{opacity:0; transition:opacity .2s cubic-bezier(.2,.6,.2,1)}
+    body.curdeck.cdplaying .cd-stage .cd-yt:not(.off){opacity:1}
+    body.curdeck.cdplaying .cd-poster{--deck-dim:1}
   }
-  #cdFeed{position:absolute; left:0; right:0; top:0; bottom:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
-    overscroll-behavior:contain; background:#0D0D10; scroll-behavior:auto}
   #cdFeed::after{content:''; display:block; height:34vh}   /* tail spacer: last card can settle as dominant */
   .cf-card{position:relative; width:100%; background:#0D0D10; padding-bottom:14px}
   .cf-media{position:relative; width:100%; aspect-ratio:16/9; background:#000 center/cover no-repeat; overflow:hidden;
@@ -1440,7 +1452,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-20';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-21';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
