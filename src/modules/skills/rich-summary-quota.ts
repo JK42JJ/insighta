@@ -2,8 +2,8 @@
  * Rich Summary quota (CP423).
  *
  * Per-tier monthly limits for rich summary generation:
- *   free      → 30 / month
- *   pro       → 200 / month
+ *   free      → 50 / month
+ *   pro       → 1000 / month
  *   lifetime  → unlimited
  *   admin     → unlimited
  *
