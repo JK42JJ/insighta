@@ -1378,7 +1378,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-12';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-13';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1842,13 +1842,7 @@
     el.innerHTML='<div class="rows" id="curRows"></div>';
     var rows=document.getElementById('curRows');
     curRowEls=[]; curRowColors=[];
-    // add-row at the TOP of the list (same convention as the goal pill on video/note)
-    var add=document.createElement('div');
-    add.className='row';
-    add.innerHTML='<span class="jk" style="background:rgba(94,86,72,.10)"><b style="color:var(--ui)">+</b></span>'
-      +'<span class="m"><span class="a">새 큐레이션</span><span class="b"><span class="bt">관심 주제 고르기</span></span></span>';
-    add.addEventListener('click',function(){ openYtSheet(); ytRenderTuning(); });
-    rows.appendChild(add); curRowEls.push(add); curRowColors.push(null); // add-row = no ambient
+    // create-new lives only in the "+" start hub now (single entry); the list shows subscriptions only
     // sort: new > in-progress > complete, newest first inside each group
     var sorted=subs.map(function(s){ return {s:s, st:curRowState(s)}; });
     sorted.sort(function(a,b){
