@@ -142,8 +142,8 @@
   .gp-plus{width:13px; height:13px; border-radius:50%; background:var(--ui); position:relative; flex:none}
   .gp-plus::before,.gp-plus::after{content:""; position:absolute; background:#fff; left:50%; top:50%; transform:translate(-50%,-50%)}
   .gp-plus::before{width:7px; height:1.7px} .gp-plus::after{width:1.7px; height:7px}
-  .htabs{display:flex; gap:5px; margin-top:11px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
-  .htab{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; border:none; background:none; font-family:inherit; font-size:10.5px; font-weight:800; letter-spacing:.01em; color:var(--paper-sub); padding:7px 0 6px; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
+  .htabs{display:flex; gap:5px; margin-top:4px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
+  .htab{flex:1; display:flex; align-items:center; justify-content:center; border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:700; letter-spacing:.01em; color:var(--paper-sub); padding:9px 0; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
   .htab svg{display:block}
   .htab.on{color:var(--paper-ink); background:var(--paper); box-shadow:0 1px 2px rgba(94,86,72,.18)}
   .htab:active{transform:scale(.97)}
@@ -259,6 +259,14 @@
   .ntb.on{background:rgba(94,86,72,.13); color:var(--paper-ink)}
   .ntb:active{transform:scale(.9)}
   .ntb .gearDot{position:absolute; top:6px; right:7px; width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C)}
+  .gearfab{position:absolute; right:8px; bottom:2px; visibility:hidden}
+  .plusfab{position:absolute; left:8px; bottom:2px; visibility:hidden; width:40px; height:40px; display:grid; place-items:center; border:none; border-radius:50%; background:rgba(232,128,76,.14); color:var(--acc,#E8804C); cursor:pointer; -webkit-tap-highlight-color:transparent; transition:transform var(--snap) ease, background var(--snap) ease}
+  .plusfab:active{transform:scale(.9)}
+  .wheel.touching ~ .plusfab,.wheel.touching ~ .gearfab{pointer-events:none} /* C3: no corner mis-touch during wheel rotation */
+  #ytsBody .mrow{margin-top:8px} #ytsBody .mrow:first-of-type{margin-top:2px}
+  #ytsBody .mrow.sel{box-shadow:inset 0 0 0 1.5px var(--acc,#E8804C), 0 3px 8px -3px rgba(94,86,72,.4)}
+  #ytsBody .mrow .sub{max-width:52%; text-align:right; line-height:1.25}
+  body.stage .gearfab,body.curdeck .gearfab,body.reading .gearfab,body.stage .plusfab,body.curdeck .plusfab,body.reading .plusfab{visibility:hidden !important}
   .gearDot{position:absolute; top:4px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C)}
   .newsDot{width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C); margin-left:2px}
   /* IA 재설계 [J:07-15] — 브레드크럼 내비 */
@@ -465,7 +473,7 @@
 
   /* ================= 조그휠 — §1.1 + §1.1a ================= */
   /* [J:07-13 설치앱 판정] 휠 = 하단 고정 — 화면 공간 최우선 (정사각 필드 폐기) */
-  .wheelzone{display:grid; place-items:center; flex:none; width:100%; padding-top:12px}
+  .wheelzone{position:relative; display:grid; place-items:center; flex:none; width:100%; padding-top:12px}
   .wheel{
     width:74%; aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center; /* [J:07-13] 클래식 62% 대비 +20% — 설치앱 하단 낭비 교정 */
     /* 평평한 매트 도넛 — 명암 ±4%, 돔 금지 */
@@ -1148,11 +1156,10 @@
 
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
-        <div class="top"><span class="tt">내 만다라</span><div class="navtog"><button class="ntb on" data-nav="home" aria-label="내 만다라"><span class="batt" id="sigHome"><svg class="ksig" width="16" height="16" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></button><button class="ntb" data-nav="menu" aria-label="설정"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg><span class="gearDot" id="gearDot" hidden></span></button></div></div>
         <div class="htabs" id="htabs">
-          <button class="htab on" data-htab="curation" aria-label="큐레이션"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg><span>큐레이션</span></button>
-          <button class="htab" data-htab="video" aria-label="영상"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M10.5 9.5l4 2.5-4 2.5z" fill="currentColor" stroke="none"/></svg><span>영상</span></button>
-          <button class="htab" data-htab="note" aria-label="노트"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h8L18.5 7.5v12a1 1 0 01-1 1h-11a1 1 0 01-1-1V4.5a1 1 0 011-1z"/><path d="M8.8 11h6.4M8.8 14.5h4.6"/></svg><span>노트</span></button>
+          <button class="htab on" data-htab="curation" aria-label="큐레이션"><span>큐레이션</span></button>
+          <button class="htab" data-htab="video" aria-label="영상"><span>영상</span></button>
+          <button class="htab" data-htab="note" aria-label="노트"><span>노트</span></button>
         </div>
         <div class="hstrip-clip" id="hstripClip">
           <div class="hstrip" id="hstrip">
@@ -1162,7 +1169,6 @@
             </div>
             <div class="hpane" id="paneVideo">
               <div class="cur-amb" id="vidAmb" aria-hidden="true"></div>
-              <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
               <div class="rows" id="rowsV"></div>
             </div>
             <div class="hpane" id="paneNote">
@@ -1306,6 +1312,8 @@
         <button class="core" id="bCore" aria-label="선택/재생"></button>
         <div class="hubpos num" id="hubPos" aria-hidden="true"></div>
       </div>
+      <button class="plusfab" id="plusFab" aria-label="새로 시작"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>
+      <button class="ntb gearfab" id="gearFab" data-nav="menu" aria-label="설정"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg><span class="gearDot" id="gearDot" hidden></span></button>
     </div>
     <div class="engrave">INSIGHTA</div>
   </div>
@@ -1370,7 +1378,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-22-09';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-12';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1484,6 +1492,8 @@
     cur=n; scr[cur].classList.add('active');
     // Slider bead lives outside .scr now (sibling of .epaper); show it home-only.
     var _hsl=document.getElementById('hsl'); if(_hsl) _hsl.style.visibility=(n==='home')?'visible':'hidden';
+    var _gf=document.getElementById('gearFab'); if(_gf) _gf.style.visibility=(n==='home')?'visible':'hidden';
+    var _pf=document.getElementById('plusFab'); if(_pf) _pf.style.visibility=(n==='home')?'visible':'hidden';
     if(n==='home'){ requestAnimationFrame(function(){ if(typeof homePaintPos==='function') homePaintPos(homeIdx, true); }); } // re-align slider to tab centers
     if(n==='menu'){ selMenu=0; setTimeout(updateSelMenu,0); } // 설정 진입 = 첫 행 선택 [J:07-15]
     syncStage();
@@ -1649,7 +1659,8 @@
     if(!rows) return;
     var items=homeItems();
     if(!items.length){
-      rows.innerHTML='<div class="row-empty">아직 만다라가 없어요<br>첫 목표를 적어보세요</div>';
+      rows.innerHTML='<button class="row-empty" id="emptyStart" type="button" style="display:block;width:100%;border:none;background:none;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent">아직 만다라가 없어요<br><span style="color:var(--acc,#E8804C);font-weight:700">첫 목표를 적어보세요 →</span></button>';
+      var _es=document.getElementById('emptyStart'); if(_es) _es.onclick=openHub;
       return;
     }
     var keepScroll=rows.scrollTop; // scroll-inviolable: a background refresh (book status) must not move the list under the user
@@ -1906,7 +1917,7 @@
   // YouTube play glyph — the G logo pairs only with Google sign-in copy, not a YouTube connect CTA.
   var YT_TUBE_SVG='<svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="4.5" width="21" height="15" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg>';
   function openYtSheet(){ document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
-  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true'); }
+  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet','hubsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true'); }
   var RMORE_SVG='<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
   // Per-surface row actions — RELOCATION of existing actions, never invention.
   // New actions are James-gated (video/note mandala rows have no existing action yet).
@@ -3496,6 +3507,7 @@
   function wheelStole(){ return Date.now()<suppressClickUntil; } // 시간창(350ms): sticky 플래그 잔류 → 후속 정상 탭 삼킴 버그 제거
   function dispatchNotch(dir){
     if(document.body.classList.contains('curdeck')){ cdNav(dir); return; } // deck: 1 detent = 1 card
+    if(document.body.classList.contains('hubsheet')){ var hr=hubRows(); if(!hr.length) return; var hx=selHub+dir; if(hx<0||hx>=hr.length){ wheelRubber(dir); return; } selHub=hx; updateSelHub(); return; }
     if(cur==='home'){
       // Curation tab has its own row list — the wheel must follow the ACTIVE tab,
       // not silently drive the hidden mandala list (focus bug, 2026-07-21).
@@ -3725,6 +3737,7 @@
   document.getElementById('bPrev').onclick=function(){ if(wheelStole()) return; dispatchNotch(-1) };
   document.getElementById('bNext').onclick=function(){ if(wheelStole()) return; dispatchNotch(1) };
   function corePress(){
+    if(document.body.classList.contains('hubsheet')){ var hr=hubRows(); if(hr[selHub]) hr[selHub].click(); return; }
     if(cur==='login'){ loginRedirect(); return; }
     if(cur==='home'){
       if(homeTab==='curation'){ var ce=curRowEls[curSelIdx]; if(ce) ce.click(); return; }
@@ -4239,11 +4252,27 @@
   var ov=document.getElementById('goalOv'), goBody=document.getElementById('goBody'),
       goProg=document.getElementById('goProgress'), goMsg=document.getElementById('goMsg'),
       goTitle=document.getElementById('goTitle'), goalInput=document.getElementById('goalInput');
-  document.getElementById('bGoal').onclick=function(){
+  function openGoalWizard(){
     ov.classList.add('show'); goBody.hidden=false; goProg.hidden=true;
     goTitle.textContent='무엇을 배우고 싶나요?';
     setTimeout(function(){goalInput.focus()},60);
-  };
+  }
+  // ===== "+" start hub sheet — reuses #ytSheet overlay + body.hubsheet flag (wheel-nav isolated) =====
+  var selHub=0;
+  function hubRows(){ return Array.prototype.filter.call(document.querySelectorAll('#ytsBody .mrow'), function(el){ return el.tagName==='BUTTON'; }); }
+  function updateSelHub(){ var rows=hubRows(); rows.forEach(function(el,i){ el.classList.toggle('sel', i===selHub); }); var el=rows[selHub]; if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'}); }
+  function openHub(){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    b.innerHTML='<div class="yts-h" style="margin-bottom:4px">무엇을 시작할까요?</div>'
+      +'<div class="yts-sub" style="margin:0 0 14px">휠로 고르고 가운데를 눌러요</div>'
+      +'<button class="mrow" id="hubGoal"><span class="lic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg></span>목표 만들기<span class="sub">핵심만 골라 학습 노트</span></button>'
+      +'<button class="mrow" id="hubCur"><span class="lic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>주간 큐레이션<span class="sub">관심 주제 새 소식 매주</span></button>';
+    document.getElementById('hubGoal').onclick=function(){ closeYtSheet(); openGoalWizard(); };
+    document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet');
+      ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderTuning(); } else { ytRenderConnect(); } }).catch(function(){ ytRenderConnect(); }); };
+    selHub=0; document.body.classList.add('hubsheet'); openYtSheet(); setTimeout(updateSelHub,0);
+  }
+  (function(){ var pf=document.getElementById('plusFab'); if(pf) pf.onclick=openHub; })();
   document.getElementById('goCancel').onclick=function(){ ov.classList.remove('show') };
   async function wizardStream(goal,sessionId,tok){
     var r=await fetch('/api/v1/mandalas/wizard-stream',{
