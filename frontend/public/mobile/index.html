@@ -459,11 +459,16 @@
     font-size:16px; font-weight:600; color:var(--paper-ink); background:#fff;
     box-shadow:inset 0 0 0 1.5px rgba(94,86,72,.22)}
   #goalInput:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
-  .yts-custom{display:flex; gap:8px; margin-top:6px}
-  .yts-custom input{flex:1; min-width:0; border:none; border-radius:12px; padding:12px 13px; font-family:inherit; font-size:14px; font-weight:600; color:var(--paper-ink); background:rgba(94,86,72,.08); box-shadow:inset 0 0 0 1.5px rgba(94,86,72,.16)}
+  /* sheet-scoped accent tokens — #ytSheet lives OUTSIDE #dev so theme --acc* were undefined
+     (my accent button rendered with no background). Define once here for all sheets. */
+  #ytSheet{--acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30}
+  /* DIAL wordmark — shared sheet header identity (James-approved guest-sheet look) */
+  .yts-brand{text-align:center; font-size:11px; font-weight:700; letter-spacing:.3em; color:#b7a988; text-transform:uppercase; margin:0 0 12px}
+  .yts-custom{display:flex; gap:8px; margin-top:8px; align-items:stretch}
+  .yts-custom input{flex:1; min-width:0; border:none; border-radius:13px; padding:13px 14px; font-family:inherit; font-size:14.5px; font-weight:600; color:var(--paper-ink); background:#fff; box-shadow:inset 0 0 0 1.5px rgba(94,86,72,.18)}
   .yts-custom input:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
-  .yts-custom input::placeholder{color:var(--paper-sub)}
-  .yts-cadd{flex:none; border:none; border-radius:12px; padding:0 17px; font-family:inherit; font-size:13.5px; font-weight:700; background:var(--acc); color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:transform var(--snap) ease}
+  .yts-custom input::placeholder{color:var(--paper-sub); font-weight:500}
+  .yts-cadd{flex:none; border:none; border-radius:13px; padding:0 18px; font-family:inherit; font-size:14px; font-weight:700; background:var(--acc); color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:transform var(--snap) ease}
   .yts-cadd:active{transform:scale(.95)}
   .go-actions{display:flex; gap:10px; margin-top:12px}
   .go-cancel,.go-make{flex:1; border:none; cursor:pointer; font-family:inherit; border-radius:12px; padding:12px;
@@ -1364,6 +1369,7 @@
     <div class="yts-bd" id="ytsBd"></div>
     <div class="yts-card" role="dialog" aria-modal="true" aria-label="유튜브 연결">
       <div class="yts-grip"></div>
+      <div class="yts-brand">DIAL</div>
       <div id="ytsBody"></div>
       <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>돌아가기</button>
     </div>
@@ -1384,7 +1390,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-16';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-17';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
