@@ -1180,7 +1180,7 @@
 
       <!-- MENU -->
       <div class="scr" data-s="menu" id="scrMenu">
-        <div class="top"><span class="tt">설정</span><div class="navtog"><button class="ntb" data-nav="home" aria-label="내 만다라"><span class="batt" id="sigMenu"><svg class="ksig" width="16" height="16" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></button><button class="ntb on" data-nav="menu" aria-label="설정"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg></button></div></div>
+        <div class="top"><span class="tt">설정</span></div>
         <div class="menu-list">
           <div class="ghd">소식 · 초대</div>
           <button class="mrow" id="bNews"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 10-12 0c0 6-2.5 7.5-2.5 7.5h17S18 15 18 9"/><path d="M10.3 20a2 2 0 003.4 0"/></svg></span>새소식<span class="newsDot" id="newsDot" hidden></span><span class="sub" id="newsSub">공지 · 업데이트</span></button>
@@ -1359,7 +1359,7 @@
     <div class="yts-card" role="dialog" aria-modal="true" aria-label="유튜브 연결">
       <div class="yts-grip"></div>
       <div id="ytsBody"></div>
-      <button class="yts-exit" id="ytsBack" type="button">← 돌아가기</button>
+      <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>돌아가기</button>
     </div>
   </div>
 
@@ -1378,7 +1378,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-23-13';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-23-14';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1659,7 +1659,7 @@
     if(!rows) return;
     var items=homeItems();
     if(!items.length){
-      rows.innerHTML='<button class="row-empty" id="emptyStart" type="button" style="display:block;width:100%;border:none;background:none;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent">아직 만다라가 없어요<br><span style="color:var(--acc,#E8804C);font-weight:700">첫 목표를 적어보세요 →</span></button>';
+      rows.innerHTML='<button class="row-empty" id="emptyStart" type="button" style="display:block;width:100%;border:none;background:none;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent">아직 만다라가 없어요<br><span style="color:var(--acc,#E8804C);font-weight:700">첫 목표를 적어보세요<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-left:4px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>';
       var _es=document.getElementById('emptyStart'); if(_es) _es.onclick=openHub;
       return;
     }
@@ -4257,10 +4257,9 @@
   function updateSelHub(){ var rows=hubRows(); rows.forEach(function(el,i){ el.classList.toggle('sel', i===selHub); }); var el=rows[selHub]; if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'}); }
   function openHub(){
     var b=document.getElementById('ytsBody'); if(!b) return;
-    b.innerHTML='<div class="yts-h" style="margin-bottom:4px">무엇을 시작할까요?</div>'
-      +'<div class="yts-sub" style="margin:0 0 14px">휠로 고르고 가운데를 눌러요</div>'
-      +'<button class="mrow" id="hubGoal"><span class="lic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg></span>목표 만들기<span class="sub">핵심만 골라 학습 노트</span></button>'
-      +'<button class="mrow" id="hubCur"><span class="lic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>주간 큐레이션<span class="sub">관심 주제 새 소식 매주</span></button>';
+    b.innerHTML='<div class="yts-h" style="margin-bottom:16px">무엇을 시작할까요?</div>'
+      +'<button class="mrow" id="hubCur"><span class="lic"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg></span>주간 큐레이션<span class="sub">따끈따끈 필요한 영상만 매주</span></button>'
+      +'<button class="mrow" id="hubGoal"><span class="lic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg></span>목표 만들기<span class="sub">핵심만 골라 학습 노트</span></button>';
     document.getElementById('hubGoal').onclick=function(){ closeYtSheet(); openGoalWizard(); };
     document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet');
       ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderTuning(); } else { ytRenderConnect(); } }).catch(function(){ ytRenderConnect(); }); };
