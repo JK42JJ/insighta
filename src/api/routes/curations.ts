@@ -320,16 +320,27 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const prisma = getPrismaClient();
       const sub = await prisma.curation_subscriptions.findUnique({
         where: { id: request.params.id },
-        select: { user_id: true },
+        select: { user_id: true, topic: true },
       });
       if (!sub || sub.user_id !== request.user.userId) {
         return reply.code(404).send({ status: 'error', code: 'CURATION_NOT_FOUND' });
       }
-      await prisma.curation_subscriptions.update({
-        where: { id: request.params.id },
+      // Unsubscribe the WHOLE curation: deactivate this sub AND every same-topic
+      // duplicate. GET display-dedups legacy duplicate rows by normalized topic, so
+      // deactivating only the shown id leaves older duplicates active and the topic
+      // reappears (looks like it removes one item at a time). Normalized match in JS
+      // because the dedup key is trim().toLowerCase() (not expressible in a where).
+      const key = sub.topic.trim().toLowerCase();
+      const active = await prisma.curation_subscriptions.findMany({
+        where: { user_id: request.user.userId, is_active: true },
+        select: { id: true, topic: true },
+      });
+      const ids = active.filter((r) => r.topic.trim().toLowerCase() === key).map((r) => r.id);
+      await prisma.curation_subscriptions.updateMany({
+        where: { id: { in: ids } },
         data: { is_active: false },
       });
-      return reply.send({ status: 'ok', data: { id: request.params.id } });
+      return reply.send({ status: 'ok', data: { id: request.params.id, deactivated: ids.length } });
     }
   );
 
