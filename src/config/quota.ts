@@ -78,9 +78,9 @@ export interface TierLimitConfig {
 export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   free: {
     mandalas: 3,
-    cards: 150,
+    cards: 300,
     aiSummaries: 150,
-    richSummaries: 30,
+    richSummaries: 50,
     weeklyReports: 10,
     skills: {
       newsletter: {
@@ -117,9 +117,9 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   },
   pro: {
     mandalas: 20,
-    cards: 1_000,
+    cards: 2_000,
     aiSummaries: 1_000,
-    richSummaries: 200,
+    richSummaries: 1_000,
     weeklyReports: null,
     skills: {
       newsletter: {

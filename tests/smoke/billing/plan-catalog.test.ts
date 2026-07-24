@@ -20,7 +20,7 @@ describe('plan-catalog', () => {
     expect(found).not.toBeNull();
     expect(found?.planCode).toBe('pro_monthly');
     expect(found?.tier).toBe('pro');
-    expect(found?.cardLimit).toBe(1000);
+    expect(found?.cardLimit).toBe(2000);
     expect(found?.mandalaLimit).toBe(20);
   });
 
@@ -30,7 +30,7 @@ describe('plan-catalog', () => {
     expect(found).not.toBeNull();
     expect(found?.planCode).toBe('pro_yearly');
     expect(found?.tier).toBe('pro');
-    expect(found?.cardLimit).toBe(1000);
+    expect(found?.cardLimit).toBe(2000);
     expect(found?.mandalaLimit).toBe(20);
   });
 

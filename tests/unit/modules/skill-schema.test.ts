@@ -95,9 +95,9 @@ describe('TIER_LIMITS.skills', () => {
 
   it('existing resource limits are unchanged', () => {
     expect(TIER_LIMITS.free.mandalas).toBe(3);
-    expect(TIER_LIMITS.free.cards).toBe(150);
+    expect(TIER_LIMITS.free.cards).toBe(300);
     expect(TIER_LIMITS.pro.mandalas).toBe(20);
-    expect(TIER_LIMITS.pro.cards).toBe(1_000);
+    expect(TIER_LIMITS.pro.cards).toBe(2_000);
     expect(TIER_LIMITS.lifetime.mandalas).toBeNull();
     expect(TIER_LIMITS.admin.cards).toBeNull();
   });
