@@ -38,7 +38,12 @@ import type {
   MandalaBookFigure,
 } from '@/shared/lib/api-client';
 import type { TiptapDoc, TiptapNode } from '@/features/video-side-panel/lib/note-parser';
-import { parseMarkdownToTiptap, parseInline, buildTableNode } from './markdown-to-tiptap';
+import {
+  parseMarkdownToTiptap,
+  parseInline,
+  buildTableNode,
+  stripEmoji,
+} from './markdown-to-tiptap';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -446,9 +451,13 @@ function sanitizeNode(node: TiptapNode): TiptapNode | null {
     return migrateMarkdownTable(node.attrs);
   }
   if (node.type === 'text') {
+    // Strip emoji/picto markers so EXISTING persisted notes are cleaned on load
+    // (and export, which is doc-based) without regeneration. Only TEXT nodes —
+    // node attrs (mermaid source / latex / tableJson) keep their structure.
+    const cleaned = typeof node.text === 'string' ? stripEmoji(node.text) : '';
     // ProseMirror rejects empty text nodes — drop them (a parent heading/paragraph
     // with `content: []` is valid 'inline*').
-    return typeof node.text === 'string' && node.text.length > 0 ? node : null;
+    return cleaned.length > 0 ? { ...node, text: cleaned } : null;
   }
   if (Array.isArray(node.content)) {
     const content = node.content.map(sanitizeNode).filter((n): n is TiptapNode => n !== null);
