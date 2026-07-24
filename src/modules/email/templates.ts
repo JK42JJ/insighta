@@ -291,3 +291,102 @@ export function buildProUpgradeEmail(params: ProUpgradeEmailParams): {
     ),
   };
 }
+
+export interface MobileGuideEmailParams {
+  ctaUrl?: string;
+}
+
+/**
+ * Mobile dial-player usage guide — installing to the home screen is the first
+ * action, so the per-platform install steps lead, then usage steps + CTA. Copy
+ * follows the insighta-copywriter rules (benefit-first; no podcast/by-ear/
+ * recitation phrasing; no emoji).
+ */
+export function buildMobileGuideEmail(params: MobileGuideEmailParams): {
+  subject: string;
+  html: string;
+} {
+  const url = params.ctaUrl ?? `${SITE_ORIGIN}/mobile/`;
+  // Per-platform install block (leads — the critical first action). Email-safe:
+  // table layout, worded steps (no icons that clients strip).
+  function platform(badge: string, where: string, steps: string[]): string {
+    const items = steps
+      .map(
+        (s, i) =>
+          `<tr><td style="padding:3px 0;font-size:13px;color:${MUTED};line-height:1.6"><b style="color:${INK}">${i + 1}.</b> ${s}</td></tr>`
+      )
+      .join('');
+    return `<tr><td style="padding:12px 0;border-top:1px dashed #d7d3c6">
+        <div style="font-size:13.5px;font-weight:800;color:${INK}">
+          <span style="font-size:10.5px;font-weight:800;color:#fff;background:${INK};border-radius:6px;padding:2px 8px">${badge}</span>
+          <span style="padding-left:7px">${where}</span>
+        </div>
+        <table role="presentation" style="margin-top:6px">${items}</table>
+      </td></tr>`;
+  }
+  const installBox = `<table role="presentation" width="100%" style="border:2px solid ${INK};border-radius:14px;background:#fff">
+    <tr><td style="padding:14px 16px 4px">
+      <div style="font-size:15px;font-weight:800;color:${INK}">홈 화면에 앱으로 추가하기</div>
+    </td></tr>
+    <tr><td style="padding:0 16px 12px">
+      <table role="presentation" width="100%">
+        ${platform('아이폰 · 아이패드', 'Safari에서', [
+          '화면 아래 <b style="color:' + INK + '">공유 버튼</b>(위로 향한 화살표)을 누르세요.',
+          '메뉴를 내려 <b style="color:' + INK + '">‘홈 화면에 추가’</b>를 누르세요.',
+          '오른쪽 위 <b style="color:' + INK + '">‘추가’</b>를 누르면 끝이에요.',
+        ])}
+        ${platform('안드로이드', 'Chrome에서', [
+          '오른쪽 위 <b style="color:' + INK + '">메뉴</b>(점 세 개)를 누르세요.',
+          '<b style="color:' +
+            INK +
+            '">‘앱 설치’</b> 또는 <b style="color:' +
+            INK +
+            '">‘홈 화면에 추가’</b>를 누르세요.',
+          '<b style="color:' + INK + '">‘설치’</b>를 누르면 끝이에요.',
+        ])}
+      </table>
+      <div style="font-size:12px;color:${MUTED};margin-top:10px;padding-top:10px;border-top:1px dashed #d7d3c6;line-height:1.6">추가한 아이콘으로 열면 주소창 없이 앱처럼 넓게 쓸 수 있어요.</div>
+    </td></tr>
+  </table>`;
+  const useRows = [
+    ['가운데 버튼으로 재생', '만다라를 열고 가운데 버튼을 누르면 노트가 이어서 재생돼요.'],
+    ['다이얼로 앞뒤 이동', '휠을 돌리면 대목을 앞뒤로, MENU로 뒤로 나가요. 원하는 부분만 골라서.'],
+    ['눈으로도 읽기', '위쪽 책 아이콘을 누르면 같은 노트를 문서로 읽을 수 있어요.'],
+  ]
+    .map(
+      ([t, d], i) =>
+        `<tr><td style="padding:13px 2px;border-top:1px dashed #d7d3c6">
+          <table role="presentation"><tr>
+            <td style="width:28px;height:28px;border:2px solid ${INK};border-radius:9px;color:${INDIGO};font-weight:800;font-size:13px;text-align:center;background:#fff">${i + 1}</td>
+            <td style="padding-left:14px">
+              <div style="font-size:14.5px;font-weight:800;color:${INK}">${t}</div>
+              <div style="font-size:12.5px;color:${MUTED};margin-top:2px">${d}</div>
+            </td>
+          </tr></table>
+        </td></tr>`
+    )
+    .join('');
+  const inner = `
+    <tr><td style="padding:14px 26px 2px;text-align:center">${mascot('mascot-welcome.gif')}</td></tr>
+    <tr><td style="padding:8px 30px 2px;text-align:center">
+      ${heading('내 유튜브에서', '필요한 정보만')}
+      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">만든 노트를 이제 모바일 다이얼로 어디서나. 먼저 홈 화면에 추가하면 다음부터 한 번에 열려요.</div>
+    </td></tr>
+    <tr><td style="padding:16px 30px 6px">${installBox}</td></tr>
+    <tr><td style="padding:6px 30px 2px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.12em;color:${MUTED};text-transform:uppercase">홈에 추가한 뒤, 이렇게 써요</div>
+    </td></tr>
+    <tr><td style="padding:2px 30px 30px">
+      <table role="presentation" width="100%">${useRows}</table>
+      <div style="text-align:center;margin-top:24px">${cta('다이얼 열어보기', url, INDIGO)}</div>
+      <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">로그인 없이 바로 둘러볼 수 있어요.</div>
+    </td></tr>`;
+  return {
+    subject: '내 유튜브에서 필요한 정보만 — 다이얼 사용 안내',
+    html: shell(
+      { label: 'GUIDE', color: INDIGO },
+      inner,
+      '홈 화면에 추가하고, 다이얼로 어디서나 이어서.'
+    ),
+  };
+}
