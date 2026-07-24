@@ -2,7 +2,7 @@
 // direct use by tests; React-refresh's only-export-components rule flags
 // non-component exports in a component file, so we disable it here.
 /* eslint-disable react-refresh/only-export-components */
-import { useMemo, useEffect, useRef, useCallback } from 'react';
+import { useMemo, useEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopilotKit, useCopilotReadable, useCopilotChat } from '@copilotkit/react-core';
 import { CopilotChat } from '@copilotkit/react-ui';
@@ -524,7 +524,70 @@ function ChatPanel({
   );
 }
 
+// BL-10 (2026-07-03) — the CopilotKit runtime endpoint is served by a raw
+// graphql-yoga handler whose `req.pause()→await→resume()` window can lose the
+// body and reply 400 ("empty payload"), intermittently (~2/10h) even on a warm
+// server — not just cold-start. CopilotKit's own runtime-info fetch does NOT
+// retry, so a single 400 hangs the chat until a manual refresh. This probe
+// gates the CopilotKit mount: it retries GET /api/v1/chat/info with backoff
+// until it 200s, so CopilotKit only mounts against a working endpoint and the
+// rare race self-heals with no visible hang.
+const RUNTIME_INFO_URL = '/api/v1/chat/info';
+const RUNTIME_PROBE_MAX_ATTEMPTS = 5;
+const RUNTIME_PROBE_BASE_DELAY_MS = 400;
+
+type RuntimeProbeState = 'probing' | 'ready' | 'failed';
+
+export function useChatRuntimeProbe(headers: Record<string, string>): {
+  state: RuntimeProbeState;
+  attemptKey: number;
+  retry: () => void;
+} {
+  const [state, setState] = useState<RuntimeProbeState>('probing');
+  // Bumped on manual retry AND used as CopilotKit's remount key so a recovered
+  // probe re-initialises the provider cleanly.
+  const [attemptKey, setAttemptKey] = useState(0);
+  const authHeader = headers.Authorization ?? '';
+
+  useEffect(() => {
+    let cancelled = false;
+    setState('probing');
+    const probe = async () => {
+      for (let attempt = 0; attempt < RUNTIME_PROBE_MAX_ATTEMPTS; attempt++) {
+        if (cancelled) return;
+        try {
+          const res = await fetch(RUNTIME_INFO_URL, {
+            method: 'GET',
+            headers: authHeader ? { Authorization: authHeader } : undefined,
+          });
+          if (res.ok) {
+            if (!cancelled) setState('ready');
+            return;
+          }
+        } catch {
+          // network hiccup — treated the same as a non-ok response, retried.
+        }
+        // Exponential backoff before the NEXT attempt (400/800/1600/3200ms);
+        // no wait after the last attempt — we fail immediately once exhausted.
+        if (attempt < RUNTIME_PROBE_MAX_ATTEMPTS - 1) {
+          const delay = RUNTIME_PROBE_BASE_DELAY_MS * 2 ** attempt;
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+      if (!cancelled) setState('failed');
+    };
+    void probe();
+    return () => {
+      cancelled = true;
+    };
+  }, [authHeader, attemptKey]);
+
+  const retry = useCallback(() => setAttemptKey((k) => k + 1), []);
+  return { state, attemptKey, retry };
+}
+
 export function ChatAssistant({ mandalaId, videoId, onSeek }: ChatAssistantProps) {
+  const { t } = useTranslation();
   // CP475+6 — Bug 2 fix: chat history preserved across tab switches (chatbot ↔
   // notes) within the same videoId.
   //
@@ -540,9 +603,32 @@ export function ChatAssistant({ mandalaId, videoId, onSeek }: ChatAssistantProps
   // and the runtime rebuilds — but for ordinary tab navigation it stays put.
   const token = apiClient.getAccessToken();
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+  const { state: probeState, attemptKey, retry } = useChatRuntimeProbe(headers);
+
+  if (probeState !== 'ready') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
+        {probeState === 'probing' ? (
+          <span>{t('chat.connecting', '챗봇 연결 중…')}</span>
+        ) : (
+          <>
+            <span>{t('chat.connectFailed', '챗봇 연결에 실패했습니다.')}</span>
+            <button
+              type="button"
+              onClick={retry}
+              className="rounded-md border border-border px-3 py-1.5 text-foreground hover:bg-accent"
+            >
+              {t('chat.retry', '다시 시도')}
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <CopilotKit
+      key={attemptKey}
       runtimeUrl="/api/v1/chat"
       showDevConsole={false}
       enableInspector={false}
