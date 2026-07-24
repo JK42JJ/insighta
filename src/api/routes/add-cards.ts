@@ -32,7 +32,7 @@ import { FastifyPluginCallback } from 'fastify';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { loadLiveSearchGateConfig } from '@/config/live-search-gate';
-import { gateLiveSearchCards } from '@/modules/inflow-gate/live-search-gate';
+import { gateLiveSearchCards, promoPenaltyMatch } from '@/modules/inflow-gate/live-search-gate';
 import { getMandalaManager } from '@/modules/mandala/manager';
 import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { getExcludedVideoIds } from '@/modules/exclude/excluded-videos';
@@ -384,6 +384,22 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             language: (language === 'en' ? 'en' : 'ko') as 'ko' | 'en',
             cfg: liveGateCfg,
           };
+          // 축3 promo-penalty shadow (CP510) — compute which candidates a
+          // demote-only penalty WOULD flag, logged for real-serving FP audit.
+          // Never affects exposure here; canary weighting waits on FP=0.
+          const promoPenaltyHits = v5Filtered
+            .map((c) => {
+              const signal = promoPenaltyMatch(c.title, c.channelTitle);
+              return signal
+                ? {
+                    id: c.videoId,
+                    signal,
+                    title: (c.title ?? '').slice(0, 60),
+                    channel: c.channelTitle,
+                  }
+                : null;
+            })
+            .filter((h): h is NonNullable<typeof h> => h !== null);
           if (liveGateCfg.mode === 'on' && v5Filtered.length > 0) {
             liveGate = await gateLiveSearchCards(v5Filtered, liveGateCtx);
             v5Exposed = liveGate.exposed;
@@ -411,6 +427,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                     latency_ms: g.latencyMs,
                     would_drop_subscriber_100: g.wouldDropSub100,
                     would_drop_subscriber_1000: g.wouldDropSub1000,
+                    promo_penalty_hits: promoPenaltyHits,
                     gc_scores: Array.from(g.gcByVideoId.entries())
                       .filter(([, v]) => v != null)
                       .map(([id, v]) => ({
@@ -447,6 +464,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
                     latency_ms: g.latencyMs,
                     would_drop_subscriber_100: g.wouldDropSub100,
                     would_drop_subscriber_1000: g.wouldDropSub1000,
+                    promo_penalty_hits: promoPenaltyHits,
                     gc_scores: Array.from(g.gcByVideoId.entries())
                       .filter(([, v]) => v != null)
                       .map(([id, v]) => ({
