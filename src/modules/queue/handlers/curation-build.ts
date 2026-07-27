@@ -28,6 +28,11 @@ import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { config } from '../../../config';
 import { nextKstWeekdayAt } from '@/utils/kst';
+import { collectChannelUploads } from '@/modules/curation/channel-uploads';
+import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
+
+/** curation_subscriptions.source value that means "build from followed channels". */
+const CHANNEL_SOURCE = 'youtube_subs';
 
 const log = logger.child({ module: 'queue/curation-build' });
 
@@ -114,26 +119,55 @@ export async function registerCurationBuildWorker(): Promise<void> {
       return;
     }
 
-    // build-1/2/3 — INSTANT pool-cosine KNN (reuses add-cards Layer1,
-    // matchFromVideoPoolByCenterGoal). Embed the topic ONCE (~0.5s) → pgvector cosine
-    // on video_pool_embeddings → top-N. NO live search / candidate embed / LLM picker;
-    // runV5Executor's full pipeline (LLM×2 + search.list fanout + bulk embed) stalled
-    // the build 20s+. ~1-2s. Thin-pool niche topics → async v5 enrichment = follow-up.
-    const [centerEmbedding] = await embedBatch([sub.topic]);
-    if (!centerEmbedding) {
-      log.warn('curation build: topic embed failed', { subscriptionId, topic: sub.topic });
-      return;
+    // build-1/2/3 — how the week's videos are chosen. This is the ONLY thing the
+    // source branch changes; the snapshot write, watched_at preservation and
+    // cadence advance below are shared verbatim.
+    const channelMode =
+      config.curationChannelSource.enabled && sub.source === CHANNEL_SOURCE && !job.data.deep;
+
+    let picked: Array<{ videoId: string; relevancePct: number }>;
+
+    if (channelMode) {
+      // Channel mode — the user named the channels, so there is nothing to
+      // discover and nothing to score. Uploads since this week's Monday (KST),
+      // interleaved so one prolific channel cannot fill the week.
+      const channels = await prisma.curation_channels.findMany({
+        where: { subscription_id: subscriptionId },
+        select: { channel_id: true, uploads_playlist_id: true },
+      });
+      picked = await collectChannelUploads({
+        channels,
+        since: new Date(weekOf),
+        limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
+        apiKeys: resolveVideosApiKeys(process.env),
+      });
+      log.info('curation build (channel mode)', {
+        subscriptionId,
+        channels: channels.length,
+        picked: picked.length,
+      });
+    } else {
+      // Topic mode — INSTANT pool-cosine KNN (reuses add-cards Layer1,
+      // matchFromVideoPoolByCenterGoal). Embed the topic ONCE (~0.5s) → pgvector cosine
+      // on video_pool_embeddings → top-N. NO live search / candidate embed / LLM picker;
+      // runV5Executor's full pipeline (LLM×2 + search.list fanout + bulk embed) stalled
+      // the build 20s+. ~1-2s. Thin-pool niche topics → async v5 enrichment = follow-up.
+      const [centerEmbedding] = await embedBatch([sub.topic]);
+      if (!centerEmbedding) {
+        log.warn('curation build: topic embed failed', { subscriptionId, topic: sub.topic });
+        return;
+      }
+      const matches = await matchFromVideoPoolByCenterGoal({
+        centerEmbedding,
+        subGoals: [],
+        language: 'ko',
+        limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
+      });
+      picked = matches.map((m) => ({
+        videoId: m.videoId,
+        relevancePct: Math.max(1, Math.min(100, Math.round((m.score ?? 0) * 100))),
+      }));
     }
-    const matches = await matchFromVideoPoolByCenterGoal({
-      centerEmbedding,
-      subGoals: [],
-      language: 'ko',
-      limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
-    });
-    const picked: Array<{ videoId: string; relevancePct: number }> = matches.map((m) => ({
-      videoId: m.videoId,
-      relevancePct: Math.max(1, Math.min(100, Math.round((m.score ?? 0) * 100))),
-    }));
 
     // build-4 — rich-summary is REUSE-ONLY for P0. video_rich_summaries is a
     // video-keyed GLOBAL table (leaks across goals), so the build never writes it
@@ -177,7 +211,11 @@ export async function registerCurationBuildWorker(): Promise<void> {
     // Thin pool (niche topic) → enqueue a background live-search enrichment (serve-first:
     // the fast pool result is already served; v5 appends more behind). Separate singleton
     // key so it doesn't collide with the weekly/immediate fast build.
-    if (picked.length < QUEUE_CONFIG.CURATION_MIN_VIDEOS) {
+    //
+    // NEVER in channel mode: a quiet week there is the honest answer (§2-d), and
+    // topping it up with discovered videos would put channels in the feed that
+    // the user did not follow — the exact thing this mode exists to prevent.
+    if (!channelMode && picked.length < QUEUE_CONFIG.CURATION_MIN_VIDEOS) {
       await enqueueCurationBuild(
         { subscriptionId, weekOf, deep: true },
         { singletonKey: `${subscriptionId}:deep` }
@@ -208,9 +246,11 @@ export async function registerCurationBuildWorker(): Promise<void> {
       subscriptionId,
       weekOf,
       topic: sub.topic,
-      poolMatches: matches.length,
+      mode: channelMode ? 'channel' : 'topic',
       picked: picked.length,
-      belowMin: picked.length < QUEUE_CONFIG.CURATION_MIN_VIDEOS,
+      // Only meaningful in topic mode; channel mode has no pool and an empty
+      // week is a valid outcome there, not a shortfall.
+      belowMin: !channelMode && picked.length < QUEUE_CONFIG.CURATION_MIN_VIDEOS,
     });
   });
 }
