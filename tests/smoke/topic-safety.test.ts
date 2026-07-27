@@ -61,6 +61,22 @@ describe('checkTopicSafety — educational carve-out', () => {
   });
 });
 
+describe('checkTopicSafety — naming a social problem is not promoting it', () => {
+  it('allows first-hand accounts and reporting', () => {
+    // measured on prod at norm_score 0.80 and wrongly blocked by the first pass:
+    // a traveller describing racism they experienced
+    expect(isTopicSafe('호주 여행 인종차별')).toBe(true);
+    expect(isTopicSafe('인종차별 다큐멘터리')).toBe(true);
+    expect(isTopicSafe('직장 내 괴롭힘 사례')).toBe(true);
+  });
+
+  it('still blocks promoting it', () => {
+    expect(isTopicSafe('혐오조장 방송')).toBe(false);
+    expect(isTopicSafe('인종차별조장')).toBe(false);
+    expect(isTopicSafe('혐오표현 모음')).toBe(false);
+  });
+});
+
 describe('checkTopicSafety — no false positives on real learning topics', () => {
   // sampled from the live top-20 of trend_signals
   const legit = [
