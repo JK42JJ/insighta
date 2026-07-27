@@ -658,9 +658,39 @@ model curation_subscriptions {
   created_at  DateTime         @default(now()) @db.Timestamptz(6)
   updated_at  DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
   items       curation_items[]
+  channels    curation_channels[]
 
   @@index([user_id], map: "idx_curation_subscriptions_user_id")
   @@index([next_run_at], map: "idx_curation_subscriptions_next_run_at")
+  @@schema("public")
+}
+
+/// Channels a curation follows (2026-07-27). One subscription, N channels —
+/// a table rather than an array column so unsubscribing a single channel,
+/// counting toward quota and cleaning duplicates stay ordinary queries.
+/// Design: docs/design/curation-channel-subscription-2026-07-27.md
+/// Raw SQL DDL: prisma/migrations/curation-channels/001_curation_channels.sql
+model curation_channels {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscription_id     String    @db.Uuid
+  /// YouTube channel id (UC...)
+  channel_id          String    @db.VarChar(30)
+  /// contentDetails.relatedPlaylists.uploads from the same channels.list call —
+  /// stored so the weekly build never derives it from the UC->UU convention.
+  uploads_playlist_id String?   @db.VarChar(34)
+  /// Snapshot for display, so a renamed channel does not blank the row.
+  channel_title       String?
+  thumbnail_url       String?
+  /// 'picked' = from the user's YouTube subscriptions · 'manual' = pasted URL/@handle
+  added_via           String    @default("picked") @db.VarChar(8)
+  /// Incremental cursor: uploads newer than this are "new this week".
+  last_seen_at        DateTime? @db.Timestamptz(6)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+
+  subscription curation_subscriptions @relation(fields: [subscription_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([subscription_id, channel_id], map: "uq_curation_channels_sub_channel")
+  @@index([subscription_id], map: "idx_curation_channels_subscription_id")
   @@schema("public")
 }
 
