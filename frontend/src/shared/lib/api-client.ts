@@ -1700,6 +1700,10 @@ class ApiClient {
       status: string;
       created_at: string;
       invited_at: string | null;
+      /** 'sent' | 'failed' | 'skipped'. null = invited before this was recorded. */
+      invite_email_status: string | null;
+      invite_email_at: string | null;
+      invite_email_error: string | null;
     }>;
     total: number;
   }> {
