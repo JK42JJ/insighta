@@ -29,48 +29,73 @@ function isTransactionalEmailEnabled(env: NodeJS.ProcessEnv = process.env): bool
   return v === 'true' || v === '1' || v === 'yes';
 }
 
-async function send(to: string, subject: string, html: string, tag: string): Promise<void> {
+/**
+ * Outcome of one send attempt. `send` used to return void, which collapsed three
+ * very different endings — delivered, refused by SMTP, and never attempted
+ * because the flag is off — into the same silence. Callers that record state
+ * (admin invite marking an application `invited`) had no way to tell them apart,
+ * so the row claimed an invitation had gone out even when nothing was sent.
+ */
+export type EmailSendResult =
+  | { status: 'sent' }
+  | { status: 'skipped'; reason: 'disabled' | 'no-recipient' }
+  | { status: 'failed'; error: string };
+
+async function send(
+  to: string,
+  subject: string,
+  html: string,
+  tag: string
+): Promise<EmailSendResult> {
   if (!isTransactionalEmailEnabled()) {
     log.info(`${tag}: transactional email disabled (TRANSACTIONAL_EMAIL_ENABLED unset) — skipped`);
-    return;
+    return { status: 'skipped', reason: 'disabled' };
   }
   if (!to) {
     log.warn(`${tag}: recipient empty — skipped`);
-    return;
+    return { status: 'skipped', reason: 'no-recipient' };
   }
   try {
     // Display name "Insighta" (not the bare noreply@ local-part).
     await transporter.sendMail({ from: `Insighta <${config.gmail.smtpFrom}>`, to, subject, html });
     log.info(`${tag}: sent to ${to}`);
+    return { status: 'sent' };
   } catch (err) {
-    log.warn(
-      `${tag}: send failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
-    );
+    const error = err instanceof Error ? err.message : String(err);
+    log.warn(`${tag}: send failed (non-fatal): ${error}`);
+    // Still non-fatal to the caller — the result is returned, not thrown.
+    return { status: 'failed', error };
   }
 }
 
-export async function sendWelcomeEmail(to: string, params: WelcomeEmailParams): Promise<void> {
+export async function sendWelcomeEmail(
+  to: string,
+  params: WelcomeEmailParams
+): Promise<EmailSendResult> {
   const { subject, html } = buildWelcomeEmail(params);
-  await send(to, subject, html, 'welcome-email');
+  return send(to, subject, html, 'welcome-email');
 }
 
 export async function sendBetaInviteEmail(
   to: string,
   params: BetaInviteEmailParams
-): Promise<void> {
+): Promise<EmailSendResult> {
   const { subject, html } = buildBetaInviteEmail(params);
-  await send(to, subject, html, 'beta-invite-email');
+  return send(to, subject, html, 'beta-invite-email');
 }
 
-export async function sendNoteReadyEmail(to: string, params: NoteReadyEmailParams): Promise<void> {
+export async function sendNoteReadyEmail(
+  to: string,
+  params: NoteReadyEmailParams
+): Promise<EmailSendResult> {
   const { subject, html } = buildNoteReadyEmail(params);
-  await send(to, subject, html, 'note-ready-email');
+  return send(to, subject, html, 'note-ready-email');
 }
 
 export async function sendProUpgradeEmail(
   to: string,
   params: ProUpgradeEmailParams
-): Promise<void> {
+): Promise<EmailSendResult> {
   const { subject, html } = buildProUpgradeEmail(params);
-  await send(to, subject, html, 'pro-upgrade-email');
+  return send(to, subject, html, 'pro-upgrade-email');
 }

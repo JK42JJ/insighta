@@ -2723,6 +2723,14 @@ model beta_applications {
   /// Invite tickets (2026-07-15): member who spent a ticket. NULL = admin invite.
   /// Raw SQL DDL: prisma/migrations/beta/002_invited_by.sql
   invited_by String?   @db.Uuid
+  /// Outcome of the invite send: sent | failed | skipped. `status` is written
+  /// BEFORE the send and the send is non-fatal, so status alone never proved
+  /// delivery. NULL = invited before this column existed — genuinely unknown,
+  /// so render it as such instead of assuming it went out.
+  /// Raw SQL DDL: prisma/migrations/beta-invite-send-status/001_send_status.sql
+  invite_email_status String?   @db.VarChar(10)
+  invite_email_at     DateTime? @db.Timestamptz(6)
+  invite_email_error  String?
 
   @@index([status])
   @@index([invited_by])

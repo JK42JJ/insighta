@@ -36,8 +36,19 @@ export async function adminBetaApplicationRoutes(fastify: FastifyInstance) {
       });
       // Pre-signup moment: announce the invitation, drive signup with this
       // email, and carry the onboarding guide (internally flag-gated + non-fatal).
-      await sendBetaInviteEmail(updated.email, { goal: updated.goal });
-      return reply.send({ application: updated });
+      const result = await sendBetaInviteEmail(updated.email, { goal: updated.goal });
+      // Record what actually happened. `status` above is written before the send
+      // and the send never throws, so without this the row claims an invitation
+      // went out even when SMTP refused it or the flag was off.
+      const withSend = await prisma.beta_applications.update({
+        where: { id: request.params.id },
+        data: {
+          invite_email_status: result.status,
+          invite_email_at: new Date(),
+          invite_email_error: result.status === 'failed' ? result.error.slice(0, 500) : null,
+        },
+      });
+      return reply.send({ application: withSend });
     }
   );
 }
