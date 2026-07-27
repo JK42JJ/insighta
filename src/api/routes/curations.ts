@@ -19,15 +19,13 @@ import { MS_PER_DAY } from '../../utils/time-constants';
 import { suggestTopics } from '../../modules/curation/suggest';
 import { maybeTriggerProfileBuild } from '../../modules/curation/interest-profile';
 import { getAccessToken } from '../../modules/youtube/api';
+import { curationWeekKey } from '../../modules/queue/handlers/curation-weekly';
+import { isValidWeekday, nextKstWeekdayAt } from '../../utils/kst';
+import { QUEUE_CONFIG } from '../../modules/queue/types';
 
-/** ISO date (YYYY-MM-DD) of this week's Monday — curation_items.week_of key. */
-function mondayOf(d: Date): string {
-  const day = d.getUTCDay();
-  const diff = (day === 0 ? -6 : 1) - day;
-  const mon = new Date(d);
-  mon.setUTCDate(d.getUTCDate() + diff);
-  return mon.toISOString().slice(0, 10);
-}
+/** This week's snapshot key. Single source (was duplicated here and in the
+ *  weekly handler); resolves on the KST calendar once the schedule flag is on. */
+const mondayOf = (d: Date): string => curationWeekKey(d);
 
 const ALLOWED_SOURCES = new Set(['discover', 'youtube_subs', 'hybrid']);
 
@@ -157,7 +155,14 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const rows = await prisma.curation_subscriptions.findMany({
       where: { user_id: request.user.userId, is_active: true },
       orderBy: { created_at: 'desc' },
-      select: { id: true, topic: true, source: true, last_run_at: true, next_run_at: true },
+      select: {
+        id: true,
+        topic: true,
+        source: true,
+        weekday: true,
+        last_run_at: true,
+        next_run_at: true,
+      },
     });
     // Display-dedup by normalized topic (newest wins) — legacy duplicate rows stay in
     // the DB untouched (reversible); POST now prevents new ones.
@@ -308,6 +313,41 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         data: { watched_at: new Date() },
       });
       return reply.send({ status: 'ok', data: { marked: updated.count > 0 } });
+    }
+  );
+
+  /**
+   * PATCH /curations/weekday — set the KST delivery day for ALL of the caller's
+   * active curations (one dial, not per-topic: "my edition arrives on <day>").
+   * next_run_at is display-only under the KST schedule, so it is realigned here
+   * to keep the list copy honest.
+   */
+  fastify.patch<{ Body: { weekday?: unknown } }>(
+    '/weekday',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
+      }
+      const weekday = (request.body ?? {}).weekday;
+      if (!isValidWeekday(weekday)) {
+        return reply.code(400).send({ status: 'error', code: 'INVALID_WEEKDAY' });
+      }
+      const prisma = getPrismaClient();
+      const nextRun = nextKstWeekdayAt(
+        weekday,
+        new Date(),
+        QUEUE_CONFIG.CURATION_DELIVERY_HOUR_KST,
+        QUEUE_CONFIG.CURATION_DELIVERY_MINUTE_KST
+      );
+      const updated = await prisma.curation_subscriptions.updateMany({
+        where: { user_id: request.user.userId, is_active: true },
+        data: { weekday, next_run_at: nextRun },
+      });
+      return reply.send({
+        status: 'ok',
+        data: { weekday, updated: updated.count, nextRunAt: nextRun.toISOString() },
+      });
     }
   );
 

@@ -26,6 +26,8 @@ import { matchFromVideoPoolByCenterGoal } from '@/skills/plugins/video-discover/
 import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
 import { MS_PER_DAY } from '@/utils/time-constants';
+import { config } from '../../../config';
+import { nextKstWeekdayAt } from '@/utils/kst';
 
 const log = logger.child({ module: 'queue/curation-build' });
 
@@ -182,10 +184,24 @@ export async function registerCurationBuildWorker(): Promise<void> {
       );
     }
 
-    // build-6 — advance the weekly cadence.
+    // build-6 — advance the cadence. Under the KST schedule `next_run_at` is
+    // DISPLAY-ONLY (the weekday column + last_run_at decide what is due), so it is
+    // pinned to the next delivery slot instead of "now + 7d", which drifted to
+    // whatever time the build happened to run.
+    const doneAt = new Date();
     await prisma.curation_subscriptions.update({
       where: { id: subscriptionId },
-      data: { last_run_at: new Date(), next_run_at: new Date(Date.now() + 7 * MS_PER_DAY) },
+      data: {
+        last_run_at: doneAt,
+        next_run_at: config.curationSchedule.kstEnabled
+          ? nextKstWeekdayAt(
+              sub.weekday,
+              doneAt,
+              QUEUE_CONFIG.CURATION_DELIVERY_HOUR_KST,
+              QUEUE_CONFIG.CURATION_DELIVERY_MINUTE_KST
+            )
+          : new Date(doneAt.getTime() + 7 * MS_PER_DAY),
+      },
     });
 
     log.info('curation build complete', {
