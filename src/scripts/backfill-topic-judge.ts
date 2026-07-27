@@ -5,6 +5,9 @@
  * the ones used:
  *   docker exec -i insighta-api node dist/scripts/backfill-topic-judge.js [--limit N]
  *
+ * Lives under src/ because the image only carries src/ (Dockerfile COPY) and tsc
+ * only compiles rootDir=src — a sibling of scripts/ would never reach the container.
+ *
  * Ordered by the same key serving uses (fetched_at desc, norm_score desc), so a
  * partial run always covers the rows a user could actually be shown first. Safe
  * to re-run: it only selects `judge_state IS NULL`.
@@ -41,7 +44,8 @@ async function main(): Promise<void> {
 
     for (const row of rows) {
       const v = byKeyword.get(row.keyword);
-      const state = !v || v.degraded ? 'unknown' : !v.safe ? 'unsafe' : !v.learnable ? 'unfit' : 'ok';
+      const state =
+        !v || v.degraded ? 'unknown' : !v.safe ? 'unsafe' : !v.learnable ? 'unfit' : 'ok';
       counts[state as keyof typeof counts] += 1;
       await prisma.trend_signals.update({
         where: { id: row.id },
