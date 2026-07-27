@@ -12,9 +12,13 @@
  */
 
 import { getPrismaClient } from '@/modules/database';
+import { logger } from '@/utils/logger';
+import { checkTopicSafety } from '@/modules/moderation/topic-safety';
 import { mapKeywordToDomain, type CurationDomain } from './domain-taxonomy';
 import type { InterestProfile } from './interest-profile';
 import { PROPOSAL_WEIGHTS, PROPOSAL_COUNT, MAX_PER_DOMAIN, REINFORCE } from './config';
+
+const log = logger.child({ module: 'curation/suggest' });
 
 export interface TrendCandidate {
   keyword: string;
@@ -139,12 +143,25 @@ export async function suggestTopics(
     select: { keyword: true, norm_score: true },
   });
   const excluded = new Set(excludeTopics.map((t) => t.trim().toLowerCase()));
+  // Serving-side safety floor. The collector gate stops NEW harmful keywords, but
+  // trend_signals already holds ~19k rows collected without one — and popularity is
+  // the rising signal, so those rows sort to the TOP (`ai 란제리 룩북` measured at
+  // norm_score 1.00). Filter here too, so nothing already stored can be proposed.
+  const blocked: string[] = [];
   const candidates: TrendCandidate[] = trends
     .filter((t) => !excluded.has(t.keyword.trim().toLowerCase()))
+    .filter((t) => {
+      const verdict = checkTopicSafety(t.keyword);
+      if (!verdict.safe) blocked.push(`${t.keyword} [${verdict.category}]`);
+      return verdict.safe;
+    })
     .map((t) => ({
       keyword: t.keyword,
       norm_score: t.norm_score,
     }));
+  if (blocked.length) {
+    log.warn('curation suggest: blocked unsafe topics', { userId, count: blocked.length, blocked });
+  }
 
   const sig = await loadReinforceSignals(userId);
   const proposals = scoreAndSelect(profile, candidates, sig);
