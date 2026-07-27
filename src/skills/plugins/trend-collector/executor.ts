@@ -57,6 +57,7 @@ import {
   type SuggestionItem,
 } from './sources/suggest';
 import { LEARNING_SEED_TERMS, type LearningSeed } from './seed-terms';
+import { checkTopicSafety } from '@/modules/moderation/topic-safety';
 import { loadDynamicSeedsFromMandalas, mergeSeeds } from './dynamic-seeds';
 import { MS_PER_DAY } from '@/utils/time-constants';
 
@@ -331,9 +332,25 @@ export const executor: SkillExecutor = {
     // Per-source min-max normalization (Suggest already in [0.05, 1] so no-op)
     normalizeWithinSource(allRows);
 
+    // Collector-side safety floor. Both sources scrape whatever YouTube is
+    // surfacing, so without this the table accumulates terms this product must
+    // never propose — `ai 란제리 룩북` was collected and then suggested at
+    // norm_score 1.00, chipped as "AI·기술". Drop them before they are stored;
+    // the serving path filters too, for rows collected before this existed.
+    let blockedUnsafe = 0;
+    const safeRows = allRows.filter((row) => {
+      const verdict = checkTopicSafety(row.keyword);
+      if (verdict.safe) return true;
+      blockedUnsafe++;
+      logger.warn(
+        `trend-collector: dropped unsafe keyword "${row.keyword.slice(0, 40)}" [${verdict.category}]`
+      );
+      return false;
+    });
+
     let inserted = 0;
     let upsertErrors = 0;
-    for (const row of allRows) {
+    for (const row of safeRows) {
       try {
         await db.trend_signals.upsert({
           where: {
@@ -392,6 +409,7 @@ export const executor: SkillExecutor = {
         suggest_failed_seeds: suggestFailed,
         suggest_duration_ms: suggestDurationMs,
         total_signals_upserted: inserted,
+        blocked_unsafe: blockedUnsafe,
         upsert_errors: upsertErrors,
       },
       metrics: {
