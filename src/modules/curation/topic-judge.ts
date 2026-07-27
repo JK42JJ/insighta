@@ -92,8 +92,14 @@ function stripFence(s: string): string {
  * Judge one batch. Throws on transport/parse failure so the caller can decide
  * the policy — this module never silently passes an unjudged keyword.
  */
-async function judgeBatch(keywords: string[], fetchImpl?: typeof fetch): Promise<TopicVerdict[]> {
-  const apiKey = config.openrouter.apiKey ?? '';
+async function judgeBatch(
+  keywords: string[],
+  fetchImpl?: typeof fetch,
+  apiKeyOverride?: string
+): Promise<TopicVerdict[]> {
+  // Injectable like llm-extract's opts.openRouterApiKey — CI has no key, so a
+  // test must be able to supply one instead of always hitting the fail-closed path.
+  const apiKey = apiKeyOverride ?? config.openrouter.apiKey ?? '';
   if (!apiKey) throw new Error('OpenRouter API key not configured');
 
   const model = await resolveModel();
@@ -155,13 +161,14 @@ async function judgeBatch(keywords: string[], fetchImpl?: typeof fetch): Promise
  */
 export async function judgeTopics(
   keywords: string[],
-  fetchImpl?: typeof fetch
+  fetchImpl?: typeof fetch,
+  apiKeyOverride?: string
 ): Promise<Array<TopicVerdict & { degraded: boolean }>> {
   const out: Array<TopicVerdict & { degraded: boolean }> = [];
   for (let i = 0; i < keywords.length; i += JUDGE_BATCH_SIZE) {
     const chunk = keywords.slice(i, i + JUDGE_BATCH_SIZE);
     try {
-      const verdicts = await judgeBatch(chunk, fetchImpl);
+      const verdicts = await judgeBatch(chunk, fetchImpl, apiKeyOverride);
       out.push(...verdicts.map((v) => ({ ...v, degraded: false })));
     } catch (err) {
       log.warn('topic judge batch failed — falling back to the deterministic floor', {
