@@ -20,7 +20,9 @@ import { suggestTopics } from '../../modules/curation/suggest';
 import { maybeTriggerProfileBuild } from '../../modules/curation/interest-profile';
 import { getAccessToken } from '../../modules/youtube/api';
 import { curationWeekKey } from '../../modules/queue/handlers/curation-weekly';
-import { getCurationLimit, type Tier } from '../../config/quota';
+import { getCurationLimit, getCurationChannelLimit, type Tier } from '../../config/quota';
+import { resolveChannel, resolveChannelIds } from '../../modules/curation/channel-resolve';
+import { resolveVideosApiKeys } from '../../skills/plugins/video-discover/v2/youtube-client';
 import { isValidWeekday, nextKstWeekdayAt } from '../../utils/kst';
 import { QUEUE_CONFIG } from '../../modules/queue/types';
 
@@ -55,6 +57,37 @@ async function resolveCurationTier(
     select: { id: true },
   });
   return approved ? 'pro' : 'free';
+}
+
+/** Infinity is not JSON — the wire form for "unlimited" is null. */
+const quotaValue = (n: number): number | null => (Number.isFinite(n) ? n : null);
+
+/**
+ * 404 unless the caller owns :id. Returns the subscription id + owner so the
+ * channel routes below never re-query it, and replies on failure so callers can
+ * `if (!owned) return;`.
+ */
+async function requireOwnedSubscription(
+  request: { user?: unknown; params: { id: string } },
+  reply: {
+    code: (n: number) => { send: (b: unknown) => unknown };
+  }
+): Promise<{ id: string; userId: string } | null> {
+  if (!request.user || !('userId' in (request.user as object))) {
+    reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
+    return null;
+  }
+  const userId = (request.user as { userId: string }).userId;
+  const prisma = getPrismaClient();
+  const sub = await prisma.curation_subscriptions.findUnique({
+    where: { id: request.params.id },
+    select: { id: true, user_id: true },
+  });
+  if (!sub || sub.user_id !== userId) {
+    reply.code(404).send({ status: 'error', code: 'CURATION_NOT_FOUND' });
+    return null;
+  }
+  return { id: sub.id, userId };
 }
 
 export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
@@ -251,6 +284,151 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     });
     return reply.send({ status: 'ok', data: { curations: withCounts } });
   });
+
+  /**
+   * GET /curations/:id/channels — the channels this curation follows.
+   * Empty for topic-mode curations; the dial uses that to pick which editor to show.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/channels',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const owned = await requireOwnedSubscription(request, reply);
+      if (!owned) return;
+      const prisma = getPrismaClient();
+      const channels = await prisma.curation_channels.findMany({
+        where: { subscription_id: owned.id },
+        orderBy: { created_at: 'asc' },
+        select: {
+          id: true,
+          channel_id: true,
+          channel_title: true,
+          thumbnail_url: true,
+          added_via: true,
+          last_seen_at: true,
+        },
+      });
+      const tier = await resolveCurationTier(prisma, owned.userId);
+      return reply.send({
+        status: 'ok',
+        data: { channels, limit: quotaValue(getCurationChannelLimit(tier)), tier },
+      });
+    }
+  );
+
+  /**
+   * POST /curations/:id/channels — follow a channel.
+   *
+   * Two entry points, one route (design §2-a option 3):
+   *   { input: "@nomadcoders" | url | UC... }   pasted by hand   -> added_via 'manual'
+   *   { channelId: "UC..." }                    picked from subs -> added_via 'picked'
+   *
+   * Both go through channels.list (1 unit) because the row stores the uploads
+   * playlist id from the response rather than deriving UC->UU. Idempotent: a
+   * channel already followed returns 200 with the existing row.
+   */
+  fastify.post<{ Params: { id: string }; Body: { input?: unknown; channelId?: unknown } }>(
+    '/:id/channels',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const owned = await requireOwnedSubscription(request, reply);
+      if (!owned) return;
+      const prisma = getPrismaClient();
+      const body = request.body ?? {};
+      const pasted = typeof body.input === 'string' ? body.input.trim() : '';
+      const picked = typeof body.channelId === 'string' ? body.channelId.trim() : '';
+      if (!pasted && !picked) {
+        return reply.code(400).send({ status: 'error', code: 'CHANNEL_INPUT_REQUIRED' });
+      }
+
+      const tier = await resolveCurationTier(prisma, owned.userId);
+      const limit = getCurationChannelLimit(tier);
+      const current = await prisma.curation_channels.count({
+        where: { subscription_id: owned.id },
+      });
+      if (current >= limit) {
+        return reply.code(403).send({
+          status: 'error',
+          code: 'CHANNEL_QUOTA_EXCEEDED',
+          message: 'Channel limit reached for this plan',
+          data: { tier, limit: quotaValue(limit), current },
+        });
+      }
+
+      const apiKeys = resolveVideosApiKeys(process.env);
+      const resolved = picked
+        ? (await resolveChannelIds([picked], apiKeys)).get(picked)
+        : await resolveChannel(pasted, apiKeys);
+      if (!resolved) {
+        return reply.code(404).send({
+          status: 'error',
+          code: 'CHANNEL_NOT_FOUND',
+          message: 'Could not resolve that channel',
+        });
+      }
+
+      // A channel with no uploads playlist cannot be built from — reject at the
+      // door rather than storing a row the weekly build silently skips.
+      if (!resolved.uploadsPlaylistId) {
+        return reply.code(422).send({
+          status: 'error',
+          code: 'CHANNEL_HAS_NO_UPLOADS',
+          message: 'That channel exposes no uploads playlist',
+        });
+      }
+
+      const row = await prisma.curation_channels.upsert({
+        where: {
+          subscription_id_channel_id: {
+            subscription_id: owned.id,
+            channel_id: resolved.channelId,
+          },
+        },
+        create: {
+          subscription_id: owned.id,
+          channel_id: resolved.channelId,
+          uploads_playlist_id: resolved.uploadsPlaylistId,
+          channel_title: resolved.title,
+          thumbnail_url: resolved.thumbnailUrl,
+          added_via: picked ? 'picked' : 'manual',
+        },
+        // Refresh the display snapshot on re-add; added_via records how it first
+        // arrived, so it is deliberately not overwritten.
+        update: {
+          uploads_playlist_id: resolved.uploadsPlaylistId,
+          channel_title: resolved.title,
+          thumbnail_url: resolved.thumbnailUrl,
+        },
+        select: {
+          id: true,
+          channel_id: true,
+          channel_title: true,
+          thumbnail_url: true,
+          added_via: true,
+          last_seen_at: true,
+        },
+      });
+      return reply.send({ status: 'ok', data: { channel: row } });
+    }
+  );
+
+  /** DELETE /curations/:id/channels/:channelId — stop following one channel. */
+  fastify.delete<{ Params: { id: string; channelId: string } }>(
+    '/:id/channels/:channelId',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const owned = await requireOwnedSubscription(request, reply);
+      if (!owned) return;
+      const prisma = getPrismaClient();
+      const removed = await prisma.curation_channels.deleteMany({
+        where: { subscription_id: owned.id, channel_id: request.params.channelId },
+      });
+      if (removed.count === 0) {
+        return reply.code(404).send({ status: 'error', code: 'CHANNEL_NOT_FOUND' });
+      }
+      return reply.send({ status: 'ok', data: { removed: removed.count } });
+    }
+  );
 
   /**
    * GET /curations/:id/items?week=YYYY-MM-DD — this curation's weekly video feed

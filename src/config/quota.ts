@@ -66,6 +66,8 @@ export interface TierLimitConfig {
    *  row: legacy duplicates exist in prod (one account holds 21 active rows for
    *  5 topics), so a row count would lock those users out immediately. */
   curations: number | null;
+  /** channels a single channel-mode curation may follow (null = unlimited) */
+  curationChannels: number | null;
   cards: number | null;
   aiSummaries: number | null;
   /**
@@ -83,6 +85,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   free: {
     mandalas: 3,
     curations: 1,
+    curationChannels: 3,
     cards: 150,
     aiSummaries: 150,
     richSummaries: 30,
@@ -123,6 +126,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   pro: {
     mandalas: 20,
     curations: 5,
+    curationChannels: 10,
     cards: 1_000,
     aiSummaries: 1_000,
     richSummaries: 200,
@@ -163,6 +167,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   lifetime: {
     mandalas: null,
     curations: null,
+    curationChannels: null,
     cards: null,
     aiSummaries: null,
     richSummaries: null,
@@ -187,6 +192,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   admin: {
     mandalas: null,
     curations: null,
+    curationChannels: null,
     cards: null,
     aiSummaries: null,
     richSummaries: null,
@@ -234,6 +240,11 @@ export function getCardsLimit(tier: Tier): number {
 /** Helper: get curation limit for a tier (returns Infinity for unlimited) */
 export function getCurationLimit(tier: Tier): number {
   return TIER_LIMITS[tier].curations ?? Infinity;
+}
+
+/** Helper: get per-curation channel limit for a tier (returns Infinity for unlimited) */
+export function getCurationChannelLimit(tier: Tier): number {
+  return TIER_LIMITS[tier].curationChannels ?? Infinity;
 }
 
 /** Helper: get rate limit max for a tier (returns 0 to indicate unlimited) */
