@@ -488,8 +488,15 @@ export const QUEUE_CONFIG = {
   MANDALA_PIPELINE_WATCHDOG_CRON: '*/10 * * * *',
   /** A pipeline run stuck at status=running past this age is treated orphaned. */
   MANDALA_PIPELINE_STALE_MINUTES: 10,
-  /** Weekly curation scan: Mondays 08:17 KST (Sun 23:17 UTC), off-minute. */
+  /** Legacy weekly curation scan: Mondays 08:17 KST (Sun 23:17 UTC), off-minute.
+   *  Used when CURATION_SCHED_KST_ENABLED is off. */
   CURATION_WEEKLY_CRON: '17 23 * * 0',
+  /** KST-calendar scan: every day 08:17 KST (23:17 UTC). The weekday filter lives
+   *  in the handler, so any delivery day fires exactly once a week. */
+  CURATION_DAILY_CRON: '17 23 * * *',
+  /** Delivery slot in KST — keeps next_run_at (display-only) on the same clock. */
+  CURATION_DELIVERY_HOUR_KST: 8,
+  CURATION_DELIVERY_MINUTE_KST: 17,
   /** Weekly curation build — a full week's feed = 15~20 videos (James 2026-07-17).
    *  Build aims for TARGET; ships if it can gather at least MIN after passesBookGate. */
   CURATION_MIN_VIDEOS: 15,

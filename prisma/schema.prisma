@@ -650,6 +650,9 @@ model curation_subscriptions {
   /// optional container mandala (kind='curation') if D1(a) is later chosen; null = standalone
   mandala_id  String?          @db.Uuid
   is_active   Boolean          @default(true)
+  /// KST delivery weekday, 0=Sun..6=Sat. Default 1 (Monday) = the shipped promise.
+  /// Raw SQL DDL: prisma/migrations/curation-weekday/001_weekday.sql (applied to prod 2026-07-27).
+  weekday     Int              @default(1) @db.SmallInt
   next_run_at DateTime?        @db.Timestamptz(6)
   last_run_at DateTime?        @db.Timestamptz(6)
   created_at  DateTime         @default(now()) @db.Timestamptz(6)
