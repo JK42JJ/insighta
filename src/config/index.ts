@@ -260,6 +260,15 @@ const envSchema = z.object({
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
 
+  // Channel-mode curation (2026-07-27). Off (default) keeps the shipped behaviour
+  // exactly: a subscription with source='youtube_subs' still builds through the
+  // discover path, so the column can be set before the leg exists. On: such a
+  // subscription is built from its followed channels' uploads instead.
+  // Rollback is a config flip, not a revert.
+  CURATION_CHANNEL_SOURCE_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+
   // CP512 — metadata REFRESH for active rows (videos.list re-fetch, keeps served
   // rows ToS-compliant AND titled). Default true; set 'false' to pause refresh
   // (scrub still only touches inactive rows, so active rows just stop aging-out).
@@ -470,6 +479,11 @@ export const config = {
   // Weekly curation schedule — KST calendar instead of UTC wall-clock (2026-07-27).
   curationSchedule: {
     kstEnabled: env.CURATION_SCHED_KST_ENABLED,
+  },
+
+  // Channel-mode curation — build from followed channels' uploads (2026-07-27).
+  curationChannelSource: {
+    enabled: env.CURATION_CHANNEL_SOURCE_ENABLED,
   },
 
   // video_pool ToS hygiene cron (CP494).
