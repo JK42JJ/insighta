@@ -31,9 +31,6 @@ import { nextKstWeekdayAt } from '@/utils/kst';
 import { collectChannelUploads } from '@/modules/curation/channel-uploads';
 import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 
-/** curation_subscriptions.source value that means "build from followed channels". */
-const CHANNEL_SOURCE = 'youtube_subs';
-
 const log = logger.child({ module: 'queue/curation-build' });
 
 export interface CurationBuildPayload {
@@ -122,8 +119,20 @@ export async function registerCurationBuildWorker(): Promise<void> {
     // build-1/2/3 — how the week's videos are chosen. This is the ONLY thing the
     // source branch changes; the snapshot write, watched_at preservation and
     // cadence advance below are shared verbatim.
-    const channelMode =
-      config.curationChannelSource.enabled && sub.source === CHANNEL_SOURCE && !job.data.deep;
+    // `source` alone is NOT the signal: selectCuration has always created every
+    // curation with source='youtube_subs' (mobile/index.html), so gating on it
+    // would flip every existing topic curation into channel mode the moment the
+    // flag went on -- and each would get an empty week, because none of them
+    // follow any channels. Followed channels are the honest signal: they only
+    // exist when the user added them.
+    const followed =
+      config.curationChannelSource.enabled && !job.data.deep
+        ? await prisma.curation_channels.findMany({
+            where: { subscription_id: subscriptionId },
+            select: { channel_id: true, uploads_playlist_id: true },
+          })
+        : [];
+    const channelMode = followed.length > 0;
 
     let picked: Array<{ videoId: string; relevancePct: number }>;
 
@@ -131,10 +140,7 @@ export async function registerCurationBuildWorker(): Promise<void> {
       // Channel mode — the user named the channels, so there is nothing to
       // discover and nothing to score. Uploads since this week's Monday (KST),
       // interleaved so one prolific channel cannot fill the week.
-      const channels = await prisma.curation_channels.findMany({
-        where: { subscription_id: subscriptionId },
-        select: { channel_id: true, uploads_playlist_id: true },
-      });
+      const channels = followed;
       picked = await collectChannelUploads({
         channels,
         since: new Date(weekOf),

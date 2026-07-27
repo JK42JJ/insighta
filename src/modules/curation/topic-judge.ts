@@ -48,10 +48,17 @@ Users subscribe to a topic and receive a weekly set of educational videos about 
 For each keyword decide two independent things:
 
 "safe": false when the keyword is sexual or suggestive, promotes gambling or
-speculation as entertainment, solicits investment (stock picks, guaranteed
-returns), instructs illegal or self-harming activity, or promotes hatred toward
-a group. Reporting, documentary, prevention and first-hand accounts of these
-subjects are SAFE — naming a social problem is not promoting it.
+speculation as entertainment, solicits investment (a specific pick to buy, a
+guaranteed return, a get-rich scheme), instructs illegal or self-harming
+activity, or promotes hatred toward a group. Reporting, documentary, prevention
+and first-hand accounts of these subjects are SAFE — naming a social problem is
+not promoting it.
+
+Studying a field is not soliciting it. Investing, personal finance, real estate,
+markets, economics and accounting are ordinary subjects people learn, and are
+SAFE — including named methods and instruments (value investing, dividend ETFs,
+index funds, REITs). Mark them unsafe only when the keyword itself is a pitch:
+a particular ticker to buy now, a promised return, "10x", "월 1000만원".
 
 "learnable": false when no weekly educational series could reasonably be built
 from it. Personal names, place names, song or film titles, individual channel or
