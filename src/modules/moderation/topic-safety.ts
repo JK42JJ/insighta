@@ -80,8 +80,15 @@ const BLOCKED = Object.freeze({
     '자살방법',
     '자해방법',
   ],
-  /** Hate / dehumanising. */
-  hate: ['혐오표현', '인종차별', '일베', '패드립'],
+  /**
+   * Hate / dehumanising. Terms here must be the SLUR OR THE ACT OF PROMOTING it,
+   * never the name of the social problem — otherwise reporting, documentary and
+   * first-hand accounts get blocked along with the abuse. `인종차별` was in this
+   * list on the first pass and took out `호주 여행 인종차별` (norm_score 0.80), a
+   * traveller describing racism they experienced. That is exactly the material a
+   * learning product should carry.
+   */
+  hate: ['혐오표현', '혐오조장', '인종차별조장', '일베', '패드립'],
 });
 
 /**
