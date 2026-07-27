@@ -30,16 +30,97 @@ env:
   FRONTEND_IMAGE: ghcr.io/jk42jj/insighta-frontend
 
 jobs:
+  # What actually changed. The dial is a single static file that nginx serves
+  # verbatim (vite copies public/ without touching it), so a dial-only commit
+  # needs no image build and no test suite -- it needs one file copied. Before
+  # this job every such commit paid the full 14-22 minute pipeline for a 322KB
+  # file, and the EC2 step inside that was 1m26s.
+  scope:
+    name: Detect scope
+    runs-on: ubuntu-latest
+    outputs:
+      mobile_only: ${{ steps.d.outputs.mobile_only }}
+      api: ${{ steps.d.outputs.api }}
+      frontend: ${{ steps.d.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: d
+        run: |
+          # workflow_dispatch has no diff to inspect -- treat it as "everything".
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "mobile_only=false" >> "$GITHUB_OUTPUT"
+            echo "api=true"          >> "$GITHUB_OUTPUT"
+            echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "manual run -> full pipeline"; exit 0
+          fi
+
+          BEFORE='${{ github.event.before }}'
+          # First push to a branch, or a force-push whose base we no longer
+          # have, reports an all-zero SHA. Fall back to the full pipeline
+          # rather than guessing a range.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "mobile_only=false" >> "$GITHUB_OUTPUT"
+            echo "api=true"          >> "$GITHUB_OUTPUT"
+            echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "no usable base ($BEFORE) -> full pipeline"; exit 0
+          fi
+
+          FILES=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
+          echo "changed:"; echo "$FILES" | sed 's/^/  /'
+
+          # An empty diff (re-run, merge with no changes) is not a licence to
+          # skip -- fall through to the full pipeline.
+          if [ -z "$FILES" ]; then
+            echo "mobile_only=false" >> "$GITHUB_OUTPUT"
+            echo "api=true"          >> "$GITHUB_OUTPUT"
+            echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "empty diff -> full pipeline"; exit 0
+          fi
+
+          if echo "$FILES" | grep -qv '^frontend/public/mobile/'; then
+            MOBILE_ONLY=false
+          else
+            MOBILE_ONLY=true
+          fi
+
+          # Which image actually needs rebuilding. The API image is built from
+          # the repo root, so anything outside frontend/ can affect it.
+          if echo "$FILES" | grep -qv '^frontend/'; then API=true; else API=false; fi
+          if echo "$FILES" | grep -q  '^frontend/';  then FE=true;  else FE=false;  fi
+
+          echo "mobile_only=$MOBILE_ONLY" >> "$GITHUB_OUTPUT"
+          echo "api=$API"                 >> "$GITHUB_OUTPUT"
+          echo "frontend=$FE"             >> "$GITHUB_OUTPUT"
+          echo "mobile_only=$MOBILE_ONLY api=$API frontend=$FE"
+
+  # The dial's only gate. Nothing in ci.yml reads frontend/public/mobile:
+  # tsc looks at src, vitest looks at src, and vite copies public/ verbatim.
+  # So a syntax error in this file has always been shippable. It is not now.
+  mobile-gate:
+    name: Dial syntax gate
+    runs-on: ubuntu-latest
+    needs: [scope]
+    if: needs.scope.outputs.mobile_only == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse every inline script and check the build stamp
+        run: node scripts/ci/check-dial.mjs
+
   ci:
     name: CI Checks
+    needs: [scope]
+    if: needs.scope.outputs.mobile_only != 'true'
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
   deploy-edge-functions:
     name: Deploy Edge Functions
-    needs: ci
+    needs: [scope, ci]
+    if: needs.scope.outputs.mobile_only != 'true'
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
@@ -63,7 +144,8 @@ jobs:
   build-and-push:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    needs: [ci]
+    needs: [scope, ci]
+    if: needs.scope.outputs.mobile_only != 'true'
     permissions:
       contents: read
       packages: write
@@ -80,7 +162,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Only the image whose source actually moved. A backend-only commit used
+      # to rebuild the frontend image and vice versa; the other side's :latest
+      # is already correct, so the rebuild was pure wall-clock.
       - name: Build & push API image
+        if: needs.scope.outputs.api == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -94,6 +180,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push Frontend image
+        if: needs.scope.outputs.frontend == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -110,10 +197,89 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # The 2-minute path. Copies the committed dial files straight into the running
+  # nginx root: no npm install, no vite build, no image, no container restart.
+  # There is no drift risk because it only ever copies what is in git -- the next
+  # full deploy rebuilds the image from those same files.
+  fast-mobile:
+    name: Fast dial deploy
+    runs-on: ubuntu-latest
+    needs: [scope, mobile-gate]
+    if: needs.scope.outputs.mobile_only == 'true'
+    environment: production
+    env:
+      SG_ID: sg-079aa1ca6855e587b
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - uses: actions/checkout@v4
+
+      - name: Open SSH for runner IP
+        run: |
+          RUNNER_IP=$(curl -s ifconfig.me)
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp --port 22 \
+            --cidr "$RUNNER_IP/32" \
+            --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=Purpose,Value=github-actions-deploy}]"
+
+      - name: Copy dial files to EC2
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "frontend/public/mobile/*"
+          target: "/tmp/dial/"
+          strip_components: 3
+          overwrite: true
+
+      - name: Install into the running nginx and verify
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            docker cp /tmp/dial/. insighta-frontend:/usr/share/nginx/html/mobile/
+            rm -rf /tmp/dial
+            # nginx serves from disk per request, so no reload is needed. Prove
+            # the file the browser will receive is the one we just shipped.
+            docker exec insighta-frontend cat /usr/share/nginx/html/mobile/version.json
+
+      - name: Verify over HTTPS
+        run: |
+          WANT=$(node -p "require('./frontend/public/mobile/version.json').build")
+          for i in $(seq 1 10); do
+            GOT=$(curl -sf "https://${{ secrets.DOMAIN }}/mobile/version.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).build" 2>/dev/null || true)
+            [ "$GOT" = "$WANT" ] && { echo "live build = $GOT"; exit 0; }
+            sleep 3
+          done
+          echo "::error::dial still serving '$GOT', expected '$WANT'"
+          exit 1
+
+      - name: Close SSH for runner IP
+        if: always()
+        run: |
+          if [ -n "$RUNNER_IP" ]; then
+            aws ec2 revoke-security-group-ingress \
+              --group-id "$SG_ID" \
+              --protocol tcp --port 22 \
+              --cidr "$RUNNER_IP/32" 2>/dev/null || true
+          fi
+
   migrate:
     name: Database Schema Sync
     runs-on: ubuntu-latest
-    needs: [ci]
+    needs: [scope, ci]
+    if: needs.scope.outputs.mobile_only != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -163,7 +329,8 @@ jobs:
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: [migrate, build-and-push]
+    needs: [scope, migrate, build-and-push]
+    if: needs.scope.outputs.mobile_only != 'true'
     environment: production
     env:
       SG_ID: sg-079aa1ca6855e587b
