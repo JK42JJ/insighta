@@ -2048,8 +2048,17 @@ model trend_signals {
   language   String   @default("ko") @db.VarChar(10)
   fetched_at DateTime @default(now()) @db.Timestamptz(6)
   expires_at DateTime @db.Timestamptz(6)
+  /// Topic verdict: ok | unsafe | unfit | unknown. Judged once at collection so
+  /// serving reads a column instead of calling an LLM per request. NULL = the row
+  /// predates judging and is excluded from proposals until backfilled.
+  /// Raw SQL DDL: prisma/migrations/trend-topic-judge/001_judge_columns.sql
+  judge_state  String?   @db.VarChar(8)
+  judge_reason String?
+  judge_model  String?   @db.VarChar(64)
+  judged_at    DateTime? @db.Timestamptz(6)
 
   @@unique([source, keyword, language])
+  @@index([judge_state], map: "idx_trend_signals_judge_state")
   @@index([keyword], map: "idx_trend_signals_keyword")
   @@index([expires_at], map: "idx_trend_signals_expires_at")
   @@index([source, fetched_at(sort: Desc)], map: "idx_trend_signals_source_fetched")

@@ -137,7 +137,18 @@ export async function suggestTopics(
   // Use the freshest trends by fetch time, NOT an expires_at gate: the trend-collector's
   // TTL can lapse (all rows "expired") between runs, which would leave zero candidates and
   // wrongly show the connect gate to a connected user. Recency + norm_score is the signal.
+  // Only rows a judge cleared on both axes. `unfit` (a church name, a song
+  // title) is filtered here as well as `unsafe` — popularity alone put those in
+  // the top ten, and neither is a weekly study subject. Rows still NULL predate
+  // judging and are excluded until the backfill reaches them; the deterministic
+  // filter below stays as a second floor for anything that slips through.
   const trends = await prisma.trend_signals.findMany({
+    // Exclude what a judge DECIDED against; let un-judged rows through.
+    // Filtering on `judge_state = 'ok'` would have been correct only after the
+    // backfill — at deploy time every row is NULL, so it would have emptied the
+    // proposal list. `unfit` leaks until a row is judged, which is no worse than
+    // today, and the deterministic safety floor below still applies to NULL rows.
+    where: { OR: [{ judge_state: null }, { judge_state: 'ok' }] },
     orderBy: [{ fetched_at: 'desc' }, { norm_score: 'desc' }],
     take: 300,
     select: { keyword: true, norm_score: true },
