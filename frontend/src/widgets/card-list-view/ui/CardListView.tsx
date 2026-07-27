@@ -10,6 +10,7 @@ import { CardList } from '@/widgets/card-list/ui/CardList';
 import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { GraphView } from '@/components/graph/GraphView';
+import { extractYouTubeVideoId } from '@/features/card-management/lib/youtubeToInsightCard';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 import {
   LayoutGrid,
@@ -623,7 +624,24 @@ export function CardListView({
           </div>
         </div>
         <div className="flex-1 min-h-0 relative">
-          <GraphView mandalaId={mandalaId} />
+          <GraphView
+            mandalaId={mandalaId}
+            onOpenVideo={({ youtubeId, url }) => {
+              const targetId = youtubeId ?? (url ? extractYouTubeVideoId(url) : null);
+              if (targetId) {
+                const card = cards.find((c) => extractYouTubeVideoId(c.videoUrl) === targetId);
+                if (card && onCardClick) {
+                  onCardClick(card);
+                  return;
+                }
+              }
+              // Node's video is not in this mandala's cards (cross-mandala or
+              // stale) — fall back to the source URL so it stays reachable.
+              const fallback =
+                url ?? (youtubeId ? `https://www.youtube.com/watch?v=${youtubeId}` : null);
+              if (fallback) window.open(fallback, '_blank', 'noopener,noreferrer');
+            }}
+          />
         </div>
       </div>
     );
