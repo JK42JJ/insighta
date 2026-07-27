@@ -62,6 +62,10 @@ export interface SkillLimits {
 /** Resource limits shape per tier */
 export interface TierLimitConfig {
   mandalas: number | null;
+  /** Weekly curation subscriptions. Counted by DISTINCT normalised topic, not by
+   *  row: legacy duplicates exist in prod (one account holds 21 active rows for
+   *  5 topics), so a row count would lock those users out immediately. */
+  curations: number | null;
   cards: number | null;
   aiSummaries: number | null;
   /**
@@ -78,6 +82,7 @@ export interface TierLimitConfig {
 export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   free: {
     mandalas: 3,
+    curations: 1,
     cards: 150,
     aiSummaries: 150,
     richSummaries: 30,
@@ -117,6 +122,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   },
   pro: {
     mandalas: 20,
+    curations: 5,
     cards: 1_000,
     aiSummaries: 1_000,
     richSummaries: 200,
@@ -156,6 +162,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   },
   lifetime: {
     mandalas: null,
+    curations: null,
     cards: null,
     aiSummaries: null,
     richSummaries: null,
@@ -179,6 +186,7 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
   },
   admin: {
     mandalas: null,
+    curations: null,
     cards: null,
     aiSummaries: null,
     richSummaries: null,
@@ -221,6 +229,11 @@ export function getMandalaLimit(tier: Tier): number {
 /** Helper: get cards limit for a tier (returns Infinity for unlimited) */
 export function getCardsLimit(tier: Tier): number {
   return TIER_LIMITS[tier].cards ?? Infinity;
+}
+
+/** Helper: get curation limit for a tier (returns Infinity for unlimited) */
+export function getCurationLimit(tier: Tier): number {
+  return TIER_LIMITS[tier].curations ?? Infinity;
 }
 
 /** Helper: get rate limit max for a tier (returns 0 to indicate unlimited) */

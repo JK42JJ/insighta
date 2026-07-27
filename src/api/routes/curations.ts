@@ -20,6 +20,7 @@ import { suggestTopics } from '../../modules/curation/suggest';
 import { maybeTriggerProfileBuild } from '../../modules/curation/interest-profile';
 import { getAccessToken } from '../../modules/youtube/api';
 import { curationWeekKey } from '../../modules/queue/handlers/curation-weekly';
+import { getCurationLimit, type Tier } from '../../config/quota';
 import { isValidWeekday, nextKstWeekdayAt } from '../../utils/kst';
 import { QUEUE_CONFIG } from '../../modules/queue/types';
 
@@ -28,6 +29,33 @@ import { QUEUE_CONFIG } from '../../modules/queue/types';
 const mondayOf = (d: Date): string => curationWeekKey(d);
 
 const ALLOWED_SOURCES = new Set(['discover', 'youtube_subs', 'hybrid']);
+
+/**
+ * Tier for the curation quota. An approved beta application counts as pro for
+ * the duration of the closed beta — the testers were invited to exercise the
+ * product, so holding them to the free ceiling defeats the point. Redeeming an
+ * invite ticket does not: `invited_by` non-null means a member spent a ticket on
+ * them, which is a signup path, not a plan.
+ */
+async function resolveCurationTier(
+  prisma: ReturnType<typeof getPrismaClient>,
+  userId: string
+): Promise<Tier> {
+  const sub = await prisma.user_subscriptions.findUnique({
+    where: { user_id: userId },
+    select: { tier: true },
+  });
+  const tier = (sub?.tier ?? 'free') as Tier;
+  if (tier !== 'free') return tier;
+
+  const user = await prisma.users.findUnique({ where: { id: userId }, select: { email: true } });
+  if (!user?.email) return 'free';
+  const approved = await prisma.beta_applications.findFirst({
+    where: { email: user.email, status: { in: ['invited', 'joined'] }, invited_by: null },
+    select: { id: true },
+  });
+  return approved ? 'pro' : 'free';
+}
 
 export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
   /** POST /curations — create a weekly curation subscription + immediate build. */
@@ -66,6 +94,20 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.send({
         status: 'ok',
         data: { id: dup.id, topic: dup.topic, source: dup.source, buildJobId: null },
+      });
+    }
+
+    // Quota. Counted by DISTINCT normalised topic, never by row: prod holds
+    // legacy duplicates (one account has 21 active rows for 5 topics), and a row
+    // count would lock those users out on the spot.
+    const tier = await resolveCurationTier(prisma, userId);
+    const limit = getCurationLimit(tier);
+    const distinctTopics = new Set(allActive.map((s) => norm(s.topic))).size;
+    if (distinctTopics >= limit) {
+      return reply.code(403).send({
+        status: 'error',
+        code: 'QUOTA_EXCEEDED',
+        data: { tier, limit, current: distinctTopics },
       });
     }
     const sub = await prisma.curation_subscriptions.create({
