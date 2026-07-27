@@ -734,7 +734,11 @@
   #ytSheet .yts-card{position:relative; width:100%; max-width:480px; background:var(--paper-hi,#FAF6EC);
     border-radius:22px 22px 0 0; padding:12px 24px calc(16px + var(--sab)); box-shadow:0 -14px 44px rgba(30,27,22,.30);
     transform:translateY(103%); transition:transform .42s var(--spring); display:flex; flex-direction:column; gap:15px;
-    text-align:center; min-height:48vh; max-height:78vh; overflow-y:auto; justify-content:flex-start}
+    text-align:center; height:58vh; overflow-y:auto; justify-content:flex-start}
+  /* One sheet height for every state. min/max let content drive the height, so each
+     sheet rose to a different point (measured: hub+connect 48vh, proposals 53vh,
+     action rows 58vh). 58vh covers the tallest measured state; anything longer
+     scrolls inside the card instead of resizing it. #ytsBody centers short content. */
   #ytSheet .yts-card.dragging{transition:none}
   #ytsBody{display:flex; flex-direction:column; gap:15px; flex:1; justify-content:center}
   body.ytsheet #ytSheet{opacity:1; pointer-events:auto}
