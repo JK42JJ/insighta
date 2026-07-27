@@ -33,7 +33,8 @@ describe('judgeTopics — verdict mapping', () => {
 
     const out = await judgeTopics(
       ['자바스크립트', 'ai 란제리 룩북', 'carol of the bells'],
-      fetchImpl
+      fetchImpl,
+      KEY
     );
     expect(out[0]!).toMatchObject({ safe: true, learnable: true, degraded: false });
     expect(out[1]!).toMatchObject({ safe: false, learnable: false });
