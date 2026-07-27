@@ -25,7 +25,12 @@ function esc(s: string): string {
 
 /** Clean white outer + polished cream card (matches the mockup). */
 function shell(pill: { label: string; color: string }, inner: string, preview: string): string {
-  return `<div style="display:none;max-height:0;overflow:hidden">${preview}</div>
+  // nodemailer already sends `Content-Type: text/html; charset=utf-8`, so delivery
+  // is fine without this. It matters once the body is rendered on its own -- a
+  // "view in browser" link, a forwarded copy, a saved .html -- where the Korean
+  // becomes mojibake with no declared charset.
+  return `<meta charset="utf-8">
+<div style="display:none;max-height:0;overflow:hidden">${preview}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;margin:0;padding:22px 0">
   <tr><td align="center">
     <table role="presentation" width="464" cellpadding="0" cellspacing="0" style="width:464px;max-width:94%;background:${CREAM};border:2px solid ${INK};border-radius:18px;overflow:hidden;font-family:${FONT}">
@@ -348,10 +353,22 @@ export function buildMobileGuideEmail(params: MobileGuideEmailParams): {
       <div style="font-size:12px;color:${MUTED};margin-top:10px;padding-top:10px;border-top:1px dashed #d7d3c6;line-height:1.6">추가한 아이콘으로 열면 주소창 없이 앱처럼 넓게 쓸 수 있어요.</div>
     </td></tr>
   </table>`;
+  // Order follows what the app actually shows a new account: the dial opens on
+  // the curation tab, which asks to connect YouTube, then proposes topics. A
+  // guide that starts with mandala playback describes a screen the user has to
+  // go looking for.
   const useRows = [
-    ['가운데 버튼으로 재생', '만다라를 열고 가운데 버튼을 누르면 노트가 이어서 재생돼요.'],
-    ['다이얼로 앞뒤 이동', '휠을 돌리면 대목을 앞뒤로, MENU로 뒤로 나가요. 원하는 부분만 골라서.'],
-    ['눈으로도 읽기', '위쪽 책 아이콘을 누르면 같은 노트를 문서로 읽을 수 있어요.'],
+    ['유튜브 연결', '처음 열면 연결부터 물어봐요. 보시던 채널을 읽어 취향을 잡습니다.'],
+    ['주제 고르기', '추천 주제 카드를 옆으로 넘겨 하나 고르세요. 직접 입력해도 됩니다.'],
+    [
+      '매주 받아보기',
+      '고른 주제의 새 영상이 매주 모여요. 휠을 돌려 넘기고 가운데 버튼으로 재생합니다.',
+    ],
+    [
+      '채널로 받기',
+      '주제 대신 채널을 고를 수도 있어요. 목록에서 이름 옆 · · · 를 누르면 나옵니다.',
+    ],
+    ['노트로 읽기', '영상에서 만든 노트는 노트 탭에서 문서로 읽을 수 있어요.'],
   ]
     .map(
       ([t, d], i) =>
@@ -370,23 +387,23 @@ export function buildMobileGuideEmail(params: MobileGuideEmailParams): {
     <tr><td style="padding:14px 26px 2px;text-align:center">${mascot('mascot-welcome.gif')}</td></tr>
     <tr><td style="padding:8px 30px 2px;text-align:center">
       ${heading('내 유튜브에서', '필요한 정보만')}
-      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">만든 노트를 이제 모바일 다이얼로 어디서나. 먼저 홈 화면에 추가하면 다음부터 한 번에 열려요.</div>
+      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">보고 싶은 주제만 정해두면, 매주 새 영상이 모입니다. 먼저 홈 화면에 추가하면 다음부터 한 번에 열려요.</div>
     </td></tr>
     <tr><td style="padding:16px 30px 6px">${installBox}</td></tr>
     <tr><td style="padding:6px 30px 2px">
-      <div style="font-size:11px;font-weight:800;letter-spacing:.12em;color:${MUTED};text-transform:uppercase">홈에 추가한 뒤, 이렇게 써요</div>
+      <div style="font-size:11px;font-weight:800;letter-spacing:.12em;color:${MUTED};text-transform:uppercase">홈에 추가한 뒤, 순서대로</div>
     </td></tr>
     <tr><td style="padding:2px 30px 30px">
       <table role="presentation" width="100%">${useRows}</table>
-      <div style="text-align:center;margin-top:24px">${cta('다이얼 열어보기', url, INDIGO)}</div>
-      <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">로그인 없이 바로 둘러볼 수 있어요.</div>
+      <div style="text-align:center;margin-top:24px">${cta('시작하기', url, INDIGO)}</div>
+      <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">주제를 받으려면 로그인이 필요해요. 샘플은 로그인 없이 들어볼 수 있습니다.</div>
     </td></tr>`;
   return {
-    subject: '내 유튜브에서 필요한 정보만 — 다이얼 사용 안내',
+    subject: '보고 싶은 주제만, 매주 — 시작 안내',
     html: shell(
       { label: 'GUIDE', color: INDIGO },
       inner,
-      '홈 화면에 추가하고, 다이얼로 어디서나 이어서.'
+      '홈 화면에 추가하고, 주제를 고르면 매주 새 영상이 모입니다.'
     ),
   };
 }
