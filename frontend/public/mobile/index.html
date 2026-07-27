@@ -471,7 +471,7 @@
      (my accent button rendered with no background). Define once here for all sheets. */
   #ytSheet{--acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30}
   /* DIAL wordmark — shared sheet header identity (James-approved guest-sheet look) */
-  .yts-brand{text-align:center; font-size:11px; font-weight:700; letter-spacing:.3em; color:#b7a988; text-transform:uppercase; margin:0 0 12px}
+  .yts-brand{flex:none; text-align:center; font-size:11px; font-weight:700; letter-spacing:.3em; color:#b7a988; text-transform:uppercase; margin:0 0 12px}
   .yts-custom{display:flex; gap:8px; margin-top:8px; align-items:stretch}
   .yts-custom input{flex:1; min-width:0; border:none; border-radius:13px; padding:13px 14px; font-family:inherit; font-size:14.5px; font-weight:600; color:var(--paper-ink); background:#fff; box-shadow:inset 0 0 0 1.5px rgba(94,86,72,.18)}
   .yts-custom input:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
@@ -754,6 +754,16 @@
   body.ytsheet #ytSheet{opacity:1; pointer-events:auto}
   body.ytsheet #ytSheet .yts-card{transform:translateY(0)}
   #ytSheet .yts-grip{width:38px; height:4px; border-radius:99px; background:rgba(94,86,72,.22); margin:0 auto; flex:none}
+  /* Retune lives as an icon in the sheet's top-right corner rather than as a
+     full-width row in the foot: same action, ~40px of vertical budget back, and
+     it reads as "try again" instead of competing with the primary input. */
+  #ytSheet .yts-retry{position:absolute; top:14px; right:16px; width:34px; height:34px; display:none;
+    align-items:center; justify-content:center; border:none; border-radius:99px; padding:0;
+    background:rgba(94,86,72,.07); color:var(--paper-sub); cursor:pointer;
+    -webkit-tap-highlight-color:transparent; touch-action:manipulation; transition:opacity .2s ease}
+  body.ytsheet.propsheet #ytSheet .yts-retry{display:flex}
+  #ytSheet .yts-retry:active{transform:scale(.94)}
+  #ytSheet .yts-retry[disabled]{opacity:.32; pointer-events:none}
   #ytSheet .yts-exit{border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:750;
     color:var(--paper-sub); cursor:pointer; padding:10px 8px 2px; touch-action:manipulation; align-self:center}
   .yts-h{font-size:20px; font-weight:850; color:var(--paper-ink); line-height:1.35; letter-spacing:-.01em; margin-top:4px}
@@ -775,7 +785,14 @@
      which the padding is shrinking — and the end cards sit clipped against the
      edge (measured -32px / +47px off centre). */
   #ytSheet{--yts-card-w:min(72vw,268px)}
-  .yts-props{display:flex; gap:10px; margin-top:2px; overflow-x:auto; overflow-y:hidden;
+  /* flex:none is load-bearing. `overflow-y:hidden` makes this item's automatic
+     minimum size resolve to ZERO, so without it the deck is the first thing flex
+     shrinks when the sheet is short -- and being overflow-hidden it then clips
+     the card silently, mid-title, instead of letting #ytsBody scroll. Reported
+     on a real phone at build 27; the earlier measurement missed it because it
+     read the CARD's overflow, which was 0 precisely BECAUSE the deck was
+     already crushed. */
+  .yts-props{flex:none; display:flex; gap:10px; margin-top:2px; overflow-x:auto; overflow-y:hidden;
     scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none;
     padding:2px calc(50% - var(--yts-card-w)/2) 4px;
     scroll-padding-inline:calc(50% - var(--yts-card-w)/2)}
@@ -1489,6 +1506,7 @@
     <div class="yts-bd" id="ytsBd"></div>
     <div class="yts-card" role="dialog" aria-modal="true" aria-label="유튜브 연결">
       <div class="yts-grip"></div>
+      <button class="yts-retry" id="ytsRetune" type="button" aria-label="다른 주제 보기"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.1-6.8"/><path d="M21 4v5h-5"/></svg></button>
       <div class="yts-brand">DIAL</div>
       <div id="ytsBody"></div>
       <!-- Actions live outside the scroll area so they stay reachable no matter how
@@ -1533,7 +1551,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-27-27';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-27-28';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2080,7 +2098,7 @@
   // YouTube play glyph — the G logo pairs only with Google sign-in copy, not a YouTube connect CTA.
   var YT_TUBE_SVG='<svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="4.5" width="21" height="15" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg>';
   function openYtSheet(){ document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
-  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet','hubsheet','goalsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true');
+  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet','hubsheet','goalsheet','propsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true');
     // Drop the pinned actions too, so the next sheet never opens showing the
     // previous state's buttons for a frame.
     var f=document.getElementById('ytsFoot'); if(f){ f.innerHTML=''; f.hidden=true; }
@@ -2099,6 +2117,7 @@
   function rowActionSheet(surface, item){
     var acts=ROW_ACTIONS[surface]; if(!acts||!acts.length) return;
     var body=document.getElementById('ytsBody'); if(!body) return;
+    setSheetFoot('');
     body.innerHTML='';
     var h=document.createElement('div'); h.className='yts-h2';
     h.textContent=item.topic||item.title||'항목'; body.appendChild(h);
@@ -2134,8 +2153,12 @@
     b.innerHTML='<div class="yts-load"><div class="yts-spin"></div>'
       +'<div class="yts-sub">'+curEsc(msg||'개인 추천을 확인하는 중이에요')+'</div></div>';
   }
-  /** Fill (or clear) the pinned action area below the scrolling body. */
+  /** Fill (or clear) the pinned action area below the scrolling body.
+   *  Also the single chokepoint that clears `propsheet` (the retry icon lives in
+   *  the sheet shell, so it would otherwise survive into every later state).
+   *  ytRenderProposals re-adds it immediately after its own call. */
   function setSheetFoot(html){
+    document.body.classList.remove('propsheet');
     var f=document.getElementById('ytsFoot'); if(!f) return;
     f.innerHTML=html||'';
     f.hidden=!html;
@@ -2223,9 +2246,10 @@
     b.innerHTML=h;
     setSheetFoot(
       '<div class="yts-custom"><input type="text" id="ytCustomTopic" maxlength="40" placeholder="직접 주제 입력" autocomplete="off"><button class="yts-cadd" id="ytCustomAdd" type="button">추가</button></div>'
-      +'<button class="yts-ghost" id="ytsRetune"'+(ytRetuneSpent?' disabled style="opacity:.4"':'')+'>'
-      +(ytRetuneSpent?'지금은 이게 최선이에요':'다른 주제 보기')+'</button>'
     );
+    // The retry icon is part of the sheet shell, not the foot, so it survives
+    // innerHTML replacement; `propsheet` is what reveals it.
+    document.body.classList.add('propsheet');
     ytPropIdx=0; ytSyncProps();
     [].forEach.call(b.querySelectorAll('.yts-prop'),function(btn,i){
       btn.onclick=function(){
@@ -2245,7 +2269,11 @@
     if(ca) ca.onclick=ytCustomSubmit;
     if(ci) ci.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); ytCustomSubmit(); } });
     var rt=document.getElementById('ytsRetune');
-    if(rt&&!ytRetuneSpent) rt.onclick=function(){ ytRenderTuning(ytLastProps.map(function(p){ return p.topic; })); };
+    if(rt){
+      rt.disabled=!!ytRetuneSpent;
+      rt.setAttribute('aria-label', ytRetuneSpent?'지금은 이게 최선이에요':'다른 주제 보기');
+      rt.onclick=ytRetuneSpent?null:function(){ ytRenderTuning(ytLastProps.map(function(p){ return p.topic; })); };
+    }
   }
 
   // ── proposal deck: wheel/finger share one focused index ──────────────────
