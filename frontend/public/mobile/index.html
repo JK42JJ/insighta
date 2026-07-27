@@ -454,10 +454,13 @@
   .fin-next:active{transform:scale(.96)}
   .fin-next b{font-weight:750}
 
-  /* ---- 목표 입력 ---- */
-  .goal-ov{position:absolute; inset:0; z-index:7; display:none; flex-direction:column; justify-content:center;
-    background:linear-gradient(175deg,#FAF6ECf2,#F6F2E7f5); padding:20px}
-  .goal-ov.show{display:flex}
+  /* ---- goal input (sheet panel) ----
+     Lives inside #ytSheet .yts-card as a sibling of #ytsBody. The card owns the
+     slide-up/backdrop grammar, so this panel is plain flow content: no position,
+     no backdrop, no z-index of its own. body.goalsheet swaps which panel shows. */
+  .goal-ov{display:none; flex-direction:column; gap:0}
+  body.goalsheet #ytSheet .goal-ov{display:flex; flex:1; justify-content:center}
+  body.goalsheet #ytsBody{display:none}   /* one panel at a time */
   .go-title{font-size:14px; font-weight:750; text-align:center}
   .go-body{margin-top:13px}
   #goalInput{width:100%; border:none; border-radius:13px; padding:13px 14px; font-family:inherit;
@@ -481,6 +484,10 @@
   .go-cancel{background:rgba(255,255,255,.7); color:var(--paper-sub); box-shadow:inset 0 0 0 1px rgba(94,86,72,.16)}
   .go-make{background:var(--ui); color:#fff; box-shadow:0 4px 10px -4px rgba(0,0,0,.35)}
   .go-cancel:active,.go-make:active{transform:scale(.95)}
+  /* wheel focus ring — parity with .mrow.sel in the hub panel */
+  #goalInput.sel{box-shadow:inset 0 0 0 2px var(--acc)}
+  .go-cancel.sel,.go-make.sel{box-shadow:0 0 0 2px var(--acc), 0 4px 10px -4px rgba(0,0,0,.35)}
+  .wheel.touching ~ * .go-cancel,.wheel.touching ~ * .go-make{pointer-events:none} /* mistouch guard while scrubbing */
   .go-progress{display:flex; flex-direction:column; align-items:center; gap:11px; margin-top:15px}
   .go-progress[hidden],.go-body[hidden]{display:none}
   [hidden]{display:none !important} /* display 클래스가 hidden을 이기는 사고 방지 (§7b) */
@@ -727,7 +734,11 @@
   #ytSheet .yts-card{position:relative; width:100%; max-width:480px; background:var(--paper-hi,#FAF6EC);
     border-radius:22px 22px 0 0; padding:12px 24px calc(16px + var(--sab)); box-shadow:0 -14px 44px rgba(30,27,22,.30);
     transform:translateY(103%); transition:transform .42s var(--spring); display:flex; flex-direction:column; gap:15px;
-    text-align:center; min-height:48vh; max-height:78vh; overflow-y:auto; justify-content:flex-start}
+    text-align:center; height:58vh; overflow-y:auto; justify-content:flex-start}
+  /* One sheet height for every state. min/max let content drive the height, so each
+     sheet rose to a different point (measured: hub+connect 48vh, proposals 53vh,
+     action rows 58vh). 58vh covers the tallest measured state; anything longer
+     scrolls inside the card instead of resizing it. #ytsBody centers short content. */
   #ytSheet .yts-card.dragging{transition:none}
   #ytsBody{display:flex; flex-direction:column; gap:15px; flex:1; justify-content:center}
   body.ytsheet #ytSheet{opacity:1; pointer-events:auto}
@@ -1374,21 +1385,6 @@
         </div>
       </div>
 
-      <!-- 목표 입력 -->
-      <div class="goal-ov" id="goalOv">
-        <div class="go-title" id="goTitle">무엇을 배우고 싶나요?</div>
-        <div class="go-body" id="goBody">
-          <input id="goalInput" type="text" maxlength="80" placeholder="예: 처음부터 시작하는 수채화" autocomplete="off">
-          <div class="go-actions">
-            <button class="go-cancel" id="goCancel">닫기</button>
-            <button class="go-make" id="goMake">만들기</button>
-          </div>
-        </div>
-        <div class="go-progress" id="goProgress" hidden>
-          <div class="pulse"></div>
-          <div class="go-msg" id="goMsg">만다라 구조를 그리는 중…</div>
-        </div>
-      </div>
     </div>
 
     <!-- Slider bead on the epaper card's bottom edge — sibling of .epaper so the
@@ -1461,6 +1457,24 @@
       <div class="yts-grip"></div>
       <div class="yts-brand">DIAL</div>
       <div id="ytsBody"></div>
+      <!-- Goal wizard — a PANEL of the same sheet (not a separate fixed overlay), so the
+           start hub -> goal path keeps one grammar. Sibling of #ytsBody (never inside it):
+           the render fns replace #ytsBody.innerHTML, which would destroy these ids and the
+           streaming handlers that hold them. -->
+      <div class="goal-ov" id="goalOv">
+        <div class="go-title" id="goTitle">무엇을 배우고 싶나요?</div>
+        <div class="go-body" id="goBody">
+          <input id="goalInput" type="text" maxlength="80" placeholder="예: 처음부터 시작하는 수채화" autocomplete="off">
+          <div class="go-actions">
+            <button class="go-cancel" id="goCancel">닫기</button>
+            <button class="go-make" id="goMake">만들기</button>
+          </div>
+        </div>
+        <div class="go-progress" id="goProgress" hidden>
+          <div class="pulse"></div>
+          <div class="go-msg" id="goMsg">만다라 구조를 그리는 중…</div>
+        </div>
+      </div>
       <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>돌아가기</button>
     </div>
   </div>
@@ -1480,7 +1494,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-24-25';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-27-26';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2027,7 +2041,7 @@
   // YouTube play glyph — the G logo pairs only with Google sign-in copy, not a YouTube connect CTA.
   var YT_TUBE_SVG='<svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="4.5" width="21" height="15" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg>';
   function openYtSheet(){ document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
-  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet','hubsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true'); }
+  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet','hubsheet','goalsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true'); }
   var RMORE_SVG='<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
   // Per-surface row actions — RELOCATION of existing actions, never invention.
   // New actions are James-gated (video/note mandala rows have no existing action yet).
@@ -2069,7 +2083,7 @@
   function ytRenderConnect(){
     var b=document.getElementById('ytsBody'); if(!b) return;
     b.innerHTML='<div class="yts-h">보던 유튜브가,<br>나만의 목표 지도로</div>'
-      +'<div class="yts-sub">자주 머무는 주제 세 갈래를<br>다이얼에 맞춰 드려요.</div>'
+      +'<div class="yts-sub">자주 머무는 주제로<br>추천해 드려요.</div>'
       +'<button class="yts-cta" id="ytsGo">'+YT_TUBE_SVG+'<span>유튜브 연결하기</span></button>'
       +'<div class="yts-safe">나중에 연결해도 괜찮아요</div>';
     var g=document.getElementById('ytsGo'); if(g) g.onclick=ytHandoff;
@@ -2099,8 +2113,8 @@
   var ytLastProps=[], ytRetuneSpent=false;
   function ytRenderTuning(excludeTopics){
     var b=document.getElementById('ytsBody'); if(!b) return;
-    b.innerHTML='<div class="yts-tune"><div class="yts-dial"></div><div class="yts-tune-t" id="ytsTuneT">다이얼을 맞추는 중…</div></div>';
-    var lines=['다이얼을 맞추는 중…','주파수가 잡히고 있어요'];
+    b.innerHTML='<div class="yts-tune"><div class="yts-dial"></div><div class="yts-tune-t" id="ytsTuneT">개인 추천을 확인하는 중이에요</div></div>';
+    var lines=['개인 추천을 확인하는 중이에요','자주 보신 주제를 살펴보는 중이에요'];
     var i=0;
     var iv=setInterval(function(){ i=(i+1)%lines.length; var e=document.getElementById('ytsTuneT'); if(e){ e.textContent=lines[i]; } else { clearInterval(iv); } },1500);
     ytPollProposals(0,function(props){ clearInterval(iv); ytRenderProposals(props, !!excludeTopics); }, excludeTopics);
@@ -2124,13 +2138,13 @@
         return;
       }
       b.innerHTML='<div class="yts-h2">잠시만요</div>'
-        +'<div class="yts-sub">세 갈래를 고르는 중이에요.<br>큐레이션 탭에서 곧 확인할 수 있어요.</div>'
+        +'<div class="yts-sub">개인 추천을 확인하는 중이에요.<br>큐레이션 탭에서 곧 확인할 수 있어요.</div>'
         +'<button class="yts-ghost" id="ytsDone">돌아가기</button>';
       var c=document.getElementById('ytsDone'); if(c) c.onclick=closeYtSheet;
       return;
     }
     ytLastProps=props;
-    var h='<div class="yts-h2">세 갈래가 잡혔어요.<br>하나 골라볼까요.</div><div class="yts-props">';
+    var h='<div class="yts-h2">하나 골라볼까요?</div><div class="yts-props">';
     props.forEach(function(p){
       h+='<button class="yts-prop" data-topic="'+curEsc(p.topic)+'">'
         +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
@@ -2139,7 +2153,7 @@
     h+='</div>';
     h+='<div class="yts-custom"><input type="text" id="ytCustomTopic" maxlength="40" placeholder="직접 주제 입력" autocomplete="off"><button class="yts-cadd" id="ytCustomAdd" type="button">추가</button></div>';
     h+='<button class="yts-ghost" id="ytsRetune"'+(ytRetuneSpent?' disabled style="opacity:.4"':'')+'>'
-      +(ytRetuneSpent?'지금은 이 세 갈래가 최선이에요':'다른 주제 보기')+'</button>';
+      +(ytRetuneSpent?'지금은 이게 최선이에요':'다른 주제 보기')+'</button>';
     b.innerHTML=h;
     [].forEach.call(b.querySelectorAll('.yts-prop'),function(btn){
       btn.onclick=function(){ var t=btn.getAttribute('data-topic'); closeYtSheet(); setHomeTab('curation'); selectCuration(t); };
@@ -3858,6 +3872,7 @@
   function dispatchNotch(dir){
     if(document.body.classList.contains('curdeck')){ cdNav(dir); return; } // deck: 1 detent = 1 card
     if(document.body.classList.contains('hubsheet')){ var hr=hubRows(); if(!hr.length) return; var hx=selHub+dir; if(hx<0||hx>=hr.length){ wheelRubber(dir); return; } selHub=hx; updateSelHub(); return; }
+    if(document.body.classList.contains('goalsheet')){ var gr=goalRows(); if(!gr.length) return; var gx=selGoal+dir; if(gx<0||gx>=gr.length){ wheelRubber(dir); return; } selGoal=gx; updateSelGoal(); return; }
     if(cur==='news'||cur==='invite'){ var sl=document.getElementById(cur==='news'?'newsList':'tkList'); if(sl){ var mx=sl.scrollHeight-sl.clientHeight; if((dir>0&&sl.scrollTop>=mx-1)||(dir<0&&sl.scrollTop<=0)){ wheelRubber(dir); } else { sl.scrollBy({top:dir*Math.max(140, sl.clientHeight*0.7), behavior:'auto'}); } } return; } // sub-screen wheel = scroll the list (instant per notch)
     if(cur==='home'){
       // Curation tab has its own row list — the wheel must follow the ACTIVE tab,
@@ -4089,6 +4104,7 @@
   document.getElementById('bNext').onclick=function(){ if(wheelStole()) return; dispatchNotch(1) };
   function corePress(){
     if(document.body.classList.contains('hubsheet')){ var hr=hubRows(); if(hr[selHub]) hr[selHub].click(); return; }
+    if(document.body.classList.contains('goalsheet')){ var gr=goalRows(); var ge=gr[selGoal]; if(!ge) return; if(ge===goalInput) ge.focus(); else ge.click(); return; }
     if(cur==='login'){ loginRedirect(); return; }
     if(cur==='home'){
       if(homeTab==='curation'){ var ce=curRowEls[curSelIdx]; if(ce) ce.click(); return; }
@@ -4600,14 +4616,20 @@
   };
 
   /* ================= 목표 입력 ================= */
-  var ov=document.getElementById('goalOv'), goBody=document.getElementById('goBody'),
+  var goBody=document.getElementById('goBody'),
       goProg=document.getElementById('goProgress'), goMsg=document.getElementById('goMsg'),
       goTitle=document.getElementById('goTitle'), goalInput=document.getElementById('goalInput');
   function openGoalWizard(){
-    ov.classList.add('show'); goBody.hidden=false; goProg.hidden=true;
+    goBody.hidden=false; goProg.hidden=true;
     goTitle.textContent='무엇을 배우고 싶나요?';
-    setTimeout(function(){goalInput.focus()},60);
+    selGoal=0; document.body.classList.add('goalsheet'); openYtSheet();
+    setTimeout(function(){ updateSelGoal(); goalInput.focus(); },60);
   }
+  // Wheel/core isolation for the goal panel — same contract as body.hubsheet.
+  // Rows = [input, submit, close]; core on the input just focuses it (keyboard opens).
+  var selGoal=0;
+  function goalRows(){ return [goalInput, document.getElementById('goMake'), document.getElementById('goCancel')].filter(Boolean); }
+  function updateSelGoal(){ var r=goalRows(); r.forEach(function(el,i){ el.classList.toggle('sel', i===selGoal); }); }
   // ===== "+" start hub sheet — reuses #ytSheet overlay + body.hubsheet flag (wheel-nav isolated) =====
   var selHub=0;
   function hubRows(){ return Array.prototype.filter.call(document.querySelectorAll('#ytsBody .mrow'), function(el){ return el.tagName==='BUTTON'; }); }
@@ -4617,13 +4639,14 @@
     b.innerHTML='<div class="yts-h" style="margin-bottom:14px">무엇을 시작할까요?</div>'
       +'<button class="mrow" id="hubCur"><span class="lic"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg></span><span class="mtx"><span class="mtt">주간 큐레이션</span><span class="msb">따끈따끈 필요한 영상만 매주</span></span></button>'
       +'<button class="mrow" id="hubGoal"><span class="lic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.6"/></svg></span><span class="mtx"><span class="mtt">목표 만들기</span><span class="msb">핵심만 골라 학습 노트</span></span></button>';
-    document.getElementById('hubGoal').onclick=function(){ closeYtSheet(); openGoalWizard(); };
+    // Panel swap inside the SAME sheet (was: close sheet + open a separate overlay).
+    document.getElementById('hubGoal').onclick=function(){ document.body.classList.remove('hubsheet'); openGoalWizard(); };
     document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet');
       ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderTuning(); } else { ytRenderConnect(); } }).catch(function(){ ytRenderConnect(); }); };
     selHub=0; document.body.classList.add('hubsheet'); openYtSheet(); setTimeout(updateSelHub,0);
   }
   (function(){ var pf=document.getElementById('plusFab'); if(pf) pf.onclick=openHub; })();
-  document.getElementById('goCancel').onclick=function(){ ov.classList.remove('show') };
+  document.getElementById('goCancel').onclick=function(){ closeYtSheet(); };
   async function wizardStream(goal,sessionId,tok){
     var r=await fetch('/api/v1/mandalas/wizard-stream',{
       method:'POST',
@@ -4672,7 +4695,7 @@
       })});
       goMsg.innerHTML='만들어졌어요 — 노트 준비 중<small>카드가 모이면 목록에 떠요</small>';
       loadList();
-      setTimeout(function(){ ov.classList.remove('show'); goalInput.value=''; },1800);
+      setTimeout(function(){ closeYtSheet(); goalInput.value=''; },1800);
     }catch(e){
       goMsg.innerHTML='만들지 못했어요 — 다시 시도해주세요<small>'+esc(String(e.message||e).slice(0,60))+'</small>';
       setTimeout(function(){ goBody.hidden=false; goProg.hidden=true;
