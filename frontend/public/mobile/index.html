@@ -816,6 +816,17 @@
   .yts-prop-t{font-size:15px; font-weight:750; color:var(--paper-ink)}
   .yts-ghost{border:none; background:none; font-family:inherit; font-size:12px; font-weight:700;
     color:var(--paper-sub); cursor:pointer; padding:8px; touch-action:manipulation}
+  /* Followed-channel list. Rows are informational (avatar + name) with one
+     destructive affordance, so they are divs with a button rather than buttons. */
+  .yts-chs{display:flex; flex-direction:column; gap:8px; text-align:left}
+  .yts-ch{display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:13px;
+    background:rgba(255,255,255,.6); box-shadow:inset 0 0 0 1px rgba(94,86,72,.13)}
+  .yts-ch img{width:32px; height:32px; border-radius:99px; flex:none; background:rgba(94,86,72,.1)}
+  .yts-ch .chn{flex:1; min-width:0; font-size:14px; font-weight:700; color:var(--paper-ink);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .yts-ch .chx{flex:none; border:none; background:none; color:var(--paper-sub); font-family:inherit;
+    font-size:12px; font-weight:700; padding:6px 4px; cursor:pointer; touch-action:manipulation}
+  .yts-chempty{font-size:12.5px; font-weight:600; color:var(--paper-sub); line-height:1.7; text-align:center}
   .yts-acct{font-size:13px; font-weight:700; color:var(--paper-ink); background:rgba(94,86,72,.06);
     border-radius:12px; padding:11px 14px; word-break:break-all}
   .yts-danger{border:1px solid var(--acc-lo); background:none; color:var(--acc-ink); font-family:inherit;
@@ -1551,7 +1562,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-27-28';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-27-29';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2107,7 +2118,8 @@
   // Per-surface row actions — RELOCATION of existing actions, never invention.
   // New actions are James-gated (video/note mandala rows have no existing action yet).
   var ROW_ACTIONS={
-    curation:[{ label:'구독 끊기', confirm:'구독을 끊을까요? · 끊기', running:'끊는 중…', err:'끊지 못했어요 — 다시 시도해주세요',
+    curation:[{ label:'채널로 받기', plain:true, run:function(s){ openChannelSheet(s); } },
+      { label:'구독 끊기', confirm:'구독을 끊을까요? · 끊기', running:'끊는 중…', err:'끊지 못했어요 — 다시 시도해주세요',
       run:function(s){ return api('/curations/'+s.id,{method:'DELETE'}).then(function(){
         if(Array.isArray(curCache)) curCache=curCache.filter(function(x){ return x.id!==s.id; }); }); },
       after:function(){ renderCuration(); } }]
@@ -2125,8 +2137,16 @@
     function disarmAll(except){ wrap.querySelectorAll('.ras-btn.confirm').forEach(function(b){
       if(b===except) return; b.classList.remove('confirm'); b.textContent=b.__label; }); }
     acts.forEach(function(a){
-      var btn=document.createElement('button'); btn.className='yts-danger ras-btn'; btn.type='button';
+      var btn=document.createElement('button'); btn.type='button';
       btn.textContent=a.label; btn.__label=a.label;
+      // `plain` actions are navigation, not destruction: no red frame, no arm-then-
+      // confirm. Only the destructive ones keep the 2-step morph (S5 grammar).
+      if(a.plain){
+        btn.className='yts-cta ras-plain';
+        btn.onclick=function(ev){ ev.stopPropagation(); document.body.classList.remove('rasheet'); a.run(item); };
+        wrap.appendChild(btn); return;
+      }
+      btn.className='yts-danger ras-btn';
       btn.onclick=function(ev){ ev.stopPropagation();
         if(!btn.classList.contains('confirm')){ disarmAll(); btn.classList.add('confirm'); btn.textContent=a.confirm; return; }
         btn.disabled=true; btn.textContent=a.running;
@@ -2377,6 +2397,70 @@
   }
   // CREATE path only (from the sheet's proposal pick) — one-time build state in the tab
   // body, then the deck. Existing curations NEVER come through here (no rebuilds).
+  /* ── Channel manager ──────────────────────────────────────────────────────
+     Follow specific channels for one curation: paste a URL/@handle, or remove.
+     Server side is #1367; this is the way in. */
+  var chSubId=null;
+  function chRow(c){
+    return '<div class="yts-ch" data-ch="'+curEsc(c.channel_id)+'">'
+      + (c.thumbnail_url ? '<img src="'+curEsc(c.thumbnail_url)+'" alt="">' : '<img alt="">')
+      + '<span class="chn">'+curEsc(c.channel_title||c.channel_id)+'</span>'
+      + '<button class="chx" type="button" data-rm="'+curEsc(c.channel_id)+'">해제</button></div>';
+  }
+  function chPaint(list, limit, note){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    b.innerHTML='<div class="yts-h2">채널로 받기</div>'
+      + '<div class="yts-sub">고른 채널이 그 주에 올린 영상만 모아 드려요.</div>'
+      + (list.length
+          ? '<div class="yts-chs">'+list.map(chRow).join('')+'</div>'
+          : '<div class="yts-chempty">아직 등록한 채널이 없어요.<br>주소나 @핸들을 붙여넣어 보세요.</div>')
+      + (note ? '<div class="yts-chempty">'+curEsc(note)+'</div>' : '');
+    setSheetFoot('<div class="yts-custom"><input type="text" id="chInput" maxlength="120" placeholder="채널 주소 또는 @핸들" autocomplete="off"'
+      + (limit!=null && list.length>=limit ? ' disabled' : '')
+      + '><button class="yts-cadd" id="chAdd" type="button"'
+      + (limit!=null && list.length>=limit ? ' disabled style="opacity:.4"' : '')+'>추가</button></div>');
+    b.querySelectorAll('[data-rm]').forEach(function(x){
+      x.onclick=function(){ chRemove(x.getAttribute('data-rm')); };
+    });
+    var inp=document.getElementById('chInput'), add=document.getElementById('chAdd');
+    function submit(){
+      var v=(inp&&inp.value||'').trim(); if(v.length<2){ if(inp) inp.focus(); return; }
+      chAddChannel(v);
+    }
+    if(add) add.onclick=submit;
+    if(inp) inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); submit(); } });
+  }
+  async function chLoad(note){
+    try{
+      var r=await api('/curations/'+chSubId+'/channels');
+      var j=await r.json(); var d=(j&&j.data)||{};
+      chPaint(d.channels||[], d.limit, note);
+    }catch(e){ chPaint([], null, '목록을 불러오지 못했어요'); }
+  }
+  async function chAddChannel(input){
+    var b=document.getElementById('ytsBody'); if(b) b.innerHTML='<div class="yts-load"><div class="yts-spin"></div><div class="yts-sub">채널을 찾는 중이에요</div></div>';
+    setSheetFoot('');
+    try{
+      var r=await api('/curations/'+chSubId+'/channels',{method:'POST',body:JSON.stringify({input:input})});
+      if(r.ok){ chLoad(); return; }
+      var j=await r.json().catch(function(){ return {}; });
+      chLoad({CHANNEL_NOT_FOUND:'그 주소로는 채널을 찾지 못했어요',
+              CHANNEL_HAS_NO_UPLOADS:'그 채널에는 업로드 목록이 없어요',
+              CHANNEL_QUOTA_EXCEEDED:'이 요금제에서 등록할 수 있는 채널을 다 채웠어요'}[j&&j.code] || '등록하지 못했어요');
+    }catch(e){ chLoad('등록하지 못했어요'); }
+  }
+  async function chRemove(channelId){
+    try{ await api('/curations/'+chSubId+'/channels/'+encodeURIComponent(channelId),{method:'DELETE'}); }catch(e){}
+    chLoad();
+  }
+  function openChannelSheet(sub){
+    chSubId=sub.id; openYtSheet();
+    var b=document.getElementById('ytsBody');
+    if(b) b.innerHTML='<div class="yts-load"><div class="yts-spin"></div><div class="yts-sub">채널 목록을 여는 중이에요</div></div>';
+    setSheetFoot('');
+    chLoad();
+  }
+
   async function selectCuration(topic){
     var el=document.getElementById('curBody'); if(!el) return;
     el.className='cur-connect';
