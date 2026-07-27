@@ -119,7 +119,9 @@ jobs:
   deploy-edge-functions:
     name: Deploy Edge Functions
     needs: [scope, ci]
-    if: needs.scope.outputs.mobile_only != 'true'
+    # The ref guard matters for workflow_dispatch, which can be started from any
+    # branch; the push trigger is already main-only.
+    if: github.ref == 'refs/heads/main' && needs.scope.outputs.mobile_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
