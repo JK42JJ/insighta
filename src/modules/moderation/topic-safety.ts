@@ -25,28 +25,63 @@
 const BLOCKED = Object.freeze({
   /** Sexual / suggestive. Nothing here is rescuable by educational context. */
   explicit: [
-    '란제리', '룩북', '비키니', '노출의상', '섹시', '야한', '19금', '성인용', '성인물',
-    '글래머', '몸매노출', '벗는', '벗기', '누드', '야동', 'av배우', '유흥',
-    'lingerie', 'lookbook', 'bikini', 'sexy', 'nsfw', 'onlyfans', 'nude', 'hentai',
+    '란제리',
+    '룩북',
+    '비키니',
+    '노출의상',
+    '섹시',
+    '야한',
+    '19금',
+    '성인용',
+    '성인물',
+    '글래머',
+    '몸매노출',
+    '벗는',
+    '벗기',
+    '누드',
+    '야동',
+    'av배우',
+    '유흥',
+    'lingerie',
+    'lookbook',
+    'bikini',
+    'sexy',
+    'nsfw',
+    'onlyfans',
+    'nude',
+    'hentai',
   ],
   /** Gambling / speculation-as-entertainment. */
   gambling: [
-    '카지노', '바카라', '슬롯머신', '토토사이트', '먹튀', '홀덤', '사설betting', '베팅사이트',
-    'casino', 'baccarat', 'betting',
+    '카지노',
+    '바카라',
+    '슬롯머신',
+    '토토사이트',
+    '먹튀',
+    '홀덤',
+    '사설betting',
+    '베팅사이트',
+    'casino',
+    'baccarat',
+    'betting',
   ],
   /** Pump-and-dump style financial solicitation. */
-  solicitation: [
-    '리딩방', '종목추천', '급등주', '코인리딩', '단타비법', '수익인증', '원금보장',
-  ],
+  solicitation: ['리딩방', '종목추천', '급등주', '코인리딩', '단타비법', '수익인증', '원금보장'],
   /** Illegal / harmful. */
   illegal: [
-    '마약', '대마초', '필로폰', '총기제작', '폭탄제조', '해킹툴', '불법다운', '토렌트다운',
-    '자살방법', '자해방법',
+    '마약',
+    '대마초',
+    '필로폰',
+    '총기제작',
+    '폭탄제조',
+    '해킹툴',
+    '불법다운',
+    '토렌트다운',
+    '자살방법',
+    '자해방법',
   ],
   /** Hate / dehumanising. */
-  hate: [
-    '혐오표현', '인종차별', '일베', '패드립',
-  ],
+  hate: ['혐오표현', '인종차별', '일베', '패드립'],
 });
 
 /**
@@ -54,9 +89,26 @@ const BLOCKED = Object.freeze({
  * prevention, education, recovery, journalism.
  */
 const EDUCATIONAL_CONTEXT = Object.freeze([
-  '예방', '교육', '중독', '상담', '치료', '회복', '캠페인', '피해', '대응', '보호',
-  '규제', '정책', '리터러시', '윤리',
-  'prevention', 'education', 'awareness', 'recovery', 'policy', 'ethics',
+  '예방',
+  '교육',
+  '중독',
+  '상담',
+  '치료',
+  '회복',
+  '캠페인',
+  '피해',
+  '대응',
+  '보호',
+  '규제',
+  '정책',
+  '리터러시',
+  '윤리',
+  'prevention',
+  'education',
+  'awareness',
+  'recovery',
+  'policy',
+  'ethics',
 ]);
 
 /** Categories no context can rescue. */
