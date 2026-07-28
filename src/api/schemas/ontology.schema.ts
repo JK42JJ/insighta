@@ -48,6 +48,11 @@ export const NeighborsQuerySchema = z.object({
   relation: z.string().optional(),
 });
 
+export const SubgraphQuerySchema = z.object({
+  mandala_id: z.string().uuid(),
+  depth: z.coerce.number().int().min(1).max(5).default(4),
+});
+
 export const HistoryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
