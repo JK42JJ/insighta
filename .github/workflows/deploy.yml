@@ -225,9 +225,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PREV=$(gh run list --workflow deploy.yml --branch main --limit 20 \
+          # -R explicitly: this step runs before checkout, so there is no git
+          # repo for gh to infer the remote from and it exits 1 -- which the
+          # guard then reported as "the previous deploy failed". The guard was
+          # blocking every fast dial deploy on its own lookup error.
+          PREV=$(gh run list -R "${{ github.repository }}" \
+                   --workflow deploy.yml --branch main --limit 20 \
                    --json databaseId,conclusion,headSha \
-                   --jq "[.[] | select(.databaseId != ${{ github.run_id }}) | select(.conclusion != null and .conclusion != \"cancelled\" and .conclusion != \"skipped\")][0]")
+                   --jq "[.[] | select(.databaseId != ${{ github.run_id }}) | select(.conclusion != null and .conclusion != \"cancelled\" and .conclusion != \"skipped\")][0]") \
+            || { echo "::warning::could not read deploy history; proceeding without the staleness check"; PREV=""; }
           CONC=$(echo "$PREV" | jq -r '.conclusion // "none"')
           SHA=$(echo "$PREV"  | jq -r '.headSha  // "none"')
           echo "previous completed deploy: $CONC ($SHA)"
