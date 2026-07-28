@@ -145,6 +145,17 @@
   .htabs{display:flex; gap:5px; margin-top:4px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
   .htab{flex:1; display:flex; align-items:center; justify-content:center; border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:700; letter-spacing:.01em; color:var(--paper-sub); padding:9px 0; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
   .htab svg{display:block}
+  /* Tab beta marker. 영상 has no relevance ordering yet and 노트 is still
+     settling, so the tab says so rather than letting the first visit discover
+     it.
+
+     No box: the tab row is already a segmented control, and a bordered pill
+     inside one reads as a second control instead of a note about the tab. It
+     inherits the tab's own colour and dims, so there is no second palette to
+     keep in step and it brightens with the tab when that tab becomes active. */
+  .htab .tb{flex:none; align-self:center; margin-left:5px; font-size:8.5px; font-weight:800;
+    letter-spacing:.1em; text-transform:uppercase; line-height:1; opacity:.45}
+  .htab.on .tb{opacity:.55}
   .htab.on{color:var(--paper-ink); background:var(--paper); box-shadow:0 1px 2px rgba(94,86,72,.18)}
   .htab:active{transform:scale(.97)}
   .pane{flex:1; min-height:0; display:flex; flex-direction:column}
@@ -1389,8 +1400,8 @@
       <div class="scr" data-s="home" id="scrHome">
         <div class="htabs" id="htabs">
           <button class="htab on" data-htab="curation" aria-label="큐레이션"><span>큐레이션</span></button>
-          <button class="htab" data-htab="video" aria-label="영상"><span>영상</span></button>
-          <button class="htab" data-htab="note" aria-label="노트"><span>노트</span></button>
+          <button class="htab" data-htab="video" aria-label="영상 (베타)"><span>영상</span><span class="tb" aria-hidden="true">beta</span></button>
+          <button class="htab" data-htab="note" aria-label="노트 (베타)"><span>노트</span><span class="tb" aria-hidden="true">beta</span></button>
         </div>
         <div class="hstrip-clip" id="hstripClip">
           <div class="hstrip" id="hstrip">
@@ -1622,7 +1633,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-28-37';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-28-38';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4475,12 +4486,18 @@
     if(!g('curDeck')) return;
     // summon-anywhere: any deck touch shows the wheel; if it was hidden, CONSUME
     // this tap (capture-phase click block) so it can't fall through as card tap.
-    // The header is chrome, not stage. A tap on the back control is an instruction, not a
-    // summon gesture, so it must not be swallowed by the 450ms consume window
-    // below -- that is what made the back button need two taps to leave the deck.
-    var cdIsChrome=function(t){ return !!(t && t.closest && t.closest('.cd-top')); };
+    //
+    // What the consume is FOR is a tap that would otherwise be read as a stage
+    // or card gesture. A tap on a control is not a gesture — it is an
+    // instruction, and swallowing it makes every control in the deck need two
+    // taps. That is what made 돌아가기 and 소리 켜기 both fail on the first
+    // press. Controls are exempt as a class, so the next control added to the
+    // deck does not inherit the bug.
+    var cdIsControl=function(t){
+      return !!(t && t.closest && t.closest('button,a,[role="button"],input,.cd-top'));
+    };
     g('curDeck').addEventListener('touchstart',function(e){
-      if(cdIsChrome(e.target)) return;
+      if(cdIsControl(e.target)) return;
       var was=cdWheelShow();
       // A2: a fresh summon touch only REVEALS the wheel — it must not operate it.
       // Hold the wheel non-interactive until this touch releases (portrait parity);
@@ -4491,7 +4508,7 @@
       g('curDeck').addEventListener(ev,function(){ document.body.classList.remove('cdsummon'); },{passive:true, capture:true});
     });
     g('curDeck').addEventListener('click',function(e){
-      if(cdIsChrome(e.target)) return;
+      if(cdIsControl(e.target)) return;
       if(Date.now()<cdConsumeUntil){ e.stopPropagation(); e.preventDefault(); }
     },true);
     g('cdBack').onclick=closeCurationDeck;
