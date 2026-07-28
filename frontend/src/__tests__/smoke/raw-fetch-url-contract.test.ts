@@ -60,14 +60,14 @@ describe('Ontology raw-fetch URL contract (useGraphData)', () => {
 
   it('endpoints carry no /api prefix of their own (single-prefix invariant)', () => {
     const endpoints = [...content.matchAll(/fetchWithAuth\(\s*[`'"]([^`'"]+)/g)].map((m) => m[1]);
-    expect(endpoints.length).toBeGreaterThanOrEqual(4); // nodes, edges, subgraph, stats
+    expect(endpoints.length).toBeGreaterThanOrEqual(3); // nodes, subgraph, stats
     for (const endpoint of endpoints) {
       expect(endpoint.startsWith('/')).toBe(true);
       expect(endpoint.startsWith('/api')).toBe(false);
     }
   });
 
-  it('subgraph call matches the BE route + query param name (mandala_id)', () => {
-    expect(content).toContain('/subgraph?mandala_id=');
+  it('user graph call matches the BE route (user-wide /subgraph, no scope param)', () => {
+    expect(content).toContain("fetchWithAuth('/subgraph')");
   });
 });
