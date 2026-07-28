@@ -339,8 +339,16 @@
     background:rgba(94,86,72,.14); display:grid; place-items:center;
     font-size:15px; font-weight:800; color:var(--paper-sub, #7c7a72)}
   .acct .atx{min-width:0; display:flex; flex-direction:column; gap:1px}
+  .acct .anrow{display:flex; align-items:center; gap:7px; min-width:0}
   .acct .an{font-size:14.5px; font-weight:800; color:var(--ink,#232320);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  /* Same badge the web app puts beside the wordmark -- 10px, bold, uppercase,
+     wide tracking, accent at 10% on a 30% border -- in the dial's own accent
+     rather than the app's. The dial carried no beta marker at all. */
+  .acct .abeta{flex:none; font-size:10px; font-weight:800; letter-spacing:.11em;
+    text-transform:uppercase; padding:2px 7px; border-radius:7px;
+    color:var(--acc-lo,#CE5F30); background:rgba(206,95,48,.10);
+    border:1px solid rgba(206,95,48,.30)}
   .acct .ae{font-size:11.5px; font-weight:600; color:var(--paper-sub,#7c7a72);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .menu-note{font-size:9px; color:var(--paper-sub); font-weight:600; text-align:center; margin-top:auto; padding-top:8px}
@@ -4263,7 +4271,9 @@
     el.innerHTML=(id.avatar
         ? '<img class="av" src="'+esc(id.avatar)+'" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'av\',textContent:'+JSON.stringify(initial)+'}))">'
         : '<span class="av">'+esc(initial)+'</span>')
-      +'<span class="atx"><span class="an">'+esc(id.name)+'</span><span class="ae">'+esc(id.email)+'</span></span>';
+      +'<span class="atx"><span class="anrow"><span class="an">'+esc(id.name)+'</span>'
+      +'<span class="abeta">beta</span></span>'
+      +'<span class="ae">'+esc(id.email)+'</span></span>';
   }
   function ytPaintMenuAccount(){
     renderAccountRow();
