@@ -316,6 +316,7 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       select: {
         id: true,
         topic: true,
+        display_title: true,
         source: true,
         weekday: true,
         last_run_at: true,
@@ -620,6 +621,51 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.send({
         status: 'ok',
         data: { weekday, updated: updated.count, nextRunAt: nextRun.toISOString() },
+      });
+    }
+  );
+
+  /**
+   * PATCH /curations/:id — rename.
+   *
+   * Writes display_title, never topic. topic doubles as the discover query, so
+   * renaming through it would quietly change which videos arrive next week; a
+   * rename has to be able to mean only "call it this". An empty string clears
+   * the override and the original name comes back.
+   */
+  fastify.patch<{ Params: { id: string }; Body: { title?: unknown } }>(
+    '/:id',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const owned = await requireOwnedSubscription(request, reply);
+      if (!owned) return;
+      const raw = typeof request.body?.title === 'string' ? request.body.title.trim() : null;
+      if (raw === null) {
+        return reply.code(400).send({ status: 'error', code: 'TITLE_REQUIRED' });
+      }
+      if (raw.length > 60) {
+        return reply.code(400).send({ status: 'error', code: 'TITLE_TOO_LONG' });
+      }
+      const prisma = getPrismaClient();
+      // Rename every row of a display-deduped topic, or the legacy duplicates
+      // keep the old name and it reappears on the next list.
+      const sub = await prisma.curation_subscriptions.findUnique({
+        where: { id: owned.id },
+        select: { topic: true },
+      });
+      const key = (sub?.topic ?? '').trim().toLowerCase();
+      const siblings = await prisma.curation_subscriptions.findMany({
+        where: { user_id: owned.userId, is_active: true },
+        select: { id: true, topic: true },
+      });
+      const ids = siblings.filter((x) => x.topic.trim().toLowerCase() === key).map((x) => x.id);
+      const updated = await prisma.curation_subscriptions.updateMany({
+        where: { id: { in: ids.length ? ids : [owned.id] } },
+        data: { display_title: raw.length ? raw : null },
+      });
+      return reply.send({
+        status: 'ok',
+        data: { id: owned.id, title: raw.length ? raw : null, updated: updated.count },
       });
     }
   );

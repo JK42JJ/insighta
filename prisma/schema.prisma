@@ -644,6 +644,11 @@ model curation_subscriptions {
   id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id     String           @db.Uuid
   topic       String
+  /// What the user renamed it to. `topic` doubles as the discover query, so
+  /// writing a new name into it would quietly change which videos arrive next
+  /// week -- a rename has to be able to mean only "call it this".
+  /// Null = show `topic`. Raw SQL DDL: prisma/migrations/curation-rename/001_display_title.sql
+  display_title String?
   cadence     String           @default("weekly") @db.VarChar(12)
   /// discover | youtube_subs | hybrid — D5, default discover (flag-expandable)
   source      String           @default("discover") @db.VarChar(16)
