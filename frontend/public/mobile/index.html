@@ -956,6 +956,19 @@
     box-shadow:0 6px 18px rgba(0,0,0,.35); display:none; pointer-events:none}
   body.curdeck.cdhint .cd-hint{display:block}
   .cd-top{display:flex; align-items:center; gap:8px; padding:2px 4px 8px}
+  /* Week chips — one horizontal row, newest first, the way a chip row reads
+     everywhere else. Scrolls rather than wraps: a second line would push the
+     feed down by a whole row on the weeks nobody is looking at. */
+  .cd-weeks{display:flex; gap:6px; padding:0 4px 8px; overflow-x:auto; overflow-y:hidden;
+    scrollbar-width:none; -webkit-overflow-scrolling:touch; flex:none}
+  .cd-weeks::-webkit-scrollbar{display:none}
+  .cd-wk{flex:none; font-family:inherit; font-size:11.5px; font-weight:700; letter-spacing:-.01em;
+    padding:6px 12px; border-radius:999px; cursor:pointer; white-space:nowrap;
+    -webkit-tap-highlight-color:transparent; transition:background .18s, color .18s, opacity .18s;
+    border:1px solid var(--cd-chip-edge); background:var(--cd-chip-bg); color:var(--cd-chip-ink)}
+  .cd-wk.on{background:var(--cd-chip-on-bg); border-color:transparent; color:var(--cd-chip-on-ink)}
+  .cd-wk:active{transform:scale(.97)}
+  .cd-weeks.busy .cd-wk{opacity:.45; pointer-events:none}
   .cd-back{border:none; background:none; color:#B8AE9E; font-family:inherit; font-size:13px; font-weight:750;
     cursor:pointer; padding:7px 4px; touch-action:manipulation; flex:none}
   .cd-title{flex:1; text-align:center; font-size:14px; font-weight:800; color:#EDE7DC; min-width:0;
@@ -1051,7 +1064,15 @@
     --cd-wheel-fill: rgba(245,242,236,.34);
     --cd-wheel-fill-quiet: rgba(245,242,236,.20);
     --cd-wheel-awake:.95;
-    --cd-wheel-awake-quiet:.6}
+    --cd-wheel-awake-quiet:.6;
+    /* Week chips. Drawn from the deck's own palette (paper ink #EDE7DC on the
+       deck's near-black) so the row reads as part of the header rather than a
+       control borrowed from the light app. */
+    --cd-chip-ink: rgba(237,231,220,.62);
+    --cd-chip-bg: rgba(237,231,220,.07);
+    --cd-chip-edge: rgba(237,231,220,.17);
+    --cd-chip-on-bg: rgba(237,231,220,.93);
+    --cd-chip-on-ink: #1b1a1e}
   /* mini wheel size token — vmin keeps it IDENTICAL in portrait and landscape
      (James: same size in landscape; shared by deck / note-reading / video-stage) */
   :root{--miniwheel: min(40vmin, 168px)}
@@ -1090,7 +1111,7 @@
      layout is invariant across play/pause/nav; only rotation changes it. */
   @media (orientation:landscape){
     body.curdeck #curDeck{padding:0}
-    body.curdeck .cd-top,body.curdeck #cdTrack{display:none}   /* landscape = no portrait header / card track; chrome is overlay-only */
+    body.curdeck .cd-top,body.curdeck .cd-weeks,body.curdeck #cdTrack{display:none}   /* landscape = no portrait header / card track / week chips; chrome is overlay-only */
     /* Pin the stage to the raw viewport so no ancestor padding can offset it. */
     body.curdeck .cd-stage{position:fixed; inset:0; height:100% !important; width:100% !important; border-radius:0; box-shadow:none}
     body.curdeck.cdnav .cd-stage{opacity:1}   /* nav = keep the video full-size in place (crossfade), never fade to the (hidden) poster track */
@@ -1116,6 +1137,15 @@
        feed (thumbnails only) — both fixed here. */
     body.curdeck #curDeck{padding:calc(var(--sat) + 6px) 0 0}          /* feed edge-to-edge (A1) */
     body.curdeck .cd-top{padding:2px 14px 9px; position:relative; z-index:8}  /* header/back above feed + stage */
+    body.curdeck .cd-weeks{padding:0 14px 9px; position:relative; z-index:8}  /* chips share the header band */
+    /* Scrolled into the feed: the header row gives up its height and the chips
+       stay. Two rows of chrome above a video feed is a lot of screen to spend
+       on navigation you are not using while watching -- YouTube collapses the
+       same way. Swiping back down restores it. */
+    body.curdeck.cdhdroff .cd-top{
+      height:0; padding:0 14px; opacity:0; pointer-events:none;
+      overflow:hidden; transition:height .18s ease, opacity .14s ease, padding .18s ease}
+    body.curdeck .cd-top{transition:height .18s ease, opacity .14s ease, padding .18s ease}
     body.curdeck #cdTrack,body.curdeck .cd-hint,body.curdeck .jbar{display:none !important}
     body.curdeck .wheelzone{display:none !important}                   /* W: wheel hidden in portrait deck only */
     body.curdeck .cd-strip{position:absolute; left:0; right:0; top:0; bottom:0; flex:none; overflow:visible; z-index:6; pointer-events:none}
@@ -1142,6 +1172,12 @@
   .cf-prog{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:2; background:rgba(237,231,220,.16)}
   .cf-prog b{display:block; height:100%; width:0; background:#FF3B30}
   .cf-prog.none{display:none}   /* unwatched or duration-less = no line (A3/A4 rule) */
+  /* Once the card is playing, the YouTube player draws its own progress bar a
+     few pixels away. Two bars for one video is not two pieces of information --
+     it is the same fact twice, and they disagree while ours waits for its next
+     poll. Ours is for cards that are NOT playing, where there is no native bar
+     to read: it says "you left off here". */
+  .cf-card.cf-playing .cf-prog{display:none}
   .cf-durchip{position:absolute; right:8px; bottom:8px; z-index:2; background:rgba(10,9,8,.8); color:#EDE7DC;
     font-size:11px; font-weight:700; border-radius:4px; padding:1px 5px; letter-spacing:.02em}
   /* unavailable video (embed disabled / deleted): card-internal label + dim, never a toast */
@@ -1178,6 +1214,7 @@
     body.curdeck #curDeck{padding:0}
     body.curdeck .cd-top{display:flex !important; position:fixed; top:0; left:0; right:0; z-index:10;
       padding:10px 14px; background:linear-gradient(180deg,rgba(0,0,0,.6),transparent)}
+    body.curdeck .cd-weeks{display:none !important}
     body.curdeck #cdFeed{display:block !important; position:absolute; inset:0; overflow:hidden}
     body.curdeck .cf-card:not(.cf-playing){display:none}
     body.curdeck .cf-playing{position:fixed; inset:0; z-index:4; padding:0; background:#000}
@@ -1556,6 +1593,12 @@
       <span class="cd-title" id="cdTitle"></span>
       <span class="cd-count num" id="cdCount"></span>
     </div>
+    <!-- Week chips. Every build keeps the weeks before it, so the history was
+         always in the database; the deck just never asked for it. One line, and
+         the older weeks slide out of sight behind the arrows rather than
+         wrapping onto a second row. Hidden entirely when there is only one
+         week, so a new curation is not given a control that does nothing. -->
+    <div class="cd-weeks" id="cdWeeks" hidden></div>
     <div class="cd-strip" id="cdStrip">
       <div id="cdTrack"></div>
       <div class="cd-stage" id="cdStage">
@@ -1633,7 +1676,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-28-38';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-28-40';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2154,9 +2197,68 @@
       var r=await api('/curations/'+sub.id+'/items');
       var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
       var week=(j&&j.data&&j.data.week_of)||null;
-      if(items.length){ openCurationDeck(sub.topic, items, {subId:sub.id, week:week}); return; }
+      var weeks=(j&&j.data&&j.data.weeks)||[];
+      if(items.length){ openCurationDeck(sub.topic, items, {subId:sub.id, week:week, weeks:weeks}); return; }
       toast('영상을 모으는 중이에요 — 잠시 후 다시 열어주세요');
     }catch(e){ toast('열지 못했어요 — 연결 확인 후 다시 시도해주세요'); }
+  }
+
+  /* ---- week chips ------------------------------------------------------
+     Labels are short enough that five fit without scrolling: Now, w30, w29...
+     The number is the ISO week, which is stable, sorts, and does not shift
+     meaning as time passes the way a relative label does.
+
+     "Now" is decided by the SCHEDULE, not by position: if this week's build has
+     not run yet, the newest week on file IS last week, and labelling it Now
+     would be a lie. It falls through to its week number instead. */
+  function kstThisMonday(){
+    var k=new Date(Date.now()+9*3600e3);              // KST calendar day
+    k.setUTCDate(k.getUTCDate()-((k.getUTCDay()+6)%7));
+    return k.toISOString().slice(0,10);
+  }
+  function isoWeekNo(iso){
+    var d=new Date(iso+'T00:00:00Z');
+    // ISO-8601: the week containing the Thursday of this Mon-Sun week.
+    d.setUTCDate(d.getUTCDate()+3);
+    var jan1=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    return Math.floor((d-jan1)/604800000)+1;
+  }
+  function cdWeekLabel(iso, idx){
+    if(idx===0 && iso===kstThisMonday()) return 'Now';
+    return 'w'+isoWeekNo(iso);
+  }
+
+  function cdRenderWeeks(){
+    var bar=document.getElementById('cdWeeks'); if(!bar) return;
+    var weeks=(cdCtx&&cdCtx.weeks)||[];
+    // One week is not a choice — showing a lone chip would be a control that
+    // cannot do anything.
+    if(weeks.length<2){ bar.hidden=true; bar.innerHTML=''; return; }
+    bar.hidden=false;
+    bar.innerHTML=weeks.map(function(w,i){
+      var on=(w===(cdCtx&&cdCtx.week))?' on':'';
+      return '<button class="cd-wk'+on+'" type="button" data-week="'+w+'">'+cdWeekLabel(w,i)+'</button>';
+    }).join('');
+    var on=bar.querySelector('.cd-wk.on');
+    if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest', inline:'nearest'});
+  }
+
+  async function cdLoadWeek(week){
+    if(!cdCtx||!cdCtx.subId||week===cdCtx.week) return;
+    var bar=document.getElementById('cdWeeks'); if(bar) bar.classList.add('busy');
+    try{
+      var r=await api('/curations/'+cdCtx.subId+'/items?week='+encodeURIComponent(week));
+      var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
+      if(!items.length){ toast('그 주에는 영상이 없어요'); return; }
+      // Re-enter the deck with the other week's items. Going through
+      // openCurationDeck rather than swapping the array keeps players, the
+      // observer and the index reset on one path.
+      var ctx={subId:cdCtx.subId, week:(j&&j.data&&j.data.week_of)||week, weeks:cdCtx.weeks};
+      var topic=cdTopic;
+      cdTeardown();                       // players and cards, but do NOT leave the deck
+      openCurationDeck(topic, items, ctx);
+    }catch(e){ toast('불러오지 못했어요 — 연결 확인 후 다시 시도해주세요'); }
+    finally{ if(bar) bar.classList.remove('busy'); }
   }
   // Not-connected gate (behind-content, never a dead end): slim prompt in the tab body +
   // auto-raise the connect sheet once per session. Tapping the button re-opens the sheet.
@@ -2726,6 +2828,7 @@
     unlockAudio();
     cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
     document.getElementById('cdTitle').textContent=cdTopic;
+    cdRenderWeeks();
     document.body.classList.add('curdeck');
     setTimeout(function(){ document.body.classList.add('cdin'); },20); // D0 crossfade (timeout: rAF throttles in bg tabs)
     // D6 — one-time coachmark until the first wheel/center interaction
@@ -2747,7 +2850,12 @@
     var _mute=document.getElementById('cfMute'); if(_mute) _mute.onclick=function(){ cfToggle(); };
     if(cfIsFeed()){ if(_feed && !_feed.firstChild) cfRender(); cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()) cfCommitPlay(0, false); },160); }
   }
-  function closeCurationDeck(){
+  /* Tear the deck's players and DOM down WITHOUT leaving the deck. Switching
+     weeks needs everything here — otherwise last week's players keep running
+     behind this week's cards — but must not run setHomeTab, which is what
+     "leave the deck" means. Splitting the two is why a week switch does not
+     flash the home screen on its way back in. */
+  function cdTeardown(){
     if(cfIsFeed()) cfCaptureActive(); // A4: save position before stopVideo resets it
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
@@ -2759,6 +2867,9 @@
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
     var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
+  }
+  function closeCurationDeck(){
+    cdTeardown();
     setHomeTab('curation');
   }
   function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
@@ -4512,6 +4623,55 @@
       if(Date.now()<cdConsumeUntil){ e.stopPropagation(); e.preventDefault(); }
     },true);
     g('cdBack').onclick=closeCurationDeck;
+    // Delegated: the chip row is rebuilt on every week switch, so binding the
+    // row once outlives its buttons.
+    g('cdWeeks').addEventListener('click',function(e){
+      var b=e.target.closest&&e.target.closest('.cd-wk'); if(!b) return;
+      cdLoadWeek(b.getAttribute('data-week'));
+    });
+
+    /* Header collapse. Scrolling INTO the feed folds the back/title row away and
+       leaves the week chips; scrolling back toward the top brings it back. The
+       threshold exists so a thumb resting on the feed does not flicker the
+       header on every stray pixel. */
+    (function(){
+      var feed=g('cdFeed'); if(!feed) return;
+      var last=0, HIDE_AFTER=64, DELTA=8;
+      feed.addEventListener('scroll',function(){
+        var y=feed.scrollTop, d=y-last;
+        if(Math.abs(d)<DELTA) return;
+        last=y;
+        // Near the top the header always comes back, whatever the direction --
+        // otherwise a short list can strand it off-screen with nothing left to
+        // scroll up through.
+        document.body.classList.toggle('cdhdroff', d>0 && y>HIDE_AFTER);
+      },{passive:true});
+    })();
+
+    /* Swipe left-to-right = back, the gesture every app already taught people.
+       Portrait only: in landscape the deck is a fullscreen player and a
+       horizontal drag there is a scrub, not a navigation.
+
+       Deliberately NOT started from anywhere: a swipe that begins on the chip
+       row is that row scrolling, and one that begins mid-feed while the feed is
+       moving vertically is a scroll with a wobble in it. */
+    (function(){
+      var deck=g('curDeck'); if(!deck) return;
+      var x0=0, y0=0, live=false;
+      var MIN_X=70, MAX_Y=45;
+      deck.addEventListener('touchstart',function(e){
+        var t=e.touches&&e.touches[0]; if(!t){ live=false; return; }
+        live = window.matchMedia('(orientation:portrait)').matches
+               && !(e.target.closest && e.target.closest('.cd-weeks'));
+        x0=t.clientX; y0=t.clientY;
+      },{passive:true});
+      deck.addEventListener('touchend',function(e){
+        if(!live) return; live=false;
+        var t=e.changedTouches&&e.changedTouches[0]; if(!t) return;
+        var dx=t.clientX-x0, dy=Math.abs(t.clientY-y0);
+        if(dx>=MIN_X && dy<=MAX_Y) closeCurationDeck();
+      },{passive:true});
+    })();
     g('cdFinList').onclick=closeCurationDeck;                    // D4: back to the lineup
     g('cdFinReplay').onclick=function(){ document.body.classList.remove('cdfin'); cdIdx=0; cdRender(); cdPlay(); };
     g('cdPlayBtn').onclick=function(e){ e.stopPropagation(); cdPlay(); };

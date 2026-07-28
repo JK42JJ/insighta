@@ -33,6 +33,10 @@ const log = logger.child({ module: 'api/curations' });
  *  weekly handler); resolves on the KST calendar once the schedule flag is on. */
 const mondayOf = (d: Date): string => curationWeekKey(d);
 
+/** How many past weeks the deck offers. A quarter is far more than anyone
+ *  scrolls back through, and it keeps the chip row from becoming a list. */
+const WEEK_HISTORY_LIMIT = 12;
+
 const ALLOWED_SOURCES = new Set(['discover', 'youtube_subs', 'hybrid']);
 
 /**
@@ -520,22 +524,30 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         return reply.code(404).send({ status: 'error', code: 'CURATION_NOT_FOUND' });
       }
 
-      // Resolve the target week: explicit ?week, else the newest built snapshot.
+      // Which weeks this curation actually has. Every build keeps the weeks
+      // before it, so the history was already there — the deck simply had no
+      // way to ask for it and always showed the newest. Returned with the
+      // items so opening a curation costs one round trip, not two.
+      const built = await prisma.curation_items.findMany({
+        where: { subscription_id: request.params.id },
+        distinct: ['week_of'],
+        orderBy: { week_of: 'desc' },
+        select: { week_of: true },
+        take: WEEK_HISTORY_LIMIT,
+      });
+      const weeks = built.map((b) => b.week_of.toISOString().slice(0, 10));
+
+      // Explicit ?week, else the newest built snapshot. An unknown week is not
+      // silently swapped for the newest: asking for a week that was never built
+      // should come back empty rather than quietly showing a different one.
       let weekOf: Date | null = null;
       if (request.query.week) {
         const d = new Date(request.query.week);
         if (!Number.isNaN(d.getTime())) weekOf = d;
       }
+      if (!weekOf) weekOf = built[0]?.week_of ?? null;
       if (!weekOf) {
-        const latest = await prisma.curation_items.findFirst({
-          where: { subscription_id: request.params.id },
-          orderBy: { week_of: 'desc' },
-          select: { week_of: true },
-        });
-        weekOf = latest?.week_of ?? null;
-      }
-      if (!weekOf) {
-        return reply.send({ status: 'ok', data: { week_of: null, items: [] } });
+        return reply.send({ status: 'ok', data: { week_of: null, weeks: [], items: [] } });
       }
 
       const items = await prisma.curation_items.findMany({
@@ -590,7 +602,7 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       });
       return reply.send({
         status: 'ok',
-        data: { week_of: weekOf.toISOString().slice(0, 10), items: enriched, dropped },
+        data: { week_of: weekOf.toISOString().slice(0, 10), weeks, items: enriched, dropped },
       });
     }
   );
