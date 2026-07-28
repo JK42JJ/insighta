@@ -31,6 +31,11 @@ import { nextKstWeekdayAt } from '@/utils/kst';
 import { collectChannelUploads } from '@/modules/curation/channel-uploads';
 import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 
+/** How far the FIRST channel build looks back. A weekly refresh uses the KST
+ *  week; the build that runs when someone adds a channel uses this, so signing
+ *  up late in the week does not hand them an empty one. */
+const CHANNEL_FIRST_LOOKBACK_DAYS = 7;
+
 const log = logger.child({ module: 'queue/curation-build' });
 
 export interface CurationBuildPayload {
@@ -138,12 +143,23 @@ export async function registerCurationBuildWorker(): Promise<void> {
 
     if (channelMode) {
       // Channel mode — the user named the channels, so there is nothing to
-      // discover and nothing to score. Uploads since this week's Monday (KST),
-      // interleaved so one prolific channel cannot fill the week.
+      // discover and nothing to score. Interleaved so one prolific channel
+      // cannot fill the week.
+      //
+      // The window depends on whether this is the first build. A weekly refresh
+      // wants this KST week, because that is what "this week's videos" means.
+      // The build that runs the moment someone adds a channel wants the last
+      // seven days: it fires on whatever day they happened to sign up, and
+      // "since Monday" on a Friday is four days — often nothing at all, so the
+      // first thing they see is an empty week for a channel they just chose.
+      const firstBuild = sub.last_run_at === null;
+      const since = firstBuild
+        ? new Date(Date.now() - CHANNEL_FIRST_LOOKBACK_DAYS * MS_PER_DAY)
+        : new Date(weekOf);
       const channels = followed;
       picked = await collectChannelUploads({
         channels,
-        since: new Date(weekOf),
+        since,
         limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
         apiKeys: resolveVideosApiKeys(process.env),
       });

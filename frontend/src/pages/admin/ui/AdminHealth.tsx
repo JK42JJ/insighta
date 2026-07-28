@@ -804,6 +804,78 @@ function BatchEnrichCard() {
   );
 }
 
+interface FeatureCheck {
+  key: string;
+  label: string;
+  status: 'ok' | 'warn' | 'fail';
+  detail: string;
+  action?: string;
+}
+
+const FEATURE_DOT: Record<FeatureCheck['status'], string> = {
+  ok: 'bg-green-500',
+  warn: 'bg-yellow-500',
+  fail: 'bg-red-500',
+};
+
+/**
+ * Does the product work right now?
+ *
+ * The panels below this one say the process is up, the database answers, the
+ * disk is not full — all of which were true on 2026-07-28 while curation cards
+ * rendered black and a 20-video week showed three. Every line here is a
+ * measurement of what a user would actually see.
+ */
+function FeatureStatusCard() {
+  const { data, isLoading, dataUpdatedAt } = useQuery({
+    queryKey: ['admin', 'feature-status'],
+    queryFn: () => apiClient.getAdminFeatureStatus(),
+    refetchInterval: 60_000,
+  });
+
+  const checks = data?.data?.checks ?? [];
+  const overall = data?.data?.overall;
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Sparkles className="w-4 h-4 text-muted-foreground" />
+        <h2 className="font-semibold text-foreground">기능 상태</h2>
+        {overall && (
+          <span className={cn('w-2 h-2 rounded-full', FEATURE_DOT[overall])} aria-hidden />
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">
+          {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : '—'}
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground py-2">확인 중…</div>
+      ) : !checks.length ? (
+        <div className="text-sm text-red-400 py-2">상태를 가져오지 못했습니다.</div>
+      ) : (
+        <ul className="space-y-2.5">
+          {checks.map((c) => (
+            <li key={c.key} className="flex gap-2.5">
+              <span
+                className={cn('mt-1.5 w-2 h-2 rounded-full shrink-0', FEATURE_DOT[c.status])}
+                aria-label={c.status}
+              />
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-foreground">{c.label}</div>
+                <div className="text-xs text-muted-foreground">{c.detail}</div>
+                {/* Only shown when something is wrong: a healthy row does not
+                    need a sentence telling you to do nothing. */}
+                {c.action && <div className="text-xs text-yellow-500/90 mt-0.5">→ {c.action}</div>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function AdminHealth() {
   const { data, isLoading, dataUpdatedAt } = useQuery({
     queryKey: ['admin', 'health'],
@@ -832,6 +904,10 @@ export function AdminHealth() {
           Last updated: {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : '—'}
         </span>
       </div>
+
+      {/* First, because it is the question actually being asked. Everything
+          below says the machine is up; this says whether the product works. */}
+      <FeatureStatusCard />
 
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading health data...</div>
