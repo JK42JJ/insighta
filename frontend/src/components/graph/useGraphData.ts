@@ -49,29 +49,20 @@ async function fetchServiceNodes(limit: number = 1000): Promise<OntologyNode[]> 
   return data.data.nodes;
 }
 
-interface ListEdgesResponse {
-  status: string;
-  data: { edges: OntologyEdge[]; total: number };
-}
-
-async function fetchEdges(): Promise<OntologyEdge[]> {
-  const data = (await fetchWithAuth('/edges?domain=service&limit=1000')) as ListEdgesResponse;
-  return data.data.edges;
-}
-
 interface SubgraphResponse {
   status: string;
   data: { nodes: OntologyNode[]; edges: OntologyEdge[]; truncated: boolean };
 }
 
-/** Mandala-scoped subgraph — complete + bounded (server resolves the mandala
- *  root by source_ref and expands via ontology.get_neighbors, depth 4). */
-async function fetchMandalaSubgraph(
-  mandalaId: string
-): Promise<{ nodes: OntologyNode[]; edges: OntologyEdge[]; truncated: boolean }> {
-  const data = (await fetchWithAuth(
-    `/subgraph?mandala_id=${encodeURIComponent(mandalaId)}`
-  )) as SubgraphResponse;
+/** The user's WHOLE knowledge graph (every mandala's structure + every
+ *  placed card, server-side projections included). The active mandala is a
+ *  client-side highlight, not a scope (2026-07-28 scope decision). */
+async function fetchUserGraph(): Promise<{
+  nodes: OntologyNode[];
+  edges: OntologyEdge[];
+  truncated: boolean;
+}> {
+  const data = (await fetchWithAuth('/subgraph')) as SubgraphResponse;
   return data.data;
 }
 
@@ -118,32 +109,20 @@ export function useGraphData(mandalaId?: string | null): {
   isError: boolean;
   error: Error | null;
 } {
-  // Mandala context → complete bounded subgraph from the server. No mandala
-  // (global view) → legacy flat fetch fallback.
+  // ALWAYS the user's whole knowledge graph — the active mandala only drives
+  // the client-side highlight below (2026-07-28 scope decision).
   const subgraphQuery = useQuery({
-    queryKey: GRAPH_QUERY_KEYS.subgraph(mandalaId ?? ''),
-    queryFn: () => fetchMandalaSubgraph(mandalaId!),
+    queryKey: GRAPH_QUERY_KEYS.subgraph('user-wide'),
+    queryFn: fetchUserGraph,
     staleTime: STALE_TIME,
-    enabled: Boolean(mandalaId),
-  });
-  const nodesQuery = useOntologyNodes('service', !mandalaId);
-  const edgesQuery = useQuery({
-    queryKey: GRAPH_QUERY_KEYS.edges(),
-    queryFn: fetchEdges,
-    staleTime: STALE_TIME,
-    enabled: !mandalaId,
   });
 
-  const isLoading = mandalaId
-    ? subgraphQuery.isLoading
-    : nodesQuery.isLoading || edgesQuery.isLoading;
-  const isError = mandalaId ? subgraphQuery.isError : nodesQuery.isError || edgesQuery.isError;
-  const error = mandalaId
-    ? (subgraphQuery.error ?? null)
-    : (nodesQuery.error ?? edgesQuery.error ?? null);
+  const isLoading = subgraphQuery.isLoading;
+  const isError = subgraphQuery.isError;
+  const error = subgraphQuery.error ?? null;
 
-  const rawNodes = mandalaId ? subgraphQuery.data?.nodes : nodesQuery.data;
-  const rawEdges = mandalaId ? subgraphQuery.data?.edges : edgesQuery.data;
+  const rawNodes = subgraphQuery.data?.nodes;
+  const rawEdges = subgraphQuery.data?.edges;
 
   // MUST be referentially stable: GraphCanvas keys its graphology build (and
   // sigma instance lifetime) on this object. Rebuilding it every render was
@@ -166,7 +145,9 @@ export function useGraphData(mandalaId?: string | null): {
     );
     if (!mandalaNode) return new Set<string>();
 
-    // BFS: traverse CONTAINS edges from mandala root to find all structure nodes
+    // BFS from the mandala root over structural relations. PLACED_IN carries
+    // the card placements (server-side projections), so the highlight covers
+    // the mandala's cards too, not just its skeleton.
     const ids = new Set<string>([mandalaNode.id]);
     const queue = [mandalaNode.id];
     while (queue.length > 0) {
@@ -174,7 +155,7 @@ export function useGraphData(mandalaId?: string | null): {
       for (const edge of rawEdges) {
         if (
           edge.source_id === current &&
-          edge.relation === 'CONTAINS' &&
+          (edge.relation === 'CONTAINS' || edge.relation === 'PLACED_IN') &&
           !ids.has(edge.target_id)
         ) {
           ids.add(edge.target_id);
