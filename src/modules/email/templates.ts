@@ -14,6 +14,11 @@ const PERI = '#8f86f2';
 const GREEN = '#31C88A';
 const GOLD = '#F5B932';
 const CREAM = '#FBF8EF';
+/* The dial is its own product with its own colour. Reusing the app's indigo
+ * made the guide read as more Insighta mail; these are the tokens the dial
+ * actually renders with (--acc / --acc-lo in mobile/index.html). */
+const DIAL = '#E0703F';
+const DIAL_DEEP = '#CE5F30';
 const FONT = `'SF Pro Rounded','Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif`;
 
 function esc(s: string): string {
@@ -60,8 +65,44 @@ function mascot(file: string): string {
   return `<img src="${SITE_ORIGIN}/emails/${file}" width="150" height="150" alt="Insighta" style="display:block;margin:0 auto;border:0" />`;
 }
 
-function heading(plain: string, hl: string): string {
-  return `<div style="font-size:25px;font-weight:800;color:${INK};letter-spacing:-.02em;line-height:1.25">${plain} <span style="color:${INDIGO};border-bottom:5px solid ${PERI}">${hl}</span></div>`;
+function heading(
+  plain: string,
+  hl: string,
+  hlColor: string = INDIGO,
+  hlUnder: string = PERI
+): string {
+  return `<div style="font-size:25px;font-weight:800;color:${INK};letter-spacing:-.02em;line-height:1.25">${plain} <span style="color:${hlColor};border-bottom:5px solid ${hlUnder}">${hl}</span></div>`;
+}
+
+/**
+ * Numbered step: a fixed square badge and the text beside it.
+ *
+ * The badge has to be a DIV inside the cell, not the cell itself. A table forces
+ * every cell in a row to the height of the tallest, so a badge drawn as a `td`
+ * stretches into a rectangle whenever its neighbouring text wraps to a second
+ * line — which is what the first send looked like: 1 and 2 square, 3 and 4
+ * stretched. A div keeps its own box, and `vertical-align:middle` centres it
+ * against however tall the text turns out to be.
+ *
+ * `line-height` carries the vertical centring because Outlook ignores
+ * flexbox and `height` on inline content.
+ */
+function stepRow(n: number, title: string, desc: string, accent: string): string {
+  const SIDE = 28;
+  const badge =
+    `<div style="width:${SIDE}px;height:${SIDE}px;line-height:${SIDE - 4}px;` +
+    `border:2px solid ${INK};border-radius:9px;background:#fff;` +
+    `color:${accent};font-weight:800;font-size:13px;text-align:center;` +
+    `mso-line-height-rule:exactly">${n}</div>`;
+  return `<tr><td style="padding:13px 2px;border-top:1px dashed #d7d3c6">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+        <td width="${SIDE}" style="width:${SIDE}px;vertical-align:middle">${badge}</td>
+        <td style="padding-left:14px;vertical-align:middle">
+          <div style="font-size:14.5px;font-weight:800;color:${INK}">${title}</div>
+          <div style="font-size:12.5px;color:${MUTED};margin-top:2px;line-height:1.5">${desc}</div>
+        </td>
+      </tr></table>
+    </td></tr>`;
 }
 
 function cta(label: string, url: string, bg: string): string {
@@ -311,7 +352,10 @@ export function buildMobileGuideEmail(params: MobileGuideEmailParams): {
   subject: string;
   html: string;
 } {
-  const url = params.ctaUrl ?? `${SITE_ORIGIN}/mobile/`;
+  // The landing page, not the app. A mail arrives cold: dropping someone
+  // straight into a running player with no idea what they opened is the wrong
+  // first frame. /dial introduces it and hands off from there.
+  const url = params.ctaUrl ?? `${SITE_ORIGIN}/dial/`;
   // Per-platform install block (leads — the critical first action). Email-safe:
   // table layout, worded steps (no icons that clients strip).
   function platform(badge: string, where: string, steps: string[]): string {
@@ -331,7 +375,7 @@ export function buildMobileGuideEmail(params: MobileGuideEmailParams): {
   }
   const installBox = `<table role="presentation" width="100%" style="border:2px solid ${INK};border-radius:14px;background:#fff">
     <tr><td style="padding:14px 16px 4px">
-      <div style="font-size:15px;font-weight:800;color:${INK}">홈 화면에 앱으로 추가하기</div>
+      <div style="font-size:15px;font-weight:800;color:${INK}">다이얼을 홈 화면에 추가하기</div>
     </td></tr>
     <tr><td style="padding:0 16px 12px">
       <table role="presentation" width="100%">
@@ -370,24 +414,18 @@ export function buildMobileGuideEmail(params: MobileGuideEmailParams): {
     ],
     ['노트로 읽기', '영상에서 만든 노트는 노트 탭에서 문서로 읽을 수 있어요.'],
   ]
-    .map(
-      ([t, d], i) =>
-        `<tr><td style="padding:13px 2px;border-top:1px dashed #d7d3c6">
-          <table role="presentation"><tr>
-            <td style="width:28px;height:28px;border:2px solid ${INK};border-radius:9px;color:${INDIGO};font-weight:800;font-size:13px;text-align:center;background:#fff">${i + 1}</td>
-            <td style="padding-left:14px">
-              <div style="font-size:14.5px;font-weight:800;color:${INK}">${t}</div>
-              <div style="font-size:12.5px;color:${MUTED};margin-top:2px">${d}</div>
-            </td>
-          </tr></table>
-        </td></tr>`
-    )
+    .map(([t, d], i) => stepRow(i + 1, t as string, d as string, DIAL_DEEP))
     .join('');
   const inner = `
-    <tr><td style="padding:14px 26px 2px;text-align:center">${mascot('mascot-welcome.gif')}</td></tr>
-    <tr><td style="padding:8px 30px 2px;text-align:center">
-      ${heading('내 유튜브에서', '필요한 정보만')}
-      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">보고 싶은 주제만 정해두면, 매주 새 영상이 모입니다. 먼저 홈 화면에 추가하면 다음부터 한 번에 열려요.</div>
+    <tr><td style="padding:0">
+      <a href="${url}" style="display:block;text-decoration:none">
+        <img src="${SITE_ORIGIN}/dial/og.png" width="464" alt="다이얼 — 유튜브를 나만의 지식노트로"
+             style="display:block;width:100%;max-width:464px;height:auto;border:0" />
+      </a>
+    </td></tr>
+    <tr><td style="padding:20px 30px 2px;text-align:center">
+      ${heading('찾지 않아도,', '매주 모입니다', DIAL_DEEP, '#F3CDB6')}
+      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:344px;line-height:1.6">주제나 채널을 한 번 정해두면, 그 주에 올라온 영상만 모아 둡니다. 휠을 돌려 넘겨 보세요.</div>
     </td></tr>
     <tr><td style="padding:16px 30px 6px">${installBox}</td></tr>
     <tr><td style="padding:6px 30px 2px">
@@ -395,15 +433,15 @@ export function buildMobileGuideEmail(params: MobileGuideEmailParams): {
     </td></tr>
     <tr><td style="padding:2px 30px 30px">
       <table role="presentation" width="100%">${useRows}</table>
-      <div style="text-align:center;margin-top:24px">${cta('시작하기', url, INDIGO)}</div>
+      <div style="text-align:center;margin-top:24px">${cta('다이얼 열어보기', url, DIAL)}</div>
       <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">주제를 받으려면 로그인이 필요해요. 샘플은 로그인 없이 들어볼 수 있습니다.</div>
     </td></tr>`;
   return {
-    subject: '보고 싶은 주제만, 매주 — 시작 안내',
+    subject: '이번 주 볼 영상만 모아 뒀어요 — 다이얼',
     html: shell(
-      { label: 'GUIDE', color: INDIGO },
+      { label: 'DIAL', color: DIAL_DEEP },
       inner,
-      '홈 화면에 추가하고, 주제를 고르면 매주 새 영상이 모입니다.'
+      '주제를 한 번 정해두면, 그 주에 올라온 영상만 모입니다.'
     ),
   };
 }
