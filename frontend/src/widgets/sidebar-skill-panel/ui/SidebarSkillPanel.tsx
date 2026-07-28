@@ -149,6 +149,17 @@ import {
 
 const USER_VISIBLE_SKILL_TYPES: ReadonlySet<string> = new Set(USER_VISIBLE_SKILL_TYPES_ARRAY);
 
+// Beta-launch lockdown (2026-07-28): newsletter…blog are not ready — rows stay
+// visible for discoverability but cannot be toggled. Remove ids as they ship.
+const BETA_LOCKED_SKILLS: ReadonlySet<string> = new Set([
+  'newsletter',
+  'report',
+  'alert',
+  'recommend',
+  'script',
+  'blog',
+]);
+
 /**
  * UI-only PRO skill entries (no backend SkillId yet). Shown below the
  * free-tier divider with a Lock icon + PRO badge. Click → upgrade toast.
@@ -430,17 +441,23 @@ export function SidebarSkillPanel({ mandalaId }: SidebarSkillPanelProps) {
             const Icon = SKILL_ICONS[skill.id] ?? Sparkles;
             const isEnabled = skillEnabledMap[skill.id] ?? false;
             const isToggling = togglingSkillId === skill.id;
+            const isBetaLocked = BETA_LOCKED_SKILLS.has(skill.id);
 
             return (
               <button
                 key={skill.id}
                 type="button"
-                onClick={() => handleToggleSkill(skill.id)}
-                disabled={isToggling}
+                onClick={() => {
+                  if (!isBetaLocked) handleToggleSkill(skill.id);
+                }}
+                disabled={isToggling || isBetaLocked}
+                aria-disabled={isBetaLocked}
                 className={cn(
                   'flex items-center gap-3 px-4 py-2.5 rounded-md select-none transition-colors duration-150',
-                  'hover:bg-sidebar-accent',
-                  isEnabled ? 'text-sidebar-foreground' : 'text-sidebar-foreground/65',
+                  isBetaLocked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-sidebar-accent',
+                  isEnabled && !isBetaLocked
+                    ? 'text-sidebar-foreground'
+                    : 'text-sidebar-foreground/65',
                   isToggling && 'opacity-50 pointer-events-none'
                 )}
               >
