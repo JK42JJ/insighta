@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { getPrismaClient } from '@/modules/database/client';
 import { config } from '@/config/index';
+import { isTransactionalEmailEnabled } from '@/modules/email/transactional';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'admin/feature-status' });
@@ -188,7 +189,9 @@ async function checkTopicJudge(prisma: ReturnType<typeof getPrismaClient>): Prom
 
 /** Whether anything can be mailed at all. */
 async function checkEmail(prisma: ReturnType<typeof getPrismaClient>): Promise<Check> {
-  const enabled = process.env['TRANSACTIONAL_EMAIL_ENABLED'] === 'true';
+  // Ask the send path's own gate, so this can never report "on" while the
+  // sender considers itself off.
+  const enabled = isTransactionalEmailEnabled();
   const rows = await prisma.$queryRawUnsafe<Array<{ sent: bigint; failed: bigint }>>(`
     SELECT COUNT(*) FILTER (WHERE status = 'sent') AS sent,
            COUNT(*) FILTER (WHERE status = 'failed') AS failed
@@ -203,7 +206,7 @@ async function checkEmail(prisma: ReturnType<typeof getPrismaClient>): Promise<C
     status: !enabled ? 'warn' : failed > 0 ? 'warn' : 'ok',
     detail: enabled
       ? `발송 가능 · 최근 30일 성공 ${sent} / 실패 ${failed}`
-      : 'TRANSACTIONAL_EMAIL_ENABLED 가 꺼져 있습니다',
+      : '발송이 꺼져 있습니다 (TRANSACTIONAL_EMAIL_ENABLED)',
   };
 }
 
