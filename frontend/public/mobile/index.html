@@ -1622,7 +1622,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-28-36';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-28-37';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4475,7 +4475,12 @@
     if(!g('curDeck')) return;
     // summon-anywhere: any deck touch shows the wheel; if it was hidden, CONSUME
     // this tap (capture-phase click block) so it can't fall through as card tap.
-    g('curDeck').addEventListener('touchstart',function(){
+    // The header is chrome, not stage. A tap on the back control is an instruction, not a
+    // summon gesture, so it must not be swallowed by the 450ms consume window
+    // below -- that is what made the back button need two taps to leave the deck.
+    var cdIsChrome=function(t){ return !!(t && t.closest && t.closest('.cd-top')); };
+    g('curDeck').addEventListener('touchstart',function(e){
+      if(cdIsChrome(e.target)) return;
       var was=cdWheelShow();
       // A2: a fresh summon touch only REVEALS the wheel — it must not operate it.
       // Hold the wheel non-interactive until this touch releases (portrait parity);
@@ -4486,6 +4491,7 @@
       g('curDeck').addEventListener(ev,function(){ document.body.classList.remove('cdsummon'); },{passive:true, capture:true});
     });
     g('curDeck').addEventListener('click',function(e){
+      if(cdIsChrome(e.target)) return;
       if(Date.now()<cdConsumeUntil){ e.stopPropagation(); e.preventDefault(); }
     },true);
     g('cdBack').onclick=closeCurationDeck;

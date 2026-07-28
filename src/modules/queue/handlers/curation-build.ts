@@ -31,6 +31,19 @@ import { nextKstWeekdayAt } from '@/utils/kst';
 import { collectChannelUploads } from '@/modules/curation/channel-uploads';
 import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 
+/**
+ * How far back channel mode looks: the last seven days, every time.
+ *
+ * It used to look forward from `weekOf`, which is the Monday the build belongs
+ * to — so the Monday-morning build asked for videos uploaded since a moment
+ * that had just happened and got a nearly empty week, and the build that runs
+ * when someone adds a channel on a Friday got four days. Measured 2026-07-28:
+ * a two-channel curation built one item.
+ *
+ * Seven days is what a weekly delivery means, so seven days is what it asks for.
+ */
+const CHANNEL_LOOKBACK_DAYS = 7;
+
 const log = logger.child({ module: 'queue/curation-build' });
 
 export interface CurationBuildPayload {
@@ -138,12 +151,14 @@ export async function registerCurationBuildWorker(): Promise<void> {
 
     if (channelMode) {
       // Channel mode — the user named the channels, so there is nothing to
-      // discover and nothing to score. Uploads since this week's Monday (KST),
-      // interleaved so one prolific channel cannot fill the week.
+      // discover and nothing to score. Interleaved so one prolific channel
+      // cannot fill the week.
+      //
+      const since = new Date(Date.now() - CHANNEL_LOOKBACK_DAYS * MS_PER_DAY);
       const channels = followed;
       picked = await collectChannelUploads({
         channels,
-        since: new Date(weekOf),
+        since,
         limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
         apiKeys: resolveVideosApiKeys(process.env),
       });

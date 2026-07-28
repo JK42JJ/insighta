@@ -23,8 +23,13 @@ import {
 
 const log = logger.child({ module: 'email/transactional' });
 
-/** Master gate — James flips on for the beta once the send path is verified. */
-function isTransactionalEmailEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+/**
+ * Master gate — James flips on for the beta once the send path is verified.
+ *
+ * Exported so anything that reports on the send path asks this function rather
+ * than reading the variable again with slightly different truthiness rules.
+ */
+export function isTransactionalEmailEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const v = String(env['TRANSACTIONAL_EMAIL_ENABLED'] ?? '')
     .trim()
     .toLowerCase();
