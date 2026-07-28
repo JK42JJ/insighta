@@ -59,6 +59,42 @@ async function resolveCurationTier(
   return approved ? 'pro' : 'free';
 }
 
+/** Store a resolved channel against a subscription. Idempotent: re-adding
+ *  refreshes the display snapshot and leaves `added_via` as first recorded. */
+async function attachChannel(
+  prisma: ReturnType<typeof getPrismaClient>,
+  subscriptionId: string,
+  ch: NonNullable<Awaited<ReturnType<typeof resolveChannel>>>,
+  addedVia: 'manual' | 'picked'
+) {
+  return prisma.curation_channels.upsert({
+    where: {
+      subscription_id_channel_id: { subscription_id: subscriptionId, channel_id: ch.channelId },
+    },
+    create: {
+      subscription_id: subscriptionId,
+      channel_id: ch.channelId,
+      uploads_playlist_id: ch.uploadsPlaylistId,
+      channel_title: ch.title,
+      thumbnail_url: ch.thumbnailUrl,
+      added_via: addedVia,
+    },
+    update: {
+      uploads_playlist_id: ch.uploadsPlaylistId,
+      channel_title: ch.title,
+      thumbnail_url: ch.thumbnailUrl,
+    },
+    select: {
+      id: true,
+      channel_id: true,
+      channel_title: true,
+      thumbnail_url: true,
+      added_via: true,
+      last_seen_at: true,
+    },
+  });
+}
+
 /** Infinity is not JSON — the wire form for "unlimited" is null. */
 const quotaValue = (n: number): number | null => (Number.isFinite(n) ? n : null);
 
@@ -101,13 +137,48 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       topic?: unknown;
       source?: unknown;
       mandalaId?: unknown;
+      channelInput?: unknown;
     };
-    const topic = typeof body.topic === 'string' ? body.topic.trim() : '';
+
+    // Channel-first creation. "I want only the channels I pick, and only what
+    // they upload each week" is a way of STARTING a curation, not something you
+    // bolt onto one you already made -- the first build has to know, or the
+    // user gets a week of discovered videos they never asked for.
+    //
+    // Resolving here (rather than making the client create-then-attach) keeps it
+    // one call and means the subscription is named after the real channel, never
+    // after whatever the user pasted.
+    const channelInput = typeof body.channelInput === 'string' ? body.channelInput.trim() : '';
+    let resolvedChannel: Awaited<ReturnType<typeof resolveChannel>> = null;
+    if (channelInput) {
+      resolvedChannel = await resolveChannel(channelInput, resolveVideosApiKeys(process.env));
+      if (!resolvedChannel) {
+        return reply.code(404).send({
+          status: 'error',
+          code: 'CHANNEL_NOT_FOUND',
+          message: 'Could not resolve that channel',
+        });
+      }
+      if (!resolvedChannel.uploadsPlaylistId) {
+        return reply.code(422).send({
+          status: 'error',
+          code: 'CHANNEL_HAS_NO_UPLOADS',
+          message: 'That channel exposes no uploads playlist',
+        });
+      }
+    }
+
+    const topic = resolvedChannel
+      ? (resolvedChannel.title ?? resolvedChannel.channelId)
+      : typeof body.topic === 'string'
+        ? body.topic.trim()
+        : '';
     if (topic.length < 2) {
       return reply.code(400).send({ status: 'error', code: 'TOPIC_REQUIRED' });
     }
-    const source =
-      typeof body.source === 'string' && ALLOWED_SOURCES.has(body.source)
+    const source = resolvedChannel
+      ? 'youtube_subs'
+      : typeof body.source === 'string' && ALLOWED_SOURCES.has(body.source)
         ? body.source
         : 'discover';
     const mandalaId = typeof body.mandalaId === 'string' ? body.mandalaId : null;
@@ -124,6 +195,11 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     const norm = (s: string) => s.trim().toLowerCase();
     const dup = allActive.find((s) => norm(s.topic) === norm(topic));
     if (dup) {
+      // Re-adding the same channel attaches it to the existing row rather than
+      // returning a curation that does not actually follow it.
+      if (resolvedChannel) {
+        await attachChannel(prisma, dup.id, resolvedChannel, 'manual');
+      }
       return reply.send({
         status: 'ok',
         data: { id: dup.id, topic: dup.topic, source: dup.source, buildJobId: null },
@@ -155,6 +231,13 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         next_run_at: new Date(now.getTime() + 7 * MS_PER_DAY),
       },
     });
+
+    // The channel row must exist BEFORE the first build is enqueued: the builder
+    // decides between channel and topic mode by whether any channels are
+    // followed, so attaching afterwards would make week one a discover week.
+    if (resolvedChannel) {
+      await attachChannel(prisma, sub.id, resolvedChannel, 'manual');
+    }
 
     // "immediate" — first build enqueued at create time (not waiting for weekly cron).
     const jobId = await enqueueCurationBuild({
@@ -377,37 +460,7 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         });
       }
 
-      const row = await prisma.curation_channels.upsert({
-        where: {
-          subscription_id_channel_id: {
-            subscription_id: owned.id,
-            channel_id: resolved.channelId,
-          },
-        },
-        create: {
-          subscription_id: owned.id,
-          channel_id: resolved.channelId,
-          uploads_playlist_id: resolved.uploadsPlaylistId,
-          channel_title: resolved.title,
-          thumbnail_url: resolved.thumbnailUrl,
-          added_via: picked ? 'picked' : 'manual',
-        },
-        // Refresh the display snapshot on re-add; added_via records how it first
-        // arrived, so it is deliberately not overwritten.
-        update: {
-          uploads_playlist_id: resolved.uploadsPlaylistId,
-          channel_title: resolved.title,
-          thumbnail_url: resolved.thumbnailUrl,
-        },
-        select: {
-          id: true,
-          channel_id: true,
-          channel_title: true,
-          thumbnail_url: true,
-          added_via: true,
-          last_seen_at: true,
-        },
-      });
+      const row = await attachChannel(prisma, owned.id, resolved, picked ? 'picked' : 'manual');
       return reply.send({ status: 'ok', data: { channel: row } });
     }
   );
