@@ -31,10 +31,18 @@ import { nextKstWeekdayAt } from '@/utils/kst';
 import { collectChannelUploads } from '@/modules/curation/channel-uploads';
 import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 
-/** How far the FIRST channel build looks back. A weekly refresh uses the KST
- *  week; the build that runs when someone adds a channel uses this, so signing
- *  up late in the week does not hand them an empty one. */
-const CHANNEL_FIRST_LOOKBACK_DAYS = 7;
+/**
+ * How far back channel mode looks: the last seven days, every time.
+ *
+ * It used to look forward from `weekOf`, which is the Monday the build belongs
+ * to — so the Monday-morning build asked for videos uploaded since a moment
+ * that had just happened and got a nearly empty week, and the build that runs
+ * when someone adds a channel on a Friday got four days. Measured 2026-07-28:
+ * a two-channel curation built one item.
+ *
+ * Seven days is what a weekly delivery means, so seven days is what it asks for.
+ */
+const CHANNEL_LOOKBACK_DAYS = 7;
 
 const log = logger.child({ module: 'queue/curation-build' });
 
@@ -146,16 +154,7 @@ export async function registerCurationBuildWorker(): Promise<void> {
       // discover and nothing to score. Interleaved so one prolific channel
       // cannot fill the week.
       //
-      // The window depends on whether this is the first build. A weekly refresh
-      // wants this KST week, because that is what "this week's videos" means.
-      // The build that runs the moment someone adds a channel wants the last
-      // seven days: it fires on whatever day they happened to sign up, and
-      // "since Monday" on a Friday is four days — often nothing at all, so the
-      // first thing they see is an empty week for a channel they just chose.
-      const firstBuild = sub.last_run_at === null;
-      const since = firstBuild
-        ? new Date(Date.now() - CHANNEL_FIRST_LOOKBACK_DAYS * MS_PER_DAY)
-        : new Date(weekOf);
+      const since = new Date(Date.now() - CHANNEL_LOOKBACK_DAYS * MS_PER_DAY);
       const channels = followed;
       picked = await collectChannelUploads({
         channels,

@@ -25,6 +25,9 @@ import { resolveChannel, resolveChannelIds } from '../../modules/curation/channe
 import { resolveVideosApiKeys } from '../../skills/plugins/video-discover/v2/youtube-client';
 import { isValidWeekday, nextKstWeekdayAt } from '../../utils/kst';
 import { QUEUE_CONFIG } from '../../modules/queue/types';
+import { logger } from '../../utils/logger';
+
+const log = logger.child({ module: 'api/curations' });
 
 /** This week's snapshot key. Single source (was duplicated here and in the
  *  weekly handler); resolves on the KST calendar once the schedule flag is on. */
@@ -146,8 +149,8 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     // user gets a week of discovered videos they never asked for.
     //
     // Resolving here (rather than making the client create-then-attach) keeps it
-    // one call and means the subscription is named after the real channel, never
-    // after whatever the user pasted.
+    // to one call, and gives a name to fall back on when the user did not type
+    // one.
     const channelInput = typeof body.channelInput === 'string' ? body.channelInput.trim() : '';
     let resolvedChannel: Awaited<ReturnType<typeof resolveChannel>> = null;
     if (channelInput) {
@@ -168,11 +171,14 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
     }
 
-    const topic = resolvedChannel
-      ? (resolvedChannel.title ?? resolvedChannel.channelId)
-      : typeof body.topic === 'string'
-        ? body.topic.trim()
-        : '';
+    // The name the user typed wins. Overwriting it with the first channel's
+    // title silently renamed a curation out from under its owner, and a
+    // curation following two channels named after one of them is wrong however
+    // you look at it. The channel title is only a fallback for when nothing was
+    // typed.
+    const typedTopic = typeof body.topic === 'string' ? body.topic.trim() : '';
+    const topic =
+      typedTopic || (resolvedChannel ? (resolvedChannel.title ?? resolvedChannel.channelId) : '');
     if (topic.length < 2) {
       return reply.code(400).send({ status: 'error', code: 'TOPIC_REQUIRED' });
     }
@@ -462,6 +468,13 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
 
       const row = await attachChannel(prisma, owned.id, resolved, picked ? 'picked' : 'manual');
+
+      // Rebuild now. Following a channel and then not seeing any of its videos
+      // until next Monday reads as a broken feature, and it was: a curation
+      // built with one channel kept showing only that channel's week after a
+      // second was added.
+      await enqueueCurationBuild({ subscriptionId: owned.id, weekOf: mondayOf(new Date()) });
+
       return reply.send({ status: 'ok', data: { channel: row } });
     }
   );
@@ -480,6 +493,9 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       if (removed.count === 0) {
         return reply.code(404).send({ status: 'error', code: 'CHANNEL_NOT_FOUND' });
       }
+      // Unfollowing has to take that channel's videos out of the week too,
+      // otherwise the feed keeps delivering a channel the user just dropped.
+      await enqueueCurationBuild({ subscriptionId: owned.id, weekOf: mondayOf(new Date()) });
       return reply.send({ status: 'ok', data: { removed: removed.count } });
     }
   );
@@ -541,7 +557,27 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         },
       });
       const metaById = new Map(metas.map((m) => [m.video_id, m]));
-      const enriched = items.map((i) => {
+
+      // An item with no pool row has no title, no thumbnail and no duration:
+      // the deck drew it as a black rectangle and counted it, so a week could
+      // announce 20 videos and show 3. It is not an item the UI can render, so
+      // it is not returned as one — the count and the screen now agree.
+      //
+      // The shortfall is not swallowed: `dropped` is reported here and the
+      // admin feature-status check measures the same ratio across all users, so
+      // a pool that stops being filled stays visible where it can be acted on.
+      const renderable = items.filter((i) => metaById.get(i.video_id)?.title);
+      const dropped = items.length - renderable.length;
+      if (dropped > 0) {
+        log.warn('curation items missing pool metadata', {
+          subscriptionId: request.params.id,
+          week: weekOf.toISOString().slice(0, 10),
+          dropped,
+          of: items.length,
+        });
+      }
+
+      const enriched = renderable.map((i) => {
         const m = metaById.get(i.video_id);
         return {
           ...i,
@@ -554,7 +590,7 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       });
       return reply.send({
         status: 'ok',
-        data: { week_of: weekOf.toISOString().slice(0, 10), items: enriched },
+        data: { week_of: weekOf.toISOString().slice(0, 10), items: enriched, dropped },
       });
     }
   );
