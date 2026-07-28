@@ -235,6 +235,22 @@ jobs:
             --cidr "$RUNNER_IP/32" \
             --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=Purpose,Value=github-actions-deploy}]"
 
+      # A new ingress rule is not usable the instant the API returns. The full
+      # deploy job never noticed because several steps run between opening the
+      # rule and its first scp; this job goes straight there and timed out on
+      # its first live run. Wait for the port to actually answer rather than
+      # sleeping a guessed number of seconds.
+      - name: Wait for SSH to become reachable
+        run: |
+          for i in $(seq 1 30); do
+            if timeout 3 bash -c "cat < /dev/null > /dev/tcp/${{ secrets.EC2_HOST }}/22" 2>/dev/null; then
+              echo "port 22 reachable after ${i} attempt(s)"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::port 22 never became reachable from $RUNNER_IP after 60s"
+          exit 1
+
       - name: Copy dial files to EC2
         uses: appleboy/scp-action@v1
         with:
