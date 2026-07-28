@@ -43,7 +43,30 @@ export function GraphView({ mandalaId, onOpenVideo }: GraphViewProps) {
   // container div actually mounts.
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [focusRequest, setFocusRequest] = useState<{ id: string; n: number } | null>(null);
+  const [focusRequest, setFocusRequest] = useState<{
+    id: string;
+    n: number;
+    ratio?: number;
+  } | null>(null);
+
+  // Entering from a mandala: the user-wide universe renders in full color and
+  // the camera lands on that mandala's neighborhood (fading everything else
+  // grey was the beta-day dull-mass bug). One flight per mandala change.
+  const focusedMandalaRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!mandalaId || !data || dimensions.width === 0) return;
+    if (focusedMandalaRef.current === mandalaId) return;
+    const root = data.nodes.find(
+      (n) => n.sourceRef?.table === 'user_mandalas' && n.sourceRef.id === mandalaId
+    );
+    if (!root) return;
+    focusedMandalaRef.current = mandalaId;
+    // After CameraReset's 300ms animatedReset, or the flight gets overridden.
+    const timer = window.setTimeout(() => {
+      setFocusRequest((prev) => ({ id: root.id, n: (prev?.n ?? 0) + 1, ratio: 0.35 }));
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [mandalaId, data, dimensions.width]);
 
   // Resize observer for canvas dimensions — rAF delays until flex layout completes
   useEffect(() => {

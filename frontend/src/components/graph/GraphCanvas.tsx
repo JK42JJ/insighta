@@ -55,8 +55,9 @@ interface GraphCanvasProps {
   mandalaNodeIds: Set<string>;
   onNodeClick: (id: string | null) => void;
   onNodeHover: (id: string | null) => void;
-  /** Search fly-to: bump `n` with a node id to animate the camera to it. */
-  focusRequest?: { id: string; n: number } | null;
+  /** Camera fly-to: bump `n` with a node id. ratio 0.05 (deep, search
+   *  default) … 0.35 (neighborhood, mandala focus). */
+  focusRequest?: { id: string; n: number; ratio?: number } | null;
   width: number;
   height: number;
 }
@@ -431,11 +432,13 @@ function GraphController({
           res.image = null;
         }
 
-        // Mandala scope: out-of-scope nodes wear the persistent fade
-        // (label kept — scope is a standing state, not a transient hover).
-        if (s.mandalaNodeIds.size > 0 && !s.mandalaNodeIds.has(node)) {
-          res.color = fade;
-          res.zIndex = 0;
+        // NOTE: the active mandala is emphasized by CAMERA FOCUS, not by
+        // fading everything else — a standing fade over the user-wide graph
+        // greyed out 99% of the universe (beta-day dull-mass report).
+        // Community colors always render; mandalaNodeIds only raises zIndex
+        // so the active mandala wins overlaps.
+        if (s.mandalaNodeIds.size > 0 && s.mandalaNodeIds.has(node)) {
+          res.zIndex = 1;
         }
 
         // S6 hover/selection grammar, verbatim (faded nodes also drop their
@@ -464,12 +467,6 @@ function GraphController({
         const g = sigma.getGraph();
         const res: Record<string, unknown> = { ...attrs };
 
-        if (s.mandalaNodeIds.size > 0) {
-          const inScope =
-            s.mandalaNodeIds.has(g.source(edge)) && s.mandalaNodeIds.has(g.target(edge));
-          if (!inScope) res.color = EDGE_FADE[s.dark ? 'dark' : 'light'];
-        }
-
         // S6, verbatim: neighbor edges take the target's color at size 4;
         // every other edge is hidden while a target is active.
         if (s.targetId) {
@@ -489,16 +486,34 @@ function GraphController({
   return null;
 }
 
-/** Fly the camera to a node — original SearchField grammar (S8). */
-function FocusCamera({ request }: { request?: { id: string; n: number } | null }) {
+/** Fly the camera to a node — original SearchField grammar (S8). Search
+ *  dives deep (0.05); mandala focus lands at neighborhood scale. The flight
+ *  waits for a rendered frame: firing before sigma's first draw reads bogus
+ *  display coordinates and strands the camera off-graph (beta-day blank
+ *  canvas). */
+function FocusCamera({ request }: { request?: { id: string; n: number; ratio?: number } | null }) {
   const sigma = useSigma();
   useEffect(() => {
     if (!request) return;
-    const graph = sigma.getGraph();
-    if (!graph.hasNode(request.id)) return;
-    const displayData = sigma.getNodeDisplayData(request.id);
-    if (!displayData) return;
-    sigma.getCamera().animate({ ...displayData, ratio: 0.05 }, { duration: 600 });
+    let cancelled = false;
+    const fly = () => {
+      if (cancelled) return;
+      const graph = sigma.getGraph();
+      if (!graph.hasNode(request.id)) return;
+      const displayData = sigma.getNodeDisplayData(request.id);
+      if (!displayData) return;
+      sigma
+        .getCamera()
+        .animate({ ...displayData, ratio: request.ratio ?? 0.05 }, { duration: 600 });
+    };
+    // Two rAF ticks ≈ one guaranteed rendered frame after mount/refresh.
+    const raf1 = requestAnimationFrame(() => {
+      requestAnimationFrame(fly);
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+    };
   }, [sigma, request]);
   return null;
 }
