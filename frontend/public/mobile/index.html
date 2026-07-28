@@ -1600,7 +1600,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-28-33';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-28-36';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1989,7 +1989,10 @@
   // skeleton) and revalidates in the background; the list only re-renders when
   // the signature actually changed. Skeleton shows on the cold first load only.
   var curCache=null, curRenderedSig='';
-  function curSig(subs){ return JSON.stringify((subs||[]).map(function(s){ return [s.id,s.item_count,s.watched_count,s.last_run_at,s.next_run_at,s.topic]; })); }
+  /** What to call a curation: the user's name if they set one, else the topic.
+   *  Every surface reads through here so a rename shows up everywhere at once. */
+  function curName(s){ return (s && (s.display_title || s.topic)) || '(제목 없음)'; }
+  function curSig(subs){ return JSON.stringify((subs||[]).map(function(s){ return [s.id,s.display_title,s.item_count,s.watched_count,s.last_run_at,s.next_run_at,s.topic]; })); }
   function curPaint(subs){ var sig=curSig(subs); if(sig===curRenderedSig&&Array.isArray(subs)) return; renderCurationRows(subs); curRenderedSig=sig; }
   async function renderCuration(){
     var el=document.getElementById('curBody'); if(!el) return;
@@ -2087,13 +2090,13 @@
     });
     sorted.forEach(function(e){
       var s=e.s, st=e.st;
-      var c=jkColor(s.topic||'?');
+      var c=jkColor(curName(s));
       var d=document.createElement('div');
       d.className='row';
       d.innerHTML='<span class="jk" style="background:linear-gradient(150deg,'+c[0]+','+c[1]+')"><b></b></span>'
         +'<span class="m"><span class="a"></span><span class="b">'+(st.dot?'<span class="dotnew"></span>':'')+'<span class="bt"></span></span></span>';
-      d.querySelector('.jk b').textContent=(s.topic||'?').trim().charAt(0);
-      d.querySelector('.a').textContent=s.topic||'(제목 없음)';
+      d.querySelector('.jk b').textContent=curName(s).trim().charAt(0);
+      d.querySelector('.a').textContent=curName(s);
       d.querySelector('.bt').textContent=st.line;
       // overflow '...' -> action sheet (unsubscribe); long-press = alias trigger for the same sheet
       var more=document.createElement('button');
@@ -2156,7 +2159,8 @@
   // Per-surface row actions — RELOCATION of existing actions, never invention.
   // New actions are James-gated (video/note mandala rows have no existing action yet).
   var ROW_ACTIONS={
-    curation:[{ label:'채널로 받기', plain:true, run:function(s){ openChannelSheet(s); } },
+    curation:[{ label:'이름 바꾸기', plain:true, run:function(s){ curRenameSheet(s); } },
+      { label:'채널로 받기', plain:true, run:function(s){ openChannelSheet(s); } },
       { label:'구독 끊기', confirm:'구독을 끊을까요? · 끊기', running:'끊는 중…', err:'끊지 못했어요 — 다시 시도해주세요',
       run:function(s){ return api('/curations/'+s.id,{method:'DELETE'}).then(function(){
         if(Array.isArray(curCache)) curCache=curCache.filter(function(x){ return x.id!==s.id; }); }); },
@@ -2170,7 +2174,7 @@
     setSheetFoot('');
     body.innerHTML='';
     var h=document.createElement('div'); h.className='yts-h2';
-    h.textContent=item.topic||item.title||'항목'; body.appendChild(h);
+    h.textContent=curName(item)||item.title||'항목'; body.appendChild(h);
     var wrap=document.createElement('div'); wrap.className='ras-actions'; body.appendChild(wrap);
     function disarmAll(except){ wrap.querySelectorAll('.ras-btn.confirm').forEach(function(b){
       if(b===except) return; b.classList.remove('confirm'); b.textContent=b.__label; }); }
@@ -2506,6 +2510,28 @@
       closeYtSheet(); setHomeTab('curation'); selectCuration(t); }
     if(ca) ca.onclick=go;
     if(ci){ ci.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); go(); } }); ci.focus(); }
+  }
+
+  /** Rename. Only the label changes -- what gets collected is untouched. */
+  function curRenameSheet(sub, note){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    document.body.classList.remove('hubsheet','propsheet','rasheet');
+    b.innerHTML='<div class="yts-h2">이름 바꾸기</div>'
+      +'<div class="yts-sub">'+(note?curEsc(note):'목록에 보일 이름이에요. 받아보는 내용은 그대로예요.')+'</div>';
+    setSheetFoot('<div class="yts-custom"><input type="text" id="curRenameIn" maxlength="60" autocomplete="off"><button class="yts-cadd" id="curRenameGo" type="button">저장</button></div>');
+    var inp=document.getElementById('curRenameIn'), go=document.getElementById('curRenameGo');
+    if(inp){ inp.value=curName(sub); inp.focus(); inp.select(); }
+    async function save(){
+      var v=(inp&&inp.value||'').trim();
+      if(!v){ curRenameSheet(sub,'이름을 비워둘 수 없어요'); return; }
+      try{
+        var r=await api('/curations/'+sub.id,{method:'PATCH',body:JSON.stringify({title:v})});
+        if(!r.ok){ curRenameSheet(sub,'바꾸지 못했어요'); return; }
+        closeYtSheet(); curCache=null; curRenderedSig=''; setHomeTab('curation'); renderCuration();
+      }catch(e){ curRenameSheet(sub,'바꾸지 못했어요'); }
+    }
+    if(go) go.onclick=save;
+    if(inp) inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); save(); } });
   }
 
   /** Channel panel BEFORE any curation exists: the first channel creates one. */
