@@ -469,7 +469,25 @@
   #goalInput:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
   /* sheet-scoped accent tokens — #ytSheet lives OUTSIDE #dev so theme --acc* were undefined
      (my accent button rendered with no background). Define once here for all sheets. */
-  #ytSheet{--acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30}
+  /* Vertical budget, measured 2026-07-28 on the proposals state (the tallest):
+   *
+   *   fixed chrome  246px   padding 12 + (16 + 34 safe-area) + grip 4
+   *                         + wordmark 18 + its 12 margin + two 15 gaps
+   *                         + foot 92 + back 28
+   *   content       161px   title 24 + 15 + deck 102 + 15 + dots 5
+   *   ------------------------------------------------------------------
+   *   minimum       407px
+   *
+   * 58vh only reaches 407 on a viewport of 702px or more. Below that the sheet
+   * was short of its own content and the heading was clipped against the top
+   * edge -- 7.7px at 730, 25.7px at 667 -- which is what a real phone showed.
+   * The three-choice branch is taller still: measured 452px to show all three
+   * options without scrolling, and an option you have to scroll to find is the
+   * bug this screen exists to fix. The floor is that number plus 4px of slack.
+   * Above 786px viewport 58vh clears it anyway, so most phones are unaffected.
+   * Re-measure and raise this if either state gains a row. */
+  #ytSheet{--yts-min-h:456px;
+    --acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30}
   /* DIAL wordmark — shared sheet header identity (James-approved guest-sheet look) */
   .yts-brand{flex:none; text-align:center; font-size:11px; font-weight:700; letter-spacing:.3em; color:#b7a988; text-transform:uppercase; margin:0 0 12px}
   .yts-custom{display:flex; gap:8px; margin-top:8px; align-items:stretch}
@@ -734,7 +752,8 @@
   #ytSheet .yts-card{position:relative; width:100%; max-width:480px; background:var(--paper-hi,#FAF6EC);
     border-radius:22px 22px 0 0; padding:12px 24px calc(16px + var(--sab)); box-shadow:0 -14px 44px rgba(30,27,22,.30);
     transform:translateY(103%); transition:transform .42s var(--spring); display:flex; flex-direction:column; gap:15px;
-    text-align:center; height:58vh; overflow:hidden; justify-content:flex-start}
+    text-align:center; height:58vh; min-height:var(--yts-min-h); max-height:80vh;
+    overflow:hidden; justify-content:flex-start}
   /* One sheet height for every state, and the CARD never scrolls — only its body
      does. Pinning the height alone (build 26) kept every sheet the same size but
      pushed the tail of the tallest state (proposals: input + retune) off a real
@@ -742,8 +761,16 @@
      .yts-foot is always reachable at the bottom. */
   #ytSheet .yts-foot{flex:none; display:flex; flex-direction:column; gap:10px}
   #ytSheet .yts-card.dragging{transition:none}
-  #ytsBody{display:flex; flex-direction:column; gap:15px; flex:1; justify-content:center;
+  /* Centred WHEN THERE IS ROOM, top-aligned when there is not. `justify-content:
+     center` alone clips the first child against the top edge once the content
+     is taller than the box -- and overflow cannot scroll back to it, because the
+     overflow is on the start side. The auto-margin form degrades to flex-start
+     instead, so the heading is never the thing that disappears. Reported on a
+     real phone at build 30: the title was sliced in half, then gone. */
+  #ytsBody{display:flex; flex-direction:column; gap:15px; flex:1;
     overflow-y:auto; overflow-x:hidden; min-height:0; scrollbar-width:none}
+  #ytsBody > :first-child{margin-top:auto}
+  #ytsBody > :last-child{margin-bottom:auto}
   #ytsBody::-webkit-scrollbar{display:none}
   /* Loading state — shown the instant a tab is pressed, before any network call. */
   .yts-load{display:flex; flex-direction:column; align-items:center; gap:14px}
@@ -803,6 +830,17 @@
     cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent;
     transition:transform .22s var(--spring), box-shadow .22s ease, border-color .22s ease, opacity .22s ease;
     transform:scale(.94); opacity:.55}
+  /* Three-choice branch. Where the pixels come from, measured at 730px viewport:
+   * the body has 254px and the rows wanted 309. Wrapping them turns three 15px
+   * body gaps into one (-30), and 13px row padding instead of the shared 17px
+   * takes another 24. 309 -> 255. The rest of the sheet is untouched, and the
+   * two-row start hub keeps the roomier default because this is scoped. */
+  .pm-rows{display:flex; flex-direction:column; gap:8px}
+  .pm-rows .mrow{margin-top:0; padding:13px 16px}
+  /* The channel card is an action, not a subject — dashed edge, no fill. */
+  .yts-prop-ch{background:none; border-style:dashed; border-color:rgba(94,86,72,.32)}
+  .yts-prop-ch .yts-prop-dom{background:rgba(94,86,72,.10); color:var(--paper-sub)}
+  .yts-prop-ch.sel{border-style:solid}
   /* the centred card is the one the core button will pick */
   .yts-prop.sel{transform:scale(1); opacity:1; border-color:var(--acc);
     box-shadow:0 8px 20px -12px rgba(30,27,22,.5)}
@@ -1562,7 +1600,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-28-30';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-28-32';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1973,7 +2011,7 @@
       var st=await ytFetchStatus();
       if(st&&st.isConnected){
         curCache=[]; curPaint([]);
-        if(!ytAutoRaised){ ytAutoRaised=true; openYtSheet(); ytRenderTuning(); }
+        if(!ytAutoRaised){ ytAutoRaised=true; openYtSheet(); ytRenderPickMode(); }
       } else { curCache=null; curRenderedSig=''; curConnectGate(); }
     }catch(e){
       if(haveCache) return; // revalidate failure: keep the cached rows on screen
@@ -2030,7 +2068,7 @@
       +'<span class="t1">관심 주제를 고르면<br>매주 큐레이션을 보내 드려요</span>'
       +'<span class="t2">트렌드·리서치·관심 분야까지<br>매주 새 영상만 골라 드려요</span>'
       +'<button class="cbtn" id="bCurPick" type="button">관심 주제 고르기</button>';
-    var b=document.getElementById('bCurPick'); if(b) b.onclick=function(){ openYtSheet(); ytRenderTuning(); };
+    var b=document.getElementById('bCurPick'); if(b) b.onclick=function(){ openYtSheet(); ytRenderPickMode(); };
   }
   // Same .rows/.row markup as the mandala lists (format parity is the contract).
   function renderCurationRows(subs){
@@ -2264,10 +2302,7 @@
       +props.map(function(_,i){ return '<span class="yts-dot'+(i===0?' on':'')+'"></span>'; }).join('')
       +'</div>';
     b.innerHTML=h;
-    setSheetFoot(
-      '<div class="yts-custom"><input type="text" id="ytCustomTopic" maxlength="40" placeholder="직접 주제 입력" autocomplete="off"><button class="yts-cadd" id="ytCustomAdd" type="button">추가</button></div>'
-      + '<button class="yts-ghost" id="ytsByChannel" type="button">주제 대신 채널로 받기</button>'
-    );
+    setSheetFoot('');
     // The retry icon is part of the sheet shell, not the foot, so it survives
     // innerHTML replacement; `propsheet` is what reveals it.
     document.body.classList.add('propsheet');
@@ -2285,12 +2320,6 @@
       if(ytPropScrollT) clearTimeout(ytPropScrollT);
       ytPropScrollT=setTimeout(function(){ ytPropIdx=ytNearestProp(); ytSyncProps(true); },90);
     });
-    var ci=document.getElementById('ytCustomTopic'), ca=document.getElementById('ytCustomAdd');
-    function ytCustomSubmit(){ var t=(ci&&ci.value||'').trim(); if(t.length<2){ if(ci) ci.focus(); return; } closeYtSheet(); setHomeTab('curation'); selectCuration(t); }
-    if(ca) ca.onclick=ytCustomSubmit;
-    if(ci) ci.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); ytCustomSubmit(); } });
-    var bc=document.getElementById('ytsByChannel');
-    if(bc) bc.onclick=function(){ chRenderNew(); };
     var rt=document.getElementById('ytsRetune');
     if(rt){
       rt.disabled=!!ytRetuneSpent;
@@ -2395,7 +2424,7 @@
     show('home'); setHomeTab('curation');
     ytAutoRaised=true;   // the wizard sheet is taking over; suppress the gate auto-raise
     if(ytParam==='error'){ openYtSheet(); ytRenderConnect(); toast('연결에 실패했어요 — 다시 시도해주세요'); return true; }
-    openYtSheet(); ytRenderTuning();
+    openYtSheet(); ytRenderPickMode();
     return true;
   }
   // CREATE path only (from the sheet's proposal pick) — one-time build state in the tab
@@ -2433,6 +2462,45 @@
     if(add) add.onclick=submit;
     if(inp) inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); submit(); } });
   }
+  /**
+   * Weekly curation: how do you want to choose?
+   *
+   * Only the first of these needs the server, and it takes ~7s to score
+   * proposals. Sending everyone through that wait before showing them "type
+   * your own" or "by channel" charged the wait to people who never wanted it.
+   * The branch is local, so it paints immediately and the wait belongs to the
+   * one choice that earns it.
+   */
+  function ytRenderPickMode(){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    document.body.classList.remove('propsheet');
+    setSheetFoot('');
+    b.innerHTML='<div class="yts-h2">어떻게 받을까요?</div>'
+      +'<div class="pm-rows">'
+      +'<button class="mrow" id="pmSuggest"><span class="mtx"><span class="mtt">추천 받아보기</span><span class="msb">보시던 유튜브에서 골라 드려요</span></span></button>'
+      +'<button class="mrow" id="pmTopic"><span class="mtx"><span class="mtt">주제 직접 입력</span><span class="msb">받고 싶은 주제를 적어주세요</span></span></button>'
+      +'<button class="mrow" id="pmChannel"><span class="mtx"><span class="mtt">채널로 받기</span><span class="msb">고른 채널이 그 주에 올린 것만</span></span></button>'
+      +'</div>';
+    document.getElementById('pmSuggest').onclick=function(){ ytRenderTuning(); };
+    document.getElementById('pmTopic').onclick=function(){ ytRenderTopicInput(); };
+    document.getElementById('pmChannel').onclick=function(){ chRenderNew(); };
+    selHub=0; document.body.classList.add('hubsheet'); setTimeout(updateSelHub,0);
+  }
+
+  /** Type your own topic. No network, so it opens instantly. */
+  function ytRenderTopicInput(note){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    document.body.classList.remove('hubsheet','propsheet');
+    b.innerHTML='<div class="yts-h2">어떤 주제로 받을까요?</div>'
+      +'<div class="yts-sub">'+(note?curEsc(note):'그 주제의 새 영상을 매주 모아 드려요.')+'</div>';
+    setSheetFoot('<div class="yts-custom"><input type="text" id="ytCustomTopic" maxlength="40" placeholder="예: 파이썬 데이터 분석" autocomplete="off"><button class="yts-cadd" id="ytCustomAdd" type="button">추가</button></div>');
+    var ci=document.getElementById('ytCustomTopic'), ca=document.getElementById('ytCustomAdd');
+    function go(){ var t=(ci&&ci.value||'').trim(); if(t.length<2){ if(ci) ci.focus(); return; }
+      closeYtSheet(); setHomeTab('curation'); selectCuration(t); }
+    if(ca) ca.onclick=go;
+    if(ci){ ci.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); go(); } }); ci.focus(); }
+  }
+
   /** Channel panel BEFORE any curation exists: the first channel creates one. */
   function chRenderNew(note){
     var b=document.getElementById('ytsBody'); if(!b) return;
@@ -4933,7 +5001,7 @@
     // pressing the weekly-curation row looked dead for ~5s and then jumped.
     document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet');
       ytRenderLoading();
-      ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderTuning(); } else { ytRenderConnect(); } }).catch(function(){ ytRenderConnect(); }); };
+      ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderPickMode(); } else { ytRenderConnect(); } }).catch(function(){ ytRenderConnect(); }); };
     selHub=0; document.body.classList.add('hubsheet'); openYtSheet(); setTimeout(updateSelHub,0);
   }
   (function(){ var pf=document.getElementById('plusFab'); if(pf) pf.onclick=openHub; })();
