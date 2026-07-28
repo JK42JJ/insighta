@@ -17,6 +17,11 @@
  */
 
 import { logger } from '@/utils/logger';
+import { getPrismaClient } from '@/modules/database/client';
+import {
+  QUALITY_GOLD_VIEW_COUNT,
+  QUALITY_SILVER_VIEW_COUNT,
+} from '@/skills/plugins/batch-video-collector/manifest';
 import {
   videosBatchFullMetadata,
   parseIsoDuration,
@@ -36,6 +41,23 @@ export const UPLOADS_PAGE_SIZE = 50;
  * every upload is equally on-topic; a varying percentage here would be theatre.
  */
 export const CHANNEL_MODE_RELEVANCE_PCT = 100;
+
+/** Provenance for pool rows that arrived because a user followed the channel. */
+const POOL_SOURCE = 'user_channel';
+
+/**
+ * Tier by view count, matching the collector's thresholds.
+ *
+ * Deliberately NOT classifyQuality(): that decides ADMISSIBILITY too, and would
+ * reject a video for being under the view floor. A channel the user chose to
+ * follow does not get its uploads turned away for being unpopular -- that is
+ * the whole point of following it. Tier stays for diagnostics only.
+ */
+function tierByViews(views: number): string {
+  if (views >= QUALITY_GOLD_VIEW_COUNT) return 'gold';
+  if (views >= QUALITY_SILVER_VIEW_COUNT) return 'silver';
+  return 'bronze';
+}
 
 export interface ChannelUpload {
   videoId: string;
@@ -90,6 +112,71 @@ export async function fetchChannelUploads(
     log.warn('playlistItems.list threw', { channelId, error: (err as Error).message });
     return [];
   }
+}
+
+/**
+ * Persist what videos.list just told us. Keyed by video_id and deliberately
+ * conservative on update: `source` is never overwritten, so a row that arrived
+ * through a more authoritative path keeps its provenance and only gets its
+ * freshness and (possibly scrubbed) display fields restored.
+ *
+ * Failures are logged, never thrown: a pool write must not cost the user their
+ * week.
+ */
+async function storeUploadsInPool(
+  meta: Array<{
+    id?: string;
+    snippet?: {
+      title?: string;
+      description?: string;
+      channelTitle?: string;
+      channelId?: string;
+      publishedAt?: string;
+      thumbnails?: Record<string, { url?: string } | undefined>;
+    };
+    contentDetails?: { duration?: string };
+    statistics?: { viewCount?: string; likeCount?: string };
+  }>
+): Promise<void> {
+  if (meta.length === 0) return;
+  const prisma = getPrismaClient();
+  let stored = 0;
+  for (const m of meta) {
+    if (!m.id || !m.snippet?.title) continue;
+    const views = Number(m.statistics?.viewCount ?? 0) || 0;
+    const likes = Number(m.statistics?.likeCount ?? 0) || 0;
+    const thumbs = m.snippet.thumbnails ?? {};
+    const shared = {
+      title: m.snippet.title,
+      description: m.snippet.description ?? null,
+      channel_name: m.snippet.channelTitle ?? null,
+      channel_id: m.snippet.channelId ?? null,
+      view_count: BigInt(views),
+      like_count: BigInt(likes),
+      duration_seconds: parseIsoDuration(m.contentDetails?.duration),
+      published_at: m.snippet.publishedAt ? new Date(m.snippet.publishedAt) : null,
+      thumbnail_url: thumbs['high']?.url ?? thumbs['medium']?.url ?? thumbs['default']?.url ?? null,
+      is_active: true,
+      refreshed_at: new Date(),
+    };
+    try {
+      await prisma.video_pool.upsert({
+        where: { video_id: m.id },
+        create: {
+          video_id: m.id,
+          language: 'ko',
+          quality_tier: tierByViews(views),
+          source: POOL_SOURCE,
+          ...shared,
+        },
+        update: shared, // source and language stay as first written
+      });
+      stored += 1;
+    } catch (err) {
+      log.warn('pool write failed', { videoId: m.id, error: (err as Error).message });
+    }
+  }
+  log.info('channel uploads stored in pool', { stored, of: meta.length });
 }
 
 export interface ChannelPick {
@@ -156,6 +243,14 @@ export async function collectChannelUploads(
   const durationById = new Map(
     meta.map((m) => [m.id, parseIsoDuration(m.contentDetails?.duration)])
   );
+
+  // The deck reads title, channel, duration and thumbnail from video_pool, and
+  // nothing else puts a channel upload there -- the discover path only ever
+  // stores what it found in the pool to begin with. Without this the week's
+  // cards render blank: the item exists, its metadata does not.
+  //
+  // We already hold that metadata; it was fetched for the Shorts filter above.
+  await storeUploadsInPool(meta);
 
   const eligible = measured
     ? all.filter((u) => !isShortsByDuration(durationById.get(u.videoId) ?? null))
