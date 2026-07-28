@@ -7,6 +7,18 @@
  * being topped up from somewhere else.
  */
 
+const poolUpserts: Array<{ where: unknown; create: Record<string, unknown> }> = [];
+jest.mock('@/modules/database/client', () => ({
+  getPrismaClient: () => ({
+    video_pool: {
+      upsert: async (arg: { where: unknown; create: Record<string, unknown> }) => {
+        poolUpserts.push(arg);
+        return arg.create;
+      },
+    },
+  }),
+}));
+
 import {
   fetchChannelUploads,
   collectChannelUploads,
@@ -99,6 +111,92 @@ describe('fetchChannelUploads', () => {
     const fetchImpl = jest.fn() as unknown as typeof fetch;
     expect(await fetchChannelUploads('UC1', 'UU1', MONDAY, [], fetchImpl)).toEqual([]);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe('collectChannelUploads — the week must be renderable', () => {
+  // The deck reads title/thumbnail/duration from video_pool. The first channel
+  // curation on prod produced an item whose video was in no pool row at all, so
+  // the card rendered black with "1 / 1" in the header. Storing what videos.list
+  // already returned is what makes the week visible.
+  it('writes the metadata it fetched into the pool', async () => {
+    poolUpserts.length = 0;
+    const fetchImpl = jest.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes('/playlistItems'))
+        return playlistReply([{ id: 'vid1', at: '2026-07-31T10:00:00Z' }]);
+      return {
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'vid1',
+              snippet: {
+                title: '테크피드 이번 주 요약',
+                channelTitle: 'T3chfeed',
+                channelId: 'UC1',
+                publishedAt: '2026-07-31T10:00:00Z',
+                thumbnails: { high: { url: 'https://i/hq.jpg' } },
+              },
+              contentDetails: { duration: LONG },
+              statistics: { viewCount: '150000' },
+            },
+          ],
+        }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const out = await collectChannelUploads({
+      channels: [{ channel_id: 'UC1', uploads_playlist_id: 'UU1' }],
+      since: MONDAY,
+      limit: 10,
+      apiKeys: KEY,
+      fetchImpl,
+    });
+
+    expect(out.map((p) => p.videoId)).toEqual(['vid1']);
+    expect(poolUpserts).toHaveLength(1);
+    expect(poolUpserts[0]!.create).toMatchObject({
+      video_id: 'vid1',
+      title: '테크피드 이번 주 요약',
+      channel_name: 'T3chfeed',
+      thumbnail_url: 'https://i/hq.jpg',
+      quality_tier: 'gold', // 150k views
+      source: 'user_channel',
+    });
+  });
+
+  it('does not turn away an unpopular upload from a followed channel', async () => {
+    poolUpserts.length = 0;
+    const fetchImpl = jest.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes('/playlistItems'))
+        return playlistReply([{ id: 'tiny', at: '2026-07-31T10:00:00Z' }]);
+      return {
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'tiny',
+              snippet: { title: '조회수 12회', thumbnails: {} },
+              contentDetails: { duration: LONG },
+              statistics: { viewCount: '12' },
+            },
+          ],
+        }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    const out = await collectChannelUploads({
+      channels: [{ channel_id: 'UC1', uploads_playlist_id: 'UU1' }],
+      since: MONDAY,
+      limit: 10,
+      apiKeys: KEY,
+      fetchImpl,
+    });
+    // following a channel means taking what it posts, popular or not
+    expect(out.map((p) => p.videoId)).toEqual(['tiny']);
+    expect(poolUpserts[0]!.create).toMatchObject({ quality_tier: 'bronze' });
   });
 });
 
