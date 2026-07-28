@@ -59,6 +59,22 @@ async function fetchEdges(): Promise<OntologyEdge[]> {
   return data.data.edges;
 }
 
+interface SubgraphResponse {
+  status: string;
+  data: { nodes: OntologyNode[]; edges: OntologyEdge[]; truncated: boolean };
+}
+
+/** Mandala-scoped subgraph — complete + bounded (server resolves the mandala
+ *  root by source_ref and expands via ontology.get_neighbors, depth 4). */
+async function fetchMandalaSubgraph(
+  mandalaId: string
+): Promise<{ nodes: OntologyNode[]; edges: OntologyEdge[]; truncated: boolean }> {
+  const data = (await fetchWithAuth(
+    `/subgraph?mandala_id=${encodeURIComponent(mandalaId)}`
+  )) as SubgraphResponse;
+  return data.data;
+}
+
 async function fetchStats(): Promise<OntologyStats> {
   const data = (await fetchWithAuth('/stats')) as StatsResponse;
   return data.data;
@@ -69,6 +85,7 @@ async function fetchStats(): Promise<OntologyStats> {
 const GRAPH_QUERY_KEYS = {
   nodes: (domain: string) => ['ontology', 'nodes', domain] as const,
   edges: () => ['ontology', 'edges'] as const,
+  subgraph: (mandalaId: string) => ['ontology', 'subgraph', mandalaId] as const,
   stats: () => ['ontology', 'stats'] as const,
   graphData: (domain: string) => ['ontology', 'graphData', domain] as const,
 };
@@ -77,11 +94,12 @@ const STALE_TIME = 2 * 60 * 1000; // 2 minutes
 
 // -- Hooks --
 
-export function useOntologyNodes(domain: string = 'service') {
+export function useOntologyNodes(domain: string = 'service', enabled: boolean = true) {
   return useQuery({
     queryKey: GRAPH_QUERY_KEYS.nodes(domain),
     queryFn: () => fetchServiceNodes(),
     staleTime: STALE_TIME,
+    enabled,
   });
 }
 
@@ -100,28 +118,50 @@ export function useGraphData(mandalaId?: string | null): {
   isError: boolean;
   error: Error | null;
 } {
-  const nodesQuery = useOntologyNodes('service');
+  // Mandala context → complete bounded subgraph from the server. No mandala
+  // (global view) → legacy flat fetch fallback.
+  const subgraphQuery = useQuery({
+    queryKey: GRAPH_QUERY_KEYS.subgraph(mandalaId ?? ''),
+    queryFn: () => fetchMandalaSubgraph(mandalaId!),
+    staleTime: STALE_TIME,
+    enabled: Boolean(mandalaId),
+  });
+  const nodesQuery = useOntologyNodes('service', !mandalaId);
   const edgesQuery = useQuery({
     queryKey: GRAPH_QUERY_KEYS.edges(),
     queryFn: fetchEdges,
     staleTime: STALE_TIME,
+    enabled: !mandalaId,
   });
 
-  const isLoading = nodesQuery.isLoading || edgesQuery.isLoading;
-  const isError = nodesQuery.isError || edgesQuery.isError;
-  const error = nodesQuery.error ?? edgesQuery.error ?? null;
+  const isLoading = mandalaId
+    ? subgraphQuery.isLoading
+    : nodesQuery.isLoading || edgesQuery.isLoading;
+  const isError = mandalaId ? subgraphQuery.isError : nodesQuery.isError || edgesQuery.isError;
+  const error = mandalaId
+    ? (subgraphQuery.error ?? null)
+    : (nodesQuery.error ?? edgesQuery.error ?? null);
 
-  const data =
-    nodesQuery.data && edgesQuery.data
-      ? buildGraphData(nodesQuery.data, edgesQuery.data)
-      : undefined;
+  const rawNodes = mandalaId ? subgraphQuery.data?.nodes : nodesQuery.data;
+  const rawEdges = mandalaId ? subgraphQuery.data?.edges : edgesQuery.data;
+
+  // MUST be referentially stable: GraphCanvas keys its graphology build (and
+  // sigma instance lifetime) on this object. Rebuilding it every render was
+  // the root of the interaction flicker — each hover re-render produced a new
+  // data object → new graph → sigma torn down and recreated mid-interaction
+  // (and, in prod scheduling, refresh() could land on the killed instance =
+  // "could not find a suitable program" crash).
+  const data = useMemo(
+    () => (rawNodes && rawEdges ? buildGraphData(rawNodes, rawEdges) : undefined),
+    [rawNodes, rawEdges]
+  );
 
   // Compute node IDs belonging to the selected mandala's structure subtree
   const mandalaNodeIds = useMemo(() => {
-    if (!mandalaId || !nodesQuery.data || !edgesQuery.data) return new Set<string>();
+    if (!mandalaId || !rawNodes || !rawEdges) return new Set<string>();
 
     // Find the mandala root node by source_ref
-    const mandalaNode = nodesQuery.data.find(
+    const mandalaNode = rawNodes.find(
       (n) => n.source_ref?.table === 'user_mandalas' && n.source_ref.id === mandalaId
     );
     if (!mandalaNode) return new Set<string>();
@@ -131,15 +171,19 @@ export function useGraphData(mandalaId?: string | null): {
     const queue = [mandalaNode.id];
     while (queue.length > 0) {
       const current = queue.shift()!;
-      for (const edge of edgesQuery.data) {
-        if (edge.source_id === current && edge.relation === 'CONTAINS' && !ids.has(edge.target_id)) {
+      for (const edge of rawEdges) {
+        if (
+          edge.source_id === current &&
+          edge.relation === 'CONTAINS' &&
+          !ids.has(edge.target_id)
+        ) {
           ids.add(edge.target_id);
           queue.push(edge.target_id);
         }
       }
     }
     return ids;
-  }, [mandalaId, nodesQuery.data, edgesQuery.data]);
+  }, [mandalaId, rawNodes, rawEdges]);
 
   return { data, mandalaNodeIds, isLoading, isError, error };
 }
