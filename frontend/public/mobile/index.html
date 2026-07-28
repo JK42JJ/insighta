@@ -1562,7 +1562,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-27-29';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-28-30';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2266,6 +2266,7 @@
     b.innerHTML=h;
     setSheetFoot(
       '<div class="yts-custom"><input type="text" id="ytCustomTopic" maxlength="40" placeholder="직접 주제 입력" autocomplete="off"><button class="yts-cadd" id="ytCustomAdd" type="button">추가</button></div>'
+      + '<button class="yts-ghost" id="ytsByChannel" type="button">주제 대신 채널로 받기</button>'
     );
     // The retry icon is part of the sheet shell, not the foot, so it survives
     // innerHTML replacement; `propsheet` is what reveals it.
@@ -2288,6 +2289,8 @@
     function ytCustomSubmit(){ var t=(ci&&ci.value||'').trim(); if(t.length<2){ if(ci) ci.focus(); return; } closeYtSheet(); setHomeTab('curation'); selectCuration(t); }
     if(ca) ca.onclick=ytCustomSubmit;
     if(ci) ci.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); ytCustomSubmit(); } });
+    var bc=document.getElementById('ytsByChannel');
+    if(bc) bc.onclick=function(){ chRenderNew(); };
     var rt=document.getElementById('ytsRetune');
     if(rt){
       rt.disabled=!!ytRetuneSpent;
@@ -2430,6 +2433,44 @@
     if(add) add.onclick=submit;
     if(inp) inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); submit(); } });
   }
+  /** Channel panel BEFORE any curation exists: the first channel creates one. */
+  function chRenderNew(note){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    chSubId=null;
+    document.body.classList.remove('propsheet');
+    b.innerHTML='<div class="yts-h2">채널로 받기</div>'
+      + '<div class="yts-sub">고른 채널이 그 주에 올린 영상만 모아 드려요.</div>'
+      + (note ? '<div class="yts-chempty">'+curEsc(note)+'</div>'
+              : '<div class="yts-chempty">유튜브 채널 주소나 @핸들을 붙여넣어 주세요.</div>');
+    setSheetFoot('<div class="yts-custom"><input type="text" id="chInput" maxlength="120" placeholder="채널 주소 또는 @핸들" autocomplete="off"><button class="yts-cadd" id="chAdd" type="button">추가</button></div>');
+    var inp=document.getElementById('chInput'), add=document.getElementById('chAdd');
+    function submit(){
+      var v=(inp&&inp.value||'').trim(); if(v.length<2){ if(inp) inp.focus(); return; }
+      chCreateFromChannel(v);
+    }
+    if(add) add.onclick=submit;
+    if(inp){ inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); submit(); } }); inp.focus(); }
+  }
+  var CH_ERR={CHANNEL_NOT_FOUND:'그 주소로는 채널을 찾지 못했어요',
+              CHANNEL_HAS_NO_UPLOADS:'그 채널에는 업로드 목록이 없어요',
+              CHANNEL_QUOTA_EXCEEDED:'이 요금제에서 등록할 수 있는 채널을 다 채웠어요',
+              QUOTA_EXCEEDED:'이 요금제에서 만들 수 있는 큐레이션을 다 채웠어요'};
+  async function chCreateFromChannel(input){
+    var b=document.getElementById('ytsBody');
+    if(b) b.innerHTML='<div class="yts-load"><div class="yts-spin"></div><div class="yts-sub">채널을 찾는 중이에요</div></div>';
+    setSheetFoot('');
+    try{
+      var r=await api('/curations',{method:'POST',body:JSON.stringify({channelInput:input})});
+      var j=await r.json();
+      if(r.ok && j&&j.data&&j.data.id){
+        closeYtSheet(); setHomeTab('curation');
+        curCache=null; renderCuration();
+        return;
+      }
+      chRenderNew(CH_ERR[j&&j.code] || '등록하지 못했어요');
+    }catch(e){ chRenderNew('등록하지 못했어요'); }
+  }
+
   async function chLoad(note){
     try{
       var r=await api('/curations/'+chSubId+'/channels');
