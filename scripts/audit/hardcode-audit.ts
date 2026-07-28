@@ -12,6 +12,8 @@ interface RuleDef {
   allowedFileGlobs: string[];
   searchGlobs?: string[];
   multiline?: boolean;
+  /** Directory to search. Defaults to `src`; the CSS rule needs `frontend`. */
+  searchRoot?: string;
 }
 
 const REPO_ROOT = resolve(__dirname, '..', '..');
@@ -60,6 +62,21 @@ const RULES: RuleDef[] = [
     pattern: String.raw`\b60\s*\*\s*60\s*\*\s*1000\b`,
     allowedFileGlobs: ['src/utils/time-constants.ts'],
   },
+  {
+    // A colour written straight into a declaration is one the theme cannot
+    // reach. Defining a token is how a colour enters the system, so lines that
+    // declare a custom property (`--cd-chip-bg: rgba(...)`) are exempt and
+    // everything else is counted. Baseline-gated like the rest: the existing
+    // literals are recorded, and the count may only go down.
+    id: 'css-color-literal',
+    description: 'Colour literal in a CSS declaration (define a token and reference it)',
+    // rg has no look-around, so the token-definition exemption is applied in
+    // code below rather than in the pattern.
+    pattern: String.raw`#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(`,
+    allowedFileGlobs: [],
+    searchRoot: 'frontend/public/mobile',
+    searchGlobs: ['**/*.html', '**/*.css'],
+  },
 ];
 
 interface RuleResult {
@@ -69,11 +86,11 @@ interface RuleResult {
   violations: Array<{ file: string; line: number; text: string }>;
 }
 
-function runRg(pattern: string, searchGlobs: string[]): string {
+function runRg(pattern: string, searchGlobs: string[], searchRoot = 'src'): string {
   const globArgs = searchGlobs.map((g) => `--glob '${g}'`).join(' ');
   try {
     const out = execSync(
-      `rg --json --line-number -e '${pattern}' ${globArgs} src`,
+      `rg --json --line-number -e '${pattern}' ${globArgs} ${searchRoot}`,
       {
         cwd: REPO_ROOT,
         encoding: 'utf8',
@@ -111,7 +128,7 @@ function auditRule(rule: RuleDef): RuleResult {
     '!**/*.test.ts',
     '!**/*.spec.ts',
   ];
-  const raw = runRg(rule.pattern, searchGlobs);
+  const raw = runRg(rule.pattern, searchGlobs, rule.searchRoot);
   const violations: RuleResult['violations'] = [];
   for (const line of raw.split('\n')) {
     if (!line.trim()) continue;
@@ -125,6 +142,10 @@ function auditRule(rule: RuleDef): RuleResult {
       if (rule.id === 'raw-ms-per-hour-literal' && /\b24\s*\*\s*60\s*\*\s*60\s*\*\s*1000\b/.test(text)) {
         continue;
       }
+      // Defining a token is how a colour is allowed to enter the system; the
+      // rule is about colours written straight into a declaration, where the
+      // theme cannot reach them.
+      if (rule.id === 'css-color-literal' && /--[a-z0-9-]+\s*:/i.test(text)) continue;
       violations.push({
         file: filePath,
         line: event.data.line_number as number,

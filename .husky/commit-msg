@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# GitHub artifacts are English-only. UI strings are Korean and live in files;
+# they never belong in a commit message, so this has no legitimate exception and
+# is checked mechanically rather than remembered.
+#
+# It was a hard rule for months and was violated anyway -- caught only by reading
+# the message back afterwards and amending it. A rule nothing enforces is a rule
+# that fires whenever someone happens to look.
+#
+# NOT `grep -P`: husky re-execs this under `sh -e`, where grep is BSD grep and
+# -P does not exist. It exits 2, the `&&` short-circuits, and the hook passes
+# every message including Korean ones -- a guard that silently never fires.
+# Setting the locale makes the range work on BSD and GNU alike; both directions
+# were run under `sh -e` before this was committed.
+#
+# Override, for the rare case where a quoted Korean identifier genuinely belongs:
+#   INSIGHTA_ALLOW_KOREAN_COMMIT=1 git commit ...
+
+MSG_FILE="$1"
+[ -n "$INSIGHTA_ALLOW_KOREAN_COMMIT" ] && exit 0
+
+# Strip comment lines: git's own template is not part of the message.
+BODY=$(grep -v '^#' "$MSG_FILE" 2>/dev/null)
+
+if printf '%s\n' "$BODY" | LC_ALL=en_US.UTF-8 grep -q '[가-힣]'; then
+  echo ""
+  echo "  Commit message contains Korean. GitHub artifacts are English-only."
+  echo ""
+  printf '%s\n' "$BODY" | LC_ALL=en_US.UTF-8 grep -n '[가-힣]' | head -5 | sed 's/^/    /'
+  echo ""
+  echo "  Rewrite those lines in English. UI strings stay Korean in the FILES;"
+  echo "  it is the message that has to be English."
+  echo ""
+  exit 1
+fi
