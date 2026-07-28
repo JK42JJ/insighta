@@ -138,6 +138,16 @@ services:
       # Perf-monitor PR4: 15-min collapse watch + daily dead-man heartbeat
       # (mails OBSERVABILITY_ALERT_EMAIL). Rollback: delete.
       - COLLAPSE_WATCH_ENABLED=true
+      # Weekly curation schedule on the KST calendar (#1354, 2026-07-27). Off, the
+      # scan ran Sundays only while rows became due at last_run_at+7d, so the
+      # effective period measured 8-14 days and the 2026-07-26 scan built nothing.
+      # On: daily scan, due = KST weekday matches + this KST week not built yet.
+      # Rollback: delete this line (code path reverts to the Sunday scan).
+      - CURATION_SCHED_KST_ENABLED=true
+      # Channel mode. The builder only takes it when a subscription has rows in
+      # curation_channels, so with none registered this is a no-op; it becomes
+      # live the moment someone adds a channel in the dial. Rollback = false.
+      - CURATION_CHANNEL_SOURCE_ENABLED=true
       # CP494 canary — pool-first backfill gate. Fill cells from the quota-FREE +
       # embedding-FREE video_pool (tsvector, v2_promoted ~1.1k) BEFORE live search;
       # a cell with ≥3 pool candidates drops its live search.list query → quota

@@ -57,6 +57,8 @@ import {
   type SuggestionItem,
 } from './sources/suggest';
 import { LEARNING_SEED_TERMS, type LearningSeed } from './seed-terms';
+import { checkTopicSafety } from '@/modules/moderation/topic-safety';
+import { judgeTopics, type TopicVerdict } from '@/modules/curation/topic-judge';
 import { loadDynamicSeedsFromMandalas, mergeSeeds } from './dynamic-seeds';
 import { MS_PER_DAY } from '@/utils/time-constants';
 
@@ -83,6 +85,26 @@ interface AggregatedKeyword {
   keyword: string;
   rawScore: number;
   metadata: Record<string, unknown>;
+}
+
+/**
+ * Map a verdict onto the trend_signals judge columns. `counts` is tallied only
+ * once per keyword (the create path) so the metric is not double-counted by the
+ * update path.
+ */
+function judgeFields(
+  v: (TopicVerdict & { degraded: boolean }) | undefined,
+  counts: { ok: number; unsafe: number; unfit: number; unknown: number } | null,
+  judgedAt: Date
+): { judge_state: string; judge_reason: string | null; judge_model: string; judged_at: Date } {
+  const state = !v || v.degraded ? 'unknown' : !v.safe ? 'unsafe' : !v.learnable ? 'unfit' : 'ok';
+  if (counts) counts[state as keyof typeof counts] += 1;
+  return {
+    judge_state: state,
+    judge_reason: v && v.why ? v.why : null,
+    judge_model: 'topic-judge',
+    judged_at: judgedAt,
+  };
 }
 
 export const executor: SkillExecutor = {
@@ -331,9 +353,34 @@ export const executor: SkillExecutor = {
     // Per-source min-max normalization (Suggest already in [0.05, 1] so no-op)
     normalizeWithinSource(allRows);
 
+    // Collector-side safety floor. Both sources scrape whatever YouTube is
+    // surfacing, so without this the table accumulates terms this product must
+    // never propose — `ai 란제리 룩북` was collected and then suggested at
+    // norm_score 1.00, chipped as "AI·기술". Drop them before they are stored;
+    // the serving path filters too, for rows collected before this existed.
+    let blockedUnsafe = 0;
+    const safeRows = allRows.filter((row) => {
+      const verdict = checkTopicSafety(row.keyword);
+      if (verdict.safe) return true;
+      blockedUnsafe++;
+      logger.warn(
+        `trend-collector: dropped unsafe keyword "${row.keyword.slice(0, 40)}" [${verdict.category}]`
+      );
+      return false;
+    });
+
+    // Judge what survived the deterministic floor. This is the axis a word list
+    // cannot reach: most rejects are not harmful, they are simply not subjects
+    // (a church name, a song title, a person). One batched call per 100 keywords,
+    // twice a day — serving never pays for it.
+    const verdicts = await judgeTopics(safeRows.map((r) => r.keyword));
+    const verdictByKeyword = new Map(verdicts.map((v) => [v.keyword, v]));
+    const judgeCounts = { ok: 0, unsafe: 0, unfit: 0, unknown: 0 };
+    const judgedAt = new Date();
+
     let inserted = 0;
     let upsertErrors = 0;
-    for (const row of allRows) {
+    for (const row of safeRows) {
       try {
         await db.trend_signals.upsert({
           where: {
@@ -347,6 +394,7 @@ export const executor: SkillExecutor = {
             source: row.source,
             keyword: row.keyword,
             language: 'ko',
+            ...judgeFields(verdictByKeyword.get(row.keyword), judgeCounts, judgedAt),
             domain: null,
             raw_score: row.rawScore,
             norm_score: getNormScore(row),
@@ -356,6 +404,10 @@ export const executor: SkillExecutor = {
             expires_at: expiresAt,
           },
           update: {
+            // The verdict is refreshed on every collection: a keyword can change
+            // meaning, and a row judged while the LLM was down must not stay
+            // 'unknown' forever.
+            ...judgeFields(verdictByKeyword.get(row.keyword), null, judgedAt),
             raw_score: row.rawScore,
             norm_score: getNormScore(row),
             velocity: 0,
@@ -392,6 +444,8 @@ export const executor: SkillExecutor = {
         suggest_failed_seeds: suggestFailed,
         suggest_duration_ms: suggestDurationMs,
         total_signals_upserted: inserted,
+        blocked_unsafe: blockedUnsafe,
+        judged: judgeCounts,
         upsert_errors: upsertErrors,
       },
       metrics: {

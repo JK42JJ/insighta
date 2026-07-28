@@ -530,20 +530,18 @@ export async function enrichVideo(
         segments: richSummarySegments,
       });
       // Book-chain relink (2026-07-12): v2 now flows through THIS inline path
-      // (wizard trigger -> enrich-video), but the book/note fill was only
-      // enqueued by the standalone enrich-rich-summary job handler — which no
-      // longer runs. Re-fire it here (same 120s-debounced singleton per
-      // mandala) so 카드 -> v2 -> 노트 completes again. Non-fatal.
+      // (wizard trigger -> enrich-video), so card -> v2 -> note must re-fire here.
+      // Route through the completion gate (2026-07-16): this used to enqueue a
+      // book-fill DIRECTLY per video, bypassing the barrier — the second ungated
+      // emitter behind early stub notes + uncontrolled Sonnet re-fills. maybeTrigger
+      // keeps exact legacy behavior when the barrier flag is off. Non-fatal.
       if (options.mandalaId) {
-        const { enqueueMandalaBookFill } =
-          await import('@/modules/queue/handlers/mandala-book-fill');
-        const { bookRefillEnqueueOptions } =
-          await import('@/modules/queue/handlers/book-refill-debounce');
-        await enqueueMandalaBookFill(
-          { userId: options.userId, mandalaId: options.mandalaId, trigger: 'enrich-complete' },
-          bookRefillEnqueueOptions(options.mandalaId)
-        ).catch((err) => {
-          logger.warn('book re-fill enqueue failed (non-fatal)', {
+        const { maybeTriggerBookFill } = await import('@/modules/queue/handlers/book-fill-gate');
+        await maybeTriggerBookFill({
+          userId: options.userId,
+          mandalaId: options.mandalaId,
+        }).catch((err) => {
+          logger.warn('book re-fill gate failed (non-fatal)', {
             videoId,
             mandalaId: options.mandalaId,
             error: err instanceof Error ? err.message : String(err),

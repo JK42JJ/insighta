@@ -142,11 +142,83 @@
   .gp-plus{width:13px; height:13px; border-radius:50%; background:var(--ui); position:relative; flex:none}
   .gp-plus::before,.gp-plus::after{content:""; position:absolute; background:#fff; left:50%; top:50%; transform:translate(-50%,-50%)}
   .gp-plus::before{width:7px; height:1.7px} .gp-plus::after{width:1.7px; height:7px}
+  .htabs{display:flex; gap:5px; margin-top:4px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
+  .htab{flex:1; display:flex; align-items:center; justify-content:center; border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:700; letter-spacing:.01em; color:var(--paper-sub); padding:9px 0; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
+  .htab svg{display:block}
+  .htab.on{color:var(--paper-ink); background:var(--paper); box-shadow:0 1px 2px rgba(94,86,72,.18)}
+  .htab:active{transform:scale(.97)}
+  .pane{flex:1; min-height:0; display:flex; flex-direction:column}
+  /* Home carousel: curation/video/note as one connected strip dragged by the
+     bottom slider (James). Panes scroll vertically; the strip translates
+     horizontally — no gesture conflict since the drag lives on the slider only. */
+  /* overflow:clip (not hidden) so a row's scrollIntoView can't horizontally
+     scroll the clip and reveal the wrong pane; older Safari keeps the hidden
+     fallback + the scroll-reset listener below. */
+  /* Slider rail = the .epaper CARD's own bottom edge (supervisor final patch): the
+     thumb is a bead threaded on that edge, moved OUT of this clip container into
+     .device — epaper has overflow:hidden, so a half-outside thumb clips here. No
+     hairline drawn inside the window; the card's natural edge is the line. */
+  .hstrip-clip{flex:1; min-height:0; position:relative; overflow:hidden; overflow:clip}
+  .hstrip{display:flex; width:300%; height:100%; transition:transform .42s var(--spring); will-change:transform}
+  .hstrip.drag{transition:none}
+  .hpane{width:33.3333%; height:100%; min-height:0; display:flex; flex-direction:column; overflow:hidden}
+  /* Slider = a bead on the .epaper card's bottom edge (supervisor final patch).
+     #hsl is a SIBLING of .epaper inside .device (flex column, no gap): with height:0
+     its top sits exactly on the card's bottom edge. .device has no overflow clip, so
+     the half-outside thumb shows. Home-only (see show()); portrait-only (landscape
+     uses a row layout). Track inset 24px = epaper corner radius → straight run only. */
+  .hsl{flex:none; position:relative; height:0; padding:0; z-index:30; visibility:hidden}
+  .hsl-track{position:absolute; left:24px; right:24px; top:0; height:0; background:transparent} /* width ref on the card edge */
+  @media (orientation:landscape){ .hsl{display:none} } /* landscape home = row layout; the bottom-edge bead is a portrait affordance */
+  .hsl-fill{display:none}
+  .hsl-thumb{position:absolute; left:0; top:0; width:13px; height:13px; transform:translate(-50%,-50%);
+    border:none; border-radius:50%; background:var(--paper); cursor:grab; touch-action:none;
+    box-shadow:0 1px 4px -1px rgba(94,86,72,.5), inset 0 0 0 1px rgba(94,86,72,.18); transition:left .42s var(--spring)}
+  .hsl-thumb::after{content:''; position:absolute; left:-14px; right:-14px; top:-16px; bottom:-8px} /* ~40px touch target, expanded upward */
+  .hsl.drag .hsl-thumb{cursor:grabbing}
+  .hsl.drag .hsl-thumb{transition:none}
+  @media (prefers-reduced-motion:reduce){ .hstrip,.hsl-thumb,.hsl-fill{transition:none} }
+  .pane[hidden]{display:none}
+  .cur-body{flex:1; min-height:0; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:8px}
+  /* Ambient background: a soft wash in the focused row's topic color, fading in
+     behind the (translucent) row cards to fill the list and cue selection. */
+  #paneCuration{position:relative}
+  #paneCuration>.cur-body{position:relative; z-index:1}
+  /* Video tab shares the same ambient (curation+video only; NOT note — a note is
+     a different consumption unit, so a focused-mandala color has no subject there). */
+  #paneVideo{position:relative}
+  #paneVideo>.goal-pill,#paneVideo>.rows{position:relative; z-index:1}
+  /* List ambient REMOVED (James, repeated): the curation/video LIST must carry no
+     colour wash behind the rows — ambient belongs only to the deck player (.cd-amb). */
+  .cur-amb{display:none !important}
+  @media (prefers-reduced-motion:reduce){ .cur-amb{transition:none} }
+  .cur-connect{flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:11px; padding:14px 22px; overflow-y:auto}
+  .cur-connect .cic{width:44px; height:44px; border-radius:13px; display:grid; place-items:center; background:rgba(94,86,72,.08); color:var(--ui)}
+  .cur-connect .t1{font-size:15px; font-weight:750; color:var(--paper-ink)}
+  .cur-connect .t2{font-size:11.5px; font-weight:600; color:var(--paper-sub); line-height:1.7}
+  .cur-connect .cbtn{margin-top:4px; border:none; background:var(--ui); color:#fff; font-family:inherit; font-size:13px; font-weight:800; padding:11px 22px; border-radius:12px; cursor:pointer; -webkit-tap-highlight-color:transparent; box-shadow:0 4px 10px -4px rgba(0,0,0,.3)}
+  .cur-connect .cur-prog{width:160px; max-width:62%; height:5px; border-radius:99px; background:rgba(94,86,72,.12); overflow:hidden; margin-top:14px; position:relative}
+  .cur-connect .cur-prog span{position:absolute; top:0; height:100%; width:42%; border-radius:99px; background:var(--ui); animation:curslide 1.25s cubic-bezier(.4,0,.2,1) infinite}
+  @keyframes curslide{0%{left:-42%}100%{left:100%}}
+  .cur-connect .cur-note{margin-top:10px; font-size:11px; font-weight:600; color:var(--acc)}
+  .cur-connect .cbtn:active{transform:scale(.97)}
   .rows{margin-top:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; min-height:0; padding-bottom:4px}
   .row{display:flex; gap:10px; align-items:center; background:rgba(255,255,255,.55); flex:none;
     box-shadow:inset 0 0 0 1px rgba(94,86,72,.10); border-radius:12px; padding:9px 10px;
     transition:transform var(--snap) var(--spring), box-shadow var(--snap) var(--soft); cursor:pointer; touch-action:manipulation}
   .row.sel{box-shadow:inset 0 0 0 1.5px var(--ui), 0 3px 8px -3px rgba(94,86,72,.4)}
+  /* Row overflow: quiet '...' glyph → action sheet (replaces the dead-end inline
+     long-press morph). 44px hit target, tertiary tone, no border. */
+  .row .rmore{flex:none; width:40px; height:40px; margin:-6px -4px -6px -2px; display:flex; align-items:center;
+    justify-content:center; border:none; background:none; cursor:pointer; color:var(--paper-sub); opacity:.42;
+    border-radius:10px; touch-action:manipulation}
+  .row .rmore:active{opacity:.85; background:rgba(94,86,72,.08)}
+  .row .rmore svg{display:block}
+  /* Action sheet body (reuses #ytSheet): title + destructive buttons (S5 grammar). */
+  .ras-actions{display:flex; flex-direction:column; gap:9px; margin-top:14px}
+  .ras-btn{width:100%; justify-content:center}
+  body.rasheet #ytsBack{display:none}   /* action sheet closes via backdrop / grip / MENU */
+  body.rasheet #ytsBody{justify-content:flex-start}  /* action menu reads top-aligned, not centered */
   .row:active{transform:scale(.98)}
   .row.making{opacity:.55; cursor:default; filter:saturate(.15)}
   .row.making:active{transform:none}
@@ -187,6 +259,19 @@
   .ntb.on{background:rgba(94,86,72,.13); color:var(--paper-ink)}
   .ntb:active{transform:scale(.9)}
   .ntb .gearDot{position:absolute; top:6px; right:7px; width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C)}
+  .gearfab{position:absolute; right:8px; bottom:2px; visibility:hidden}
+  .plusfab{position:absolute; left:8px; bottom:2px; visibility:hidden; width:40px; height:40px; display:grid; place-items:center; border:none; border-radius:50%; background:rgba(232,128,76,.14); color:var(--acc,#E8804C); cursor:pointer; -webkit-tap-highlight-color:transparent; transition:transform var(--snap) ease, background var(--snap) ease}
+  .plusfab:active{transform:scale(.9)}
+  .wheel.touching ~ .plusfab,.wheel.touching ~ .gearfab{pointer-events:none} /* C3: no corner mis-touch during wheel rotation */
+  #ytsBody .mrow{margin-top:9px; padding:17px 16px; font-size:15px; border-radius:14px} #ytsBody .mrow:first-of-type{margin-top:2px}
+  #ytsBody .mrow.sel{box-shadow:inset 0 0 0 1.5px var(--acc,#E8804C), 0 3px 8px -3px rgba(94,86,72,.4)}
+  #ytsBody .mrow .sub{max-width:52%; text-align:right; line-height:1.25}
+  #ytsBody .mrow{align-items:center; gap:12px}
+  #ytsBody .mrow .lic{width:20px; height:20px}
+  #ytsBody .mrow .mtx{display:flex; flex-direction:column; gap:2px; text-align:left; min-width:0; flex:1}
+  #ytsBody .mrow .mtt{font-size:15px; font-weight:750; color:var(--paper-ink)}
+  #ytsBody .mrow .msb{font-size:11.5px; font-weight:600; color:var(--paper-sub); line-height:1.35}
+  body.stage .gearfab,body.curdeck .gearfab,body.reading .gearfab,body.stage .plusfab,body.curdeck .plusfab,body.reading .plusfab{visibility:hidden !important}
   .gearDot{position:absolute; top:4px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C)}
   .newsDot{width:6px; height:6px; border-radius:50%; background:var(--acc, #E8804C); margin-left:2px}
   /* IA 재설계 [J:07-15] — 브레드크럼 내비 */
@@ -286,7 +371,7 @@
   /* [J:07-15] 미니휠 = 진행바 위로 올림(엄지존) + 3초 자동숨김 (e). 기본 투명 → 터치 시 표시 → 3초 뒤 소멸 */
   body.reading .wheelzone{position:absolute; left:0; right:0; top:auto; bottom:36%;
     z-index:40; padding:0 24px 0 0; width:100%; pointer-events:none; place-items:center end} /* [J:07-16] right-center (right-thumb) per device guide box */
-  body.reading .wheel{width:min(40%,168px); transform:translateX(-40%); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)} /* [J:07-16] shift left by 40% of wheel size (one-hand reach) */
+  body.reading .wheel{width:var(--miniwheel); transform:translateX(-40%); opacity:0; pointer-events:auto; transition:opacity .35s var(--soft)} /* [J:07-16] shift left by 40% of wheel size (one-hand reach) */
   body.reading .wheel.touching,body.reading .wheel.demo,body.reading .wheel.awake,body.reading.wheelawake .wheel{opacity:.70} /* [J:07-15] 더 투명하게 — 읽기 콘텐츠 가림 완화 */
   /* Fine (scrub) mode = a toggle; same palette, signalled by a dim tone + pressed core. */
   body.finemode .wheel{filter:brightness(.84) contrast(1.02) saturate(.98); transition:filter .3s var(--soft)}
@@ -369,22 +454,40 @@
   .fin-next:active{transform:scale(.96)}
   .fin-next b{font-weight:750}
 
-  /* ---- 목표 입력 ---- */
-  .goal-ov{position:absolute; inset:0; z-index:7; display:none; flex-direction:column; justify-content:center;
-    background:linear-gradient(175deg,#FAF6ECf2,#F6F2E7f5); padding:20px}
-  .goal-ov.show{display:flex}
+  /* ---- goal input (sheet panel) ----
+     Lives inside #ytSheet .yts-card as a sibling of #ytsBody. The card owns the
+     slide-up/backdrop grammar, so this panel is plain flow content: no position,
+     no backdrop, no z-index of its own. body.goalsheet swaps which panel shows. */
+  .goal-ov{display:none; flex-direction:column; gap:0}
+  body.goalsheet #ytSheet .goal-ov{display:flex; flex:1; justify-content:center}
+  body.goalsheet #ytsBody{display:none}   /* one panel at a time */
   .go-title{font-size:14px; font-weight:750; text-align:center}
   .go-body{margin-top:13px}
   #goalInput{width:100%; border:none; border-radius:13px; padding:13px 14px; font-family:inherit;
     font-size:16px; font-weight:600; color:var(--paper-ink); background:#fff;
     box-shadow:inset 0 0 0 1.5px rgba(94,86,72,.22)}
   #goalInput:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
+  /* sheet-scoped accent tokens — #ytSheet lives OUTSIDE #dev so theme --acc* were undefined
+     (my accent button rendered with no background). Define once here for all sheets. */
+  #ytSheet{--acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30}
+  /* DIAL wordmark — shared sheet header identity (James-approved guest-sheet look) */
+  .yts-brand{flex:none; text-align:center; font-size:11px; font-weight:700; letter-spacing:.3em; color:#b7a988; text-transform:uppercase; margin:0 0 12px}
+  .yts-custom{display:flex; gap:8px; margin-top:8px; align-items:stretch}
+  .yts-custom input{flex:1; min-width:0; border:none; border-radius:13px; padding:13px 14px; font-family:inherit; font-size:14.5px; font-weight:600; color:var(--paper-ink); background:#fff; box-shadow:inset 0 0 0 1.5px rgba(94,86,72,.18)}
+  .yts-custom input:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
+  .yts-custom input::placeholder{color:var(--paper-sub); font-weight:500}
+  .yts-cadd{flex:none; border:none; border-radius:13px; padding:0 18px; font-family:inherit; font-size:14px; font-weight:700; background:var(--acc); color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:transform var(--snap) ease}
+  .yts-cadd:active{transform:scale(.95)}
   .go-actions{display:flex; gap:10px; margin-top:12px}
   .go-cancel,.go-make{flex:1; border:none; cursor:pointer; font-family:inherit; border-radius:12px; padding:12px;
     font-size:12.5px; font-weight:750; transition:transform var(--snap) var(--spring); touch-action:manipulation}
   .go-cancel{background:rgba(255,255,255,.7); color:var(--paper-sub); box-shadow:inset 0 0 0 1px rgba(94,86,72,.16)}
   .go-make{background:var(--ui); color:#fff; box-shadow:0 4px 10px -4px rgba(0,0,0,.35)}
   .go-cancel:active,.go-make:active{transform:scale(.95)}
+  /* wheel focus ring — parity with .mrow.sel in the hub panel */
+  #goalInput.sel{box-shadow:inset 0 0 0 2px var(--acc)}
+  .go-cancel.sel,.go-make.sel{box-shadow:0 0 0 2px var(--acc), 0 4px 10px -4px rgba(0,0,0,.35)}
+  .wheel.touching ~ * .go-cancel,.wheel.touching ~ * .go-make{pointer-events:none} /* mistouch guard while scrubbing */
   .go-progress{display:flex; flex-direction:column; align-items:center; gap:11px; margin-top:15px}
   .go-progress[hidden],.go-body[hidden]{display:none}
   [hidden]{display:none !important} /* display 클래스가 hidden을 이기는 사고 방지 (§7b) */
@@ -393,7 +496,7 @@
 
   /* ================= 조그휠 — §1.1 + §1.1a ================= */
   /* [J:07-13 설치앱 판정] 휠 = 하단 고정 — 화면 공간 최우선 (정사각 필드 폐기) */
-  .wheelzone{display:grid; place-items:center; flex:none; width:100%; padding-top:12px}
+  .wheelzone{position:relative; display:grid; place-items:center; flex:none; width:100%; padding-top:12px}
   .wheel{
     width:74%; aspect-ratio:1; border-radius:50%; position:relative; display:grid; place-items:center; /* [J:07-13] 클래식 62% 대비 +20% — 설치앱 하단 낭비 교정 */
     /* 평평한 매트 도넛 — 명암 ±4%, 돔 금지 */
@@ -466,7 +569,7 @@
   body.stage .device::after{display:none}
   body.stage .engrave{display:none}
   /* [J pick 07-14] C3 미니 휠 — 세로 조그휠의 미니어처, 반투명 상주 */
-  body.stage .wheelzone{display:block; position:absolute; z-index:7; width:176px; padding:0;
+  body.stage .wheelzone{display:block; position:absolute; z-index:7; width:var(--miniwheel); padding:0;
     right:calc(env(safe-area-inset-right, 0px) + 14px); bottom:calc(var(--sab) + 14px); left:auto; top:auto}
   /* A-기록 핸들 문법 [J:07-14]: 평시 투명 → 터치 시 저투명(시청 무방해) → 3초 머문 뒤 소멸 */
   body.stage .wheel{width:100%; opacity:0; transition:opacity .35s var(--soft)}
@@ -622,6 +725,396 @@
   .inst-x{border:none; background:none; cursor:pointer; font-family:inherit; font-size:13px; font-weight:750;
     color:var(--paper-sub); padding:9px; margin-top:2px; touch-action:manipulation}
 
+  /* YouTube connect wizard sheet [J:07-21] — TRUE bottom sheet (guest-mockup grammar):
+     body-level fixed overlay, card anchored to the VIEWPORT bottom (rises over the wheel),
+     compact height so the content stays visible behind; exit = quiet bottom-center link. */
+  #ytSheet{position:fixed; inset:0; z-index:80; display:flex; align-items:flex-end; justify-content:center;
+    pointer-events:none; opacity:0; transition:opacity .34s var(--soft)}
+  #ytSheet .yts-bd{position:absolute; inset:0; background:rgba(30,27,22,.42)}
+  #ytSheet .yts-card{position:relative; width:100%; max-width:480px; background:var(--paper-hi,#FAF6EC);
+    border-radius:22px 22px 0 0; padding:12px 24px calc(16px + var(--sab)); box-shadow:0 -14px 44px rgba(30,27,22,.30);
+    transform:translateY(103%); transition:transform .42s var(--spring); display:flex; flex-direction:column; gap:15px;
+    text-align:center; height:58vh; overflow:hidden; justify-content:flex-start}
+  /* One sheet height for every state, and the CARD never scrolls — only its body
+     does. Pinning the height alone (build 26) kept every sheet the same size but
+     pushed the tail of the tallest state (proposals: input + retune) off a real
+     phone screen. Three regions instead: grip/wordmark stay put, #ytsBody scrolls,
+     .yts-foot is always reachable at the bottom. */
+  #ytSheet .yts-foot{flex:none; display:flex; flex-direction:column; gap:10px}
+  #ytSheet .yts-card.dragging{transition:none}
+  #ytsBody{display:flex; flex-direction:column; gap:15px; flex:1; justify-content:center;
+    overflow-y:auto; overflow-x:hidden; min-height:0; scrollbar-width:none}
+  #ytsBody::-webkit-scrollbar{display:none}
+  /* Loading state — shown the instant a tab is pressed, before any network call. */
+  .yts-load{display:flex; flex-direction:column; align-items:center; gap:14px}
+  .yts-spin{width:26px; height:26px; border-radius:99px; border:2.5px solid rgba(94,86,72,.16);
+    border-top-color:var(--acc); animation:ytspin .8s linear infinite}
+  @keyframes ytspin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){ .yts-spin{animation-duration:2.4s} }
+  body.ytsheet #ytSheet{opacity:1; pointer-events:auto}
+  body.ytsheet #ytSheet .yts-card{transform:translateY(0)}
+  #ytSheet .yts-grip{width:38px; height:4px; border-radius:99px; background:rgba(94,86,72,.22); margin:0 auto; flex:none}
+  /* Retune lives as an icon in the sheet's top-right corner rather than as a
+     full-width row in the foot: same action, ~40px of vertical budget back, and
+     it reads as "try again" instead of competing with the primary input. */
+  #ytSheet .yts-retry{position:absolute; top:14px; right:16px; width:34px; height:34px; display:none;
+    align-items:center; justify-content:center; border:none; border-radius:99px; padding:0;
+    background:rgba(94,86,72,.07); color:var(--paper-sub); cursor:pointer;
+    -webkit-tap-highlight-color:transparent; touch-action:manipulation; transition:opacity .2s ease}
+  body.ytsheet.propsheet #ytSheet .yts-retry{display:flex}
+  #ytSheet .yts-retry:active{transform:scale(.94)}
+  #ytSheet .yts-retry[disabled]{opacity:.32; pointer-events:none}
+  #ytSheet .yts-exit{border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:750;
+    color:var(--paper-sub); cursor:pointer; padding:10px 8px 2px; touch-action:manipulation; align-self:center}
+  .yts-h{font-size:20px; font-weight:850; color:var(--paper-ink); line-height:1.35; letter-spacing:-.01em; margin-top:4px}
+  .yts-h2{font-size:17px; font-weight:800; color:var(--paper-ink); line-height:1.4; margin-top:2px}
+  .yts-sub{font-size:12.5px; font-weight:600; color:var(--paper-sub); line-height:1.7}
+  .yts-cta{display:inline-flex; align-items:center; justify-content:center; gap:9px; background:#fff; color:#3B372F;
+    font-family:inherit; font-size:14px; font-weight:800; padding:13px 20px; border-radius:14px; cursor:pointer;
+    -webkit-tap-highlight-color:transparent; box-shadow:0 4px 14px -4px rgba(0,0,0,.22); border:1px solid rgba(94,86,72,.16)}
+  .yts-cta:active{transform:scale(.98)}
+  .yts-cta[disabled]{opacity:.6; pointer-events:none}
+  .yts-safe{font-size:11px; font-weight:600; color:var(--paper-sub)}
+  /* Proposals = a horizontal deck you flick through, not a stack you scroll past.
+     Three stacked cards cost ~240px of sheet height and overflowed on a real
+     phone; one row costs ~110px. Peeking the next card also says "there is more"
+     without a scrollbar, and the wheel maps onto it naturally (turn = next card). */
+  /* Card width is a LENGTH, not a percentage, so the gutter can be expressed as
+     `50% - half a card` and actually centre the first and last card. With a %
+     flex-basis the two are circular — the basis resolves against the content box,
+     which the padding is shrinking — and the end cards sit clipped against the
+     edge (measured -32px / +47px off centre). */
+  #ytSheet{--yts-card-w:min(72vw,268px)}
+  /* flex:none is load-bearing. `overflow-y:hidden` makes this item's automatic
+     minimum size resolve to ZERO, so without it the deck is the first thing flex
+     shrinks when the sheet is short -- and being overflow-hidden it then clips
+     the card silently, mid-title, instead of letting #ytsBody scroll. Reported
+     on a real phone at build 27; the earlier measurement missed it because it
+     read the CARD's overflow, which was 0 precisely BECAUSE the deck was
+     already crushed. */
+  .yts-props{flex:none; display:flex; gap:10px; margin-top:2px; overflow-x:auto; overflow-y:hidden;
+    scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    padding:2px calc(50% - var(--yts-card-w)/2) 4px;
+    scroll-padding-inline:calc(50% - var(--yts-card-w)/2)}
+  .yts-props::-webkit-scrollbar{display:none}
+  .yts-prop{flex:0 0 var(--yts-card-w); scroll-snap-align:center; display:flex; flex-direction:column;
+    align-items:flex-start; justify-content:center; gap:7px; text-align:left; min-height:96px;
+    border:1px solid rgba(94,86,72,.14); background:rgba(255,255,255,.6); border-radius:17px; padding:15px 16px;
+    cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent;
+    transition:transform .22s var(--spring), box-shadow .22s ease, border-color .22s ease, opacity .22s ease;
+    transform:scale(.94); opacity:.55}
+  /* the centred card is the one the core button will pick */
+  .yts-prop.sel{transform:scale(1); opacity:1; border-color:var(--acc);
+    box-shadow:0 8px 20px -12px rgba(30,27,22,.5)}
+  .yts-prop:active{transform:scale(.97)}
+  /* position dots — which of the three is focused */
+  .yts-dots{display:flex; gap:6px; justify-content:center; margin-top:2px}
+  .yts-dot{width:5px; height:5px; border-radius:99px; background:rgba(94,86,72,.22); transition:all .22s ease}
+  .yts-dot.on{background:var(--acc); width:16px}
+  .yts-prop-dom{font-size:10px; font-weight:800; letter-spacing:.04em; color:var(--acc-ink);
+    background:rgba(206,95,48,.10); padding:2px 8px; border-radius:99px}
+  .yts-prop-t{font-size:15px; font-weight:750; color:var(--paper-ink)}
+  .yts-ghost{border:none; background:none; font-family:inherit; font-size:12px; font-weight:700;
+    color:var(--paper-sub); cursor:pointer; padding:8px; touch-action:manipulation}
+  /* Followed-channel list. Rows are informational (avatar + name) with one
+     destructive affordance, so they are divs with a button rather than buttons. */
+  .yts-chs{display:flex; flex-direction:column; gap:8px; text-align:left}
+  .yts-ch{display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:13px;
+    background:rgba(255,255,255,.6); box-shadow:inset 0 0 0 1px rgba(94,86,72,.13)}
+  .yts-ch img{width:32px; height:32px; border-radius:99px; flex:none; background:rgba(94,86,72,.1)}
+  .yts-ch .chn{flex:1; min-width:0; font-size:14px; font-weight:700; color:var(--paper-ink);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .yts-ch .chx{flex:none; border:none; background:none; color:var(--paper-sub); font-family:inherit;
+    font-size:12px; font-weight:700; padding:6px 4px; cursor:pointer; touch-action:manipulation}
+  .yts-chempty{font-size:12.5px; font-weight:600; color:var(--paper-sub); line-height:1.7; text-align:center}
+  .yts-acct{font-size:13px; font-weight:700; color:var(--paper-ink); background:rgba(94,86,72,.06);
+    border-radius:12px; padding:11px 14px; word-break:break-all}
+  .yts-danger{border:1px solid var(--acc-lo); background:none; color:var(--acc-ink); font-family:inherit;
+    font-size:13px; font-weight:800; padding:11px 18px; border-radius:12px; cursor:pointer; touch-action:manipulation}
+  /* confirm bg: #ytSheet lives OUTSIDE the themed #dev, so every --acc* token is
+     undefined here and resolved to transparent (white text vanished). Use --ink,
+     which is defined on :root and always dark, so white text stays legible. */
+  .yts-danger.confirm{background:var(--ink); color:#fff; border-color:var(--ink)}
+  .yts-danger[disabled]{opacity:.6; pointer-events:none}
+  .yts-tune{display:flex; flex-direction:column; align-items:center; gap:16px; padding:20px 0}
+  .yts-dial{width:54px; height:54px; border-radius:50%; border:3px solid rgba(94,86,72,.14);
+    border-top-color:var(--ui); animation:ytspin 1s linear infinite}
+  @keyframes ytspin{to{transform:rotate(360deg)}}
+  .yts-tune-t{font-size:13.5px; font-weight:700; color:var(--paper-ink)}
+  @media (prefers-reduced-motion:reduce){ .yts-dial{animation:none} #ytSheet .yts-card{transition-duration:.001s} }
+  /* Curation deck [J:07-21] — full-bleed dark player, port of the approved design
+     (project ef4fae07 + James device screenshots as the numeric contract):
+       - all THREE cards fully inside the viewport: prev 24% / focus 42% / next 24%
+         of the strip height (mockup shows near-equal thirds, focus slightly larger)
+       - relevance wave lives INSIDE the focus card, ALWAYS visible (playing too)
+       - core/full toggle in the header (mockup 핵심만/전체)
+       - jog wheel = the EXISTING #wheel floating-mini mode (reading/stage pattern),
+         NOT a bespoke widget. */
+  #curDeck{position:fixed; inset:0; z-index:70; background:#12100E; display:none; flex-direction:column;
+    padding:calc(var(--sat) + 8px) 14px calc(var(--sab) + 10px); color:#EDE7DC; overflow:hidden;
+    opacity:0; transition:opacity .25s var(--soft)}
+  /* Ambient background (YouTube ambient-mode grammar): the current poster,
+     heavily blurred + dimmed, fills the whole deck so the empty area below the
+     video card carries the video's colors instead of a flat black void. */
+  /* Background decoration MUST NOT intercept touches (convention: every ambient
+     layer needs pointer-events:none — the deck one was missed, killing the back
+     button since a z0 positioned layer paints above the static top bar). */
+  .cd-amb{position:absolute; inset:-14%; z-index:0; pointer-events:none; background:#12100E center/cover no-repeat;
+    -webkit-filter:blur(var(--cd-amb-blur)) saturate(1.3) brightness(.5);
+    filter:blur(var(--cd-amb-blur)) saturate(1.3) brightness(.5);
+    opacity:0; transition:opacity .6s var(--soft)}
+  .cd-amb.on{opacity:.5}
+  /* keep the wheel/text legible: darken the lower half where the wheel lives */
+  .cd-amb::after{content:''; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(18,16,14,.15) 0%, rgba(18,16,14,.55) 58%, rgba(18,16,14,.82) 100%)}
+  @media (prefers-reduced-motion:reduce){ .cd-amb{transition:none} }
+  body.curdeck #curDeck{display:flex}
+  body.curdeck.cdin #curDeck{opacity:1}   /* D0: cream->dark crossfade (studio entry) */
+  /* D4 — weekly complete card (slides into the deck position) */
+  .cd-fin{position:absolute; inset:0; z-index:6; background:#12100E; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:14px; text-align:center; padding:0 30px}
+  body.cdfin .cd-fin{display:flex}
+  body.cdfin .cd-strip,body.cdfin .cd-top .cd-count{visibility:hidden}
+  .cd-fin-t{font-size:19px; font-weight:850; color:#F5F2EC; line-height:1.45}
+  .cd-fin-s{font-size:12.5px; font-weight:650; color:#B8AE9E}
+  .cd-fin button{border:1px solid rgba(237,231,220,.25); background:none; color:#EDE7DC; font-family:inherit;
+    font-size:13px; font-weight:750; padding:11px 20px; border-radius:12px; cursor:pointer; touch-action:manipulation; width:min(78%,260px)}
+  .cd-fin button.primary{background:var(--acc); border-color:var(--acc); color:#fff}
+  /* D6 — one-time wheel coachmark */
+  .cd-hint{position:fixed; right:8px; bottom:calc(36% + 6px); z-index:77; background:rgba(245,242,236,.95);
+    color:#2C2925; font-size:11.5px; font-weight:750; border-radius:99px; padding:8px 14px;
+    box-shadow:0 6px 18px rgba(0,0,0,.35); display:none; pointer-events:none}
+  body.curdeck.cdhint .cd-hint{display:block}
+  .cd-top{display:flex; align-items:center; gap:8px; padding:2px 4px 8px}
+  .cd-back{border:none; background:none; color:#B8AE9E; font-family:inherit; font-size:13px; font-weight:750;
+    cursor:pointer; padding:7px 4px; touch-action:manipulation; flex:none}
+  .cd-title{flex:1; text-align:center; font-size:14px; font-weight:800; color:#EDE7DC; min-width:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .cd-count{flex:none; font-size:10.5px; font-weight:700; color:#8F887A; letter-spacing:.12em; text-align:right}
+  /* Layout v2 (device review 3: "low-frame = cheap"): EQUAL-height 3-card TRACK.
+     Cards physically travel the full pitch via transform-only transitions (GPU,
+     60fps, zero distortion because heights are uniform). The PLAYBACK STAGE is a
+     separate layer pinned over the TOP card; during wheel travel only posters
+     slide (stage hidden), playback starts on settle — control feel, no load storm. */
+  .cd-strip{flex:1; min-height:0; position:relative; overflow:hidden}
+  #cdTrack{position:absolute; left:0; right:0; top:0; will-change:transform}
+  #cdTrack.gliding{transition:transform .21s cubic-bezier(.25,.8,.3,1)}
+  .cd-card{position:relative; border-radius:16px; overflow:hidden; background:#1E1B17 center/cover no-repeat;
+    -webkit-tap-highlight-color:transparent; margin-bottom:8px}
+  .cd-card::after{content:''; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(10,9,8,.15), rgba(10,9,8,.55) 82%)}
+  .cd-card.upnext::after{background:rgba(10,9,8,.45)}
+  .cd-card.empty{background:#181512; opacity:.35}
+  /* stage = playback layer over the top card (same rect) */
+  .cd-stage{position:absolute; left:0; right:0; top:0; z-index:4; border-radius:16px; overflow:hidden;
+    background:#000; box-shadow:0 14px 40px rgba(0,0,0,.5); transition:opacity .14s}
+  body.cdnav .cd-stage{opacity:0; pointer-events:none}   /* wheel travel: posters only */
+  .cd-meta{position:absolute; left:14px; right:14px; bottom:22px; z-index:2; display:flex; flex-direction:column; gap:2px; pointer-events:none}
+  .cd-vt{font-size:14.5px; font-weight:800; color:#F5F2EC; line-height:1.3;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .cd-vs{font-size:10.5px; font-weight:650; color:#B8AE9E; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  body.cdplaying .cd-meta{display:none}
+  .cd-chap{position:absolute; left:12px; right:12px; bottom:8px; z-index:3; display:flex; gap:4px; pointer-events:none}
+  .cd-chap i{flex:1; height:4px; border-radius:2.5px; background:rgba(237,231,220,.22); position:relative; overflow:hidden}
+  .cd-chap i.done{background:var(--ui)}
+  .cd-chap i.now b{position:absolute; left:0; top:0; bottom:0; background:var(--ui); border-radius:2.5px;
+    transition:width .45s linear; display:block}
+  /* stage poster (device review: landscape pre-play thumbnail was crop-zoomed and
+     cheap-looking) — premium standard: blurred cover fill behind + contained
+     original in front; works for any viewport aspect with zero cropping. */
+  .cd-poster{position:absolute; inset:0; z-index:0; overflow:hidden}
+  .cd-poster .cp-back{position:absolute; inset:-8%; background:#181512 center/cover no-repeat;
+    filter:blur(26px) saturate(1.15) brightness(.75); transform:scale(1.12)}
+  .cd-poster .cp-front{position:absolute; inset:0; background:transparent center/contain no-repeat}
+  /* Letterbox invariant: the video stage is ALWAYS black behind the iframe, so a
+     16:9 video in an ultra-wide landscape letterboxes to black, never bleeding
+     the deck ambient (or any layer) through the side bars. */
+  .cd-yt{position:absolute; inset:0; z-index:1; background:#000}
+  /* YouTube's iframe must fill the stage exactly. Left unstyled it keeps the pixel
+     size the YT API gave it at creation (portrait width), so after rotation the
+     video sits off-center and slides left/right, and its focus ring paints a
+     shifting purple box (James: "왔다갔다"). Pin it to the container on every axis
+     and kill the focus outline. Target #cdYtA/#cdYtB by id too — the YT API drops
+     the .cd-yt class when it swaps the div for the iframe. */
+  .cd-yt iframe, iframe.cd-yt, #cdStage iframe, #cdYtA, #cdYtB{position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; border:0 !important; outline:none !important}
+  .cd-yt.off{visibility:hidden}
+  /* Touch guard over the player iframe: touches on an iframe never reach the
+     parent DOM, so wheel summon was impossible wherever the stage covers the
+     screen (landscape = 100%). Guard is a parent-DOM surface while the wheel
+     is hidden; once the wheel is awake it steps aside so YouTube UI stays
+     reachable (summon-consume contract unchanged). */
+  .cd-guard{position:absolute; inset:0; z-index:2; background:transparent; -webkit-tap-highlight-color:transparent}
+  body.curdeck.cdwheel .cd-guard{pointer-events:none}
+  /* Loading = note veil: top-card poster shows through + bottom-right ring until PLAYING */
+  .cd-ring{position:absolute; right:12px; bottom:20px; z-index:4; width:24px; height:24px; border-radius:50%;
+    border:2.5px solid rgba(255,255,255,.28); border-top-color:#fff; animation:veilspin .9s linear infinite; display:none;
+    pointer-events:none} /* visual only — must never shadow the stage touch guard */
+  body.cdloading .cd-stage .cd-ring{display:block}
+  body.cdloading .cd-stage .cd-yt{visibility:hidden}
+  /* Pause veil: while paused the iframe (and YouTube's related-video overlay) is
+     hidden behind the poster; a quiet play glyph signals "center resumes". */
+  body.cdpaused .cd-stage .cd-yt{visibility:hidden}
+  .cd-resume{display:none; position:absolute; left:50%; top:50%; z-index:3; width:54px; height:54px;
+    transform:translate(-50%,-50%); border-radius:50%; background:rgba(18,16,14,.5);
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.22); pointer-events:none;
+    align-items:center; justify-content:center}
+  body.curdeck.cdpaused .cd-resume{display:flex}
+  @media (prefers-reduced-motion:reduce){ #cdTrack.gliding{transition:none} .cd-ring{animation:none} }
+  .cd-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2;
+    width:56px; height:56px; border-radius:50%; border:none; cursor:pointer;
+    background:rgba(245,242,236,.92); color:#2C2925; display:grid; place-items:center;
+    box-shadow:0 8px 24px rgba(0,0,0,.4); touch-action:manipulation}
+  .cd-play:active{transform:translate(-50%,-50%) scale(.94)}
+  body.cdplaying .cd-play{display:none}
+  /* jog wheel = existing #wheel in floating-mini mode — SAME coordinates as the note's
+     reading mode (bottom 36%, right-aligned, shifted left 40%, width min(40%,168px)).
+     Device review 4: APPLE GLASS finish + summon-anywhere fade (own cdwheel state,
+     not the stage/reading awake path): any deck touch fades it in (220ms), 3s idle
+     fades it out (500ms); pointer-events only while visible. */
+  :root{--cd-amb-blur: 46px;   /* deck ambient blur — lower if fullscreen blur drops frames on low-end iOS */
+  }
+  :root{--cd-glass: blur(18px) saturate(1.6);   /* tunable if warm-swap playback drops frames */
+    /* quiet state while a video PLAYS — lower saturation, more transparency
+       (device directive: the wheel must not compete with the picture) */
+    --cd-glass-quiet: blur(18px) saturate(1.1);
+    --cd-wheel-fill: rgba(245,242,236,.34);
+    --cd-wheel-fill-quiet: rgba(245,242,236,.20);
+    --cd-wheel-awake:.95;
+    --cd-wheel-awake-quiet:.6}
+  /* mini wheel size token — vmin keeps it IDENTICAL in portrait and landscape
+     (James: same size in landscape; shared by deck / note-reading / video-stage) */
+  :root{--miniwheel: min(40vmin, 168px)}
+  body.curdeck .wheelzone{position:fixed; left:0; right:0; top:auto; bottom:36%;
+    z-index:76; padding:0 24px 0 0; width:100%; pointer-events:none; display:grid; place-items:center end}
+  body.curdeck .wheel{width:var(--miniwheel); transform:translateX(-40%) scale(.98); opacity:0; pointer-events:none;
+    transition:opacity .5s ease, transform .5s ease;
+    background:var(--cd-wheel-fill);
+    -webkit-backdrop-filter:var(--cd-glass); backdrop-filter:var(--cd-glass);
+    border:1px solid rgba(255,255,255,.38);
+    box-shadow:0 10px 34px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.45)}
+  body.curdeck.cdplaying .wheel{background:var(--cd-wheel-fill-quiet);
+    -webkit-backdrop-filter:var(--cd-glass-quiet); backdrop-filter:var(--cd-glass-quiet);
+    border-color:rgba(255,255,255,.24);
+    box-shadow:0 8px 26px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.28)}
+  body.curdeck.cdsummon .wheel{pointer-events:none !important} /* A2: summon touch reveals only; operable next touch (overrides cdwheel below) */
+  body.curdeck.cdwheel .wheel{opacity:var(--cd-wheel-awake); transform:translateX(-40%) scale(1); pointer-events:auto;
+    transition:opacity .22s ease, transform .22s ease}
+  body.curdeck.cdplaying.cdwheel .wheel{opacity:var(--cd-wheel-awake-quiet)}
+  @media (prefers-reduced-motion:reduce){ body.curdeck .wheel,body.curdeck.cdwheel .wheel{transition:none} }
+  /* journey bar (reusable unit — the video tab adopts this pattern later, R12):
+     continuous slim bar at the very bottom = position within the lineup; thickens
+     + shows a transient "7 / 20" label while the wheel/drag is travelling. */
+  .jbar{position:absolute; left:14px; right:14px; bottom:calc(var(--sab) + 6px); z-index:5;
+    height:3px; border-radius:99px; background:rgba(237,231,220,.18); transition:height .18s ease; pointer-events:none}
+  .jbar .jb-fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--acc); transition:width .25s ease}
+  .jbar .jb-mark{position:absolute; top:50%; width:9px; height:9px; border-radius:50%; background:#F5D48A;
+    transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(18,16,14,.8)}
+  /* jb-label retired (P1-4): header keeps the persistent N/20 — one meaning, one place */
+  body.cdnav .jbar{height:5px}
+  /* Landscape = the mockup's fullscreen contract: the stage fills the viewport.
+     These are gated on body.curdeck ONLY (NOT .cdplaying) — supervisor L1: "stage size
+     only changes on rotation". Gating on .cdplaying let nav/pause frames drop the stage
+     to the portrait card size (cdRender's inline g.card height) + reveal the in-flow
+     .cd-top = the size "seesaw" (pump① 69% posters, pump② 15% height). Now the full-stage
+     layout is invariant across play/pause/nav; only rotation changes it. */
+  @media (orientation:landscape){
+    body.curdeck #curDeck{padding:0}
+    body.curdeck .cd-top,body.curdeck #cdTrack{display:none}   /* landscape = no portrait header / card track; chrome is overlay-only */
+    /* Pin the stage to the raw viewport so no ancestor padding can offset it. */
+    body.curdeck .cd-stage{position:fixed; inset:0; height:100% !important; width:100% !important; border-radius:0; box-shadow:none}
+    body.curdeck.cdnav .cd-stage{opacity:1}   /* nav = keep the video full-size in place (crossfade), never fade to the (hidden) poster track */
+    /* Poster/veil inherits the full stage rect (ride-along ①: no small poster on black).
+       Also clips the poster bleed (.cp-back inset:-8%) / ambient (-14%) that ballooned on
+       the wide full-screen stage (measured 1858px vs 1430 viewport). */
+    body.curdeck .cd-poster .cp-back{inset:0; transform:none}
+    body.curdeck .cd-amb{display:none} /* ambient = portrait-only decoration; the stage fills landscape */
+    body.curdeck .cd-chap{display:none}
+  }
+
+  /* ===== Portrait deck = native-scroll YouTube-style feed (supervisor handoff 2026-07-23) =====
+     Full-bleed 16:9 cards + bottom meta block; native scroll + IntersectionObserver autoplay.
+     Landscape keeps the stage/track/wheel path above (frozen). Portrait hides the track,
+     wheel, hint and journey bar; the feed owns the whole area under the header. */
+  #cdFeed{display:none; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+    background:#0D0D10; scroll-behavior:auto; min-height:0}
+  @media (orientation:portrait){
+    /* Portrait curation deck = full-bleed native-scroll feed. #curDeck is a flex column:
+       header (flex:none) sits above, the feed (flex:1) fills below, the stage is a fixed
+       overlay hosted by .cd-strip ABOVE the feed. The old #cdFeed{position:absolute}
+       covered the header (no back button) and .cd-strip z:0 trapped the video behind the
+       feed (thumbnails only) — both fixed here. */
+    body.curdeck #curDeck{padding:calc(var(--sat) + 6px) 0 0}          /* feed edge-to-edge (A1) */
+    body.curdeck .cd-top{padding:2px 14px 9px; position:relative; z-index:8}  /* header/back above feed + stage */
+    body.curdeck #cdTrack,body.curdeck .cd-hint,body.curdeck .jbar{display:none !important}
+    body.curdeck .wheelzone{display:none !important}                   /* W: wheel hidden in portrait deck only */
+    body.curdeck .cd-strip{position:absolute; left:0; right:0; top:0; bottom:0; flex:none; overflow:visible; z-index:6; pointer-events:none}
+    body.curdeck #cdFeed{display:block; flex:1; min-height:0; position:relative; z-index:1}
+    body.curdeck .cd-stage{pointer-events:auto}                        /* video is the tap target */
+    body.curdeck .cd-stage .cd-meta,body.curdeck .cd-stage .cd-chap,body.curdeck .cd-stage .cd-play{display:none !important}
+    body.curdeck .cd-ring{display:none !important}                     /* A5: no spinner in the deck */
+    /* A5: static thumbnail -> live video reads as "coming alive". The poster starts dim
+       and the iframe crossfades in on PLAYING with a tone ramp (0.80 -> 1.00) slightly
+       longer than the fade, so brightening continues after the crossfade = "서서히 밝아진다". */
+    body.curdeck .cd-poster{--deck-dim:.8; filter:brightness(var(--deck-dim)); transition:filter .26s cubic-bezier(.2,.6,.2,1)}
+    body.curdeck .cd-stage .cd-yt{opacity:0; transition:opacity .2s cubic-bezier(.2,.6,.2,1)}
+    body.curdeck.cdplaying .cd-stage .cd-yt:not(.off){opacity:1}
+    body.curdeck.cdplaying .cd-poster{--deck-dim:1}
+  }
+  #cdFeed::after{content:''; display:block; height:34vh}   /* tail spacer: last card can settle as dominant */
+  .cf-card{position:relative; width:100%; background:#0D0D10; padding-bottom:14px}
+  .cf-media{position:relative; width:100%; aspect-ratio:16/9; background:#000 center/cover no-repeat; overflow:hidden;
+    transition:filter .3s ease}
+  body.curdeck .cf-card:not(.cf-focus) .cf-media{filter:brightness(.5)}   /* A2: brightness tier replaces width tier */
+  .cf-slot{position:absolute; inset:0; z-index:1; background:#000}   /* active/warm iframe mounts here; empty = poster shows */
+  .cf-slot:empty{display:none}
+  .cf-slot iframe{position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; border:0 !important}
+  .cf-prog{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:2; background:rgba(237,231,220,.16)}
+  .cf-prog b{display:block; height:100%; width:0; background:#FF3B30}
+  .cf-prog.none{display:none}   /* unwatched or duration-less = no line (A3/A4 rule) */
+  .cf-durchip{position:absolute; right:8px; bottom:8px; z-index:2; background:rgba(10,9,8,.8); color:#EDE7DC;
+    font-size:11px; font-weight:700; border-radius:4px; padding:1px 5px; letter-spacing:.02em}
+  /* unavailable video (embed disabled / deleted): card-internal label + dim, never a toast */
+  .cf-na{position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center;
+    background:rgba(13,13,16,.72); color:#B8AE9E; font-size:13px; font-weight:650; letter-spacing:.01em}
+  .cf-durchip{display:none}   /* duration lives in the meta sub uniformly; no per-card chip (avoids focus-change flicker) */
+  .cf-meta{padding:14px 20px 6px}
+  .cf-vt{font-size:16px; font-weight:650; color:#EDE7DC; line-height:1.35;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .cf-sub{margin-top:7px; font-size:12.5px; font-weight:600; color:rgba(237,231,220,.55); line-height:1.4;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  /* Every card carries the SAME meta (2-line title + channel/time/views) so card heights
+     are identical and NEVER change when a card becomes the playing one — that height
+     change was the feed "wobble" (꿀렁거림) on scroll. Uniform = zero reflow. */
+  .cf-play{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3;
+    width:54px; height:54px; border-radius:50%; border:none; cursor:pointer; background:rgba(245,242,236,.92);
+    color:#2C2925; display:none; place-items:center; box-shadow:0 8px 24px rgba(0,0,0,.4); touch-action:manipulation}
+  body.curdeck .cf-focus:not(.cf-playing) .cf-play{display:grid}
+  /* muted-autoplay affordance: shown while the feed plays muted; a tap unmutes (gesture) */
+  .cf-mutechip{display:none; position:fixed; left:50%; bottom:calc(var(--sab) + 18px); transform:translateX(-50%); z-index:9;
+    align-items:center; gap:6px; border:none; cursor:pointer; -webkit-tap-highlight-color:transparent;
+    background:rgba(18,16,14,.82); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    color:#EDE7DC; font-family:inherit; font-size:12.5px; font-weight:750; letter-spacing:.01em;
+    border-radius:99px; padding:8px 15px; box-shadow:0 6px 18px rgba(0,0,0,.42)}
+  .cf-mutechip svg{display:block}
+  body.curdeck.cffeedmuted .cf-mutechip{display:inline-flex}
+  body.curdeck.cffeedmuted .cf-mutechip:active{transform:translateX(-50%) scale(.96)}
+  /* The deck now uses in-card players (video lives in .cf-slot, scrolls natively). The old
+     fixed-overlay stage is scrapped — hide it in the deck so nothing floats over the feed. */
+  body.curdeck .cd-stage{display:none !important}
+  /* Landscape = rotate-to-fullscreen: the current (playing) card fills the viewport, feed
+     hidden, same in-card player (no reload). Rotate back to portrait returns to the feed. */
+  @media (orientation:landscape){
+    body.curdeck #curDeck{padding:0}
+    body.curdeck .cd-top{display:flex !important; position:fixed; top:0; left:0; right:0; z-index:10;
+      padding:10px 14px; background:linear-gradient(180deg,rgba(0,0,0,.6),transparent)}
+    body.curdeck #cdFeed{display:block !important; position:absolute; inset:0; overflow:hidden}
+    body.curdeck .cf-card:not(.cf-playing){display:none}
+    body.curdeck .cf-playing{position:fixed; inset:0; z-index:4; padding:0; background:#000}
+    body.curdeck .cf-playing .cf-media{width:100%; height:100%; aspect-ratio:auto}
+    body.curdeck .cf-playing .cf-meta,body.curdeck .cf-mutechip{display:none}
+  }
+
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
   .shr{border:none; background:none; cursor:pointer; touch-action:manipulation; color:var(--paper-sub);
     padding:4px 8px; margin-left:auto; flex:none; line-height:0}
@@ -648,6 +1141,17 @@
     opacity:0; transition:opacity .3s, transform .3s var(--spring); pointer-events:none; z-index:50; white-space:nowrap;
     max-width:86vw; overflow:hidden; text-overflow:ellipsis}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  /* App-version update toast: persistent + tappable (unlike the transient .toast). */
+  /* background uses --ink (:root, always defined) not --acc-ink (theme-scoped to
+     #dev): the toast is appended to <body>, outside the themed device, and can show
+     before login, so a theme-only token would render transparent. */
+  .uptoast{position:fixed; left:50%; bottom:calc(var(--sab) + 26px); transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:#F5F2EC; font-size:12px; font-weight:750; border-radius:99px; padding:10px 16px;
+    opacity:0; transition:opacity .3s, transform .3s var(--spring); z-index:60; white-space:nowrap; cursor:pointer;
+    box-shadow:0 6px 20px rgba(0,0,0,.28); display:flex; align-items:center; gap:9px; -webkit-tap-highlight-color:transparent}
+  .uptoast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .uptoast:active{transform:translateX(-50%) translateY(0) scale(.97)}
+  .uptoast .upbtn{background:rgba(245,242,236,.20); border-radius:99px; padding:3px 11px; font-weight:800}
 
   /* §5: 세로 짧은 뷰포트 — 하단 트림 압축, 회수분은 스크린이 흡수 */
   @media (max-height: 820px) and (orientation: portrait){
@@ -824,14 +1328,31 @@
 
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
-        <div class="top"><span class="tt">내 만다라</span><div class="navtog"><button class="ntb on" data-nav="home" aria-label="내 만다라"><span class="batt" id="sigHome"><svg class="ksig" width="16" height="16" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></button><button class="ntb" data-nav="menu" aria-label="설정"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg><span class="gearDot" id="gearDot" hidden></span></button></div></div>
-        <button class="goal-pill" id="bGoal"><span class="gp-plus"></span>원하는 목표 적기</button>
-        <div class="rows" id="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
+        <div class="htabs" id="htabs">
+          <button class="htab on" data-htab="curation" aria-label="큐레이션"><span>큐레이션</span></button>
+          <button class="htab" data-htab="video" aria-label="영상"><span>영상</span></button>
+          <button class="htab" data-htab="note" aria-label="노트"><span>노트</span></button>
+        </div>
+        <div class="hstrip-clip" id="hstripClip">
+          <div class="hstrip" id="hstrip">
+            <div class="hpane" id="paneCuration">
+              <div class="cur-amb" id="curAmb" aria-hidden="true"></div>
+              <div class="cur-body" id="curBody"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>
+            </div>
+            <div class="hpane" id="paneVideo">
+              <div class="cur-amb" id="vidAmb" aria-hidden="true"></div>
+              <div class="rows" id="rowsV"></div>
+            </div>
+            <div class="hpane" id="paneNote">
+              <div class="rows" id="rowsN"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- MENU -->
       <div class="scr" data-s="menu" id="scrMenu">
-        <div class="top"><span class="tt">설정</span><div class="navtog"><button class="ntb" data-nav="home" aria-label="내 만다라"><span class="batt" id="sigMenu"><svg class="ksig" width="16" height="16" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg></span></button><button class="ntb on" data-nav="menu" aria-label="설정"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg></button></div></div>
+        <div class="top"><span class="tt">설정</span></div>
         <div class="menu-list">
           <div class="ghd">소식 · 초대</div>
           <button class="mrow" id="bNews"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 10-12 0c0 6-2.5 7.5-2.5 7.5h17S18 15 18 9"/><path d="M10.3 20a2 2 0 003.4 0"/></svg></span>새소식<span class="newsDot" id="newsDot" hidden></span><span class="sub" id="newsSub">공지 · 업데이트</span></button>
@@ -851,6 +1372,7 @@
           <button class="mrow" id="bInstall"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/></svg></span>홈 화면에 설치<span class="sub">전체화면 앱</span></button>
           <button class="mrow" id="bRefresh"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 11-2.34-5.66"/><path d="M20 3v4h-4"/></svg></span>새로고침<span class="sub">최신 버전 불러오기</span></button>
           <div class="ghd">계정</div>
+          <button class="mrow" id="bYtConnect"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12.5" rx="3.5"/><path d="M10 9.5l4.4 2.75L10 15z" fill="currentColor" stroke="none"/></svg></span>유튜브 연결<span class="sub" id="ytConnSub">계정 연결 · 관리</span></button>
           <button class="mrow" id="bFeedback"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11a7.5 7.5 0 01-7.9 7.5c-1.3 0-2.6-.3-3.7-.9L4 19l1.5-4.3A7.5 7.5 0 1121 11z"/></svg></span>의견 보내기<span class="sub">기능 제안 · 불편 신고</span></button>
           <button class="mrow" id="bLogout"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4H6.5A1.5 1.5 0 005 5.5v13A1.5 1.5 0 006.5 20H14"/><path d="M10 12h11M18 8.8L21 12l-3 3.2"/></svg></span>로그아웃</button>
         </div>
@@ -925,21 +1447,12 @@
         </div>
       </div>
 
-      <!-- 목표 입력 -->
-      <div class="goal-ov" id="goalOv">
-        <div class="go-title" id="goTitle">무엇을 배우고 싶나요?</div>
-        <div class="go-body" id="goBody">
-          <input id="goalInput" type="text" maxlength="80" placeholder="예: 처음부터 시작하는 수채화" autocomplete="off">
-          <div class="go-actions">
-            <button class="go-cancel" id="goCancel">닫기</button>
-            <button class="go-make" id="goMake">만들기</button>
-          </div>
-        </div>
-        <div class="go-progress" id="goProgress" hidden>
-          <div class="pulse"></div>
-          <div class="go-msg" id="goMsg">만다라 구조를 그리는 중…</div>
-        </div>
-      </div>
+    </div>
+
+    <!-- Slider bead on the epaper card's bottom edge — sibling of .epaper so the
+         half-outside half is not clipped by epaper's overflow:hidden. Home-only. -->
+    <div class="hsl" id="hsl">
+      <div class="hsl-track" id="hslTrack"><div class="hsl-fill" id="hslFill"></div><button class="hsl-thumb" id="hslThumb" type="button" aria-label="큐레이션·영상·노트 이동"></button></div>
     </div>
 
     <div class="wheelzone">
@@ -956,10 +1469,83 @@
         <button class="core" id="bCore" aria-label="선택/재생"></button>
         <div class="hubpos num" id="hubPos" aria-hidden="true"></div>
       </div>
+      <button class="plusfab" id="plusFab" aria-label="새로 시작"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>
+      <button class="ntb gearfab" id="gearFab" data-nav="menu" aria-label="설정"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17.6 7H20"/><circle cx="15.2" cy="7" r="2.4"/><path d="M4 17h2.8M11.4 17H20"/><circle cx="8.8" cy="17" r="2.4"/></svg><span class="gearDot" id="gearDot" hidden></span></button>
     </div>
     <div class="engrave">INSIGHTA</div>
   </div>
 
+
+  <!-- Curation deck [J:07-21] — full-bleed player, approved-design port (filmstrip + wave + wheel).
+       Body-level so it truly covers the viewport (never trapped inside the screen area). -->
+  <div id="curDeck" aria-hidden="true">
+    <div class="cd-amb" id="cdAmb" aria-hidden="true"></div>
+    <div class="cd-top">
+      <button class="cd-back" id="cdBack" type="button">← 큐레이션</button>
+      <span class="cd-title" id="cdTitle"></span>
+      <span class="cd-count num" id="cdCount"></span>
+    </div>
+    <div class="cd-strip" id="cdStrip">
+      <div id="cdTrack"></div>
+      <div class="cd-stage" id="cdStage">
+        <div class="cd-poster" id="cdPoster" aria-hidden="true"><div class="cp-back" id="cdPosterB"></div><div class="cp-front" id="cdPosterF"></div></div>
+        <div class="cd-yt off" id="cdYtA"></div>
+        <div class="cd-yt off" id="cdYtB"></div>
+        <div class="cd-guard" id="cdGuard" aria-hidden="true"></div>
+        <span class="cd-resume" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="#EDE7DC"><path d="M8 5.5v13l11-6.5z"/></svg></span>
+        <span class="cd-ring" aria-hidden="true"></span>
+        <button class="cd-play" id="cdPlayBtn" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></button>
+        <div class="cd-meta"><span class="cd-vt" id="cdVt"></span><span class="cd-vs" id="cdVs"></span></div>
+        <div class="cd-chap" id="cdChap" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div id="cdFeed"></div>
+    <div class="cd-fin" id="cdFin">
+      <div class="cd-fin-t">이번 주 편성,<br>끝까지 들었어요</div>
+      <div class="cd-fin-s">새 편성은 월요일에 도착해요</div>
+      <button class="primary" id="cdFinList" type="button">다른 주제 보기</button>
+      <button id="cdFinReplay" type="button">처음부터 다시</button>
+    </div>
+    <span class="cd-hint" id="cdHint">돌려서 고르고, 눌러서 재생</span>
+    <div class="jbar" id="cdJbar" aria-hidden="true"><div class="jb-fill" id="cdJbFill"></div><span class="jb-mark" id="cdJbMark"></span></div>
+    <button class="cf-mutechip" id="cfMute" type="button" aria-label="소리 켜기"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 9.5v5h3.5L12 19V5L7.5 9.5H4z"/><path d="M15.5 9l4 6M19.5 9l-4 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg><span>소리 켜기</span></button>
+  </div>
+
+  <!-- YouTube connect wizard sheet [J:07-21] — TRUE bottom sheet: body-level, rises from the
+       viewport bottom over everything (wheel included); quiet exit link at the bottom center. -->
+  <div id="ytSheet" aria-hidden="true">
+    <div class="yts-bd" id="ytsBd"></div>
+    <div class="yts-card" role="dialog" aria-modal="true" aria-label="유튜브 연결">
+      <div class="yts-grip"></div>
+      <button class="yts-retry" id="ytsRetune" type="button" aria-label="다른 주제 보기"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.1-6.8"/><path d="M21 4v5h-5"/></svg></button>
+      <div class="yts-brand">DIAL</div>
+      <div id="ytsBody"></div>
+      <!-- Actions live outside the scroll area so they stay reachable no matter how
+           tall the body gets. On a real phone (393x852 + 34px home-indicator inset)
+           the proposals state overflowed the pinned card by 46px and pushed these
+           off-screen entirely. -->
+      <div class="yts-foot" id="ytsFoot" hidden></div>
+      <!-- Goal wizard — a PANEL of the same sheet (not a separate fixed overlay), so the
+           start hub -> goal path keeps one grammar. Sibling of #ytsBody (never inside it):
+           the render fns replace #ytsBody.innerHTML, which would destroy these ids and the
+           streaming handlers that hold them. -->
+      <div class="goal-ov" id="goalOv">
+        <div class="go-title" id="goTitle">무엇을 배우고 싶나요?</div>
+        <div class="go-body" id="goBody">
+          <input id="goalInput" type="text" maxlength="80" placeholder="예: 처음부터 시작하는 수채화" autocomplete="off">
+          <div class="go-actions">
+            <button class="go-cancel" id="goCancel">닫기</button>
+            <button class="go-make" id="goMake">만들기</button>
+          </div>
+        </div>
+        <div class="go-progress" id="goProgress" hidden>
+          <div class="pulse"></div>
+          <div class="go-msg" id="goMsg">만다라 구조를 그리는 중…</div>
+        </div>
+      </div>
+      <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>돌아가기</button>
+    </div>
+  </div>
 
   <div class="toast" id="toast"></div>
 
@@ -970,6 +1556,41 @@
     var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
     clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show')},2400);
   }
+
+  /* ===== App-version update toast (standalone PWA has no address bar, so a stale
+     home-screen build can't be hard-reloaded by hand). The running build compares
+     itself to /mobile/version.json (fetched no-store) on load + every foreground
+     return; on mismatch it offers a one-tap update that clears caches and reloads
+     to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
+  var APP_BUILD='2026-07-28-30';   // bump every mobile deploy (deploy writes version.json to match)
+  var upShown=false, upLast=0;
+  function checkAppVersion(){
+    var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
+    fetch('/mobile/version.json?t='+now,{cache:'no-store'})
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(v){ if(v&&v.build&&v.build!==APP_BUILD&&!upShown){ upShown=true; showUpdateToast(); } })
+      .catch(function(){});
+  }
+  function showUpdateToast(){
+    var el=document.getElementById('upToast');
+    if(!el){
+      el=document.createElement('div'); el.id='upToast'; el.className='uptoast'; el.setAttribute('role','button');
+      el.innerHTML='<span>새 버전이 있어요</span><span class="upbtn">업데이트</span>';
+      el.addEventListener('click', doAppUpdate);
+      document.body.appendChild(el);
+    }
+    requestAnimationFrame(function(){ el.classList.add('show'); });
+  }
+  function doAppUpdate(){
+    var el=document.getElementById('upToast'); if(el){ var b=el.querySelector('.upbtn'); if(b) b.textContent='업데이트 중…'; }
+    var go=function(){ location.replace('/mobile/?u='+Date.now()); }; // fresh URL bypasses the standalone HTTP cache
+    try{
+      if(window.caches&&caches.keys){ caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); }).then(go, go); return; }
+    }catch(e){}
+    go();
+  }
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden) checkAppVersion(); });
+  setTimeout(checkAppVersion, 4000);
   function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]}) }
 
   /* ================= 인증 ================= */
@@ -1053,6 +1674,11 @@
     if(n===cur) return;
     scr[cur].classList.remove('active');
     cur=n; scr[cur].classList.add('active');
+    // Slider bead lives outside .scr now (sibling of .epaper); show it home-only.
+    var _hsl=document.getElementById('hsl'); if(_hsl) _hsl.style.visibility=(n==='home')?'visible':'hidden';
+    var _gf=document.getElementById('gearFab'); if(_gf) _gf.style.visibility=(n==='home')?'visible':'hidden';
+    var _pf=document.getElementById('plusFab'); if(_pf) _pf.style.visibility=(n==='home')?'visible':'hidden';
+    if(n==='home'){ requestAnimationFrame(function(){ if(typeof homePaintPos==='function') homePaintPos(homeIdx, true); }); } // re-align slider to tab centers
     if(n==='menu'){ selMenu=0; setTimeout(updateSelMenu,0); } // 설정 진입 = 첫 행 선택 [J:07-15]
     syncStage();
   }
@@ -1211,13 +1837,17 @@
     return {kind:'new', line:'새 노트', dot:true};
   }
   function homeItems(){ return mandalas }
-  function renderRows(){
-    var rows=document.getElementById('rows');
+  // The video and note panels share the mandala list; each is painted with its
+  // own tap action so the connected strip shows a distinct panel per slider stop.
+  function paintMandalaList(rows, mode){
+    if(!rows) return;
     var items=homeItems();
     if(!items.length){
-      rows.innerHTML='<div class="row-empty">아직 만다라가 없어요<br>첫 목표를 적어보세요</div>';
+      rows.innerHTML='<button class="row-empty" id="emptyStart" type="button" style="display:block;width:100%;border:none;background:none;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent">아직 만다라가 없어요<br><span style="color:var(--acc,#E8804C);font-weight:700">첫 목표를 적어보세요<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-left:4px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>';
+      var _es=document.getElementById('emptyStart'); if(_es) _es.onclick=openHub;
       return;
     }
+    var keepScroll=rows.scrollTop; // scroll-inviolable: a background refresh (book status) must not move the list under the user
     rows.innerHTML='';
     if(selIdx>=items.length) selIdx=items.length-1;
     items.forEach(function(m,i){
@@ -1234,11 +1864,1381 @@
       d.querySelector('.bt').textContent=st.line;
       if(st.skt) d.querySelector('.bt').classList.add('skt');
       if(st.kind!=='making'&&st.kind!=='loading'){
-        d.addEventListener('click',function(){ selIdx=i; renderRows(); openNote(m); });
+        d.addEventListener('click',function(){ selIdx=i; renderRows(); if(mode==='video'){ openMandalaVideos(m); } else { openNote(m); } });
       }
       rows.appendChild(d);
     });
-    var selEl=rows.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
+    rows.scrollTop=keepScroll; // restore scroll after the innerHTML rebuild (else it snaps to 0 = jitter)
+  }
+  // renderRows(userSel): only a real user selection may re-anchor the scroll (scrollIntoView).
+  // A background refresh (fetchBookStatus) passes no arg, so it never moves the list.
+  function renderRows(userSel){
+    paintMandalaList(document.getElementById('rowsV'),'video');
+    paintMandalaList(document.getElementById('rowsN'),'note');
+    setVideoAmbient();
+    if(userSel){
+      var active=document.getElementById(homeTab==='note'?'rowsN':'rowsV');
+      var selEl=active&&active.children[selIdx]; if(selEl&&selEl.scrollIntoView) selEl.scrollIntoView({block:'nearest'});
+    }
+  }
+  // Coalesce the 8 parallel book-status arrivals into one refresh (was: full renderRows per arrival = jitter).
+  var _rowsRefreshT=null;
+  function scheduleRowsRefresh(){ clearTimeout(_rowsRefreshT); _rowsRefreshT=setTimeout(function(){ renderRows(); },120); }
+  // Ambient for the VIDEO tab only — the focused mandala's topic color (same
+  // pattern/values as curation). Bound to the #paneVideo DOM, so note never gets it.
+  function setVideoAmbient(){
+    var amb=document.getElementById('vidAmb'); if(!amb) return;
+    var m=homeItems()[selIdx];
+    if(m){ var c=jkColor(m.title||'?'); amb.style.backgroundImage='radial-gradient(140% 80% at 50% -6%, '+hexA(c[0],.55)+', '+hexA(c[1],.24)+' 42%, transparent 76%)'; amb.classList.add('on'); }
+    else amb.classList.remove('on');
+  }
+  /* ============ Home tabs (curation / video / note) [J:07-20] ============ */
+  var homeTab='curation';   // default (James)
+  // Home carousel: the strip and the bottom slider both express the same index.
+  var HTABS=['curation','video','note'], homeIdx=0;
+  function homeMetrics(){
+    var tr=document.getElementById('hslTrack'), th=document.getElementById('hslThumb');
+    var w=(tr&&tr.clientWidth)||0, tw=(th&&th.offsetWidth)||56;
+    return {w:w, tw:tw, half:tw/2, usable:Math.max(1, w-tw)};
+  }
+  // Thumb travel = curation-tab center → note-tab center (James: one-thumb reach, so the
+  // range is narrower than the full card). Align the track BOX to the outer tab centers;
+  // with the half-thumb inset the thumb CENTER then lands exactly on each tab center
+  // (cont0=curation, cont1=video=midpoint, cont2=note). Re-run on layout changes only.
+  function syncSliderToTabs(){
+    var track=document.getElementById('hslTrack'), hsl=document.getElementById('hsl'),
+        th=document.getElementById('hslThumb'), tabs=document.querySelectorAll('.htab[data-htab]');
+    if(!track||!hsl||tabs.length<3) return;
+    var hR=hsl.getBoundingClientRect(); if(!hR.width) return;
+    var half=((th&&th.offsetWidth)||13)/2;
+    var c0=tabs[0].getBoundingClientRect(), c2=tabs[tabs.length-1].getBoundingClientRect();
+    var curC=(c0.left+c0.width/2)-hR.left, noteC=(c2.left+c2.width/2)-hR.left;
+    track.style.left=(curC-half)+'px';
+    track.style.right=(hR.width-(noteC+half))+'px';
+  }
+  // cont = continuous position 0..2 (0=curation … 2=note). animate=false while dragging.
+  function homePaintPos(cont, animate){
+    var strip=document.getElementById('hstrip'), th=document.getElementById('hslThumb'),
+        fill=document.getElementById('hslFill'), hsl=document.getElementById('hsl');
+    if(!strip) return;
+    if(animate){ strip.classList.remove('drag'); hsl.classList.remove('drag'); syncSliderToTabs(); }
+    else { strip.classList.add('drag'); hsl.classList.add('drag'); }
+    strip.style.transform='translateX('+(-cont*(100/3))+'%)';
+    var m=homeMetrics(), left=m.half+(cont/2)*m.usable;
+    if(th) th.style.left=left+'px';
+    if(fill) fill.style.width=left+'px';
+  }
+  function homeGo(idx){
+    idx=Math.max(0, Math.min(2, idx|0)); homeIdx=idx; homeTab=HTABS[idx];
+    Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'),function(b){
+      b.classList.toggle('on', b.getAttribute('data-htab')===homeTab);
+    });
+    homePaintPos(idx, true);
+    selIdx=0;
+    if(homeTab==='curation') renderCuration(); else renderRows();
+  }
+  function setHomeTab(t){ homeGo(HTABS.indexOf(t)>=0?HTABS.indexOf(t):0); } // back-compat alias
+  // Curation — YouTube connect gate → analyzing → 3 personalized proposals →
+  // select → async build → weekly video feed (reuses the beat player).
+  var CUR_STAR='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg>';
+  function curEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  var CUR_DOM_LABEL={ai_ml:'AI·기술',career:'취업·커리어',investment:'투자·경제',startup:'창업',language:'어학',exam:'시험·입시',other:'추천'};
+  /* Curation tab = the caller's PERSISTENT curation list (GET /curations), rendered as
+     the same text rows as the video/note tabs. Row tap opens the EXISTING week (GET
+     items -> deck) — never a rebuild. Proposals live only in the connect-sheet wizard
+     (first curation / "+ new"). Model fix per James + supervisor A. */
+  // Cache-first render: tab re-entry paints the last known list INSTANTLY (no
+  // skeleton) and revalidates in the background; the list only re-renders when
+  // the signature actually changed. Skeleton shows on the cold first load only.
+  var curCache=null, curRenderedSig='';
+  function curSig(subs){ return JSON.stringify((subs||[]).map(function(s){ return [s.id,s.item_count,s.watched_count,s.last_run_at,s.next_run_at,s.topic]; })); }
+  function curPaint(subs){ var sig=curSig(subs); if(sig===curRenderedSig&&Array.isArray(subs)) return; renderCurationRows(subs); curRenderedSig=sig; }
+  async function renderCuration(){
+    var el=document.getElementById('curBody'); if(!el) return;
+    var haveCache=Array.isArray(curCache);
+    if(haveCache){
+      curPaint(curCache); // instant — no skeleton on re-entry / revalidate
+    } else {
+      curRowEls=[]; curRowColors=[]; curRenderedSig=''; // cold: skeleton, and drop stale wheel targets
+      var amb0=document.getElementById('curAmb'); if(amb0) amb0.classList.remove('on'); // no ambient during skeleton/gate
+      el.className='cur-body';
+      el.innerHTML='<div class="rows"><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div><div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div></div>';
+    }
+    try{
+      var r=await api('/curations');
+      var j=await r.json();
+      var subs=(j&&j.data&&j.data.curations)||[];
+      if(subs.length){ curCache=subs; curPaint(subs); return; }
+      // no curations yet: connected -> proposal wizard for the first one; else connect gate
+      var st=await ytFetchStatus();
+      if(st&&st.isConnected){
+        curCache=[]; curPaint([]);
+        if(!ytAutoRaised){ ytAutoRaised=true; openYtSheet(); ytRenderTuning(); }
+      } else { curCache=null; curRenderedSig=''; curConnectGate(); }
+    }catch(e){
+      if(haveCache) return; // revalidate failure: keep the cached rows on screen
+      if(e&&(e.status===401||e.status===403)){ curConnectGate(); return; }
+      // T4 — inline one-liner + retry (no full-screen error)
+      el.innerHTML='<div class="rows"><div class="row-empty">편성표를 불러오지 못했어요<br><button class="yts-ghost" id="curRetry" style="margin-top:6px">다시 시도</button></div></div>';
+      var b=document.getElementById('curRetry'); if(b) b.onclick=renderCuration;
+    }
+  }
+  /* Row meta (interim, supervisor-approved): item_count-based only. M-of-N and
+     weekly-complete arrive with the watched_at DDL (server-side, cross-device —
+     James gate). localStorage watch-state was REJECTED (per-device drift). */
+  var CUR_DOW=['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
+  function curRowState(s){
+    var n=s.item_count||0;
+    var watched=(typeof s.watched_count==='number')?s.watched_count:null;
+    var nextDow=s.next_run_at?CUR_DOW[new Date(s.next_run_at).getDay()]:'월요일';
+    if(n>0&&watched!=null){ // server watch-state present (post-DDL)
+      if(watched<=0) return {rank:0, dot:true, line:'새 영상 '+n+'편'};
+      if(watched<n) return {rank:1, dot:false, line:Math.min(watched,n)+'/'+n+' 들음'};
+      return {rank:2, dot:false, line:'이번 주 완청 · 다음 편성 '+nextDow};
+    }
+    if(n>0) return {rank:0, dot:true, line:'새 영상 '+n+'편'};
+    return {rank:1, dot:false, line:'영상을 모으는 중'};
+  }
+  // Wheel selection state for the curation list (the home wheel branch was
+  // mandala-list-only — new tab must be recognized by every global input surface).
+  var curSelIdx=0, curRowEls=[], curRowColors=[];
+  function hexA(hex, a){
+    var n=parseInt(hex.slice(1),16);
+    return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+  }
+  function curUpdateSel(){
+    curRowEls.forEach(function(el,i){ el.classList.toggle('sel', i===curSelIdx); });
+    var el=curRowEls[curSelIdx];
+    if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
+    // Ambient background follows the focused row's topic color (YouTube hover-color
+    // grammar) — fills the empty list, and encodes the current selection.
+    var amb=document.getElementById('curAmb');
+    if(amb){
+      var col=curRowColors[curSelIdx];
+      if(col){ amb.style.backgroundImage='radial-gradient(140% 80% at 50% -6%, '+hexA(col[0],.55)+', '+hexA(col[1],.24)+' 42%, transparent 76%)'; amb.classList.add('on'); }
+      else amb.classList.remove('on'); // add-row / no selection = no ambient
+    }
+  }
+  // Connected but no subscription yet -> onboarding CTA, never a blank list.
+  // Mirrors curConnectGate; the CTA opens the topic picker instead of connect.
+  function curEmptyState(){
+    var el=document.getElementById('curBody'); if(!el) return;
+    curRowEls=[]; curRowColors=[]; curSelIdx=0;
+    var amb=document.getElementById('curAmb'); if(amb) amb.classList.remove('on');
+    el.className='cur-connect';
+    el.innerHTML=''
+      +'<span class="t1">관심 주제를 고르면<br>매주 큐레이션을 보내 드려요</span>'
+      +'<span class="t2">트렌드·리서치·관심 분야까지<br>매주 새 영상만 골라 드려요</span>'
+      +'<button class="cbtn" id="bCurPick" type="button">관심 주제 고르기</button>';
+    var b=document.getElementById('bCurPick'); if(b) b.onclick=function(){ openYtSheet(); ytRenderTuning(); };
+  }
+  // Same .rows/.row markup as the mandala lists (format parity is the contract).
+  function renderCurationRows(subs){
+    var el=document.getElementById('curBody'); if(!el) return;
+    if(!subs || !subs.length){ curEmptyState(); return; } // 0 subs (connected): onboarding, never blank
+    el.className='cur-body';
+    el.innerHTML='<div class="rows" id="curRows"></div>';
+    var rows=document.getElementById('curRows');
+    curRowEls=[]; curRowColors=[];
+    // create-new lives only in the "+" start hub now (single entry); the list shows subscriptions only
+    // sort: new > in-progress > complete, newest first inside each group
+    var sorted=subs.map(function(s){ return {s:s, st:curRowState(s)}; });
+    sorted.sort(function(a,b){
+      if(a.st.rank!==b.st.rank) return a.st.rank-b.st.rank;
+      return (b.s.last_run_at||'').localeCompare(a.s.last_run_at||'');
+    });
+    sorted.forEach(function(e){
+      var s=e.s, st=e.st;
+      var c=jkColor(s.topic||'?');
+      var d=document.createElement('div');
+      d.className='row';
+      d.innerHTML='<span class="jk" style="background:linear-gradient(150deg,'+c[0]+','+c[1]+')"><b></b></span>'
+        +'<span class="m"><span class="a"></span><span class="b">'+(st.dot?'<span class="dotnew"></span>':'')+'<span class="bt"></span></span></span>';
+      d.querySelector('.jk b').textContent=(s.topic||'?').trim().charAt(0);
+      d.querySelector('.a').textContent=s.topic||'(제목 없음)';
+      d.querySelector('.bt').textContent=st.line;
+      // overflow '...' -> action sheet (unsubscribe); long-press = alias trigger for the same sheet
+      var more=document.createElement('button');
+      more.className='rmore'; more.type='button'; more.setAttribute('aria-label','메뉴'); more.innerHTML=RMORE_SVG;
+      more.addEventListener('click',function(ev){ ev.stopPropagation(); rowActionSheet('curation', s); });
+      d.appendChild(more);
+      var lp=null, fired=false;
+      d.addEventListener('pointerdown',function(){ fired=false; lp=setTimeout(function(){ fired=true; rowActionSheet('curation', s); },600); });
+      d.addEventListener('pointerup',function(){ clearTimeout(lp); });
+      d.addEventListener('pointerleave',function(){ clearTimeout(lp); });
+      d.addEventListener('click',function(){ if(fired) return; openExistingCuration(s); });
+      rows.appendChild(d); curRowEls.push(d); curRowColors.push(c);
+    });
+    if(curSelIdx>=curRowEls.length) curSelIdx=curRowEls.length-1;
+    if(curSelIdx<0) curSelIdx=0;
+    curUpdateSel();
+  }
+  // Long-press: row expands inline into a 2-step unsubscribe action.
+  // Open an EXISTING curation week — read-only, never triggers a rebuild.
+  async function openExistingCuration(sub){
+    try{
+      var r=await api('/curations/'+sub.id+'/items');
+      var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
+      var week=(j&&j.data&&j.data.week_of)||null;
+      if(items.length){ openCurationDeck(sub.topic, items, {subId:sub.id, week:week}); return; }
+      toast('영상을 모으는 중이에요 — 잠시 후 다시 열어주세요');
+    }catch(e){ toast('열지 못했어요 — 연결 확인 후 다시 시도해주세요'); }
+  }
+  // Not-connected gate (behind-content, never a dead end): slim prompt in the tab body +
+  // auto-raise the connect sheet once per session. Tapping the button re-opens the sheet.
+  var ytAutoRaised=false;
+  function curConnectGate(note){
+    var el=document.getElementById('curBody'); if(!el) return;
+    el.className='cur-connect';
+    el.innerHTML=''
+      +'<span class="t1">관심 주제를 고르면<br>매주 큐레이션을 보내 드려요</span>'
+      +'<button class="cbtn" id="bCurConnect">유튜브 연결하기</button>'
+      +(note?'<span class="cur-note">'+curEsc(note)+'</span>':'');
+    var b=document.getElementById('bCurConnect'); if(b) b.onclick=function(){ openYtSheet(); ytRenderConnect(); };
+    if(!ytAutoRaised && !note){ ytAutoRaised=true; openYtSheet(); ytRenderConnect(); }
+  }
+
+  /* ============ YouTube connect wizard sheet (#ytSheet) [J:07-21] ============
+     Bottom-sheet overlay orthogonal to screens: rises OVER the current content
+     (playback preserved behind), the back button lowers it — never navigates away.
+     Wizard: S1 connect -> S2 handoff (snapshot + OAuth redirect) -> S3 tuning -> S4
+     proposals. (c) disconnect = the sheet's connected state. EF/BE unchanged —
+     the redirect round-trip is sealed FE-side via a sessionStorage snapshot.
+     Design: supervisor 0709 (Fable 5), guest-sheet pattern. */
+  var YTS_SNAP='insighta-yt-wizard-snap';
+  // YouTube play glyph — the G logo pairs only with Google sign-in copy, not a YouTube connect CTA.
+  var YT_TUBE_SVG='<svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="4.5" width="21" height="15" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg>';
+  function openYtSheet(){ document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
+  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet','hubsheet','goalsheet','propsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true');
+    // Drop the pinned actions too, so the next sheet never opens showing the
+    // previous state's buttons for a frame.
+    var f=document.getElementById('ytsFoot'); if(f){ f.innerHTML=''; f.hidden=true; }
+    ytPropIdx=0; }
+  var RMORE_SVG='<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>';
+  // Per-surface row actions — RELOCATION of existing actions, never invention.
+  // New actions are James-gated (video/note mandala rows have no existing action yet).
+  var ROW_ACTIONS={
+    curation:[{ label:'채널로 받기', plain:true, run:function(s){ openChannelSheet(s); } },
+      { label:'구독 끊기', confirm:'구독을 끊을까요? · 끊기', running:'끊는 중…', err:'끊지 못했어요 — 다시 시도해주세요',
+      run:function(s){ return api('/curations/'+s.id,{method:'DELETE'}).then(function(){
+        if(Array.isArray(curCache)) curCache=curCache.filter(function(x){ return x.id!==s.id; }); }); },
+      after:function(){ renderCuration(); } }]
+  };
+  // Generic overflow sheet (reuses #ytSheet: backdrop/grip/MENU close come free).
+  // Destructive confirm = in-sheet 2-step morph (S5 grammar); no dead-end.
+  function rowActionSheet(surface, item){
+    var acts=ROW_ACTIONS[surface]; if(!acts||!acts.length) return;
+    var body=document.getElementById('ytsBody'); if(!body) return;
+    setSheetFoot('');
+    body.innerHTML='';
+    var h=document.createElement('div'); h.className='yts-h2';
+    h.textContent=item.topic||item.title||'항목'; body.appendChild(h);
+    var wrap=document.createElement('div'); wrap.className='ras-actions'; body.appendChild(wrap);
+    function disarmAll(except){ wrap.querySelectorAll('.ras-btn.confirm').forEach(function(b){
+      if(b===except) return; b.classList.remove('confirm'); b.textContent=b.__label; }); }
+    acts.forEach(function(a){
+      var btn=document.createElement('button'); btn.type='button';
+      btn.textContent=a.label; btn.__label=a.label;
+      // `plain` actions are navigation, not destruction: no red frame, no arm-then-
+      // confirm. Only the destructive ones keep the 2-step morph (S5 grammar).
+      if(a.plain){
+        btn.className='yts-cta ras-plain';
+        btn.onclick=function(ev){ ev.stopPropagation(); document.body.classList.remove('rasheet'); a.run(item); };
+        wrap.appendChild(btn); return;
+      }
+      btn.className='yts-danger ras-btn';
+      btn.onclick=function(ev){ ev.stopPropagation();
+        if(!btn.classList.contains('confirm')){ disarmAll(); btn.classList.add('confirm'); btn.textContent=a.confirm; return; }
+        btn.disabled=true; btn.textContent=a.running;
+        a.run(item).then(function(){ closeYtSheet(); if(a.after) a.after(item); })
+          .catch(function(){ toast(a.err); btn.disabled=false; btn.classList.remove('confirm'); btn.textContent=a.label; });
+      };
+      wrap.appendChild(btn);
+    });
+    // cancel path: tap anywhere in the sheet body (not the armed button) reverts it
+    body.onclick=function(e){ if(!e.target.closest('.ras-btn.confirm')) disarmAll(); };
+    document.body.classList.add('rasheet');
+    openYtSheet();
+  }
+
+  // S1 — connect. Content keeps playing behind; the top-left back button dismisses at every step.
+  /**
+   * Immediate state — rendered synchronously so a tap always changes the screen
+   * on the same frame. Every async entry point paints this first, then replaces
+   * it when the network answers.
+   */
+  function ytRenderLoading(msg){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    setSheetFoot('');
+    b.innerHTML='<div class="yts-load"><div class="yts-spin"></div>'
+      +'<div class="yts-sub">'+curEsc(msg||'개인 추천을 확인하는 중이에요')+'</div></div>';
+  }
+  /** Fill (or clear) the pinned action area below the scrolling body.
+   *  Also the single chokepoint that clears `propsheet` (the retry icon lives in
+   *  the sheet shell, so it would otherwise survive into every later state).
+   *  ytRenderProposals re-adds it immediately after its own call. */
+  function setSheetFoot(html){
+    document.body.classList.remove('propsheet');
+    var f=document.getElementById('ytsFoot'); if(!f) return;
+    f.innerHTML=html||'';
+    f.hidden=!html;
+  }
+
+  function ytRenderConnect(){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    setSheetFoot('');
+    b.innerHTML='<div class="yts-h">보던 유튜브가,<br>나만의 목표 지도로</div>'
+      +'<div class="yts-sub">자주 머무는 주제로<br>추천해 드려요.</div>'
+      +'<button class="yts-cta" id="ytsGo">'+YT_TUBE_SVG+'<span>유튜브 연결하기</span></button>'
+      +'<div class="yts-safe">나중에 연결해도 괜찮아요</div>';
+    var g=document.getElementById('ytsGo'); if(g) g.onclick=ytHandoff;
+  }
+
+  // S2 — handoff. Snapshot the background (so S3 can restore it), then OAuth redirect.
+  // The redirect is inevitable, so we announce it in the button rather than hide it.
+  async function ytHandoff(){
+    var g=document.getElementById('ytsGo');
+    try{
+      var tok=await freshToken(); if(!tok){ show('login'); return; }
+      if(g){ g.setAttribute('disabled','disabled'); var lbl=g.querySelector('span'); if(lbl) lbl.textContent='Google로 이동합니다…'; }
+      var snap={ returnTo:'yt-wizard', screen:cur, ts:Date.now() };
+      try{ sessionStorage.setItem(YTS_SNAP, JSON.stringify(snap)); }catch(e){}
+      var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=auth-url&origin=mobile',{headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
+      if(!r.ok) throw new Error('auth-url '+r.status);
+      var j=await r.json(); if(!j||!j.authUrl) throw new Error('no authUrl');
+      location.href=j.authUrl;
+    }catch(e){ try{ sessionStorage.removeItem(YTS_SNAP); }catch(_){} if(g){ g.removeAttribute('disabled'); } ytRenderConnect(); toast('연결을 시작하지 못했어요 — 다시 시도해주세요'); }
+  }
+
+  // S3 — return + tuning. Called on boot when we come back from OAuth with a snapshot.
+  // Background is already restored to the curation tab; float the sheet with the tuning
+  // interstitial, then poll for proposals (profile builds async right after connect).
+  // Re-tune passes the previously shown topics as a server-side exclude (re-score,
+  // not rank 4-6). 12s honest timeout — never an endless spinner (device review R6).
+  var ytLastProps=[], ytRetuneSpent=false;
+  function ytRenderTuning(excludeTopics){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    setSheetFoot('');
+    b.innerHTML='<div class="yts-load"><div class="yts-spin"></div>'
+      +'<div class="yts-sub" id="ytsTuneT">개인 추천을 확인하는 중이에요</div></div>';
+    var lines=['개인 추천을 확인하는 중이에요','자주 보신 주제를 살펴보는 중이에요'];
+    var i=0;
+    var iv=setInterval(function(){ i=(i+1)%lines.length; var e=document.getElementById('ytsTuneT'); if(e){ e.textContent=lines[i]; } else { clearInterval(iv); } },1500);
+    ytPollProposals(0,function(props){ clearInterval(iv); ytRenderProposals(props, !!excludeTopics); }, excludeTopics);
+  }
+  function ytPollProposals(tries,done,excludeTopics){
+    var q=(excludeTopics&&excludeTopics.length)?('?exclude='+encodeURIComponent(excludeTopics.join(','))):'';
+    api('/curations/suggest'+q).then(function(r){
+      if(r.status===202){ if(tries<4){ setTimeout(function(){ ytPollProposals(tries+1,done,excludeTopics); },2500); } else { done([]); } return null; } // ~12s cap
+      return r.json();
+    }).then(function(j){ if(j){ done((j&&j.data&&j.data.proposals)||[]); } }).catch(function(){ done([]); });
+  }
+
+  // S4 — proposals inside the sheet (full-screen C dropped). Select → build → curation tab.
+  function ytRenderProposals(props, wasRetune){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    if(!props.length){
+      if(wasRetune){
+        // Honest ending (R6): no better re-score available — say so, disable re-tap.
+        ytRetuneSpent=true;
+        ytRenderProposals(ytLastProps, false);
+        return;
+      }
+      setSheetFoot('');
+      b.innerHTML='<div class="yts-h2">잠시만요</div>'
+        +'<div class="yts-sub">개인 추천을 확인하는 중이에요.<br>큐레이션 탭에서 곧 확인할 수 있어요.</div>'
+        +'<button class="yts-ghost" id="ytsDone">돌아가기</button>';
+      var c=document.getElementById('ytsDone'); if(c) c.onclick=closeYtSheet;
+      return;
+    }
+    ytLastProps=props;
+    // Body = header + the card deck only. Everything actionable moves to the
+    // pinned foot, so a tall body can never push it off a phone screen.
+    var h='<div class="yts-h2">하나 골라볼까요?</div><div class="yts-props" id="ytsProps">';
+    props.forEach(function(p){
+      h+='<button class="yts-prop" data-topic="'+curEsc(p.topic)+'">'
+        +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
+        +'<span class="yts-prop-t">'+curEsc(p.topic)+'</span></button>';
+    });
+    h+='</div><div class="yts-dots" id="ytsDots">'
+      +props.map(function(_,i){ return '<span class="yts-dot'+(i===0?' on':'')+'"></span>'; }).join('')
+      +'</div>';
+    b.innerHTML=h;
+    setSheetFoot(
+      '<div class="yts-custom"><input type="text" id="ytCustomTopic" maxlength="40" placeholder="직접 주제 입력" autocomplete="off"><button class="yts-cadd" id="ytCustomAdd" type="button">추가</button></div>'
+      + '<button class="yts-ghost" id="ytsByChannel" type="button">주제 대신 채널로 받기</button>'
+    );
+    // The retry icon is part of the sheet shell, not the foot, so it survives
+    // innerHTML replacement; `propsheet` is what reveals it.
+    document.body.classList.add('propsheet');
+    ytPropIdx=0; ytSyncProps();
+    [].forEach.call(b.querySelectorAll('.yts-prop'),function(btn,i){
+      btn.onclick=function(){
+        // First tap on an off-centre card centres it; the centred card commits.
+        if(i!==ytPropIdx){ ytPropIdx=i; ytSyncProps(); return; }
+        var t=btn.getAttribute('data-topic'); closeYtSheet(); setHomeTab('curation'); selectCuration(t);
+      };
+    });
+    // Keep the dots/scale in step when the deck is flicked by finger.
+    var deck=document.getElementById('ytsProps');
+    if(deck) deck.addEventListener('scroll',function(){
+      if(ytPropScrollT) clearTimeout(ytPropScrollT);
+      ytPropScrollT=setTimeout(function(){ ytPropIdx=ytNearestProp(); ytSyncProps(true); },90);
+    });
+    var ci=document.getElementById('ytCustomTopic'), ca=document.getElementById('ytCustomAdd');
+    function ytCustomSubmit(){ var t=(ci&&ci.value||'').trim(); if(t.length<2){ if(ci) ci.focus(); return; } closeYtSheet(); setHomeTab('curation'); selectCuration(t); }
+    if(ca) ca.onclick=ytCustomSubmit;
+    if(ci) ci.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); ytCustomSubmit(); } });
+    var bc=document.getElementById('ytsByChannel');
+    if(bc) bc.onclick=function(){ chRenderNew(); };
+    var rt=document.getElementById('ytsRetune');
+    if(rt){
+      rt.disabled=!!ytRetuneSpent;
+      rt.setAttribute('aria-label', ytRetuneSpent?'지금은 이게 최선이에요':'다른 주제 보기');
+      rt.onclick=ytRetuneSpent?null:function(){ ytRenderTuning(ytLastProps.map(function(p){ return p.topic; })); };
+    }
+  }
+
+  // ── proposal deck: wheel/finger share one focused index ──────────────────
+  var ytPropIdx=0, ytPropScrollT=null;
+  function ytPropCards(){ return [].slice.call(document.querySelectorAll('#ytsProps .yts-prop')); }
+  /** Which card is closest to the deck's centre — the finger-scroll counterpart. */
+  function ytNearestProp(){
+    var deck=document.getElementById('ytsProps'); if(!deck) return ytPropIdx;
+    var mid=deck.scrollLeft+deck.clientWidth/2, best=0, bestD=Infinity;
+    ytPropCards().forEach(function(c,i){
+      var d=Math.abs(c.offsetLeft+c.offsetWidth/2-mid);
+      if(d<bestD){ bestD=d; best=i; }
+    });
+    return best;
+  }
+  /** Paint focus + dots. `fromScroll` skips scrollIntoView so the finger isn't fought. */
+  function ytSyncProps(fromScroll){
+    var cards=ytPropCards();
+    if(!cards.length) return;
+    if(ytPropIdx<0) ytPropIdx=0;
+    if(ytPropIdx>=cards.length) ytPropIdx=cards.length-1;
+    cards.forEach(function(c,i){ c.classList.toggle('sel', i===ytPropIdx); });
+    var dots=[].slice.call(document.querySelectorAll('#ytsDots .yts-dot'));
+    dots.forEach(function(d,i){ d.classList.toggle('on', i===ytPropIdx); });
+    if(fromScroll) return;
+    // Compute scrollLeft directly instead of scrollIntoView: it only has to move
+    // this one axis, it cannot disturb the sheet's own scroll position, and it is
+    // deterministic (scrollIntoView is a no-op in a backgrounded tab, which made
+    // the deck look stuck during verification).
+    var deck=document.getElementById('ytsProps'), c=cards[ytPropIdx];
+    if(!deck||!c) return;
+    // offsetLeft is measured from the nearest POSITIONED ancestor, which is the
+    // sheet card, not the deck — subtract the deck's own offset or every target
+    // is shifted by the card's padding.
+    var target=(c.offsetLeft-deck.offsetLeft)-(deck.clientWidth-c.offsetWidth)/2;
+    var max=deck.scrollWidth-deck.clientWidth;
+    target=Math.max(0,Math.min(target,max));
+    if(deck.scrollTo) deck.scrollTo({ left:target, behavior: reduce?'auto':'smooth' });
+    else deck.scrollLeft=target;
+  }
+
+  // (c) — connected state (disconnect). Same sheet; entry = curation-tab account chip.
+  async function ytFetchStatus(){
+    try{
+      var tok=await freshToken(); if(!tok) return null;
+      var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=status',{headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
+      if(!r.ok) return null; return await r.json();
+    }catch(e){ return null; }
+  }
+  // Settings-row entry: connected -> manage/disconnect state; not connected -> S1 connect.
+  async function ytOpenManage(){
+    openYtSheet(); ytRenderConnected(null);
+    var st=await ytFetchStatus();
+    if(st&&st.isConnected) ytRenderConnected(st); else ytRenderConnect();
+    var sub=document.getElementById('ytConnSub');
+    if(sub) sub.textContent=(st&&st.isConnected)?((st.youtubeEmail||'연결됨')+' · 관리'):'계정 연결 · 관리';
+  }
+  // S5 — structured manage state: account row / divider / disconnect row (contract S5).
+  function ytRenderConnected(status){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    setSheetFoot('');
+    var acct=(status&&status.youtubeEmail)||'연결된 계정';
+    b.innerHTML='<div class="yts-h2">유튜브 연결됨</div>'
+      +'<div class="yts-acct">'+YT_TUBE_SVG+' <span style="vertical-align:2px">'+curEsc(acct)+'</span></div>'
+      +'<div style="height:1px;background:rgba(94,86,72,.14);margin:2px 6px"></div>'
+      +'<button class="yts-danger" id="ytsDisc">연결 해제</button>'
+      +'<div class="yts-safe">해제해도 만든 큐레이션은 남아요</div>';
+    var d=document.getElementById('ytsDisc'); if(d) d.onclick=ytDiscConfirm;
+  }
+  function ytDiscConfirm(){
+    var d=document.getElementById('ytsDisc'); if(!d) return;
+    d.classList.add('confirm'); d.textContent='정말 해제할까요? · 해제하기';
+    d.onclick=ytDisconnect;
+  }
+  async function ytDisconnect(){
+    var d=document.getElementById('ytsDisc'); if(d){ d.setAttribute('disabled','disabled'); d.textContent='해제하는 중…'; }
+    try{
+      var tok=await freshToken(); if(!tok){ show('login'); return; }
+      var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=disconnect',{method:'POST',headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
+      if(!r.ok) throw new Error('disconnect '+r.status);
+      toast('유튜브 연결을 해제했어요');
+      ytAutoRaised=true;               // don't auto-pop the connect sheet right after a manual disconnect
+      ytRenderConnect();                // soft transition back to S1 within the same sheet
+      setHomeTab('curation'); renderCuration();
+    }catch(e){ if(d){ d.removeAttribute('disabled'); } toast('해제하지 못했어요 — 다시 시도해주세요'); ytRenderConnected(null); }
+  }
+
+  // On boot after the OAuth round-trip: consume the snapshot, restore the background
+  // (curation tab), and re-raise the sheet at the tuning step. Returns true if handled.
+  function ytTryRestore(ytParam){
+    var raw; try{ raw=sessionStorage.getItem(YTS_SNAP); }catch(e){}
+    if(!raw) return false;
+    try{ sessionStorage.removeItem(YTS_SNAP); }catch(e){}
+    var snap; try{ snap=JSON.parse(raw); }catch(e){}
+    if(!snap || snap.returnTo!=='yt-wizard') return false;
+    show('home'); setHomeTab('curation');
+    ytAutoRaised=true;   // the wizard sheet is taking over; suppress the gate auto-raise
+    if(ytParam==='error'){ openYtSheet(); ytRenderConnect(); toast('연결에 실패했어요 — 다시 시도해주세요'); return true; }
+    openYtSheet(); ytRenderTuning();
+    return true;
+  }
+  // CREATE path only (from the sheet's proposal pick) — one-time build state in the tab
+  // body, then the deck. Existing curations NEVER come through here (no rebuilds).
+  /* ── Channel manager ──────────────────────────────────────────────────────
+     Follow specific channels for one curation: paste a URL/@handle, or remove.
+     Server side is #1367; this is the way in. */
+  var chSubId=null;
+  function chRow(c){
+    return '<div class="yts-ch" data-ch="'+curEsc(c.channel_id)+'">'
+      + (c.thumbnail_url ? '<img src="'+curEsc(c.thumbnail_url)+'" alt="">' : '<img alt="">')
+      + '<span class="chn">'+curEsc(c.channel_title||c.channel_id)+'</span>'
+      + '<button class="chx" type="button" data-rm="'+curEsc(c.channel_id)+'">해제</button></div>';
+  }
+  function chPaint(list, limit, note){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    b.innerHTML='<div class="yts-h2">채널로 받기</div>'
+      + '<div class="yts-sub">고른 채널이 그 주에 올린 영상만 모아 드려요.</div>'
+      + (list.length
+          ? '<div class="yts-chs">'+list.map(chRow).join('')+'</div>'
+          : '<div class="yts-chempty">아직 등록한 채널이 없어요.<br>주소나 @핸들을 붙여넣어 보세요.</div>')
+      + (note ? '<div class="yts-chempty">'+curEsc(note)+'</div>' : '');
+    setSheetFoot('<div class="yts-custom"><input type="text" id="chInput" maxlength="120" placeholder="채널 주소 또는 @핸들" autocomplete="off"'
+      + (limit!=null && list.length>=limit ? ' disabled' : '')
+      + '><button class="yts-cadd" id="chAdd" type="button"'
+      + (limit!=null && list.length>=limit ? ' disabled style="opacity:.4"' : '')+'>추가</button></div>');
+    b.querySelectorAll('[data-rm]').forEach(function(x){
+      x.onclick=function(){ chRemove(x.getAttribute('data-rm')); };
+    });
+    var inp=document.getElementById('chInput'), add=document.getElementById('chAdd');
+    function submit(){
+      var v=(inp&&inp.value||'').trim(); if(v.length<2){ if(inp) inp.focus(); return; }
+      chAddChannel(v);
+    }
+    if(add) add.onclick=submit;
+    if(inp) inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); submit(); } });
+  }
+  /** Channel panel BEFORE any curation exists: the first channel creates one. */
+  function chRenderNew(note){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    chSubId=null;
+    document.body.classList.remove('propsheet');
+    b.innerHTML='<div class="yts-h2">채널로 받기</div>'
+      + '<div class="yts-sub">고른 채널이 그 주에 올린 영상만 모아 드려요.</div>'
+      + (note ? '<div class="yts-chempty">'+curEsc(note)+'</div>'
+              : '<div class="yts-chempty">유튜브 채널 주소나 @핸들을 붙여넣어 주세요.</div>');
+    setSheetFoot('<div class="yts-custom"><input type="text" id="chInput" maxlength="120" placeholder="채널 주소 또는 @핸들" autocomplete="off"><button class="yts-cadd" id="chAdd" type="button">추가</button></div>');
+    var inp=document.getElementById('chInput'), add=document.getElementById('chAdd');
+    function submit(){
+      var v=(inp&&inp.value||'').trim(); if(v.length<2){ if(inp) inp.focus(); return; }
+      chCreateFromChannel(v);
+    }
+    if(add) add.onclick=submit;
+    if(inp){ inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); submit(); } }); inp.focus(); }
+  }
+  var CH_ERR={CHANNEL_NOT_FOUND:'그 주소로는 채널을 찾지 못했어요',
+              CHANNEL_HAS_NO_UPLOADS:'그 채널에는 업로드 목록이 없어요',
+              CHANNEL_QUOTA_EXCEEDED:'이 요금제에서 등록할 수 있는 채널을 다 채웠어요',
+              QUOTA_EXCEEDED:'이 요금제에서 만들 수 있는 큐레이션을 다 채웠어요'};
+  async function chCreateFromChannel(input){
+    var b=document.getElementById('ytsBody');
+    if(b) b.innerHTML='<div class="yts-load"><div class="yts-spin"></div><div class="yts-sub">채널을 찾는 중이에요</div></div>';
+    setSheetFoot('');
+    try{
+      var r=await api('/curations',{method:'POST',body:JSON.stringify({channelInput:input})});
+      var j=await r.json();
+      if(r.ok && j&&j.data&&j.data.id){
+        closeYtSheet(); setHomeTab('curation');
+        curCache=null; renderCuration();
+        return;
+      }
+      chRenderNew(CH_ERR[j&&j.code] || '등록하지 못했어요');
+    }catch(e){ chRenderNew('등록하지 못했어요'); }
+  }
+
+  async function chLoad(note){
+    try{
+      var r=await api('/curations/'+chSubId+'/channels');
+      var j=await r.json(); var d=(j&&j.data)||{};
+      chPaint(d.channels||[], d.limit, note);
+    }catch(e){ chPaint([], null, '목록을 불러오지 못했어요'); }
+  }
+  async function chAddChannel(input){
+    var b=document.getElementById('ytsBody'); if(b) b.innerHTML='<div class="yts-load"><div class="yts-spin"></div><div class="yts-sub">채널을 찾는 중이에요</div></div>';
+    setSheetFoot('');
+    try{
+      var r=await api('/curations/'+chSubId+'/channels',{method:'POST',body:JSON.stringify({input:input})});
+      if(r.ok){ chLoad(); return; }
+      var j=await r.json().catch(function(){ return {}; });
+      chLoad({CHANNEL_NOT_FOUND:'그 주소로는 채널을 찾지 못했어요',
+              CHANNEL_HAS_NO_UPLOADS:'그 채널에는 업로드 목록이 없어요',
+              CHANNEL_QUOTA_EXCEEDED:'이 요금제에서 등록할 수 있는 채널을 다 채웠어요'}[j&&j.code] || '등록하지 못했어요');
+    }catch(e){ chLoad('등록하지 못했어요'); }
+  }
+  async function chRemove(channelId){
+    try{ await api('/curations/'+chSubId+'/channels/'+encodeURIComponent(channelId),{method:'DELETE'}); }catch(e){}
+    chLoad();
+  }
+  function openChannelSheet(sub){
+    chSubId=sub.id; openYtSheet();
+    var b=document.getElementById('ytsBody');
+    if(b) b.innerHTML='<div class="yts-load"><div class="yts-spin"></div><div class="yts-sub">채널 목록을 여는 중이에요</div></div>';
+    setSheetFoot('');
+    chLoad();
+  }
+
+  async function selectCuration(topic){
+    var el=document.getElementById('curBody'); if(!el) return;
+    el.className='cur-connect';
+    el.innerHTML='<span class="cic">'+CUR_STAR+'</span><span class="t1">큐레이션 만드는 중</span>'
+      +'<span class="t2">'+curEsc(topic)+'<br>관련 영상을 모으고 있어요</span>'
+      +'<div class="cur-prog"><span></span></div>';
+    try{
+      var r=await api('/curations',{method:'POST',body:JSON.stringify({topic:topic,source:'youtube_subs'})});
+      var j=await r.json(); var id=j&&j.data&&j.data.id; if(!id) throw new Error('no id');
+      pollCurationItems(id,topic,0);
+    }catch(e){ el.innerHTML='<span class="cic">'+CUR_STAR+'</span><span class="t1">잠시 후 다시 시도해주세요</span>'; renderCuration(); }
+  }
+  async function pollCurationItems(id,topic,tries){
+    try{
+      var r=await api('/curations/'+id+'/items');
+      var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
+      if(items.length){ renderCuration(); openCurationDeck(topic,items); return; }
+    }catch(e){}
+    if(tries<20 && homeTab==='curation'){ setTimeout(function(){ pollCurationItems(id,topic,tries+1); },3000); }
+    else{ renderCuration(); toast('영상을 모으는 중이에요 — 잠시 후 목록에서 열어주세요'); }
+  }
+  /* ============ Curation deck — WARM PRE-ROLL dual-player engine [B+C'+R] ============
+     Seamless-consumption contract (James): transition <= 0.3s / imperceptible,
+     benchmark = the YouTube app. Warm = mute -> play -> (PLAYING) -> pause on the
+     idle slot; advance = visibility swap + seek + unmute. ~2s before ended the idle
+     slot resumes muted -> zero-gap auto-advance. iOS/low-power: quiet cue fallback.
+     Device review 2 (R8/R9/R11): PLAYING card at the TOP + two upcoming below
+     (near-equal, no empty prev slot); curation = FULL-PLAY ONLY (no relevance, no
+     core/full toggle — those belong to the video mode, separate track); progress =
+     the note's segmented chapters bar (one segment per video, progress meaning only);
+     loading = note veil pattern (poster + bottom-right ring until PLAYING). */
+  var cdItems=[], cdIdx=0, cdTopic='', cdCtx=null;
+  var cdP=[null,null], cdAct=0, cdWarmKey=[null,null], cdWarmT=[null,null];
+  var cdLoadedKey=[null,null]; // video_id currently loaded per slot — lets settle RESUME vs restart (A3)
+  var cdReadySlots=[false,false], cdPendingWarm=[null,null];
+  var cdPollT=null, cdEndRolled=false;
+  function cdEl(i){ return document.getElementById(i===0?'cdYtA':'cdYtB'); }
+  function openCurationDeck(topic, items, ctx){
+    unlockAudio();
+    cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
+    document.getElementById('cdTitle').textContent=cdTopic;
+    document.body.classList.add('curdeck');
+    setTimeout(function(){ document.body.classList.add('cdin'); },20); // D0 crossfade (timeout: rAF throttles in bg tabs)
+    // D6 — one-time coachmark until the first wheel/center interaction
+    try{ if(!localStorage.getItem('insighta-cd-hint')) document.body.classList.add('cdhint'); }catch(e){}
+    // release the note/beat player pair — never two dual-player pairs alive (memory)
+    try{ ytP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
+    cdEnsurePlayers();               // inside the row-tap gesture: prime allowed
+    cdRender();
+    // re-measure once the entry crossfade settles — an entry-time measure can
+    // read pre-layout strip height and leave the track clipped (P1-3 class)
+    setTimeout(function(){ if(document.body.classList.contains('curdeck')&&!cdFollow.on&&!cdAnimBusy) cdRender(); },420);
+    // In-card feed players: observe cards, tap a card's play glyph to play it, and
+    // auto-play the top card on open (YouTube-feed grammar). Each card owns its player.
+    cfManualPause=false; cfPlayIdx=-1; cfMuteFallback=false; cfSoundOn=false; clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
+    var _feed=document.getElementById('cdFeed');
+    if(_feed) _feed.onclick=function(ev){ var pb=ev.target.closest&&ev.target.closest('.cf-play'); if(!pb) return;
+      var card=pb.closest('.cf-card'); if(!card) return; var i=+card.getAttribute('data-i');
+      cfMuteFallback=false; cfManualPause=false; cfCommitPlay(i, true); }; // explicit play tap = sound (gesture)
+    var _mute=document.getElementById('cfMute'); if(_mute) _mute.onclick=function(){ cfToggle(); };
+    if(cfIsFeed()){ if(_feed && !_feed.firstChild) cfRender(); cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()) cfCommitPlay(0, false); },160); }
+  }
+  function closeCurationDeck(){
+    if(cfIsFeed()) cfCaptureActive(); // A4: save position before stopVideo resets it
+    cdStopPoll();
+    try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
+    cdWarmKey=[null,null]; cdLoadedKey=[null,null];
+    if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfMuteFallback=false; cfSoundOn=false; cfRatios={}; clearTimeout(cfScrollT); clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
+    Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} }); cfPlayers={}; // tear down the in-card players
+    var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; _fd.innerHTML=''; } // drop cards+players so re-open builds fresh
+    clearTimeout(cdWheelT);
+    document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
+    [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
+    var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
+    setHomeTab('curation');
+  }
+  function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
+  // Best-poster probe: try maxresdefault (true 16:9, 1280w); YouTube serves a 120x90
+  // placeholder when absent -> fall back to hqdefault. Cached per video.
+  var cdPosterCache={};
+  function cdBestPoster(vid, cb){
+    if(cdPosterCache[vid]){ cb(cdPosterCache[vid]); return; }
+    var maxres='https://i.ytimg.com/vi/'+vid+'/maxresdefault.jpg';
+    var img=new Image();
+    img.onload=function(){ var u=(img.naturalWidth>320)?maxres:('https://i.ytimg.com/vi/'+vid+'/hqdefault.jpg'); cdPosterCache[vid]=u; cb(u); };
+    img.onerror=function(){ var u='https://i.ytimg.com/vi/'+vid+'/hqdefault.jpg'; cdPosterCache[vid]=u; cb(u); };
+    img.src=maxres;
+  }
+  function cdPosterSync(){
+    var it=cdItems[cdIdx]; if(!it) return;
+    var vid=it.video_id;
+    var b=document.getElementById('cdPosterB'), f=document.getElementById('cdPosterF'), amb=document.getElementById('cdAmb');
+    // paint instantly (hq/known thumb) — the maxres probe upgrade lands async;
+    // waiting for the probe left the stage dark for a network round-trip
+    var now=cdPosterCache[vid]||cdThumb(it);
+    if(b) b.style.backgroundImage='url("'+now+'")';
+    if(f) f.style.backgroundImage='url("'+now+'")';
+    if(amb){ amb.style.backgroundImage='url("'+now+'")'; amb.classList.add('on'); } // deck ambient bg
+    cdBestPoster(vid, function(u){
+      if(u===now) return;
+      if(!cdItems[cdIdx]||cdItems[cdIdx].video_id!==vid) return; // stale guard
+      if(b) b.style.backgroundImage='url("'+u+'")';
+      if(f) f.style.backgroundImage='url("'+u+'")';
+      if(amb) amb.style.backgroundImage='url("'+u+'")';
+    });
+  }
+  /* Track renderer (motion v2): equal-height cards laid on a translating track.
+     Window = [idx-1 .. idx+2]; resting transform hides the buffer card above, so a
+     glide of exactly one pitch (transform-only, GPU) moves every card its real
+     distance — no snap, no distortion. */
+  var cdGAP=8;
+  function cdPitch(){
+    var s=document.getElementById('cdStrip');
+    var h=(s&&s.clientHeight)||480;
+    var card=Math.max(80, Math.floor((h - 2*cdGAP)/3));
+    return {card:card, pitch:card+cdGAP};
+  }
+  function cdRender(){
+    var n=cdItems.length; if(!n) return;
+    var g=cdPitch();
+    var tr=document.getElementById('cdTrack');
+    var html='';
+    for(var k=cdIdx-1;k<=cdIdx+2;k++){
+      var it=cdItems[k];
+      html+='<div class="cd-card'+(it?(k>cdIdx?' upnext':''):' empty')+'" data-k="'+k+'"'
+        +' style="height:'+g.card+'px'+(it?(';background-image:url(\''+cdThumb(it)+'\')'):'')+'"></div>';
+    }
+    tr.innerHTML=html;
+    tr.classList.remove('gliding');
+    tr.style.transform='translateY('+(-g.pitch)+'px)';
+    // Portrait: the stage is one card tall (inline height). Landscape: CSS owns the height
+    // (100% of the fixed viewport) — an inline card-height here fights the !important rule and
+    // collapses the stage mid-nav (the size pump). Clear it in landscape so CSS wins; cdRemeasure
+    // re-runs cdRender on orientationchange, so returning to portrait restores the card height.
+    var st=document.getElementById('cdStage');
+    if(st) st.style.height = matchMedia('(orientation:landscape)').matches ? '' : (g.card+'px');
+    var cur=cdItems[cdIdx];
+    document.getElementById('cdVt').textContent=cur.title||'제목 없음';
+    var bits=[];
+    if(cur.channel) bits.push(cur.channel);
+    if(cur.duration_sec) bits.push(fmtSec(cur.duration_sec));
+    document.getElementById('cdVs').textContent=bits.join(' · ');
+    document.getElementById('cdCount').textContent=(cdIdx+1)+' / '+n;
+    cdPosterSync();
+    cdDrawChap(0);
+    cdJbarSync(0);
+    // Build the portrait feed ONCE. cdRender re-runs (the 420ms entry re-measure, nav)
+    // would rebuild feed.innerHTML and ORPHAN the IntersectionObserver (it keeps observing
+    // the removed cards) -> cfRatios never updates -> only card 0 ever becomes dominant ->
+    // "only the top card plays + play button dead on the rest". Rebuild only when empty.
+    var _fd=document.getElementById('cdFeed'); if(cfIsFeed() && _fd && !_fd.firstChild) cfRender();
+  }
+  function cfEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];}); }
+  function cfViews(n){ n=+n||0; if(n>=1e8) return (n/1e8).toFixed(1).replace(/\.0$/,'')+'억'; if(n>=1e4) return Math.round(n/1e4)+'만'; if(n>=1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'')+'천'; return String(n); }
+  // Portrait feed renderer (native scroll). Each item = one full-bleed 16:9 card
+  // (poster + a .cf-slot the active iframe mounts into on autoplay) + a bottom meta
+  // block. Landscape ignores this DOM (CSS hides #cdFeed there). Progress line is
+  // painted per card by the A4 watch-state pass; static render leaves it hidden.
+  function cfRender(){
+    var feed=document.getElementById('cdFeed'); if(!feed) return;
+    var n=cdItems.length; if(!n){ feed.innerHTML=''; return; }
+    var html='';
+    for(var i=0;i<n;i++){
+      var it=cdItems[i]; if(!it||!it.title) continue; // A3: never serve a text-less card
+      var durTxt=it.duration_sec?fmtSec(it.duration_sec):'';
+      var sub=[]; if(it.channel) sub.push(it.channel); if(it.views>0) sub.push('조회수 '+cfViews(it.views)); if(durTxt) sub.push(durTxt);
+      var w=cfWatch[it.video_id], pc=(w&&w.dur>0)?Math.round(Math.min(1,w.pos/w.dur)*100):0; // A4 progress line
+      html+='<div class="cf-card'+(i===cdIdx?' cf-focus':'')+'" data-i="'+i+'">'
+        +'<div class="cf-media" style="background-image:url(\''+cdThumb(it)+'\')">'
+          +'<div class="cf-slot"></div>'
+          +(durTxt?'<span class="cf-durchip">'+cfEsc(durTxt)+'</span>':'')
+          +'<div class="cf-prog'+((w&&w.dur>0)?'':' none')+'"><b style="width:'+pc+'%"></b></div>'
+          +'<button class="cf-play" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button>'
+        +'</div>'
+        +'<div class="cf-meta"><div class="cf-vt">'+cfEsc(it.title)+'</div>'
+        +(sub.length?'<div class="cf-sub">'+cfEsc(sub.join(' · '))+'</div>':'')+'</div>'
+      +'</div>';
+    }
+    feed.innerHTML=html;
+  }
+  // ===== D: native-scroll dominant-card autoplay (portrait feed) =====
+  // No iframe reparent (= no reload): the dual-player STAGE is placed as a fixed
+  // overlay over the dominant card on settle; during scroll it hides (posters only,
+  // audio paused). Dominant = IntersectionObserver max-ratio (>=0.5), +0.15
+  // hysteresis vs the current player, committed 150ms after the last scroll.
+  var cfRatios={}, cfObs=null, cfScrollT=null, cfManualPause=false, cfPlayIdx=-1;
+  // Feed autoplay is OFF-gesture (a settle timer, not a tap), and the deck players are
+  // never gesture-primed, so an unmuted programmatic playVideo() is blocked by iOS/
+  // browsers and YouTube surfaces "An error occurred" (the app documents this at ytPrime).
+  // YouTube's own feed grammar sidesteps it: dominant card autoplays MUTED (muted play
+  // needs no gesture — the warm engine already relies on it), and the first user tap
+  // unmutes (inside a gesture; that interaction also unlocks the audio context so later
+  // Supervisor #4: SOUND-FIRST. Attempt UNMUTED autoplay (cdPrime unlocks the players);
+  // only if that's blocked (onError 2/5, or no PLAYING within a watchdog) fall back to
+  // MUTED + a "tap for sound" affordance. A tap turns sound on inside the gesture. Muted
+  // is the fallback, never the default — this is a weekly-radio product, it needs sound.
+  var cfMuteFallback=false, cfSoundWatch=null, cfSoundOn=false; // cfSoundOn: user enabled sound ONCE -> every later card plays with sound (no per-video re-prompt)
+  function cfIsFeed(){ return document.body.classList.contains('curdeck') && matchMedia('(orientation:portrait)').matches; }
+  function cfCards(){ var f=document.getElementById('cdFeed'); return f?f.querySelectorAll('.cf-card'):[]; }
+  function cfSetupObserver(){
+    var feed=document.getElementById('cdFeed'); if(!feed) return;
+    if(cfObs) cfObs.disconnect();
+    cfRatios={};
+    cfObs=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ var i=+e.target.getAttribute('data-i'); cfRatios[i]=e.isIntersecting?e.intersectionRatio:0; });
+    },{root:feed, threshold:[0,.2,.35,.5,.6,.7,.85,1]});
+    Array.prototype.forEach.call(cfCards(),function(c){ cfObs.observe(c); });
+    feed.onscroll=cfOnScroll;
+  }
+  function cfDominant(){ // max visible ratio; tie -> upper (lower index)
+    var best=-1, bestR=-1;
+    for(var i=0;i<cdItems.length;i++){ var r=cfRatios[i]||0; if(r>bestR+1e-4){ bestR=r; best=i; } }
+    return {idx:best, ratio:bestR};
+  }
+  // Native scroll: the video is IN the card, so it moves with the scroll automatically —
+  // no reposition, no pause. We only wait for the scroll to settle, then hand the dominant
+  // card the player. Sound stays continuous while scrolling (supervisor #5).
+  function cfOnScroll(){ if(!cfIsFeed()) return; clearTimeout(cfScrollT); cfScrollT=setTimeout(cfSettle,140); }
+  // ===== In-card players (commercial rebuild) =====
+  // The old fixed-overlay stage repositioned one video over the scrolling feed via JS on
+  // every scroll event — it could never scroll-sync with native momentum, so the video
+  // floated/jittered over the header + meta. SCRAPPED. Each card now owns its OWN YT
+  // player INSIDE the card (.cf-slot) → the video scrolls natively with the card (YouTube-
+  // feed smoothness, zero JS reposition). A small pool (dominant +/- neighbours) is created
+  // lazily and recycled; the dominant plays, the rest pause (single voice owner).
+  var cfPlayers={};
+  function cfEnsurePlayer(i){
+    if(cfPlayers[i]) return cfPlayers[i];
+    var card=cfCards()[i]; if(!card) return null;
+    var slot=card.querySelector('.cf-slot'); if(!slot||!window.YT||!YT.Player) return null;
+    var it=cdItems[i]; if(!it) return null;
+    var w=cfWatch[it.video_id], startAt=(w&&w.dur>0&&w.pos<w.dur*0.95)?Math.floor(w.pos):0; // A4 resume
+    var host=document.createElement('div'); slot.appendChild(host);
+    try{ cfPlayers[i]=new YT.Player(host,{width:'100%',height:'100%',videoId:it.video_id,
+      playerVars:{playsinline:1,rel:0,modestbranding:1,controls:1,fs:1,start:startAt},
+      events:{onStateChange:(function(x){return function(ev){cfPlayerState(x,ev.data);};})(i),
+              onError:(function(x){return function(ev){cfPlayerError(x,ev.data);};})(i)}});
+      card.classList.add('cf-live'); return cfPlayers[i];
+    }catch(e){ return null; }
+  }
+  function cfDestroyFar(i){ // keep only dominant +/- 2; recycle the rest (memory + one-voice)
+    Object.keys(cfPlayers).forEach(function(k){ var j=+k; if(Math.abs(j-i)>2){
+      try{ cfPlayers[j]&&cfPlayers[j].destroy&&cfPlayers[j].destroy(); }catch(e){} delete cfPlayers[j];
+      var c=cfCards()[j]; if(c){ c.classList.remove('cf-live','cf-playing'); var s=c.querySelector('.cf-slot'); if(s) s.innerHTML=''; } } });
+  }
+  function cfSaveCard(i){ try{ var p=cfPlayers[i], it=cdItems[i]; if(!p||!it||!p.getCurrentTime) return;
+    var dur=p.getDuration()||0,pos=p.getCurrentTime()||0; if(dur>0){ cfSaveWatch(it.video_id,pos,dur); cfPaintProg(i); } }catch(e){} }
+  function cfPlayerState(i, st){ if(st===1){ if(i===cfPlayIdx) clearTimeout(cfSoundWatch); var c=cfCards()[i]; if(c) c.classList.add('cf-playing'); } else if(st===0){ cfCardEnded(i); } }
+  function cfPlayerError(i, code){
+    if((code===2||code===5) && i===cfPlayIdx && !cfMuteFallback){ cfMuteFallback=true; try{ cfPlayers[i].mute(); cfPlayers[i].playVideo(); }catch(e){} cfShowMuteHint(); return; }
+    if(code===100||code===101||code===150){ var c=cfCards()[i], m=c&&c.querySelector('.cf-media'); if(m&&!m.querySelector('.cf-na')){ var d=document.createElement('div'); d.className='cf-na'; d.textContent='재생할 수 없는 영상'; m.appendChild(d); } }
+  }
+  function cfCardEnded(i){ if(i>=cdItems.length-1) return; var c=cfCards()[i+1]; if(c) c.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'}); }
+  function cfSetFocus(i){
+    Array.prototype.forEach.call(cfCards(),function(c){ c.classList.toggle('cf-focus', +c.getAttribute('data-i')===i); });
+  }
+  function cfSettle(){
+    if(!cfIsFeed()) return;
+    var d=cfDominant(); if(d.idx<0 || d.ratio<0.5) return;
+    if(d.idx===cfPlayIdx) return;                                        // already the playing card
+    if(cfPlayIdx>=0 && d.ratio < (cfRatios[cfPlayIdx]||0)+0.15) return;  // hysteresis: not a clear enough lead
+    cfSetFocus(d.idx);
+    if(cfManualPause){ cfPlayIdx=d.idx; return; }                        // user paused: focus only, no autoplay
+    cfCommitPlay(d.idx, false);
+  }
+  function cfCommitPlay(i, gesture){
+    if(i<0||i>=cdItems.length) return;
+    if(cfPlayIdx>=0 && cfPlayIdx!==i){ cfSaveCard(cfPlayIdx); try{ var pv=cfPlayers[cfPlayIdx]; if(pv&&pv.pauseVideo) pv.pauseVideo(); }catch(e){} } // single voice owner
+    cfPlayIdx=i; cdIdx=i; cfSetFocus(i);
+    var p=cfEnsurePlayer(i); if(!p) return;
+    try{
+      if(gesture){ cfSoundOn=true; cfMuteFallback=false; cfShowMuteHint(); if(p.unMute) p.unMute(); }
+      else if(cfSoundOn){ cfMuteFallback=false; if(p.unMute) p.unMute(); }  // sound enabled ONCE -> stays on for every card, never re-prompt
+      else { if(p.unMute) p.unMute(); }                                     // sound-first attempt (watchdog below, only until sound is enabled once)
+      if(p.playVideo) p.playVideo();
+    }catch(e){}
+    Array.prototype.forEach.call(cfCards(),function(c){ c.classList.toggle('cf-playing', +c.getAttribute('data-i')===i); });
+    if(!gesture && !cfSoundOn){ clearTimeout(cfSoundWatch); cfSoundWatch=setTimeout(function(){ // sound never enabled + blocked -> muted fallback + chip (once)
+      try{ var pp=cfPlayers[i]; if(pp&&pp.getPlayerState&&pp.getPlayerState()!==1){ cfMuteFallback=true; pp.mute(); pp.playVideo(); cfShowMuteHint(); } }catch(e){} },1500); }
+    if(i+1<cdItems.length) cfEnsurePlayer(i+1);                          // pre-create the next card's player (instant on scroll)
+    cfDestroyFar(i);
+  }
+  // A4: paint one card's progress line in place (no innerHTML rebuild = no scroll/observer reset).
+  function cfPaintProg(i){
+    var c=cfCards()[i]; if(!c) return; var it=cdItems[i]; if(!it) return;
+    var w=cfWatch[it.video_id], prog=c.querySelector('.cf-prog'); if(!prog) return;
+    var b=prog.querySelector('b');
+    if(w&&w.dur>0){ prog.classList.remove('none'); if(b) b.style.width=Math.round(Math.min(1,w.pos/w.dur)*100)+'%'; }
+    else prog.classList.add('none');
+  }
+  function cfShowMuteHint(){ document.body.classList.toggle('cffeedmuted', cfIsFeed() && cfMuteFallback && !cfSoundOn); }
+  // Tap on the playing video: the FIRST tap unmutes (inside a gesture — this also
+  // unlocks the audio context so later commits can autoplay with sound); after that a
+  // tap toggles play/pause (a settled pause = manualPause, respected on scroll).
+  function cfToggle(){
+    if(!cfIsFeed()||cfPlayIdx<0) return;
+    var p=cfPlayers[cfPlayIdx]; if(!p) return;
+    try{ var st=p.getPlayerState?p.getPlayerState():-1;
+      if(cfMuteFallback){ cfMuteFallback=false; cfSoundOn=true; if(p.unMute) p.unMute(); cfShowMuteHint(); if(st!==1&&p.playVideo) p.playVideo(); return; } // tap turns sound on for the whole session
+      if(st===1){ p.pauseVideo(); cfManualPause=true; cfSaveCard(cfPlayIdx); }
+      else { cfSoundOn=true; if(p.unMute) p.unMute(); p.playVideo(); cfManualPause=false; }
+    }catch(e){}
+  }
+  // ===== A4: watch position + per-card progress line + resume =====
+  // Session store now; the server PATCH wires in when the DDL lands (2 derived cols
+  // on curation_items). Duration is captured from the PLAYER (pool duration is 86%
+  // NULL), so a watched card always has a ratio for its line. cfSaveWatch is the
+  // single no-op-now / server-later seam.
+  var cfWatch={}, cfCapTick=0;
+  function cfSaveWatch(vid, pos, dur){
+    if(!vid||!(dur>0)) return;
+    cfWatch[vid]={pos:Math.max(0, Math.min(pos||0, dur)), dur:dur};
+    // TODO(A4 DDL): PATCH /curations/:subId/items/:vid/watched {position,duration} — position-only, must NOT touch watched_at.
+  }
+  function cfCaptureActive(){ if(cfIsFeed() && cfPlayIdx>=0) cfSaveCard(cfPlayIdx); } // in-card: save the current card's player position
+  document.addEventListener('visibilitychange', function(){ if(document.hidden && cfIsFeed()) cfCaptureActive(); });
+  window.addEventListener('pagehide', function(){ if(cfIsFeed()) cfCaptureActive(); });
+  // Progress = note chapters grammar: one segment per video, done/now(partial)/todo (R9).
+  function cdDrawChap(frac){
+    var el=document.getElementById('cdChap'); if(!el) return;
+    var n=cdItems.length; if(n<1){ el.innerHTML=''; return; }
+    var h='';
+    for(var i=0;i<n;i++){
+      if(i<cdIdx) h+='<i class="done"></i>';
+      else if(i===cdIdx) h+='<i class="now"><b style="width:'+Math.round((frac||0)*100)+'%"></b></i>';
+      else h+='<i></i>';
+    }
+    el.innerHTML=h;
+  }
+  function cdUpdateChapFill(frac){
+    var b=document.querySelector('#cdChap i.now b');
+    if(b) b.style.width=Math.round(Math.max(0,Math.min(1,frac))*100)+'%';
+    cdJbarSync(frac);
+  }
+  // Journey bar (bottom): position within the lineup = (idx + within-video frac) / N.
+  function cdJbarSync(frac){
+    var n=cdItems.length; if(!n) return;
+    var pos=Math.max(0, Math.min(1, (cdIdx + Math.max(0,Math.min(1,frac||0))) / n));
+    var pct=(pos*100).toFixed(2)+'%';
+    var f=document.getElementById('cdJbFill'), m=document.getElementById('cdJbMark');
+    if(f) f.style.width=pct;
+    if(m) m.style.left=pct;
+  }
+  /* Wheel summon (glass): ANY deck touch fades the wheel in; 3s idle fades out.
+     Supervisor boundary: when the wheel is NOT visible, the summoning tap is
+     CONSUMED — it must not fall through as a card tap / play toggle. */
+  var cdWheelT=null, cdConsumeUntil=0;
+  function cdWheelShow(){
+    var was=document.body.classList.contains('cdwheel');
+    document.body.classList.add('cdwheel');
+    clearTimeout(cdWheelT);
+    cdWheelT=setTimeout(function(){ document.body.classList.remove('cdwheel'); },3000);
+    return was;
+  }
+  function cdEnsurePlayers(){
+    if(!window.YT||!YT.Player) return;
+    [0,1].forEach(function(i){
+      if(cdP[i]) return;
+      cdP[i]=new YT.Player(i===0?'cdYtA':'cdYtB',{
+        width:'100%', height:'100%', videoId:'',
+        playerVars:{playsinline:1, rel:0, modestbranding:1, controls:1, fs:1},
+        events:{
+          onReady:(function(slot){ return function(){
+            cdReadySlots[slot]=true;
+            if(cdPendingWarm[slot]!=null){ var ix=cdPendingWarm[slot]; cdPendingWarm[slot]=null; cdWarmInto(slot, ix); }
+          }; })(i),
+          onStateChange:(function(slot){ return function(ev){ cdOnState(slot, ev.data); }; })(i),
+          onError:(function(slot){ return function(ev){ cdOnError(slot, ev.data); }; })(i)
+        }
+      });
+    });
+  }
+  // YT error codes: 2 invalid param, 5 HTML5 error, 100 not found, 101/150 embedding
+  // disabled by the owner. Never leave YouTube's raw error visible — cover it with our
+  // poster; tell the user only when the video genuinely can't play here.
+  function cdOnError(slot, code){
+    if(slot!==cdAct) return;
+    if((code===2||code===5) && cfIsFeed() && !cfMuteFallback){ // playback error on an unmuted attempt -> muted fallback, keep playing (supervisor #4)
+      cfMuteFallback=true; try{ var p=cdP[cdAct]; p.mute(); p.playVideo(); }catch(e){} cfShowMuteHint(); return;
+    }
+    // 100=deleted/private (most common in the pool), 101/150=embedding disabled: cover with
+    // the poster + a CARD-INTERNAL label, never a global toast (a toast vanishes with its info).
+    document.body.classList.remove('cdplaying','cdloading'); document.body.classList.add('cdpaused');
+    if(cfIsFeed()) cfMarkCardUnavailable(cdIdx);
+  }
+  function cfMarkCardUnavailable(i){
+    var c=cfCards()[i]; if(!c) return; var m=c.querySelector('.cf-media'); if(!m||m.querySelector('.cf-na')) return;
+    var d=document.createElement('div'); d.className='cf-na'; d.textContent='재생할 수 없는 영상';
+    m.appendChild(d);
+  }
+  function cdOnState(slot, st){
+    if(slot!==cdAct){
+      // idle slot warming: reached PLAYING => buffered => pause & mark warm
+      if(st===1 && cdWarmKey[slot]==='warming'){ try{cdP[slot].pauseVideo();}catch(e){} cdWarmKey[slot]=cdP[slot].__warmTarget||null; }
+      return;
+    }
+    if(st===1){ document.body.classList.remove('cdloading','cdpaused'); if(cfIsFeed()){ cfManualPause=false; clearTimeout(cfSoundWatch); } } // veil off + unmuted play confirmed (cancel the mute-fallback watchdog)
+    // Pause veil (deck isolation, James pick 07-21): YouTube's paused 'More videos'
+    // overlay surfaces OUTSIDE videos with no player param to disable it — cover the
+    // iframe with our poster while paused; center press resumes (deck grammar).
+    // In the feed, a pause while settled (not mid-scroll) = an explicit user pause -> respect it.
+    if(st===2){ document.body.classList.add('cdpaused'); if(cfIsFeed() && !document.body.classList.contains('cdnav')) cfManualPause=true; }
+    if(st===0){ cdEnded(); }
+  }
+  // Warm an item into a slot: muted load -> PLAYING -> pause. Quiet cue fallback (iOS/low-power).
+  // Before the slot's onReady, park the request (cdPendingWarm) — never silently skip.
+  function cdWarmInto(slot, itemIdx){
+    if(!cdReadySlots[slot]){ cdPendingWarm[slot]=itemIdx; return; }
+    var it=cdItems[itemIdx]; if(!it||!cdP[slot]||!cdP[slot].loadVideoById) return;
+    var key=it.video_id;                       // full-play only (contract: curation has no sections)
+    if(cdWarmKey[slot]===key) return;
+    clearTimeout(cdWarmT[slot]);
+    cdP[slot].__warmTarget=key;
+    cdWarmKey[slot]='warming';
+    try{
+      cdP[slot].mute();
+      cdP[slot].loadVideoById({videoId:it.video_id}); cdLoadedKey[slot]=key;
+    }catch(e){ cdWarmKey[slot]=null; return; }
+    cdWarmT[slot]=setTimeout(function(){
+      if(cdWarmKey[slot]==='warming'){ // never reached PLAYING: quiet cue fallback, poster stays
+        try{ cdP[slot].cueVideoById({videoId:it.video_id}); }catch(e){}
+        cdWarmKey[slot]=null;
+      }
+    },3500);
+  }
+  // Show only the active slot's iframe inside the focus card.
+  function cdShowActive(){
+    [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.toggle('off', i!==cdAct); });
+  }
+  // Start/resume playback of the current item on the active slot.
+  // Loading = note veil (D2): poster + bottom-right ring until PLAYING reveals the iframe.
+  function cdPlay(){
+    cdHintDismiss();
+    document.body.classList.remove('cdfin','cdpaused');
+    document.body.classList.add('cdplaying');
+    cdEnsurePlayers();
+    var it=cdItems[cdIdx]; if(!it) return;
+    var key=it.video_id;
+    var idle=1-cdAct;
+    if(cdWarmKey[idle]===key){ cdAct=idle; }         // warm slot has it: swap
+    cdShowActive();
+    try{ var q=cdP[1-cdAct]; if(q&&q.pauseVideo) q.pauseVideo(); }catch(e){} // single audio owner: silence the slot we just left
+    var p=cdP[cdAct]; if(!p||!p.loadVideoById) return;
+    // A1 state machine: load (+ dark veil) ONLY on a true cold slot. A warm-buffered
+    // or already-loaded slot just plays — no cdloading veil, so no black flicker on
+    // transitions or resume. Cold path paints the poster BEFORE the veil.
+    var ready=(cdWarmKey[cdAct]===key)||(cdLoadedKey[cdAct]===key);
+    try{
+      var feedMuted = cfIsFeed() && cfMuteFallback;                 // sound-first; muted only after a detected block (supervisor #4)
+      if(ready){ if(feedMuted) p.mute(); else p.unMute(); p.playVideo(); }   // warm / loaded -> play, no veil
+      else { cdPosterSync(); document.body.classList.add('cdloading'); if(feedMuted) p.mute(); else p.unMute();
+        var _w=cfWatch[it.video_id], _ss=(_w&&_w.dur>0&&_w.pos<_w.dur*0.95)?_w.pos:0; // A4 resume from saved position
+        p.loadVideoById({videoId:it.video_id, startSeconds:_ss}); } // cold: poster first, then veil
+      cfShowMuteHint();
+      // sound-first watchdog: if the unmuted attempt doesn't reach PLAYING, iOS blocked it
+      // -> fall back to muted + affordance so the video still plays (supervisor #4).
+      if(cfIsFeed() && !feedMuted){ clearTimeout(cfSoundWatch); cfSoundWatch=setTimeout(function(){
+        try{ var pp=cdP[cdAct]; if(pp&&pp.getPlayerState&&pp.getPlayerState()!==1){ cfMuteFallback=true; pp.mute(); pp.playVideo(); cfShowMuteHint(); } }catch(e){}
+      },1500); }
+    }catch(e){}
+    cdLoadedKey[cdAct]=key; // this slot now holds this video (A3 resume detection)
+    cdWarmKey[cdAct]=null; cdEndRolled=false;
+    // server-side watch mark (cross-device row meta) — fire-and-forget, idempotent
+    if(cdCtx&&cdCtx.subId){ api('/curations/'+cdCtx.subId+'/items/'+it.video_id+'/watched',{method:'PATCH'}).catch(function(){}); }
+    cdWarmInto(1-cdAct, cdIdx+1<cdItems.length?cdIdx+1:cdIdx); // keep travel-direction neighbor warm
+    cdStartPoll();
+  }
+  // Nav freeze = pause EVERY slot, not just the active one. Playback focus can sit on a
+  // slot cdAct does not point to (end-of-video rolling-start plays the idle slot; a warm-swap
+  // moves cdAct while the old slot's pauseVideo() is still in flight on iOS). Pausing only
+  // cdAct let the other slot keep sounding under the hidden stage = the "ghost". Freeze both.
+  function cdPause(){ [0,1].forEach(function(i){ try{ var p=cdP[i]; if(p&&p.pauseVideo) p.pauseVideo(); }catch(e){} }); }
+  // Prime the DECK players inside a user gesture (mute->play->pause) so later OFF-gesture
+  // autoplays are allowed. The feed autoplays on scroll-settle (not a tap), and cdP was
+  // never primed — only the note players ytP are (via ytPrime). This was the missing
+  // invariant behind "An error occurred" / cards not activating. Self-guarded + idempotent.
+  var cdPrimed=false;
+  function cdPrime(){
+    if(cdPrimed) return; var ok=false;
+    // Supervisor review: prime ONLY empty slots (no loaded/warm video). Priming a slot
+    // that already holds a video would (a) advance its currentTime (pollution) and (b)
+    // race a real play whose playVideo() could land before this pause(). Muted throughout
+    // (no unmute here) so it can never leak audio — unmute happens only on a user tap.
+    [0,1].forEach(function(i){ var p=cdP[i]; if(!p||!p.playVideo) return;
+      if(cdLoadedKey[i]||cdWarmKey[i]) return;      // skip slots that hold a video
+      try{ p.mute(); p.playVideo(); p.pauseVideo(); ok=true; }catch(e){} });
+    if(ok) cdPrimed=true;                            // only latch once we actually primed an empty slot in a gesture
+  }
+  function cdToggle(){
+    if(!document.body.classList.contains('cdplaying')){ cdPlay(); return; }
+    try{
+      var p=cdP[cdAct]; var st=p&&p.getPlayerState?p.getPlayerState():-1;
+      if(st===1) p.pauseVideo(); else p.playVideo();
+    }catch(e){}
+  }
+  // ~2s before the end, resume the warmed idle slot muted (zero-gap) + drive the
+  // now-segment fill of the progress bar (note chapters grammar).
+  function cdStartPoll(){
+    cdStopPoll();
+    cdPollT=setInterval(function(){
+      try{
+        var p=cdP[cdAct]; if(!p||!p.getCurrentTime) return;
+        var end=p.getDuration()||0; if(!end) return;
+        var t=p.getCurrentTime();
+        cdUpdateChapFill(t/end);
+        if(cfIsFeed() && ++cfCapTick>=24){ cfCapTick=0; var _pi=cfPlayIdx>=0?cfPlayIdx:cdIdx, _it=cdItems[_pi]; if(_it){ cfSaveWatch(_it.video_id, t, end); cfPaintProg(_pi); } } // A4: ~12s throttle
+        var rem=end-t;
+        if(rem<2&&!cdEndRolled){
+          cdEndRolled=true;
+          var idle=1-cdAct;
+          if(cdWarmKey[idle]&&cdWarmKey[idle]!=='warming'){ try{ cdP[idle].playVideo(); }catch(e){} } // rolling start (muted)
+        }
+      }catch(e){}
+    },500);
+  }
+  function cdStopPoll(){ if(cdPollT){ clearInterval(cdPollT); cdPollT=null; } }
+  // Ended on the active slot: next video via the warm-swap path (no spinner).
+  // Last video -> D4 weekly-complete card (list row updates on return via re-fetch).
+  function cdEnded(){
+    if(cfIsFeed()){ // feed: scroll to the next card; the settle commits + plays it
+      cfCaptureActive(); cfPaintProg(cfPlayIdx>=0?cfPlayIdx:cdIdx); // A4: ended = complete (pos≈dur)
+      if(cdIdx<cdItems.length-1){ var c=cfCards()[cdIdx+1]; if(c) c.querySelector('.cf-media').scrollIntoView({behavior:reduce?'auto':'smooth', block:'start'}); }
+      else { cdStopPoll(); document.body.classList.remove('cdplaying','cdloading','cdpaused'); document.body.classList.add('cdfin'); }
+      return;
+    }
+    if(cdIdx<cdItems.length-1){ cdAdvance(1,true); }
+    else { cdStopPoll(); document.body.classList.remove('cdplaying','cdloading','cdpaused'); document.body.classList.add('cdfin'); }
+  }
+  function cdHintDismiss(){
+    if(!document.body.classList.contains('cdhint')) return;
+    document.body.classList.remove('cdhint');
+    try{ localStorage.setItem('insighta-cd-hint','1'); }catch(e){}
+  }
+  /* Wheel-coupled navigation (note navBegin/navEnd grammar): each detent = exactly
+     one card glide, queued; a burst fast-forwards the running glide so motion stays
+     1:1 with the wheel. During travel the stage hides (posters only, playback
+     paused); playback resumes ONLY on settle (wheel release / 280ms idle). */
+  var cdNavActive=false, cdWasPlaying=false, cdSettleT=null, cdAnimBusy=false, cdQueue=[], cdFinCur=null;
+  function cdGlide(d){
+    cdAnimBusy=true;
+    var g=cdPitch(); var tr=document.getElementById('cdTrack');
+    tr.classList.add('gliding');
+    tr.style.transform='translateY('+(-g.pitch - d*g.pitch)+'px)';
+    var done=false;
+    var fin=function(){
+      if(done) return; done=true; cdFinCur=null;
+      tr.removeEventListener('transitionend',fin);
+      cdAnimBusy=false; cdRender();
+      if(cdQueue.length) cdPump();
+    };
+    cdFinCur=fin;
+    tr.addEventListener('transitionend',fin);
+    setTimeout(fin, 250); // safety: transitionend can be swallowed
+  }
+  function cdPump(){
+    if(cdAnimBusy) return;
+    var d=cdQueue.shift(); if(d==null) return;
+    cdGlide(d);
+  }
+  function cdStep(d){
+    var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
+    cdIdx=ni; cdEndRolled=false;
+    if(typeof cdWheelShow==='function') cdWheelShow(); // keep the wheel alive while turning
+    if(!cdNavActive){
+      cdNavActive=true;
+      cdWasPlaying=document.body.classList.contains('cdplaying');
+      cdPause();
+      document.body.classList.add('cdnav');
+    }
+    if(cdAnimBusy&&cdFinCur) cdFinCur();   // fast-forward: stay 1:1 with the wheel
+    cdQueue.push(d); cdPump();
+    clearTimeout(cdSettleT); cdSettleT=setTimeout(cdSettle, 280);
+  }
+  function cdSettle(){
+    if(!cdNavActive) return;
+    clearTimeout(cdSettleT);
+    cdNavActive=false;
+    document.body.classList.remove('cdnav');
+    if(cdWasPlaying){
+      // A3: settling on the SAME card the active slot already holds = RESUME at
+      // the current position (playVideo only) — never reload/seek(0). Only a
+      // genuinely different card goes through cdPlay's load path.
+      var cur=cdItems[cdIdx];
+      if(cur && cdLoadedKey[cdAct]===cur.video_id){
+        document.body.classList.remove('cdfin','cdpaused'); document.body.classList.add('cdplaying');
+        try{ cdP[cdAct].playVideo(); }catch(e){}
+        cdStartPoll();
+      } else cdPlay();
+    }
+    else { cdWarmInto(1-cdAct, cdIdx); } // browse: keep the new focus warm for an instant play tap
+    cdWasPlaying=false;
+  }
+  // Pixel-follow (device directive: detent jumps feel cheap — the track must ride
+  // the wheel continuously). Raw wheel degrees -> px; whole-card crossings commit
+  // live (vibrate per boundary); release snaps by displacement/velocity.
+  var CD_DEG_PER_CARD=140;   // wheel degrees per full card of travel
+  var CD_OMEGA_REF=210;      // deg/s where wheel acceleration kicks in (tunable)
+  var CD_ACCEL_MAX=3;        // extra multiplier cap -> total up to 4x (fast spin = multi-card)
+  var CD_FRICTION=0.94;      // per-16ms momentum decay (release inertia)
+  var CD_FLING_MIN=0.5;      // px/ms release velocity above which momentum kicks in
+  var CD_MOM_MINV=0.055;     // px/ms momentum stop threshold
+  var CD_MOM_MAXV=5.0;       // px/ms fling velocity clamp
+  var cdFollow={on:false, off:0, v:0, lt:0, raf:0};
+  function cdWheelMove(deg){
+    if(!cdItems.length) return;
+    document.body.classList.remove('cdfin');
+    cdWheelShow();
+    if(cdFollow.raf){ cancelAnimationFrame(cdFollow.raf); cdFollow.raf=0; } // grab back from momentum
+    if(!cdNavActive){
+      cdNavActive=true;
+      cdWasPlaying=document.body.classList.contains('cdplaying');
+      cdPause();
+      document.body.classList.add('cdnav');
+    }
+    if(cdAnimBusy&&cdFinCur) cdFinCur();          // land any running glide first
+    var g=cdPitch(), tr=document.getElementById('cdTrack');
+    var now=performance.now();
+    if(!cdFollow.on){ cdFollow.on=true; cdFollow.off=0; cdFollow.v=0; cdFollow.lt=now; tr.classList.remove('gliding'); }
+    var dt=Math.max(1, now-cdFollow.lt); cdFollow.lt=now;
+    // Acceleration: faster spin -> more px per degree, so a quick flick crosses
+    // several cards instead of crawling one-by-one (device directive).
+    var omega=Math.abs(deg)/dt*1000; // deg/s
+    var mult=1+Math.min(CD_ACCEL_MAX, Math.pow(omega/CD_OMEGA_REF, 1.2));
+    var px=-deg*(g.pitch/CD_DEG_PER_CARD)*mult;   // clockwise = forward = track up
+    cdFollow.v=cdFollow.v*0.7+(px/dt)*0.3;        // smoothed px/ms
+    // edge resistance (drag parity), overhang capped at half a pitch
+    if((cdIdx===0&&px>0&&cdFollow.off>=0)||(cdIdx>=cdItems.length-1&&px<0&&cdFollow.off<=0)) px*=0.35;
+    cdFollow.off+=px;
+    while(cdFollow.off<=-g.pitch&&cdIdx<cdItems.length-1){ cdFollow.off+=g.pitch; cdIdx++; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(7); cdRender(); }
+    while(cdFollow.off>=g.pitch&&cdIdx>0){ cdFollow.off-=g.pitch; cdIdx--; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(7); cdRender(); }
+    var cap=g.pitch*0.5;
+    if(cdIdx===0&&cdFollow.off>cap) cdFollow.off=cap;
+    if(cdIdx>=cdItems.length-1&&cdFollow.off<-cap) cdFollow.off=-cap;
+    tr.style.transform='translateY('+(-g.pitch+cdFollow.off)+'px)';
+    cdJbarSync(Math.max(0, -cdFollow.off/g.pitch));
+  }
+  // Release inertia (device directive: no acceleration/momentum -> "the app gets
+  // abandoned"). A real fling decays with friction and carries through several
+  // cards; only posters render mid-glide (never play/warm), settle fires on land.
+  function cdMomentum(v0){
+    var g=cdPitch(), tr=document.getElementById('cdTrack');
+    tr.classList.remove('gliding');
+    var v=Math.max(-CD_MOM_MAXV, Math.min(CD_MOM_MAXV, v0)); // px/ms, negative=forward
+    var last=performance.now();
+    if(cdFollow.raf) cancelAnimationFrame(cdFollow.raf);
+    function step(now){
+      var dt=Math.min(40, now-last); last=now;
+      v*=Math.pow(CD_FRICTION, dt/16.67);
+      cdFollow.off+=v*dt;
+      while(cdFollow.off<=-g.pitch&&cdIdx<cdItems.length-1){ cdFollow.off+=g.pitch; cdIdx++; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(5); cdRender(); }
+      while(cdFollow.off>=g.pitch&&cdIdx>0){ cdFollow.off-=g.pitch; cdIdx--; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(5); cdRender(); }
+      if((cdIdx===0&&cdFollow.off>0)||(cdIdx>=cdItems.length-1&&cdFollow.off<0)){ cdFollow.off*=0.55; v*=0.4; } // edge rubber-band
+      tr.style.transform='translateY('+(-g.pitch+cdFollow.off)+'px)';
+      cdJbarSync(Math.max(0,-cdFollow.off/g.pitch));
+      if(Math.abs(v)>CD_MOM_MINV){ cdFollow.raf=requestAnimationFrame(step); }
+      else { cdFollow.raf=0; cdMomentumLand(); }
+    }
+    cdFollow.raf=requestAnimationFrame(step);
+  }
+  // Destination land: ease the small leftover onto the nearest card boundary
+  // (decelerate onto a card, not stop-then-snap), then settle playback.
+  function cdMomentumLand(){
+    var g=cdPitch(), tr=document.getElementById('cdTrack');
+    if(cdFollow.off<=-g.pitch*0.5&&cdIdx<cdItems.length-1){ cdIdx++; cdFollow.off+=g.pitch; cdRender(); }
+    else if(cdFollow.off>=g.pitch*0.5&&cdIdx>0){ cdIdx--; cdFollow.off-=g.pitch; cdRender(); }
+    cdFollow.off=0; cdFollow.v=0;
+    tr.classList.add('gliding');
+    tr.style.transform='translateY('+(-g.pitch)+'px)';
+    clearTimeout(cdSettleT);
+    cdSettleT=setTimeout(function(){ tr.classList.remove('gliding'); cdSettle(); }, 200);
+  }
+  // called by the wheel engine on pointer-up (fingers off = fling->momentum, else snap)
+  function cdWheelRelease(){
+    if(cdFollow.on){
+      cdFollow.on=false;
+      var g=cdPitch(), tr=document.getElementById('cdTrack');
+      var off=cdFollow.off, v=cdFollow.v;
+      if(Math.abs(v)>=CD_FLING_MIN){ cdMomentum(v); return; }   // fling -> inertial multi-card glide + settle
+      cdFollow.off=0; cdFollow.v=0;
+      var dir=0;
+      if((off<-g.pitch*0.28)&&cdIdx<cdItems.length-1) dir=1;
+      else if((off>g.pitch*0.28)&&cdIdx>0) dir=-1;
+      tr.classList.add('gliding');
+      if(dir!==0){
+        cdIdx+=dir; cdEndRolled=false; cdAnimBusy=true;
+        tr.style.transform='translateY('+(-g.pitch-dir*g.pitch)+'px)';
+        var done=false;
+        var fin=function(){ if(done) return; done=true; cdFinCur=null; cdAnimBusy=false; cdRender(); if(cdQueue.length) cdPump(); };
+        cdFinCur=fin;
+        tr.addEventListener('transitionend',function h(){ tr.removeEventListener('transitionend',h); fin(); });
+        setTimeout(fin,250);
+      } else {
+        tr.style.transform='translateY('+(-g.pitch)+'px)';
+      }
+    }
+    if(!cdNavActive) return;
+    clearTimeout(cdSettleT);
+    var wait=(cdAnimBusy||cdQueue.length)?230:0;   // let the last glide land first
+    cdSettleT=setTimeout(cdSettle, wait);
+  }
+  // Auto-advance (ended, zero-gap): glide + immediate warm-swap play, stage stays up.
+  function cdAdvance(d, keepPlaying){
+    var ni=cdIdx+d; if(ni<0||ni>=cdItems.length) return;
+    cdIdx=ni; cdEndRolled=false;
+    if(cdAnimBusy&&cdFinCur) cdFinCur();
+    cdQueue.push(d); cdPump();
+    if(keepPlaying||document.body.classList.contains('cdplaying')) cdPlay();
+  }
+  function cdNav(d){
+    cdHintDismiss();
+    if(document.body.classList.contains('cdfin')){ document.body.classList.remove('cdfin'); }
+    cdStep(d);
+  }
+  // Video tab — select a mandala → continuous watch of its videos, reusing the existing beat player.
+  async function openMandalaVideos(m){
+    unlockAudio();
+    document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true;
+    curNote={ id:m.id, title:m.title, videoMode:true }; show('player');
+    var sh=document.getElementById('bShareNote'); if(sh) sh.hidden=true;
+    document.getElementById('pTitle').textContent=m.title||'영상';
+    pShowSkeleton('영상을 여는 중');
+    var recs=[];
+    try{
+      var r=await api('/mandalas/'+m.id+'/recommendations');
+      var j=await r.json(); recs=(j&&j.items)||[];
+    }catch(e){ pShowState('영상을 불러오지 못했어요','연결 확인 후 다시 시도해주세요'); return; }
+    recs=recs.filter(function(it){ return it && it.videoId; });
+    if(!recs.length){ pShowState('영상이 아직 없어요','추천 영상이 모이면 여기서 이어봐요'); return; }
+    // video beats — full playback (core-segment seek = follow-up); nextBeat auto-advances = continuous watch
+    beats=[]; chapterOfBeat=[];
+    recs.forEach(function(it){
+      beats.push({ t:'c', vid:it.videoId, from:0, to:(it.durationSec||99999), text:it.title||'', src:it.channel||null });
+      chapterOfBeat.push(0);
+    });
+    bi=0;
+    buildRail();
+    setPlaying(true);
   }
   async function fetchBookStatus(m){
     if(m.sample||bookCache[m.id]) return;
@@ -1249,11 +3249,12 @@
       if(book&&book.chapters&&book.chapters.length) bookCache[m.id]={book:book, sourceVideos:(j.data.sourceVideos||0)};
       else bookCache[m.id]={making:true};
     }catch(e){ bookCache[m.id]={making:true}; }
-    renderRows();
+    scheduleRowsRefresh(); // debounced + scroll-preserving (no per-arrival full re-render)
   }
   var SK_ROW='<div class="skrow"><span class="sk skj"></span><span class="skm"><span class="sk" style="width:62%;height:13px"></span><span class="sk" style="width:36%;height:10px"></span></span></div>';
+  function listPanes(){ return [document.getElementById('rowsV'), document.getElementById('rowsN')]; }
   async function loadList(){
-    document.getElementById('rows').innerHTML=SK_ROW+SK_ROW+SK_ROW;
+    listPanes().forEach(function(el){ if(el) el.innerHTML=SK_ROW+SK_ROW+SK_ROW; });
     try{
       var r=await api('/mandalas/list?limit=12');
       var j=await r.json();
@@ -1261,7 +3262,8 @@
       selIdx=0; renderRows();
       mandalas.slice(0,8).forEach(function(m){ fetchBookStatus(m) }); // S2: 병렬 상태 조회 + 캐시 재사용
     }catch(e){
-      document.getElementById('rows').innerHTML='<div class="row-empty">'+(navigator.onLine===false?'오프라인이에요 — 연결 후 다시':'목록을 불러오지 못했어요 — 다시 시도해주세요')+'</div>';
+      var msg='<div class="row-empty">'+(navigator.onLine===false?'오프라인이에요 — 연결 후 다시':'목록을 불러오지 못했어요 — 다시 시도해주세요')+'</div>';
+      listPanes().forEach(function(el){ if(el) el.innerHTML=msg; });
     }
   }
 
@@ -1468,7 +3470,7 @@
   var PREFETCH_AHEAD=2, BLOB_CACHE_MAX=8;
   var SILENT_WAV='data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
   function unlockAudio(){ // 사용자 제스처 안에서 1회 — 이후 프로그래매틱 재생 허용
-    ytPrime(); // prime YT iframes on any play gesture (self-guarded, retries until players ready)
+    ytPrime(); cdPrime(); // prime note + deck iframes on any play gesture (self-guarded, retries until players ready)
     if(narrUnlocked) return;
     try{
       narrEl=narrEl||new Audio();
@@ -2072,7 +4074,12 @@
       if(!s.rotated && Math.abs(s.cum)>ROT_THRESH){ // rotation confirmed -> cancel tap + hold
         s.rotated=true; clearTimeout(s.holdT); s.acc=0; s.vel=0; // click suppression handled on pointerup
       }
-      if(s.rotated){
+      if(s.rotated&&document.body.classList.contains('curdeck')&&!fineMode){
+        // Deck = pixel-follow: raw degrees drive the track 1:1 (no detent quantization —
+        // stepped card jumps read as cheap; boundary crossings vibrate instead).
+        if(typeof cdWheelMove==='function') cdWheelMove(d);
+        s.lt=e.timeStamp;
+      } else if(s.rotated){
         // Mode is explicit (fine toggle = within-beat scrub, else beat navigation). Unpredictable
         // mode-switching came from touch-zone coupling, not from acceleration; so acceleration is
         // kept as a core feel: faster rotation shrinks the step -> more notches fire -> movement
@@ -2099,6 +4106,7 @@
         delete ptr[e.pointerId]; touchN=Math.max(0,touchN-1);
         if(touchN===0){ wheel.classList.remove('touching');
           if(navHold.active) navEnd(); // fingers up -> settle: resume (or stay paused) per start state
+          if(document.body.classList.contains('curdeck')&&typeof cdWheelRelease==='function') cdWheelRelease(); // deck settle on release
           if(document.body.classList.contains('stage')||document.body.classList.contains('reading')) wheelSleep(); } // float wheel hides 3s after release
         kickFrame();
       });
@@ -2128,15 +4136,35 @@
     var el=rows[selMenu]; if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
   }
   function updateSel(){
-    var rows=document.getElementById('rows');
+    var rows=document.getElementById(homeTab==='note'?'rowsN':'rowsV'); if(!rows) return;
     for(var i=0;i<rows.children.length;i++) rows.children[i].classList.toggle('sel', i===selIdx);
     var el=rows.children[selIdx];
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'});
+    setVideoAmbient(); // wheel selection moves the mandala focus -> update the video ambient color
   }
   var suppressClickUntil=0;
   function wheelStole(){ return Date.now()<suppressClickUntil; } // 시간창(350ms): sticky 플래그 잔류 → 후속 정상 탭 삼킴 버그 제거
   function dispatchNotch(dir){
+    if(document.body.classList.contains('curdeck')){ cdNav(dir); return; } // deck: 1 detent = 1 card
+    if(document.body.classList.contains('hubsheet')){ var hr=hubRows(); if(!hr.length) return; var hx=selHub+dir; if(hx<0||hx>=hr.length){ wheelRubber(dir); return; } selHub=hx; updateSelHub(); return; }
+    if(document.body.classList.contains('goalsheet')){ var gr=goalRows(); if(!gr.length) return; var gx=selGoal+dir; if(gx<0||gx>=gr.length){ wheelRubber(dir); return; } selGoal=gx; updateSelGoal(); return; }
+    // Proposal deck: one detent = one card. The wheel is the primary way to move
+    // through a horizontal deck on this device, so it must own the sheet while open.
+    if(document.body.classList.contains('ytsheet') && ytPropCards().length){
+      var px=ytPropIdx+dir;
+      if(px<0||px>=ytPropCards().length){ wheelRubber(dir); return; }
+      ytPropIdx=px; ytSyncProps(); return;
+    }
+    if(cur==='news'||cur==='invite'){ var sl=document.getElementById(cur==='news'?'newsList':'tkList'); if(sl){ var mx=sl.scrollHeight-sl.clientHeight; if((dir>0&&sl.scrollTop>=mx-1)||(dir<0&&sl.scrollTop<=0)){ wheelRubber(dir); } else { sl.scrollBy({top:dir*Math.max(140, sl.clientHeight*0.7), behavior:'auto'}); } } return; } // sub-screen wheel = scroll the list (instant per notch)
     if(cur==='home'){
+      // Curation tab has its own row list — the wheel must follow the ACTIVE tab,
+      // not silently drive the hidden mandala list (focus bug, 2026-07-21).
+      if(homeTab==='curation'){
+        if(!curRowEls.length) return;
+        var cx=curSelIdx+dir;
+        if(cx<0||cx>=curRowEls.length){ wheelRubber(dir); return; }
+        curSelIdx=cx; curUpdateSel(); return;
+      }
       var items=homeItems(); if(!items.length) return;
       var nx=selIdx+dir;
       if(nx<0||nx>=items.length){ wheelRubber(dir); return; } // J4
@@ -2171,17 +4199,19 @@
     return ({menu:'home', player:'home'})[s]||null;
   }
   function menuBack(){
+    if(document.body.classList.contains('ytsheet')){ closeYtSheet(); return; } // sheet MENU = close (wheel parity)
+    if(document.body.classList.contains('curdeck')){ closeCurationDeck(); return; } // deck MENU = back to tab
     if(cur==='login') return;
     if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
     var parent=screenParent(cur);
     if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); }
-    if(parent){ show(parent); if(parent==='home') renderRows(); if(parent==='menu') loadTicketsQuiet(); }
+    if(parent){ show(parent); if(parent==='home'){ if(homeTab==='curation') renderCuration(); else renderRows(); } if(parent==='menu') loadTicketsQuiet(); }
     else if(window.wheelRubber){ wheelRubber(-1); } // home = 최상위, 부드러운 저항
   }
   function goHome(){
     if(cur==='login'||cur==='home') return;
     if(cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); }
-    show('home'); renderRows();
+    show('home'); if(homeTab==='curation') renderCuration(); else renderRows();
   }
   // 재생 중 '가운데 누른 채 휠 회전' = 현재 구간 내부 스크럽 (클립=seekTo · 노트=오디오 위치)
   function dispatchScrub(dir){
@@ -2209,21 +4239,172 @@
   };
   document.getElementById('instClose').onclick=function(){ document.getElementById('instOv').hidden=true; };
   document.getElementById('instOv').addEventListener('click',function(e){ if(e.target===this) this.hidden=true; });
+  // YouTube connect sheet — back button, backdrop tap, AND grip swipe-down all dismiss
+  // to the content behind (R5: drag-following with a release threshold).
+  (function(){
+    var bk=document.getElementById('ytsBack'), bd=document.getElementById('ytsBd');
+    if(bk) bk.onclick=closeYtSheet; if(bd) bd.onclick=closeYtSheet;
+    var card=document.querySelector('#ytSheet .yts-card'); if(!card) return;
+    var y0=null, dy=0;
+    card.addEventListener('touchstart',function(e){
+      if(card.scrollTop>2) return;           // only when scrolled to top
+      y0=e.touches[0].clientY; dy=0;
+    },{passive:true});
+    card.addEventListener('touchmove',function(e){
+      if(y0==null) return;
+      dy=e.touches[0].clientY-y0;
+      if(dy>0){ card.classList.add('dragging'); card.style.transform='translateY('+dy+'px)'; }
+    },{passive:true});
+    card.addEventListener('touchend',function(){
+      if(y0==null) return;
+      card.classList.remove('dragging'); card.style.transform='';
+      if(dy>90) closeYtSheet();
+      y0=null; dy=0;
+    },{passive:true});
+  })();
+  // Curation deck controls — every visible control is live (no dead controls).
+  // Wheel bindings (rotate/center/MENU) live in the EXISTING #wheel dispatcher.
+  (function(){
+    var g=function(id){ return document.getElementById(id); };
+    if(!g('curDeck')) return;
+    // summon-anywhere: any deck touch shows the wheel; if it was hidden, CONSUME
+    // this tap (capture-phase click block) so it can't fall through as card tap.
+    g('curDeck').addEventListener('touchstart',function(){
+      var was=cdWheelShow();
+      // A2: a fresh summon touch only REVEALS the wheel — it must not operate it.
+      // Hold the wheel non-interactive until this touch releases (portrait parity);
+      // the wheel becomes operable from the NEXT touch.
+      if(!was){ cdConsumeUntil=Date.now()+450; document.body.classList.add('cdsummon'); }
+    },{passive:true, capture:true});
+    ['touchend','touchcancel'].forEach(function(ev){
+      g('curDeck').addEventListener(ev,function(){ document.body.classList.remove('cdsummon'); },{passive:true, capture:true});
+    });
+    g('curDeck').addEventListener('click',function(e){
+      if(Date.now()<cdConsumeUntil){ e.stopPropagation(); e.preventDefault(); }
+    },true);
+    g('cdBack').onclick=closeCurationDeck;
+    g('cdFinList').onclick=closeCurationDeck;                    // D4: back to the lineup
+    g('cdFinReplay').onclick=function(){ document.body.classList.remove('cdfin'); cdIdx=0; cdRender(); cdPlay(); };
+    g('cdPlayBtn').onclick=function(e){ e.stopPropagation(); cdPlay(); };
+    // track tap: upcoming card = travel there; top card handled by the stage layer
+    g('cdTrack').addEventListener('click',function(e){
+      var c=e.target.closest('.cd-card'); if(!c) return;
+      var k=parseInt(c.getAttribute('data-k'),10);
+      if(isNaN(k)||k===cdIdx) return;
+      var d=k>cdIdx?1:-1, steps=Math.abs(k-cdIdx);
+      for(var s2=0;s2<steps;s2++) cdNav(d);
+    });
+    // Re-measure on ANY viewport change (rotation, browser chrome, PWA insets) —
+    // stale card heights left the track clipped at rest (device review P1-3).
+    var cdRszT=null;
+    function cdRemeasure(){
+      if(!document.body.classList.contains('curdeck')) return;
+      if(cdFollow.on||cdAnimBusy){ clearTimeout(cdRszT); cdRszT=setTimeout(cdRemeasure,180); return; }
+      cdRender();
+    }
+    ['resize','orientationchange'].forEach(function(ev){
+      window.addEventListener(ev,function(){ clearTimeout(cdRszT); cdRszT=setTimeout(cdRemeasure,150); });
+    });
+    // Finger-follow drag (YouTube grammar): the track tracks the finger 1:1 live;
+    // release snaps by displacement/velocity — next/prev glide or spring back.
+    (function(){
+      var y0=null, t0=0, dy=0, yPrev=0, active=false, navGated=false;
+      var TAP_GATE=8; // px of movement before this becomes a drag (a tap only summons)
+      function tr(){ return document.getElementById('cdTrack'); }
+      function rest(){ return -cdPitch().pitch; }
+      function enterNav(){
+        if(navGated) return; navGated=true;
+        tr().classList.remove('gliding');
+        if(!cdNavActive){
+          cdNavActive=true;
+          cdWasPlaying=document.body.classList.contains('cdplaying');
+          cdPause(); document.body.classList.add('cdnav');
+        }
+        clearTimeout(cdSettleT);
+      }
+      g('cdStrip').addEventListener('touchstart',function(e){
+        if(document.body.classList.contains('cdfin')) return;
+        if(cdAnimBusy&&cdFinCur) cdFinCur();
+        y0=e.touches[0].clientY; t0=Date.now(); dy=0; active=true; navGated=false;
+        cdHintDismiss();
+        // A1 tap-gate: do NOT enter nav / pause / hide the stage yet — a tap that
+        // was only meant to summon the wheel must not blink the video to black.
+      },{passive:true});
+      g('cdStrip').addEventListener('touchmove',function(e){
+        if(!active) return;
+        var y=e.touches[0].clientY; dy=y - y0;
+        if(!navGated){
+          if(Math.abs(dy)<TAP_GATE) return;
+          enterNav();                       // real drag -> now enter nav
+          cdFollow.off=0; cdFollow.v=0; cdFollow.lt=Date.now(); yPrev=y;
+        }
+        // Stick to the finger through as many cards as it travels (device directive:
+        // "grip the video and move it up/down freely") -- no +-1 clamp; whole-card
+        // crossings commit live, release carries momentum.
+        var g2=cdPitch(), now=Date.now(), delta=y - yPrev; yPrev=y;
+        if((cdIdx===0&&delta>0&&cdFollow.off>=0)||(cdIdx>=cdItems.length-1&&delta<0&&cdFollow.off<=0)) delta*=0.35; // edge resistance
+        var dt=Math.max(1, now-cdFollow.lt); cdFollow.lt=now;
+        cdFollow.v=cdFollow.v*0.7+(delta/dt)*0.3;     // smoothed px/ms (negative = forward)
+        cdFollow.off+=delta;
+        while(cdFollow.off<=-g2.pitch&&cdIdx<cdItems.length-1){ cdFollow.off+=g2.pitch; cdIdx++; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(6); cdRender(); }
+        while(cdFollow.off>=g2.pitch&&cdIdx>0){ cdFollow.off-=g2.pitch; cdIdx--; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(6); cdRender(); }
+        var cap=g2.pitch*0.5;
+        if(cdIdx===0&&cdFollow.off>cap) cdFollow.off=cap;
+        if(cdIdx>=cdItems.length-1&&cdFollow.off<-cap) cdFollow.off=-cap;
+        tr().style.transform='translateY('+(rest()+cdFollow.off)+'px)';
+        cdJbarSync(Math.max(0,-cdFollow.off/g2.pitch));
+      },{passive:true});
+      g('cdStrip').addEventListener('touchend',function(){
+        if(!active) return; active=false;
+        if(!navGated){ return; } // a tap (never crossed the gate) -> summon only, no snap/restart
+        var g2=cdPitch(), off=cdFollow.off, v=cdFollow.v; // px/ms from the drag
+        if(Math.abs(v)>=CD_FLING_MIN){ cdMomentum(v); return; } // fling -> inertial multi-card glide + settle
+        cdFollow.off=0; cdFollow.v=0;
+        var dir=0;
+        if(off<-g2.pitch*0.28&&cdIdx<cdItems.length-1) dir=1;
+        else if(off>g2.pitch*0.28&&cdIdx>0) dir=-1;
+        var t=tr(); t.classList.add('gliding');
+        if(dir!==0){
+          cdIdx+=dir; cdEndRolled=false; cdAnimBusy=true;
+          t.style.transform='translateY('+(rest()-dir*g2.pitch)+'px)';
+          var done=false;
+          var fin=function(){ if(done) return; done=true; cdFinCur=null; cdAnimBusy=false; cdRender(); if(cdQueue.length) cdPump(); };
+          cdFinCur=fin;
+          t.addEventListener('transitionend',function h(){ t.removeEventListener('transitionend',h); fin(); });
+          setTimeout(fin,250);
+        } else {
+          t.style.transform='translateY('+rest()+'px)'; // spring back
+        }
+        clearTimeout(cdSettleT); cdSettleT=setTimeout(cdSettle, 260);
+      },{passive:true});
+    })();
+  })();
   document.getElementById('spdBtn').onclick=cycleSpd;
   document.getElementById('spdStage').onclick=cycleSpd;
   renderSpd();
   document.getElementById('bPrev').onclick=function(){ if(wheelStole()) return; dispatchNotch(-1) };
   document.getElementById('bNext').onclick=function(){ if(wheelStole()) return; dispatchNotch(1) };
   function corePress(){
+    if(document.body.classList.contains('hubsheet')){ var hr=hubRows(); if(hr[selHub]) hr[selHub].click(); return; }
+    if(document.body.classList.contains('goalsheet')){ var gr=goalRows(); var ge=gr[selGoal]; if(!ge) return; if(ge===goalInput) ge.focus(); else ge.click(); return; }
+    if(document.body.classList.contains('ytsheet')){
+      var pc=ytPropCards();
+      if(pc.length && pc[ytPropIdx]){ pc[ytPropIdx].click(); return; }
+    }
     if(cur==='login'){ loginRedirect(); return; }
-    if(cur==='home'){ var items=homeItems(); var m=items[selIdx];
+    if(cur==='home'){
+      if(homeTab==='curation'){ var ce=curRowEls[curSelIdx]; if(ce) ce.click(); return; }
+      var items=homeItems(); var m=items[selIdx];
       if(m){ var k=rowState(m).kind; if(k!=='making'&&k!=='loading') openNote(m); } return; }
     if(cur==='menu'){ var mr=menuRows(); if(mr[selMenu]) mr[selMenu].click(); return; }
     if(cur==='player'){ setPlaying(!playing); }
   }
-  document.getElementById('bCore').onclick=function(){ if(wheelStole()) return; corePress(); };
+  document.getElementById('bCore').onclick=function(){ if(wheelStole()) return;
+    if(document.body.classList.contains('curdeck')){ cdToggle(); return; }
+    corePress(); };
   document.getElementById('bPlay').onclick=function(){
     if(wheelStole()) return;
+    if(document.body.classList.contains('curdeck')){ cdToggle(); return; }
     if(cur==='player'){ setPlaying(!playing); }
     else if(cur==='home'){ corePress(); }
   };
@@ -2258,7 +4439,7 @@
   }
   (function(){
     var wz=document.querySelector('.wheelzone'); if(!wz) return;
-    wz.addEventListener('pointerdown',function(){ if(document.body.classList.contains('stage')) wheelAwake(); });
+    wz.addEventListener('pointerdown',function(){ if(document.body.classList.contains('stage')) wheelAwake(); if(document.body.classList.contains('curdeck')&&typeof cdWheelShow==='function') cdWheelShow(); });
     ['pointerup','pointercancel'].forEach(function(ev){
       wz.addEventListener(ev,function(){ if(document.body.classList.contains('stage')) wheelSleep(); });
     });
@@ -2607,10 +4788,43 @@
     }catch(e){ document.getElementById('tkList').innerHTML='<div class="menu-note" style="margin-top:20px">불러오지 못했어요 — 연결 확인 후 다시</div>'; }
   }
   document.getElementById('bInvite').onclick=function(){ show('invite'); loadTickets(); };
+  document.getElementById('bYtConnect').onclick=ytOpenManage;
   // 나브 토글 — 만다라/설정 아이콘 각각 클릭 이동 [J:07-15]
   Array.prototype.forEach.call(document.querySelectorAll('.ntb[data-nav]'), function(b){
     b.onclick=function(){ var t=b.getAttribute('data-nav'); show(t); if(t==='menu') loadTicketsQuiet(); };
   });
+  // [J:07-20] home tabs = labels + tap fallback -> jump to that panel
+  Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'), function(b){
+    b.onclick=function(){ homeGo(HTABS.indexOf(b.getAttribute('data-htab'))); };
+  });
+  // [J:07-22] Bottom slider drags the connected curation/video/note strip. The thumb
+  // follows the finger 1:1 (strip translates with it); release snaps to the
+  // nearest stop. Lives on its own control -> no conflict with list scroll.
+  (function(){
+    var hsl=document.getElementById('hsl'), track=document.getElementById('hslTrack'),
+        thumb=document.getElementById('hslThumb'), clip=document.getElementById('hstripClip');
+    if(!hsl||!track||!thumb) return;
+    // Fallback for browsers without overflow:clip — a row's scrollIntoView must
+    // never leave the clip horizontally scrolled (the transform owns position).
+    if(clip) clip.addEventListener('scroll',function(){ if(clip.scrollLeft){ clip.scrollLeft=0; } if(clip.scrollTop){ clip.scrollTop=0; } },{passive:true});
+    var dragging=false, lastCont=0;
+    function contFromClientX(cx){
+      var r=track.getBoundingClientRect(), m=homeMetrics();
+      var px=Math.max(m.half, Math.min(r.width-m.half, cx-r.left)); // clamp to thumb travel
+      return ((px-m.half)/m.usable)*2; // 0..2
+    }
+    function down(cx){ dragging=true; lastCont=contFromClientX(cx); homePaintPos(lastCont, false); if(navigator.vibrate)navigator.vibrate(4); }
+    function move(cx){ if(!dragging) return; lastCont=contFromClientX(cx); homePaintPos(lastCont, false);
+      // live tab identity as it crosses a stop (highlight + homeTab follow)
+      var near=Math.round(lastCont); if(HTABS[near]&&homeTab!==HTABS[near]){ homeTab=HTABS[near];
+        Array.prototype.forEach.call(document.querySelectorAll('.htab[data-htab]'),function(b){ b.classList.toggle('on', b.getAttribute('data-htab')===homeTab); }); }
+    }
+    function up(){ if(!dragging) return; dragging=false; homeGo(Math.round(lastCont)); }
+    // pointer events cover touch + mouse; track tap also moves (down at that x)
+    hsl.addEventListener('pointerdown',function(e){ e.preventDefault(); try{thumb.setPointerCapture(e.pointerId);}catch(_){} down(e.clientX); });
+    hsl.addEventListener('pointermove',function(e){ move(e.clientX); });
+    ['pointerup','pointercancel'].forEach(function(ev){ hsl.addEventListener(ev, up); });
+  })();
   // 브레드크럼 "설정" 세그먼트 = 한 단계 위(설정)로 [J:07-15 IA]
   Array.prototype.forEach.call(document.querySelectorAll('.bc .up[data-back]'), function(b){
     b.onclick=function(){ show(b.getAttribute('data-back')); };
@@ -2688,15 +4902,42 @@
   };
 
   /* ================= 목표 입력 ================= */
-  var ov=document.getElementById('goalOv'), goBody=document.getElementById('goBody'),
+  var goBody=document.getElementById('goBody'),
       goProg=document.getElementById('goProgress'), goMsg=document.getElementById('goMsg'),
       goTitle=document.getElementById('goTitle'), goalInput=document.getElementById('goalInput');
-  document.getElementById('bGoal').onclick=function(){
-    ov.classList.add('show'); goBody.hidden=false; goProg.hidden=true;
+  function openGoalWizard(){
+    goBody.hidden=false; goProg.hidden=true;
     goTitle.textContent='무엇을 배우고 싶나요?';
-    setTimeout(function(){goalInput.focus()},60);
-  };
-  document.getElementById('goCancel').onclick=function(){ ov.classList.remove('show') };
+    selGoal=0; document.body.classList.add('goalsheet'); openYtSheet();
+    setTimeout(function(){ updateSelGoal(); goalInput.focus(); },60);
+  }
+  // Wheel/core isolation for the goal panel — same contract as body.hubsheet.
+  // Rows = [input, submit, close]; core on the input just focuses it (keyboard opens).
+  var selGoal=0;
+  function goalRows(){ return [goalInput, document.getElementById('goMake'), document.getElementById('goCancel')].filter(Boolean); }
+  function updateSelGoal(){ var r=goalRows(); r.forEach(function(el,i){ el.classList.toggle('sel', i===selGoal); }); }
+  // ===== "+" start hub sheet — reuses #ytSheet overlay + body.hubsheet flag (wheel-nav isolated) =====
+  var selHub=0;
+  function hubRows(){ return Array.prototype.filter.call(document.querySelectorAll('#ytsBody .mrow'), function(el){ return el.tagName==='BUTTON'; }); }
+  function updateSelHub(){ var rows=hubRows(); rows.forEach(function(el,i){ el.classList.toggle('sel', i===selHub); }); var el=rows[selHub]; if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:reduce?'auto':'smooth'}); }
+  function openHub(){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    setSheetFoot('');
+    b.innerHTML='<div class="yts-h" style="margin-bottom:14px">무엇을 시작할까요?</div>'
+      +'<button class="mrow" id="hubCur"><span class="lic"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg></span><span class="mtx"><span class="mtt">주간 큐레이션</span><span class="msb">따끈따끈 필요한 영상만 매주</span></span></button>'
+      +'<button class="mrow" id="hubGoal"><span class="lic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.6"/></svg></span><span class="mtx"><span class="mtt">목표 만들기</span><span class="msb">핵심만 골라 학습 노트</span></span></button>';
+    // Panel swap inside the SAME sheet (was: close sheet + open a separate overlay).
+    document.getElementById('hubGoal').onclick=function(){ document.body.classList.remove('hubsheet'); openGoalWizard(); };
+    // Paint the loading state BEFORE awaiting anything. The old order left the
+    // hub list on screen for the whole freshToken + youtube-auth round trip, so
+    // pressing the weekly-curation row looked dead for ~5s and then jumped.
+    document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet');
+      ytRenderLoading();
+      ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderTuning(); } else { ytRenderConnect(); } }).catch(function(){ ytRenderConnect(); }); };
+    selHub=0; document.body.classList.add('hubsheet'); openYtSheet(); setTimeout(updateSelHub,0);
+  }
+  (function(){ var pf=document.getElementById('plusFab'); if(pf) pf.onclick=openHub; })();
+  document.getElementById('goCancel').onclick=function(){ closeYtSheet(); };
   async function wizardStream(goal,sessionId,tok){
     var r=await fetch('/api/v1/mandalas/wizard-stream',{
       method:'POST',
@@ -2745,7 +4986,7 @@
       })});
       goMsg.innerHTML='만들어졌어요 — 노트 준비 중<small>카드가 모이면 목록에 떠요</small>';
       loadList();
-      setTimeout(function(){ ov.classList.remove('show'); goalInput.value=''; },1800);
+      setTimeout(function(){ closeYtSheet(); goalInput.value=''; },1800);
     }catch(e){
       goMsg.innerHTML='만들지 못했어요 — 다시 시도해주세요<small>'+esc(String(e.message||e).slice(0,60))+'</small>';
       setTimeout(function(){ goBody.hidden=false; goProg.hidden=true;
@@ -2796,7 +5037,21 @@
       }catch(e){ GUEST=null; show('login'); toast('링크를 열지 못했어요'); return; }
     }
     var tok=await freshToken();
-    if(tok){ show('home'); loadList(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite(); }
+    // Return from YouTube OAuth (EF callback → /mobile/?youtube=connected|error). Clean the
+    // param. If a wizard snapshot exists, ytTryRestore rebuilds the sheet (S3 tuning →
+    // proposals) over the restored curation tab — the redirect looks seamless. Otherwise
+    // renderCuration re-checks (connected→analyzing, error→gate).
+    var ytParam=new URLSearchParams(location.search).get('youtube');
+    if(ytParam) history.replaceState(null,'',location.pathname);
+    if(tok){
+      var wiz = ytParam ? ytTryRestore(ytParam) : false;
+      show('home'); loadList(); wheelIntroOnce(); checkNewsUnread(); redeemPendingInvite();
+      if(!wiz) renderCuration();
+      requestAnimationFrame(function(){ homePaintPos(homeIdx, true); }); // slider position once laid out
+      window.addEventListener('resize', function(){ if(cur==='home') homePaintPos(homeIdx, true); }); // keep thumb px in sync
+      if(!wiz && ytParam==='connected') toast('유튜브 계정을 연결했어요');
+      else if(!wiz && ytParam==='error') toast('유튜브 연결에 실패했어요. 다시 시도해주세요');
+    }
     else { show('login'); }
   })();
 </script>

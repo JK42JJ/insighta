@@ -634,6 +634,130 @@ model mandala_subscriptions {
   @@schema("public")
 }
 
+/// Weekly curation subscription (Growth Hub, 2026-07-16). SEPARATE from
+/// `mandala_subscriptions` (that is a social follow graph). A curation is a
+/// lightweight consumption feed: relevance-ordered videos, core-segment /
+/// full toggle, bookmarks — NO note (book_json) pipeline, so it never touches
+/// book-fill-gate (no barrier risk). user_id kept as a plain column; the FK
+/// lives in the raw DDL (prisma/migrations/curation/001_*.sql).
+model curation_subscriptions {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String           @db.Uuid
+  topic       String
+  cadence     String           @default("weekly") @db.VarChar(12)
+  /// discover | youtube_subs | hybrid — D5, default discover (flag-expandable)
+  source      String           @default("discover") @db.VarChar(16)
+  /// optional container mandala (kind='curation') if D1(a) is later chosen; null = standalone
+  mandala_id  String?          @db.Uuid
+  is_active   Boolean          @default(true)
+  /// KST delivery weekday, 0=Sun..6=Sat. Default 1 (Monday) = the shipped promise.
+  /// Raw SQL DDL: prisma/migrations/curation-weekday/001_weekday.sql (applied to prod 2026-07-27).
+  weekday     Int              @default(1) @db.SmallInt
+  next_run_at DateTime?        @db.Timestamptz(6)
+  last_run_at DateTime?        @db.Timestamptz(6)
+  created_at  DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
+  items       curation_items[]
+  channels    curation_channels[]
+
+  @@index([user_id], map: "idx_curation_subscriptions_user_id")
+  @@index([next_run_at], map: "idx_curation_subscriptions_next_run_at")
+  @@schema("public")
+}
+
+/// Channels a curation follows (2026-07-27). One subscription, N channels —
+/// a table rather than an array column so unsubscribing a single channel,
+/// counting toward quota and cleaning duplicates stay ordinary queries.
+/// Design: docs/design/curation-channel-subscription-2026-07-27.md
+/// Raw SQL DDL: prisma/migrations/curation-channels/001_curation_channels.sql
+model curation_channels {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscription_id     String    @db.Uuid
+  /// YouTube channel id (UC...)
+  channel_id          String    @db.VarChar(30)
+  /// contentDetails.relatedPlaylists.uploads from the same channels.list call —
+  /// stored so the weekly build never derives it from the UC->UU convention.
+  uploads_playlist_id String?   @db.VarChar(34)
+  /// Snapshot for display, so a renamed channel does not blank the row.
+  channel_title       String?
+  thumbnail_url       String?
+  /// 'picked' = from the user's YouTube subscriptions · 'manual' = pasted URL/@handle
+  added_via           String    @default("picked") @db.VarChar(8)
+  /// Incremental cursor: uploads newer than this are "new this week".
+  last_seen_at        DateTime? @db.Timestamptz(6)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+
+  subscription curation_subscriptions @relation(fields: [subscription_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([subscription_id, channel_id], map: "uq_curation_channels_sub_channel")
+  @@index([subscription_id], map: "idx_curation_channels_subscription_id")
+  @@schema("public")
+}
+
+/// One video in a weekly curation build (Growth Hub, 2026-07-16). Relevance
+/// comes from rich_summary (segment relevance_pct is INLINE — no separate
+/// backfill). `week_of` keeps each week's build (D2: snapshot, not overwrite —
+/// data-reversibility hard rule). Source videos are gated by passesBookGate
+/// upstream (off-topic drop).
+model curation_items {
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscription_id String                 @db.Uuid
+  video_id        String                 @db.VarChar(11)
+  /// video-level relevance_pct (video_mandala_relevance / rich_summary), drives ordering
+  relevance_pct   Int
+  /// 0-based rank within the week's build (relevance order)
+  position        Int
+  bookmarked_at   DateTime?              @db.Timestamptz(6)
+  /// Derived-only watch mark (write-guard type (a): original fields untouched).
+  /// Set when playback of this item starts in the deck; NULL = unwatched.
+  /// Same-week rebuild PRESERVES watched_at for retained video_ids (see
+  /// curation-build); a NEW week's rows are born NULL = natural weekly reset.
+  /// Raw SQL DDL: prisma/migrations/curation-watched/001_watched_at.sql
+  watched_at      DateTime?              @db.Timestamptz(6)
+  /// which weekly build this row belongs to (snapshot key)
+  week_of         DateTime               @db.Date
+  added_at        DateTime               @default(now()) @db.Timestamptz(6)
+  subscription    curation_subscriptions @relation(fields: [subscription_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([subscription_id], map: "idx_curation_items_subscription_id")
+  @@index([subscription_id, week_of], map: "idx_curation_items_sub_week")
+  @@schema("public")
+}
+
+/// Async-built YouTube interest profile (one per user). Read by GET /curations/suggest.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model curation_interest_profile {
+  user_id    String   @id @db.Uuid
+  /// [{ kw, domain, weight }] — normalized interest vector from subs + playlists + saved videos
+  profile    Json     @default("[]")
+  /// building | ready | stale | error
+  status     String   @default("building") @db.VarChar(12)
+  built_at   DateTime? @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+/// Append-only proposal log = reinforcement input. No topic_affinity column; reinforce() derived at read time.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model curation_proposals {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  /// Monday of the proposal week (dedup + reinforcement horizon)
+  week_of        DateTime @db.Date
+  /// the 3 proposed topics: [{ topic, domain, score, rising, hook }]
+  proposed       Json
+  /// which topic the user chose (null = not yet selected / abandoned)
+  selected_topic String?
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([user_id, week_of], map: "uq_curation_proposals_user_week")
+  @@index([user_id], map: "idx_curation_proposals_user_id")
+  @@schema("public")
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model mandala_activity_log {
   id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -671,6 +795,19 @@ model mandala_books {
   generated_at  DateTime      @default(now()) @db.Timestamptz(6)
   updated_at    DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
   mandala       user_mandalas @relation(fields: [mandala_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// Note-ready email dedup + send log (2026-07-16 deadlock fix). One row per
+/// mandala = the note-ready email was sent once. mandala_id PK makes the send
+/// at-most-once (evergreen). Also the durable send log (container logs are lost
+/// on deploy, so delivery was previously unverifiable).
+/// Raw DDL: prisma/migrations/note-ready-email/001_create_note_ready_email_sends.sql
+model note_ready_email_sends {
+  mandala_id String   @id @db.Uuid
+  to_email   String?
+  sent_at    DateTime @default(now()) @db.Timestamptz(6)
 
   @@schema("public")
 }
@@ -1941,8 +2078,17 @@ model trend_signals {
   language   String   @default("ko") @db.VarChar(10)
   fetched_at DateTime @default(now()) @db.Timestamptz(6)
   expires_at DateTime @db.Timestamptz(6)
+  /// Topic verdict: ok | unsafe | unfit | unknown. Judged once at collection so
+  /// serving reads a column instead of calling an LLM per request. NULL = the row
+  /// predates judging and is excluded from proposals until backfilled.
+  /// Raw SQL DDL: prisma/migrations/trend-topic-judge/001_judge_columns.sql
+  judge_state  String?   @db.VarChar(8)
+  judge_reason String?
+  judge_model  String?   @db.VarChar(64)
+  judged_at    DateTime? @db.Timestamptz(6)
 
   @@unique([source, keyword, language])
+  @@index([judge_state], map: "idx_trend_signals_judge_state")
   @@index([keyword], map: "idx_trend_signals_keyword")
   @@index([expires_at], map: "idx_trend_signals_expires_at")
   @@index([source, fetched_at(sort: Desc)], map: "idx_trend_signals_source_fetched")
@@ -2616,6 +2762,14 @@ model beta_applications {
   /// Invite tickets (2026-07-15): member who spent a ticket. NULL = admin invite.
   /// Raw SQL DDL: prisma/migrations/beta/002_invited_by.sql
   invited_by String?   @db.Uuid
+  /// Outcome of the invite send: sent | failed | skipped. `status` is written
+  /// BEFORE the send and the send is non-fatal, so status alone never proved
+  /// delivery. NULL = invited before this column existed — genuinely unknown,
+  /// so render it as such instead of assuming it went out.
+  /// Raw SQL DDL: prisma/migrations/beta-invite-send-status/001_send_status.sql
+  invite_email_status String?   @db.VarChar(10)
+  invite_email_at     DateTime? @db.Timestamptz(6)
+  invite_email_error  String?
 
   @@index([status])
   @@index([invited_by])

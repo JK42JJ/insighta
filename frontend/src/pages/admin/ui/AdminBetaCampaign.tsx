@@ -178,6 +178,7 @@ export function AdminBetaCampaign() {
                   <th className="py-2 pr-4 font-medium">이메일</th>
                   <th className="py-2 pr-4 font-medium">학습 목표</th>
                   <th className="py-2 pr-4 font-medium">상태</th>
+                  <th className="py-2 pr-4 font-medium">메일</th>
                   <th className="py-2 pr-4 font-medium">신청일</th>
                   <th className="py-2 font-medium text-right">액션</th>
                 </tr>
@@ -201,6 +202,39 @@ export function AdminBetaCampaign() {
                       >
                         {a.status}
                       </span>
+                    </td>
+                    <td className="py-2.5 pr-4">
+                      {/* `status` is written before the send and the send is
+                          non-fatal, so it never proved delivery. null means the
+                          row predates this record — say so rather than guess. */}
+                      {a.status === 'pending' ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : a.invite_email_status === 'sent' ? (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400"
+                          title={a.invite_email_at ?? undefined}
+                        >
+                          발송됨
+                        </span>
+                      ) : a.invite_email_status === 'failed' ? (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400"
+                          title={a.invite_email_error ?? undefined}
+                        >
+                          실패
+                        </span>
+                      ) : a.invite_email_status === 'skipped' ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
+                          미발송
+                        </span>
+                      ) : (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title="이 컬럼이 생기기 전에 초대된 건이라 발송 여부를 알 수 없습니다"
+                        >
+                          확인 불가
+                        </span>
+                      )}
                     </td>
                     <td className="py-2.5 pr-4 text-xs text-muted-foreground">
                       {new Date(a.created_at).toLocaleDateString('ko-KR')}
