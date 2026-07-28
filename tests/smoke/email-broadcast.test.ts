@@ -10,6 +10,7 @@
 const created: Array<{ campaign: string; email: string }> = [];
 const updated: Array<{ email: string; status: string }> = [];
 let authUsers: string[] = [];
+let betaInvitees: string[] = [];
 let alreadySent: string[] = [];
 const sendCalls: string[] = [];
 let sendResult: { status: string; error?: string; reason?: string } = { status: 'sent' };
@@ -17,6 +18,9 @@ let sendResult: { status: string; error?: string; reason?: string } = { status: 
 jest.mock('@/modules/database/client', () => ({
   getPrismaClient: () => ({
     $queryRawUnsafe: async () => authUsers.map((email) => ({ email })),
+    beta_applications: {
+      findMany: async () => betaInvitees.map((email) => ({ email })),
+    },
     email_broadcast_sends: {
       findMany: async () => alreadySent.map((email) => ({ email })),
       create: async ({ data }: { data: { campaign: string; email: string } }) => {
@@ -59,11 +63,28 @@ beforeEach(() => {
   updated.length = 0;
   sendCalls.length = 0;
   authUsers = ['a@x.com', 'b@x.com', 'c@x.com'];
+  betaInvitees = [];
   alreadySent = [];
   sendResult = { status: 'sent' };
 });
 
 describe('planBroadcast', () => {
+  it('includes beta invitees who never signed up', async () => {
+    // measured on prod: 2 of 3 invitees had no account, so an accounts-only
+    // query drops exactly the people most likely to act on an announcement
+    betaInvitees = ['invited@x.com', 'A@X.COM'];
+    const plan = await planBroadcast('mobile-guide');
+    expect(plan.recipients).toContain('invited@x.com');
+    // the one who did sign up is not counted twice
+    expect(plan.recipients.filter((e) => e === 'a@x.com')).toHaveLength(1);
+  });
+
+  it('never mails the addresses that are not people', async () => {
+    authUsers = ['a@x.com', 'e2e-test@insighta.one', 'support@insighta.one'];
+    const plan = await planBroadcast('mobile-guide');
+    expect(plan.recipients).toEqual(['a@x.com']);
+  });
+
   it('separates who still needs it from who already got it', async () => {
     alreadySent = ['b@x.com'];
     const plan = await planBroadcast('mobile-guide');
