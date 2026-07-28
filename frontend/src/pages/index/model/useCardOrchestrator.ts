@@ -262,8 +262,11 @@ export function useCardOrchestrator(
           c.cellIndex >= 0 &&
           c.levelId &&
           c.levelId !== 'scratchpad' &&
-          // Only show cards belonging to the current mandala
-          (!mandalaId || c.mandalaId === mandalaId)
+          // STRICT mandala match. `!mandalaId ||` used to pass EVERYTHING
+          // through while the mandala id was still resolving — the grid
+          // flashed the user's entire local store (1,018 cross-mandala cards
+          // on prod, beta-day incident 2026-07-28). No id → no cards.
+          c.mandalaId === mandalaId
       ),
     [persistedLocalCards, mandalaId]
   );
@@ -289,8 +292,8 @@ export function useCardOrchestrator(
           c.cellIndex >= 0 &&
           c.levelId &&
           c.levelId !== 'scratchpad' &&
-          // Only show cards belonging to the current mandala
-          (!mandalaId || c.mandalaId === mandalaId)
+          // STRICT mandala match (see mandalaLocalCards above).
+          c.mandalaId === mandalaId
       ),
     [syncedCards, mandalaId]
   );
