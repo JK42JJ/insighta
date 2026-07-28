@@ -25,7 +25,12 @@ function esc(s: string): string {
 
 /** Clean white outer + polished cream card (matches the mockup). */
 function shell(pill: { label: string; color: string }, inner: string, preview: string): string {
-  return `<div style="display:none;max-height:0;overflow:hidden">${preview}</div>
+  // nodemailer already sends `Content-Type: text/html; charset=utf-8`, so delivery
+  // is fine without this. It matters once the body is rendered on its own -- a
+  // "view in browser" link, a forwarded copy, a saved .html -- where the Korean
+  // becomes mojibake with no declared charset.
+  return `<meta charset="utf-8">
+<div style="display:none;max-height:0;overflow:hidden">${preview}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;margin:0;padding:22px 0">
   <tr><td align="center">
     <table role="presentation" width="464" cellpadding="0" cellspacing="0" style="width:464px;max-width:94%;background:${CREAM};border:2px solid ${INK};border-radius:18px;overflow:hidden;font-family:${FONT}">
@@ -288,6 +293,117 @@ export function buildProUpgradeEmail(params: ProUpgradeEmailParams): {
       { label: 'PRO', color: GOLD },
       inner,
       '베타 기간 동안 만다라·카드 무제한 + 새 기능 우선.'
+    ),
+  };
+}
+
+export interface MobileGuideEmailParams {
+  ctaUrl?: string;
+}
+
+/**
+ * Mobile dial-player usage guide — installing to the home screen is the first
+ * action, so the per-platform install steps lead, then usage steps + CTA. Copy
+ * follows the insighta-copywriter rules (benefit-first; no podcast/by-ear/
+ * recitation phrasing; no emoji).
+ */
+export function buildMobileGuideEmail(params: MobileGuideEmailParams): {
+  subject: string;
+  html: string;
+} {
+  const url = params.ctaUrl ?? `${SITE_ORIGIN}/mobile/`;
+  // Per-platform install block (leads — the critical first action). Email-safe:
+  // table layout, worded steps (no icons that clients strip).
+  function platform(badge: string, where: string, steps: string[]): string {
+    const items = steps
+      .map(
+        (s, i) =>
+          `<tr><td style="padding:3px 0;font-size:13px;color:${MUTED};line-height:1.6"><b style="color:${INK}">${i + 1}.</b> ${s}</td></tr>`
+      )
+      .join('');
+    return `<tr><td style="padding:12px 0;border-top:1px dashed #d7d3c6">
+        <div style="font-size:13.5px;font-weight:800;color:${INK}">
+          <span style="font-size:10.5px;font-weight:800;color:#fff;background:${INK};border-radius:6px;padding:2px 8px">${badge}</span>
+          <span style="padding-left:7px">${where}</span>
+        </div>
+        <table role="presentation" style="margin-top:6px">${items}</table>
+      </td></tr>`;
+  }
+  const installBox = `<table role="presentation" width="100%" style="border:2px solid ${INK};border-radius:14px;background:#fff">
+    <tr><td style="padding:14px 16px 4px">
+      <div style="font-size:15px;font-weight:800;color:${INK}">홈 화면에 앱으로 추가하기</div>
+    </td></tr>
+    <tr><td style="padding:0 16px 12px">
+      <table role="presentation" width="100%">
+        ${platform('아이폰 · 아이패드', 'Safari에서', [
+          '화면 아래 <b style="color:' + INK + '">공유 버튼</b>(위로 향한 화살표)을 누르세요.',
+          '메뉴를 내려 <b style="color:' + INK + '">‘홈 화면에 추가’</b>를 누르세요.',
+          '오른쪽 위 <b style="color:' + INK + '">‘추가’</b>를 누르면 끝이에요.',
+        ])}
+        ${platform('안드로이드', 'Chrome에서', [
+          '오른쪽 위 <b style="color:' + INK + '">메뉴</b>(점 세 개)를 누르세요.',
+          '<b style="color:' +
+            INK +
+            '">‘앱 설치’</b> 또는 <b style="color:' +
+            INK +
+            '">‘홈 화면에 추가’</b>를 누르세요.',
+          '<b style="color:' + INK + '">‘설치’</b>를 누르면 끝이에요.',
+        ])}
+      </table>
+      <div style="font-size:12px;color:${MUTED};margin-top:10px;padding-top:10px;border-top:1px dashed #d7d3c6;line-height:1.6">추가한 아이콘으로 열면 주소창 없이 앱처럼 넓게 쓸 수 있어요.</div>
+    </td></tr>
+  </table>`;
+  // Order follows what the app actually shows a new account: the dial opens on
+  // the curation tab, which asks to connect YouTube, then proposes topics. A
+  // guide that starts with mandala playback describes a screen the user has to
+  // go looking for.
+  const useRows = [
+    ['유튜브 연결', '처음 열면 연결부터 물어봐요. 보시던 채널을 읽어 취향을 잡습니다.'],
+    ['주제 고르기', '추천 주제 카드를 옆으로 넘겨 하나 고르세요. 직접 입력해도 됩니다.'],
+    [
+      '매주 받아보기',
+      '고른 주제의 새 영상이 매주 모여요. 휠을 돌려 넘기고 가운데 버튼으로 재생합니다.',
+    ],
+    [
+      '채널로 받기',
+      '주제 대신 채널을 고를 수도 있어요. 목록에서 이름 옆 · · · 를 누르면 나옵니다.',
+    ],
+    ['노트로 읽기', '영상에서 만든 노트는 노트 탭에서 문서로 읽을 수 있어요.'],
+  ]
+    .map(
+      ([t, d], i) =>
+        `<tr><td style="padding:13px 2px;border-top:1px dashed #d7d3c6">
+          <table role="presentation"><tr>
+            <td style="width:28px;height:28px;border:2px solid ${INK};border-radius:9px;color:${INDIGO};font-weight:800;font-size:13px;text-align:center;background:#fff">${i + 1}</td>
+            <td style="padding-left:14px">
+              <div style="font-size:14.5px;font-weight:800;color:${INK}">${t}</div>
+              <div style="font-size:12.5px;color:${MUTED};margin-top:2px">${d}</div>
+            </td>
+          </tr></table>
+        </td></tr>`
+    )
+    .join('');
+  const inner = `
+    <tr><td style="padding:14px 26px 2px;text-align:center">${mascot('mascot-welcome.gif')}</td></tr>
+    <tr><td style="padding:8px 30px 2px;text-align:center">
+      ${heading('내 유튜브에서', '필요한 정보만')}
+      <div style="font-size:14px;color:${MUTED};margin:10px auto 0;max-width:330px;line-height:1.5">보고 싶은 주제만 정해두면, 매주 새 영상이 모입니다. 먼저 홈 화면에 추가하면 다음부터 한 번에 열려요.</div>
+    </td></tr>
+    <tr><td style="padding:16px 30px 6px">${installBox}</td></tr>
+    <tr><td style="padding:6px 30px 2px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.12em;color:${MUTED};text-transform:uppercase">홈에 추가한 뒤, 순서대로</div>
+    </td></tr>
+    <tr><td style="padding:2px 30px 30px">
+      <table role="presentation" width="100%">${useRows}</table>
+      <div style="text-align:center;margin-top:24px">${cta('시작하기', url, INDIGO)}</div>
+      <div style="text-align:center;font-size:12px;color:${MUTED};margin-top:16px">주제를 받으려면 로그인이 필요해요. 샘플은 로그인 없이 들어볼 수 있습니다.</div>
+    </td></tr>`;
+  return {
+    subject: '보고 싶은 주제만, 매주 — 시작 안내',
+    html: shell(
+      { label: 'GUIDE', color: INDIGO },
+      inner,
+      '홈 화면에 추가하고, 주제를 고르면 매주 새 영상이 모입니다.'
     ),
   };
 }
