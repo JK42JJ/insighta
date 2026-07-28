@@ -1560,7 +1560,11 @@
   },
   "graph": {
     "empty": "아직 지식 노드가 없습니다.",
-    "emptyHint": "카드를 저장하고 만다라를 만들어 지식 그래프를 구축하세요."
+    "emptyHint": "카드를 저장하고 만다라를 만들어 지식 그래프를 구축하세요.",
+    "searchPlaceholder": "내 지식에서 찾기…",
+    "noResults": "일치 항목 없음",
+    "openVideo": "영상 열기",
+    "connections": "연결"
   },
   "privacy": {
     "title": "개인정보처리방침",

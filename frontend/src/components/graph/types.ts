@@ -12,7 +12,14 @@ export type OntologyNodeType =
   | 'note'
   | 'source'
   | 'source_segment'
-  | 'insight';
+  | 'insight'
+  // v2-bridge era types (prod-verified 2026-07-27: video_resource 4.2k,
+  // concept 25.3k, atom_node 21.1k, section_node 12.6k, action_node 9.2k)
+  | 'video_resource'
+  | 'concept'
+  | 'atom_node'
+  | 'section_node'
+  | 'action_node';
 
 export type NodeCategory = 'structure' | 'content' | 'derived';
 
@@ -55,6 +62,10 @@ export interface GraphNode {
   category: NodeCategory;
   val: number;
   properties: Record<string, unknown>;
+  /** Origin row pointer — for video_resource this carries the YouTube video
+   *  id ({table: 'youtube_videos', id: '<ytid>'}), which powers the in-app
+   *  "open video" action + thumbnail. */
+  sourceRef: { table: string; id: string } | null;
 }
 
 export interface GraphLink {
@@ -72,7 +83,7 @@ export interface GraphData {
 // -- Category classification --
 
 const STRUCTURE_TYPES: OntologyNodeType[] = ['mandala', 'mandala_sector', 'goal'];
-const DERIVED_TYPES: OntologyNodeType[] = ['insight', 'topic'];
+const DERIVED_TYPES: OntologyNodeType[] = ['insight', 'topic', 'concept', 'action_node'];
 
 export function getNodeCategory(type: OntologyNodeType): NodeCategory {
   if (STRUCTURE_TYPES.includes(type)) return 'structure';
