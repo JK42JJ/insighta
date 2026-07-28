@@ -1603,7 +1603,7 @@
           <div class="go-msg" id="goMsg">만다라 구조를 그리는 중…</div>
         </div>
       </div>
-      <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>돌아가기</button>
+      <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span class="ytsBackT">돌아가기</span></button>
     </div>
   </div>
 
@@ -1622,7 +1622,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-28-34';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-28-35';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2168,8 +2168,30 @@
   var YTS_SNAP='insighta-yt-wizard-snap';
   // YouTube play glyph — the G logo pairs only with Google sign-in copy, not a YouTube connect CTA.
   var YT_TUBE_SVG='<svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="4.5" width="21" height="15" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg>';
-  function openYtSheet(){ document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
-  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet','hubsheet','goalsheet','propsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true');
+  /* Sheet back-stack.
+   *
+   * The sheet was one screen deep when this button was written, so closing was
+   * the same thing as going back. It is three deep now -- start hub -> how do
+   * you want to receive -> type a topic -- and closing from the third step
+   * throws away two choices the user just made, with no way back but starting
+   * over.
+   *
+   * Each screen registers what it sits on top of, so every door into it behaves
+   * the same. Only an empty stack closes, and the label says which it will do. */
+  var ytBackStack=[];
+  function ytSyncBackLabel(){
+    var t=document.querySelector('#ytsBack .ytsBackT');
+    if(t) t.textContent=ytBackStack.length?'돌아가기':'닫기';
+  }
+  function ytPushBack(fn){ ytBackStack.push(fn); ytSyncBackLabel(); }
+  function ytGoBack(){
+    var fn=ytBackStack.pop();
+    ytSyncBackLabel();
+    if(fn) fn(); else closeYtSheet();
+  }
+
+  function openYtSheet(){ ytBackStack=[]; ytSyncBackLabel(); document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
+  function closeYtSheet(){ ytBackStack=[]; document.body.classList.remove('ytsheet','rasheet','hubsheet','goalsheet','propsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true');
     // Drop the pinned actions too, so the next sheet never opens showing the
     // previous state's buttons for a frame.
     var f=document.getElementById('ytsFoot'); if(f){ f.innerHTML=''; f.hidden=true; }
@@ -2533,12 +2555,13 @@
     // Typing a topic and pasting a channel do not, which is why the check cannot
     // sit in front of the whole branch.
     document.getElementById('pmSuggest').onclick=function(){
+      ytPushBack(ytRenderPickMode);
       ytRenderLoading();
       ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderTuning(); } else { ytRenderConnect(); } })
                      .catch(function(){ ytRenderConnect(); });
     };
-    document.getElementById('pmTopic').onclick=function(){ ytRenderTopicInput(); };
-    document.getElementById('pmChannel').onclick=function(){ chRenderNew(); };
+    document.getElementById('pmTopic').onclick=function(){ ytPushBack(ytRenderPickMode); ytRenderTopicInput(); };
+    document.getElementById('pmChannel').onclick=function(){ ytPushBack(ytRenderPickMode); chRenderNew(); };
     selHub=0; document.body.classList.add('hubsheet'); setTimeout(updateSelHub,0);
   }
 
@@ -4356,7 +4379,7 @@
     return ({menu:'home', player:'home'})[s]||null;
   }
   function menuBack(){
-    if(document.body.classList.contains('ytsheet')){ closeYtSheet(); return; } // sheet MENU = close (wheel parity)
+    if(document.body.classList.contains('ytsheet')){ ytGoBack(); return; } // sheet MENU = one step back, closes at the root
     if(document.body.classList.contains('curdeck')){ closeCurationDeck(); return; } // deck MENU = back to tab
     if(cur==='login') return;
     if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
@@ -4400,7 +4423,7 @@
   // to the content behind (R5: drag-following with a release threshold).
   (function(){
     var bk=document.getElementById('ytsBack'), bd=document.getElementById('ytsBd');
-    if(bk) bk.onclick=closeYtSheet; if(bd) bd.onclick=closeYtSheet;
+    if(bk) bk.onclick=ytGoBack; if(bd) bd.onclick=closeYtSheet;   // backdrop = dismiss, not step back
     var card=document.querySelector('#ytSheet .yts-card'); if(!card) return;
     var y0=null, dy=0;
     card.addEventListener('touchstart',function(e){
@@ -5090,7 +5113,7 @@
     // pressing the weekly-curation row looked dead for ~5s and then jumped.
     // Straight to the branch. The old order painted a spinner and waited on
     // ytFetchStatus before showing three options, two of which never needed it.
-    document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet'); ytRenderPickMode(); };
+    document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet'); ytPushBack(openHub); ytRenderPickMode(); };
     selHub=0; document.body.classList.add('hubsheet'); openYtSheet(); setTimeout(updateSelHub,0);
   }
   (function(){ var pf=document.getElementById('plusFab'); if(pf) pf.onclick=openHub; })();
