@@ -109,12 +109,24 @@ export function AdminUsers() {
         <table className="w-full">
           <thead className="bg-muted/50">
             <tr>
-              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">User</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Tier</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Cards</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Mandalas</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Joined</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Actions</th>
+              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">
+                User
+              </th>
+              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">
+                Tier
+              </th>
+              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">
+                Cards
+              </th>
+              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">
+                Mandalas
+              </th>
+              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">
+                Joined
+              </th>
+              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -162,9 +174,7 @@ export function AdminUsers() {
                           <p className="text-sm font-medium">{(user.name as string) || '—'}</p>
                           <p className="text-xs text-muted-foreground">{user.email as string}</p>
                         </div>
-                        {user.is_super_admin && (
-                          <Shield className="h-3.5 w-3.5 text-primary" />
-                        )}
+                        {user.is_super_admin && <Shield className="h-3.5 w-3.5 text-primary" />}
                         {isBanned && <Ban className="h-3.5 w-3.5 text-destructive" />}
                       </div>
                     </td>
@@ -204,9 +214,7 @@ export function AdminUsers() {
                           Edit
                         </button>
                         <button
-                          onClick={() =>
-                            statusMutation.mutate({ id: uid, banned: !isBanned })
-                          }
+                          onClick={() => statusMutation.mutate({ id: uid, banned: !isBanned })}
                           className={cn(
                             'text-xs px-2 py-1 rounded',
                             isBanned
@@ -267,9 +275,7 @@ export function AdminUsers() {
               <label className="text-xs text-muted-foreground block mb-1">New Tier</label>
               <select
                 value={tierEditTarget.newTier}
-                onChange={(e) =>
-                  setTierEditTarget({ ...tierEditTarget, newTier: e.target.value })
-                }
+                onChange={(e) => setTierEditTarget({ ...tierEditTarget, newTier: e.target.value })}
                 className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
               >
                 <option value="free">Free</option>
@@ -327,7 +333,8 @@ export function AdminUsers() {
                 }}
                 disabled={
                   tierEditTarget.currentTier === tierEditTarget.newTier ||
-                  (tierEditTarget.currentTier !== tierEditTarget.newTier && !tierEditTarget.reason.trim()) ||
+                  (tierEditTarget.currentTier !== tierEditTarget.newTier &&
+                    !tierEditTarget.reason.trim()) ||
                   tierMutation.isPending
                 }
                 className="text-sm px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
@@ -387,7 +394,69 @@ export function AdminUsers() {
               </dd>
             </div>
           </dl>
+
+          <EmailHistory rows={userDetail.data.email_history as EmailHistoryRow[] | undefined} />
         </div>
+      )}
+    </div>
+  );
+}
+
+interface EmailHistoryRow {
+  kind: string;
+  campaign: string | null;
+  status: string;
+  error: string | null;
+  sent_at: string;
+}
+
+/** What we have sent this address, newest first.
+ *
+ *  A send cannot be recalled, so the record of one is the only thing that can
+ *  answer "did this person already get it, and did it land". Three sources are
+ *  merged server-side; this only has to make them legible.
+ */
+function EmailHistory({ rows }: { rows?: EmailHistoryRow[] }) {
+  const KIND_LABEL: Record<string, string> = {
+    broadcast: '단체 발송',
+    'beta-invite': '베타 초대',
+    'note-ready': '노트 완성',
+  };
+
+  return (
+    <div className="mt-6 border-t pt-4">
+      <h4 className="text-sm font-semibold mb-2">메일 발송 이력</h4>
+
+      {!rows?.length ? (
+        <p className="text-sm text-muted-foreground">보낸 메일이 없습니다.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {rows.map((r, i) => {
+            const failed = r.status !== 'sent';
+            return (
+              <li key={`${r.kind}-${r.sent_at}-${i}`} className="flex items-baseline gap-2 text-sm">
+                <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                  {new Date(r.sent_at).toLocaleString()}
+                </span>
+                <span className="font-medium shrink-0">{KIND_LABEL[r.kind] ?? r.kind}</span>
+                {r.campaign && (
+                  <span className="text-xs text-muted-foreground truncate">{r.campaign}</span>
+                )}
+                {/* Only a failure is called out; a successful send is the norm
+                    and does not need a badge competing with the ones that
+                    actually need attention. */}
+                {failed && (
+                  <span
+                    className="text-xs font-semibold text-destructive shrink-0"
+                    title={r.error ?? undefined}
+                  >
+                    {r.status}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
