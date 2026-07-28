@@ -804,6 +804,26 @@ model mandala_books {
 /// at-most-once (evergreen). Also the durable send log (container logs are lost
 /// on deploy, so delivery was previously unverifiable).
 /// Raw DDL: prisma/migrations/note-ready-email/001_create_note_ready_email_sends.sql
+/// One row per (campaign, recipient) actually sent. A broadcast is irreversible,
+/// so the send path reads this first and skips anyone already recorded: a repeat
+/// run, a retry after a crash, or two admins clicking at once cannot double-mail
+/// the same person. Failures are recorded too, with the reason, so a retry can
+/// target only them.
+model email_broadcast_sends {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// campaign key, e.g. 'mobile-guide-2026-07'
+  campaign  String   @db.VarChar(64)
+  email     String   @db.VarChar(255)
+  /// sent | failed
+  status    String   @default("sent") @db.VarChar(8)
+  error     String?
+  sent_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([campaign, email], map: "uq_email_broadcast_campaign_email")
+  @@index([campaign], map: "idx_email_broadcast_campaign")
+  @@schema("public")
+}
+
 model note_ready_email_sends {
   mandala_id String   @id @db.Uuid
   to_email   String?

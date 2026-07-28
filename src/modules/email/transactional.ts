@@ -105,7 +105,7 @@ export async function sendProUpgradeEmail(
 export async function sendMobileGuideEmail(
   to: string,
   params: MobileGuideEmailParams = {}
-): Promise<void> {
+): Promise<EmailSendResult> {
   const { subject, html } = buildMobileGuideEmail(params);
-  await send(to, subject, html, 'mobile-guide-email');
+  return send(to, subject, html, 'mobile-guide-email');
 }
