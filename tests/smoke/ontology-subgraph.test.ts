@@ -124,6 +124,31 @@ describe('getMandalaSubgraph (user-wide)', () => {
     expect(result.edges[0]?.id).toBe('e-real');
   });
 
+  it('caps synthetic card nodes at the total node cap and flags truncation', async () => {
+    // 4,100 placed cards with no ontology nodes at all — synthetic creation
+    // must stop at the 4,000 cap instead of ballooning the payload (prod
+    // beta-day incident: ~9k nodes froze the layout thread).
+    const manyCards = Array.from({ length: 4100 }, (_, i) => ({
+      ytid: `yt${i}`,
+      state_id: null,
+      title: `V${i}`,
+      mandala_id: MANDALA,
+      cell_pos: null,
+    }));
+    mockPrisma([
+      [], // roots
+      [], // sectors
+      manyCards,
+      [], // card-node match
+      [], // edges
+      [], // nodes
+    ]);
+
+    const result = await getMandalaSubgraph(null, USER, 4);
+    expect(result.nodes).toHaveLength(4000);
+    expect(result.truncated).toBe(true);
+  });
+
   it('drops edges whose endpoints fall outside the kept node set', async () => {
     mockPrisma([
       [{ id: ROOT, mandala_id: MANDALA }],

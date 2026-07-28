@@ -320,8 +320,12 @@ export async function getMandalaSubgraph(
     });
   }
 
-  // 2) cards → synthetic nodes where needed + cell placement edges
+  // 2) cards → synthetic nodes where needed + cell placement edges.
+  // Synthetic nodes respect the SAME total node cap — without this, a
+  // card-heavy account ballooned to ~9k nodes and froze the tab's layout
+  // thread (prod-measured on beta day). Overflow flips `truncated`.
   const presentNodeIds = new Set(nodes.map((n) => n.id));
+  let syntheticOverflow = false;
   for (const card of cardRows) {
     const matchedId =
       (card.state_id ? nodeIdByStateId.get(card.state_id) : undefined) ??
@@ -334,6 +338,10 @@ export async function getMandalaSubgraph(
     } else {
       videoNodeId = `derived-video-${card.ytid}`;
       if (!presentNodeIds.has(videoNodeId)) {
+        if (presentNodeIds.size >= SUBGRAPH_NODE_CAP) {
+          syntheticOverflow = true;
+          continue;
+        }
         presentNodeIds.add(videoNodeId);
         nodes.push({
           id: videoNodeId,
@@ -373,5 +381,5 @@ export async function getMandalaSubgraph(
     });
   }
 
-  return { nodes, edges, truncated };
+  return { nodes, edges, truncated: truncated || syntheticOverflow };
 }
