@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  convertNode,
-  convertEdge,
-  buildGraphData,
-} from '@/components/graph/graph-converters';
+import { convertNode, convertEdge, buildGraphData } from '@/components/graph/graph-converters';
 import type { OntologyNode, OntologyEdge } from '@/components/graph/types';
 
 const NOW = '2026-03-27T00:00:00Z';
@@ -49,15 +45,22 @@ describe('convertNode', () => {
       category: 'content',
       val: 4, // edgeCount(3) + 1
       properties: {},
+      sourceRef: null,
     });
   });
 
-  it('truncates long labels with ellipsis', () => {
+  it('passes source_ref through as sourceRef (video open + thumbnail path)', () => {
+    const node = { ...makeNode(), source_ref: { table: 'youtube_videos', id: 'EO8_27ERYjI' } };
+    const result = convertNode(node, new Map());
+    expect(result.sourceRef).toEqual({ table: 'youtube_videos', id: 'EO8_27ERYjI' });
+  });
+
+  it('truncates long labels with ellipsis (18-char graph label budget)', () => {
     const longTitle = 'A'.repeat(50);
     const node = makeNode({ title: longTitle });
     const result = convertNode(node, new Map());
 
-    expect(result.label).toHaveLength(30);
+    expect(result.label).toHaveLength(18);
     expect(result.label.endsWith('…')).toBe(true);
     expect(result.fullTitle).toBe(longTitle);
   });
@@ -78,10 +81,7 @@ describe('convertNode', () => {
     const noEdges = convertNode(makeNode(), new Map());
     expect(noEdges.val).toBe(1); // max(1, min(0+1, 10)) = 1
 
-    const manyEdges = convertNode(
-      makeNode(),
-      new Map([['node-1', 20]])
-    );
+    const manyEdges = convertNode(makeNode(), new Map([['node-1', 20]]));
     expect(manyEdges.val).toBe(10); // max(1, min(21, 10)) = 10
   });
 });
@@ -114,9 +114,7 @@ describe('buildGraphData', () => {
       makeNode({ id: 'n1', title: 'Node 1' }),
       makeNode({ id: 'n2', title: 'Node 2' }),
     ];
-    const edges = [
-      makeEdge({ source_id: 'n1', target_id: 'n2' }),
-    ];
+    const edges = [makeEdge({ source_id: 'n1', target_id: 'n2' })];
 
     const result = buildGraphData(nodes, edges);
     expect(result.nodes).toHaveLength(2);
@@ -127,20 +125,14 @@ describe('buildGraphData', () => {
 
   it('filters edges with missing endpoints', () => {
     const nodes = [makeNode({ id: 'n1' })];
-    const edges = [
-      makeEdge({ source_id: 'n1', target_id: 'n-missing' }),
-    ];
+    const edges = [makeEdge({ source_id: 'n1', target_id: 'n-missing' })];
 
     const result = buildGraphData(nodes, edges);
     expect(result.links).toHaveLength(0);
   });
 
   it('computes edge count for node sizing', () => {
-    const nodes = [
-      makeNode({ id: 'n1' }),
-      makeNode({ id: 'n2' }),
-      makeNode({ id: 'n3' }),
-    ];
+    const nodes = [makeNode({ id: 'n1' }), makeNode({ id: 'n2' }), makeNode({ id: 'n3' })];
     const edges = [
       makeEdge({ source_id: 'n1', target_id: 'n2' }),
       makeEdge({ id: 'e2', source_id: 'n1', target_id: 'n3' }),

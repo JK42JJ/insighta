@@ -330,6 +330,27 @@
   .iosw::after{content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(60,45,25,.3); transition:transform .22s cubic-bezier(.3,.8,.3,1)}
   .iosw.on{background:var(--ui)}
   .iosw.on::after{transform:translateX(16px)}
+  /* Signed-in account. The dial never showed who you are -- Settings had a
+     "계정" group whose rows were all actions. This is the answer to "is this
+     the right account", which is exactly the question that group raises. */
+  .acct{display:flex; align-items:center; gap:12px; padding:12px 14px; margin:2px 0 8px;
+    border-radius:14px; background:rgba(94,86,72,.06)}
+  .acct .av{flex:none; width:38px; height:38px; border-radius:99px; object-fit:cover;
+    background:rgba(94,86,72,.14); display:grid; place-items:center;
+    font-size:15px; font-weight:800; color:var(--paper-sub, #7c7a72)}
+  .acct .atx{min-width:0; display:flex; flex-direction:column; gap:1px}
+  .acct .anrow{display:flex; align-items:center; gap:7px; min-width:0}
+  .acct .an{font-size:14.5px; font-weight:800; color:var(--ink,#232320);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  /* Same badge the web app puts beside the wordmark -- 10px, bold, uppercase,
+     wide tracking, accent at 10% on a 30% border -- in the dial's own accent
+     rather than the app's. The dial carried no beta marker at all. */
+  .acct .abeta{flex:none; font-size:10px; font-weight:800; letter-spacing:.11em;
+    text-transform:uppercase; padding:2px 7px; border-radius:7px;
+    color:var(--acc-lo,#CE5F30); background:rgba(206,95,48,.10);
+    border:1px solid rgba(206,95,48,.30)}
+  .acct .ae{font-size:11.5px; font-weight:600; color:var(--paper-sub,#7c7a72);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .menu-note{font-size:9px; color:var(--paper-sub); font-weight:600; text-align:center; margin-top:auto; padding-top:8px}
 
   /* ---- 플레이어 (세로) ---- */
@@ -469,7 +490,25 @@
   #goalInput:focus{outline:none; box-shadow:inset 0 0 0 2px var(--acc)}
   /* sheet-scoped accent tokens — #ytSheet lives OUTSIDE #dev so theme --acc* were undefined
      (my accent button rendered with no background). Define once here for all sheets. */
-  #ytSheet{--acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30}
+  /* Vertical budget, measured 2026-07-28 on the proposals state (the tallest):
+   *
+   *   fixed chrome  246px   padding 12 + (16 + 34 safe-area) + grip 4
+   *                         + wordmark 18 + its 12 margin + two 15 gaps
+   *                         + foot 92 + back 28
+   *   content       161px   title 24 + 15 + deck 102 + 15 + dots 5
+   *   ------------------------------------------------------------------
+   *   minimum       407px
+   *
+   * 58vh only reaches 407 on a viewport of 702px or more. Below that the sheet
+   * was short of its own content and the heading was clipped against the top
+   * edge -- 7.7px at 730, 25.7px at 667 -- which is what a real phone showed.
+   * The three-choice branch is taller still: measured 452px to show all three
+   * options without scrolling, and an option you have to scroll to find is the
+   * bug this screen exists to fix. The floor is that number plus 4px of slack.
+   * Above 786px viewport 58vh clears it anyway, so most phones are unaffected.
+   * Re-measure and raise this if either state gains a row. */
+  #ytSheet{--yts-min-h:456px;
+    --acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30}
   /* DIAL wordmark — shared sheet header identity (James-approved guest-sheet look) */
   .yts-brand{flex:none; text-align:center; font-size:11px; font-weight:700; letter-spacing:.3em; color:#b7a988; text-transform:uppercase; margin:0 0 12px}
   .yts-custom{display:flex; gap:8px; margin-top:8px; align-items:stretch}
@@ -734,7 +773,8 @@
   #ytSheet .yts-card{position:relative; width:100%; max-width:480px; background:var(--paper-hi,#FAF6EC);
     border-radius:22px 22px 0 0; padding:12px 24px calc(16px + var(--sab)); box-shadow:0 -14px 44px rgba(30,27,22,.30);
     transform:translateY(103%); transition:transform .42s var(--spring); display:flex; flex-direction:column; gap:15px;
-    text-align:center; height:58vh; overflow:hidden; justify-content:flex-start}
+    text-align:center; height:58vh; min-height:var(--yts-min-h); max-height:80vh;
+    overflow:hidden; justify-content:flex-start}
   /* One sheet height for every state, and the CARD never scrolls — only its body
      does. Pinning the height alone (build 26) kept every sheet the same size but
      pushed the tail of the tallest state (proposals: input + retune) off a real
@@ -742,8 +782,16 @@
      .yts-foot is always reachable at the bottom. */
   #ytSheet .yts-foot{flex:none; display:flex; flex-direction:column; gap:10px}
   #ytSheet .yts-card.dragging{transition:none}
-  #ytsBody{display:flex; flex-direction:column; gap:15px; flex:1; justify-content:center;
+  /* Centred WHEN THERE IS ROOM, top-aligned when there is not. `justify-content:
+     center` alone clips the first child against the top edge once the content
+     is taller than the box -- and overflow cannot scroll back to it, because the
+     overflow is on the start side. The auto-margin form degrades to flex-start
+     instead, so the heading is never the thing that disappears. Reported on a
+     real phone at build 30: the title was sliced in half, then gone. */
+  #ytsBody{display:flex; flex-direction:column; gap:15px; flex:1;
     overflow-y:auto; overflow-x:hidden; min-height:0; scrollbar-width:none}
+  #ytsBody > :first-child{margin-top:auto}
+  #ytsBody > :last-child{margin-bottom:auto}
   #ytsBody::-webkit-scrollbar{display:none}
   /* Loading state — shown the instant a tab is pressed, before any network call. */
   .yts-load{display:flex; flex-direction:column; align-items:center; gap:14px}
@@ -803,6 +851,17 @@
     cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent;
     transition:transform .22s var(--spring), box-shadow .22s ease, border-color .22s ease, opacity .22s ease;
     transform:scale(.94); opacity:.55}
+  /* Three-choice branch. Where the pixels come from, measured at 730px viewport:
+   * the body has 254px and the rows wanted 309. Wrapping them turns three 15px
+   * body gaps into one (-30), and 13px row padding instead of the shared 17px
+   * takes another 24. 309 -> 255. The rest of the sheet is untouched, and the
+   * two-row start hub keeps the roomier default because this is scoped. */
+  .pm-rows{display:flex; flex-direction:column; gap:8px}
+  .pm-rows .mrow{margin-top:0; padding:13px 16px}
+  /* The channel card is an action, not a subject — dashed edge, no fill. */
+  .yts-prop-ch{background:none; border-style:dashed; border-color:rgba(94,86,72,.32)}
+  .yts-prop-ch .yts-prop-dom{background:rgba(94,86,72,.10); color:var(--paper-sub)}
+  .yts-prop-ch.sel{border-style:solid}
   /* the centred card is the one the core button will pick */
   .yts-prop.sel{transform:scale(1); opacity:1; border-color:var(--acc);
     box-shadow:0 8px 20px -12px rgba(30,27,22,.5)}
@@ -1372,6 +1431,7 @@
           <button class="mrow" id="bInstall"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/></svg></span>홈 화면에 설치<span class="sub">전체화면 앱</span></button>
           <button class="mrow" id="bRefresh"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 11-2.34-5.66"/><path d="M20 3v4h-4"/></svg></span>새로고침<span class="sub">최신 버전 불러오기</span></button>
           <div class="ghd">계정</div>
+          <div class="acct" id="acctRow" hidden></div>
           <button class="mrow" id="bYtConnect"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12.5" rx="3.5"/><path d="M10 9.5l4.4 2.75L10 15z" fill="currentColor" stroke="none"/></svg></span>유튜브 연결<span class="sub" id="ytConnSub">계정 연결 · 관리</span></button>
           <button class="mrow" id="bFeedback"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11a7.5 7.5 0 01-7.9 7.5c-1.3 0-2.6-.3-3.7-.9L4 19l1.5-4.3A7.5 7.5 0 1121 11z"/></svg></span>의견 보내기<span class="sub">기능 제안 · 불편 신고</span></button>
           <button class="mrow" id="bLogout"><span class="lic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4H6.5A1.5 1.5 0 005 5.5v13A1.5 1.5 0 006.5 20H14"/><path d="M10 12h11M18 8.8L21 12l-3 3.2"/></svg></span>로그아웃</button>
@@ -1543,7 +1603,7 @@
           <div class="go-msg" id="goMsg">만다라 구조를 그리는 중…</div>
         </div>
       </div>
-      <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>돌아가기</button>
+      <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span class="ytsBackT">돌아가기</span></button>
     </div>
   </div>
 
@@ -1562,7 +1622,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-28-30';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-28-36';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -1679,7 +1739,7 @@
     var _gf=document.getElementById('gearFab'); if(_gf) _gf.style.visibility=(n==='home')?'visible':'hidden';
     var _pf=document.getElementById('plusFab'); if(_pf) _pf.style.visibility=(n==='home')?'visible':'hidden';
     if(n==='home'){ requestAnimationFrame(function(){ if(typeof homePaintPos==='function') homePaintPos(homeIdx, true); }); } // re-align slider to tab centers
-    if(n==='menu'){ selMenu=0; setTimeout(updateSelMenu,0); } // 설정 진입 = 첫 행 선택 [J:07-15]
+    if(n==='menu'){ selMenu=0; setTimeout(updateSelMenu,0); ytPaintMenuAccount(); } // 설정 진입 = 첫 행 선택 [J:07-15] + 계정 즉시 표시
     syncStage();
   }
   function syncStage(){
@@ -1951,7 +2011,10 @@
   // skeleton) and revalidates in the background; the list only re-renders when
   // the signature actually changed. Skeleton shows on the cold first load only.
   var curCache=null, curRenderedSig='';
-  function curSig(subs){ return JSON.stringify((subs||[]).map(function(s){ return [s.id,s.item_count,s.watched_count,s.last_run_at,s.next_run_at,s.topic]; })); }
+  /** What to call a curation: the user's name if they set one, else the topic.
+   *  Every surface reads through here so a rename shows up everywhere at once. */
+  function curName(s){ return (s && (s.display_title || s.topic)) || '(제목 없음)'; }
+  function curSig(subs){ return JSON.stringify((subs||[]).map(function(s){ return [s.id,s.display_title,s.item_count,s.watched_count,s.last_run_at,s.next_run_at,s.topic]; })); }
   function curPaint(subs){ var sig=curSig(subs); if(sig===curRenderedSig&&Array.isArray(subs)) return; renderCurationRows(subs); curRenderedSig=sig; }
   async function renderCuration(){
     var el=document.getElementById('curBody'); if(!el) return;
@@ -1973,7 +2036,7 @@
       var st=await ytFetchStatus();
       if(st&&st.isConnected){
         curCache=[]; curPaint([]);
-        if(!ytAutoRaised){ ytAutoRaised=true; openYtSheet(); ytRenderTuning(); }
+        if(!ytAutoRaised){ ytAutoRaised=true; openYtSheet(); ytRenderPickMode(); }
       } else { curCache=null; curRenderedSig=''; curConnectGate(); }
     }catch(e){
       if(haveCache) return; // revalidate failure: keep the cached rows on screen
@@ -2030,7 +2093,7 @@
       +'<span class="t1">관심 주제를 고르면<br>매주 큐레이션을 보내 드려요</span>'
       +'<span class="t2">트렌드·리서치·관심 분야까지<br>매주 새 영상만 골라 드려요</span>'
       +'<button class="cbtn" id="bCurPick" type="button">관심 주제 고르기</button>';
-    var b=document.getElementById('bCurPick'); if(b) b.onclick=function(){ openYtSheet(); ytRenderTuning(); };
+    var b=document.getElementById('bCurPick'); if(b) b.onclick=function(){ openYtSheet(); ytRenderPickMode(); };
   }
   // Same .rows/.row markup as the mandala lists (format parity is the contract).
   function renderCurationRows(subs){
@@ -2049,13 +2112,13 @@
     });
     sorted.forEach(function(e){
       var s=e.s, st=e.st;
-      var c=jkColor(s.topic||'?');
+      var c=jkColor(curName(s));
       var d=document.createElement('div');
       d.className='row';
       d.innerHTML='<span class="jk" style="background:linear-gradient(150deg,'+c[0]+','+c[1]+')"><b></b></span>'
         +'<span class="m"><span class="a"></span><span class="b">'+(st.dot?'<span class="dotnew"></span>':'')+'<span class="bt"></span></span></span>';
-      d.querySelector('.jk b').textContent=(s.topic||'?').trim().charAt(0);
-      d.querySelector('.a').textContent=s.topic||'(제목 없음)';
+      d.querySelector('.jk b').textContent=curName(s).trim().charAt(0);
+      d.querySelector('.a').textContent=curName(s);
       d.querySelector('.bt').textContent=st.line;
       // overflow '...' -> action sheet (unsubscribe); long-press = alias trigger for the same sheet
       var more=document.createElement('button');
@@ -2108,8 +2171,30 @@
   var YTS_SNAP='insighta-yt-wizard-snap';
   // YouTube play glyph — the G logo pairs only with Google sign-in copy, not a YouTube connect CTA.
   var YT_TUBE_SVG='<svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="4.5" width="21" height="15" rx="4" fill="#FF0000"/><path d="M10 9l5.2 3L10 15z" fill="#fff"/></svg>';
-  function openYtSheet(){ document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
-  function closeYtSheet(){ document.body.classList.remove('ytsheet','rasheet','hubsheet','goalsheet','propsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true');
+  /* Sheet back-stack.
+   *
+   * The sheet was one screen deep when this button was written, so closing was
+   * the same thing as going back. It is three deep now -- start hub -> how do
+   * you want to receive -> type a topic -- and closing from the third step
+   * throws away two choices the user just made, with no way back but starting
+   * over.
+   *
+   * Each screen registers what it sits on top of, so every door into it behaves
+   * the same. Only an empty stack closes, and the label says which it will do. */
+  var ytBackStack=[];
+  function ytSyncBackLabel(){
+    var t=document.querySelector('#ytsBack .ytsBackT');
+    if(t) t.textContent=ytBackStack.length?'돌아가기':'닫기';
+  }
+  function ytPushBack(fn){ ytBackStack.push(fn); ytSyncBackLabel(); }
+  function ytGoBack(){
+    var fn=ytBackStack.pop();
+    ytSyncBackLabel();
+    if(fn) fn(); else closeYtSheet();
+  }
+
+  function openYtSheet(){ ytBackStack=[]; ytSyncBackLabel(); document.body.classList.add('ytsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','false'); }
+  function closeYtSheet(){ ytBackStack=[]; document.body.classList.remove('ytsheet','rasheet','hubsheet','goalsheet','propsheet'); var s=document.getElementById('ytSheet'); if(s) s.setAttribute('aria-hidden','true');
     // Drop the pinned actions too, so the next sheet never opens showing the
     // previous state's buttons for a frame.
     var f=document.getElementById('ytsFoot'); if(f){ f.innerHTML=''; f.hidden=true; }
@@ -2118,7 +2203,8 @@
   // Per-surface row actions — RELOCATION of existing actions, never invention.
   // New actions are James-gated (video/note mandala rows have no existing action yet).
   var ROW_ACTIONS={
-    curation:[{ label:'채널로 받기', plain:true, run:function(s){ openChannelSheet(s); } },
+    curation:[{ label:'이름 바꾸기', plain:true, run:function(s){ curRenameSheet(s); } },
+      { label:'채널로 받기', plain:true, run:function(s){ openChannelSheet(s); } },
       { label:'구독 끊기', confirm:'구독을 끊을까요? · 끊기', running:'끊는 중…', err:'끊지 못했어요 — 다시 시도해주세요',
       run:function(s){ return api('/curations/'+s.id,{method:'DELETE'}).then(function(){
         if(Array.isArray(curCache)) curCache=curCache.filter(function(x){ return x.id!==s.id; }); }); },
@@ -2132,7 +2218,7 @@
     setSheetFoot('');
     body.innerHTML='';
     var h=document.createElement('div'); h.className='yts-h2';
-    h.textContent=item.topic||item.title||'항목'; body.appendChild(h);
+    h.textContent=curName(item)||item.title||'항목'; body.appendChild(h);
     var wrap=document.createElement('div'); wrap.className='ras-actions'; body.appendChild(wrap);
     function disarmAll(except){ wrap.querySelectorAll('.ras-btn.confirm').forEach(function(b){
       if(b===except) return; b.classList.remove('confirm'); b.textContent=b.__label; }); }
@@ -2264,10 +2350,7 @@
       +props.map(function(_,i){ return '<span class="yts-dot'+(i===0?' on':'')+'"></span>'; }).join('')
       +'</div>';
     b.innerHTML=h;
-    setSheetFoot(
-      '<div class="yts-custom"><input type="text" id="ytCustomTopic" maxlength="40" placeholder="직접 주제 입력" autocomplete="off"><button class="yts-cadd" id="ytCustomAdd" type="button">추가</button></div>'
-      + '<button class="yts-ghost" id="ytsByChannel" type="button">주제 대신 채널로 받기</button>'
-    );
+    setSheetFoot('');
     // The retry icon is part of the sheet shell, not the foot, so it survives
     // innerHTML replacement; `propsheet` is what reveals it.
     document.body.classList.add('propsheet');
@@ -2285,12 +2368,6 @@
       if(ytPropScrollT) clearTimeout(ytPropScrollT);
       ytPropScrollT=setTimeout(function(){ ytPropIdx=ytNearestProp(); ytSyncProps(true); },90);
     });
-    var ci=document.getElementById('ytCustomTopic'), ca=document.getElementById('ytCustomAdd');
-    function ytCustomSubmit(){ var t=(ci&&ci.value||'').trim(); if(t.length<2){ if(ci) ci.focus(); return; } closeYtSheet(); setHomeTab('curation'); selectCuration(t); }
-    if(ca) ca.onclick=ytCustomSubmit;
-    if(ci) ci.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); ytCustomSubmit(); } });
-    var bc=document.getElementById('ytsByChannel');
-    if(bc) bc.onclick=function(){ chRenderNew(); };
     var rt=document.getElementById('ytsRetune');
     if(rt){
       rt.disabled=!!ytRetuneSpent;
@@ -2339,20 +2416,45 @@
   }
 
   // (c) — connected state (disconnect). Same sheet; entry = curation-tab account chip.
+  /* YouTube connection status.
+   *
+   * It changes only when the user connects or disconnects, and both happen in
+   * this app -- so there is no reason to make them watch a token refresh plus an
+   * edge-function round trip every time they open Settings. It was 3-5 seconds
+   * of blank account row on every visit.
+   *
+   * Same shape the curation list already uses: last answer renders instantly,
+   * a fresh one replaces it when it lands, and connect/disconnect clear it. */
+  var YT_ST_KEY='insighta-yt-status';
+  function ytStatusCached(){ try{ return readJSON(localStorage.getItem(YT_ST_KEY)); }catch(e){ return null; } }
+  function ytStatusStore(st){
+    try{ if(st) localStorage.setItem(YT_ST_KEY, JSON.stringify(st)); else localStorage.removeItem(YT_ST_KEY); }catch(e){}
+  }
+  function ytStatusClear(){ ytStatusStore(null); }
   async function ytFetchStatus(){
     try{
       var tok=await freshToken(); if(!tok) return null;
       var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=status',{headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
-      if(!r.ok) return null; return await r.json();
+      if(!r.ok) return null;
+      var st=await r.json();
+      ytStatusStore(st);
+      return st;
     }catch(e){ return null; }
   }
   // Settings-row entry: connected -> manage/disconnect state; not connected -> S1 connect.
-  async function ytOpenManage(){
-    openYtSheet(); ytRenderConnected(null);
-    var st=await ytFetchStatus();
-    if(st&&st.isConnected) ytRenderConnected(st); else ytRenderConnect();
+  function ytPaintConnSub(st){
     var sub=document.getElementById('ytConnSub');
     if(sub) sub.textContent=(st&&st.isConnected)?((st.youtubeEmail||'연결됨')+' · 관리'):'계정 연결 · 관리';
+  }
+  async function ytOpenManage(){
+    var known=ytStatusCached();
+    openYtSheet();
+    // Paint what we already know on the same frame as the tap; only fall back to
+    // the empty state when we genuinely have nothing.
+    if(known&&known.isConnected) ytRenderConnected(known); else if(known) ytRenderConnect(); else ytRenderConnected(null);
+    var st=await ytFetchStatus();
+    if(st&&st.isConnected) ytRenderConnected(st); else if(st) ytRenderConnect();
+    ytPaintConnSub(st||known);
   }
   // S5 — structured manage state: account row / divider / disconnect row (contract S5).
   function ytRenderConnected(status){
@@ -2375,6 +2477,7 @@
     var d=document.getElementById('ytsDisc'); if(d){ d.setAttribute('disabled','disabled'); d.textContent='해제하는 중…'; }
     try{
       var tok=await freshToken(); if(!tok){ show('login'); return; }
+      ytStatusClear();
       var r=await fetch(SUPA+'/functions/v1/youtube-auth?action=disconnect',{method:'POST',headers:{Authorization:'Bearer '+tok,apikey:SUPA_KEY}});
       if(!r.ok) throw new Error('disconnect '+r.status);
       toast('유튜브 연결을 해제했어요');
@@ -2395,7 +2498,7 @@
     show('home'); setHomeTab('curation');
     ytAutoRaised=true;   // the wizard sheet is taking over; suppress the gate auto-raise
     if(ytParam==='error'){ openYtSheet(); ytRenderConnect(); toast('연결에 실패했어요 — 다시 시도해주세요'); return true; }
-    openYtSheet(); ytRenderTuning();
+    openYtSheet(); ytRenderPickMode();
     return true;
   }
   // CREATE path only (from the sheet's proposal pick) — one-time build state in the tab
@@ -2433,6 +2536,75 @@
     if(add) add.onclick=submit;
     if(inp) inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); submit(); } });
   }
+  /**
+   * Weekly curation: how do you want to choose?
+   *
+   * Only the first of these needs the server, and it takes ~7s to score
+   * proposals. Sending everyone through that wait before showing them "type
+   * your own" or "by channel" charged the wait to people who never wanted it.
+   * The branch is local, so it paints immediately and the wait belongs to the
+   * one choice that earns it.
+   */
+  function ytRenderPickMode(){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    document.body.classList.remove('propsheet');
+    setSheetFoot('');
+    b.innerHTML='<div class="yts-h2">어떻게 받을까요?</div>'
+      +'<div class="pm-rows">'
+      +'<button class="mrow" id="pmSuggest"><span class="lic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.1 4.9 5.4.5-4.1 3.6 1.2 5.3L12 14.7 7.4 17.3l1.2-5.3L4.5 8.4l5.4-.5z"/></svg></span><span class="mtx"><span class="mtt">추천 받아보기</span><span class="msb">보시던 유튜브에서 골라 드려요</span></span></button>'
+      +'<button class="mrow" id="pmTopic"><span class="lic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg></span><span class="mtx"><span class="mtt">주제 직접 입력</span><span class="msb">받고 싶은 주제를 적어주세요</span></span></button>'
+      +'<button class="mrow" id="pmChannel"><span class="lic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor" stroke="none"/></svg></span><span class="mtx"><span class="mtt">채널로 받기</span><span class="msb">고른 채널이 그 주에 올린 것만</span></span></button>'
+      +'</div>';
+    // Only this option needs YouTube connected -- it reads the interest profile.
+    // Typing a topic and pasting a channel do not, which is why the check cannot
+    // sit in front of the whole branch.
+    document.getElementById('pmSuggest').onclick=function(){
+      ytPushBack(ytRenderPickMode);
+      ytRenderLoading();
+      ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderTuning(); } else { ytRenderConnect(); } })
+                     .catch(function(){ ytRenderConnect(); });
+    };
+    document.getElementById('pmTopic').onclick=function(){ ytPushBack(ytRenderPickMode); ytRenderTopicInput(); };
+    document.getElementById('pmChannel').onclick=function(){ ytPushBack(ytRenderPickMode); chRenderNew(); };
+    selHub=0; document.body.classList.add('hubsheet'); setTimeout(updateSelHub,0);
+  }
+
+  /** Type your own topic. No network, so it opens instantly. */
+  function ytRenderTopicInput(note){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    document.body.classList.remove('hubsheet','propsheet');
+    b.innerHTML='<div class="yts-h2">어떤 주제로 받을까요?</div>'
+      +'<div class="yts-sub">'+(note?curEsc(note):'그 주제의 새 영상을 매주 모아 드려요.')+'</div>';
+    setSheetFoot('<div class="yts-custom"><input type="text" id="ytCustomTopic" maxlength="40" placeholder="예: 파이썬 데이터 분석" autocomplete="off"><button class="yts-cadd" id="ytCustomAdd" type="button">추가</button></div>');
+    var ci=document.getElementById('ytCustomTopic'), ca=document.getElementById('ytCustomAdd');
+    function go(){ var t=(ci&&ci.value||'').trim(); if(t.length<2){ if(ci) ci.focus(); return; }
+      closeYtSheet(); setHomeTab('curation'); selectCuration(t); }
+    if(ca) ca.onclick=go;
+    if(ci){ ci.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); go(); } }); ci.focus(); }
+  }
+
+  /** Rename. Only the label changes -- what gets collected is untouched. */
+  function curRenameSheet(sub, note){
+    var b=document.getElementById('ytsBody'); if(!b) return;
+    document.body.classList.remove('hubsheet','propsheet','rasheet');
+    b.innerHTML='<div class="yts-h2">이름 바꾸기</div>'
+      +'<div class="yts-sub">'+(note?curEsc(note):'목록에 보일 이름이에요. 받아보는 내용은 그대로예요.')+'</div>';
+    setSheetFoot('<div class="yts-custom"><input type="text" id="curRenameIn" maxlength="60" autocomplete="off"><button class="yts-cadd" id="curRenameGo" type="button">저장</button></div>');
+    var inp=document.getElementById('curRenameIn'), go=document.getElementById('curRenameGo');
+    if(inp){ inp.value=curName(sub); inp.focus(); inp.select(); }
+    async function save(){
+      var v=(inp&&inp.value||'').trim();
+      if(!v){ curRenameSheet(sub,'이름을 비워둘 수 없어요'); return; }
+      try{
+        var r=await api('/curations/'+sub.id,{method:'PATCH',body:JSON.stringify({title:v})});
+        if(!r.ok){ curRenameSheet(sub,'바꾸지 못했어요'); return; }
+        closeYtSheet(); curCache=null; curRenderedSig=''; setHomeTab('curation'); renderCuration();
+      }catch(e){ curRenameSheet(sub,'바꾸지 못했어요'); }
+    }
+    if(go) go.onclick=save;
+    if(inp) inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); save(); } });
+  }
+
   /** Channel panel BEFORE any curation exists: the first channel creates one. */
   function chRenderNew(note){
     var b=document.getElementById('ytsBody'); if(!b) return;
@@ -4129,6 +4301,40 @@
     };
   })();
   var selMenu=0;
+  /** Settings list shows the connected account straight away, from cache. */
+  /** Whoever is signed in, straight from the session token. Supabase carries
+   *  `email` and `user_metadata` in the JWT payload, so there is no request to
+   *  make and nothing extra to store. */
+  function currentIdentity(){
+    var s=loadSession(); if(!s||!s.access_token) return null;
+    try{
+      var b=s.access_token.split('.')[1]; if(!b) return null;
+      var json=decodeURIComponent(atob(b.replace(/-/g,'+').replace(/_/g,'/'))
+        .split('').map(function(c){ return '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2); }).join(''));
+      var p=JSON.parse(json), m=p.user_metadata||{};
+      var email=p.email||m.email||'';
+      return { email: email,
+               name: m.full_name||m.name||(email?email.split('@')[0]:''),
+               avatar: m.avatar_url||m.picture||'' };
+    }catch(e){ return null; }
+  }
+  function renderAccountRow(){
+    var el=document.getElementById('acctRow'); if(!el) return;
+    var id=currentIdentity();
+    if(!id||!id.email){ el.hidden=true; el.innerHTML=''; return; }
+    var initial=(id.name||id.email).trim().charAt(0).toUpperCase();
+    el.hidden=false;
+    el.innerHTML=(id.avatar
+        ? '<img class="av" src="'+esc(id.avatar)+'" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'av\',textContent:'+JSON.stringify(initial)+'}))">'
+        : '<span class="av">'+esc(initial)+'</span>')
+      +'<span class="atx"><span class="anrow"><span class="an">'+esc(id.name)+'</span>'
+      +'<span class="abeta">beta</span></span>'
+      +'<span class="ae">'+esc(id.email)+'</span></span>';
+  }
+  function ytPaintMenuAccount(){
+    renderAccountRow();
+    ytPaintConnSub(ytStatusCached());
+  }
   function menuRows(){ return Array.prototype.filter.call(document.querySelectorAll('#scrMenu .mrow'), function(el){ return el.tagName==='BUTTON'; }); }
   function updateSelMenu(){
     var rows=menuRows();
@@ -4199,7 +4405,7 @@
     return ({menu:'home', player:'home'})[s]||null;
   }
   function menuBack(){
-    if(document.body.classList.contains('ytsheet')){ closeYtSheet(); return; } // sheet MENU = close (wheel parity)
+    if(document.body.classList.contains('ytsheet')){ ytGoBack(); return; } // sheet MENU = one step back, closes at the root
     if(document.body.classList.contains('curdeck')){ closeCurationDeck(); return; } // deck MENU = back to tab
     if(cur==='login') return;
     if(curNote&&curNote.guest&&cur==='player'){ setPlaying(false); document.body.classList.remove('clipmode'); show('login'); return; } // 게스트 = 가입 유도
@@ -4243,7 +4449,7 @@
   // to the content behind (R5: drag-following with a release threshold).
   (function(){
     var bk=document.getElementById('ytsBack'), bd=document.getElementById('ytsBd');
-    if(bk) bk.onclick=closeYtSheet; if(bd) bd.onclick=closeYtSheet;
+    if(bk) bk.onclick=ytGoBack; if(bd) bd.onclick=closeYtSheet;   // backdrop = dismiss, not step back
     var card=document.querySelector('#ytSheet .yts-card'); if(!card) return;
     var y0=null, dy=0;
     card.addEventListener('touchstart',function(e){
@@ -4931,9 +5137,9 @@
     // Paint the loading state BEFORE awaiting anything. The old order left the
     // hub list on screen for the whole freshToken + youtube-auth round trip, so
     // pressing the weekly-curation row looked dead for ~5s and then jumped.
-    document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet');
-      ytRenderLoading();
-      ytFetchStatus().then(function(st){ if(st&&st.isConnected){ ytRenderTuning(); } else { ytRenderConnect(); } }).catch(function(){ ytRenderConnect(); }); };
+    // Straight to the branch. The old order painted a spinner and waited on
+    // ytFetchStatus before showing three options, two of which never needed it.
+    document.getElementById('hubCur').onclick=function(){ document.body.classList.remove('hubsheet'); ytPushBack(openHub); ytRenderPickMode(); };
     selHub=0; document.body.classList.add('hubsheet'); openYtSheet(); setTimeout(updateSelHub,0);
   }
   (function(){ var pf=document.getElementById('plusFab'); if(pf) pf.onclick=openHub; })();
@@ -5049,7 +5255,7 @@
       if(!wiz) renderCuration();
       requestAnimationFrame(function(){ homePaintPos(homeIdx, true); }); // slider position once laid out
       window.addEventListener('resize', function(){ if(cur==='home') homePaintPos(homeIdx, true); }); // keep thumb px in sync
-      if(!wiz && ytParam==='connected') toast('유튜브 계정을 연결했어요');
+      if(!wiz && ytParam==='connected'){ ytStatusClear(); toast('유튜브 계정을 연결했어요'); }
       else if(!wiz && ytParam==='error') toast('유튜브 연결에 실패했어요. 다시 시도해주세요');
     }
     else { show('login'); }
