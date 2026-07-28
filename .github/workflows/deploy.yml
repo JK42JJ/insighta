@@ -216,6 +216,26 @@ jobs:
     env:
       SG_ID: sg-079aa1ca6855e587b
     steps:
+      # Skipping the image build is only safe if the image on the box is already
+      # current. If the previous deploy failed -- Docker Hub timed out on
+      # 718bd88f -- the backend change it carried is still unshipped, and this
+      # job would sail past it and report green, leaving the failure to be found
+      # by hand. Refuse instead, and say what to do about it.
+      - name: Refuse to skip the build over a failed deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PREV=$(gh run list --workflow deploy.yml --branch main --limit 20 \
+                   --json databaseId,conclusion,headSha \
+                   --jq "[.[] | select(.databaseId != ${{ github.run_id }}) | select(.conclusion != null and .conclusion != \"cancelled\" and .conclusion != \"skipped\")][0]")
+          CONC=$(echo "$PREV" | jq -r '.conclusion // "none"')
+          SHA=$(echo "$PREV"  | jq -r '.headSha  // "none"')
+          echo "previous completed deploy: $CONC ($SHA)"
+          if [ "$CONC" != "success" ] && [ "$CONC" != "none" ]; then
+            echo "::error::the last deploy ($SHA) ended in '$CONC', so the image on the box may be stale. Re-run that deploy first, then re-run this one."
+            exit 1
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -234,6 +254,22 @@ jobs:
             --protocol tcp --port 22 \
             --cidr "$RUNNER_IP/32" \
             --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=Purpose,Value=github-actions-deploy}]"
+
+      # A new ingress rule is not usable the instant the API returns. The full
+      # deploy job never noticed because several steps run between opening the
+      # rule and its first scp; this job goes straight there and timed out on
+      # its first live run. Wait for the port to actually answer rather than
+      # sleeping a guessed number of seconds.
+      - name: Wait for SSH to become reachable
+        run: |
+          for i in $(seq 1 30); do
+            if timeout 3 bash -c "cat < /dev/null > /dev/tcp/${{ secrets.EC2_HOST }}/22" 2>/dev/null; then
+              echo "port 22 reachable after ${i} attempt(s)"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::port 22 never became reachable from $RUNNER_IP after 60s"
+          exit 1
 
       - name: Copy dial files to EC2
         uses: appleboy/scp-action@v1
