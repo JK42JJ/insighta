@@ -31,6 +31,9 @@
     /* Dark stage. Written out identically in six places before this; the
        deck feed now references it and the rest can follow. */
     --stage:#0D0D10;
+    /* Skeleton on the dark stage: a step up from the background, and a sweep
+       one step brighter again. Two tokens so the pair stays in proportion. */
+    --cf-skel:#1B1A1F; --cf-skel-hi:#2A2830;
     /* S3: 물성 공통 토큰 — 전 표면 동일 계열 */
     --soft:cubic-bezier(.22,.9,.3,1); --spring:cubic-bezier(.34,1.4,.64,1); --snap:120ms;
     --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
@@ -1225,6 +1228,20 @@
      what is on screen, there is no native bar, and ours is the only thing
      saying where you left off. */
   .cf-card.cf-shown .cf-prog{display:none}
+  /* Skeleton while a week is being fetched. It holds the real card's geometry,
+     so the arriving content does not shift anything -- a skeleton that changes
+     the layout when it resolves is just a slower flash. The sweep is a single
+     translated gradient: one composited layer, no per-frame paint. */
+  .cf-skel .cf-media{background:var(--cf-skel); position:relative; overflow:hidden}
+  .cf-skel .cf-media::before{content:''; position:absolute; inset:0;
+    background:linear-gradient(100deg, transparent 20%, var(--cf-skel-hi) 50%, transparent 80%);
+    transform:translateX(-100%); animation:cfSweep 1.25s ease-in-out infinite}
+  .cf-skel .cf-skline{height:13px; border-radius:5px; background:var(--cf-skel); margin:11px 0 0}
+  .cf-skel .cf-skline.w1{width:78%}
+  .cf-skel .cf-skline.w2{width:44%; height:11px; margin-top:9px}
+  @keyframes cfSweep{to{transform:translateX(100%)}}
+  .cf-empty{padding:38px 18px; text-align:center; font-size:13px; font-weight:650; color:var(--paper-sub)}
+  @media (prefers-reduced-motion:reduce){ .cf-skel .cf-media::before{animation:none} }
   .cf-durchip{position:absolute; right:8px; bottom:8px; z-index:2; background:rgba(10,9,8,.8); color:#EDE7DC;
     font-size:11px; font-weight:700; border-radius:4px; padding:1px 5px; letter-spacing:.02em}
   /* unavailable video (embed disabled / deleted): card-internal label + dim, never a toast */
@@ -1723,7 +1740,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-42';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-43';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2290,22 +2307,57 @@
     if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest', inline:'nearest'});
   }
 
+  /* Skeleton for the week being fetched. Same card geometry as the real thing,
+     so nothing moves when the content lands -- the point of a skeleton is that
+     the layout is already correct and only the pixels are missing. Count is
+     taken from the week being left, which is the best available guess and is
+     never wrong by much. */
+  function cfSkeleton(n){
+    var html='';
+    for(var i=0;i<Math.max(3,Math.min(n||6,8));i++){
+      html+='<div class="cf-card cf-skel"><div class="cf-media"></div>'
+          +'<div class="cf-meta"><div class="cf-skline w1"></div><div class="cf-skline w2"></div></div></div>';
+    }
+    return html;
+  }
+
+  /* Switching weeks used to run cdTeardown(), which removes the `curdeck` class
+     -- for a frame the deck was gone and the home screen showed through, then
+     the deck came back. That is the flash. The deck now stays mounted and only
+     the feed's contents are replaced: header, chips and background never move,
+     and the chip you tapped is marked active immediately rather than after the
+     round trip. */
   async function cdLoadWeek(week){
     if(!cdCtx||!cdCtx.subId||week===cdCtx.week) return;
-    var bar=document.getElementById('cdWeeks'); if(bar) bar.classList.add('busy');
+    var bar=document.getElementById('cdWeeks');
+    var feed=document.getElementById('cdFeed');
+    var prevCount=cdItems.length;
+
+    // Optimistic: the chip responds to the tap, not to the network.
+    if(bar) Array.prototype.forEach.call(bar.querySelectorAll('.cd-wk'),function(b){
+      b.classList.toggle('on', b.getAttribute('data-week')===week); });
+
+    // Players go, the deck stays. cfDestroyFar's teardown is per-card; this is
+    // the whole feed, so it is done here rather than borrowed from it.
+    if(cfObs){ cfObs.disconnect(); cfObs=null; }
+    Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} });
+    cfPlayers={}; cfPlayIdx=-1; cfRatios={}; cfManualPause=false;
+    if(feed){ feed.scrollTop=0; feed.innerHTML=cfSkeleton(prevCount); }
+
     try{
       var r=await api('/curations/'+cdCtx.subId+'/items?week='+encodeURIComponent(week));
       var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
-      if(!items.length){ toast('그 주에는 영상이 없어요'); return; }
-      // Re-enter the deck with the other week's items. Going through
-      // openCurationDeck rather than swapping the array keeps players, the
-      // observer and the index reset on one path.
-      var ctx={subId:cdCtx.subId, week:(j&&j.data&&j.data.week_of)||week, weeks:cdCtx.weeks};
-      var topic=cdTopic;
-      cdTeardown();                       // players and cards, but do NOT leave the deck
-      openCurationDeck(topic, items, ctx);
-    }catch(e){ toast('불러오지 못했어요 — 연결 확인 후 다시 시도해주세요'); }
-    finally{ if(bar) bar.classList.remove('busy'); }
+      if(!items.length){
+        if(feed) feed.innerHTML='<div class="cf-empty">그 주에는 영상이 없어요</div>';
+        cdItems=[]; cdCtx.week=week; return;
+      }
+      cdItems=items; cdIdx=0; cdEndRolled=false;
+      cdCtx.week=(j&&j.data&&j.data.week_of)||week;
+      cfRender(); cfSetupObserver();
+      setTimeout(function(){ if(cfIsFeed()) cfCommitPlay(0,false); },160);
+    }catch(e){
+      if(feed) feed.innerHTML='<div class="cf-empty">불러오지 못했어요 — 다시 시도해주세요</div>';
+    }
   }
   // Not-connected gate (behind-content, never a dead end): slim prompt in the tab body +
   // auto-raise the connect sheet once per session. Tapping the button re-opens the sheet.
