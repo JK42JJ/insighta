@@ -1834,7 +1834,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-54';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-55';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3307,7 +3307,9 @@
       playerVars:{playsinline:1,rel:0,modestbranding:1,controls:1,fs:1,start:startAt},
       events:{onStateChange:(function(x){return function(ev){cfPlayerState(x,ev.data);};})(i),
               onError:(function(x){return function(ev){cfPlayerError(x,ev.data);};})(i)}});
-      card.classList.add('cf-live'); return cfPlayers[i];
+      card.classList.add('cf-live');
+      cfBornPortrait[i]=matchMedia('(orientation:portrait)').matches;
+      return cfPlayers[i];
     }catch(e){ return null; }
   }
   function cfDestroyFar(i){ // keep only dominant +/- 2; recycle the rest (memory + one-voice)
@@ -3330,7 +3332,7 @@
 
      Never touches a player that is currently playing, and never re-primes -- a
      second prime would pause a running video. */
-  var cfPrimed={};
+  var cfPrimed={}, cfBornPortrait={};
   /* Tell every live player its box changed. Called on rotation, and after a
      beat as well: iOS reports the new viewport before it has finished settling,
      so a single immediate call can measure the old size. */
@@ -3347,6 +3349,41 @@
     apply();
     setTimeout(apply, 260);
   }
+
+
+  /* ?dbg=1 -- an on-screen readout of the geometry that decides where the video
+     sits. Added because two diagnoses were made from screenshots whose pixel
+     scale was unknown, and both were wrong. Off unless the URL asks. */
+  (function(){
+    if(!/[?&]dbg=1/.test(location.search)) return;
+    var box=document.createElement('div');
+    box.style.cssText='position:fixed;left:0;bottom:0;z-index:99999;max-width:100%;'
+      +'font:10px/1.45 ui-monospace,Menlo,monospace;white-space:pre;padding:6px 8px;'
+      +'background:rgba(0,0,0,.82);color:#7CFC9B;pointer-events:none';
+    document.body.appendChild(box);
+    var probe=document.createElement('div');
+    probe.style.cssText='position:fixed;left:env(safe-area-inset-left,0px);'
+      +'top:env(safe-area-inset-top,0px);right:env(safe-area-inset-right,0px);'
+      +'bottom:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden';
+    document.body.appendChild(probe);
+    var r=function(el){ if(!el) return 'absent';
+      var b=el.getBoundingClientRect();
+      return Math.round(b.x)+','+Math.round(b.y)+' '+Math.round(b.width)+'x'+Math.round(b.height); };
+    setInterval(function(){
+      var pr=probe.getBoundingClientRect();
+      var card=document.querySelector('.cf-playing');
+      var i=(typeof cfPlayIdx!=='undefined'&&cfPlayIdx>=0)?cfPlayIdx:'-';
+      box.textContent=
+        'vw '+innerWidth+'x'+innerHeight+'  dpr '+devicePixelRatio
+        +'  '+(matchMedia('(orientation:portrait)').matches?'PORTRAIT':'LANDSCAPE')+'\n'
+        +'safe L'+Math.round(pr.left)+' T'+Math.round(pr.top)
+        +' R'+Math.round(innerWidth-pr.right)+' B'+Math.round(innerHeight-pr.bottom)+'\n'
+        +'card  '+r(card)+'\n'
+        +'media '+r(card&&card.querySelector('.cf-media'))+'\n'
+        +'ifr   '+r(card&&card.querySelector('.cf-slot iframe'))+'\n'
+        +'play idx '+i+'  bornPortrait '+(cfBornPortrait[i]===undefined?'-':cfBornPortrait[i]);
+    },400);
+  })();
 
   function cfPrimeOne(i){
     if(cfPrimed[i]) return;
