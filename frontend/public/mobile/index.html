@@ -1676,7 +1676,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-28-40';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-41';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2835,7 +2835,12 @@
     try{ if(!localStorage.getItem('insighta-cd-hint')) document.body.classList.add('cdhint'); }catch(e){}
     // release the note/beat player pair — never two dual-player pairs alive (memory)
     try{ ytP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
-    cdEnsurePlayers();               // inside the row-tap gesture: prime allowed
+    // Portrait runs on in-card players (one YT iframe per card, .cf-slot). The
+    // legacy dual pair cdYtA/cdYtB belongs to the LANDSCAPE stage, and creating
+    // it here meant portrait carried two whole playback systems at once: two
+    // idle iframes plus their 500ms poll, none of which portrait ever reads.
+    // Landscape still gets them, and rotating into landscape creates them then.
+    if(!cfIsFeed()) cdEnsurePlayers();   // inside the row-tap gesture: prime allowed
     cdRender();
     // re-measure once the entry crossfade settles — an entry-time measure can
     // read pre-layout strip height and leave the track clipped (P1-3 class)
@@ -3295,6 +3300,11 @@
   // now-segment fill of the progress bar (note chapters grammar).
   function cdStartPoll(){
     cdStopPoll();
+    // This polls cdP[cdAct] -- the landscape pair. In portrait that is not the
+    // player anything is playing through, so the loop woke twice a second to
+    // read a stopped player and write the chapter fill with a value that never
+    // changed. Nothing in portrait consumes it.
+    if(cfIsFeed()) return;
     cdPollT=setInterval(function(){
       try{
         var p=cdP[cdAct]; if(!p||!p.getCurrentTime) return;
@@ -4689,6 +4699,12 @@
     function cdRemeasure(){
       if(!document.body.classList.contains('curdeck')) return;
       if(cdFollow.on||cdAnimBusy){ clearTimeout(cdRszT); cdRszT=setTimeout(cdRemeasure,180); return; }
+      // Rotation is where the two playback systems hand over. Portrait no longer
+      // builds the landscape pair on entry, so landscape has to build it when it
+      // arrives; and rotating back has to stop the poll it started, or portrait
+      // inherits the idle loop it was just relieved of.
+      if(cfIsFeed()) cdStopPoll();
+      else cdEnsurePlayers();
       cdRender();
     }
     ['resize','orientationchange'].forEach(function(ev){
