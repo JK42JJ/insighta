@@ -1113,10 +1113,14 @@
      fades it out (500ms); pointer-events only while visible. */
   :root{--cd-amb-blur: 46px;   /* deck ambient blur — lower if fullscreen blur drops frames on low-end iOS */
   }
-  :root{--cd-glass: blur(18px) saturate(1.6);   /* tunable if warm-swap playback drops frames */
-    /* quiet state while a video PLAYS — lower saturation, more transparency
-       (device directive: the wheel must not compete with the picture) */
-    --cd-glass-quiet: blur(18px) saturate(1.1);
+  /* No glass. The blur turned whatever the wheel sat over into a smeared patch
+     for as long as it was up, and a control that is gone in three seconds does
+     not need to obscure the picture to be legible -- a translucent fill reads
+     fine over video and lets the frame keep showing through. Kept as `none`
+     rather than deleted so the two states stay named and one value brings it
+     back. */
+  :root{--cd-glass: none;
+    --cd-glass-quiet: none;
     --cd-wheel-fill: rgba(245,242,236,.34);
     --cd-wheel-fill-quiet: rgba(245,242,236,.20);
     --cd-wheel-awake:.95;
@@ -1334,14 +1338,32 @@
      hidden, same in-card player (no reload). Rotate back to portrait returns to the feed. */
   @media (orientation:landscape){
     body.curdeck #curDeck{padding:0}
-    body.curdeck .cd-top{display:flex !important; position:fixed; top:0; left:0; right:0; z-index:10;
-      padding:10px 14px; background:linear-gradient(180deg,rgba(0,0,0,.6),transparent)}
-    body.curdeck .cd-weeks{display:none !important}
+    /* No chrome of ours over the video. The header sat on top of YouTube's own
+       title, CC and settings controls, and its background band pushed the
+       picture off to one side -- you had to watch it at an angle. Landscape is
+       full-bleed playback; the way out is to rotate back, which is the gesture
+       every video app already teaches. Reported twice before it came out. */
+    body.curdeck .cd-top,body.curdeck .cd-weeks{display:none !important}
+    /* The wheel already fades out after 3s and is already summoned by a
+       pointerdown on the wheel zone. The only thing missing was that the zone
+       is pointer-events:none, so that listener never received anything -- in
+       portrait the deck itself can be touched to summon, but in landscape the
+       deck IS a full-bleed iframe and touches on an iframe never reach this
+       document. Opening the zone is the whole fix; nothing else about the wheel
+       needed changing, and the version that kept it permanently lit was me
+       working around this one line. */
+    body.curdeck .wheelzone{pointer-events:auto}
     body.curdeck #cdFeed{display:block !important; position:absolute; inset:0; overflow:hidden}
     body.curdeck .cf-card:not(.cf-playing){display:none}
     body.curdeck .cf-playing{position:fixed; inset:0; z-index:4; padding:0; background:#000}
     body.curdeck .cf-playing .cf-media{width:100%; height:100%; aspect-ratio:auto}
-    body.curdeck .cf-playing .cf-meta,body.curdeck .cf-mutechip{display:none}
+    body.curdeck .cf-playing .cf-meta{display:none}
+    /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
+       left landscape playing silently with nothing to press. Moved clear of
+       YouTube's bottom bar and its own progress scrubber. */
+    body.curdeck.cffeedmuted .cf-mutechip{display:inline-flex; bottom:auto; top:calc(var(--sat) + 12px);
+      left:auto; right:14px; transform:none; z-index:11}
+    body.curdeck.cffeedmuted .cf-mutechip:active{transform:scale(.96)}
   }
 
   /* 배속 캡슐 — 팟캐스트 문법: 재생 화면에서 탭 = 순환 */
@@ -1798,7 +1820,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-48';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-50';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3001,7 +3023,6 @@
     cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
     document.getElementById('cdTitle').textContent=cdTopic;
     cdRenderWeeks();
-    setTimeout(cdWheelSyncOrientation, 30);   // entering already sideways
     document.body.classList.add('curdeck');
     setTimeout(function(){ document.body.classList.add('cdin'); },20); // D0 crossfade (timeout: rAF throttles in bg tabs)
     // D6 — one-time coachmark until the first wheel/center interaction
@@ -3396,20 +3417,8 @@
     var was=document.body.classList.contains('cdwheel');
     document.body.classList.add('cdwheel');
     clearTimeout(cdWheelT);
-    // Landscape has no other way to change video: the screen is a full-bleed
-    // YouTube iframe, and touches on an iframe never reach this document, so the
-    // summon that portrait relies on can never fire. The wheel stays up.
-    if(!matchMedia('(orientation:portrait)').matches) return was;
     cdWheelT=setTimeout(function(){ document.body.classList.remove('cdwheel'); },3000);
     return was;
-  }
-  /* Show it on arrival in landscape, and take it away on the way back to
-     portrait, where the feed is the navigation and the wheel is hidden. */
-  function cdWheelSyncOrientation(){
-    if(!document.body.classList.contains('curdeck')) return;
-    if(matchMedia('(orientation:portrait)').matches) return;
-    clearTimeout(cdWheelT);
-    document.body.classList.add('cdwheel');
   }
   function cdEnsurePlayers(){
     if(!window.YT||!YT.Player) return;
@@ -3546,10 +3555,13 @@
     if(ok) cdPrimed=true;                            // only latch once we actually primed an empty slot in a gesture
   }
   function cdToggle(){
-    if(!document.body.classList.contains('cdplaying')){ cdPlay(); return; }
+    // Play/pause the player that is actually playing, not the legacy pair.
+    var i=(cfPlayIdx>=0?cfPlayIdx:cdIdx), p=cfPlayers[i];
+    if(!p||!p.getPlayerState){ cfCommitPlay(i, true); return; }
     try{
-      var p=cdP[cdAct]; var st=p&&p.getPlayerState?p.getPlayerState():-1;
-      if(st===1) p.pauseVideo(); else p.playVideo();
+      var st=p.getPlayerState();
+      if(st===1){ cfManualPause=true; p.pauseVideo(); }
+      else { cfManualPause=false; if(p.unMute) p.unMute(); cfSoundOn=true; cfShowMuteHint(); p.playVideo(); }
     }catch(e){}
   }
   // ~2s before the end, resume the warmed idle slot muted (zero-gap) + drive the
@@ -3773,7 +3785,18 @@
   function cdNav(d){
     cdHintDismiss();
     if(document.body.classList.contains('cdfin')){ document.body.classList.remove('cdfin'); }
-    cdStep(d);
+    // The video that is on screen is an in-card player. cdStep moves the legacy
+    // track, which is display:none in both orientations since the in-card
+    // rewrite -- so the wheel moved the progress bar and left the picture where
+    // it was. Navigation goes where the playback actually is.
+    var cur=(cfPlayIdx>=0?cfPlayIdx:cdIdx), ni=cur+d;
+    if(ni<0||ni>=cdItems.length) return;
+    if(cfIsFeed()){
+      // Portrait scrolls; the settle then commits and plays, which keeps one path.
+      var c=cfCards()[ni]; if(c) c.querySelector('.cf-media').scrollIntoView({behavior:reduce?'auto':'smooth', block:'start'});
+      return;
+    }
+    cfCommitPlay(ni, true);   // landscape: the wheel IS the gesture, so sound is allowed
   }
   // Video tab — select a mandala → continuous watch of its videos, reusing the existing beat player.
   async function openMandalaVideos(m){
@@ -5023,7 +5046,6 @@
       // inherits the idle loop it was just relieved of.
       if(cfIsFeed()) cdStopPoll();
       else cdEnsurePlayers();
-      cdWheelSyncOrientation();
       cdRender();
     }
     ['resize','orientationchange'].forEach(function(ev){
