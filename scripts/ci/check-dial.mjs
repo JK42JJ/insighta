@@ -63,3 +63,26 @@ if (!stamp) {
 
 if (process.exitCode) process.exit(process.exitCode);
 console.log(`dial OK — ${parsed} inline script(s) parse, build ${stamp}`);
+
+// Every custom property a scene references must exist in EVERY colourway.
+// The scenes shipped once with their palette defined inside .th-cream only, so
+// on .th-sage and .th-mist every fill resolved to nothing -- which renders BLACK,
+// not "unstyled". It reached a real handset. This is that check.
+{
+  const scenes = [...html.matchAll(/var\((--il-[a-z0-9-]+)\)/g)].map(m => m[1]);
+  const used = [...new Set(scenes)];
+  if (used.length) {
+    const ways = [...html.matchAll(/\n\s*\.(th-[a-z]+)\s*\{([\s\S]*?)\n\s*\}/g)]
+      .map(m => ({ name: m[1], body: m[2] }));
+    // Anything declared on :root is shared by every colourway.
+    const rootBody = [...html.matchAll(/:root\s*\{([\s\S]*?)\}/g)].map(m => m[1]).join('\n');
+    const missing = [];
+    for (const t of used) {
+      if (rootBody.includes(t + ':')) continue;
+      for (const w of ways) if (!w.body.includes(t + ':')) missing.push(`${t} missing in .${w.name}`);
+    }
+    if (missing.length) {
+      for (const m of missing.slice(0, 12)) fail(`scene token: ${m}`);
+    }
+  }
+}
