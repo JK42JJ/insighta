@@ -1823,7 +1823,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-51';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-52';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3077,6 +3077,7 @@
     cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
     document.getElementById('cdTitle').textContent=cdTopic;
     cdRenderWeeks();
+    if(!cfIsFeed()) cdTimeBarStart();   // entered already sideways
     document.body.classList.add('curdeck');
     setTimeout(function(){ document.body.classList.add('cdin'); },20); // D0 crossfade (timeout: rAF throttles in bg tabs)
     // D6 — one-time coachmark until the first wheel/center interaction
@@ -3127,6 +3128,7 @@
     clearTimeout(cdWheelT);
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
+    cdTimeBarStop();
     var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
   }
   function closeCurationDeck(){
@@ -3458,11 +3460,29 @@
   function cdJbarSync(frac){
     var n=cdItems.length; if(!n) return;
     var pos=Math.max(0, Math.min(1, (cdIdx + Math.max(0,Math.min(1,frac||0))) / n));
-    var pct=(pos*100).toFixed(2)+'%';
+    cdJbarPaint(pos);
+  }
+  function cdJbarPaint(pos){
+    var pct=(Math.max(0,Math.min(1,pos))*100).toFixed(2)+'%';
     var f=document.getElementById('cdJbFill'), m=document.getElementById('cdJbMark');
     if(f) f.style.width=pct;
     if(m) m.style.left=pct;
   }
+  /* In landscape the bar is under a video, and what a bar under a video means is
+     how far through THIS video you are -- not which card of the week is showing,
+     which is what it drew before and which the N/M counter already says. Driven
+     from the in-card player, since that is the one playing. */
+  var cdTimeT=null;
+  function cdTimeBarStart(){
+    cdTimeBarStop();
+    cdTimeT=setInterval(function(){
+      if(cfIsFeed()) return;                       // portrait hides the bar entirely
+      var p=cfPlayers[cfPlayIdx>=0?cfPlayIdx:cdIdx];
+      if(!p||!p.getCurrentTime||!p.getDuration) return;
+      try{ var d=p.getDuration()||0; if(d>0) cdJbarPaint(p.getCurrentTime()/d); }catch(e){}
+    },500);
+  }
+  function cdTimeBarStop(){ if(cdTimeT){ clearInterval(cdTimeT); cdTimeT=null; } }
   /* Wheel summon (glass): ANY deck touch fades the wheel in; 3s idle fades out.
      Supervisor boundary: when the wheel is NOT visible, the summoning tap is
      CONSUMED — it must not fall through as a card tap / play toggle. */
@@ -3838,6 +3858,10 @@
   }
   function cdNav(d){
     cdHintDismiss();
+    // Keep it awake while it is being used. The 3s countdown started at the
+    // summon, so a slow turn could have the wheel disappear -- and with it
+    // pointer-events -- in the middle of the gesture.
+    if(typeof cdWheelShow==='function') cdWheelShow();
     if(document.body.classList.contains('cdfin')){ document.body.classList.remove('cdfin'); }
     // The video that is on screen is an in-card player. cdStep moves the legacy
     // track, which is display:none in both orientations since the in-card
@@ -5098,8 +5122,16 @@
       // builds the landscape pair on entry, so landscape has to build it when it
       // arrives; and rotating back has to stop the poll it started, or portrait
       // inherits the idle loop it was just relieved of.
-      if(cfIsFeed()) cdStopPoll();
-      else cdEnsurePlayers();
+      if(cfIsFeed()){
+        cdStopPoll(); cdTimeBarStop();
+        // Coming back to portrait, the feed has to be looking at the video that
+        // has been playing. Without this the audio carried on while the screen
+        // showed some other part of the week.
+        var i=(cfPlayIdx>=0?cfPlayIdx:cdIdx), c=cfCards()[i];
+        if(c) c.querySelector('.cf-media').scrollIntoView({behavior:'auto', block:'start'});
+      } else {
+        cdEnsurePlayers(); cdTimeBarStart();
+      }
       cdRender();
     }
     ['resize','orientationchange'].forEach(function(ev){
