@@ -1740,7 +1740,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-43';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-44';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2341,7 +2341,7 @@
     // the whole feed, so it is done here rather than borrowed from it.
     if(cfObs){ cfObs.disconnect(); cfObs=null; }
     Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} });
-    cfPlayers={}; cfPlayIdx=-1; cfRatios={}; cfManualPause=false;
+    cfPlayers={}; cfPrimed={}; cfPlayIdx=-1; cfRatios={}; cfManualPause=false;
     if(feed){ feed.scrollTop=0; feed.innerHTML=cfSkeleton(prevCount); }
 
     try{
@@ -2965,7 +2965,7 @@
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null]; cdLoadedKey=[null,null];
     if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfMuteFallback=false; cfSoundOn=false; cfRatios={}; clearTimeout(cfScrollT); clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
-    Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} }); cfPlayers={}; // tear down the in-card players
+    Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} }); cfPlayers={}; cfPrimed={}; // tear down the in-card players
     var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; _fd.innerHTML=''; } // drop cards+players so re-open builds fresh
     clearTimeout(cdWheelT);
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
@@ -3147,6 +3147,34 @@
   }
   function cfSaveCard(i){ try{ var p=cfPlayers[i], it=cdItems[i]; if(!p||!it||!p.getCurrentTime) return;
     var dur=p.getDuration()||0,pos=p.getCurrentTime()||0; if(dur>0){ cfSaveWatch(it.video_id,pos,dur); cfPaintProg(i); } }catch(e){} }
+  /* ---- gesture unlock for the cards you have not reached yet -------------
+     Every card owns its own YouTube iframe, and an iframe that has never been
+     touched cannot be started programmatically on iOS. The first card plays
+     because it is created inside the row-tap gesture; every card after it is
+     created by cfSettle, which runs on a timer with no gesture in scope, so the
+     play is refused and the user has to tap. That is the reported bug.
+
+     Scrolling IS a gesture, so the scroll that reveals the next card is used to
+     unlock it: mute, play, pause, in the touch's own call stack. Cheap, silent,
+     and it happens for cards the user is already moving toward.
+
+     Never touches a player that is currently playing, and never re-primes -- a
+     second prime would pause a running video. */
+  var cfPrimed={};
+  function cfPrimeOne(i){
+    if(cfPrimed[i]) return;
+    var p=cfPlayers[i]; if(!p||!p.playVideo||!p.mute) return;
+    if(i===cfPlayIdx) return;                     // the one playing must not be paused
+    try{ p.mute(); p.playVideo(); p.pauseVideo(); cfPrimed[i]=true; }catch(e){}
+  }
+  /* Prime the cards on either side of the one in view. Called from the entry
+     tap and from touchend on the feed -- both are real gestures. */
+  function cfPrimeSoon(){
+    if(!cfIsFeed()) return;
+    var c=cfPlayIdx>=0?cfPlayIdx:0;
+    [c+1, c+2, c-1].forEach(function(k){ if(k>=0 && k<cdItems.length) cfPrimeOne(k); });
+  }
+
   /* A5 visual state. Three separate facts that used to be one class:
        cf-playing  this is the active card (set at commit; landscape keys off it)
        cf-shown    the iframe has painted and may be revealed  (PLAYING only)
@@ -3214,6 +3242,7 @@
     if(!gesture && !cfSoundOn){ clearTimeout(cfSoundWatch); cfSoundWatch=setTimeout(function(){ // sound never enabled + blocked -> muted fallback + chip (once)
       try{ var pp=cfPlayers[i]; if(pp&&pp.getPlayerState&&pp.getPlayerState()!==1){ cfMuteFallback=true; pp.mute(); pp.playVideo(); cfShowMuteHint(); } }catch(e){} },1500); }
     if(i+1<cdItems.length) cfEnsurePlayer(i+1);                          // pre-create the next card's player (instant on scroll)
+    cfPrimeSoon();                                                       // unlock it while a touch is still in hand
     cfDestroyFar(i);
   }
   // A4: paint one card's progress line in place (no innerHTML rebuild = no scroll/observer reset).
@@ -4779,6 +4808,12 @@
        header on every stray pixel. */
     (function(){
       var feed=g('cdFeed'); if(!feed) return;
+      // Unlock the neighbouring players inside the touch that just scrolled.
+      // This is the whole fix for "only the first video autoplays": the players
+      // for later cards are built on a timer, where iOS refuses to start them.
+      ['touchend','touchcancel'].forEach(function(ev){
+        feed.addEventListener(ev, function(){ cfPrimeSoon(); }, {passive:true});
+      });
       var last=0, HIDE_AFTER=64, DELTA=8;
       feed.addEventListener('scroll',function(){
         var y=feed.scrollTop, d=y-last;
