@@ -1359,7 +1359,18 @@
     body.curdeck #cdFeed{display:block !important; position:absolute; inset:0; overflow:hidden}
     body.curdeck .cf-card:not(.cf-playing){display:none}
     body.curdeck .cf-playing{position:fixed; inset:0; z-index:4; padding:0; background:#000}
-    body.curdeck .cf-playing .cf-media{width:100%; height:100%; aspect-ratio:auto}
+    /* The poster fills the card in portrait, where the box IS 16:9 and cover
+       crops nothing. Landscape stretches that box to the whole screen -- 2.16:1
+       on this handset -- so cover started cutting the top and bottom off the
+       thumbnail, while the video that replaces it is letterboxed by YouTube to
+       its own ratio. Two different framings of the same frame, one after the
+       other.
+
+       contain here makes the poster sit exactly where the video will, against
+       the same black. Nothing jumps when one becomes the other, which is the
+       whole point of showing the poster first. */
+    body.curdeck .cf-playing .cf-media{width:100%; height:100%; aspect-ratio:auto;
+      background-size:contain; background-color:var(--stage)}
     body.curdeck .cf-playing .cf-meta{display:none}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
@@ -1823,7 +1834,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-52';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-53';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
