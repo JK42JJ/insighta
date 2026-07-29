@@ -1145,10 +1145,16 @@
   /* mini wheel size token — vmin keeps it IDENTICAL in portrait and landscape
      (James: same size in landscape; shared by deck / note-reading / video-stage) */
   :root{--miniwheel: min(40vmin, 168px)}
+  /* Wheel: the note view's grammar, copied rather than re-invented. The version
+     I wrote gated pointer-events on a .cdwheel class, so the wheel could not be
+     touched until something else had already shown it -- which is why turning it
+     did nothing and why only its own patch of screen responded. In the note view
+     it is ALWAYS touchable and merely invisible, and any touch on the band wakes
+     it for three seconds. */
   body.curdeck .wheelzone{position:fixed; left:0; right:0; top:auto; bottom:36%;
     z-index:76; padding:0 24px 0 0; width:100%; pointer-events:none; display:grid; place-items:center end}
-  body.curdeck .wheel{width:var(--miniwheel); transform:translateX(-40%) scale(.98); opacity:0; pointer-events:none;
-    transition:opacity .5s ease, transform .5s ease;
+  body.curdeck .wheel{width:var(--miniwheel); transform:translateX(-40%); opacity:0; pointer-events:auto;
+    transition:opacity .35s var(--soft);
     background:var(--cd-wheel-fill);
     -webkit-backdrop-filter:var(--cd-glass); backdrop-filter:var(--cd-glass);
     border:1px solid rgba(255,255,255,.38);
@@ -1157,10 +1163,7 @@
     -webkit-backdrop-filter:var(--cd-glass-quiet); backdrop-filter:var(--cd-glass-quiet);
     border-color:rgba(255,255,255,.24);
     box-shadow:0 8px 26px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.28)}
-  body.curdeck.cdsummon .wheel{pointer-events:none !important} /* A2: summon touch reveals only; operable next touch (overrides cdwheel below) */
-  body.curdeck.cdwheel .wheel{opacity:var(--cd-wheel-awake); transform:translateX(-40%) scale(1); pointer-events:auto;
-    transition:opacity .22s ease, transform .22s ease}
-  body.curdeck.cdplaying.cdwheel .wheel{opacity:var(--cd-wheel-awake-quiet)}
+  body.curdeck .wheel.touching,body.curdeck .wheel.awake,body.curdeck.wheelawake .wheel{opacity:.70}
   @media (prefers-reduced-motion:reduce){ body.curdeck .wheel,body.curdeck.cdwheel .wheel{transition:none} }
   /* journey bar (reusable unit — the video tab adopts this pattern later, R12):
      continuous slim bar at the very bottom = position within the lineup; thickens
@@ -1207,14 +1210,6 @@
     body.curdeck #curDeck{padding:calc(var(--sat) + 6px) 0 0}          /* feed edge-to-edge (A1) */
     body.curdeck .cd-top{padding:2px 14px 9px; position:relative; z-index:8}  /* header/back above feed + stage */
     body.curdeck .cd-weeks{padding:0 14px 9px; position:relative; z-index:8}  /* chips share the header band */
-    /* Scrolled into the feed: the header row gives up its height and the chips
-       stay. Two rows of chrome above a video feed is a lot of screen to spend
-       on navigation you are not using while watching -- YouTube collapses the
-       same way. Swiping back down restores it. */
-    body.curdeck.cdhdroff .cd-top{
-      height:0; padding:0 14px; opacity:0; pointer-events:none;
-      overflow:hidden; transition:height .18s ease, opacity .14s ease, padding .18s ease}
-    body.curdeck .cd-top{transition:height .18s ease, opacity .14s ease, padding .18s ease}
     body.curdeck #cdTrack,body.curdeck .cd-hint,body.curdeck .jbar{display:none !important}
     body.curdeck .wheelzone{display:none !important}                   /* W: wheel hidden in portrait deck only */
     body.curdeck .cd-strip{position:absolute; left:0; right:0; top:0; bottom:0; flex:none; overflow:visible; z-index:6; pointer-events:none}
@@ -1375,8 +1370,17 @@
        contain here makes the poster sit exactly where the video will, against
        the same black. Nothing jumps when one becomes the other, which is the
        whole point of showing the poster first. */
-    body.curdeck .cf-playing .cf-media{width:100%; height:100%; aspect-ratio:auto;
-      background-size:contain; background-color:var(--stage)}
+    /* Give the player a box that is ALREADY the right shape instead of a
+       full-bleed one it has to letterbox inside. Stretching the iframe to the
+       whole screen left YouTube to centre the picture itself, and it did not do
+       so evenly -- measured on a real frame: 48px of black above, 27px below,
+       and the picture sitting off to one side.
+       A 16:9 box, centred by auto margins, removes the decision: there is no
+       letterboxing left to get wrong, because the box and the video are the
+       same shape. min() keeps it inside whichever dimension runs out first. */
+    body.curdeck .cf-playing .cf-media{position:absolute; inset:0; margin:auto;
+      width:min(100%, calc(100vh * 16 / 9)); height:min(100%, calc(100vw * 9 / 16));
+      aspect-ratio:auto; background-size:contain; background-color:var(--stage)}
     body.curdeck .cf-playing .cf-meta{display:none}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
@@ -1840,7 +1844,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-56';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-59';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2264,9 +2268,109 @@
       +'<circle cx="100" cy="66" r="4.5" fill="var(--paper-ink)"/>'
       +'<circle cx="100" cy="30" r="3" fill="var(--il-ochre)"/>'
   };
-  function ytScene(domain){
+
+  /* Seventeen more scenes, keyed on what the TOPIC says rather than which
+     domain it fell into. "ai 마케팅" and "ai 워크플로우" are both ai_ml, so with
+     only seven scenes they drew the same picture -- the card stopped telling
+     you anything the label had not already said. */
+  var YTS_SCENE_T={
+    dividend:'<circle cx="66" cy="70" r="26" fill="var(--il-ochre)"/><circle cx="96" cy="70" r="26" fill="var(--acc)"/>'
+      +'<circle cx="126" cy="70" r="26" fill="var(--il-sage)"/>'
+      +'<g class="ys-orb"><circle cx="150" cy="38" r="9" fill="var(--il-ochre)"/></g>'
+      +'<path d="M40 104 h120" stroke="var(--il-line-2)" stroke-width="3" stroke-linecap="round"/>',
+    realestate:'<path d="M40 70 L100 32 L160 70 V104 H40z" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<rect class="ys-step" x="62" y="78" width="22" height="26" fill="var(--il-slate)"/>'
+      +'<rect x="112" y="78" width="26" height="20" rx="2" fill="var(--il-ochre)"/>'
+      +'<path d="M100 32 L172 78" stroke="var(--acc)" stroke-width="3" stroke-linecap="round"/>',
+    crypto:'<g class="ys-orb"><circle cx="78" cy="60" r="24" fill="var(--il-ochre)"/></g>'
+      +'<g class="ys-orb o2"><circle cx="118" cy="82" r="20" fill="var(--il-slate)"/></g>'
+      +'<path class="ys-bar" d="M78 44 v32 M70 52 h16 M70 68 h16" stroke="var(--il-sheet)" stroke-width="3" stroke-linecap="round"/>',
+    code:'<rect x="34" y="34" width="132" height="70" rx="6" fill="var(--il-slate)"/>'
+      +'<path d="M52 60 l12 10 l-12 10" fill="none" stroke="var(--il-sheet)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+      +'<path class="ys-bar" d="M78 82 h34" stroke="var(--acc)" stroke-width="4" stroke-linecap="round"/>'
+      +'<circle cx="46" cy="44" r="3" fill="var(--il-clay)"/><circle cx="56" cy="44" r="3" fill="var(--il-ochre)"/>',
+    workflow:'<rect x="30" y="52" width="34" height="30" rx="5" fill="var(--il-slate)"/>'
+      +'<rect x="84" y="52" width="34" height="30" rx="5" fill="var(--acc)"/>'
+      +'<rect x="138" y="52" width="34" height="30" rx="5" fill="var(--il-sage)"/>'
+      +'<path class="ys-bar" d="M64 67 h20 M118 67 h20" stroke="var(--il-line-2)" stroke-width="4" stroke-linecap="round"/>',
+    prompt:'<rect x="36" y="44" width="128" height="52" rx="8" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<path d="M52 62 h60 M52 76 h38" stroke="var(--il-line-2)" stroke-width="4" stroke-linecap="round"/>'
+      +'<rect class="ys-bar" x="96" y="70" width="4" height="14" fill="var(--acc)"/>'
+      +'<g class="ys-orb"><circle cx="152" cy="36" r="8" fill="var(--il-ochre)"/></g>',
+    agent:'<circle cx="100" cy="64" r="26" fill="var(--acc)"/>'
+      +'<g class="ys-orb"><circle cx="52" cy="44" r="11" fill="var(--il-slate)"/></g>'
+      +'<g class="ys-orb o2"><circle cx="150" cy="46" r="11" fill="var(--il-sage)"/></g>'
+      +'<g class="ys-orb o3"><circle cx="100" cy="108" r="11" fill="var(--il-ochre)"/></g>'
+      +'<path d="M63 50 L80 60 M139 52 L120 60 M100 90 v8" stroke="var(--il-line-2)" stroke-width="2.4"/>',
+    marketing:'<path d="M40 60 L96 44 V88 L40 74z" fill="var(--acc)"/>'
+      +'<path d="M96 52 q26 12 0 28" fill="none" stroke="var(--il-line-2)" stroke-width="3"/>'
+      +'<g class="ys-orb"><circle cx="138" cy="52" r="8" fill="var(--il-ochre)"/></g>'
+      +'<g class="ys-orb o2"><circle cx="156" cy="76" r="6" fill="var(--il-sage)"/></g>',
+    funnel:'<path d="M40 38 h120 l-38 38 v30 l-44 16 v-46z" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<path class="ys-bar" d="M56 50 h88" stroke="var(--acc)" stroke-width="6" stroke-linecap="round"/>'
+      +'<path class="ys-bar b2" d="M76 66 h48" stroke="var(--il-ochre)" stroke-width="6" stroke-linecap="round"/>',
+    content:'<rect x="34" y="36" width="76" height="66" rx="5" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<rect x="48" y="50" width="48" height="26" rx="3" fill="var(--il-slate)"/>'
+      +'<path d="M48 86 h48" stroke="var(--il-line-2)" stroke-width="3" stroke-linecap="round"/>'
+      +'<g class="ys-orb"><rect x="122" y="52" width="44" height="34" rx="5" fill="var(--acc)"/></g>',
+    interview:'<circle cx="72" cy="56" r="16" fill="var(--il-ochre)"/>'
+      +'<path d="M52 96 q20 -20 40 0z" fill="var(--il-ochre)" opacity=".8"/>'
+      +'<rect class="ys-orb" x="112" y="42" width="50" height="34" rx="8" fill="var(--acc)"/>'
+      +'<path d="M124 88 l10 -12 h-16z" fill="var(--acc)"/>',
+    resume:'<rect x="56" y="28" width="88" height="78" rx="5" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<circle cx="80" cy="50" r="10" fill="var(--il-slate)"/>'
+      +'<path d="M98 46 h32 M72 72 h56 M72 86 h40" stroke="var(--il-line-2)" stroke-width="3" stroke-linecap="round"/>'
+      +'<path class="ys-glow" d="M120 96 l10 8 l16 -18" fill="none" stroke="var(--acc)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
+    shop:'<path d="M44 54 h112 l-10 -16 h-92z" fill="var(--acc)" opacity=".85"/>'
+      +'<rect x="52" y="54" width="96" height="50" rx="4" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<rect class="ys-step" x="70" y="72" width="24" height="32" rx="3" fill="var(--il-slate)"/>'
+      +'<rect x="110" y="72" width="24" height="18" rx="3" fill="var(--il-sage)"/>',
+    idea:'<circle cx="100" cy="56" r="22" fill="var(--il-ochre)"/>'
+      +'<rect x="90" y="80" width="20" height="14" rx="3" fill="var(--il-slate)"/>'
+      +'<g class="ys-orb"><path d="M100 20 v10 M64 34 l7 7 M136 34 l-7 7" stroke="var(--acc)" stroke-width="4" stroke-linecap="round"/></g>',
+    funding:'<rect x="46" y="56" width="108" height="52" rx="6" fill="var(--il-sage)"/>'
+      +'<circle cx="100" cy="82" r="14" fill="var(--il-sheet)"/>'
+      +'<g class="ys-orb"><circle cx="72" cy="36" r="10" fill="var(--il-ochre)"/></g>'
+      +'<g class="ys-orb o2"><circle cx="128" cy="32" r="8" fill="var(--acc)"/></g>',
+    vocab:'<rect x="40" y="40" width="56" height="56" rx="6" fill="var(--acc)"/>'
+      +'<rect class="ys-orb" x="106" y="40" width="56" height="56" rx="6" fill="var(--il-slate)"/>'
+      +'<path d="M56 68 h24 M122 68 h24" stroke="var(--il-sheet)" stroke-width="5" stroke-linecap="round"/>',
+    workout:'<rect x="86" y="60" width="28" height="10" rx="4" fill="var(--il-line-2)"/>'
+      +'<g class="ys-bar"><rect x="52" y="46" width="18" height="38" rx="5" fill="var(--acc)"/></g>'
+      +'<g class="ys-bar b2"><rect x="130" y="46" width="18" height="38" rx="5" fill="var(--il-slate)"/></g>'
+      +'<g class="ys-bar b3"><rect x="34" y="56" width="12" height="18" rx="4" fill="var(--il-ochre)"/>'
+      +'<rect x="154" y="56" width="12" height="18" rx="4" fill="var(--il-ochre)"/></g>',
+    diet:'<circle cx="100" cy="68" r="34" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<path d="M100 68 L100 34 A34 34 0 0 1 130 84z" fill="var(--il-sage)"/>'
+      +'<path d="M100 68 L130 84 A34 34 0 0 1 72 90z" fill="var(--acc)" opacity=".85"/>'
+      +'<g class="ys-orb"><circle cx="156" cy="40" r="8" fill="var(--il-ochre)"/></g>'
+  };
+  /* topic word -> scene. First match wins, so the more specific words come
+     first; the domain is only consulted when nothing here matches. */
+  var YTS_TOPIC=[
+    [/배당|주주|주식|증시/, 'dividend'], [/부동산|아파트|전세|월세/, 'realestate'],
+    [/코인|비트|크립토|블록체인/, 'crypto'],
+    [/코드|코딩|개발|프로그래/i, 'code'], [/워크플로우|자동화|파이프라인/, 'workflow'],
+    [/프롬프트|prompt/i, 'prompt'], [/에이전트|agent/i, 'agent'],
+    [/마케팅|광고|브랜딩/, 'marketing'], [/퍼널|전환율|리드/, 'funnel'],
+    [/콘텐츠|유튜브|영상 제작|숏폼/, 'content'],
+    [/면접|인터뷰/, 'interview'], [/이력서|자소서|포트폴리오|취업|이직/, 'resume'],
+    [/자영업|매장|가게|장사/, 'shop'], [/아이디어|아이템|기획/, 'idea'],
+    [/투자유치|자금|펀딩|매출/, 'funding'],
+    [/단어|어휘|문법/, 'vocab'],
+    [/운동|헬스|근력|홈트/, 'workout'], [/식단|다이어트|영양/, 'diet']
+  ];
+  function ytSceneKey(topic, domain){
+    var t=String(topic||'');
+    for(var i=0;i<YTS_TOPIC.length;i++){ if(YTS_TOPIC[i][0].test(t)) return YTS_TOPIC[i][1]; }
+    return domain;
+  }
+
+  function ytScene(domain, topic){
+    var k=ytSceneKey(topic, domain);
+    var g=YTS_SCENE_T[k]||YTS_SCENE[k]||YTS_SCENE[domain]||YTS_SCENE.other;
     return '<svg class="yts-scene" viewBox="0 0 200 130" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'
-      +(YTS_SCENE[domain]||YTS_SCENE.other)+'</svg>';
+      +g+'</svg>';
   }
   var CUR_DOM_LABEL={ai_ml:'AI·기술',career:'취업·커리어',investment:'투자·경제',startup:'창업',language:'어학',exam:'시험·입시',other:'추천'};
   /* Curation tab = the caller's PERSISTENT curation list (GET /curations), rendered as
@@ -2718,7 +2822,7 @@
     var h='<div class="yts-h2">하나 골라볼까요?</div><div class="yts-props enter" id="ytsProps">';
     props.forEach(function(p){
       h+='<button class="yts-prop" data-topic="'+curEsc(p.topic)+'">'
-        +ytScene(p.domain)
+        +ytScene(p.domain, p.topic)
         +'<span class="yts-body">'
           +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
           +'<span class="yts-prop-t">'+curEsc(p.topic)+'</span>'
@@ -3095,6 +3199,7 @@
     document.getElementById('cdTitle').textContent=cdTopic;
     cdRenderWeeks();
     if(!cfIsFeed()) cdTimeBarStart();   // entered already sideways
+    wheelAwake(); wheelSleep();          // brief hello on entry, as the note view does
     document.body.classList.add('curdeck');
     setTimeout(function(){ document.body.classList.add('cdin'); },20); // D0 crossfade (timeout: rAF throttles in bg tabs)
     // D6 — one-time coachmark until the first wheel/center interaction
@@ -3558,11 +3663,14 @@
      Supervisor boundary: when the wheel is NOT visible, the summoning tap is
      CONSUMED — it must not fall through as a card tap / play toggle. */
   var cdWheelT=null, cdConsumeUntil=0;
+  /* Kept as a thin alias so existing call sites keep working, but it now does
+     exactly what the note view does: wake, then sleep after the shared linger.
+     The class it used to toggle also gated pointer-events, which is what made
+     the wheel unturnable until something else had revealed it. */
   function cdWheelShow(){
-    var was=document.body.classList.contains('cdwheel');
-    document.body.classList.add('cdwheel');
-    clearTimeout(cdWheelT);
-    cdWheelT=setTimeout(function(){ document.body.classList.remove('cdwheel'); },3000);
+    var was=document.querySelector('.wheel');
+    was=!!(was&&was.classList.contains('awake'));
+    wheelAwake(); wheelSleep();
     return was;
   }
   function cdEnsurePlayers(){
@@ -4787,7 +4895,7 @@
       ptr[e.pointerId]=s; touchN++;
       if(zone==='center') centerId=e.pointerId;
       visAngle=p.a; wheel.classList.add('touching');
-      if(document.body.classList.contains('stage')||document.body.classList.contains('reading')) wheelAwake(); // 플로팅 휠 = 터치 시 표시 (e)
+      if(document.body.classList.contains('stage')||document.body.classList.contains('reading')||document.body.classList.contains('curdeck')) wheelAwake(); // 플로팅 휠 = 터치 시 표시 (e)
       // 롱프레스: MENU 길게 = 홈 (회전 없이 유지 시)
       s.holdT=setTimeout(function(){
         if(s.rotated) return;
@@ -4839,7 +4947,7 @@
         if(touchN===0){ wheel.classList.remove('touching');
           if(navHold.active) navEnd(); // fingers up -> settle: resume (or stay paused) per start state
           if(document.body.classList.contains('curdeck')&&typeof cdWheelRelease==='function') cdWheelRelease(); // deck settle on release
-          if(document.body.classList.contains('stage')||document.body.classList.contains('reading')) wheelSleep(); } // float wheel hides 3s after release
+          if(document.body.classList.contains('stage')||document.body.classList.contains('reading')||document.body.classList.contains('curdeck')) wheelSleep(); } // float wheel hides 3s after release
         kickFrame();
       });
     });
@@ -5103,6 +5211,7 @@
     };
     g('curDeck').addEventListener('touchstart',function(e){
       if(cdIsControl(e.target)) return;
+      wheelAwake(); wheelSleep();          // touch anywhere on the deck, like the note view
       var was=cdWheelShow();
       // A2: a fresh summon touch only REVEALS the wheel — it must not operate it.
       // Hold the wheel non-interactive until this touch releases (portrait parity);
@@ -5141,10 +5250,6 @@
         var y=feed.scrollTop, d=y-last;
         if(Math.abs(d)<DELTA) return;
         last=y;
-        // Near the top the header always comes back, whatever the direction --
-        // otherwise a short list can strand it off-screen with nothing left to
-        // scroll up through.
-        document.body.classList.toggle('cdhdroff', d>0 && y>HIDE_AFTER);
       },{passive:true});
     })();
 
@@ -5350,9 +5455,9 @@
   }
   (function(){
     var wz=document.querySelector('.wheelzone'); if(!wz) return;
-    wz.addEventListener('pointerdown',function(){ if(document.body.classList.contains('stage')) wheelAwake(); if(document.body.classList.contains('curdeck')&&typeof cdWheelShow==='function') cdWheelShow(); });
+    wz.addEventListener('pointerdown',function(){ if(document.body.classList.contains('stage')||document.body.classList.contains('curdeck')) wheelAwake(); });
     ['pointerup','pointercancel'].forEach(function(ev){
-      wz.addEventListener(ev,function(){ if(document.body.classList.contains('stage')) wheelSleep(); });
+      wz.addEventListener(ev,function(){ if(document.body.classList.contains('stage')||document.body.classList.contains('curdeck')) wheelSleep(); });
     });
   })();
 
