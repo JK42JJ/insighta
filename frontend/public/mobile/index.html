@@ -1165,9 +1165,45 @@
   .cf-card{position:relative; width:100%; background:#0D0D10; padding-bottom:14px}
   .cf-media{position:relative; width:100%; aspect-ratio:16/9; background:#000 center/cover no-repeat; overflow:hidden;
     transition:filter .3s ease}
-  body.curdeck .cf-card:not(.cf-focus) .cf-media{filter:brightness(.5)}   /* A2: brightness tier replaces width tier */
-  .cf-slot{position:absolute; inset:0; z-index:1; background:#000}   /* active/warm iframe mounts here; empty = poster shows */
+  /* A2: brightness tier replaces width tier. Expressed through the same --cf-dim
+     veil as the tone ramp, so a card has ONE source of darkness -- a filter here
+     plus a veil below would multiply, and the unfocused card would go nearly
+     black the moment the ramp state changed. */
+  body.curdeck .cf-card:not(.cf-focus) .cf-media::after{opacity:.5}
+  .cf-slot{position:absolute; inset:0; z-index:1; background:#000;   /* active/warm iframe mounts here; empty = poster shows */
+    opacity:0; transition:opacity 200ms cubic-bezier(.2,.6,.2,1)}
   .cf-slot:empty{display:none}
+  /* A5 — the poster IS the loading state. The iframe is revealed only once it
+     reports PLAYING, so the fade never crosses YouTube's black first frame;
+     before that the thumbnail simply stays. cf-playing is set optimistically at
+     commit (landscape fullscreen keys off it), which is why the reveal needs its
+     own class rather than reusing it. */
+  .cf-card.cf-shown .cf-slot{opacity:1}
+  /* One dim layer for every darkness state: the waiting poster, the unfocused
+     card, and the tone ramp on play. A veil rather than a filter -- filtering a
+     box that contains a cross-origin iframe repaints the video every frame,
+     whereas an opacity change on a sibling is composited. */
+  /* Opacity is stated per state rather than derived from a custom property:
+     the veil is one element with four values, and a transition that has to
+     resolve calc(1 - var(--x)) does not reliably re-run when only the variable
+     changed -- measured: --cf-dim went to 1 while the veil stayed at .20. */
+  .cf-media::after{content:''; position:absolute; inset:0; z-index:2; background:#0D0D10;
+    opacity:0; pointer-events:none;
+    transition:opacity 220ms cubic-bezier(.2,.6,.2,1)}
+  body.curdeck .cf-card.cf-focus .cf-media::after{opacity:.20}
+  /* The ramp up is longer than the fade (260 vs 200ms) so the picture is still
+     brightening after it has finished arriving -- that is what reads as
+     "gradually lights up" rather than "switches on". */
+  body.curdeck .cf-card.cf-focus.cf-lit .cf-media::after{opacity:0; transition-duration:260ms}
+  /* Waiting past the point where a spinner would have appeared: the same veil
+     breathes. No second layer, no spinner -- a spinner is the app admitting it
+     has nothing to show, and the poster is already the thing being loaded. */
+  @keyframes cfBreathe{0%,100%{opacity:.20} 50%{opacity:.26}}
+  body.curdeck .cf-card.cf-wait .cf-media::after{animation:cfBreathe 1.6s ease-in-out infinite}
+  @media (prefers-reduced-motion:reduce){
+    .cf-slot,.cf-media::after{transition:none}
+    body.curdeck .cf-card.cf-wait .cf-media::after{animation:none}
+  }
   .cf-slot iframe{position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; border:0 !important}
   .cf-prog{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:2; background:rgba(237,231,220,.16)}
   .cf-prog b{display:block; height:100%; width:0; background:#FF3B30}
@@ -1676,7 +1712,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-41';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-42';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3044,11 +3080,38 @@
   function cfDestroyFar(i){ // keep only dominant +/- 2; recycle the rest (memory + one-voice)
     Object.keys(cfPlayers).forEach(function(k){ var j=+k; if(Math.abs(j-i)>2){
       try{ cfPlayers[j]&&cfPlayers[j].destroy&&cfPlayers[j].destroy(); }catch(e){} delete cfPlayers[j];
-      var c=cfCards()[j]; if(c){ c.classList.remove('cf-live','cf-playing'); var s=c.querySelector('.cf-slot'); if(s) s.innerHTML=''; } } });
+      var c=cfCards()[j]; if(c){ c.classList.remove('cf-live','cf-playing','cf-shown','cf-lit','cf-wait'); var s=c.querySelector('.cf-slot'); if(s) s.innerHTML=''; } } });
   }
   function cfSaveCard(i){ try{ var p=cfPlayers[i], it=cdItems[i]; if(!p||!it||!p.getCurrentTime) return;
     var dur=p.getDuration()||0,pos=p.getCurrentTime()||0; if(dur>0){ cfSaveWatch(it.video_id,pos,dur); cfPaintProg(i); } }catch(e){} }
-  function cfPlayerState(i, st){ if(st===1){ if(i===cfPlayIdx) clearTimeout(cfSoundWatch); var c=cfCards()[i]; if(c) c.classList.add('cf-playing'); } else if(st===0){ cfCardEnded(i); } }
+  /* A5 visual state. Three separate facts that used to be one class:
+       cf-playing  this is the active card (set at commit; landscape keys off it)
+       cf-shown    the iframe has painted and may be revealed  (PLAYING only)
+       cf-lit      the picture is at full brightness           (follows play/pause)
+     Revealing on commit rather than on PLAYING is what put YouTube's black
+     first frame on screen. */
+  var cfWaitT=null;
+  function cfWaitClear(){ clearTimeout(cfWaitT); cfWaitT=null;
+    Array.prototype.forEach.call(cfCards(),function(c){ c.classList.remove('cf-wait'); }); }
+  function cfWaitArm(i){
+    cfWaitClear();
+    // Only after the moment a spinner would have appeared: below this, the
+    // poster arriving and the video arriving are indistinguishable anyway.
+    cfWaitT=setTimeout(function(){ var c=cfCards()[i];
+      if(c && !c.classList.contains('cf-shown')) c.classList.add('cf-wait'); },3000);
+  }
+  function cfPlayerState(i, st){
+    var c=cfCards()[i];
+    if(st===1){
+      if(i===cfPlayIdx) clearTimeout(cfSoundWatch);
+      cfWaitClear();
+      if(c){ c.classList.add('cf-playing','cf-shown','cf-lit'); }
+    } else if(st===2){
+      // Paused: the picture dims back but stays visible. Fading the iframe out
+      // would put the poster back over a video the user deliberately paused.
+      if(c) c.classList.remove('cf-lit');
+    } else if(st===0){ cfCardEnded(i); }
+  }
   function cfPlayerError(i, code){
     if((code===2||code===5) && i===cfPlayIdx && !cfMuteFallback){ cfMuteFallback=true; try{ cfPlayers[i].mute(); cfPlayers[i].playVideo(); }catch(e){} cfShowMuteHint(); return; }
     if(code===100||code===101||code===150){ var c=cfCards()[i], m=c&&c.querySelector('.cf-media'); if(m&&!m.querySelector('.cf-na')){ var d=document.createElement('div'); d.className='cf-na'; d.textContent='재생할 수 없는 영상'; m.appendChild(d); } }
@@ -3077,7 +3140,14 @@
       else { if(p.unMute) p.unMute(); }                                     // sound-first attempt (watchdog below, only until sound is enabled once)
       if(p.playVideo) p.playVideo();
     }catch(e){}
-    Array.prototype.forEach.call(cfCards(),function(c){ c.classList.toggle('cf-playing', +c.getAttribute('data-i')===i); });
+    Array.prototype.forEach.call(cfCards(),function(c){ var me=+c.getAttribute('data-i')===i;
+      c.classList.toggle('cf-playing', me);
+      // The reveal belongs to the card that is actually painting. A card we
+      // just left keeps its iframe (it may be scrolled back to) but gives up
+      // full brightness immediately.
+      if(!me) c.classList.remove('cf-lit');
+    });
+    cfWaitArm(i);
     if(!gesture && !cfSoundOn){ clearTimeout(cfSoundWatch); cfSoundWatch=setTimeout(function(){ // sound never enabled + blocked -> muted fallback + chip (once)
       try{ var pp=cfPlayers[i]; if(pp&&pp.getPlayerState&&pp.getPlayerState()!==1){ cfMuteFallback=true; pp.mute(); pp.playVideo(); cfShowMuteHint(); } }catch(e){} },1500); }
     if(i+1<cdItems.length) cfEnsurePlayer(i+1);                          // pre-create the next card's player (instant on scroll)
