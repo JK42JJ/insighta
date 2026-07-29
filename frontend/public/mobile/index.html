@@ -51,13 +51,19 @@
   }
   .num{font-variant-numeric:tabular-nums}
   :root{--butter:#F5D48A}
+  /* Scene palette. Shared by every colourway on purpose: the drawing is the same
+     drawing whichever shell is picked, and a token defined in only one of them
+     leaves an SVG fill undefined -- which renders BLACK, not "unstyled". */
+  :root{
+    --il-sage:#7C8B6F; --il-ochre:#D6A44C; --il-slate:#6C7C8C; --il-clay:#C4674A;
+    --il-cream:#F2ECDD; --il-sheet:#FFFDF7;
+    --il-line:rgba(60,55,45,.18); --il-line-2:rgba(60,55,45,.24);
+  }
 
   /* ---- 컬러웨이 ---- */
   .th-cream{
     --body-hi:#FBFAF6; --body-mid:#F1EEE6; --body-lo:#DDD7C9; --rim:#FFFFFF;
     --wheel-a:#F7F5EF; --wheel-b:#EFECE4; --wheel-c:#E4E0D5;
-    --il-sage:#7C8B6F; --il-ochre:#D6A44C; --il-slate:#6C7C8C; --il-clay:#C4674A; --il-cream:#F2ECDD;
-    --il-sheet:#FFFDF7; --il-line:rgba(60,55,45,.18); --il-line-2:rgba(60,55,45,.24);
     --acc:#E0703F; --acc-rgb:224,112,63; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30; --shade:44,41,37;
   }
   .th-sage{
@@ -1834,7 +1840,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-54';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-55';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
