@@ -1834,7 +1834,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-53';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-54';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3331,6 +3331,23 @@
      Never touches a player that is currently playing, and never re-primes -- a
      second prime would pause a running video. */
   var cfPrimed={};
+  /* Tell every live player its box changed. Called on rotation, and after a
+     beat as well: iOS reports the new viewport before it has finished settling,
+     so a single immediate call can measure the old size. */
+  function cfRelayoutPlayers(){
+    var apply=function(){
+      Object.keys(cfPlayers).forEach(function(k){
+        var p=cfPlayers[k]; if(!p||!p.setSize) return;
+        var card=cfCards()[+k]; if(!card) return;
+        var m=card.querySelector('.cf-media'); if(!m) return;
+        var r=m.getBoundingClientRect();
+        if(r.width>0&&r.height>0){ try{ p.setSize(Math.round(r.width), Math.round(r.height)); }catch(e){} }
+      });
+    };
+    apply();
+    setTimeout(apply, 260);
+  }
+
   function cfPrimeOne(i){
     if(cfPrimed[i]) return;
     var p=cfPlayers[i]; if(!p||!p.playVideo||!p.mute) return;
@@ -5133,6 +5150,14 @@
       // builds the landscape pair on entry, so landscape has to build it when it
       // arrives; and rotating back has to stop the poll it started, or portrait
       // inherits the idle loop it was just relieved of.
+      // A YouTube player lays its video out for the size the iframe had when it
+      // was created. Rotating changes the iframe's box, but the player inside
+      // keeps the old internal geometry -- so a video that started in portrait
+      // arrives in landscape sitting where a 390px-wide player put it, with the
+      // black falling on one side only. A video first played in landscape looks
+      // right, which is why it seemed to happen to some videos and not others.
+      // setSize is the API's own way of saying "your box changed".
+      cfRelayoutPlayers();
       if(cfIsFeed()){
         cdStopPoll(); cdTimeBarStop();
         // Coming back to portrait, the feed has to be looking at the video that
