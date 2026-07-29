@@ -1370,8 +1370,17 @@
        contain here makes the poster sit exactly where the video will, against
        the same black. Nothing jumps when one becomes the other, which is the
        whole point of showing the poster first. */
-    body.curdeck .cf-playing .cf-media{width:100%; height:100%; aspect-ratio:auto;
-      background-size:contain; background-color:var(--stage)}
+    /* Give the player a box that is ALREADY the right shape instead of a
+       full-bleed one it has to letterbox inside. Stretching the iframe to the
+       whole screen left YouTube to centre the picture itself, and it did not do
+       so evenly -- measured on a real frame: 48px of black above, 27px below,
+       and the picture sitting off to one side.
+       A 16:9 box, centred by auto margins, removes the decision: there is no
+       letterboxing left to get wrong, because the box and the video are the
+       same shape. min() keeps it inside whichever dimension runs out first. */
+    body.curdeck .cf-playing .cf-media{position:absolute; inset:0; margin:auto;
+      width:min(100%, calc(100vh * 16 / 9)); height:min(100%, calc(100vw * 9 / 16));
+      aspect-ratio:auto; background-size:contain; background-color:var(--stage)}
     body.curdeck .cf-playing .cf-meta{display:none}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
@@ -1835,7 +1844,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-58';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-59';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
