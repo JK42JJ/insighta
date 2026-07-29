@@ -1216,7 +1216,15 @@
      it is the same fact twice, and they disagree while ours waits for its next
      poll. Ours is for cards that are NOT playing, where there is no native bar
      to read: it says "you left off here". */
-  .cf-card.cf-playing .cf-prog{display:none}
+  /* Gated on cf-shown -- the YouTube player is VISIBLE on this card -- not on
+     cf-playing. cf-playing is set at commit, before the player has painted, and
+     a card could hold a loaded-but-unstarted player that was already drawing
+     its own red bar with ours underneath it. That is the two-bar screenshot.
+     cf-shown is set only once the player reports PLAYING and is therefore
+     exactly the window in which YouTube owns the bar; outside it the poster is
+     what is on screen, there is no native bar, and ours is the only thing
+     saying where you left off. */
+  .cf-card.cf-shown .cf-prog{display:none}
   .cf-durchip{position:absolute; right:8px; bottom:8px; z-index:2; background:rgba(10,9,8,.8); color:#EDE7DC;
     font-size:11px; font-weight:700; border-radius:4px; padding:1px 5px; letter-spacing:.02em}
   /* unavailable video (embed disabled / deleted): card-internal label + dim, never a toast */
