@@ -1798,7 +1798,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-47';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-48';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3001,6 +3001,7 @@
     cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
     document.getElementById('cdTitle').textContent=cdTopic;
     cdRenderWeeks();
+    setTimeout(cdWheelSyncOrientation, 30);   // entering already sideways
     document.body.classList.add('curdeck');
     setTimeout(function(){ document.body.classList.add('cdin'); },20); // D0 crossfade (timeout: rAF throttles in bg tabs)
     // D6 — one-time coachmark until the first wheel/center interaction
@@ -3025,7 +3026,15 @@
       var card=pb.closest('.cf-card'); if(!card) return; var i=+card.getAttribute('data-i');
       cfMuteFallback=false; cfManualPause=false; cfCommitPlay(i, true); }; // explicit play tap = sound (gesture)
     var _mute=document.getElementById('cfMute'); if(_mute) _mute.onclick=function(){ cfToggle(); };
-    if(cfIsFeed()){ if(_feed && !_feed.firstChild) cfRender(); cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()) cfCommitPlay(0, false); },160); }
+    // Cards are rendered whatever way the phone is held. Landscape shows ONE of
+    // them fullscreen (.cf-playing) and hides the rest in CSS -- but it can only
+    // do that if they exist. Gating the render on portrait meant opening the deck
+    // sideways rendered nothing at all: no feed cards, no track (display:none in
+    // landscape), no stage (display:none since the in-card rewrite). An empty
+    // screen with a back button.
+    if(_feed && !_feed.firstChild) cfRender();
+    if(cfIsFeed()){ cfSetupObserver(); setTimeout(function(){ if(cfIsFeed()) cfCommitPlay(0, false); },160); }
+    else { cfSetFocus(0); setTimeout(function(){ if(!cfIsFeed()) cfCommitPlay(0, false); },160); }
   }
   /* Tear the deck's players and DOM down WITHOUT leaving the deck. Switching
      weeks needs everything here — otherwise last week's players keep running
@@ -3387,8 +3396,20 @@
     var was=document.body.classList.contains('cdwheel');
     document.body.classList.add('cdwheel');
     clearTimeout(cdWheelT);
+    // Landscape has no other way to change video: the screen is a full-bleed
+    // YouTube iframe, and touches on an iframe never reach this document, so the
+    // summon that portrait relies on can never fire. The wheel stays up.
+    if(!matchMedia('(orientation:portrait)').matches) return was;
     cdWheelT=setTimeout(function(){ document.body.classList.remove('cdwheel'); },3000);
     return was;
+  }
+  /* Show it on arrival in landscape, and take it away on the way back to
+     portrait, where the feed is the navigation and the wheel is hidden. */
+  function cdWheelSyncOrientation(){
+    if(!document.body.classList.contains('curdeck')) return;
+    if(matchMedia('(orientation:portrait)').matches) return;
+    clearTimeout(cdWheelT);
+    document.body.classList.add('cdwheel');
   }
   function cdEnsurePlayers(){
     if(!window.YT||!YT.Player) return;
@@ -5002,6 +5023,7 @@
       // inherits the idle loop it was just relieved of.
       if(cfIsFeed()) cdStopPoll();
       else cdEnsurePlayers();
+      cdWheelSyncOrientation();
       cdRender();
     }
     ['resize','orientationchange'].forEach(function(ev){
