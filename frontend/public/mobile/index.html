@@ -31,6 +31,9 @@
     /* Dark stage. Written out identically in six places before this; the
        deck feed now references it and the rest can follow. */
     --stage:#0D0D10;
+    /* Skeleton on the dark stage: a step up from the background, and a sweep
+       one step brighter again. Two tokens so the pair stays in proportion. */
+    --cf-skel:#1B1A1F; --cf-skel-hi:#2A2830;
     /* S3: 물성 공통 토큰 — 전 표면 동일 계열 */
     --soft:cubic-bezier(.22,.9,.3,1); --spring:cubic-bezier(.34,1.4,.64,1); --snap:120ms;
     --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
@@ -815,7 +818,14 @@
   @media (prefers-reduced-motion:reduce){ .yts-spin{animation-duration:2.4s} }
   body.ytsheet #ytSheet{opacity:1; pointer-events:auto}
   body.ytsheet #ytSheet .yts-card{transform:translateY(0)}
-  #ytSheet .yts-grip{width:38px; height:4px; border-radius:99px; background:rgba(94,86,72,.22); margin:0 auto; flex:none}
+  /* The bar is 4px because that is what reads well; the TARGET is 44px tall and
+     full width, because that is what a thumb needs. The pseudo-element carries
+     the reach so the visible handle does not have to grow to be catchable. */
+  #ytSheet{--grip:94,86,72}
+  #ytSheet .yts-grip{width:38px; height:4px; border-radius:99px; background:rgba(var(--grip),.22);
+    margin:0 auto; flex:none; position:relative; touch-action:none}
+  #ytSheet .yts-grip::before{content:''; position:absolute; left:-50vw; right:-50vw; top:-20px; bottom:-20px}
+  #ytSheet .yts-card.dragging .yts-grip{background:rgba(var(--grip),.4)}
   /* Retune lives as an icon in the sheet's top-right corner rather than as a
      full-width row in the foot: same action, ~40px of vertical budget back, and
      it reads as "try again" instead of competing with the primary input. */
@@ -846,7 +856,7 @@
      flex-basis the two are circular — the basis resolves against the content box,
      which the padding is shrinking — and the end cards sit clipped against the
      edge (measured -32px / +47px off centre). */
-  #ytSheet{--yts-card-w:min(72vw,268px)}
+  #ytSheet{--yts-card-w:min(43vw,168px)}
   /* flex:none is load-bearing. `overflow-y:hidden` makes this item's automatic
      minimum size resolve to ZERO, so without it the deck is the first thing flex
      shrinks when the sheet is short -- and being overflow-hidden it then clips
@@ -855,16 +865,22 @@
      read the CARD's overflow, which was 0 precisely BECAUSE the deck was
      already crushed. */
   .yts-props{flex:none; display:flex; gap:10px; margin-top:2px; overflow-x:auto; overflow-y:hidden;
-    scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none;
-    padding:2px calc(50% - var(--yts-card-w)/2) 4px;
-    scroll-padding-inline:calc(50% - var(--yts-card-w)/2)}
+    scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    padding:2px 18px 4px; scroll-padding-inline:18px}
   .yts-props::-webkit-scrollbar{display:none}
-  .yts-prop{flex:0 0 var(--yts-card-w); scroll-snap-align:center; display:flex; flex-direction:column;
-    align-items:flex-start; justify-content:center; gap:7px; text-align:left; min-height:96px;
-    border:1px solid rgba(94,86,72,.14); background:rgba(255,255,255,.6); border-radius:17px; padding:15px 16px;
+  /* The type is the design. An icon in the corner was decoration bolted onto a
+     box; what a person is choosing between here is three WORDS, so the words
+     are given the room and the weight, and everything else recedes to a hairline
+     and a whisper of a label. Two fit on screen at once -- comparing is the
+     whole task, and a card that fills the width leaves nothing to compare it to. */
+  .yts-prop{flex:0 0 var(--yts-card-w); scroll-snap-align:start; display:flex; flex-direction:column;
+    align-items:flex-start; justify-content:flex-end; gap:9px; text-align:left; min-height:112px;
+    border:1px solid rgba(94,86,72,.13); background:rgba(255,255,255,.52); border-radius:16px;
+    padding:16px 15px 15px;
     cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent;
-    transition:transform .22s var(--spring), box-shadow .22s ease, border-color .22s ease, opacity .22s ease;
-    transform:scale(.94); opacity:.55}
+    transition:transform .24s var(--spring), box-shadow .24s ease, border-color .24s ease,
+               background .24s ease, opacity .24s ease;
+    transform:none; opacity:.62}
   /* Three-choice branch. Where the pixels come from, measured at 730px viewport:
    * the body has 254px and the rows wanted 309. Wrapping them turns three 15px
    * body gaps into one (-30), and 13px row padding instead of the shared 17px
@@ -877,16 +893,29 @@
   .yts-prop-ch .yts-prop-dom{background:rgba(94,86,72,.10); color:var(--paper-sub)}
   .yts-prop-ch.sel{border-style:solid}
   /* the centred card is the one the core button will pick */
-  .yts-prop.sel{transform:scale(1); opacity:1; border-color:var(--acc);
-    box-shadow:0 8px 20px -12px rgba(30,27,22,.5)}
+  /* Selection lifts the card rather than outlining it -- a heavy ring competes
+     with the word it is meant to be pointing at. */
+  .yts-prop.sel{opacity:1; background:rgba(255,255,255,.92); border-color:rgba(94,86,72,.2);
+    box-shadow:0 10px 24px -16px rgba(30,27,22,.55)}
   .yts-prop:active{transform:scale(.97)}
   /* position dots — which of the three is focused */
   .yts-dots{display:flex; gap:6px; justify-content:center; margin-top:2px}
   .yts-dot{width:5px; height:5px; border-radius:99px; background:rgba(94,86,72,.22); transition:all .22s ease}
   .yts-dot.on{background:var(--acc); width:16px}
-  .yts-prop-dom{font-size:10px; font-weight:800; letter-spacing:.04em; color:var(--acc-ink);
-    background:rgba(206,95,48,.10); padding:2px 8px; border-radius:99px}
-  .yts-prop-t{font-size:15px; font-weight:750; color:var(--paper-ink)}
+  /* Label: no pill. A filled capsule reads as a button, and this is a caption.
+     Wide tracking and low contrast put it where a caption belongs -- present,
+     and second. The accent stays for the card that is actually chosen. */
+  .yts-prop-dom{font-size:9.5px; font-weight:800; letter-spacing:.13em; color:var(--paper-sub);
+    background:none; padding:0; border-radius:0; transition:color .24s ease}
+  .yts-prop.sel .yts-prop-dom{color:var(--acc-ink)}
+  .yts-prop-t{font-size:17.5px; font-weight:800; letter-spacing:-.022em; line-height:1.3;
+    color:var(--paper-ink); position:relative;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+  /* One hairline between caption and word. It is the only ornament on the card
+     and it is doing structural work: it separates the two registers. */
+  .yts-prop-dom::after{content:''; display:block; width:20px; height:1px; margin-top:9px;
+    background:currentColor; opacity:.35; transition:width .3s var(--spring), opacity .24s ease}
+  .yts-prop.sel .yts-prop-dom::after{width:34px; opacity:.65}
   .yts-ghost{border:none; background:none; font-family:inherit; font-size:12px; font-weight:700;
     color:var(--paper-sub); cursor:pointer; padding:8px; touch-action:manipulation}
   /* Followed-channel list. Rows are informational (avatar + name) with one
@@ -1225,6 +1254,20 @@
      what is on screen, there is no native bar, and ours is the only thing
      saying where you left off. */
   .cf-card.cf-shown .cf-prog{display:none}
+  /* Skeleton while a week is being fetched. It holds the real card's geometry,
+     so the arriving content does not shift anything -- a skeleton that changes
+     the layout when it resolves is just a slower flash. The sweep is a single
+     translated gradient: one composited layer, no per-frame paint. */
+  .cf-skel .cf-media{background:var(--cf-skel); position:relative; overflow:hidden}
+  .cf-skel .cf-media::before{content:''; position:absolute; inset:0;
+    background:linear-gradient(100deg, transparent 20%, var(--cf-skel-hi) 50%, transparent 80%);
+    transform:translateX(-100%); animation:cfSweep 1.25s ease-in-out infinite}
+  .cf-skel .cf-skline{height:13px; border-radius:5px; background:var(--cf-skel); margin:11px 0 0}
+  .cf-skel .cf-skline.w1{width:78%}
+  .cf-skel .cf-skline.w2{width:44%; height:11px; margin-top:9px}
+  @keyframes cfSweep{to{transform:translateX(100%)}}
+  .cf-empty{padding:38px 18px; text-align:center; font-size:13px; font-weight:650; color:var(--paper-sub)}
+  @media (prefers-reduced-motion:reduce){ .cf-skel .cf-media::before{animation:none} }
   .cf-durchip{position:absolute; right:8px; bottom:8px; z-index:2; background:rgba(10,9,8,.8); color:#EDE7DC;
     font-size:11px; font-weight:700; border-radius:4px; padding:1px 5px; letter-spacing:.02em}
   /* unavailable video (embed disabled / deleted): card-internal label + dim, never a toast */
@@ -1723,7 +1766,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-42';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-46';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2290,22 +2333,57 @@
     if(on&&on.scrollIntoView) on.scrollIntoView({block:'nearest', inline:'nearest'});
   }
 
+  /* Skeleton for the week being fetched. Same card geometry as the real thing,
+     so nothing moves when the content lands -- the point of a skeleton is that
+     the layout is already correct and only the pixels are missing. Count is
+     taken from the week being left, which is the best available guess and is
+     never wrong by much. */
+  function cfSkeleton(n){
+    var html='';
+    for(var i=0;i<Math.max(3,Math.min(n||6,8));i++){
+      html+='<div class="cf-card cf-skel"><div class="cf-media"></div>'
+          +'<div class="cf-meta"><div class="cf-skline w1"></div><div class="cf-skline w2"></div></div></div>';
+    }
+    return html;
+  }
+
+  /* Switching weeks used to run cdTeardown(), which removes the `curdeck` class
+     -- for a frame the deck was gone and the home screen showed through, then
+     the deck came back. That is the flash. The deck now stays mounted and only
+     the feed's contents are replaced: header, chips and background never move,
+     and the chip you tapped is marked active immediately rather than after the
+     round trip. */
   async function cdLoadWeek(week){
     if(!cdCtx||!cdCtx.subId||week===cdCtx.week) return;
-    var bar=document.getElementById('cdWeeks'); if(bar) bar.classList.add('busy');
+    var bar=document.getElementById('cdWeeks');
+    var feed=document.getElementById('cdFeed');
+    var prevCount=cdItems.length;
+
+    // Optimistic: the chip responds to the tap, not to the network.
+    if(bar) Array.prototype.forEach.call(bar.querySelectorAll('.cd-wk'),function(b){
+      b.classList.toggle('on', b.getAttribute('data-week')===week); });
+
+    // Players go, the deck stays. cfDestroyFar's teardown is per-card; this is
+    // the whole feed, so it is done here rather than borrowed from it.
+    if(cfObs){ cfObs.disconnect(); cfObs=null; }
+    Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} });
+    cfPlayers={}; cfPrimed={}; cfPlayIdx=-1; cfRatios={}; cfManualPause=false;
+    if(feed){ feed.scrollTop=0; feed.innerHTML=cfSkeleton(prevCount); }
+
     try{
       var r=await api('/curations/'+cdCtx.subId+'/items?week='+encodeURIComponent(week));
       var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
-      if(!items.length){ toast('그 주에는 영상이 없어요'); return; }
-      // Re-enter the deck with the other week's items. Going through
-      // openCurationDeck rather than swapping the array keeps players, the
-      // observer and the index reset on one path.
-      var ctx={subId:cdCtx.subId, week:(j&&j.data&&j.data.week_of)||week, weeks:cdCtx.weeks};
-      var topic=cdTopic;
-      cdTeardown();                       // players and cards, but do NOT leave the deck
-      openCurationDeck(topic, items, ctx);
-    }catch(e){ toast('불러오지 못했어요 — 연결 확인 후 다시 시도해주세요'); }
-    finally{ if(bar) bar.classList.remove('busy'); }
+      if(!items.length){
+        if(feed) feed.innerHTML='<div class="cf-empty">그 주에는 영상이 없어요</div>';
+        cdItems=[]; cdCtx.week=week; return;
+      }
+      cdItems=items; cdIdx=0; cdEndRolled=false;
+      cdCtx.week=(j&&j.data&&j.data.week_of)||week;
+      cfRender(); cfSetupObserver();
+      setTimeout(function(){ if(cfIsFeed()) cfCommitPlay(0,false); },160);
+    }catch(e){
+      if(feed) feed.innerHTML='<div class="cf-empty">불러오지 못했어요 — 다시 시도해주세요</div>';
+    }
   }
   // Not-connected gate (behind-content, never a dead end): slim prompt in the tab body +
   // auto-raise the connect sheet once per session. Tapping the button re-opens the sheet.
@@ -2913,7 +2991,7 @@
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
     cdWarmKey=[null,null]; cdLoadedKey=[null,null];
     if(cfObs){ cfObs.disconnect(); cfObs=null; } cfPlayIdx=-1; cfManualPause=false; cfMuteFallback=false; cfSoundOn=false; cfRatios={}; clearTimeout(cfScrollT); clearTimeout(cfSoundWatch); document.body.classList.remove('cffeedmuted');
-    Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} }); cfPlayers={}; // tear down the in-card players
+    Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} }); cfPlayers={}; cfPrimed={}; // tear down the in-card players
     var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; _fd.innerHTML=''; } // drop cards+players so re-open builds fresh
     clearTimeout(cdWheelT);
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
@@ -3095,6 +3173,34 @@
   }
   function cfSaveCard(i){ try{ var p=cfPlayers[i], it=cdItems[i]; if(!p||!it||!p.getCurrentTime) return;
     var dur=p.getDuration()||0,pos=p.getCurrentTime()||0; if(dur>0){ cfSaveWatch(it.video_id,pos,dur); cfPaintProg(i); } }catch(e){} }
+  /* ---- gesture unlock for the cards you have not reached yet -------------
+     Every card owns its own YouTube iframe, and an iframe that has never been
+     touched cannot be started programmatically on iOS. The first card plays
+     because it is created inside the row-tap gesture; every card after it is
+     created by cfSettle, which runs on a timer with no gesture in scope, so the
+     play is refused and the user has to tap. That is the reported bug.
+
+     Scrolling IS a gesture, so the scroll that reveals the next card is used to
+     unlock it: mute, play, pause, in the touch's own call stack. Cheap, silent,
+     and it happens for cards the user is already moving toward.
+
+     Never touches a player that is currently playing, and never re-primes -- a
+     second prime would pause a running video. */
+  var cfPrimed={};
+  function cfPrimeOne(i){
+    if(cfPrimed[i]) return;
+    var p=cfPlayers[i]; if(!p||!p.playVideo||!p.mute) return;
+    if(i===cfPlayIdx) return;                     // the one playing must not be paused
+    try{ p.mute(); p.playVideo(); p.pauseVideo(); cfPrimed[i]=true; }catch(e){}
+  }
+  /* Prime the cards on either side of the one in view. Called from the entry
+     tap and from touchend on the feed -- both are real gestures. */
+  function cfPrimeSoon(){
+    if(!cfIsFeed()) return;
+    var c=cfPlayIdx>=0?cfPlayIdx:0;
+    [c+1, c+2, c-1].forEach(function(k){ if(k>=0 && k<cdItems.length) cfPrimeOne(k); });
+  }
+
   /* A5 visual state. Three separate facts that used to be one class:
        cf-playing  this is the active card (set at commit; landscape keys off it)
        cf-shown    the iframe has painted and may be revealed  (PLAYING only)
@@ -3162,6 +3268,7 @@
     if(!gesture && !cfSoundOn){ clearTimeout(cfSoundWatch); cfSoundWatch=setTimeout(function(){ // sound never enabled + blocked -> muted fallback + chip (once)
       try{ var pp=cfPlayers[i]; if(pp&&pp.getPlayerState&&pp.getPlayerState()!==1){ cfMuteFallback=true; pp.mute(); pp.playVideo(); cfShowMuteHint(); } }catch(e){} },1500); }
     if(i+1<cdItems.length) cfEnsurePlayer(i+1);                          // pre-create the next card's player (instant on scroll)
+    cfPrimeSoon();                                                       // unlock it while a touch is still in hand
     cfDestroyFar(i);
   }
   // A4: paint one card's progress line in place (no innerHTML rebuild = no scroll/observer reset).
@@ -4664,21 +4771,77 @@
     var bk=document.getElementById('ytsBack'), bd=document.getElementById('ytsBd');
     if(bk) bk.onclick=ytGoBack; if(bd) bd.onclick=closeYtSheet;   // backdrop = dismiss, not step back
     var card=document.querySelector('#ytSheet .yts-card'); if(!card) return;
-    var y0=null, dy=0;
+
+    /* The sheet used to follow the finger from anywhere on it. The guard was
+       `card.scrollTop > 2`, but the sheet does not scroll -- #ytsBody does --
+       so card.scrollTop is always 0 and the guard never once said no. Every
+       touch anywhere on the sheet dragged the whole thing.
+
+       Two ways to dismiss it, and nothing else moves the sheet:
+
+         the grip   a handle exists to be grabbed; it drags immediately
+         the body   only from the top of the content, and only once the gesture
+                    has shown it is a downward drag rather than a scroll or a
+                    sideways swipe through the cards
+
+       Controls are never drag surfaces: a press on a button is an answer, not a
+       gesture. */
+    var GRAB=10;        // px before an ambiguous touch has to declare itself
+    var VERT=1.4;       // downward must beat sideways by this much
+    var CLOSE=90;       // px of travel that counts as "let it go"
+
+    function scrollerAt(t){
+      while(t && t!==card){
+        if(t.scrollHeight>t.clientHeight+1){
+          var oy=getComputedStyle(t).overflowY;
+          if(oy==='auto'||oy==='scroll') return t;
+        }
+        t=t.parentElement;
+      }
+      return null;
+    }
+    function isControl(t){ return !!(t&&t.closest&&t.closest('button,a,input,textarea,select,[role="button"]')); }
+
+    var y0=null, x0=0, dy=0, live=false, fromGrip=false, decided=false, cancelled=false;
+
     card.addEventListener('touchstart',function(e){
-      if(card.scrollTop>2) return;           // only when scrolled to top
-      y0=e.touches[0].clientY; dy=0;
+      var t=e.touches[0]; y0=t.clientY; x0=t.clientX; dy=0;
+      live=false; decided=false; cancelled=false;
+      fromGrip=!!(e.target.closest&&e.target.closest('.yts-grip'));
+      if(fromGrip){ live=true; decided=true; return; }
+      if(isControl(e.target)){ cancelled=true; return; }
+      var sc=scrollerAt(e.target);
+      if(sc && sc.scrollTop>2) cancelled=true;      // reading, not dismissing
     },{passive:true});
+
     card.addEventListener('touchmove',function(e){
-      if(y0==null) return;
-      dy=e.touches[0].clientY-y0;
-      if(dy>0){ card.classList.add('dragging'); card.style.transform='translateY('+dy+'px)'; }
+      if(y0==null||cancelled) return;
+      var t=e.touches[0];
+      dy=t.clientY-y0;
+      var dx=Math.abs(t.clientX-x0);
+      if(!decided){
+        if(Math.max(dy,dx)<GRAB) return;            // too small to mean anything yet
+        decided=true;
+        // A sideways swipe is the card carousel; an upward drag is a scroll.
+        if(dy<=0 || dx>Math.abs(dy)/VERT){ cancelled=true; return; }
+        live=true;
+      }
+      if(!live||dy<=0) return;
+      card.classList.add('dragging');
+      // Resistance, so the sheet feels attached rather than thrown.
+      card.style.transform='translateY('+(dy*0.62)+'px)';
     },{passive:true});
+
     card.addEventListener('touchend',function(){
-      if(y0==null) return;
+      if(y0!=null&&live){
+        card.classList.remove('dragging'); card.style.transform='';
+        if(dy>CLOSE) closeYtSheet();
+      }
+      y0=null; dy=0; live=false; decided=false; cancelled=false; fromGrip=false;
+    },{passive:true});
+    card.addEventListener('touchcancel',function(){
       card.classList.remove('dragging'); card.style.transform='';
-      if(dy>90) closeYtSheet();
-      y0=null; dy=0;
+      y0=null; dy=0; live=false; decided=false; cancelled=false; fromGrip=false;
     },{passive:true});
   })();
   // Curation deck controls — every visible control is live (no dead controls).
@@ -4727,6 +4890,12 @@
        header on every stray pixel. */
     (function(){
       var feed=g('cdFeed'); if(!feed) return;
+      // Unlock the neighbouring players inside the touch that just scrolled.
+      // This is the whole fix for "only the first video autoplays": the players
+      // for later cards are built on a timer, where iOS refuses to start them.
+      ['touchend','touchcancel'].forEach(function(ev){
+        feed.addEventListener(ev, function(){ cfPrimeSoon(); }, {passive:true});
+      });
       var last=0, HIDE_AFTER=64, DELTA=8;
       feed.addEventListener('scroll',function(){
         var y=feed.scrollTop, d=y-last;
