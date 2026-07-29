@@ -849,7 +849,7 @@
      flex-basis the two are circular — the basis resolves against the content box,
      which the padding is shrinking — and the end cards sit clipped against the
      edge (measured -32px / +47px off centre). */
-  #ytSheet{--yts-card-w:min(72vw,268px)}
+  #ytSheet{--yts-card-w:min(43vw,168px)}
   /* flex:none is load-bearing. `overflow-y:hidden` makes this item's automatic
      minimum size resolve to ZERO, so without it the deck is the first thing flex
      shrinks when the sheet is short -- and being overflow-hidden it then clips
@@ -858,16 +858,22 @@
      read the CARD's overflow, which was 0 precisely BECAUSE the deck was
      already crushed. */
   .yts-props{flex:none; display:flex; gap:10px; margin-top:2px; overflow-x:auto; overflow-y:hidden;
-    scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none;
-    padding:2px calc(50% - var(--yts-card-w)/2) 4px;
-    scroll-padding-inline:calc(50% - var(--yts-card-w)/2)}
+    scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    padding:2px 18px 4px; scroll-padding-inline:18px}
   .yts-props::-webkit-scrollbar{display:none}
-  .yts-prop{flex:0 0 var(--yts-card-w); scroll-snap-align:center; display:flex; flex-direction:column;
-    align-items:flex-start; justify-content:center; gap:7px; text-align:left; min-height:96px;
-    border:1px solid rgba(94,86,72,.14); background:rgba(255,255,255,.6); border-radius:17px; padding:15px 16px;
+  /* The type is the design. An icon in the corner was decoration bolted onto a
+     box; what a person is choosing between here is three WORDS, so the words
+     are given the room and the weight, and everything else recedes to a hairline
+     and a whisper of a label. Two fit on screen at once -- comparing is the
+     whole task, and a card that fills the width leaves nothing to compare it to. */
+  .yts-prop{flex:0 0 var(--yts-card-w); scroll-snap-align:start; display:flex; flex-direction:column;
+    align-items:flex-start; justify-content:flex-end; gap:9px; text-align:left; min-height:112px;
+    border:1px solid rgba(94,86,72,.13); background:rgba(255,255,255,.52); border-radius:16px;
+    padding:16px 15px 15px;
     cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent;
-    transition:transform .22s var(--spring), box-shadow .22s ease, border-color .22s ease, opacity .22s ease;
-    transform:scale(.94); opacity:.55}
+    transition:transform .24s var(--spring), box-shadow .24s ease, border-color .24s ease,
+               background .24s ease, opacity .24s ease;
+    transform:none; opacity:.62}
   /* Three-choice branch. Where the pixels come from, measured at 730px viewport:
    * the body has 254px and the rows wanted 309. Wrapping them turns three 15px
    * body gaps into one (-30), and 13px row padding instead of the shared 17px
@@ -880,65 +886,29 @@
   .yts-prop-ch .yts-prop-dom{background:rgba(94,86,72,.10); color:var(--paper-sub)}
   .yts-prop-ch.sel{border-style:solid}
   /* the centred card is the one the core button will pick */
-  .yts-prop.sel{transform:scale(1); opacity:1; border-color:var(--acc);
-    box-shadow:0 8px 20px -12px rgba(30,27,22,.5)}
+  /* Selection lifts the card rather than outlining it -- a heavy ring competes
+     with the word it is meant to be pointing at. */
+  .yts-prop.sel{opacity:1; background:rgba(255,255,255,.92); border-color:rgba(94,86,72,.2);
+    box-shadow:0 10px 24px -16px rgba(30,27,22,.55)}
   .yts-prop:active{transform:scale(.97)}
   /* position dots — which of the three is focused */
   .yts-dots{display:flex; gap:6px; justify-content:center; margin-top:2px}
   .yts-dot{width:5px; height:5px; border-radius:99px; background:rgba(94,86,72,.22); transition:all .22s ease}
   .yts-dot.on{background:var(--acc); width:16px}
-  .yts-prop-dom{font-size:10px; font-weight:800; letter-spacing:.04em; color:var(--acc-ink);
-    background:rgba(206,95,48,.10); padding:2px 8px; border-radius:99px}
-  .yts-prop-t{font-size:15px; font-weight:750; color:var(--paper-ink); position:relative; z-index:1}
-  /* ---- subject motifs ---------------------------------------------------
-     The card was a label and a title in a box, and the box was mostly empty.
-     Each subject now draws its own small figure in that space: a chart that
-     climbs for investment, a network that pulses for AI, bubbles that trade
-     places for language. Drawn here as SVG rather than picked from an emoji
-     set -- an emoji is someone else's drawing at someone else's weight, and it
-     would be the one thing on the sheet not in our hand.
-
-     Everything is currentColor at low opacity, so a motif can never introduce a
-     colour, and the art sits behind the text at the card's right edge, which
-     costs no height: the card stays 96px.
-
-     Only the CENTRED card animates. The two either side are the same drawing
-     held still -- motion three times over reads as a busy screen, and only one
-     card is being considered at a time. */
-  .yts-prop{position:relative; overflow:hidden; padding-right:74px}
-  .yts-art{position:absolute; right:-6px; bottom:-4px; width:78px; height:78px;
-    color:var(--acc-ink); opacity:.13; pointer-events:none;
-    transition:opacity .3s ease, transform .3s var(--spring); transform:scale(.92)}
-  .yts-prop.sel .yts-art{opacity:.26; transform:scale(1)}
-  .yts-prop-ch .yts-art{color:var(--paper-sub)}
-  /* Each motif animates one property, and only while its card is centred. */
-  .yts-art .dash{stroke-dasharray:64; stroke-dashoffset:64}
-  .yts-prop.sel .yts-art .dash{animation:ytDraw 2.6s ease-in-out infinite}
-  /* Draws in, HOLDS, then fades. The first version ran the offset past zero to
-     un-draw it, which left the card blank for roughly a third of every cycle --
-     caught in a screenshot taken during that phase. The line is now present for
-     most of the loop and leaves by fading, not by being erased backwards. */
-  @keyframes ytDraw{
-    0%{stroke-dashoffset:64; opacity:0}
-    14%{opacity:1}
-    42%{stroke-dashoffset:0}
-    86%{stroke-dashoffset:0; opacity:1}
-    100%{stroke-dashoffset:0; opacity:0}
-  }
-  .yts-prop.sel .yts-art .pulse{animation:ytPulse 2.2s ease-in-out infinite}
-  .yts-prop.sel .yts-art .pulse.d2{animation-delay:.45s}
-  .yts-prop.sel .yts-art .pulse.d3{animation-delay:.9s}
-  @keyframes ytPulse{0%,100%{opacity:.35; r:2.4} 50%{opacity:1; r:3.4}}
-  .yts-prop.sel .yts-art .rise{animation:ytRise 2.4s ease-in-out infinite}
-  .yts-prop.sel .yts-art .rise.d2{animation-delay:.2s}
-  .yts-prop.sel .yts-art .rise.d3{animation-delay:.4s}
-  @keyframes ytRise{0%,100%{transform:translateY(3px)} 50%{transform:translateY(-2px)}}
-  .yts-prop.sel .yts-art .sway{animation:ytSway 3.4s ease-in-out infinite; transform-origin:12px 20px}
-  @keyframes ytSway{0%,100%{transform:rotate(-7deg)} 50%{transform:rotate(7deg)}}
-  @media (prefers-reduced-motion:reduce){
-    .yts-art .dash{stroke-dashoffset:0}
-    .yts-prop.sel .yts-art *{animation:none !important}
-  }
+  /* Label: no pill. A filled capsule reads as a button, and this is a caption.
+     Wide tracking and low contrast put it where a caption belongs -- present,
+     and second. The accent stays for the card that is actually chosen. */
+  .yts-prop-dom{font-size:9.5px; font-weight:800; letter-spacing:.13em; color:var(--paper-sub);
+    background:none; padding:0; border-radius:0; transition:color .24s ease}
+  .yts-prop.sel .yts-prop-dom{color:var(--acc-ink)}
+  .yts-prop-t{font-size:17.5px; font-weight:800; letter-spacing:-.022em; line-height:1.3;
+    color:var(--paper-ink); position:relative;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+  /* One hairline between caption and word. It is the only ornament on the card
+     and it is doing structural work: it separates the two registers. */
+  .yts-prop-dom::after{content:''; display:block; width:20px; height:1px; margin-top:9px;
+    background:currentColor; opacity:.35; transition:width .3s var(--spring), opacity .24s ease}
+  .yts-prop.sel .yts-prop-dom::after{width:34px; opacity:.65}
   .yts-ghost{border:none; background:none; font-family:inherit; font-size:12px; font-weight:700;
     color:var(--paper-sub); cursor:pointer; padding:8px; touch-action:manipulation}
   /* Followed-channel list. Rows are informational (avatar + name) with one
@@ -2169,23 +2139,6 @@
   // select → async build → weekly video feed (reuses the beat player).
   var CUR_STAR='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg>';
   function curEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
-  /* One drawing per subject, 40x40, stroked in currentColor. Deliberately
-     simple: at 78px behind text at .26 opacity, detail turns to noise. Each
-     carries exactly one animated class so the motion says something about the
-     subject rather than decorating it. */
-  var YTS_ART={
-    investment:'<path class="dash" d="M5 30 L14 22 L21 26 L34 11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="34" cy="11" r="3" fill="currentColor" class="pulse"/>',
-    ai_ml:'<path d="M12 12 L28 20 M12 12 L20 30 M28 20 L20 30" stroke="currentColor" stroke-width="1.6" opacity=".6"/><circle cx="12" cy="12" r="3" fill="currentColor" class="pulse"/><circle cx="28" cy="20" r="3" fill="currentColor" class="pulse d2"/><circle cx="20" cy="30" r="3" fill="currentColor" class="pulse d3"/>',
-    career:'<rect class="rise" x="7" y="22" width="7" height="12" rx="2" fill="currentColor"/><rect class="rise d2" x="17" y="16" width="7" height="18" rx="2" fill="currentColor"/><rect class="rise d3" x="27" y="9" width="7" height="25" rx="2" fill="currentColor"/>',
-    startup:'<path class="dash" d="M7 33 C13 20 22 11 34 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M34 7 l-1.5 7 l7-1.5 z" fill="currentColor" class="pulse"/>',
-    language:'<rect class="rise" x="5" y="9" width="20" height="14" rx="5" fill="currentColor" opacity=".75"/><rect class="rise d2" x="17" y="20" width="19" height="14" rx="5" fill="currentColor"/>',
-    exam:'<rect x="8" y="6" width="24" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path class="dash" d="M14 17 l4 4 l8-9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 27 h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".5"/>',
-    other:'<circle cx="20" cy="20" r="14" fill="none" stroke="currentColor" stroke-width="2" opacity=".55"/><path class="sway" d="M20 20 L27 12" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="20" cy="20" r="2.6" fill="currentColor"/>'
-  };
-  function ytPropArt(domain){
-    var g=YTS_ART[domain]||YTS_ART.other;
-    return '<svg class="yts-art" viewBox="0 0 40 40" aria-hidden="true">'+g+'</svg>';
-  }
   var CUR_DOM_LABEL={ai_ml:'AI·기술',career:'취업·커리어',investment:'투자·경제',startup:'창업',language:'어학',exam:'시험·입시',other:'추천'};
   /* Curation tab = the caller's PERSISTENT curation list (GET /curations), rendered as
      the same text rows as the video/note tabs. Row tap opens the EXISTING week (GET
@@ -2621,7 +2574,6 @@
     var h='<div class="yts-h2">하나 골라볼까요?</div><div class="yts-props" id="ytsProps">';
     props.forEach(function(p){
       h+='<button class="yts-prop" data-topic="'+curEsc(p.topic)+'">'
-        +ytPropArt(p.domain)
         +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
         +'<span class="yts-prop-t">'+curEsc(p.topic)+'</span></button>';
     });
