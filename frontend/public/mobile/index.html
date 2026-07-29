@@ -56,17 +56,17 @@
   .th-cream{
     --body-hi:#FBFAF6; --body-mid:#F1EEE6; --body-lo:#DDD7C9; --rim:#FFFFFF;
     --wheel-a:#F7F5EF; --wheel-b:#EFECE4; --wheel-c:#E4E0D5;
-    --acc:#E0703F; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30; --shade:44,41,37;
+    --acc:#E0703F; --acc-rgb:224,112,63; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30; --shade:44,41,37;
   }
   .th-sage{
     --body-hi:#DCE4D5; --body-mid:#BECBB3; --body-lo:#93A788; --rim:#EFF4EA;
     --wheel-a:#EDF2E8; --wheel-b:#DDE6D5; --wheel-c:#C8D5BC;
-    --acc:#F0EBDD; --acc-hi:#F6F2E7; --acc-lo:#DCD5C2; --acc-ink:#6B6450; --ui:#6F8A63; --shade:52,66,46;
+    --acc:#F0EBDD; --acc-rgb:240,235,221; --acc-hi:#F6F2E7; --acc-lo:#DCD5C2; --acc-ink:#6B6450; --ui:#6F8A63; --shade:52,66,46;
   }
   .th-mist{
     --body-hi:#DCE6EE; --body-mid:#BECDD9; --body-lo:#90A7B8; --rim:#EFF4F8;
     --wheel-a:#ECF1F5; --wheel-b:#DAE3EA; --wheel-c:#C3D1DB;
-    --acc:#ECBD6B; --acc-hi:#F1C87F; --acc-lo:#D9A551; --acc-ink:#6E4E14; --ui:#B8862F; --shade:44,60,72;
+    --acc:#ECBD6B; --acc-rgb:236,189,107; --acc-hi:#F1C87F; --acc-lo:#D9A551; --acc-ink:#6E4E14; --ui:#B8862F; --shade:44,60,72;
   }
 
   /* ---- 디바이스 ---- */
@@ -149,7 +149,7 @@
   .gp-plus::before,.gp-plus::after{content:""; position:absolute; background:#fff; left:50%; top:50%; transform:translate(-50%,-50%)}
   .gp-plus::before{width:7px; height:1.7px} .gp-plus::after{width:1.7px; height:7px}
   .htabs{display:flex; gap:5px; margin-top:4px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
-  .htab{flex:1; display:flex; align-items:center; justify-content:center; border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:700; letter-spacing:.01em; color:var(--paper-sub); padding:9px 0; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
+  .htab{position:relative; flex:1; display:flex; align-items:center; justify-content:center; border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:700; letter-spacing:.01em; color:var(--paper-sub); padding:9px 0; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
   .htab svg{display:block}
   /* Tab beta marker. 영상 has no relevance ordering yet and 노트 is still
      settling, so the tab says so rather than letting the first visit discover
@@ -163,6 +163,21 @@
     letter-spacing:.1em; text-transform:uppercase; line-height:1; opacity:.45}
   .htab.on .tb{opacity:.55}
   .htab.on{color:var(--paper-ink); background:var(--paper); box-shadow:0 1px 2px rgba(94,86,72,.18)}
+  /* D1 -- says "something new is here" and stops. It settles in once and pulses
+     twice; a marker that keeps blinking is not a notice, it is nagging. It also
+     has to be visible from the OTHER tabs, which is the whole point -- today the
+     only way to learn there are new videos is to already be looking at them. */
+  .htab .nd{position:absolute; top:6px; right:10px; width:5px; height:5px; border-radius:99px;
+    background:var(--acc); opacity:0; transform:scale(.4)}
+  .htab.hasnew .nd{animation:ndIn .5s cubic-bezier(.2,.8,.3,1) forwards,
+                             ndPulse 2.4s ease-in-out .5s 2}
+  @keyframes ndIn{to{opacity:1; transform:none}}
+  @keyframes ndPulse{0%,100%{box-shadow:0 0 0 0 rgba(var(--acc-rgb),0)}
+                     35%{box-shadow:0 0 0 4px rgba(var(--acc-rgb),.22)}}
+  @media (prefers-reduced-motion:reduce){
+    .yts-props.enter .yts-prop,#cdFeed.wkin .cf-card,.htab.hasnew .nd{animation:none}
+    .htab.hasnew .nd{opacity:1; transform:none}
+  }
   .htab:active{transform:scale(.97)}
   .pane{flex:1; min-height:0; display:flex; flex-direction:column}
   /* Home carousel: curation/video/note as one connected strip dragged by the
@@ -898,6 +913,15 @@
   .yts-prop.sel{opacity:1; background:rgba(255,255,255,.92); border-color:rgba(94,86,72,.2);
     box-shadow:0 10px 24px -16px rgba(30,27,22,.55)}
   .yts-prop:active{transform:scale(.97)}
+  /* A1 -- the cards come up in reading order, 70ms apart, so the motion guides
+     the eye along the row instead of competing for it. Applied by a class so it
+     runs on render and never again; a list that re-animates on every repaint is
+     a list that keeps interrupting. */
+  .yts-props.enter .yts-prop{animation:ytsRise .44s cubic-bezier(.2,.7,.25,1) backwards}
+  .yts-props.enter .yts-prop:nth-child(2){animation-delay:.07s}
+  .yts-props.enter .yts-prop:nth-child(3){animation-delay:.14s}
+  .yts-props.enter .yts-prop:nth-child(4){animation-delay:.21s}
+  @keyframes ytsRise{from{opacity:0; transform:translateY(12px)} to{opacity:1; transform:none}}
   /* position dots — which of the three is focused */
   .yts-dots{display:flex; gap:6px; justify-content:center; margin-top:2px}
   .yts-dot{width:5px; height:5px; border-radius:99px; background:rgba(94,86,72,.22); transition:all .22s ease}
@@ -1266,6 +1290,14 @@
   .cf-skel .cf-skline.w1{width:78%}
   .cf-skel .cf-skline.w2{width:44%; height:11px; margin-top:9px}
   @keyframes cfSweep{to{transform:translateX(100%)}}
+  /* C1 -- a new week slides in from the right, so the hand remembers which way
+     it moved through time. Only on a week SWITCH: the first open has nothing to
+     have come from. */
+  #cdFeed.wkin .cf-card{animation:cfWeekIn .5s cubic-bezier(.2,.7,.25,1) backwards}
+  #cdFeed.wkin .cf-card:nth-child(2){animation-delay:.06s}
+  #cdFeed.wkin .cf-card:nth-child(3){animation-delay:.12s}
+  #cdFeed.wkin .cf-card:nth-child(n+4){animation-delay:.18s}
+  @keyframes cfWeekIn{from{opacity:0; transform:translateX(46px)} to{opacity:1; transform:none}}
   .cf-empty{padding:38px 18px; text-align:center; font-size:13px; font-weight:650; color:var(--paper-sub)}
   @media (prefers-reduced-motion:reduce){ .cf-skel .cf-media::before{animation:none} }
   .cf-durchip{position:absolute; right:8px; bottom:8px; z-index:2; background:rgba(10,9,8,.8); color:#EDE7DC;
@@ -1526,7 +1558,7 @@
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
         <div class="htabs" id="htabs">
-          <button class="htab on" data-htab="curation" aria-label="큐레이션"><span>큐레이션</span></button>
+          <button class="htab on" data-htab="curation" aria-label="큐레이션"><span>큐레이션</span><span class="nd" aria-hidden="true"></span></button>
           <button class="htab" data-htab="video" aria-label="영상 (베타)"><span>영상</span><span class="tb" aria-hidden="true">beta</span></button>
           <button class="htab" data-htab="note" aria-label="노트 (베타)"><span>노트</span><span class="tb" aria-hidden="true">beta</span></button>
         </div>
@@ -1766,7 +1798,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-46';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-47';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2159,7 +2191,18 @@
    *  Every surface reads through here so a rename shows up everywhere at once. */
   function curName(s){ return (s && (s.display_title || s.topic)) || '(제목 없음)'; }
   function curSig(subs){ return JSON.stringify((subs||[]).map(function(s){ return [s.id,s.display_title,s.item_count,s.watched_count,s.last_run_at,s.next_run_at,s.topic]; })); }
-  function curPaint(subs){ var sig=curSig(subs); if(sig===curRenderedSig&&Array.isArray(subs)) return; renderCurationRows(subs); curRenderedSig=sig; }
+  /* D1 -- the tab carries the same fact the rows already carry: at least one
+     curation has a week nobody has started. curRowState is the single source, so
+     the dot can never disagree with the row underneath it. Cleared by OPENING a
+     deck, not by visiting the tab: seeing the list is not the same as having
+     seen the week, and clearing it on arrival would lose the very signal. */
+  function curSyncTabDot(subs){
+    var tab=document.querySelector('.htab[data-htab="curation"]'); if(!tab) return;
+    var any=Array.isArray(subs)&&subs.some(function(s){ return curRowState(s).dot; });
+    tab.classList.toggle('hasnew', !!any);
+  }
+  function curPaint(subs){ curSyncTabDot(subs);
+    var sig=curSig(subs); if(sig===curRenderedSig&&Array.isArray(subs)) return; renderCurationRows(subs); curRenderedSig=sig; }
   async function renderCuration(){
     var el=document.getElementById('curBody'); if(!el) return;
     var haveCache=Array.isArray(curCache);
@@ -2379,7 +2422,11 @@
       }
       cdItems=items; cdIdx=0; cdEndRolled=false;
       cdCtx.week=(j&&j.data&&j.data.week_of)||week;
-      cfRender(); cfSetupObserver();
+      cfRender();
+      // C1: the new week arrives from the side. Scoped to the switch -- opening
+      // the deck has nothing to have come from, so it does not slide.
+      if(feed){ feed.classList.remove('wkin'); void feed.offsetWidth; feed.classList.add('wkin'); }
+      cfSetupObserver();
       setTimeout(function(){ if(cfIsFeed()) cfCommitPlay(0,false); },160);
     }catch(e){
       if(feed) feed.innerHTML='<div class="cf-empty">불러오지 못했어요 — 다시 시도해주세요</div>';
@@ -2578,7 +2625,7 @@
     ytLastProps=props;
     // Body = header + the card deck only. Everything actionable moves to the
     // pinned foot, so a tall body can never push it off a phone screen.
-    var h='<div class="yts-h2">하나 골라볼까요?</div><div class="yts-props" id="ytsProps">';
+    var h='<div class="yts-h2">하나 골라볼까요?</div><div class="yts-props enter" id="ytsProps">';
     props.forEach(function(p){
       h+='<button class="yts-prop" data-topic="'+curEsc(p.topic)+'">'
         +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
