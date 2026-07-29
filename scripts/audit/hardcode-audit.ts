@@ -145,7 +145,16 @@ function auditRule(rule: RuleDef): RuleResult {
       // Defining a token is how a colour is allowed to enter the system; the
       // rule is about colours written straight into a declaration, where the
       // theme cannot reach them.
-      if (rule.id === 'css-color-literal' && /--[a-z0-9-]+\s*:/i.test(text)) continue;
+      if (rule.id === 'css-color-literal') {
+        if (/--[a-z0-9-]+\s*:/i.test(text)) continue;
+        // rgba(var(--shade),.3) is a TOKEN with an alpha applied -- the one
+        // correct way to make a themed colour translucent, and already the
+        // house style. Counting it taught the opposite lesson: it pushed you
+        // toward writing the channels out by hand. Strip those calls and judge
+        // whatever literal is left on the line.
+        const stripped = text.replace(/\b(?:rgba?|hsla?)\(\s*var\([^)]*\)[^)]*\)/gi, '');
+        if (!/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/.test(stripped)) continue;
+      }
       violations.push({
         file: filePath,
         line: event.data.line_number as number,

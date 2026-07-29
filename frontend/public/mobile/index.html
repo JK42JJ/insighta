@@ -818,7 +818,14 @@
   @media (prefers-reduced-motion:reduce){ .yts-spin{animation-duration:2.4s} }
   body.ytsheet #ytSheet{opacity:1; pointer-events:auto}
   body.ytsheet #ytSheet .yts-card{transform:translateY(0)}
-  #ytSheet .yts-grip{width:38px; height:4px; border-radius:99px; background:rgba(94,86,72,.22); margin:0 auto; flex:none}
+  /* The bar is 4px because that is what reads well; the TARGET is 44px tall and
+     full width, because that is what a thumb needs. The pseudo-element carries
+     the reach so the visible handle does not have to grow to be catchable. */
+  #ytSheet{--grip:94,86,72}
+  #ytSheet .yts-grip{width:38px; height:4px; border-radius:99px; background:rgba(var(--grip),.22);
+    margin:0 auto; flex:none; position:relative; touch-action:none}
+  #ytSheet .yts-grip::before{content:''; position:absolute; left:-50vw; right:-50vw; top:-20px; bottom:-20px}
+  #ytSheet .yts-card.dragging .yts-grip{background:rgba(var(--grip),.4)}
   /* Retune lives as an icon in the sheet's top-right corner rather than as a
      full-width row in the foot: same action, ~40px of vertical budget back, and
      it reads as "try again" instead of competing with the primary input. */
@@ -1759,7 +1766,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-45';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-46';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4764,21 +4771,77 @@
     var bk=document.getElementById('ytsBack'), bd=document.getElementById('ytsBd');
     if(bk) bk.onclick=ytGoBack; if(bd) bd.onclick=closeYtSheet;   // backdrop = dismiss, not step back
     var card=document.querySelector('#ytSheet .yts-card'); if(!card) return;
-    var y0=null, dy=0;
+
+    /* The sheet used to follow the finger from anywhere on it. The guard was
+       `card.scrollTop > 2`, but the sheet does not scroll -- #ytsBody does --
+       so card.scrollTop is always 0 and the guard never once said no. Every
+       touch anywhere on the sheet dragged the whole thing.
+
+       Two ways to dismiss it, and nothing else moves the sheet:
+
+         the grip   a handle exists to be grabbed; it drags immediately
+         the body   only from the top of the content, and only once the gesture
+                    has shown it is a downward drag rather than a scroll or a
+                    sideways swipe through the cards
+
+       Controls are never drag surfaces: a press on a button is an answer, not a
+       gesture. */
+    var GRAB=10;        // px before an ambiguous touch has to declare itself
+    var VERT=1.4;       // downward must beat sideways by this much
+    var CLOSE=90;       // px of travel that counts as "let it go"
+
+    function scrollerAt(t){
+      while(t && t!==card){
+        if(t.scrollHeight>t.clientHeight+1){
+          var oy=getComputedStyle(t).overflowY;
+          if(oy==='auto'||oy==='scroll') return t;
+        }
+        t=t.parentElement;
+      }
+      return null;
+    }
+    function isControl(t){ return !!(t&&t.closest&&t.closest('button,a,input,textarea,select,[role="button"]')); }
+
+    var y0=null, x0=0, dy=0, live=false, fromGrip=false, decided=false, cancelled=false;
+
     card.addEventListener('touchstart',function(e){
-      if(card.scrollTop>2) return;           // only when scrolled to top
-      y0=e.touches[0].clientY; dy=0;
+      var t=e.touches[0]; y0=t.clientY; x0=t.clientX; dy=0;
+      live=false; decided=false; cancelled=false;
+      fromGrip=!!(e.target.closest&&e.target.closest('.yts-grip'));
+      if(fromGrip){ live=true; decided=true; return; }
+      if(isControl(e.target)){ cancelled=true; return; }
+      var sc=scrollerAt(e.target);
+      if(sc && sc.scrollTop>2) cancelled=true;      // reading, not dismissing
     },{passive:true});
+
     card.addEventListener('touchmove',function(e){
-      if(y0==null) return;
-      dy=e.touches[0].clientY-y0;
-      if(dy>0){ card.classList.add('dragging'); card.style.transform='translateY('+dy+'px)'; }
+      if(y0==null||cancelled) return;
+      var t=e.touches[0];
+      dy=t.clientY-y0;
+      var dx=Math.abs(t.clientX-x0);
+      if(!decided){
+        if(Math.max(dy,dx)<GRAB) return;            // too small to mean anything yet
+        decided=true;
+        // A sideways swipe is the card carousel; an upward drag is a scroll.
+        if(dy<=0 || dx>Math.abs(dy)/VERT){ cancelled=true; return; }
+        live=true;
+      }
+      if(!live||dy<=0) return;
+      card.classList.add('dragging');
+      // Resistance, so the sheet feels attached rather than thrown.
+      card.style.transform='translateY('+(dy*0.62)+'px)';
     },{passive:true});
+
     card.addEventListener('touchend',function(){
-      if(y0==null) return;
+      if(y0!=null&&live){
+        card.classList.remove('dragging'); card.style.transform='';
+        if(dy>CLOSE) closeYtSheet();
+      }
+      y0=null; dy=0; live=false; decided=false; cancelled=false; fromGrip=false;
+    },{passive:true});
+    card.addEventListener('touchcancel',function(){
       card.classList.remove('dragging'); card.style.transform='';
-      if(dy>90) closeYtSheet();
-      y0=null; dy=0;
+      y0=null; dy=0; live=false; decided=false; cancelled=false; fromGrip=false;
     },{passive:true});
   })();
   // Curation deck controls — every visible control is live (no dead controls).
