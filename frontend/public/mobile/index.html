@@ -28,6 +28,9 @@
     --studio-hi:#F5F2EC; --studio-lo:#E6E1D6; --ink:#2C2925; --ink-2:#837D72; --hair:#DCD6CA;
     --paper:#F6F2E7; --paper-ink:#3B372F; --paper-sub:#8F887A;
     --butter:#F5D48A; --green:#34C759; --red:#FF3B30;
+    /* Dark stage. Written out identically in six places before this; the
+       deck feed now references it and the rest can follow. */
+    --stage:#0D0D10;
     /* S3: 물성 공통 토큰 — 전 표면 동일 계열 */
     --soft:cubic-bezier(.22,.9,.3,1); --spring:cubic-bezier(.34,1.4,.64,1); --snap:120ms;
     --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
@@ -1162,7 +1165,7 @@
     body.curdeck.cdplaying .cd-poster{--deck-dim:1}
   }
   #cdFeed::after{content:''; display:block; height:34vh}   /* tail spacer: last card can settle as dominant */
-  .cf-card{position:relative; width:100%; background:#0D0D10; padding-bottom:14px}
+  .cf-card{position:relative; width:100%; background:var(--stage); padding-bottom:14px}
   .cf-media{position:relative; width:100%; aspect-ratio:16/9; background:#000 center/cover no-repeat; overflow:hidden;
     transition:filter .3s ease}
   /* A2: brightness tier replaces width tier. Expressed through the same --cf-dim
@@ -1187,7 +1190,7 @@
      the veil is one element with four values, and a transition that has to
      resolve calc(1 - var(--x)) does not reliably re-run when only the variable
      changed -- measured: --cf-dim went to 1 while the veil stayed at .20. */
-  .cf-media::after{content:''; position:absolute; inset:0; z-index:2; background:#0D0D10;
+  .cf-media::after{content:''; position:absolute; inset:0; z-index:2; background:var(--stage);
     opacity:0; pointer-events:none;
     transition:opacity 220ms cubic-bezier(.2,.6,.2,1)}
   body.curdeck .cf-card.cf-focus .cf-media::after{opacity:.20}
