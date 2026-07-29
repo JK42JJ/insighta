@@ -56,6 +56,8 @@
   .th-cream{
     --body-hi:#FBFAF6; --body-mid:#F1EEE6; --body-lo:#DDD7C9; --rim:#FFFFFF;
     --wheel-a:#F7F5EF; --wheel-b:#EFECE4; --wheel-c:#E4E0D5;
+    --il-sage:#7C8B6F; --il-ochre:#D6A44C; --il-slate:#6C7C8C; --il-clay:#C4674A; --il-cream:#F2ECDD;
+    --il-sheet:#FFFDF7; --il-line:rgba(60,55,45,.18); --il-line-2:rgba(60,55,45,.24);
     --acc:#E0703F; --acc-rgb:224,112,63; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C; --ui:#CE5F30; --shade:44,41,37;
   }
   .th-sage{
@@ -883,15 +885,16 @@
     scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:none;
     padding:2px 18px 4px; scroll-padding-inline:18px}
   .yts-props::-webkit-scrollbar{display:none}
-  /* The type is the design. An icon in the corner was decoration bolted onto a
-     box; what a person is choosing between here is three WORDS, so the words
-     are given the room and the weight, and everything else recedes to a hairline
-     and a whisper of a label. Two fit on screen at once -- comparing is the
-     whole task, and a card that fills the width leaves nothing to compare it to. */
+  /* The illustration needs a band of its own, not a corner. Scene on top,
+     words below -- which is why the card grew from 112 to 196px. Measured
+     first: the sheet body is 321px on the shortest phone the dial supports,
+     so 196 leaves the heading and the dots their room and keeps TWO cards on
+     screen. A scene squeezed into 78px beside the text was the version that
+     collapsed into coloured blobs. */
   .yts-prop{flex:0 0 var(--yts-card-w); scroll-snap-align:start; display:flex; flex-direction:column;
-    align-items:flex-start; justify-content:flex-end; gap:9px; text-align:left; min-height:112px;
+    align-items:stretch; justify-content:flex-start; gap:0; text-align:left; min-height:196px;
     border:1px solid rgba(94,86,72,.13); background:rgba(255,255,255,.52); border-radius:16px;
-    padding:16px 15px 15px;
+    padding:0; overflow:hidden;
     cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent;
     transition:transform .24s var(--spring), box-shadow .24s ease, border-color .24s ease,
                background .24s ease, opacity .24s ease;
@@ -934,7 +937,7 @@
   .yts-prop.sel .yts-prop-dom{color:var(--acc-ink)}
   .yts-prop-t{font-size:17.5px; font-weight:800; letter-spacing:-.022em; line-height:1.3;
     color:var(--paper-ink); position:relative;
-    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
   /* One hairline between caption and word. It is the only ornament on the card
      and it is doing structural work: it separates the two registers. */
   .yts-prop-dom::after{content:''; display:block; width:20px; height:1px; margin-top:9px;
@@ -1820,7 +1823,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-50';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-29-51';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2200,6 +2203,54 @@
   // select → async build → weekly video feed (reuses the beat player).
   var CUR_STAR='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 4.4 4.7 1.4-3.5 3 .9 4.7L12 14.6 7.6 17l.9-4.7-3.5-3 4.7-1.4z"/></svg>';
   function curEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  var YTS_SCENE={
+    investment:'<rect x="26" y="34" width="104" height="72" rx="5" fill="var(--il-sheet)" stroke="var(--il-line)"/>'
+      +'<rect class="ys-bar" x="40" y="72" width="14" height="24" rx="3" fill="var(--il-sage)"/>'
+      +'<rect class="ys-bar b2" x="60" y="60" width="14" height="36" rx="3" fill="var(--il-ochre)"/>'
+      +'<rect class="ys-bar b3" x="80" y="48" width="14" height="48" rx="3" fill="var(--acc)"/>'
+      +'<path d="M40 44 h56" stroke="var(--il-line-2)" stroke-width="3" stroke-linecap="round"/>'
+      +'<g class="ys-pen"><rect x="132" y="52" width="7" height="42" rx="3.5" fill="var(--il-slate)" transform="rotate(24 135 73)"/>'
+      +'<path d="M147 92 l4 9 l-8 -2 z" fill="var(--paper-ink)"/></g>',
+    ai_ml:'<path d="M64 46 L118 68 M64 46 L84 100 M118 68 L84 100 M118 68 L146 40" stroke="var(--il-line-2)" stroke-width="2.4" stroke-linecap="round"/>'
+      +'<g class="ys-orb"><circle cx="64" cy="46" r="13" fill="var(--il-slate)"/></g>'
+      +'<g class="ys-orb o2"><circle cx="118" cy="68" r="16" fill="var(--acc)"/></g>'
+      +'<g class="ys-orb o3"><circle cx="84" cy="100" r="10" fill="var(--il-sage)"/></g>'
+      +'<circle cx="146" cy="40" r="7" fill="var(--il-ochre)"/>',
+    language:'<path d="M42 92 V52 q26 -10 52 0 V92 q-26 -9 -52 0z" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<path d="M146 92 V52 q-26 -10 -52 0 V92 q26 -9 52 0z" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<path d="M94 52 V92" stroke="var(--il-line-2)" stroke-width="2"/>'
+      +'<path d="M56 64 h24 M56 72 h20 M110 64 h24 M110 72 h18" stroke="var(--il-line-2)" stroke-width="2.6" stroke-linecap="round"/>'
+      +'<rect x="150" y="76" width="22" height="17" rx="3" fill="var(--il-clay)"/>'
+      +'<path d="M172 80 h5 a4 4 0 0 1 0 8 h-5" fill="none" stroke="var(--il-clay)" stroke-width="2.6"/>'
+      +'<path class="ys-steam" d="M157 70 q3 -5 0 -9" stroke="var(--il-line-2)" stroke-width="2" fill="none" stroke-linecap="round"/>'
+      +'<path class="ys-steam s2" d="M165 70 q3 -5 0 -9" stroke="var(--il-line-2)" stroke-width="2" fill="none" stroke-linecap="round"/>',
+    career:'<rect x="52" y="30" width="76" height="76" rx="5" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<rect x="76" y="24" width="28" height="13" rx="3" fill="var(--il-slate)"/>'
+      +'<circle cx="90" cy="58" r="12" fill="var(--il-ochre)"/>'
+      +'<path d="M72 88 q18 -16 36 0" fill="var(--il-ochre)" opacity=".75"/>'
+      +'<g class="ys-step"><rect x="140" y="80" width="13" height="22" rx="3" fill="var(--il-sage)"/></g>'
+      +'<g class="ys-step s2"><rect x="158" y="66" width="13" height="36" rx="3" fill="var(--acc)"/></g>',
+    startup:'<path d="M44 56 h112 l-10 -18 h-92 z" fill="var(--acc)" opacity=".85"/>'
+      +'<rect x="52" y="56" width="96" height="48" rx="4" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<rect x="68" y="72" width="26" height="32" rx="3" fill="var(--il-slate)" opacity=".8"/>'
+      +'<rect x="108" y="72" width="26" height="20" rx="3" fill="var(--il-sage)" opacity=".8"/>'
+      +'<g class="ys-orb"><circle cx="160" cy="34" r="7" fill="var(--il-ochre)"/></g>',
+    exam:'<path d="M132 26 a18 18 0 0 1 18 18 v6 h-36 v-6 a18 18 0 0 1 18 -18z" fill="var(--il-slate)"/>'
+      +'<path d="M132 50 v20" stroke="var(--il-slate)" stroke-width="4"/>'
+      +'<path class="ys-glow" d="M104 96 l28 -26 l28 26z" fill="var(--il-ochre)" opacity=".28"/>'
+      +'<rect x="40" y="70" width="72" height="34" rx="4" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<path d="M52 82 h44 M52 92 h30" stroke="var(--il-line-2)" stroke-width="2.6" stroke-linecap="round"/>'
+      +'<g class="ys-pen"><rect x="98" y="60" width="6" height="34" rx="3" fill="var(--il-clay)" transform="rotate(26 101 77)"/></g>',
+    other:'<circle cx="100" cy="66" r="34" fill="var(--il-sheet)" stroke="var(--il-line)" stroke-width="2"/>'
+      +'<g class="ys-needle"><path d="M100 66 L118 44" stroke="var(--acc)" stroke-width="5" stroke-linecap="round"/>'
+      +'<path d="M100 66 L84 86" stroke="var(--il-slate)" stroke-width="4" stroke-linecap="round" opacity=".6"/></g>'
+      +'<circle cx="100" cy="66" r="4.5" fill="var(--paper-ink)"/>'
+      +'<circle cx="100" cy="30" r="3" fill="var(--il-ochre)"/>'
+  };
+  function ytScene(domain){
+    return '<svg class="yts-scene" viewBox="0 0 200 130" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'
+      +(YTS_SCENE[domain]||YTS_SCENE.other)+'</svg>';
+  }
   var CUR_DOM_LABEL={ai_ml:'AI·기술',career:'취업·커리어',investment:'투자·경제',startup:'창업',language:'어학',exam:'시험·입시',other:'추천'};
   /* Curation tab = the caller's PERSISTENT curation list (GET /curations), rendered as
      the same text rows as the video/note tabs. Row tap opens the EXISTING week (GET
@@ -2650,8 +2701,11 @@
     var h='<div class="yts-h2">하나 골라볼까요?</div><div class="yts-props enter" id="ytsProps">';
     props.forEach(function(p){
       h+='<button class="yts-prop" data-topic="'+curEsc(p.topic)+'">'
-        +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
-        +'<span class="yts-prop-t">'+curEsc(p.topic)+'</span></button>';
+        +ytScene(p.domain)
+        +'<span class="yts-body">'
+          +'<span class="yts-prop-dom">'+curEsc(CUR_DOM_LABEL[p.domain]||'추천')+'</span>'
+          +'<span class="yts-prop-t">'+curEsc(p.topic)+'</span>'
+        +'</span></button>';
     });
     h+='</div><div class="yts-dots" id="ytsDots">'
       +props.map(function(_,i){ return '<span class="yts-dot'+(i===0?' on':'')+'"></span>'; }).join('')
