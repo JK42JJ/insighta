@@ -153,7 +153,19 @@ function auditRule(rule: RuleDef): RuleResult {
         // toward writing the channels out by hand. Strip those calls and judge
         // whatever literal is left on the line.
         const stripped = text.replace(/\b(?:rgba?|hsla?)\(\s*var\([^)]*\)[^)]*\)/gi, '');
-        if (!/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/.test(stripped)) continue;
+        if (/\brgba?\(|\bhsla?\(/.test(stripped)) { /* a colour function is always a value */ }
+        else {
+          // A #hex is only a COLOUR where a value can go, which means after a
+          // colon. An id selector can spell one by accident -- #cdFeed is six
+          // hex digits -- and counting those taught nothing except to rename
+          // the element.
+          const hex = /#[0-9a-fA-F]{3,8}\b/g;
+          let isValue = false;
+          for (let m = hex.exec(stripped); m; m = hex.exec(stripped)) {
+            if (stripped.lastIndexOf(':', m.index) !== -1) { isValue = true; break; }
+          }
+          if (!isValue) continue;
+        }
       }
       violations.push({
         file: filePath,
