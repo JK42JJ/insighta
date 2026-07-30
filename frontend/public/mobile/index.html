@@ -1437,9 +1437,27 @@
   .cf-mound .mdot{fill:var(--cd-chip-on-bg)}
   .cf-mound .mzones{position:absolute;left:0;top:0;width:100%;height:100%;display:flex}
   .cf-mound .mzones i{display:block;height:100%}
-  .cf-card.mdim .cf-mound .mbase{opacity:.55}
   .cf-card.monly .cf-mound .mbase{opacity:.35}
-  @media (prefers-reduced-motion: no-preference){ .cf-mound .mbase{transition:opacity .5s} }
+  /* Mobile quiet gate (James 07-31 "지나치게 거슬려"): on PC the mound appears
+     WITH the hover chrome and hides with it; mobile has no hover, so the mound
+     follows the rhythm of YouTube's own mobile controls instead — 3s into
+     playback the hills SINK into the baseline (the thin progress line stays),
+     pause or a strip tap raises them back. While sunk, the first tap only
+     raises (no seek) — same two-tap grammar as the native controls. */
+  .cf-mound .mbase,.cf-mound .msweep{transform-box:view-box;transform-origin:50% 95.5%}
+  .cf-card.msunk .cf-mound .mbase,.cf-card.msunk .cf-mound .msweep{transform:scale(1,.03);opacity:0}
+  .cf-card.msunk .cf-mound .mdot{opacity:0}
+  /* Current-section title + one-liner in the empty band above the hills.
+     Same gate as the hills: raised = visible, sunk = gone. PC parity for the
+     chapter list's per-section text, sized for the deck's quiet register. */
+  .cf-secline{position:absolute;left:2px;right:2px;top:0;pointer-events:none;opacity:0}
+  .cf-card.cf-playing:not(.msunk) .cf-mound .cf-secline{opacity:1}
+  .cf-secline b{display:block;font-size:12px;line-height:1.2;font-weight:600;color:var(--cd-chip-on-bg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cf-secline span{display:block;font-size:11px;line-height:1.25;color:var(--cd-chip-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  @media (prefers-reduced-motion: no-preference){
+    .cf-mound .mbase,.cf-mound .msweep{transition:transform .6s cubic-bezier(.4,0,.2,1),opacity .6s}
+    .cf-mound .mdot,.cf-secline{transition:opacity .4s}
+  }
   .cf-segchip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;color:var(--cd-chip-ink);background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge)}
   /* V3 core-only toggle — video decks only (body.vdeck). Default = full. */
   .cd-mode{display:none;align-items:center;background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge);border-radius:999px;padding:2px;margin-left:auto}
@@ -2059,7 +2077,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-77';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-78';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3922,12 +3940,12 @@
       if(i===cfPlayIdx) clearTimeout(cfSoundWatch);
       cfWaitClear();
       if(c){ c.classList.add('cf-playing','cf-shown','cf-lit'); }
-      if(cdItems[i]&&cdItems[i].vtab){ cfDimWake(i); cfDimArm(i); } // V2: tone the curve down 3s into playback
+      if(cdItems[i]&&cdItems[i].vtab){ cfDimWake(i); cfDimArm(i); } // quiet gate: hills sink 3s into playback
     } else if(st===2){
       // Paused: the picture dims back but stays visible. Fading the iframe out
       // would put the poster back over a video the user deliberately paused.
       if(c) c.classList.remove('cf-lit');
-      if(cdItems[i]&&cdItems[i].vtab) cfDimWake(i);                 // V2: paused = full chroma
+      if(cdItems[i]&&cdItems[i].vtab) cfDimWake(i);                 // quiet gate: paused = hills up
     } else if(st===0){ cfCardEnded(i); }
   }
   function cfPlayerError(i, code){
@@ -4140,15 +4158,22 @@
       +baseP+sweepP
       +'<circle class="mdot" cx="0" cy="'+Math.round(g.yAt(0)*10)/10+'" r="3"></circle>'
       +'</svg>'
+      +'<div class="cf-secline"></div>'
       +'<div class="mzones">'+g.zones.map(function(z){ return '<i style="flex-grow:'+z.w+'" data-sec="'+z.from+'"></i>'; }).join('')+'</div>';
     media.insertAdjacentElement('afterend', el);
     el.querySelector('.mzones').addEventListener('click', function(ev){
       var z=ev.target; if(!z||!z.getAttribute) return; var sec=+z.getAttribute('data-sec'); if(isNaN(sec)) return;
+      if(c.classList.contains('msunk')){ c.classList.remove('msunk'); cfSecLine(i); cfDimArm(i); return; } // sunk: first tap only raises
       try{ var p=cfPlayers[i]; if(p&&p.seekTo){ p.seekTo(sec,true); if(p.playVideo) p.playVideo(); } }catch(e){}
-      c.classList.remove('mdim'); cfDimArm(i);           // touching the strip wakes it
+      cfSecLine(i, sec);
+      cfDimArm(i);           // touching the strip keeps it up for another 3s
     });
     c.classList.add('hasmound');
     cfMoundArm(i);
+    cfSecLine(i);
+    // Late render (segments fetched mid-playback): the st===1 sink timer may
+    // have fired before the mound existed — re-arm so it still goes quiet.
+    try{ var ps=cfPlayers[i]; if(ps&&ps.getPlayerState&&ps.getPlayerState()===1) cfDimArm(i); }catch(e){}
     cfCoreApply(i); // V3: sections just became available — apply the mode now
   }
   function cfMoundPaint(i, frac){
@@ -4170,6 +4195,7 @@
         var d=p.getDuration()||it.duration_sec||0; if(!(d>0)) return;
         var t=p.getCurrentTime()||0;
         cfMoundPaint(i, t/d);
+        cfSecLine(i, t); // current-section text rides the tick (no-op unless section changed)
         cfCoreTick(i, t); // V3: core-only steering rides the same 1s tick
       }catch(e){}
     },1000);
@@ -4177,9 +4203,30 @@
   // Supervisor condition: full chroma on pause/scrub, 40% tone-down of the
   // NON-highlight curve 3s into playback. Progress fill + peaks stay readable.
   function cfDimArm(i){ if(cfDimT) clearTimeout(cfDimT);
-    cfDimT=setTimeout(function(){ var c=cfCards()[i]; if(c&&c.classList.contains('hasmound')&&i===cfPlayIdx) c.classList.add('mdim'); },3000);
+    cfDimT=setTimeout(function(){ var c=cfCards()[i]; if(c&&c.classList.contains('hasmound')&&i===cfPlayIdx) c.classList.add('msunk'); },3000);
   }
-  function cfDimWake(i){ var c=cfCards()[i]; if(c) c.classList.remove('mdim'); if(cfDimT){ clearTimeout(cfDimT); cfDimT=null; } }
+  function cfDimWake(i){ var c=cfCards()[i]; if(c) c.classList.remove('msunk'); if(cfDimT){ clearTimeout(cfDimT); cfDimT=null; } }
+  // Current-section text (James 07-31: PC shows per-section one-liners — the
+  // mobile slot is the empty band ABOVE the hills, visible only while they are
+  // raised, so the text obeys the same quiet gate as the mound itself.
+  function cfSecAt(vid, t){
+    var e=segCache[vid]; if(!e||!e.sections) return null;
+    for(var k=0;k<e.sections.length;k++){ var s=e.sections[k]; if(t>=+s.from_sec&&t<+s.to_sec) return s; }
+    return null;
+  }
+  function cfSecLine(i, forcedSec){
+    var c=cfCards()[i]; if(!c) return; var el=c.querySelector('.cf-secline'); if(!el) return;
+    var it=cdItems[i]; if(!it) return;
+    var t=forcedSec;
+    if(t==null){ try{ var p=cfPlayers[i]; t=(p&&p.getCurrentTime)?(p.getCurrentTime()||0):0; }catch(e){ t=0; } }
+    var s=cfSecAt(it.video_id, t);
+    if(!s){ if(el.getAttribute('data-k')){ el.removeAttribute('data-k'); el.innerHTML=''; } return; }
+    var key=String(s.from_sec);
+    if(el.getAttribute('data-k')===key) return;
+    el.setAttribute('data-k', key);
+    var esc=function(x){ return String(x==null?'':x).replace(/[<>&"]/g,function(ch){ return ch==='<'?'&lt;':ch==='>'?'&gt;':ch==='&'?'&amp;':'&quot;'; }); };
+    el.innerHTML='<b>'+esc(s.title||'')+'</b>'+(s.summary?'<span>'+esc(s.summary)+'</span>':'');
+  }
 
   // ===== V3: core-only playback ==============================================
   // Plays only the >=80 sections, chained through the SAME in-card player.
