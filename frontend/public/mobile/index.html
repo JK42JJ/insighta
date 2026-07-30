@@ -1192,8 +1192,16 @@
   /* journey bar (reusable unit — the video tab adopts this pattern later, R12):
      continuous slim bar at the very bottom = position within the lineup; thickens
      + shows a transient "7 / 20" label while the wheel/drag is travelling. */
+  /* Cut into one segment per video, so the length of the week is legible at a
+     glance and a wheel turn visibly lands on the next notch. A mask, so the
+     fill is divided by the same cuts without a second element. */
   .jbar{position:absolute; left:14px; right:14px; bottom:calc(var(--sab) + 6px); z-index:5;
-    height:3px; border-radius:99px; background:rgba(237,231,220,.18); transition:height .18s ease; pointer-events:none}
+    height:3px; border-radius:99px; background:rgba(237,231,220,.18); transition:height .18s ease; pointer-events:none;
+    --jb-n:1; --jb-gap:2px;
+    -webkit-mask-image:repeating-linear-gradient(90deg, black 0 calc(100%/var(--jb-n) - var(--jb-gap)),
+      transparent calc(100%/var(--jb-n) - var(--jb-gap)) calc(100%/var(--jb-n)));
+    mask-image:repeating-linear-gradient(90deg, black 0 calc(100%/var(--jb-n) - var(--jb-gap)),
+      transparent calc(100%/var(--jb-n) - var(--jb-gap)) calc(100%/var(--jb-n)))}
   .jbar .jb-fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--acc); transition:width .25s ease}
   .jbar .jb-mark{position:absolute; top:50%; width:9px; height:9px; border-radius:50%; background:#F5D48A;
     transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(18,16,14,.8)}
@@ -1506,6 +1514,11 @@
       inset:0 var(--stage-nudge, 0px) 0 0;      /* the owner's rect, nudge included */
       margin:0; width:auto; height:auto; aspect-ratio:auto;
       background-size:contain; background-color:var(--noir)}
+    /* Two lines along the bottom edge: the card's own resume line, which sits at
+       the foot of a media box that is now the whole screen, and the journey bar
+       under it. The lower one is the one worth keeping -- it is the lineup, and
+       it is already clear of the safe area. */
+    body.curdeck .cf-playing .cf-prog{display:none}
     body.curdeck .cf-playing .cf-meta{display:none}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
@@ -1969,7 +1982,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-68';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-69';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3892,7 +3905,7 @@
     // remember. Start is idempotent and makes the tick's existence independent
     // of which path opened the deck; the tick right after it means the bar moves
     // on the same frame as the picture instead of up to 500ms later.
-    cdTimeBarStart(); cdTimeBarTick();
+    cdTimeBarStart(); cdLineupTick();
   }
   // A4: paint one card's progress line in place (no innerHTML rebuild = no scroll/observer reset).
   function cfPaintProg(i){
@@ -3972,34 +3985,28 @@
      opener -- a teardown, a week switch, a rotation that took the other branch
      -- left the bar dead with no way to tell from the outside. */
   var cdTimeT=null;
-  function cdTimeBarTick(){
-    // Self-heal, for free, on a tick that by design can never be stopped. The one
-    // way this change could hurt is if the app were left with the notch strip
-    // switched off after the deck is gone -- the whole layout would sit inside
-    // the safe area and every edge would gain a margin. Rotating, closing and
-    // resuming all restore it; this catches whatever those three miss.
-    if(typeof cfViewportSync==='function') cfViewportSync();
+  /* The bar under a landscape video says WHICH OF THE TWENTY you are on, and
+     nothing else. YouTube's own control already shows how far through this one
+     video you are -- a second bar saying the same thing is a duplicate, and it
+     was the wrong meaning besides. Twenty videos is the length; the wheel steps
+     through them, fast spin accelerates, prev/next moves exactly one.
+
+     I had this backwards. The original cdJbarSync computed (cdIdx + frac) / n
+     -- position in the lineup -- and I replaced it with currentTime/duration
+     three builds ago. Restored, without the within-video fraction: a video
+     boundary is the only thing that should move it, so a turn of the wheel
+     lands on a notch instead of drifting. */
+  function cdLineupTick(){
     if(!document.body.classList.contains('curdeck')) return;   // not in the deck
-    if(cfIsFeed()) return;                         // portrait hides the bar entirely
-    var i=cfPlayIdx>=0?cfPlayIdx:cdIdx, p=cfPlayers[i];
-    try{
-      if(p&&p.getDuration&&p.getCurrentTime){
-        var d=p.getDuration()||0;
-        if(d>0){ cdJbarPaint(p.getCurrentTime()/d); return; }
-      }
-    }catch(e){}
-    // The player of a card just arrived at reports no duration for a beat. Left
-    // to itself the bar simply holds whatever the previous video had painted,
-    // which reads as "the bar is dead". The saved position for this video is
-    // the honest answer for that beat, and 0 for one never opened.
-    var it=cdItems[i], wch=it&&cfWatch[it.video_id];
-    cdJbarPaint(wch&&wch.dur>0 ? wch.pos/wch.dur : 0);
+    if(typeof cfViewportSync==='function') cfViewportSync();   // self-heal, see cfViewportFit
+    if(cfIsFeed()) return;                                     // portrait hides the bar entirely
+    var n=cdItems.length; if(!n) return;
+    var i=cfPlayIdx>=0?cfPlayIdx:cdIdx;
+    var bar=document.getElementById('cdJbar');
+    if(bar) bar.style.setProperty('--jb-n', n);                // the mask cuts it into n segments
+    cdJbarPaint((Math.max(0,Math.min(n-1,i))+1)/n);
   }
-  // Idempotent by the same guard the note view uses: ask for it as often as you
-  // like, it exists once. There is deliberately no stop -- a stop is the thing
-  // that has to be re-started, and the tick already costs nothing when the deck
-  // is closed or the feed is up.
-  function cdTimeBarStart(){ if(!cdTimeT) cdTimeT=setInterval(cdTimeBarTick,500); }
+  function cdTimeBarStart(){ if(!cdTimeT) cdTimeT=setInterval(cdLineupTick,500); }
   /* Wheel summon (glass): ANY deck touch fades the wheel in; 3s idle fades out.
      Supervisor boundary: when the wheel is NOT visible, the summoning tap is
      CONSUMED — it must not fall through as a card tap / play toggle. */
