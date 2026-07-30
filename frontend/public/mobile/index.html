@@ -1844,7 +1844,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-29-59';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-60';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3542,7 +3542,26 @@
     if((code===2||code===5) && i===cfPlayIdx && !cfMuteFallback){ cfMuteFallback=true; try{ cfPlayers[i].mute(); cfPlayers[i].playVideo(); }catch(e){} cfShowMuteHint(); return; }
     if(code===100||code===101||code===150){ var c=cfCards()[i], m=c&&c.querySelector('.cf-media'); if(m&&!m.querySelector('.cf-na')){ var d=document.createElement('div'); d.className='cf-na'; d.textContent='재생할 수 없는 영상'; m.appendChild(d); } }
   }
-  function cfCardEnded(i){ if(i>=cdItems.length-1) return; var c=cfCards()[i+1]; if(c) c.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'}); }
+  /* Move the FEED, and only the feed.
+     scrollIntoView scrolls every scrollable ancestor it can find, including the
+     document -- so asking a card to come to the top pushed the whole app up, and
+     the header went off the top while the last card went off the bottom. That is
+     the "clipped after coming back from landscape" report. The horizontal
+     carousel in this same file already learned this and computes scrollLeft by
+     hand; this is the vertical twin, which I should have written the same way.
+     It is also deterministic in a backgrounded tab, where scrollIntoView is a
+     no-op. */
+  function cfScrollToCard(i, smooth){
+    var feed=document.getElementById('cdFeed'); if(!feed) return;
+    var c=cfCards()[i]; if(!c) return;
+    var top=c.offsetTop;                       // cards are positioned within the feed
+    var max=Math.max(0, feed.scrollHeight - feed.clientHeight);
+    top=Math.max(0, Math.min(top, max));
+    if(smooth && !reduce && feed.scrollTo) feed.scrollTo({top:top, behavior:'smooth'});
+    else feed.scrollTop=top;
+  }
+
+  function cfCardEnded(i){ if(i>=cdItems.length-1) return; cfScrollToCard(i+1, true); }
   function cfSetFocus(i){
     Array.prototype.forEach.call(cfCards(),function(c){ c.classList.toggle('cf-focus', +c.getAttribute('data-i')===i); });
   }
@@ -3848,7 +3867,7 @@
   function cdEnded(){
     if(cfIsFeed()){ // feed: scroll to the next card; the settle commits + plays it
       cfCaptureActive(); cfPaintProg(cfPlayIdx>=0?cfPlayIdx:cdIdx); // A4: ended = complete (pos≈dur)
-      if(cdIdx<cdItems.length-1){ var c=cfCards()[cdIdx+1]; if(c) c.querySelector('.cf-media').scrollIntoView({behavior:reduce?'auto':'smooth', block:'start'}); }
+      if(cdIdx<cdItems.length-1) cfScrollToCard(cdIdx+1, true);
       else { cdStopPoll(); document.body.classList.remove('cdplaying','cdloading','cdpaused'); document.body.classList.add('cdfin'); }
       return;
     }
@@ -4050,7 +4069,7 @@
     if(ni<0||ni>=cdItems.length) return;
     if(cfIsFeed()){
       // Portrait scrolls; the settle then commits and plays, which keeps one path.
-      var c=cfCards()[ni]; if(c) c.querySelector('.cf-media').scrollIntoView({behavior:reduce?'auto':'smooth', block:'start'});
+      cfScrollToCard(ni, true);
       return;
     }
     cfCommitPlay(ni, true);   // landscape: the wheel IS the gesture, so sound is allowed
@@ -5311,8 +5330,7 @@
         // Coming back to portrait, the feed has to be looking at the video that
         // has been playing. Without this the audio carried on while the screen
         // showed some other part of the week.
-        var i=(cfPlayIdx>=0?cfPlayIdx:cdIdx), c=cfCards()[i];
-        if(c) c.querySelector('.cf-media').scrollIntoView({behavior:'auto', block:'start'});
+        cfScrollToCard(cfPlayIdx>=0?cfPlayIdx:cdIdx, false);
       } else {
         cdEnsurePlayers(); cdTimeBarStart();
       }
