@@ -61,6 +61,34 @@ if (!stamp) {
   }
 }
 
+
+// Every custom property referenced from a BODY-LEVEL surface must resolve there.
+// The colourway classes live on .device; #curDeck, #ytSheet and .toast sit
+// outside it on purpose, so a token defined only in .th-* is silently empty for
+// them -- and an empty custom property does not warn, it deletes the whole
+// declaration. The deck's journey bar painted its fill in transparent because
+// of exactly this. Same family as the scene palette above, third time.
+//
+// Only references WITHOUT a fallback count: var(--x, 0px) is a deliberate opt-in
+// default, not a missing token. Declarations anywhere that a body-level element
+// inherits from count as resolved -- :root, html, body and body.* .
+{
+  const scopeRe = /(?:^|\n)\s*(?::root|html|body(?:\.[a-z0-9-]+)*(?:\.[a-z0-9-]+)?)\s*\{([\s\S]*?)\n\s*\}/g;
+  const scoped = [...html.matchAll(scopeRe)].map(m => m[1]).join('\n');
+  // Strip comments first: prose about tokens is not a reference to one.
+  const deckCss = html.slice(html.indexOf('#curDeck{'), html.indexOf('</style>'))
+                      .replace(/\/\*[\s\S]*?\*\//g, '');
+  const refs = [...new Set([...deckCss.matchAll(/var\((--[a-z0-9-]+)\s*\)/g)].map(m => m[1]))];
+  // A token declared anywhere in this same region is set on some ancestor of the
+  // element that reads it -- that is the normal local-token idiom (#newsList
+  // declares its own palette, .cd-poster its own dim) and resolves fine.
+  const orphans = refs.filter(t => !scoped.includes(t + ':') && !deckCss.includes(t + ':'));
+  for (const t of orphans.slice(0, 12)) {
+    fail(`body-level surface references ${t} with no fallback, and it is not ` +
+         `declared on :root/html/body (colourway tokens live on .device and never reach #curDeck)`);
+  }
+}
+
 if (process.exitCode) process.exit(process.exitCode);
 console.log(`dial OK — ${parsed} inline script(s) parse, build ${stamp}`);
 

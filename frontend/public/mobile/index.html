@@ -65,7 +65,26 @@
     --il-line:rgba(60,55,45,.18); --il-line-2:rgba(60,55,45,.24);
   }
 
-  /* ---- 컬러웨이 ---- */
+  /* ---- Colourways ----
+     The colourway classes live on .device, and three surfaces do NOT: #curDeck,
+     #ytSheet and .toast are all body-level, deliberately, so they can cover the
+     screen instead of being trapped inside the device frame. Every var(--acc)
+     they use therefore resolved to nothing -- an undefined custom property is
+     not an error, it just makes the whole declaration vanish. The deck's
+     journey bar has been painting its fill in transparent this entire time,
+     which is why the bar looked dead even once it was being told to move.
+
+     Same failure as the scene palette that rendered black: a token defined in
+     one place and referenced from another that never inherits it. So the
+     default colourway is declared at the root as well; .device still overrides
+     it per theme, and anything outside the device now has a real value instead
+     of silence. */
+  :root{
+    --body-hi:#FBFAF6; --body-mid:#F1EEE6; --body-lo:#DDD7C9; --rim:#FFFFFF;
+    --wheel-a:#F7F5EF; --wheel-b:#EFECE4; --wheel-c:#E4E0D5;
+    --acc:#E0703F; --acc-rgb:224,112,63; --acc-hi:#E87B4C; --acc-lo:#CE5F30; --acc-ink:#7A2A0C;
+    --ui:#CE5F30; --shade:44,41,37;
+  }
   .th-cream{
     --body-hi:#FBFAF6; --body-mid:#F1EEE6; --body-lo:#DDD7C9; --rim:#FFFFFF;
     --wheel-a:#F7F5EF; --wheel-b:#EFECE4; --wheel-c:#E4E0D5;
@@ -1309,6 +1328,45 @@
      owner's rect, and a frame is a replaced element so it needs the pair
      spelled out to fill rather than fall back to its intrinsic 300x150. */
   .cf-slot iframe{position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; border:0 !important}
+  /* ===== "Is anything happening?" =========================================
+     Between committing a card and the player's first frame the deck showed
+     nothing for three seconds, and then a veil breathing between .20 and .26 --
+     a six percent change nobody can see. So for the part of the wait that
+     matters there was no signal at all, and the honest reading of a still
+     poster is that the tap missed.
+
+     A spinner is still the wrong answer, for the reason already written into
+     this file: it covers the poster and it is the app admitting it does not
+     know. This is the smallest thing that is unmistakably alive -- a 2px line
+     along the top edge of the picture, sweeping, from the moment the card is
+     committed until the player reports PLAYING. One translated gradient, the
+     same single composited layer the skeleton sweep uses, and it sits on an
+     edge nothing else occupies (the bottom belongs to the resume line in
+     portrait and the journey bar in landscape).
+
+     The veil also lifts part of the way at commit -- not to full brightness,
+     which would claim the video is already up, but enough that the tap visibly
+     landed. And the three-second breathe stays: first the line says "working",
+     then the breathe says "still working, longer than usual". */
+  /* The track carries the signal on its own. A sweep that is the ONLY thing
+     drawn disappears entirely wherever its animation is throttled -- which is
+     any moment the page is not being painted, and is exactly when a person is
+     most likely to be staring at it wondering. Track first, sweep on top. */
+  .cf-cue{position:absolute; left:0; right:0; top:0; height:2px; z-index:3; overflow:hidden;
+    background:rgba(var(--acc-rgb),.28);
+    opacity:0; transition:opacity .18s ease; pointer-events:none}
+  .cf-cue::before{content:''; position:absolute; top:0; bottom:0; width:38%;
+    background:linear-gradient(90deg, transparent, var(--acc), transparent);
+    transform:translateX(-100%); animation:cfCue 1.15s linear infinite}
+  @keyframes cfCue{to{transform:translateX(263%)}}
+  body.curdeck .cf-playing:not(.cf-shown) .cf-cue{opacity:1}
+  body.curdeck .cf-playing.cf-dead .cf-cue{opacity:0}   /* unplayable: the cue would be a lie */
+  body.curdeck .cf-playing:not(.cf-shown) .cf-media::after{opacity:.12}
+  @media (prefers-reduced-motion:reduce){
+    .cf-cue::before{width:100%; transform:none; background:var(--acc);
+      animation:cfCuePulse 1.4s ease-in-out infinite}
+    @keyframes cfCuePulse{0%,100%{opacity:.22} 50%{opacity:.55}}
+  }
   .cf-prog{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:2; background:rgba(237,231,220,.16)}
   .cf-prog b{display:block; height:100%; width:0; background:#FF3B30}
   .cf-prog.none{display:none}   /* unwatched or duration-less = no line (A3/A4 rule) */
@@ -1911,7 +1969,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-67';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-68';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3495,7 +3553,7 @@
       var w=cfWatch[it.video_id], pc=(w&&w.dur>0)?Math.round(Math.min(1,w.pos/w.dur)*100):0; // A4 progress line
       html+='<div class="cf-card'+(i===cdIdx?' cf-focus':'')+'" data-i="'+i+'">'
         +'<div class="cf-media" style="background-image:'+cfPoster(it)+'">'
-          +'<div class="cf-slot"></div>'
+          +'<div class="cf-slot"></div><i class="cf-cue" aria-hidden="true"></i>'
           +(durTxt?'<span class="cf-durchip">'+cfEsc(durTxt)+'</span>':'')
           +'<div class="cf-prog'+((w&&w.dur>0)?'':' none')+'"><b style="width:'+pc+'%"></b></div>'
           +'<button class="cf-play" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button>'
@@ -3572,7 +3630,7 @@
   function cfDestroyFar(i){ // keep only dominant +/- 2; recycle the rest (memory + one-voice)
     Object.keys(cfPlayers).forEach(function(k){ var j=+k; if(Math.abs(j-i)>2){
       try{ cfPlayers[j]&&cfPlayers[j].destroy&&cfPlayers[j].destroy(); }catch(e){} delete cfPlayers[j];
-      var c=cfCards()[j]; if(c){ c.classList.remove('cf-live','cf-playing','cf-shown','cf-lit','cf-wait'); var s=c.querySelector('.cf-slot'); if(s) s.innerHTML=''; } } });
+      var c=cfCards()[j]; if(c){ c.classList.remove('cf-live','cf-playing','cf-shown','cf-lit','cf-wait','cf-dead'); var s=c.querySelector('.cf-slot'); if(s) s.innerHTML=''; } } });
   }
   function cfSaveCard(i){ try{ var p=cfPlayers[i], it=cdItems[i]; if(!p||!it||!p.getCurrentTime) return;
     var dur=p.getDuration()||0,pos=p.getCurrentTime()||0; if(dur>0){ cfSaveWatch(it.video_id,pos,dur); cfPaintProg(i); } }catch(e){} }
@@ -3988,6 +4046,7 @@
     if(cfIsFeed()) cfMarkCardUnavailable(cdIdx);
   }
   function cfMarkCardUnavailable(i){
+    var dc=cfCards()[i]; if(dc) dc.classList.add('cf-dead');   // the cue must not outlive the truth
     var c=cfCards()[i]; if(!c) return; var m=c.querySelector('.cf-media'); if(!m||m.querySelector('.cf-na')) return;
     var d=document.createElement('div'); d.className='cf-na'; d.textContent='재생할 수 없는 영상';
     m.appendChild(d);
