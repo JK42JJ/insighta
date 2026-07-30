@@ -1465,13 +1465,17 @@
   }
   .cf-segchip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;color:var(--cd-chip-ink);background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge)}
   /* V3 core-only toggle — video decks only (body.vdeck). Default = full. */
-  .cd-mode{display:none;position:relative;align-items:center;background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge);border-radius:999px;padding:2px;margin-left:auto}
-  body.vdeck .cd-mode{display:flex}
   /* Sliding segmented control (James 07-31): equal-width segments, one thumb
-     that GLIDES left-right under the selected label instead of swapping. */
-  .cd-mode button{position:relative;z-index:1;border:0;background:none;color:var(--cd-chip-ink);font-size:11px;font-weight:600;width:54px;padding:4px 0;text-align:center;border-radius:999px}
+     that GLIDES left-right under the selected label. Every axis is EXPLICIT px
+     and the capsule clips (device incident build 80: iOS inflated the auto
+     heights into a giant oval dominating the header — with fixed heights and
+     overflow:hidden there is nothing left to inflate and nothing can paint
+     outside the capsule). */
+  .cd-mode{display:none;position:relative;overflow:hidden;box-sizing:border-box;height:28px;align-items:center;background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge);border-radius:999px;padding:2px;margin-left:auto;flex:none;align-self:center}
+  body.vdeck .cd-mode{display:flex}
+  .cd-mode button{position:relative;z-index:1;border:0;background:none;color:var(--cd-chip-ink);font-size:11px;font-weight:600;width:54px;height:22px;line-height:22px;padding:0;text-align:center;border-radius:999px}
   .cd-mode button.on{color:var(--cd-chip-on-ink)}
-  .cd-mode .cd-mode-thumb{position:absolute;z-index:0;top:2px;bottom:2px;left:2px;width:54px;border-radius:999px;background:var(--cd-chip-on-bg);transform:translateX(54px)}
+  .cd-mode .cd-mode-thumb{position:absolute;z-index:0;top:2px;left:2px;width:54px;height:22px;border-radius:999px;background:var(--cd-chip-on-bg);transform:translateX(54px)}
   .cd-mode.core .cd-mode-thumb{transform:translateX(0)}
   @media (prefers-reduced-motion: no-preference){
     .cd-mode .cd-mode-thumb{transition:transform .25s cubic-bezier(.4,0,.2,1)}
@@ -2090,7 +2094,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-80';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-81';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
