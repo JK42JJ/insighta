@@ -1392,12 +1392,30 @@
     body.curdeck .cf-playing .cf-media{position:absolute; inset:0; margin:auto;
       width:min(100%, calc(100vh * 16 / 9)); height:min(100%, calc(100vw * 9 / 16));
       aspect-ratio:auto; background-size:contain; background-color:var(--stage)}
+    /* Measured, not guessed. On the reported frame (a 2079x960 grab of a 956x440
+       landscape viewport) the picture is the same SIZE as YouTube's own app --
+       the watermark is 182px wide in both -- and sits 129 device px further
+       right, correlation .99. In a real browser at that exact viewport the
+       media box, the slot and the iframe all report x87 782x440, the identical
+       rect YouTube uses; and the point where the picture is cut, 1892, is
+       87+782, this box's own right edge. So the box is right on the device too
+       and the offset is INSIDE the iframe: the player paints its picture 58 CSS
+       px right of the frame it was given, which puts black on the left and
+       feeds the same amount of picture into overflow on the right.
+
+       58px is this device's landscape env(safe-area-inset-left). Nothing else
+       on the page carries that number, and viewport-fit=cover is what lets the
+       inset reach into the frame. Pull the slot left by exactly it and the
+       picture lands on the box. Every surface where the inset is zero --
+       portrait, desktop, any phone without a sensor housing -- is untouched,
+       which is also why this was only ever a landscape report. */
+    body.curdeck .cf-playing .cf-slot{left:calc(-1 * env(safe-area-inset-left, 0px)); right:auto; width:100%}
     body.curdeck .cf-playing .cf-meta{display:none}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
        YouTube's bottom bar and its own progress scrubber. */
     body.curdeck.cffeedmuted .cf-mutechip{display:inline-flex; bottom:auto; top:calc(var(--sat) + 12px);
-      left:auto; right:14px; transform:none; z-index:11}
+      left:auto; right:calc(env(safe-area-inset-right, 0px) + 14px); transform:none; z-index:11}
     body.curdeck.cffeedmuted .cf-mutechip:active{transform:scale(.96)}
   }
 
@@ -1855,7 +1873,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-61';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-62';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3682,14 +3700,15 @@
      which is what it drew before and which the N/M counter already says. Driven
      from the in-card player, since that is the one playing. */
   var cdTimeT=null;
+  function cdTimeBarTick(){
+    if(cfIsFeed()) return;                         // portrait hides the bar entirely
+    var p=cfPlayers[cfPlayIdx>=0?cfPlayIdx:cdIdx];
+    if(!p||!p.getCurrentTime||!p.getDuration) return;
+    try{ var d=p.getDuration()||0; if(d>0) cdJbarPaint(p.getCurrentTime()/d); }catch(e){}
+  }
   function cdTimeBarStart(){
     cdTimeBarStop();
-    cdTimeT=setInterval(function(){
-      if(cfIsFeed()) return;                       // portrait hides the bar entirely
-      var p=cfPlayers[cfPlayIdx>=0?cfPlayIdx:cdIdx];
-      if(!p||!p.getCurrentTime||!p.getDuration) return;
-      try{ var d=p.getDuration()||0; if(d>0) cdJbarPaint(p.getCurrentTime()/d); }catch(e){}
-    },500);
+    cdTimeT=setInterval(cdTimeBarTick,500);
   }
   function cdTimeBarStop(){ if(cdTimeT){ clearInterval(cdTimeT); cdTimeT=null; } }
   /* Wheel summon (glass): ANY deck touch fades the wheel in; 3s idle fades out.
@@ -3963,38 +3982,50 @@
   var CD_MOM_MINV=0.055;     // px/ms momentum stop threshold
   var CD_MOM_MAXV=5.0;       // px/ms fling velocity clamp
   var cdFollow={on:false, off:0, v:0, lt:0, raf:0};
+  /* The wheel used to drive #cdTrack and the cdP[] pair. Since the in-card
+     rewrite the track is display:none in BOTH orientations and cdP is no longer
+     what plays, so a turn moved the journey bar and the invisible track and left
+     the picture exactly where it was -- the reported "the progress bar moves and
+     nothing else happens". dispatchNotch -> cdNav was rewired to the in-card
+     players last round, but curdeck never reaches dispatchNotch: the branch in
+     the wheel's pointermove sends every deck rotation straight here. Fixing
+     cdNav therefore fixed a function this mode does not call, which is the whole
+     reason the bug survived a fix.
+
+     Portrait rides the feed's own scroll -- the IntersectionObserver then commits
+     playback, the identical path a finger scroll takes, so there is no second
+     playback rule to keep in sync. Landscape has no scroll to ride: one card of
+     accumulated travel commits the next card straight into the fullscreen
+     player. This runs inside pointermove, so the commit is inside a real
+     gesture and iOS lets it start with sound. */
+  var cfWheelAcc=0, cfWheelLt=0;
+  function cfWheelStep(d){
+    var cur=(cfPlayIdx>=0?cfPlayIdx:cdIdx), ni=cur+d;
+    if(ni<0||ni>=cdItems.length) return false;
+    if(navigator.vibrate) navigator.vibrate(7);
+    cfCommitPlay(ni, true);
+    cdJbarPaint(0);            // the bar means "how far through THIS video" -- a new video restarts it
+    return true;
+  }
   function cdWheelMove(deg){
     if(!cdItems.length) return;
     document.body.classList.remove('cdfin');
     cdWheelShow();
-    if(cdFollow.raf){ cancelAnimationFrame(cdFollow.raf); cdFollow.raf=0; } // grab back from momentum
-    if(!cdNavActive){
-      cdNavActive=true;
-      cdWasPlaying=document.body.classList.contains('cdplaying');
-      cdPause();
-      document.body.classList.add('cdnav');
-    }
-    if(cdAnimBusy&&cdFinCur) cdFinCur();          // land any running glide first
-    var g=cdPitch(), tr=document.getElementById('cdTrack');
-    var now=performance.now();
-    if(!cdFollow.on){ cdFollow.on=true; cdFollow.off=0; cdFollow.v=0; cdFollow.lt=now; tr.classList.remove('gliding'); }
-    var dt=Math.max(1, now-cdFollow.lt); cdFollow.lt=now;
-    // Acceleration: faster spin -> more px per degree, so a quick flick crosses
-    // several cards instead of crawling one-by-one (device directive).
+    // Acceleration: faster spin -> more travel per degree, so a quick flick
+    // crosses several cards instead of crawling one-by-one (device directive).
+    var now=performance.now(), dt=Math.max(1, now-(cfWheelLt||now)); cfWheelLt=now;
     var omega=Math.abs(deg)/dt*1000; // deg/s
     var mult=1+Math.min(CD_ACCEL_MAX, Math.pow(omega/CD_OMEGA_REF, 1.2));
-    var px=-deg*(g.pitch/CD_DEG_PER_CARD)*mult;   // clockwise = forward = track up
-    cdFollow.v=cdFollow.v*0.7+(px/dt)*0.3;        // smoothed px/ms
-    // edge resistance (drag parity), overhang capped at half a pitch
-    if((cdIdx===0&&px>0&&cdFollow.off>=0)||(cdIdx>=cdItems.length-1&&px<0&&cdFollow.off<=0)) px*=0.35;
-    cdFollow.off+=px;
-    while(cdFollow.off<=-g.pitch&&cdIdx<cdItems.length-1){ cdFollow.off+=g.pitch; cdIdx++; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(7); cdRender(); }
-    while(cdFollow.off>=g.pitch&&cdIdx>0){ cdFollow.off-=g.pitch; cdIdx--; cdEndRolled=false; if(navigator.vibrate)navigator.vibrate(7); cdRender(); }
-    var cap=g.pitch*0.5;
-    if(cdIdx===0&&cdFollow.off>cap) cdFollow.off=cap;
-    if(cdIdx>=cdItems.length-1&&cdFollow.off<-cap) cdFollow.off=-cap;
-    tr.style.transform='translateY('+(-g.pitch+cdFollow.off)+'px)';
-    cdJbarSync(Math.max(0, -cdFollow.off/g.pitch));
+    if(cfIsFeed()){
+      var feed=document.getElementById('cdFeed'); if(!feed) return;
+      var card=cfCards()[cfPlayIdx>=0?cfPlayIdx:0];
+      var pitch=(card&&card.offsetHeight)||feed.clientHeight; if(!pitch) return;
+      feed.scrollTop+=deg*(pitch/CD_DEG_PER_CARD)*mult;   // clockwise = forward = down the feed
+      return;
+    }
+    cfWheelAcc+=deg*(mult/CD_DEG_PER_CARD);
+    while(cfWheelAcc>=1){ cfWheelAcc-=1; if(!cfWheelStep(1)){ cfWheelAcc=0; break; } }
+    while(cfWheelAcc<=-1){ cfWheelAcc+=1; if(!cfWheelStep(-1)){ cfWheelAcc=0; break; } }
   }
   // Release inertia (device directive: no acceleration/momentum -> "the app gets
   // abandoned"). A real fling decays with friction and carries through several
@@ -4031,34 +4062,27 @@
     clearTimeout(cdSettleT);
     cdSettleT=setTimeout(function(){ tr.classList.remove('gliding'); cdSettle(); }, 200);
   }
-  // called by the wheel engine on pointer-up (fingers off = fling->momentum, else snap)
+  // Nearest card to where the feed is parked, measured from the feed's own
+  // scrollTop. cfDominant answers the same question from the observer's
+  // ratios, but those arrive on a callback -- after a turn that moved the
+  // feed synchronously they are still describing where it used to be, and the
+  // snap did nothing. Measured, not observed.
+  function cfNearestCard(){
+    var feed=document.getElementById('cdFeed'); if(!feed) return -1;
+    var cards=cfCards(); if(!cards.length) return -1;
+    var y=feed.scrollTop, best=-1, bd=Infinity;
+    for(var i=0;i<cards.length;i++){ var dd=Math.abs(cards[i].offsetTop-y); if(dd<bd){ bd=dd; best=i; } }
+    return best;
+  }
+  // called by the wheel engine on pointer-up.
+  // Landscape has already committed on every boundary it crossed, so releasing
+  // is only about the feed: settle it onto the card the user stopped on, the
+  // same snap a finger scroll gets. cfScrollToCard fires scroll events, so
+  // cfOnScroll -> cfSettle owns playback from here as usual.
   function cdWheelRelease(){
-    if(cdFollow.on){
-      cdFollow.on=false;
-      var g=cdPitch(), tr=document.getElementById('cdTrack');
-      var off=cdFollow.off, v=cdFollow.v;
-      if(Math.abs(v)>=CD_FLING_MIN){ cdMomentum(v); return; }   // fling -> inertial multi-card glide + settle
-      cdFollow.off=0; cdFollow.v=0;
-      var dir=0;
-      if((off<-g.pitch*0.28)&&cdIdx<cdItems.length-1) dir=1;
-      else if((off>g.pitch*0.28)&&cdIdx>0) dir=-1;
-      tr.classList.add('gliding');
-      if(dir!==0){
-        cdIdx+=dir; cdEndRolled=false; cdAnimBusy=true;
-        tr.style.transform='translateY('+(-g.pitch-dir*g.pitch)+'px)';
-        var done=false;
-        var fin=function(){ if(done) return; done=true; cdFinCur=null; cdAnimBusy=false; cdRender(); if(cdQueue.length) cdPump(); };
-        cdFinCur=fin;
-        tr.addEventListener('transitionend',function h(){ tr.removeEventListener('transitionend',h); fin(); });
-        setTimeout(fin,250);
-      } else {
-        tr.style.transform='translateY('+(-g.pitch)+'px)';
-      }
-    }
-    if(!cdNavActive) return;
-    clearTimeout(cdSettleT);
-    var wait=(cdAnimBusy||cdQueue.length)?230:0;   // let the last glide land first
-    cdSettleT=setTimeout(cdSettle, wait);
+    cfWheelAcc=0; cfWheelLt=0;
+    if(!cfIsFeed()) return;
+    var i=cfNearestCard(); if(i>=0) cfScrollToCard(i, true);
   }
   // Auto-advance (ended, zero-gap): glide + immediate warm-swap play, stage stays up.
   function cdAdvance(d, keepPlaying){
