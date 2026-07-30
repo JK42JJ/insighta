@@ -2077,7 +2077,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-78';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-79';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4090,7 +4090,6 @@
     var secs=secsIn.filter(function(s){ return (+s.to_sec||0)>(+s.from_sec||0); })
       .slice().sort(function(a,b){ return (+a.from_sec||0)-(+b.from_sec||0); });
     var rnd=function(v){ return Math.round(v*10)/10; };
-    var cub=function(a,b,c2,d2,t){ var u=1-t; return u*u*u*a+3*u*u*t*b+3*u*t*t*c2+t*t*t*d2; };
     var mounds=[], last=secs.length-1;
     for(var i2=0;i2<secs.length;i2++){
       var s=secs[i2];
@@ -4104,23 +4103,9 @@
         +' C'+rnd(c(.25))+','+rnd(y+2)+' '+rnd(c(.5))+','+rnd(y)+' '+rnd(c(.72))+','+rnd(y)
         +' C'+rnd(c(.88))+','+rnd(y)+' '+rnd(x1)+','+rnd(y+1)+' '+rnd(x1)+','+rnd(edgeOutY)
         +' L'+rnd(x1)+','+rnd(base)+' Z';
-      // Sampled outline of the two cubics — the progress dot rides this.
-      var pts=[];
-      for(var j=0;j<=10;j++){ var t2=j/10;
-        pts.push({ x:cub(x0,c(.25),c(.5),c(.72),t2), y:cub(edgeInY,y+2,y,y,t2) }); }
-      for(var j2=1;j2<=10;j2++){ var t3=j2/10;
-        pts.push({ x:cub(c(.72),c(.88),x1,x1,t3), y:cub(y,y,y+1,edgeOutY,t3) }); }
-      mounds.push({ d:d, t:tier, x0:x0, x1:x1, pts:pts });
+      mounds.push({ d:d, t:tier });
     }
-    var yAt=function(x){
-      for(var k=0;k<mounds.length;k++){ var m=mounds[k];
-        if(x<m.x0) break;
-        if(x<=m.x1){ var P=m.pts;
-          for(var k2=1;k2<P.length;k2++){ if(P[k2].x>=x){ var A=P[k2-1],B=P[k2],f2=(B.x===A.x)?0:(x-A.x)/(B.x-A.x); return A.y+(B.y-A.y)*f2; } }
-          return P[P.length-1].y; } }
-      return base;                     // gaps and uncovered stretches: dot on the track
-    };
-    var g={ mounds:mounds, yAt:yAt, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
+    var g={ mounds:mounds, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
     cfMoundGeomCache[vid]=g; return g;
   }
   function cfMoundEnsure(i){
@@ -4156,7 +4141,7 @@
       +'<rect class="mtrack" x="0" y="52.5" width="360" height="2" rx="1"></rect>'
       +'<rect class="mprog" x="0" y="52.5" width="0" height="2" rx="1"></rect>'
       +baseP+sweepP
-      +'<circle class="mdot" cx="0" cy="'+Math.round(g.yAt(0)*10)/10+'" r="3"></circle>'
+      +'<circle class="mdot" cx="0" cy="53.5" r="3"></circle>'
       +'</svg>'
       +'<div class="cf-secline"></div>'
       +'<div class="mzones">'+g.zones.map(function(z){ return '<i style="flex-grow:'+z.w+'" data-sec="'+z.from+'"></i>'; }).join('')+'</div>';
@@ -4178,13 +4163,12 @@
   }
   function cfMoundPaint(i, frac){
     var c=cfCards()[i]; if(!c) return; var svg=c.querySelector('.cf-mound svg'); if(!svg) return;
-    var it=cdItems[i]; if(!it) return;
     var px=Math.round(Math.max(0,Math.min(1,frac))*3600)/10;
     var cr=svg.querySelector('clipPath rect'); if(cr) cr.setAttribute('width', px);
     var pr=svg.querySelector('.mprog'); if(pr) pr.setAttribute('width', px);
-    var g=cfMoundGeomCache[it.video_id];
-    var dot=svg.querySelector('.mdot');
-    if(dot&&g){ dot.setAttribute('cx', px); dot.setAttribute('cy', Math.round(g.yAt(px)*10)/10); }
+    // Dot stays ON the straight track (James, build 78 device pass: riding the
+    // hill outline made it leap at every section boundary).
+    var dot=svg.querySelector('.mdot'); if(dot) dot.setAttribute('cx', px);
   }
   function cfMoundArm(i){
     cfMoundStop();
