@@ -1412,15 +1412,21 @@
   .cf-mound svg{display:block;width:100%;height:56px}
   .cf-mound .mtrack{fill:rgb(var(--shade))}
   .cf-mound .mprog{fill:var(--acc)}
-  .cf-mound .mfill{fill:rgba(var(--acc-rgb),.30)}
-  .cf-mound .mline{stroke:var(--acc);opacity:.42;fill:none}
-  .cf-mound .mhi{stroke:var(--acc);fill:none}
+  /* V2.1 terrain paint (PC language): always-on soft silhouette + a deeper
+     saturation sweep up to the play position + crest lines on the peaks.
+     Gradient stops are styled here so the colourway tokens drive them. */
+  .cf-mound .mgb-a{stop-color:rgba(var(--acc-rgb),.34)}
+  .cf-mound .mgb-b{stop-color:rgba(var(--acc-rgb),.06)}
+  .cf-mound .mgs-a{stop-color:rgba(var(--acc-rgb),.78)}
+  .cf-mound .mgs-b{stop-color:rgba(var(--acc-rgb),.22)}
+  .cf-mound .mhi{stroke:var(--acc-hi);fill:none;opacity:.95}
   .cf-mound .mdot{fill:var(--cd-chip-on-bg)}
   .cf-mound .mzones{position:absolute;left:0;top:0;width:100%;height:100%;display:flex}
   .cf-mound .mzones i{display:block;height:100%}
-  .cf-card.mdim .cf-mound .mline{opacity:.17}
+  .cf-card.mdim .cf-mound .mbase{opacity:.55}
   .cf-card.mdim .cf-mound .mhi{opacity:.62}
-  @media (prefers-reduced-motion: no-preference){ .cf-mound .mline,.cf-mound .mhi{transition:opacity .5s} }
+  .cf-card.monly .cf-mound .mbase{opacity:.35}
+  @media (prefers-reduced-motion: no-preference){ .cf-mound .mbase,.cf-mound .mhi{transition:opacity .5s} }
   .cf-segchip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;color:var(--cd-chip-ink);background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge)}
   /* V3 core-only toggle — video decks only (body.vdeck). Default = full. */
   .cd-mode{display:none;align-items:center;background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge);border-radius:999px;padding:2px;margin-left:auto}
@@ -1428,7 +1434,6 @@
   .cd-mode button{border:0;background:none;color:var(--cd-chip-ink);font-size:11px;font-weight:600;padding:4px 10px;border-radius:999px}
   .cd-mode button.on{background:var(--cd-chip-on-bg);color:var(--cd-chip-on-ink)}
   .cf-corechip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;color:var(--acc);background:rgba(var(--acc-rgb),.14)}
-  .cf-card.monly .cf-mound .mline{opacity:.18}
   /* Once the card is playing, the YouTube player draws its own progress bar a
      few pixels away. Two bars for one video is not two pieces of information --
      it is the same fact twice, and they disagree while ours waits for its next
@@ -2041,7 +2046,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-74';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-75';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4038,17 +4043,24 @@
       segCache[vid]={ sections:(j&&j.data&&j.data.segments&&j.data.segments.sections)||[], credit:(j&&j.data&&j.data.oneLiner)||null };
     }).catch(function(){ segCache[vid]={sections:[],credit:null}; });
   }
+  // V2.1 terrain constants (James 07-30: PC language — low filled silhouette,
+  // no dive-to-baseline end hooks, crest lines only on the >=80 peaks).
+  var MOUND_RISE=22;          // was 44 — hills decorate, never dominate
+  var MOUND_EDGE_EXT=30;      // virtual flat endpoints kill the Catmull-Rom edge hooks
   function cfMoundGeom(vid, secsIn, dur){
     if(cfMoundGeomCache[vid]) return cfMoundGeomCache[vid];
-    var W=360,H=56,base=H-2.5,rise=H-12;
+    var W=360,H=56,base=H-2.5,rise=MOUND_RISE;
     var secs=secsIn.slice().sort(function(a,b){ return (+a.from_sec||0)-(+b.from_sec||0); });
-    var pts=[{x:0,y:base-1.5}];
+    var yOf=function(s){ var v=(s.relevance_pct!=null?+s.relevance_pct:20); return base-2-Math.pow(v/100,1.35)*rise; };
+    // Enter the frame flat at the first/last section's own height — never dive
+    // to the baseline at the edges (that dive is what drew the hooks on device).
+    var y0=yOf(secs[0]), yN=yOf(secs[secs.length-1]);
+    var pts=[{x:-MOUND_EDGE_EXT,y:y0},{x:0,y:y0}];
     secs.forEach(function(s){
       var f=+s.from_sec||0, t=+s.to_sec||f;
-      var v=(s.relevance_pct!=null?+s.relevance_pct:20); // unscored section: draw low, never skip
-      pts.push({ x:Math.max(0,Math.min(W,((f+t)/2)/dur*W)), y:base-2-Math.pow(v/100,1.35)*rise });
+      pts.push({ x:Math.max(0,Math.min(W,((f+t)/2)/dur*W)), y:yOf(s) });
     });
-    pts.push({x:W,y:base-1.5});
+    pts.push({x:W,y:yN},{x:W+MOUND_EDGE_EXT,y:yN});
     var S=[];
     for(var a=0;a<pts.length-1;a++){
       var p0=pts[Math.max(0,a-1)],p1=pts[a],p2=pts[a+1],p3=pts[Math.min(pts.length-1,a+2)];
@@ -4057,6 +4069,8 @@
                  y:.5*(2*p1.y+(-p0.y+p2.y)*u+(2*p0.y-5*p1.y+4*p2.y-p3.y)*u2+(-p0.y+3*p1.y-3*p2.y+p3.y)*u3) }); }
     }
     S.push(pts[pts.length-1]);
+    S=S.filter(function(q){ return q.x>=0&&q.x<=W; });
+    S.unshift({x:0,y:y0}); S.push({x:W,y:yN});
     var rnd=function(v){ return Math.round(v*10)/10; };
     var yAt=function(x){ for(var i2=1;i2<S.length;i2++){ if(S[i2].x>=x){ var A=S[i2-1],B=S[i2],t2=(B.x===A.x)?0:(x-A.x)/(B.x-A.x); return A.y+(B.y-A.y)*t2; } } return S[S.length-1].y; };
     var seg=function(x0,x1){ var p=[{x:x0,y:yAt(x0)}]; S.forEach(function(q){ if(q.x>x0&&q.x<x1) p.push(q); }); p.push({x:x1,y:yAt(x1)});
@@ -4064,7 +4078,7 @@
     var area='M0,'+rnd(base)+' L'+S.map(function(q){ return rnd(q.x)+','+rnd(q.y); }).join(' L ')+' L'+W+','+rnd(base)+' Z';
     var hi=[];
     secs.forEach(function(s){ if(s.relevance_pct!=null&&+s.relevance_pct>=80){ hi.push(seg(Math.max(0,(+s.from_sec||0)/dur*W), Math.min(W,(+s.to_sec||0)/dur*W))); } });
-    var g={ line:seg(0,W), area:area, hi:hi, yAt:yAt, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
+    var g={ area:area, hi:hi, yAt:yAt, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
     cfMoundGeomCache[vid]=g; return g;
   }
   function cfMoundEnsure(i){
@@ -4084,16 +4098,21 @@
     var secs=(entry.sections&&entry.sections.length)?entry.sections:null;
     if(!secs||!(dur>0)){ meta.insertAdjacentHTML('beforeend','<span class="cf-segchip">전체 재생</span>'); return; }
     var g=cfMoundGeom(it.video_id, secs, dur);
-    var hiP=g.hi.map(function(d){ return '<path class="mhi" d="'+d+'" stroke-width="2.6" stroke-linecap="round"></path>'; }).join('');
+    // Crest lines ride only the >=80 peaks (PC language: the high ground glows).
+    var hiP=g.hi.map(function(d){ return '<path class="mhi" d="'+d+'" stroke-width="2" stroke-linecap="round"></path>'; }).join('');
     var el=document.createElement('div'); el.className='cf-mound';
     el.innerHTML='<svg viewBox="0 0 360 56" preserveAspectRatio="none">'
+      +'<defs>'
+      +'<linearGradient id="mgb'+i+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mgb-a"></stop><stop offset="1" class="mgb-b"></stop></linearGradient>'
+      +'<linearGradient id="mgs'+i+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mgs-a"></stop><stop offset="1" class="mgs-b"></stop></linearGradient>'
       +'<clipPath id="mclip'+i+'"><rect x="0" y="0" width="0" height="56"></rect></clipPath>'
+      +'</defs>'
       +'<rect class="mtrack" x="0" y="52.5" width="360" height="2" rx="1"></rect>'
       +'<rect class="mprog" x="0" y="52.5" width="0" height="2" rx="1"></rect>'
-      +'<path class="mfill" d="'+g.area+'" clip-path="url(#mclip'+i+')"></path>'
-      +'<path class="mline" d="'+g.line+'" stroke-width="1.7" stroke-linecap="round"></path>'
+      +'<path class="mbase" d="'+g.area+'" fill="url(#mgb'+i+')"></path>'
+      +'<path class="msweep" d="'+g.area+'" fill="url(#mgs'+i+')" clip-path="url(#mclip'+i+')"></path>'
       +hiP
-      +'<circle class="mdot" cx="0" cy="'+Math.round(g.yAt(0)*10)/10+'" r="3.5"></circle>'
+      +'<circle class="mdot" cx="0" cy="'+Math.round(g.yAt(0)*10)/10+'" r="3"></circle>'
       +'</svg>'
       +'<div class="mzones">'+g.zones.map(function(z){ return '<i style="flex-grow:'+z.w+'" data-sec="'+z.from+'"></i>'; }).join('')+'</div>';
     media.insertAdjacentElement('afterend', el);
