@@ -1175,8 +1175,16 @@
      did nothing and why only its own patch of screen responded. In the note view
      it is ALWAYS touchable and merely invisible, and any touch on the band wakes
      it for three seconds. */
-  body.curdeck .wheelzone{position:fixed; left:0; right:0; top:auto; bottom:36%;
-    z-index:76; padding:0 24px 0 0; width:100%; pointer-events:none; display:grid; place-items:center end}
+  /* The band is only as wide as the wheel that sits in it. It used to span the
+     full width, and in landscape it is also pointer-events:auto -- so a strip
+     across the entire screen was swallowing touches that were meant for
+     YouTube's own controls, which live at roughly this height. Play, CC,
+     settings and fullscreen all read as locked in landscape and worked fine in
+     portrait, where this band is display:none. The wheel needs the touches over
+     the wheel; it never needed the rest of the row. */
+  body.curdeck .wheelzone{position:fixed; right:0; left:auto; top:auto; bottom:36%;
+    z-index:76; padding:0 24px 0 0; width:calc(var(--miniwheel) + 24px);
+    pointer-events:none; display:grid; place-items:center end}
   body.curdeck .wheel{width:var(--miniwheel); transform:translateX(-40%); opacity:0; pointer-events:auto;
     transition:opacity .35s var(--soft);
     background:var(--cd-wheel-fill);
@@ -1207,6 +1215,22 @@
     transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(18,16,14,.8)}
   /* jb-label retired (P1-4): header keeps the persistent N/20 — one meaning, one place */
   body.cdnav .jbar{height:5px}
+  @media (orientation:landscape){
+    /* On the picture's own bottom edge, and only as wide as the picture. The bar
+       was floating inside the frame -- inset by the safe-area padding and
+       stretched the full width -- so it crossed the video instead of ending
+       with it. The picture in landscape is 16:9 fitted to the height and
+       centred, which is a width this stylesheet can compute exactly.
+
+       It also fades with the rest of the chrome now. YouTube hides its own
+       controls after a few seconds and the wheel sleeps on the same timer; a bar
+       that stayed lit was the one thing left on an otherwise clean frame. */
+    body.curdeck .jbar{left:50%; right:auto; transform:translateX(-50%);
+      width:min(100%, calc(100vh * 16 / 9)); bottom:0;
+      opacity:0; transition:opacity .35s var(--soft), height .18s ease}
+    body.curdeck.wheelawake .jbar,
+    body.curdeck.cdnav .jbar{opacity:1}
+  }
   /* Landscape = the mockup's fullscreen contract: the stage fills the viewport.
      These are gated on body.curdeck ONLY (NOT .cdplaying) — supervisor L1: "stage size
      only changes on rotation". Gating on .cdplaying let nav/pause frames drop the stage
@@ -1982,7 +2006,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-69';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-70';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -5803,14 +5827,21 @@
   /* ================= 무대 컨트롤러 — §2.2 [J pick] 포커스 라인 + 푸시 레일 + C1/C2 ================= */
   /* 무대 휠 표시 수명: 터치 중 유지, 손 뗀 뒤 3s 후 소멸 (A 게임핸들 문법) */
   var WHEEL_LINGER_MS=3000;
+  /* The awake state is mirrored onto <body>. Three stylesheets already read
+     body.wheelawake -- reading, curdeck, and now the journey bar -- and nothing
+     had ever set it, so every one of those rules was dead. .wheel.awake cannot
+     reach the bar with a selector either: they are in different subtrees. One
+     place sets both, so a rule that names either form works. */
   function wheelAwake(){
     var wh=document.querySelector('.wheel'); if(!wh) return;
-    wh.classList.add('awake'); clearTimeout(wheelAwake._t);
+    wh.classList.add('awake'); document.body.classList.add('wheelawake');
+    clearTimeout(wheelAwake._t);
   }
   function wheelSleep(){
     clearTimeout(wheelAwake._t);
     wheelAwake._t=setTimeout(function(){
       var wh=document.querySelector('.wheel'); if(wh) wh.classList.remove('awake');
+      document.body.classList.remove('wheelawake');
     },WHEEL_LINGER_MS);
   }
   (function(){
