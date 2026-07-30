@@ -40,6 +40,11 @@
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
+  /* While landscape playback has viewport-fit off, iOS paints the strip either
+     side of the safe area from the canvas, and the canvas takes its colour from
+     here. The deck's own ground is black, so anything else would put two bright
+     bands beside the video. */
+  html:has(body.vpsafe),body.vpsafe{background:var(--noir) !important}
   html,body{height:100%}
   body{
     background:radial-gradient(130% 100% at 50% 0%, var(--studio-hi) 0%, var(--studio-lo) 100%);
@@ -1906,7 +1911,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-66';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-67';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3273,6 +3278,7 @@
     // portrait, so it needs no guard here at all -- and not needing one is why
     // the bar could not be left unstarted by whichever path opened the deck.
     cdTimeBarStart();
+    cfViewportSync();
     setTimeout(function(){ document.body.classList.add('cdin'); },20); // D0 crossfade (timeout: rAF throttles in bg tabs)
     // D6 — one-time coachmark until the first wheel/center interaction
     try{ if(!localStorage.getItem('insighta-cd-hint')) document.body.classList.add('cdhint'); }catch(e){}
@@ -3312,6 +3318,7 @@
      "leave the deck" means. Splitting the two is why a week switch does not
      flash the home screen on its way back in. */
   function cdTeardown(){
+    cfViewportFit(true);   // the deck is the only thing that turns it off
     if(cfIsFeed()) cfCaptureActive(); // A4: save position before stopVideo resets it
     cdStopPoll();
     try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
@@ -3596,6 +3603,51 @@
      and back. An embed re-letterboxes when its box actually changes; it ignores
      being told. The previous version told it, via the API's setSize, and setSize
      writes attributes that the stylesheet outranks. */
+  /* ===== The safe area is the whole bug, and this turns it off. =================
+     Reported: the picture is pushed right ONLY in the installed app, never in a
+     browser tab. That is the tell. A browser tab has Safari's own chrome over
+     the sensor housing, so env(safe-area-inset-left) is 0 there; installed with
+     viewport-fit=cover it is not, and iOS hands that inset down into the
+     YouTube frame, which shifts its picture right by exactly that much.
+
+     Measured on the handset, not guessed: build 62 moved the slot by
+     -1 * env(safe-area-inset-left) and the picture moved 129 device px, from
+     315 to 186. So the inset is 129 device px -- 59 CSS px, which is the
+     standard landscape inset on this class of phone -- and the shift is the
+     whole inset, not a fraction of it.
+
+     Compensating for it does not work, and I shipped that twice to find out:
+     the player only applies the inset on SOME layouts, so half the videos land
+     right and the other half land 129px the other way. There is no way to ask a
+     cross-origin frame which of the two it did.
+
+     So remove the cause. viewport-fit=auto for the duration of landscape
+     playback makes the inset zero, for us and for the frame, and the two states
+     collapse into the one correct one.
+
+     It costs nothing, which is the part I got wrong when I first dismissed this:
+     the layout viewport shrinks to the safe width (837 of 956 here) but the
+     picture is bound by HEIGHT, so it stays 782x440 and lands at 87..869 --
+     pixel-identical to the YouTube app. The strip iOS reclaims either side is
+     letterbox black either way, provided the page under it is black, which is
+     why the deck paints the canvas black in landscape. */
+  var CF_VP_COVER='width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no';
+  var CF_VP_SAFE ='width=device-width, initial-scale=1, viewport-fit=auto, user-scalable=no';
+  function cfViewportFit(cover){
+    var m=document.querySelector('meta[name=viewport]'); if(!m) return;
+    var want=cover?CF_VP_COVER:CF_VP_SAFE;
+    if(m.getAttribute('content')===want) return;
+    m.setAttribute('content', want);
+    document.body.classList.toggle('vpsafe', !cover);
+  }
+  /* Every way out of landscape playback, so the app can never be left with the
+     notch strip switched off: rotating back, closing the deck, and the page
+     being restored from the background (iOS can rotate while suspended). */
+  function cfViewportSync(){
+    var inDeck=document.body.classList.contains('curdeck');
+    var land=!matchMedia('(orientation:portrait)').matches;
+    cfViewportFit(!(inDeck&&land));
+  }
   function cfRelayoutPlayers(){
     var root=document.documentElement, restore=null;
     // setTimeout, not requestAnimationFrame. rAF is throttled whenever the page
@@ -3863,6 +3915,12 @@
      -- left the bar dead with no way to tell from the outside. */
   var cdTimeT=null;
   function cdTimeBarTick(){
+    // Self-heal, for free, on a tick that by design can never be stopped. The one
+    // way this change could hurt is if the app were left with the notch strip
+    // switched off after the deck is gone -- the whole layout would sit inside
+    // the safe area and every edge would gain a margin. Rotating, closing and
+    // resuming all restore it; this catches whatever those three miss.
+    if(typeof cfViewportSync==='function') cfViewportSync();
     if(!document.body.classList.contains('curdeck')) return;   // not in the deck
     if(cfIsFeed()) return;                         // portrait hides the bar entirely
     var i=cfPlayIdx>=0?cfPlayIdx:cdIdx, p=cfPlayers[i];
@@ -5538,6 +5596,7 @@
       // black falling on one side only. A video first played in landscape looks
       // right, which is why it seemed to happen to some videos and not others.
       // setSize is the API's own way of saying "your box changed".
+      cfViewportSync();      // safe area off for landscape playback, back on for portrait
       cfRelayoutPlayers();
       if(cfIsFeed()){
         cdStopPoll();
@@ -5550,6 +5609,9 @@
       }
       cdRender();
     }
+    ['pageshow','visibilitychange','focus'].forEach(function(ev){
+      window.addEventListener(ev,function(){ if(typeof cfViewportSync==='function') cfViewportSync(); });
+    });
     ['resize','orientationchange'].forEach(function(ev){
       window.addEventListener(ev,function(){ clearTimeout(cdRszT); cdRszT=setTimeout(cdRemeasure,150); });
     });
