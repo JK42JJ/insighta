@@ -1210,6 +1210,17 @@
     body.curdeck #curDeck{padding:calc(var(--sat) + 6px) 0 0}          /* feed edge-to-edge (A1) */
     body.curdeck .cd-top{padding:2px 14px 9px; position:relative; z-index:8}  /* header/back above feed + stage */
     body.curdeck .cd-weeks{padding:0 14px 9px; position:relative; z-index:8}  /* chips share the header band */
+    /* Scroll into the feed and the back/title row folds away; the week chips
+       stay, because they are how you move between weeks and that is still true
+       while you are watching. Scroll back toward the top and it returns.
+
+       It was removed once on the theory that it caused the "clipped top and
+       bottom" report. It did not -- that was scrollIntoView dragging the whole
+       document, fixed separately. Two rows of chrome over a video feed is a lot
+       of screen to spend on navigation you are not currently using. */
+    body.curdeck .cd-top{transition:height .18s ease, opacity .14s ease, padding .18s ease}
+    body.curdeck.cdhdroff .cd-top{
+      height:0; padding:0 14px; opacity:0; pointer-events:none; overflow:hidden}
     body.curdeck #cdTrack,body.curdeck .cd-hint,body.curdeck .jbar{display:none !important}
     body.curdeck .wheelzone{display:none !important}                   /* W: wheel hidden in portrait deck only */
     body.curdeck .cd-strip{position:absolute; left:0; right:0; top:0; bottom:0; flex:none; overflow:visible; z-index:6; pointer-events:none}
@@ -1844,7 +1855,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-60';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-61';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3559,6 +3570,9 @@
     top=Math.max(0, Math.min(top, max));
     if(smooth && !reduce && feed.scrollTo) feed.scrollTo({top:top, behavior:'smooth'});
     else feed.scrollTop=top;
+    // A jump we made ourselves is not the user scrolling into the feed, so the
+    // header comes back rather than staying folded from wherever they were.
+    if(top<=0) document.body.classList.remove('cdhdroff');
   }
 
   function cfCardEnded(i){ if(i>=cdItems.length-1) return; cfScrollToCard(i+1, true); }
@@ -5269,6 +5283,10 @@
         var y=feed.scrollTop, d=y-last;
         if(Math.abs(d)<DELTA) return;
         last=y;
+        // Fold going down, restore coming back. Near the top it always returns,
+        // whatever the direction -- a short list could otherwise strand it with
+        // nothing left to scroll up through.
+        document.body.classList.toggle('cdhdroff', d>0 && y>HIDE_AFTER);
       },{passive:true});
     })();
 
