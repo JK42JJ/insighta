@@ -2047,7 +2047,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-76';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-77';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4044,29 +4044,33 @@
       segCache[vid]={ sections:(j&&j.data&&j.data.segments&&j.data.segments.sections)||[], credit:(j&&j.data&&j.data.oneLiner)||null };
     }).catch(function(){ segCache[vid]={sections:[],credit:null}; });
   }
-  // V2.2 terrain constants (James 07-30: "sections are not divided" — each
-  // section is now its OWN hill, meeting neighbors at shallow valleys, with a
-  // faint boundary tick. PC language: per-segment mounds, low rise).
+  // V2.3 terrain (James 07-31): ONE continuous graph — each section HOLDS its
+  // height as a gentle plateau, and the boundary makes a soft partial notch
+  // ("다소 하강/상승"), which is what makes the section levels legible. This is
+  // the PC PlayerChrome grammar: tiered mounds joined by shallow dips, never
+  // fully separated hills (V2.2) and never one blended mass (V2.1).
   var MOUND_RISE=22;          // hills decorate, never dominate
-  var MOUND_VALLEY=0.28;      // valley height = 28% of the lower neighbor — divided but grounded
+  var MOUND_NOTCH=0.74;       // boundary dips to 74% of the lower neighbor's plateau
   function cfMoundGeom(vid, secsIn, dur){
     if(cfMoundGeomCache[vid]) return cfMoundGeomCache[vid];
     var W=360,H=56,base=H-2.5;
     var secs=secsIn.slice().sort(function(a,b){ return (+a.from_sec||0)-(+b.from_sec||0); });
     var hOf=function(s){ var v=(s.relevance_pct!=null?+s.relevance_pct:20); return Math.pow(v/100,1.35)*MOUND_RISE; };
-    // One asymmetric raised-cosine hump per section: valley-edge heights come
-    // from the lower neighbor, the bell rises to this section's own peak.
+    var ease=function(u){ return .5-.5*Math.cos(Math.PI*u); };
     var S=[];
     for(var i2=0;i2<secs.length;i2++){
-      var s=secs[i2], x0=(+s.from_sec||0)/dur*W, x1=(+s.to_sec||0)/dur*W, peak=hOf(s);
-      if(x1<=x0) continue;
-      var hL=(i2>0)?Math.min(peak,hOf(secs[i2-1]))*MOUND_VALLEY:0;
-      var hR=(i2<secs.length-1)?Math.min(peak,hOf(secs[i2+1]))*MOUND_VALLEY:0;
-      for(var j=0;j<=24;j++){
-        var u=j/24, x=x0+(x1-x0)*u;
-        var edge=hL+(hR-hL)*u;
-        var bell=Math.pow(Math.sin(Math.PI*u),1.2)*(peak-Math.max(hL,hR)*0.4);
-        S.push({ x:Math.max(0,Math.min(W,x)), y:base-2-Math.max(edge, edge+bell) });
+      var s=secs[i2], x0=(+s.from_sec||0)/dur*W, x1=(+s.to_sec||0)/dur*W, span=x1-x0, h=hOf(s);
+      if(span<=0) continue;
+      var T=Math.min(16, span*0.28); // boundary transition width
+      var nL=(i2>0)?Math.min(h,hOf(secs[i2-1]))*MOUND_NOTCH:h*0.45;   // frame edges: soft shoulder
+      var nR=(i2<secs.length-1)?Math.min(h,hOf(secs[i2+1]))*MOUND_NOTCH:h*0.45;
+      var pIn=T/span, pOut=1-T/span;
+      for(var j=0;j<=26;j++){
+        var u=j/26, x=x0+span*u, hh;
+        if(u<pIn){ hh=nL+(h-nL)*ease(u/pIn); }
+        else if(u>pOut){ hh=nR+(h-nR)*ease((1-u)/(1-pOut)); }
+        else { var m=(u-pIn)/(pOut-pIn); hh=h*(0.965+0.035*Math.sin(Math.PI*m)); } // gentle crown
+        S.push({ x:Math.max(0,Math.min(W,x)), y:base-2-hh });
       }
     }
     var rnd=function(v){ return Math.round(v*10)/10; };
@@ -4076,7 +4080,7 @@
     var area='M0,'+rnd(base)+' L'+S.map(function(q){ return rnd(q.x)+','+rnd(q.y); }).join(' L ')+' L'+W+','+rnd(base)+' Z';
     var hi=[];
     secs.forEach(function(s){ if(s.relevance_pct!=null&&+s.relevance_pct>=80){
-      var cx0=(+s.from_sec||0)/dur*W+3, cx1=(+s.to_sec||0)/dur*W-3; // inset so crests never dip into the valleys
+      var cx0=(+s.from_sec||0)/dur*W+8, cx1=(+s.to_sec||0)/dur*W-8; // inset past the boundary transitions
       if(cx1>cx0) hi.push(seg(Math.max(0,cx0), Math.min(W,cx1))); } });
     var ticks=[];
     for(var m2=1;m2<secs.length;m2++){ ticks.push(rnd((+secs[m2].from_sec||0)/dur*W)); }
