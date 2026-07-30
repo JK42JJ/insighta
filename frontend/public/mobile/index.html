@@ -1422,6 +1422,13 @@
   .cf-card.mdim .cf-mound .mhi{opacity:.62}
   @media (prefers-reduced-motion: no-preference){ .cf-mound .mline,.cf-mound .mhi{transition:opacity .5s} }
   .cf-segchip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;color:var(--cd-chip-ink);background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge)}
+  /* V3 core-only toggle — video decks only (body.vdeck). Default = full. */
+  .cd-mode{display:none;align-items:center;background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge);border-radius:999px;padding:2px;margin-left:auto}
+  body.vdeck .cd-mode{display:flex}
+  .cd-mode button{border:0;background:none;color:var(--cd-chip-ink);font-size:11px;font-weight:600;padding:4px 10px;border-radius:999px}
+  .cd-mode button.on{background:var(--cd-chip-on-bg);color:var(--cd-chip-on-ink)}
+  .cf-corechip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;color:var(--acc);background:rgba(var(--acc-rgb),.14)}
+  .cf-card.monly .cf-mound .mline{opacity:.18}
   /* Once the card is playing, the YouTube player draws its own progress bar a
      few pixels away. Two bars for one video is not two pieces of information --
      it is the same fact twice, and they disagree while ours waits for its next
@@ -1941,6 +1948,9 @@
     <div class="cd-top">
       <button class="cd-back" id="cdBack" type="button">← 큐레이션</button>
       <span class="cd-title" id="cdTitle"></span>
+      <div class="cd-mode" id="cdMode" role="group" aria-label="재생 모드">
+        <button type="button" data-m="core">핵심만</button><button type="button" data-m="full" class="on">전체</button>
+      </div>
       <span class="cd-count num" id="cdCount"></span>
     </div>
     <!-- Week chips. Every build keeps the weeks before it, so the history was
@@ -2026,7 +2036,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-72';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-73';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3386,6 +3396,15 @@
     document.getElementById('cdTitle').textContent=cdTopic;
     // V1: the deck serves two tabs now — the back button names where you came from.
     var _bk=document.getElementById('cdBack'); if(_bk) _bk.textContent=(ctx&&ctx.backLabel)||'← 큐레이션';
+    // V3: video decks get the core/full toggle (body.vdeck shows it); the mode
+    // itself is session-scoped so it carries across decks until reload.
+    document.body.classList.toggle('vdeck', !!(ctx&&ctx.returnTab==='video'));
+    var _md=document.getElementById('cdMode');
+    if(_md&&!_md.__wired){ _md.__wired=true; _md.addEventListener('click',function(ev){
+      var b=ev.target&&ev.target.closest?ev.target.closest('button'):null; if(!b) return;
+      cfModeSet(b.getAttribute('data-m')==='core');
+    }); }
+    cfModeSet(cfCoreOnly); // repaint the pill to the session state on every open
     cdRenderWeeks();
     wheelAwake(); wheelSleep();          // brief hello on entry, as the note view does
     document.body.classList.add('curdeck');
@@ -3445,7 +3464,7 @@
     var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; _fd.innerHTML=''; } // drop cards+players so re-open builds fresh
     clearTimeout(cdWheelT);
     cfMoundStop(); // V2: the mound tick/dim timers die with the deck
-    document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
+    document.body.classList.remove('curdeck','vdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
     var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
   }
@@ -3961,7 +3980,7 @@
     cdTimeBarStart(); cdLineupTick();
     // V2 mound: build/arm on the committed card, pre-fetch the next card's
     // sections alongside its player warm (vtab items only; no-op for curation).
-    cfMoundEnsure(i); cfDimWake(i);
+    cfMoundEnsure(i); cfDimWake(i); cfCoreApply(i);
     var nx=cdItems[i+1];
     if(nx&&nx.vtab&&nx.has_segments&&(nx.seg_coverage==null||nx.seg_coverage>=0.9)) cfSegFetchV(nx.video_id);
   }
@@ -4080,6 +4099,7 @@
     });
     c.classList.add('hasmound');
     cfMoundArm(i);
+    cfCoreApply(i); // V3: sections just became available — apply the mode now
   }
   function cfMoundPaint(i, frac){
     var c=cfCards()[i]; if(!c) return; var svg=c.querySelector('.cf-mound svg'); if(!svg) return;
@@ -4098,7 +4118,9 @@
     cfMoundT=setInterval(function(){
       try{ var p=cfPlayers[i]; if(!p||!p.getCurrentTime) return;
         var d=p.getDuration()||it.duration_sec||0; if(!(d>0)) return;
-        cfMoundPaint(i, (p.getCurrentTime()||0)/d);
+        var t=p.getCurrentTime()||0;
+        cfMoundPaint(i, t/d);
+        cfCoreTick(i, t); // V3: core-only steering rides the same 1s tick
       }catch(e){}
     },1000);
   }
@@ -4108,6 +4130,70 @@
     cfDimT=setTimeout(function(){ var c=cfCards()[i]; if(c&&c.classList.contains('hasmound')&&i===cfPlayIdx) c.classList.add('mdim'); },3000);
   }
   function cfDimWake(i){ var c=cfCards()[i]; if(c) c.classList.remove('mdim'); if(cfDimT){ clearTimeout(cfDimT); cfDimT=null; } }
+
+  // ===== V3: core-only playback ==============================================
+  // Plays only the >=80 sections, chained through the SAME in-card player.
+  // Default is FULL (44% of videos have no v2 — core-only default would read
+  // as broken). Escape hatch inherited from the PC highlight reel: a manual
+  // scrub outside every core section stops the steering for THAT video —
+  // the mode never drags the user back. Toggle state is session-scoped.
+  var cfCoreOnly=false, cfCoreDisarm={}, cfCoreSeekAt=0;
+  function cfCoreSegs(vid){
+    var e=segCache[vid]; if(!e||!e.sections||!e.sections.length) return null;
+    var out=e.sections.filter(function(s){ return s.relevance_pct!=null&&+s.relevance_pct>=80&&+s.to_sec>+s.from_sec; })
+      .map(function(s){ return {from:+s.from_sec,to:+s.to_sec}; }).sort(function(a,b){ return a.from-b.from; });
+    return out.length?out:null;
+  }
+  function cfCoreEligible(i){
+    var it=cdItems[i]; if(!it||!it.vtab||!it.has_segments) return false;
+    if(it.seg_coverage!=null&&it.seg_coverage<0.9) return false;
+    return !!cfCoreSegs(it.video_id);
+  }
+  function cfCoreApply(i){
+    var it=cdItems[i], c=cfCards()[i]; if(!it||!c||!it.vtab) return;
+    var active=cfCoreOnly&&cfCoreEligible(i)&&!cfCoreDisarm[it.video_id];
+    c.classList.toggle('monly', active);
+    var chip=c.querySelector('.cf-corechip');
+    if(active&&!chip){ var meta=c.querySelector('.cf-meta'); if(meta) meta.insertAdjacentHTML('afterbegin','<span class="cf-corechip">핵심 구간 건너뛰는 중 »</span>'); }
+    else if(!active&&chip){ chip.remove(); }
+    if(active){
+      try{ var p=cfPlayers[i]; if(p&&p.getCurrentTime&&p.seekTo){
+        var segs=cfCoreSegs(it.video_id), t=p.getCurrentTime()||0;
+        var inSeg=segs.some(function(s){ return t>=s.from&&t<s.to; });
+        if(!inSeg){ var nx=null; for(var k=0;k<segs.length;k++){ if(segs[k].from>=t){ nx=segs[k]; break; } }
+          cfCoreSeekAt=Date.now(); p.seekTo((nx||segs[0]).from,true); }
+      } }catch(e){}
+    }
+  }
+  function cfCoreTick(i, t){
+    if(!cfCoreOnly) return;
+    var it=cdItems[i]; if(!it||!it.vtab||cfCoreDisarm[it.video_id]||!cfCoreEligible(i)) return;
+    var p=cfPlayers[i]; if(!p||(p.getPlayerState&&p.getPlayerState()!==1)) return; // steer only while playing
+    var segs=cfCoreSegs(it.video_id), cur=null, nx=null;
+    for(var k=0;k<segs.length;k++){
+      if(t>=segs[k].from-0.5&&t<segs[k].to){ cur=segs[k]; nx=segs[k+1]||null; break; }
+      if(segs[k].from>t){ nx=segs[k]; break; }
+    }
+    if(cur){
+      if(t>=cur.to-0.5){
+        if(nx){ cfCoreSeekAt=Date.now(); try{ p.seekTo(nx.from,true); }catch(e){} }
+        else cfCardEnded(i); // past the last core section = this video is done
+      }
+      return;
+    }
+    // Outside every core section. Right after our own seek that is transit;
+    // 3s+ later it means the user scrubbed here on purpose -> stop steering.
+    if(Date.now()-cfCoreSeekAt>3000){ cfCoreDisarm[it.video_id]=true; cfCoreApply(i); return; }
+    if(nx){ cfCoreSeekAt=Date.now(); try{ p.seekTo(nx.from,true); }catch(e){} }
+    else cfCardEnded(i);
+  }
+  function cfModeSet(core){
+    cfCoreOnly=!!core;
+    var box=document.getElementById('cdMode');
+    if(box) Array.prototype.forEach.call(box.querySelectorAll('button'),function(b){ b.classList.toggle('on',(b.getAttribute('data-m')==='core')===cfCoreOnly); });
+    if(cfPlayIdx>=0) cfCoreApply(cfPlayIdx);
+  }
+  // ===== end V3 ==============================================================
   // ===== end V2 mound =========================================================
 
   // Progress = note chapters grammar: one segment per video, done/now(partial)/todo (R9).
