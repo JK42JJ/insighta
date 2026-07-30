@@ -2006,7 +2006,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-70';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-71';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3364,6 +3364,8 @@
     unlockAudio();
     cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
     document.getElementById('cdTitle').textContent=cdTopic;
+    // V1: the deck serves two tabs now — the back button names where you came from.
+    var _bk=document.getElementById('cdBack'); if(_bk) _bk.textContent=(ctx&&ctx.backLabel)||'← 큐레이션';
     cdRenderWeeks();
     wheelAwake(); wheelSleep();          // brief hello on entry, as the note view does
     document.body.classList.add('curdeck');
@@ -3427,8 +3429,12 @@
     var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
   }
   function closeCurationDeck(){
+    // V1: return to the tab the deck was opened from (video tab reuses the
+    // deck). cdTeardown does not clear cdCtx, so read it after is also fine —
+    // capture first anyway so the ordering never matters again.
+    var back=(cdCtx&&cdCtx.returnTab)||'curation';
     cdTeardown();
-    setHomeTab('curation');
+    setHomeTab(back);
   }
   function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
   /* Poster resolution follows the connection: high on a good one, the small
@@ -4434,28 +4440,27 @@
   }
   // Video tab — select a mandala → continuous watch of its videos, reusing the existing beat player.
   async function openMandalaVideos(m){
-    unlockAudio();
-    document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true;
-    curNote={ id:m.id, title:m.title, videoMode:true }; show('player');
-    var sh=document.getElementById('bShareNote'); if(sh) sh.hidden=true;
-    document.getElementById('pTitle').textContent=m.title||'영상';
-    pShowSkeleton('영상을 여는 중');
-    var recs=[];
+    /* V1 (video-mode redesign, 2026-07-30): the video tab plays the mandala's
+       PLACED cards through the curation deck engine, relevance-first — it no
+       longer replays the recommendation cache through the note beat player.
+       (That old path also violated the clip-boundary rule with 0..99999
+       windows; the deck is full-play by design, so no synthetic windows.)
+       The note path (openNote → flatten(book)) is untouched. */
     try{
-      var r=await api('/mandalas/'+m.id+'/recommendations');
-      var j=await r.json(); recs=(j&&j.items)||[];
-    }catch(e){ pShowState('영상을 불러오지 못했어요','연결 확인 후 다시 시도해주세요'); return; }
-    recs=recs.filter(function(it){ return it && it.videoId; });
-    if(!recs.length){ pShowState('영상이 아직 없어요','추천 영상이 모이면 여기서 이어봐요'); return; }
-    // video beats — full playback (core-segment seek = follow-up); nextBeat auto-advances = continuous watch
-    beats=[]; chapterOfBeat=[];
-    recs.forEach(function(it){
-      beats.push({ t:'c', vid:it.videoId, from:0, to:(it.durationSec||99999), text:it.title||'', src:it.channel||null });
-      chapterOfBeat.push(0);
-    });
-    bi=0;
-    buildRail();
-    setPlaying(true);
+      var r=await api('/mandalas/'+m.id+'/videos?limit=100');
+      var j=await r.json(); var list=(j&&j.items)||[];
+      var items=list.filter(function(it){ return it&&it.videoId&&it.title; }).map(function(it){
+        return { video_id:it.videoId, title:it.title, channel:it.channel||null,
+          thumbnail:it.thumbnail||null, duration_sec:it.durationSec||null, views:it.views||null,
+          relevance_pct:(it.relevancePct!=null?it.relevancePct:null),
+          has_segments:!!it.hasSegments, seg_coverage:(it.segCoverage!=null?it.segCoverage:null) };
+      });
+      if(!items.length){ toast('영상이 아직 없어요 — 카드가 모이면 여기서 이어봐요'); return; }
+      openCurationDeck(m.title||'영상', items, { returnTab:'video', backLabel:'← 영상' });
+      // Fire-and-forget: start scoring this mandala's unscored cards so the
+      // relevance order (and the V2 mound later) fills in on the next open.
+      api('/mandalas/'+m.id+'/relevance-trigger',{method:'POST'}).catch(function(){});
+    }catch(e){ toast('열지 못했어요 — 연결 확인 후 다시 시도해주세요'); }
   }
   async function fetchBookStatus(m){
     if(m.sample||bookCache[m.id]) return;
@@ -5795,7 +5800,9 @@
     if(cur==='home'){
       if(homeTab==='curation'){ var ce=curRowEls[curSelIdx]; if(ce) ce.click(); return; }
       var items=homeItems(); var m=items[selIdx];
-      if(m){ var k=rowState(m).kind; if(k!=='making'&&k!=='loading') openNote(m); } return; }
+      // V1 fix: core press on the video tab opened the NOTE (fell through to
+      // openNote for both tabs) — route it to the video deck like a row tap.
+      if(m){ var k=rowState(m).kind; if(k!=='making'&&k!=='loading'){ if(homeTab==='video') openMandalaVideos(m); else openNote(m); } } return; }
     if(cur==='menu'){ var mr=menuRows(); if(mr[selMenu]) mr[selMenu].click(); return; }
     if(cur==='player'){ setPlaying(!playing); }
   }
