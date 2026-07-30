@@ -1392,24 +1392,6 @@
     body.curdeck .cf-playing .cf-media{position:absolute; inset:0; margin:auto;
       width:min(100%, calc(100vh * 16 / 9)); height:min(100%, calc(100vw * 9 / 16));
       aspect-ratio:auto; background-size:contain; background-color:var(--stage)}
-    /* Measured, not guessed. On the reported frame (a 2079x960 grab of a 956x440
-       landscape viewport) the picture is the same SIZE as YouTube's own app --
-       the watermark is 182px wide in both -- and sits 129 device px further
-       right, correlation .99. In a real browser at that exact viewport the
-       media box, the slot and the iframe all report x87 782x440, the identical
-       rect YouTube uses; and the point where the picture is cut, 1892, is
-       87+782, this box's own right edge. So the box is right on the device too
-       and the offset is INSIDE the iframe: the player paints its picture 58 CSS
-       px right of the frame it was given, which puts black on the left and
-       feeds the same amount of picture into overflow on the right.
-
-       58px is this device's landscape env(safe-area-inset-left). Nothing else
-       on the page carries that number, and viewport-fit=cover is what lets the
-       inset reach into the frame. Pull the slot left by exactly it and the
-       picture lands on the box. Every surface where the inset is zero --
-       portrait, desktop, any phone without a sensor housing -- is untouched,
-       which is also why this was only ever a landscape report. */
-    body.curdeck .cf-playing .cf-slot{left:calc(-1 * env(safe-area-inset-left, 0px)); right:auto; width:100%}
     body.curdeck .cf-playing .cf-meta{display:none}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
@@ -1873,7 +1855,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-62';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-63';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3227,9 +3209,14 @@
     cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
     document.getElementById('cdTitle').textContent=cdTopic;
     cdRenderWeeks();
-    if(!cfIsFeed()) cdTimeBarStart();   // entered already sideways
     wheelAwake(); wheelSleep();          // brief hello on entry, as the note view does
     document.body.classList.add('curdeck');
+    // After the class, not before it. cfIsFeed asks whether the body is in the
+    // deck AND portrait, so asking one line earlier answered "not the deck" every
+    // time and the orientation half never got a vote. The tick already no-ops in
+    // portrait, so it needs no guard here at all -- and not needing one is why
+    // the bar could not be left unstarted by whichever path opened the deck.
+    cdTimeBarStart();
     setTimeout(function(){ document.body.classList.add('cdin'); },20); // D0 crossfade (timeout: rAF throttles in bg tabs)
     // D6 — one-time coachmark until the first wheel/center interaction
     try{ if(!localStorage.getItem('insighta-cd-hint')) document.body.classList.add('cdhint'); }catch(e){}
@@ -3279,7 +3266,6 @@
     clearTimeout(cdWheelT);
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
-    cdTimeBarStop();
     var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
   }
   function closeCurationDeck(){
@@ -3513,9 +3499,18 @@
       var pr=probe.getBoundingClientRect();
       var card=document.querySelector('.cf-playing');
       var i=(typeof cfPlayIdx!=='undefined'&&cfPlayIdx>=0)?cfPlayIdx:'-';
+      var vv=window.visualViewport;
+      // Three unknowns that two rounds of screenshot arithmetic could not pin
+      // down, and which decide whether the picture is placed by us or by the
+      // player: whether a fixed inset:0 box is the screen or only the safe part
+      // of it, what the insets actually measure, and whether this is standalone
+      // (where iOS applies the safe area to the viewport itself).
+      var mode=(matchMedia('(display-mode:standalone)').matches||navigator.standalone)?'STANDALONE':'BROWSER';
       box.textContent=
-        'vw '+innerWidth+'x'+innerHeight+'  dpr '+devicePixelRatio
-        +'  '+(matchMedia('(orientation:portrait)').matches?'PORTRAIT':'LANDSCAPE')+'\n'
+        'vw '+innerWidth+'x'+innerHeight+'  doc '+document.documentElement.clientWidth
+        +'  dpr '+devicePixelRatio+'  '+mode+'\n'
+        +(vv?('visual '+Math.round(vv.width)+'x'+Math.round(vv.height)+' off '+Math.round(vv.offsetLeft)+','+Math.round(vv.offsetTop)+'  scale '+vv.scale+'\n'):'')
+        +(matchMedia('(orientation:portrait)').matches?'PORTRAIT':'LANDSCAPE')+'  '
         +'safe L'+Math.round(pr.left)+' T'+Math.round(pr.top)
         +' R'+Math.round(innerWidth-pr.right)+' B'+Math.round(innerHeight-pr.bottom)+'\n'
         +'card  '+r(card)+'\n'
@@ -3630,6 +3625,14 @@
     if(i+1<cdItems.length) cfEnsurePlayer(i+1);                          // pre-create the next card's player (instant on scroll)
     cfPrimeSoon();                                                       // unlock it while a touch is still in hand
     cfDestroyFar(i);
+    // Every way the playing card can change comes through here -- the wheel, the
+    // prev/next buttons, a feed settle, the end of a video, rotation. So this is
+    // where the bar under the video gets told, and the reason the buttons moved
+    // the picture while the bar sat still was that each caller was expected to
+    // remember. Start is idempotent and makes the tick's existence independent
+    // of which path opened the deck; the tick right after it means the bar moves
+    // on the same frame as the picture instead of up to 500ms later.
+    cdTimeBarStart(); cdTimeBarTick();
   }
   // A4: paint one card's progress line in place (no innerHTML rebuild = no scroll/observer reset).
   function cfPaintProg(i){
@@ -3699,18 +3702,38 @@
      how far through THIS video you are -- not which card of the week is showing,
      which is what it drew before and which the N/M counter already says. Driven
      from the in-card player, since that is the one playing. */
+  /* Shaped after the note view, which has had a working version of this the
+     whole time (startLive/renderLive). Its shape is the reason: ONE interval,
+     started once, never stopped, and the decision to paint lives INSIDE the
+     tick -- `if(cur==='player'&&beats.length)`. There is no lifecycle to drive
+     from the right places, so there is nothing any path can forget.
+
+     The deck had start/stop instead, and every route that did not run the
+     opener -- a teardown, a week switch, a rotation that took the other branch
+     -- left the bar dead with no way to tell from the outside. */
   var cdTimeT=null;
   function cdTimeBarTick(){
+    if(!document.body.classList.contains('curdeck')) return;   // not in the deck
     if(cfIsFeed()) return;                         // portrait hides the bar entirely
-    var p=cfPlayers[cfPlayIdx>=0?cfPlayIdx:cdIdx];
-    if(!p||!p.getCurrentTime||!p.getDuration) return;
-    try{ var d=p.getDuration()||0; if(d>0) cdJbarPaint(p.getCurrentTime()/d); }catch(e){}
+    var i=cfPlayIdx>=0?cfPlayIdx:cdIdx, p=cfPlayers[i];
+    try{
+      if(p&&p.getDuration&&p.getCurrentTime){
+        var d=p.getDuration()||0;
+        if(d>0){ cdJbarPaint(p.getCurrentTime()/d); return; }
+      }
+    }catch(e){}
+    // The player of a card just arrived at reports no duration for a beat. Left
+    // to itself the bar simply holds whatever the previous video had painted,
+    // which reads as "the bar is dead". The saved position for this video is
+    // the honest answer for that beat, and 0 for one never opened.
+    var it=cdItems[i], wch=it&&cfWatch[it.video_id];
+    cdJbarPaint(wch&&wch.dur>0 ? wch.pos/wch.dur : 0);
   }
-  function cdTimeBarStart(){
-    cdTimeBarStop();
-    cdTimeT=setInterval(cdTimeBarTick,500);
-  }
-  function cdTimeBarStop(){ if(cdTimeT){ clearInterval(cdTimeT); cdTimeT=null; } }
+  // Idempotent by the same guard the note view uses: ask for it as often as you
+  // like, it exists once. There is deliberately no stop -- a stop is the thing
+  // that has to be re-started, and the tick already costs nothing when the deck
+  // is closed or the feed is up.
+  function cdTimeBarStart(){ if(!cdTimeT) cdTimeT=setInterval(cdTimeBarTick,500); }
   /* Wheel summon (glass): ANY deck touch fades the wheel in; 3s idle fades out.
      Supervisor boundary: when the wheel is NOT visible, the summoning tap is
      CONSUMED — it must not fall through as a card tap / play toggle. */
@@ -4003,8 +4026,7 @@
     var cur=(cfPlayIdx>=0?cfPlayIdx:cdIdx), ni=cur+d;
     if(ni<0||ni>=cdItems.length) return false;
     if(navigator.vibrate) navigator.vibrate(7);
-    cfCommitPlay(ni, true);
-    cdJbarPaint(0);            // the bar means "how far through THIS video" -- a new video restarts it
+    cfCommitPlay(ni, true);    // commit repaints the bar; no caller needs to remember
     return true;
   }
   function cdWheelMove(deg){
@@ -5368,7 +5390,7 @@
       // setSize is the API's own way of saying "your box changed".
       cfRelayoutPlayers();
       if(cfIsFeed()){
-        cdStopPoll(); cdTimeBarStop();
+        cdStopPoll();
         // Coming back to portrait, the feed has to be looking at the video that
         // has been playing. Without this the audio carried on while the screen
         // showed some other part of the week.
