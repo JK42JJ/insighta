@@ -1571,6 +1571,11 @@
        it is already clear of the safe area. */
     body.curdeck .cf-playing .cf-prog{display:none}
     body.curdeck .cf-playing .cf-meta{display:none}
+    /* V2 fix (device pass 07-30): the mound is portrait furniture too — without
+       this it rendered ACROSS THE TOP of the landscape fullscreen picture
+       (card goes fixed, media absolute, the in-flow strip floats up top).
+       Landscape mound ships separately with its own device-verified pass. */
+    body.curdeck .cf-playing .cf-mound{display:none}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
        YouTube's bottom bar and its own progress scrubber. */
@@ -2036,7 +2041,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-73';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-74';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
