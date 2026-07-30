@@ -1392,9 +1392,27 @@
        needed changing, and the version that kept it permanently lit was me
        working around this one line. */
     body.curdeck .wheelzone{pointer-events:auto}
-    body.curdeck #cdFeed{display:block !important; position:absolute; inset:0; overflow:hidden}
+    /* -webkit-overflow-scrolling:auto, deliberately, and it is the whole bug.
+       On iOS a position:fixed DESCENDANT of a scroller that has touch momentum
+       is laid out against that SCROLLER instead of the viewport, and drifts with
+       its scroll position. The playing card is fixed, and it lives inside this
+       feed, so on a handset it was being placed against a box that is not the
+       screen -- which is why the same video sat centred in one screenshot and
+       129px to the side in the next, and why every measurement I took in a
+       desktop browser came back correct: that browser does not have the
+       behaviour, so the check could never fail. Landscape hides the feed's
+       scrolling anyway (one card, overflow:hidden), so momentum costs nothing
+       here and the card gets the viewport it was always asking for. */
+    body.curdeck #cdFeed{display:block !important; position:absolute; inset:0; overflow:hidden;
+      -webkit-overflow-scrolling:auto}
     body.curdeck .cf-card:not(.cf-playing){display:none}
     body.curdeck .cf-playing{position:fixed; inset:0; z-index:4; padding:0; background:#000}
+    /* A card mid-entrance carries a transform, and a transformed element becomes
+       the containing block for its own fixed positioning -- another way for the
+       full-screen card to be measured against something that is not the screen.
+       The class that arms it is added and never removed, so it survives into
+       landscape. Landscape has one card and no week-switch to announce. */
+    body.curdeck #cdFeed.wkin .cf-card{animation:none}
     /* The poster fills the card in portrait, where the box IS 16:9 and cover
        crops nothing. Landscape stretches that box to the whole screen -- 2.16:1
        on this handset -- so cover started cutting the top and bottom off the
@@ -1888,7 +1906,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-65';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-66';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -2663,7 +2681,12 @@
       cfRender();
       // C1: the new week arrives from the side. Scoped to the switch -- opening
       // the deck has nothing to have come from, so it does not slide.
-      if(feed){ feed.classList.remove('wkin'); void feed.offsetWidth; feed.classList.add('wkin'); }
+      // Take it off again. A card mid-entrance carries a transform, and a
+      // transformed element is the containing block for its own fixed
+      // positioning -- so a class that is only ever added is a landmine for the
+      // full-screen landscape card. The longest delay is .18s + .5s.
+      if(feed){ feed.classList.remove('wkin'); void feed.offsetWidth; feed.classList.add('wkin');
+        clearTimeout(cfWkinT); cfWkinT=setTimeout(function(){ feed.classList.remove('wkin'); }, CF_WKIN_MS); }
       cfSetupObserver();
       setTimeout(function(){ if(cfIsFeed()) cfCommitPlay(0,false); },160);
     }catch(e){
@@ -3372,6 +3395,7 @@
      sheet and the poster lands smaller than the video. mq is 320x180, exactly
      16:9, and exists whenever the video does. (maxres is not always 16:9 either
      -- measured one at 1280x702 -- but off by a hair beats off by a quarter.) */
+  var cfWkinT=null, CF_WKIN_MS=760;   // longest entrance delay (.18s) + duration (.5s) + slack
   var cdPosterCache={};
   function cdPosterMq(vid){ return 'https://i.ytimg.com/vi/'+vid+'/mqdefault.jpg'; }
   function cdBestPoster(vid, cb){
@@ -3636,6 +3660,9 @@
         +(matchMedia('(orientation:portrait)').matches?'PORTRAIT':'LANDSCAPE')+'  '
         +'safe L'+Math.round(pr.left)+' T'+Math.round(pr.top)
         +' R'+Math.round(innerWidth-pr.right)+' B'+Math.round(innerHeight-pr.bottom)+'\n'
+        +'body  '+r(document.body)+'\n'
+        +'deck  '+r(document.getElementById('curDeck'))+'\n'
+        +'feed  '+r(document.getElementById('cdFeed'))+'  st'+(document.getElementById('cdFeed')||{}).scrollTop+'\n'
         +'card  '+r(card)+'\n'
         +'media '+r(card&&card.querySelector('.cf-media'))+'\n'
         +'ifr   '+r(card&&card.querySelector('.cf-slot iframe'))+'\n'
