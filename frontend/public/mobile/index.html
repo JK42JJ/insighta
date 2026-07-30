@@ -1888,7 +1888,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-64';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-65';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3316,6 +3316,7 @@
      both true 16:9, so either lands on exactly the video's rect.
      Two layers on the high branch: if a video has no maxres the browser simply
      paints the mq one underneath, same rect either way. */
+  var CD_POSTER_REAL_W=320;    // a decoded width at or below this is YouTube's grey placeholder
   var CF_POSTER_HI_MBPS=1.5;   // downlink below this = small poster sheet
   function cfNetHi(){
     try{
@@ -3330,12 +3331,24 @@
   }
   function cfPoster(it){
     var v=it&&it.video_id; if(!v) return 'none';
-    var base='https://i.ytimg.com/vi/'+v+'/';
-    var mq="url('"+base+"mqdefault.jpg')";
-    if(!cfNetHi()) return mq;
     var t=it&&it.thumbnail;
-    var hi=(t&&!/\/(hq|sd|mq)default\.jpg/.test(t))?("url('"+t+"')"):("url('"+base+"maxresdefault.jpg')");
-    return hi+', '+mq;
+    // Cached probe result wins; otherwise the 16:9 sheet that always exists.
+    // A slow link stays on it and never probes for the big one.
+    if(cfNetHi()&&cdPosterCache[v]) return "url('"+cdPosterCache[v]+"')";
+    if(cfNetHi()&&t&&!/\/(hq|sd|mq)default\.jpg/.test(t)) return "url('"+t+"')";
+    return "url('"+cdPosterMq(v)+"')";
+  }
+  /* Ask for the big poster only where the small one is already on screen, and
+     paint it in when the probe says it is a real image rather than the grey
+     placeholder. */
+  function cfUpgradePosters(){
+    if(!cfNetHi()) return;
+    Array.prototype.forEach.call(cfCards(),function(c){
+      var it=cdItems[+c.getAttribute('data-i')]; if(!it||!it.video_id) return;
+      cdBestPoster(it.video_id,function(u){
+        var m=c.querySelector('.cf-media'); if(m) m.style.backgroundImage="url('"+u+"')";
+      });
+    });
   }
   /* Repaint in place rather than re-render: a re-render resets the feed's scroll
      and the observer, and the connection can change while the user is reading. */
@@ -3346,15 +3359,28 @@
     });
   }
   try{ var cfConn=navigator.connection; if(cfConn&&cfConn.addEventListener) cfConn.addEventListener('change',cfRepaintPosters); }catch(e){}
-  // Best-poster probe: try maxresdefault (true 16:9, 1280w); YouTube serves a 120x90
-  // placeholder when absent -> fall back to hqdefault. Cached per video.
+  /* Best-poster probe. maxresdefault does not exist for every video, and when it
+     does not, YouTube answers with a 120x90 grey placeholder -- sometimes as a
+     404, which a background-image quietly skips, and sometimes as a 200, which
+     it paints. Only a decoded size tells the two apart, which is the whole
+     reason this probe exists and cannot be replaced by layered CSS urls: a
+     stack of background-images has no way to ask how big the top one turned out
+     and will happily show the grey box over a perfectly good one underneath.
+
+     The fallback is mqdefault, not hqdefault. hq is 480x360 and sd is 640x480 --
+     4:3 sheets with the black bars baked into the pixels, so `contain` fits the
+     sheet and the poster lands smaller than the video. mq is 320x180, exactly
+     16:9, and exists whenever the video does. (maxres is not always 16:9 either
+     -- measured one at 1280x702 -- but off by a hair beats off by a quarter.) */
   var cdPosterCache={};
+  function cdPosterMq(vid){ return 'https://i.ytimg.com/vi/'+vid+'/mqdefault.jpg'; }
   function cdBestPoster(vid, cb){
     if(cdPosterCache[vid]){ cb(cdPosterCache[vid]); return; }
     var maxres='https://i.ytimg.com/vi/'+vid+'/maxresdefault.jpg';
     var img=new Image();
-    img.onload=function(){ var u=(img.naturalWidth>320)?maxres:('https://i.ytimg.com/vi/'+vid+'/hqdefault.jpg'); cdPosterCache[vid]=u; cb(u); };
-    img.onerror=function(){ var u='https://i.ytimg.com/vi/'+vid+'/hqdefault.jpg'; cdPosterCache[vid]=u; cb(u); };
+    var settle=function(u){ cdPosterCache[vid]=u; cb(u); };
+    img.onload=function(){ settle(img.naturalWidth>CD_POSTER_REAL_W?maxres:cdPosterMq(vid)); };
+    img.onerror=function(){ settle(cdPosterMq(vid)); };
     img.src=maxres;
   }
   function cdPosterSync(){
@@ -3448,6 +3474,7 @@
       +'</div>';
     }
     feed.innerHTML=html;
+    cfUpgradePosters();   // small sheet is already painted; swap in the big one if it is real
   }
   // ===== D: native-scroll dominant-card autoplay (portrait feed) =====
   // No iframe reparent (= no reload): the dual-player STAGE is placed as a fixed
@@ -3567,7 +3594,17 @@
      sits. Added because two diagnoses were made from screenshots whose pixel
      scale was unknown, and both were wrong. Off unless the URL asks. */
   (function(){
-    if(!/[?&]dbg=1/.test(location.search)) return;
+    // Sticky: the geometry that decides where the picture sits only misbehaves
+    // on a real handset, mid-session, and retyping a query string inside an
+    // installed app to catch it is not a thing anyone can do. Turn it on once
+    // with ?dbg=1, off with ?dbg=0.
+    try{
+      if(/[?&]dbg=1/.test(location.search)) localStorage.setItem('insighta-dbg','1');
+      if(/[?&]dbg=0/.test(location.search)) localStorage.removeItem('insighta-dbg');
+    }catch(e){}
+    var dbgOn=/[?&]dbg=1/.test(location.search);
+    try{ dbgOn=dbgOn||localStorage.getItem('insighta-dbg')==='1'; }catch(e){}
+    if(!dbgOn) return;
     var box=document.createElement('div');
     box.style.cssText='position:fixed;left:0;bottom:0;z-index:99999;max-width:100%;'
       +'font:10px/1.45 ui-monospace,Menlo,monospace;white-space:pre;padding:6px 8px;'
