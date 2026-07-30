@@ -30,7 +30,7 @@
     --butter:#F5D48A; --green:#34C759; --red:#FF3B30;
     /* Dark stage. Written out identically in six places before this; the
        deck feed now references it and the rest can follow. */
-    --stage:#0D0D10;
+    --stage:#0D0D10; --noir:#000;   /* letterbox ground: the video's own black, not the paper stage */
     /* Skeleton on the dark stage: a step up from the background, and a sweep
        one step brighter again. Two tokens so the pair stays in proportion. */
     --cf-skel:#1B1A1F; --cf-skel-hi:#2A2830;
@@ -1238,7 +1238,28 @@
   }
   #cdFeed::after{content:''; display:block; height:34vh}   /* tail spacer: last card can settle as dominant */
   .cf-card{position:relative; width:100%; background:var(--stage); padding-bottom:14px}
-  .cf-media{position:relative; width:100%; aspect-ratio:16/9; background:#000 center/cover no-repeat; overflow:hidden;
+  /* ===== The stage rect has exactly ONE owner: .cf-media. =====================
+     Nothing else in this subtree states a width or a height of its own, and no
+     script ever sets one. .cf-slot and the frame inside it only fill what the
+     owner declares, in every orientation.
+
+     It needed saying because three things were claiming the size at once -- this
+     rule, the frame rule, and the API's setSize from the rotation path -- and
+     they disagreed in silence. setSize lost every time: it writes the width and
+     height ATTRIBUTES, an attribute is a presentational hint, and any author
+     declaration beats one. Measured: setSize(300,200) left the frame at 782x440
+     with the attributes set and ignored. So the single call whose whole job was
+     to tell a player its box had changed had never told it anything, and a
+     player born in portrait carried its portrait geometry into landscape. That
+     is why some videos sat centred and others sat 129px to the side on the same
+     build -- reported as "some videos and not others", and true all along.
+
+     One owner means that disagreement is no longer expressible. --stage-nudge is
+     how the owner ships a real resize into the frame after a rotation: a pixel
+     off its own box and back, declared here, rather than poked into an element
+     from script. */
+  .cf-media{position:relative; width:calc(100% - var(--stage-nudge, 0px)); aspect-ratio:16/9;
+    background:#000 center/cover no-repeat; overflow:hidden;
     transition:filter .3s ease}
   /* A2: brightness tier replaces width tier. Expressed through the same --cf-dim
      veil as the tone ramp, so a card has ONE source of darkness -- a filter here
@@ -1279,6 +1300,9 @@
     .cf-slot,.cf-media::after{transition:none}
     body.curdeck .cf-card.cf-wait .cf-media::after{animation:none}
   }
+  /* Fills the owner. States no size of its own -- 100% of the slot IS the
+     owner's rect, and a frame is a replaced element so it needs the pair
+     spelled out to fill rather than fall back to its intrinsic 300x150. */
   .cf-slot iframe{position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; border:0 !important}
   .cf-prog{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:2; background:rgba(237,231,220,.16)}
   .cf-prog b{display:block; height:100%; width:0; background:#FF3B30}
@@ -1381,17 +1405,26 @@
        contain here makes the poster sit exactly where the video will, against
        the same black. Nothing jumps when one becomes the other, which is the
        whole point of showing the poster first. */
-    /* Give the player a box that is ALREADY the right shape instead of a
-       full-bleed one it has to letterbox inside. Stretching the iframe to the
-       whole screen left YouTube to centre the picture itself, and it did not do
-       so evenly -- measured on a real frame: 48px of black above, 27px below,
-       and the picture sitting off to one side.
-       A 16:9 box, centred by auto margins, removes the decision: there is no
-       letterboxing left to get wrong, because the box and the video are the
-       same shape. min() keeps it inside whichever dimension runs out first. */
-    body.curdeck .cf-playing .cf-media{position:absolute; inset:0; margin:auto;
-      width:min(100%, calc(100vh * 16 / 9)); height:min(100%, calc(100vw * 9 / 16));
-      aspect-ratio:auto; background-size:contain; background-color:var(--stage)}
+    /* Full bleed, which is the structure YouTube's own fullscreen uses, and the
+       one this had before a 16:9 box was fitted around the player.
+
+       That box was a mistake twice over. It did not centre anything the player
+       was not already centring -- an embed letterboxes to its own ratio inside
+       whatever frame it is given -- and because the box was exactly the size of
+       the picture, with overflow:hidden, it turned any misplacement INSIDE the
+       frame into a crop. Measured across eight frames from one device on one
+       build: three landed at 186..1892, pixel-identical to the YouTube app, and
+       three landed at 315..1892 -- the same 1707px picture, 129px of it cut off
+       at the box edge. A frame that is the whole screen has no edge to cut
+       against: the worst a stale player can do there is sit off-centre, which
+       is a blemish rather than lost picture.
+
+       contain on the poster makes it land where the video will, against the same
+       black, so nothing jumps when one becomes the other. */
+    body.curdeck .cf-playing .cf-media{position:absolute;
+      inset:0 var(--stage-nudge, 0px) 0 0;      /* the owner's rect, nudge included */
+      margin:0; width:auto; height:auto; aspect-ratio:auto;
+      background-size:contain; background-color:var(--noir)}
     body.curdeck .cf-playing .cf-meta{display:none}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
@@ -1855,7 +1888,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-63';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-64';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3273,6 +3306,46 @@
     setHomeTab('curation');
   }
   function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
+  /* Poster resolution follows the connection: high on a good one, the small
+     sheet on a metered or slow one. What it does NOT do is trade shape for
+     size -- only 16:9 sources are eligible, because hqdefault and sddefault are
+     4:3 with the black bars baked into the image, so `contain` fits the whole
+     4:3 sheet and the poster lands smaller than the video that replaces it.
+     Measured in landscape: a 1280px poster against a 1707px video, so the frame
+     visibly grew the moment it played. mq (320x180) and maxres (1280x720) are
+     both true 16:9, so either lands on exactly the video's rect.
+     Two layers on the high branch: if a video has no maxres the browser simply
+     paints the mq one underneath, same rect either way. */
+  var CF_POSTER_HI_MBPS=1.5;   // downlink below this = small poster sheet
+  function cfNetHi(){
+    try{
+      var c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+      if(!c) return true;                                  // no signal to read (iOS) -> assume good
+      if(c.saveData) return false;                         // the user asked for less data
+      var t=c.effectiveType||'';
+      if(t==='slow-2g'||t==='2g'||t==='3g') return false;
+      if(typeof c.downlink==='number'&&c.downlink>0&&c.downlink<CF_POSTER_HI_MBPS) return false;
+      return true;
+    }catch(e){ return true; }
+  }
+  function cfPoster(it){
+    var v=it&&it.video_id; if(!v) return 'none';
+    var base='https://i.ytimg.com/vi/'+v+'/';
+    var mq="url('"+base+"mqdefault.jpg')";
+    if(!cfNetHi()) return mq;
+    var t=it&&it.thumbnail;
+    var hi=(t&&!/\/(hq|sd|mq)default\.jpg/.test(t))?("url('"+t+"')"):("url('"+base+"maxresdefault.jpg')");
+    return hi+', '+mq;
+  }
+  /* Repaint in place rather than re-render: a re-render resets the feed's scroll
+     and the observer, and the connection can change while the user is reading. */
+  function cfRepaintPosters(){
+    Array.prototype.forEach.call(cfCards(),function(c){
+      var it=cdItems[+c.getAttribute('data-i')]; if(!it) return;
+      var m=c.querySelector('.cf-media'); if(m) m.style.backgroundImage=cfPoster(it);
+    });
+  }
+  try{ var cfConn=navigator.connection; if(cfConn&&cfConn.addEventListener) cfConn.addEventListener('change',cfRepaintPosters); }catch(e){}
   // Best-poster probe: try maxresdefault (true 16:9, 1280w); YouTube serves a 120x90
   // placeholder when absent -> fall back to hqdefault. Cached per video.
   var cdPosterCache={};
@@ -3364,7 +3437,7 @@
       var sub=[]; if(it.channel) sub.push(it.channel); if(it.views>0) sub.push('조회수 '+cfViews(it.views)); if(durTxt) sub.push(durTxt);
       var w=cfWatch[it.video_id], pc=(w&&w.dur>0)?Math.round(Math.min(1,w.pos/w.dur)*100):0; // A4 progress line
       html+='<div class="cf-card'+(i===cdIdx?' cf-focus':'')+'" data-i="'+i+'">'
-        +'<div class="cf-media" style="background-image:url(\''+cdThumb(it)+'\')">'
+        +'<div class="cf-media" style="background-image:'+cfPoster(it)+'">'
           +'<div class="cf-slot"></div>'
           +(durTxt?'<span class="cf-durchip">'+cfEsc(durTxt)+'</span>':'')
           +'<div class="cf-prog'+((w&&w.dur>0)?'':' none')+'"><b style="width:'+pc+'%"></b></div>'
@@ -3462,18 +3535,31 @@
   /* Tell every live player its box changed. Called on rotation, and after a
      beat as well: iOS reports the new viewport before it has finished settling,
      so a single immediate call can measure the old size. */
+  /* Tell every live player its box changed. Called on rotation, and again after
+     a beat: iOS reports the new viewport before it has finished settling, so a
+     single immediate call can act on the old size.
+
+     This does not size anything -- sizing has one owner, .cf-media, and adding a
+     second claimant here is exactly what made the old version a no-op. It flips
+     the one token that owner reads, so the owner resizes its own rect by a pixel
+     and back. An embed re-letterboxes when its box actually changes; it ignores
+     being told. The previous version told it, via the API's setSize, and setSize
+     writes attributes that the stylesheet outranks. */
   function cfRelayoutPlayers(){
-    var apply=function(){
-      Object.keys(cfPlayers).forEach(function(k){
-        var p=cfPlayers[k]; if(!p||!p.setSize) return;
-        var card=cfCards()[+k]; if(!card) return;
-        var m=card.querySelector('.cf-media'); if(!m) return;
-        var r=m.getBoundingClientRect();
-        if(r.width>0&&r.height>0){ try{ p.setSize(Math.round(r.width), Math.round(r.height)); }catch(e){} }
-      });
+    var root=document.documentElement, restore=null;
+    // setTimeout, not requestAnimationFrame. rAF is throttled whenever the page
+    // is not being painted, and a nudge whose restore never runs leaves the
+    // stage a pixel narrow for good -- measured here as a frame stuck at 955 in
+    // a 956 viewport. Timers still fire when throttled, and the restore is
+    // cleared and re-armed on every call so two overlapping rotations cannot
+    // leave it set either.
+    var flip=function(){
+      clearTimeout(restore);
+      root.style.setProperty('--stage-nudge','1px');
+      restore=setTimeout(function(){ root.style.removeProperty('--stage-nudge'); }, 40);
     };
-    apply();
-    setTimeout(apply, 260);
+    flip();
+    setTimeout(flip, 260);
   }
 
 
