@@ -3266,7 +3266,6 @@
     clearTimeout(cdWheelT);
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
-    cdTimeBarStop();
     var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
   }
   function closeCurationDeck(){
@@ -3703,8 +3702,18 @@
      how far through THIS video you are -- not which card of the week is showing,
      which is what it drew before and which the N/M counter already says. Driven
      from the in-card player, since that is the one playing. */
+  /* Shaped after the note view, which has had a working version of this the
+     whole time (startLive/renderLive). Its shape is the reason: ONE interval,
+     started once, never stopped, and the decision to paint lives INSIDE the
+     tick -- `if(cur==='player'&&beats.length)`. There is no lifecycle to drive
+     from the right places, so there is nothing any path can forget.
+
+     The deck had start/stop instead, and every route that did not run the
+     opener -- a teardown, a week switch, a rotation that took the other branch
+     -- left the bar dead with no way to tell from the outside. */
   var cdTimeT=null;
   function cdTimeBarTick(){
+    if(!document.body.classList.contains('curdeck')) return;   // not in the deck
     if(cfIsFeed()) return;                         // portrait hides the bar entirely
     var i=cfPlayIdx>=0?cfPlayIdx:cdIdx, p=cfPlayers[i];
     try{
@@ -3720,11 +3729,11 @@
     var it=cdItems[i], wch=it&&cfWatch[it.video_id];
     cdJbarPaint(wch&&wch.dur>0 ? wch.pos/wch.dur : 0);
   }
-  function cdTimeBarStart(){
-    cdTimeBarStop();
-    cdTimeT=setInterval(cdTimeBarTick,500);
-  }
-  function cdTimeBarStop(){ if(cdTimeT){ clearInterval(cdTimeT); cdTimeT=null; } }
+  // Idempotent by the same guard the note view uses: ask for it as often as you
+  // like, it exists once. There is deliberately no stop -- a stop is the thing
+  // that has to be re-started, and the tick already costs nothing when the deck
+  // is closed or the feed is up.
+  function cdTimeBarStart(){ if(!cdTimeT) cdTimeT=setInterval(cdTimeBarTick,500); }
   /* Wheel summon (glass): ANY deck touch fades the wheel in; 3s idle fades out.
      Supervisor boundary: when the wheel is NOT visible, the summoning tap is
      CONSUMED — it must not fall through as a card tap / play toggle. */
@@ -5381,7 +5390,7 @@
       // setSize is the API's own way of saying "your box changed".
       cfRelayoutPlayers();
       if(cfIsFeed()){
-        cdStopPoll(); cdTimeBarStop();
+        cdStopPoll();
         // Coming back to portrait, the feed has to be looking at the video that
         // has been playing. Without this the audio carried on while the screen
         // showed some other part of the week.
