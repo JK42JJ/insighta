@@ -1402,6 +1402,26 @@
   .cf-prog{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:2; background:rgba(237,231,220,.16)}
   .cf-prog b{display:block; height:100%; width:0; background:#FF3B30}
   .cf-prog.none{display:none}   /* unwatched or duration-less = no line (A3/A4 rule) */
+  /* V2 relevance mound (video tab only, it.vtab) — a progress bar that grew
+     hills. ONE strip carries track + progress fill + per-section relevance
+     curve: height = relevance, fill = position, so the two axes never fight.
+     Curation cards never render it. Colors are colourway tokens only. */
+  .cf-mound{position:relative;height:56px;margin:0 14px;display:none}
+  .cf-card.hasmound .cf-mound{display:block}
+  .cf-card.hasmound .cf-prog{display:none}  /* mound owns progress; never two bars */
+  .cf-mound svg{display:block;width:100%;height:56px}
+  .cf-mound .mtrack{fill:rgb(var(--shade))}
+  .cf-mound .mprog{fill:var(--acc)}
+  .cf-mound .mfill{fill:rgba(var(--acc-rgb),.30)}
+  .cf-mound .mline{stroke:var(--acc);opacity:.42;fill:none}
+  .cf-mound .mhi{stroke:var(--acc);fill:none}
+  .cf-mound .mdot{fill:var(--cd-chip-on-bg)}
+  .cf-mound .mzones{position:absolute;left:0;top:0;width:100%;height:100%;display:flex}
+  .cf-mound .mzones i{display:block;height:100%}
+  .cf-card.mdim .cf-mound .mline{opacity:.17}
+  .cf-card.mdim .cf-mound .mhi{opacity:.62}
+  @media (prefers-reduced-motion: no-preference){ .cf-mound .mline,.cf-mound .mhi{transition:opacity .5s} }
+  .cf-segchip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;color:var(--cd-chip-ink);background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge)}
   /* Once the card is playing, the YouTube player draws its own progress bar a
      few pixels away. Two bars for one video is not two pieces of information --
      it is the same fact twice, and they disagree while ours waits for its next
@@ -2006,7 +2026,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-71';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-30-72';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3424,6 +3444,7 @@
     Object.keys(cfPlayers).forEach(function(k){ try{ cfPlayers[k]&&cfPlayers[k].destroy&&cfPlayers[k].destroy(); }catch(e){} }); cfPlayers={}; cfPrimed={}; // tear down the in-card players
     var _fd=document.getElementById('cdFeed'); if(_fd){ _fd.onscroll=null; _fd.onclick=null; _fd.innerHTML=''; } // drop cards+players so re-open builds fresh
     clearTimeout(cdWheelT);
+    cfMoundStop(); // V2: the mound tick/dim timers die with the deck
     document.body.classList.remove('curdeck','cdplaying','cdloading','cdpaused','cdin','cdfin','cdhint','cdwheel','cdnav','cdsummon');
     [0,1].forEach(function(i){ var w=cdEl(i); if(w) w.classList.add('off'); });
     var amb=document.getElementById('cdAmb'); if(amb){ amb.classList.remove('on'); amb.style.backgroundImage=''; } // free the ambient image
@@ -3859,10 +3880,12 @@
       if(i===cfPlayIdx) clearTimeout(cfSoundWatch);
       cfWaitClear();
       if(c){ c.classList.add('cf-playing','cf-shown','cf-lit'); }
+      if(cdItems[i]&&cdItems[i].vtab){ cfDimWake(i); cfDimArm(i); } // V2: tone the curve down 3s into playback
     } else if(st===2){
       // Paused: the picture dims back but stays visible. Fading the iframe out
       // would put the poster back over a video the user deliberately paused.
       if(c) c.classList.remove('cf-lit');
+      if(cdItems[i]&&cdItems[i].vtab) cfDimWake(i);                 // V2: paused = full chroma
     } else if(st===0){ cfCardEnded(i); }
   }
   function cfPlayerError(i, code){
@@ -3936,6 +3959,11 @@
     // of which path opened the deck; the tick right after it means the bar moves
     // on the same frame as the picture instead of up to 500ms later.
     cdTimeBarStart(); cdLineupTick();
+    // V2 mound: build/arm on the committed card, pre-fetch the next card's
+    // sections alongside its player warm (vtab items only; no-op for curation).
+    cfMoundEnsure(i); cfDimWake(i);
+    var nx=cdItems[i+1];
+    if(nx&&nx.vtab&&nx.has_segments&&(nx.seg_coverage==null||nx.seg_coverage>=0.9)) cfSegFetchV(nx.video_id);
   }
   // A4: paint one card's progress line in place (no innerHTML rebuild = no scroll/observer reset).
   function cfPaintProg(i){
@@ -3972,6 +4000,116 @@
   function cfCaptureActive(){ if(cfIsFeed() && cfPlayIdx>=0) cfSaveCard(cfPlayIdx); } // in-card: save the current card's player position
   document.addEventListener('visibilitychange', function(){ if(document.hidden && cfIsFeed()) cfCaptureActive(); });
   window.addEventListener('pagehide', function(){ if(cfIsFeed()) cfCaptureActive(); });
+  // ===== V2: relevance mound (video tab) ======================================
+  // The adopted design's buildGeom, adapted to REAL section boundaries: points
+  // sit at each section's time midpoint (not equal sevenths), high bands are the
+  // actual [from,to] spans of sections with relevance >= 80. Data = the same
+  // segCache the note path fills (shared fetch, shared cache). Gates: vtab items
+  // only; has_segments; seg_coverage >= 0.9 (PC PlayerChrome mirror, #1078).
+  var cfMoundT=null, cfDimT=null, cfMoundGeomCache={};
+  function cfMoundStop(){ if(cfMoundT){ clearInterval(cfMoundT); cfMoundT=null; } if(cfDimT){ clearTimeout(cfDimT); cfDimT=null; } }
+  function cfSegFetchV(vid){
+    if(vid in segCache) return Promise.resolve();
+    return api('/videos/'+vid+'/rich-summary').then(function(r){ return r.json(); }).then(function(j){
+      segCache[vid]={ sections:(j&&j.data&&j.data.segments&&j.data.segments.sections)||[], credit:(j&&j.data&&j.data.oneLiner)||null };
+    }).catch(function(){ segCache[vid]={sections:[],credit:null}; });
+  }
+  function cfMoundGeom(vid, secsIn, dur){
+    if(cfMoundGeomCache[vid]) return cfMoundGeomCache[vid];
+    var W=360,H=56,base=H-2.5,rise=H-12;
+    var secs=secsIn.slice().sort(function(a,b){ return (+a.from_sec||0)-(+b.from_sec||0); });
+    var pts=[{x:0,y:base-1.5}];
+    secs.forEach(function(s){
+      var f=+s.from_sec||0, t=+s.to_sec||f;
+      var v=(s.relevance_pct!=null?+s.relevance_pct:20); // unscored section: draw low, never skip
+      pts.push({ x:Math.max(0,Math.min(W,((f+t)/2)/dur*W)), y:base-2-Math.pow(v/100,1.35)*rise });
+    });
+    pts.push({x:W,y:base-1.5});
+    var S=[];
+    for(var a=0;a<pts.length-1;a++){
+      var p0=pts[Math.max(0,a-1)],p1=pts[a],p2=pts[a+1],p3=pts[Math.min(pts.length-1,a+2)];
+      for(var j=0;j<16;j++){ var u=j/16,u2=u*u,u3=u2*u;
+        S.push({ x:.5*(2*p1.x+(-p0.x+p2.x)*u+(2*p0.x-5*p1.x+4*p2.x-p3.x)*u2+(-p0.x+3*p1.x-3*p2.x+p3.x)*u3),
+                 y:.5*(2*p1.y+(-p0.y+p2.y)*u+(2*p0.y-5*p1.y+4*p2.y-p3.y)*u2+(-p0.y+3*p1.y-3*p2.y+p3.y)*u3) }); }
+    }
+    S.push(pts[pts.length-1]);
+    var rnd=function(v){ return Math.round(v*10)/10; };
+    var yAt=function(x){ for(var i2=1;i2<S.length;i2++){ if(S[i2].x>=x){ var A=S[i2-1],B=S[i2],t2=(B.x===A.x)?0:(x-A.x)/(B.x-A.x); return A.y+(B.y-A.y)*t2; } } return S[S.length-1].y; };
+    var seg=function(x0,x1){ var p=[{x:x0,y:yAt(x0)}]; S.forEach(function(q){ if(q.x>x0&&q.x<x1) p.push(q); }); p.push({x:x1,y:yAt(x1)});
+      return 'M'+p.map(function(q){ return rnd(q.x)+','+rnd(q.y); }).join(' L '); };
+    var area='M0,'+rnd(base)+' L'+S.map(function(q){ return rnd(q.x)+','+rnd(q.y); }).join(' L ')+' L'+W+','+rnd(base)+' Z';
+    var hi=[];
+    secs.forEach(function(s){ if(s.relevance_pct!=null&&+s.relevance_pct>=80){ hi.push(seg(Math.max(0,(+s.from_sec||0)/dur*W), Math.min(W,(+s.to_sec||0)/dur*W))); } });
+    var g={ line:seg(0,W), area:area, hi:hi, yAt:yAt, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
+    cfMoundGeomCache[vid]=g; return g;
+  }
+  function cfMoundEnsure(i){
+    var it=cdItems[i], c=cfCards()[i];
+    if(!it||!c||!it.vtab) return;             // curation cards: never
+    if(c.querySelector('.cf-mound')||c.querySelector('.cf-segchip')){ cfMoundArm(i); return; }
+    var meta=c.querySelector('.cf-meta'), media=c.querySelector('.cf-media');
+    if(!meta||!media) return;
+    var dur=it.duration_sec||0;
+    if(!it.has_segments){ meta.insertAdjacentHTML('beforeend','<span class="cf-segchip">전체 재생</span>'); return; }
+    if(it.seg_coverage!=null&&it.seg_coverage<0.9){
+      var mins=dur>0?Math.max(1,Math.round((it.seg_coverage*dur)/60)):null;
+      meta.insertAdjacentHTML('beforeend','<span class="cf-segchip">'+(mins?('앞 '+mins+'분 분석'):'일부만 분석')+'</span>'); return;
+    }
+    var entry=segCache[it.video_id];
+    if(!entry){ cfSegFetchV(it.video_id).then(function(){ if(cfPlayIdx===i) cfMoundEnsure(i); }); return; }
+    var secs=(entry.sections&&entry.sections.length)?entry.sections:null;
+    if(!secs||!(dur>0)){ meta.insertAdjacentHTML('beforeend','<span class="cf-segchip">전체 재생</span>'); return; }
+    var g=cfMoundGeom(it.video_id, secs, dur);
+    var hiP=g.hi.map(function(d){ return '<path class="mhi" d="'+d+'" stroke-width="2.6" stroke-linecap="round"></path>'; }).join('');
+    var el=document.createElement('div'); el.className='cf-mound';
+    el.innerHTML='<svg viewBox="0 0 360 56" preserveAspectRatio="none">'
+      +'<clipPath id="mclip'+i+'"><rect x="0" y="0" width="0" height="56"></rect></clipPath>'
+      +'<rect class="mtrack" x="0" y="52.5" width="360" height="2" rx="1"></rect>'
+      +'<rect class="mprog" x="0" y="52.5" width="0" height="2" rx="1"></rect>'
+      +'<path class="mfill" d="'+g.area+'" clip-path="url(#mclip'+i+')"></path>'
+      +'<path class="mline" d="'+g.line+'" stroke-width="1.7" stroke-linecap="round"></path>'
+      +hiP
+      +'<circle class="mdot" cx="0" cy="'+Math.round(g.yAt(0)*10)/10+'" r="3.5"></circle>'
+      +'</svg>'
+      +'<div class="mzones">'+g.zones.map(function(z){ return '<i style="flex-grow:'+z.w+'" data-sec="'+z.from+'"></i>'; }).join('')+'</div>';
+    media.insertAdjacentElement('afterend', el);
+    el.querySelector('.mzones').addEventListener('click', function(ev){
+      var z=ev.target; if(!z||!z.getAttribute) return; var sec=+z.getAttribute('data-sec'); if(isNaN(sec)) return;
+      try{ var p=cfPlayers[i]; if(p&&p.seekTo){ p.seekTo(sec,true); if(p.playVideo) p.playVideo(); } }catch(e){}
+      c.classList.remove('mdim'); cfDimArm(i);           // touching the strip wakes it
+    });
+    c.classList.add('hasmound');
+    cfMoundArm(i);
+  }
+  function cfMoundPaint(i, frac){
+    var c=cfCards()[i]; if(!c) return; var svg=c.querySelector('.cf-mound svg'); if(!svg) return;
+    var it=cdItems[i]; if(!it) return;
+    var px=Math.round(Math.max(0,Math.min(1,frac))*3600)/10;
+    var cr=svg.querySelector('clipPath rect'); if(cr) cr.setAttribute('width', px);
+    var pr=svg.querySelector('.mprog'); if(pr) pr.setAttribute('width', px);
+    var g=cfMoundGeomCache[it.video_id];
+    var dot=svg.querySelector('.mdot');
+    if(dot&&g){ dot.setAttribute('cx', px); dot.setAttribute('cy', Math.round(g.yAt(px)*10)/10); }
+  }
+  function cfMoundArm(i){
+    cfMoundStop();
+    var it=cdItems[i]; if(!it||!it.vtab) return;
+    var c=cfCards()[i]; if(!c||!c.classList.contains('hasmound')) return;
+    cfMoundT=setInterval(function(){
+      try{ var p=cfPlayers[i]; if(!p||!p.getCurrentTime) return;
+        var d=p.getDuration()||it.duration_sec||0; if(!(d>0)) return;
+        cfMoundPaint(i, (p.getCurrentTime()||0)/d);
+      }catch(e){}
+    },1000);
+  }
+  // Supervisor condition: full chroma on pause/scrub, 40% tone-down of the
+  // NON-highlight curve 3s into playback. Progress fill + peaks stay readable.
+  function cfDimArm(i){ if(cfDimT) clearTimeout(cfDimT);
+    cfDimT=setTimeout(function(){ var c=cfCards()[i]; if(c&&c.classList.contains('hasmound')&&i===cfPlayIdx) c.classList.add('mdim'); },3000);
+  }
+  function cfDimWake(i){ var c=cfCards()[i]; if(c) c.classList.remove('mdim'); if(cfDimT){ clearTimeout(cfDimT); cfDimT=null; } }
+  // ===== end V2 mound =========================================================
+
   // Progress = note chapters grammar: one segment per video, done/now(partial)/todo (R9).
   function cdDrawChap(frac){
     var el=document.getElementById('cdChap'); if(!el) return;
@@ -4450,7 +4588,7 @@
       var r=await api('/mandalas/'+m.id+'/videos?limit=100');
       var j=await r.json(); var list=(j&&j.items)||[];
       var items=list.filter(function(it){ return it&&it.videoId&&it.title; }).map(function(it){
-        return { video_id:it.videoId, title:it.title, channel:it.channel||null,
+        return { vtab:true, video_id:it.videoId, title:it.title, channel:it.channel||null,
           thumbnail:it.thumbnail||null, duration_sec:it.durationSec||null, views:it.views||null,
           relevance_pct:(it.relevancePct!=null?it.relevancePct:null),
           has_segments:!!it.hasSegments, seg_coverage:(it.segCoverage!=null?it.segCoverage:null) };
