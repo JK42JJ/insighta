@@ -1165,7 +1165,12 @@
     --cd-chip-bg: rgba(237,231,220,.07);
     --cd-chip-edge: rgba(237,231,220,.17);
     --cd-chip-on-bg: rgba(237,231,220,.93);
-    --cd-chip-on-ink: #1b1a1e}
+    --cd-chip-on-ink: #1b1a1e;
+    /* Relevance tier hues — the PC learning page's --lp-rel-* triplet, carried
+       over verbatim so both surfaces speak one relevance color language. */
+    --rel-high:#7FB69A;
+    --rel-mid:#C9A36A;
+    --rel-low:#76746E}
   /* mini wheel size token — vmin keeps it IDENTICAL in portrait and landscape
      (James: same size in landscape; shared by deck / note-reading / video-stage) */
   :root{--miniwheel: min(40vmin, 168px)}
@@ -1405,29 +1410,36 @@
   /* V2 relevance mound (video tab only, it.vtab) — a progress bar that grew
      hills. ONE strip carries track + progress fill + per-section relevance
      curve: height = relevance, fill = position, so the two axes never fight.
-     Curation cards never render it. Colors are colourway tokens only. */
+     Curation cards never render it. Colors are colourway tokens only.
+     Shape + tiers + fill opacities = the PC PlayerChrome mound, ported
+     verbatim (James 07-31 "그냥 pc처럼"): per-section plateau mounds at three
+     discrete heights, hairline gaps, tier-hued top-down gradient fades. */
   .cf-mound{position:relative;height:56px;margin:0 14px;display:none}
   .cf-card.hasmound .cf-mound{display:block}
   .cf-card.hasmound .cf-prog{display:none}  /* mound owns progress; never two bars */
   .cf-mound svg{display:block;width:100%;height:56px}
   .cf-mound .mtrack{fill:rgb(var(--shade))}
   .cf-mound .mprog{fill:var(--acc)}
-  /* V2.1 terrain paint (PC language): always-on soft silhouette + a deeper
-     saturation sweep up to the play position + crest lines on the peaks.
-     Gradient stops are styled here so the colourway tokens drive them. */
-  .cf-mound .mgb-a{stop-color:rgba(var(--acc-rgb),.34)}
-  .cf-mound .mgb-b{stop-color:rgba(var(--acc-rgb),.06)}
-  .cf-mound .mgs-a{stop-color:rgba(var(--acc-rgb),.78)}
-  .cf-mound .mgs-b{stop-color:rgba(var(--acc-rgb),.22)}
-  .cf-mound .mhi{stroke:var(--acc-hi);fill:none;opacity:.95}
-  .cf-mound .mtick{stroke:var(--cd-chip-ink);stroke-width:1;opacity:.45}
+  /* PC FILL_OPACITY / FILL_OPACITY_VIVID pairs. The vivid twin — hover on PC —
+     is the played-region sweep here (clip reveals it up to the play position). */
+  .cf-mound .mg-h-a{stop-color:var(--rel-high);stop-opacity:.55}
+  .cf-mound .mg-h-b{stop-color:var(--rel-high);stop-opacity:.08}
+  .cf-mound .mg-m-a{stop-color:var(--rel-mid);stop-opacity:.5}
+  .cf-mound .mg-m-b{stop-color:var(--rel-mid);stop-opacity:.07}
+  .cf-mound .mg-l-a{stop-color:var(--rel-low);stop-opacity:.38}
+  .cf-mound .mg-l-b{stop-color:var(--rel-low);stop-opacity:.05}
+  .cf-mound .mv-h-a{stop-color:var(--rel-high);stop-opacity:.92}
+  .cf-mound .mv-h-b{stop-color:var(--rel-high);stop-opacity:.22}
+  .cf-mound .mv-m-a{stop-color:var(--rel-mid);stop-opacity:.88}
+  .cf-mound .mv-m-b{stop-color:var(--rel-mid);stop-opacity:.2}
+  .cf-mound .mv-l-a{stop-color:var(--rel-low);stop-opacity:.68}
+  .cf-mound .mv-l-b{stop-color:var(--rel-low);stop-opacity:.14}
   .cf-mound .mdot{fill:var(--cd-chip-on-bg)}
   .cf-mound .mzones{position:absolute;left:0;top:0;width:100%;height:100%;display:flex}
   .cf-mound .mzones i{display:block;height:100%}
   .cf-card.mdim .cf-mound .mbase{opacity:.55}
-  .cf-card.mdim .cf-mound .mhi{opacity:.62}
   .cf-card.monly .cf-mound .mbase{opacity:.35}
-  @media (prefers-reduced-motion: no-preference){ .cf-mound .mbase,.cf-mound .mhi{transition:opacity .5s} }
+  @media (prefers-reduced-motion: no-preference){ .cf-mound .mbase{transition:opacity .5s} }
   .cf-segchip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;color:var(--cd-chip-ink);background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge)}
   /* V3 core-only toggle — video decks only (body.vdeck). Default = full. */
   .cd-mode{display:none;align-items:center;background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge);border-radius:999px;padding:2px;margin-left:auto}
@@ -2047,7 +2059,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-76';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-77';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4044,43 +4056,53 @@
       segCache[vid]={ sections:(j&&j.data&&j.data.segments&&j.data.segments.sections)||[], credit:(j&&j.data&&j.data.oneLiner)||null };
     }).catch(function(){ segCache[vid]={sections:[],credit:null}; });
   }
-  // V2.2 terrain constants (James 07-30: "sections are not divided" — each
-  // section is now its OWN hill, meeting neighbors at shallow valleys, with a
-  // faint boundary tick. PC language: per-segment mounds, low rise).
-  var MOUND_RISE=22;          // hills decorate, never dominate
-  var MOUND_VALLEY=0.28;      // valley height = 28% of the lower neighbor — divided but grounded
+  // PC PlayerChrome mound, ported verbatim (James 07-31 "그냥 pc처럼"): one
+  // plateau mound per section at three DISCRETE tier heights (>=80 / >=50 /
+  // rest), hairline gaps between neighbors, shoulders that settle only
+  // slightly at the edges (never to the floor). Same path grammar and control
+  // fractions as frontend/src/pages/learning/ui/PlayerChrome.tsx moundPath().
+  var MOUND_BASE=53.5;                 // path floor, just over the 52.5 track
+  var MOUND_GAP=1.44;                  // PC GAP=4 of 1000 → 360-wide strip
+  var MOUND_MIN_W=1.1;                 // PC skips mounds under 3/1000
+  var MOUND_TIER_H={h:22,m:17,l:12};   // PC Y_FOR heights on its 26 strip
+  function cfMoundTier(s){ var v=s.relevance_pct; if(v==null) return 'l'; v=+v; return v>=80?'h':(v>=50?'m':'l'); }
   function cfMoundGeom(vid, secsIn, dur){
     if(cfMoundGeomCache[vid]) return cfMoundGeomCache[vid];
-    var W=360,H=56,base=H-2.5;
-    var secs=secsIn.slice().sort(function(a,b){ return (+a.from_sec||0)-(+b.from_sec||0); });
-    var hOf=function(s){ var v=(s.relevance_pct!=null?+s.relevance_pct:20); return Math.pow(v/100,1.35)*MOUND_RISE; };
-    // One asymmetric raised-cosine hump per section: valley-edge heights come
-    // from the lower neighbor, the bell rises to this section's own peak.
-    var S=[];
-    for(var i2=0;i2<secs.length;i2++){
-      var s=secs[i2], x0=(+s.from_sec||0)/dur*W, x1=(+s.to_sec||0)/dur*W, peak=hOf(s);
-      if(x1<=x0) continue;
-      var hL=(i2>0)?Math.min(peak,hOf(secs[i2-1]))*MOUND_VALLEY:0;
-      var hR=(i2<secs.length-1)?Math.min(peak,hOf(secs[i2+1]))*MOUND_VALLEY:0;
-      for(var j=0;j<=24;j++){
-        var u=j/24, x=x0+(x1-x0)*u;
-        var edge=hL+(hR-hL)*u;
-        var bell=Math.pow(Math.sin(Math.PI*u),1.2)*(peak-Math.max(hL,hR)*0.4);
-        S.push({ x:Math.max(0,Math.min(W,x)), y:base-2-Math.max(edge, edge+bell) });
-      }
-    }
+    var W=360, base=MOUND_BASE;
+    var secs=secsIn.filter(function(s){ return (+s.to_sec||0)>(+s.from_sec||0); })
+      .slice().sort(function(a,b){ return (+a.from_sec||0)-(+b.from_sec||0); });
     var rnd=function(v){ return Math.round(v*10)/10; };
-    var yAt=function(x){ for(var k=1;k<S.length;k++){ if(S[k].x>=x){ var A=S[k-1],B=S[k],t2=(B.x===A.x)?0:(x-A.x)/(B.x-A.x); return A.y+(B.y-A.y)*t2; } } return S[S.length-1].y; };
-    var seg=function(x0,x1){ var p=[{x:x0,y:yAt(x0)}]; S.forEach(function(q){ if(q.x>x0&&q.x<x1) p.push(q); }); p.push({x:x1,y:yAt(x1)});
-      return 'M'+p.map(function(q){ return rnd(q.x)+','+rnd(q.y); }).join(' L '); };
-    var area='M0,'+rnd(base)+' L'+S.map(function(q){ return rnd(q.x)+','+rnd(q.y); }).join(' L ')+' L'+W+','+rnd(base)+' Z';
-    var hi=[];
-    secs.forEach(function(s){ if(s.relevance_pct!=null&&+s.relevance_pct>=80){
-      var cx0=(+s.from_sec||0)/dur*W+3, cx1=(+s.to_sec||0)/dur*W-3; // inset so crests never dip into the valleys
-      if(cx1>cx0) hi.push(seg(Math.max(0,cx0), Math.min(W,cx1))); } });
-    var ticks=[];
-    for(var m2=1;m2<secs.length;m2++){ ticks.push(rnd((+secs[m2].from_sec||0)/dur*W)); }
-    var g={ area:area, hi:hi, yAt:yAt, ticks:ticks, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
+    var cub=function(a,b,c2,d2,t){ var u=1-t; return u*u*u*a+3*u*u*t*b+3*u*t*t*c2+t*t*t*d2; };
+    var mounds=[], last=secs.length-1;
+    for(var i2=0;i2<secs.length;i2++){
+      var s=secs[i2];
+      var x0=(+s.from_sec||0)/dur*W+(i2===0?0:MOUND_GAP/2);
+      var x1=(+s.to_sec||0)/dur*W-(i2===last?0:MOUND_GAP/2);
+      if(x1-x0<MOUND_MIN_W) continue;
+      var w=x1-x0, tier=cfMoundTier(s), y=base-MOUND_TIER_H[tier];
+      var edgeInY=Math.min(base-4,y+6), edgeOutY=Math.min(base-4,y+2);
+      var c=function(f){ return x0+w*f; };
+      var d='M'+rnd(x0)+','+rnd(base)+' L'+rnd(x0)+','+rnd(edgeInY)
+        +' C'+rnd(c(.25))+','+rnd(y+2)+' '+rnd(c(.5))+','+rnd(y)+' '+rnd(c(.72))+','+rnd(y)
+        +' C'+rnd(c(.88))+','+rnd(y)+' '+rnd(x1)+','+rnd(y+1)+' '+rnd(x1)+','+rnd(edgeOutY)
+        +' L'+rnd(x1)+','+rnd(base)+' Z';
+      // Sampled outline of the two cubics — the progress dot rides this.
+      var pts=[];
+      for(var j=0;j<=10;j++){ var t2=j/10;
+        pts.push({ x:cub(x0,c(.25),c(.5),c(.72),t2), y:cub(edgeInY,y+2,y,y,t2) }); }
+      for(var j2=1;j2<=10;j2++){ var t3=j2/10;
+        pts.push({ x:cub(c(.72),c(.88),x1,x1,t3), y:cub(y,y,y+1,edgeOutY,t3) }); }
+      mounds.push({ d:d, t:tier, x0:x0, x1:x1, pts:pts });
+    }
+    var yAt=function(x){
+      for(var k=0;k<mounds.length;k++){ var m=mounds[k];
+        if(x<m.x0) break;
+        if(x<=m.x1){ var P=m.pts;
+          for(var k2=1;k2<P.length;k2++){ if(P[k2].x>=x){ var A=P[k2-1],B=P[k2],f2=(B.x===A.x)?0:(x-A.x)/(B.x-A.x); return A.y+(B.y-A.y)*f2; } }
+          return P[P.length-1].y; } }
+      return base;                     // gaps and uncovered stretches: dot on the track
+    };
+    var g={ mounds:mounds, yAt:yAt, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
     cfMoundGeomCache[vid]=g; return g;
   }
   function cfMoundEnsure(i){
@@ -4100,21 +4122,22 @@
     var secs=(entry.sections&&entry.sections.length)?entry.sections:null;
     if(!secs||!(dur>0)){ meta.insertAdjacentHTML('beforeend','<span class="cf-segchip">전체 재생</span>'); return; }
     var g=cfMoundGeom(it.video_id, secs, dur);
-    // Crest lines ride only the >=80 peaks (PC language: the high ground glows).
-    var hiP=g.hi.map(function(d){ return '<path class="mhi" d="'+d+'" stroke-width="2" stroke-linecap="round"></path>'; }).join('');
+    // One base + one sweep path PER section, each on its tier's gradient pair
+    // (PC renders exactly this — the vivid twin there is hover, here it's the
+    // played region revealed by the clip).
+    var grads=['h','m','l'].map(function(t){
+      return '<linearGradient id="mgb'+i+t+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mg-'+t+'-a"></stop><stop offset="1" class="mg-'+t+'-b"></stop></linearGradient>'
+           +'<linearGradient id="mgs'+i+t+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mv-'+t+'-a"></stop><stop offset="1" class="mv-'+t+'-b"></stop></linearGradient>'; }).join('');
+    var baseP=g.mounds.map(function(m){ return '<path class="mbase" d="'+m.d+'" fill="url(#mgb'+i+m.t+')"></path>'; }).join('');
+    var sweepP=g.mounds.map(function(m){ return '<path class="msweep" d="'+m.d+'" fill="url(#mgs'+i+m.t+')" clip-path="url(#mclip'+i+')"></path>'; }).join('');
     var el=document.createElement('div'); el.className='cf-mound';
     el.innerHTML='<svg viewBox="0 0 360 56" preserveAspectRatio="none">'
-      +'<defs>'
-      +'<linearGradient id="mgb'+i+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mgb-a"></stop><stop offset="1" class="mgb-b"></stop></linearGradient>'
-      +'<linearGradient id="mgs'+i+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mgs-a"></stop><stop offset="1" class="mgs-b"></stop></linearGradient>'
+      +'<defs>'+grads
       +'<clipPath id="mclip'+i+'"><rect x="0" y="0" width="0" height="56"></rect></clipPath>'
       +'</defs>'
       +'<rect class="mtrack" x="0" y="52.5" width="360" height="2" rx="1"></rect>'
       +'<rect class="mprog" x="0" y="52.5" width="0" height="2" rx="1"></rect>'
-      +'<path class="mbase" d="'+g.area+'" fill="url(#mgb'+i+')"></path>'
-      +'<path class="msweep" d="'+g.area+'" fill="url(#mgs'+i+')" clip-path="url(#mclip'+i+')"></path>'
-      +(g.ticks||[]).map(function(tx){ return '<line class="mtick" x1="'+tx+'" y1="'+(56-11.5)+'" x2="'+tx+'" y2="'+(56-3.5)+'"></line>'; }).join('')
-      +hiP
+      +baseP+sweepP
       +'<circle class="mdot" cx="0" cy="'+Math.round(g.yAt(0)*10)/10+'" r="3"></circle>'
       +'</svg>'
       +'<div class="mzones">'+g.zones.map(function(z){ return '<i style="flex-grow:'+z.w+'" data-sec="'+z.from+'"></i>'; }).join('')+'</div>';
