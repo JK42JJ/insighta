@@ -1420,14 +1420,17 @@
   .cf-mound svg{display:block;width:100%;height:56px}
   .cf-mound .mtrack{fill:rgb(var(--shade))}
   .cf-mound .mprog{fill:var(--acc)}
-  /* PC FILL_OPACITY / FILL_OPACITY_VIVID pairs. The vivid twin — hover on PC —
-     is the played-region sweep here (clip reveals it up to the play position). */
-  .cf-mound .mg-h-a{stop-color:var(--rel-high);stop-opacity:.55}
-  .cf-mound .mg-h-b{stop-color:var(--rel-high);stop-opacity:.08}
-  .cf-mound .mg-m-a{stop-color:var(--rel-mid);stop-opacity:.5}
-  .cf-mound .mg-m-b{stop-color:var(--rel-mid);stop-opacity:.07}
-  .cf-mound .mg-l-a{stop-color:var(--rel-low);stop-opacity:.38}
-  .cf-mound .mg-l-b{stop-color:var(--rel-low);stop-opacity:.05}
+  /* Base vs sweep = YouTube's own progress grammar (James, build 78 device
+     pass): unplayed hills are a FAINT silhouette, only the played region gets
+     the vivid tier color. PC's base opacities read "already highlighted"
+     everywhere on the dark card, so the base runs far fainter here; the vivid
+     pair stays the PC FILL_OPACITY_VIVID (hover there, played sweep here). */
+  .cf-mound .mg-h-a{stop-color:var(--rel-high);stop-opacity:.2}
+  .cf-mound .mg-h-b{stop-color:var(--rel-high);stop-opacity:.03}
+  .cf-mound .mg-m-a{stop-color:var(--rel-mid);stop-opacity:.18}
+  .cf-mound .mg-m-b{stop-color:var(--rel-mid);stop-opacity:.03}
+  .cf-mound .mg-l-a{stop-color:var(--rel-low);stop-opacity:.15}
+  .cf-mound .mg-l-b{stop-color:var(--rel-low);stop-opacity:.02}
   .cf-mound .mv-h-a{stop-color:var(--rel-high);stop-opacity:.92}
   .cf-mound .mv-h-b{stop-color:var(--rel-high);stop-opacity:.22}
   .cf-mound .mv-m-a{stop-color:var(--rel-mid);stop-opacity:.88}
