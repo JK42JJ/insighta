@@ -13,8 +13,10 @@
  * instead of sinking — same constants, same 90d linear fade.
  */
 
+import { MS_PER_DAY } from '@/utils/time-constants';
+
 export const NULL_RECENCY_CAP = 60;
-export const NULL_RECENCY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000; // 90d linear fade to 0
+export const NULL_RECENCY_WINDOW_MS = 90 * MS_PER_DAY; // 90d linear fade to 0
 
 export const VIDEO_LIST_DEFAULT_LIMIT = 50;
 export const VIDEO_LIST_MAX_LIMIT = 200;
