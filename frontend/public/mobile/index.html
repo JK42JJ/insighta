@@ -1420,6 +1420,7 @@
   .cf-mound .mgs-a{stop-color:rgba(var(--acc-rgb),.78)}
   .cf-mound .mgs-b{stop-color:rgba(var(--acc-rgb),.22)}
   .cf-mound .mhi{stroke:var(--acc-hi);fill:none;opacity:.95}
+  .cf-mound .mtick{stroke:var(--cd-chip-ink);stroke-width:1;opacity:.45}
   .cf-mound .mdot{fill:var(--cd-chip-on-bg)}
   .cf-mound .mzones{position:absolute;left:0;top:0;width:100%;height:100%;display:flex}
   .cf-mound .mzones i{display:block;height:100%}
@@ -2046,7 +2047,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-30-75';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-76';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4043,42 +4044,43 @@
       segCache[vid]={ sections:(j&&j.data&&j.data.segments&&j.data.segments.sections)||[], credit:(j&&j.data&&j.data.oneLiner)||null };
     }).catch(function(){ segCache[vid]={sections:[],credit:null}; });
   }
-  // V2.1 terrain constants (James 07-30: PC language — low filled silhouette,
-  // no dive-to-baseline end hooks, crest lines only on the >=80 peaks).
-  var MOUND_RISE=22;          // was 44 — hills decorate, never dominate
-  var MOUND_EDGE_EXT=30;      // virtual flat endpoints kill the Catmull-Rom edge hooks
+  // V2.2 terrain constants (James 07-30: "sections are not divided" — each
+  // section is now its OWN hill, meeting neighbors at shallow valleys, with a
+  // faint boundary tick. PC language: per-segment mounds, low rise).
+  var MOUND_RISE=22;          // hills decorate, never dominate
+  var MOUND_VALLEY=0.28;      // valley height = 28% of the lower neighbor — divided but grounded
   function cfMoundGeom(vid, secsIn, dur){
     if(cfMoundGeomCache[vid]) return cfMoundGeomCache[vid];
-    var W=360,H=56,base=H-2.5,rise=MOUND_RISE;
+    var W=360,H=56,base=H-2.5;
     var secs=secsIn.slice().sort(function(a,b){ return (+a.from_sec||0)-(+b.from_sec||0); });
-    var yOf=function(s){ var v=(s.relevance_pct!=null?+s.relevance_pct:20); return base-2-Math.pow(v/100,1.35)*rise; };
-    // Enter the frame flat at the first/last section's own height — never dive
-    // to the baseline at the edges (that dive is what drew the hooks on device).
-    var y0=yOf(secs[0]), yN=yOf(secs[secs.length-1]);
-    var pts=[{x:-MOUND_EDGE_EXT,y:y0},{x:0,y:y0}];
-    secs.forEach(function(s){
-      var f=+s.from_sec||0, t=+s.to_sec||f;
-      pts.push({ x:Math.max(0,Math.min(W,((f+t)/2)/dur*W)), y:yOf(s) });
-    });
-    pts.push({x:W,y:yN},{x:W+MOUND_EDGE_EXT,y:yN});
+    var hOf=function(s){ var v=(s.relevance_pct!=null?+s.relevance_pct:20); return Math.pow(v/100,1.35)*MOUND_RISE; };
+    // One asymmetric raised-cosine hump per section: valley-edge heights come
+    // from the lower neighbor, the bell rises to this section's own peak.
     var S=[];
-    for(var a=0;a<pts.length-1;a++){
-      var p0=pts[Math.max(0,a-1)],p1=pts[a],p2=pts[a+1],p3=pts[Math.min(pts.length-1,a+2)];
-      for(var j=0;j<16;j++){ var u=j/16,u2=u*u,u3=u2*u;
-        S.push({ x:.5*(2*p1.x+(-p0.x+p2.x)*u+(2*p0.x-5*p1.x+4*p2.x-p3.x)*u2+(-p0.x+3*p1.x-3*p2.x+p3.x)*u3),
-                 y:.5*(2*p1.y+(-p0.y+p2.y)*u+(2*p0.y-5*p1.y+4*p2.y-p3.y)*u2+(-p0.y+3*p1.y-3*p2.y+p3.y)*u3) }); }
+    for(var i2=0;i2<secs.length;i2++){
+      var s=secs[i2], x0=(+s.from_sec||0)/dur*W, x1=(+s.to_sec||0)/dur*W, peak=hOf(s);
+      if(x1<=x0) continue;
+      var hL=(i2>0)?Math.min(peak,hOf(secs[i2-1]))*MOUND_VALLEY:0;
+      var hR=(i2<secs.length-1)?Math.min(peak,hOf(secs[i2+1]))*MOUND_VALLEY:0;
+      for(var j=0;j<=24;j++){
+        var u=j/24, x=x0+(x1-x0)*u;
+        var edge=hL+(hR-hL)*u;
+        var bell=Math.pow(Math.sin(Math.PI*u),1.2)*(peak-Math.max(hL,hR)*0.4);
+        S.push({ x:Math.max(0,Math.min(W,x)), y:base-2-Math.max(edge, edge+bell) });
+      }
     }
-    S.push(pts[pts.length-1]);
-    S=S.filter(function(q){ return q.x>=0&&q.x<=W; });
-    S.unshift({x:0,y:y0}); S.push({x:W,y:yN});
     var rnd=function(v){ return Math.round(v*10)/10; };
-    var yAt=function(x){ for(var i2=1;i2<S.length;i2++){ if(S[i2].x>=x){ var A=S[i2-1],B=S[i2],t2=(B.x===A.x)?0:(x-A.x)/(B.x-A.x); return A.y+(B.y-A.y)*t2; } } return S[S.length-1].y; };
+    var yAt=function(x){ for(var k=1;k<S.length;k++){ if(S[k].x>=x){ var A=S[k-1],B=S[k],t2=(B.x===A.x)?0:(x-A.x)/(B.x-A.x); return A.y+(B.y-A.y)*t2; } } return S[S.length-1].y; };
     var seg=function(x0,x1){ var p=[{x:x0,y:yAt(x0)}]; S.forEach(function(q){ if(q.x>x0&&q.x<x1) p.push(q); }); p.push({x:x1,y:yAt(x1)});
       return 'M'+p.map(function(q){ return rnd(q.x)+','+rnd(q.y); }).join(' L '); };
     var area='M0,'+rnd(base)+' L'+S.map(function(q){ return rnd(q.x)+','+rnd(q.y); }).join(' L ')+' L'+W+','+rnd(base)+' Z';
     var hi=[];
-    secs.forEach(function(s){ if(s.relevance_pct!=null&&+s.relevance_pct>=80){ hi.push(seg(Math.max(0,(+s.from_sec||0)/dur*W), Math.min(W,(+s.to_sec||0)/dur*W))); } });
-    var g={ area:area, hi:hi, yAt:yAt, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
+    secs.forEach(function(s){ if(s.relevance_pct!=null&&+s.relevance_pct>=80){
+      var cx0=(+s.from_sec||0)/dur*W+3, cx1=(+s.to_sec||0)/dur*W-3; // inset so crests never dip into the valleys
+      if(cx1>cx0) hi.push(seg(Math.max(0,cx0), Math.min(W,cx1))); } });
+    var ticks=[];
+    for(var m2=1;m2<secs.length;m2++){ ticks.push(rnd((+secs[m2].from_sec||0)/dur*W)); }
+    var g={ area:area, hi:hi, yAt:yAt, ticks:ticks, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
     cfMoundGeomCache[vid]=g; return g;
   }
   function cfMoundEnsure(i){
@@ -4111,6 +4113,7 @@
       +'<rect class="mprog" x="0" y="52.5" width="0" height="2" rx="1"></rect>'
       +'<path class="mbase" d="'+g.area+'" fill="url(#mgb'+i+')"></path>'
       +'<path class="msweep" d="'+g.area+'" fill="url(#mgs'+i+')" clip-path="url(#mclip'+i+')"></path>'
+      +(g.ticks||[]).map(function(tx){ return '<line class="mtick" x1="'+tx+'" y1="'+(56-11.5)+'" x2="'+tx+'" y2="'+(56-3.5)+'"></line>'; }).join('')
       +hiP
       +'<circle class="mdot" cx="0" cy="'+Math.round(g.yAt(0)*10)/10+'" r="3"></circle>'
       +'</svg>'
