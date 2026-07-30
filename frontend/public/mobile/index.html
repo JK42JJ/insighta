@@ -1450,23 +1450,33 @@
   .cf-mound .mbase,.cf-mound .msweep{transform-box:view-box;transform-origin:50% 95.5%}
   .cf-card.msunk .cf-mound .mbase,.cf-card.msunk .cf-mound .msweep{transform:scale(1,.03);opacity:0}
   .cf-card.msunk .cf-mound .mdot{opacity:0}
-  /* Current-section title + one-liner in the empty band above the hills.
-     Same gate as the hills: raised = visible, sunk = gone. PC parity for the
-     chapter list's per-section text, sized for the deck's quiet register. */
-  .cf-secline{position:absolute;left:2px;right:2px;top:0;pointer-events:none;opacity:0}
+  /* Current-section text in the empty band above the hills — ONE line
+     (James, build 79 device pass: two stacked lines collided with the video
+     edge and broke the card's calm). Title bold, summary dim, single shared
+     ellipsis. Same gate as the hills: raised = visible, sunk = gone. */
+  .cf-secline{position:absolute;left:2px;right:2px;top:7px;pointer-events:none;opacity:0;
+    font-size:12px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cf-card.cf-playing:not(.msunk) .cf-mound .cf-secline{opacity:1}
-  .cf-secline b{display:block;font-size:12px;line-height:1.2;font-weight:600;color:var(--cd-chip-on-bg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .cf-secline span{display:block;font-size:11px;line-height:1.25;color:var(--cd-chip-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cf-secline b{font-weight:600;color:var(--cd-chip-on-bg)}
+  .cf-secline span{color:var(--cd-chip-ink)}
   @media (prefers-reduced-motion: no-preference){
     .cf-mound .mbase,.cf-mound .msweep{transition:transform .6s cubic-bezier(.4,0,.2,1),opacity .6s}
     .cf-mound .mdot,.cf-secline{transition:opacity .4s}
   }
   .cf-segchip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;color:var(--cd-chip-ink);background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge)}
   /* V3 core-only toggle — video decks only (body.vdeck). Default = full. */
-  .cd-mode{display:none;align-items:center;background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge);border-radius:999px;padding:2px;margin-left:auto}
+  .cd-mode{display:none;position:relative;align-items:center;background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge);border-radius:999px;padding:2px;margin-left:auto}
   body.vdeck .cd-mode{display:flex}
-  .cd-mode button{border:0;background:none;color:var(--cd-chip-ink);font-size:11px;font-weight:600;padding:4px 10px;border-radius:999px}
-  .cd-mode button.on{background:var(--cd-chip-on-bg);color:var(--cd-chip-on-ink)}
+  /* Sliding segmented control (James 07-31): equal-width segments, one thumb
+     that GLIDES left-right under the selected label instead of swapping. */
+  .cd-mode button{position:relative;z-index:1;border:0;background:none;color:var(--cd-chip-ink);font-size:11px;font-weight:600;width:54px;padding:4px 0;text-align:center;border-radius:999px}
+  .cd-mode button.on{color:var(--cd-chip-on-ink)}
+  .cd-mode .cd-mode-thumb{position:absolute;z-index:0;top:2px;bottom:2px;left:2px;width:54px;border-radius:999px;background:var(--cd-chip-on-bg);transform:translateX(54px)}
+  .cd-mode.core .cd-mode-thumb{transform:translateX(0)}
+  @media (prefers-reduced-motion: no-preference){
+    .cd-mode .cd-mode-thumb{transition:transform .25s cubic-bezier(.4,0,.2,1)}
+    .cd-mode button{transition:color .25s}
+  }
   .cf-corechip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;color:var(--acc);background:rgba(var(--acc-rgb),.14)}
   /* Once the card is playing, the YouTube player draws its own progress bar a
      few pixels away. Two bars for one video is not two pieces of information --
@@ -1993,7 +2003,7 @@
       <button class="cd-back" id="cdBack" type="button">← 큐레이션</button>
       <span class="cd-title" id="cdTitle"></span>
       <div class="cd-mode" id="cdMode" role="group" aria-label="재생 모드">
-        <button type="button" data-m="core">핵심만</button><button type="button" data-m="full" class="on">전체</button>
+        <i class="cd-mode-thumb" aria-hidden="true"></i><button type="button" data-m="core">핵심만</button><button type="button" data-m="full" class="on">전체</button>
       </div>
       <span class="cd-count num" id="cdCount"></span>
     </div>
@@ -2080,7 +2090,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-79';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-80';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4212,7 +4222,7 @@
     if(el.getAttribute('data-k')===key) return;
     el.setAttribute('data-k', key);
     var esc=function(x){ return String(x==null?'':x).replace(/[<>&"]/g,function(ch){ return ch==='<'?'&lt;':ch==='>'?'&gt;':ch==='&'?'&amp;':'&quot;'; }); };
-    el.innerHTML='<b>'+esc(s.title||'')+'</b>'+(s.summary?'<span>'+esc(s.summary)+'</span>':'');
+    el.innerHTML='<b>'+esc(s.title||'')+'</b>'+(s.summary?'<span> · '+esc(s.summary)+'</span>':'');
   }
 
   // ===== V3: core-only playback ==============================================
@@ -4274,7 +4284,10 @@
   function cfModeSet(core){
     cfCoreOnly=!!core;
     var box=document.getElementById('cdMode');
-    if(box) Array.prototype.forEach.call(box.querySelectorAll('button'),function(b){ b.classList.toggle('on',(b.getAttribute('data-m')==='core')===cfCoreOnly); });
+    if(box){
+      box.classList.toggle('core', cfCoreOnly); // slides the thumb
+      Array.prototype.forEach.call(box.querySelectorAll('button'),function(b){ b.classList.toggle('on',(b.getAttribute('data-m')==='core')===cfCoreOnly); });
+    }
     if(cfPlayIdx>=0) cfCoreApply(cfPlayIdx);
   }
   // ===== end V3 ==============================================================
