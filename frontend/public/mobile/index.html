@@ -1425,8 +1425,17 @@
      chrome. Hills additionally sink (transform) so the raise/sink has motion. */
   .cf-card.msunk .cf-mound{opacity:0}
   .cf-mound svg{display:block;width:100%;height:56px}
-  .cf-mound .mtrack{fill:rgb(var(--shade))}
-  .cf-mound .mprog{fill:var(--acc)}
+  /* No progress furniture in the overlay (James, build 82 device pass):
+     YouTube's own bar carries position — exactly as on PC. The vivid twin is
+     no longer a played-region sweep either: only the CURRENT section lights
+     up (.on), so what is being played is stated explicitly. */
+  .cf-mound .msweep{opacity:0}
+  .cf-mound .msweep.on{opacity:1}
+  /* Full-surface wake catcher: while the overlay is sunk during playback, ANY
+     tap on the picture raises it (the YouTube-chrome gesture). It disarms the
+     moment the overlay is up, so the next tap reaches the player itself. */
+  .cf-mtap{display:none;position:absolute;inset:0;z-index:6}
+  .cf-card.hasmound.cf-shown.msunk .cf-mtap{display:block}
   /* Base vs sweep = YouTube's own progress grammar (James, build 78 device
      pass): unplayed hills are a FAINT silhouette, only the played region gets
      the vivid tier color. Overlay note: over bright footage the card-era
@@ -1457,15 +1466,12 @@
      raises (no seek) — same two-tap grammar as the native controls. */
   .cf-mound .mbase,.cf-mound .msweep{transform-box:view-box;transform-origin:50% 95.5%}
   .cf-card.msunk .cf-mound .mbase,.cf-card.msunk .cf-mound .msweep{transform:scale(1,.03);opacity:0}
-  /* Current-section text in the empty band above the hills — ONE line
-     (James, build 79 device pass: two stacked lines collided with the video
-     edge and broke the card's calm). Title bold, summary dim, single shared
-     ellipsis. Same gate as the hills: raised = visible, sunk = gone. */
-  .cf-secline{position:absolute;left:2px;right:2px;top:7px;pointer-events:none;opacity:0;
-    font-size:12px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .cf-card.cf-playing:not(.msunk) .cf-mound .cf-secline{opacity:1}
-  .cf-secline b{font-weight:600;color:var(--cd-chip-on-bg)}
-  .cf-secline span{color:var(--cd-chip-ink)}
+  /* Current-section one-liner — BELOW the video, never on the footage
+     (James, build 82 device pass). Just the summary sentence itself, one
+     ellipsized line above the title block, in the caption register. */
+  .cf-secline{display:none;margin:8px 14px 0;font-size:12px;line-height:1.35;color:var(--cd-chip-ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cf-card.hasmound.cf-playing .cf-secline{display:block}
   @media (prefers-reduced-motion: no-preference){
     .cf-mound{transition:opacity .5s}
     .cf-mound .mbase,.cf-mound .msweep{transition:transform .6s cubic-bezier(.4,0,.2,1),opacity .6s}
@@ -1636,7 +1642,11 @@
        this it rendered ACROSS THE TOP of the landscape fullscreen picture
        (card goes fixed, media absolute, the in-flow strip floats up top).
        Landscape mound ships separately with its own device-verified pass. */
-    body.curdeck .cf-playing .cf-mound{display:none}
+    /* Specificity note (device bug, build 82): the portrait show rule is
+       .cf-card.hasmound.cf-shown .cf-mound = (0,4,0), so this hide must
+       outrank it — carry the same class chain. */
+    body.curdeck .cf-card.cf-playing .cf-mound,
+    body.curdeck .cf-card.cf-playing .cf-mtap{display:none}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
        YouTube's bottom bar and its own progress scrubber. */
@@ -2102,7 +2112,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-82';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-83';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4115,22 +4125,42 @@
     var secs=secsIn.filter(function(s){ return (+s.to_sec||0)>(+s.from_sec||0); })
       .slice().sort(function(a,b){ return (+a.from_sec||0)-(+b.from_sec||0); });
     var rnd=function(v){ return Math.round(v*10)/10; };
-    var mounds=[], last=secs.length-1;
+    // Merge consecutive same-tier sections into ONE plateau (James, build 82
+    // device pass: a row of identical domes read as the segments of a bug).
+    // The skyline now steps only where the relevance tier actually changes;
+    // section boundaries survive invisibly in zones (tap) and sections (vivid).
+    var runs=[];
     for(var i2=0;i2<secs.length;i2++){
-      var s=secs[i2];
-      var x0=(+s.from_sec||0)/dur*W+(i2===0?0:MOUND_GAP/2);
-      var x1=(+s.to_sec||0)/dur*W-(i2===last?0:MOUND_GAP/2);
-      if(x1-x0<MOUND_MIN_W) continue;
-      var w=x1-x0, tier=cfMoundTier(s), y=base-MOUND_TIER_H[tier];
-      var edgeInY=Math.min(base-4,y+6), edgeOutY=Math.min(base-4,y+2);
-      var c=function(f){ return x0+w*f; };
-      var d='M'+rnd(x0)+','+rnd(base)+' L'+rnd(x0)+','+rnd(edgeInY)
-        +' C'+rnd(c(.25))+','+rnd(y+2)+' '+rnd(c(.5))+','+rnd(y)+' '+rnd(c(.72))+','+rnd(y)
-        +' C'+rnd(c(.88))+','+rnd(y)+' '+rnd(x1)+','+rnd(y+1)+' '+rnd(x1)+','+rnd(edgeOutY)
-        +' L'+rnd(x1)+','+rnd(base)+' Z';
-      mounds.push({ d:d, t:tier });
+      var s=secs[i2], tier=cfMoundTier(s), prev=runs[runs.length-1];
+      if(prev&&prev.t===tier){ prev.to=+s.to_sec||0; prev.secs.push(s); }
+      else runs.push({ t:tier, from:+s.from_sec||0, to:+s.to_sec||0, secs:[s] });
     }
-    var g={ mounds:mounds, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
+    var mounds=[], sections=[], lastRun=runs.length-1;
+    for(var r=0;r<runs.length;r++){
+      var run=runs[r];
+      var x0=run.from/dur*W+(r===0?0:MOUND_GAP/2);
+      var x1=run.to/dur*W-(r===lastRun?0:MOUND_GAP/2);
+      if(x1-x0<MOUND_MIN_W) continue;
+      var w=x1-x0, y=base-MOUND_TIER_H[run.t];
+      var edgeInY=Math.min(base-4,y+6), edgeOutY=Math.min(base-4,y+2);
+      // PC shoulder grammar, but with the ramp span CAPPED so a long merged
+      // plateau keeps compact shoulders and a long FLAT top instead of a
+      // stretched hillside. Short runs degrade to near-PC dome proportions.
+      var rin=Math.min(w*.5,26), rout=Math.min(w*.28,14);
+      var d='M'+rnd(x0)+','+rnd(base)+' L'+rnd(x0)+','+rnd(edgeInY)
+        +' C'+rnd(x0+rin*.35)+','+rnd(y+2)+' '+rnd(x0+rin*.7)+','+rnd(y)+' '+rnd(x0+rin)+','+rnd(y)
+        +' L'+rnd(x1-rout)+','+rnd(y)
+        +' C'+rnd(x1-rout*.45)+','+rnd(y)+' '+rnd(x1)+','+rnd(y+1)+' '+rnd(x1)+','+rnd(edgeOutY)
+        +' L'+rnd(x1)+','+rnd(base)+' Z';
+      mounds.push({ d:d, t:run.t });
+      var mi=mounds.length-1;
+      for(var k2=0;k2<run.secs.length;k2++){
+        var ss=run.secs[k2], sx0=(+ss.from_sec||0)/dur*W, sx1=(+ss.to_sec||0)/dur*W;
+        sections.push({ mi:mi, t:run.t, from:+ss.from_sec||0, to:+ss.to_sec||0,
+          x0:rnd(Math.max(x0,sx0)), x1:rnd(Math.min(x1,sx1)) });
+      }
+    }
+    var g={ mounds:mounds, sections:sections, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
     cfMoundGeomCache[vid]=g; return g;
   }
   function cfMoundEnsure(i){
@@ -4150,31 +4180,36 @@
     var secs=(entry.sections&&entry.sections.length)?entry.sections:null;
     if(!secs||!(dur>0)){ meta.insertAdjacentHTML('beforeend','<span class="cf-segchip">전체 재생</span>'); return; }
     var g=cfMoundGeom(it.video_id, secs, dur);
-    // One base + one sweep path PER section, each on its tier's gradient pair
-    // (PC renders exactly this — the vivid twin there is hover, here it's the
-    // played region revealed by the clip).
+    // One base + one vivid path PER section (PC's gradient pairs). No progress
+    // furniture — YouTube's own bar carries position; the vivid twin lights
+    // ONLY the section currently playing (cfMoundPaint toggles .on).
     var grads=['h','m','l'].map(function(t){
       return '<linearGradient id="mgb'+i+t+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mg-'+t+'-a"></stop><stop offset="1" class="mg-'+t+'-b"></stop></linearGradient>'
            +'<linearGradient id="mgs'+i+t+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mv-'+t+'-a"></stop><stop offset="1" class="mv-'+t+'-b"></stop></linearGradient>'; }).join('');
     var baseP=g.mounds.map(function(m){ return '<path class="mbase" d="'+m.d+'" fill="url(#mgb'+i+m.t+')"></path>'; }).join('');
-    var sweepP=g.mounds.map(function(m){ return '<path class="msweep" d="'+m.d+'" fill="url(#mgs'+i+m.t+')" clip-path="url(#mclip'+i+')"></path>'; }).join('');
+    // Vivid layer is PER SECTION: the run silhouette clipped to that section's
+    // x-range, so inside a merged plateau only the playing slice lights up.
+    var clips=g.sections.map(function(s,k){
+      return '<clipPath id="ms'+i+'_'+k+'"><rect x="'+s.x0+'" y="0" width="'+Math.max(0,Math.round((s.x1-s.x0)*10)/10)+'" height="56"></rect></clipPath>'; }).join('');
+    var sweepP=g.sections.map(function(s,k){
+      return '<path class="msweep" d="'+g.mounds[s.mi].d+'" fill="url(#mgs'+i+s.t+')" clip-path="url(#ms'+i+'_'+k+')"></path>'; }).join('');
     var el=document.createElement('div'); el.className='cf-mound';
     el.innerHTML='<svg viewBox="0 0 360 56" preserveAspectRatio="none">'
-      +'<defs>'+grads
-      +'<clipPath id="mclip'+i+'"><rect x="0" y="0" width="0" height="56"></rect></clipPath>'
-      +'</defs>'
-      +'<rect class="mtrack" x="0" y="52.5" width="360" height="2" rx="1"></rect>'
-      +'<rect class="mprog" x="0" y="52.5" width="0" height="2" rx="1"></rect>'
+      +'<defs>'+grads+clips+'</defs>'
       +baseP+sweepP
-      +'<circle class="mdot" cx="0" cy="53.5" r="3"></circle>'
       +'</svg>'
-      +'<div class="cf-secline"></div>'
       +'<div class="mzones">'+g.zones.map(function(z){ return '<i style="flex-grow:'+z.w+'" data-sec="'+z.from+'"></i>'; }).join('')+'</div>';
     media.appendChild(el);   // overlay lives INSIDE the video box (PC anatomy)
+    // Wake catcher + below-video section caption (James: no text on footage).
+    var tap=document.createElement('div'); tap.className='cf-mtap'; media.appendChild(tap);
+    var sl=document.createElement('div'); sl.className='cf-secline'; media.insertAdjacentElement('afterend', sl);
+    tap.addEventListener('click', function(){
+      c.classList.remove('msunk'); cfSecLine(i); cfDimArm(i);
+    });
     el.querySelector('.mzones').addEventListener('click', function(ev){
       var z=ev.target; if(!z||!z.getAttribute) return; var sec=+z.getAttribute('data-sec'); if(isNaN(sec)) return;
-      if(c.classList.contains('msunk')){ c.classList.remove('msunk'); cfSecLine(i); cfDimArm(i); return; } // sunk: first tap only raises
       try{ var p=cfPlayers[i]; if(p&&p.seekTo){ p.seekTo(sec,true); if(p.playVideo) p.playVideo(); } }catch(e){}
+      cfMoundPaint(i, sec);
       cfSecLine(i, sec);
       cfDimArm(i);           // touching the strip keeps it up for another 3s
     });
@@ -4186,14 +4221,18 @@
     try{ var ps=cfPlayers[i]; if(ps&&ps.getPlayerState&&ps.getPlayerState()===1) cfDimArm(i); }catch(e){}
     cfCoreApply(i); // V3: sections just became available — apply the mode now
   }
-  function cfMoundPaint(i, frac){
+  // Light ONLY the section under the playhead (James, build 82 device pass:
+  // "the selected section alone goes bold" — the past-sweep read as everything
+  // before the playhead being emphasized).
+  function cfMoundPaint(i, t){
     var c=cfCards()[i]; if(!c) return; var svg=c.querySelector('.cf-mound svg'); if(!svg) return;
-    var px=Math.round(Math.max(0,Math.min(1,frac))*3600)/10;
-    var cr=svg.querySelector('clipPath rect'); if(cr) cr.setAttribute('width', px);
-    var pr=svg.querySelector('.mprog'); if(pr) pr.setAttribute('width', px);
-    // Dot stays ON the straight track (James, build 78 device pass: riding the
-    // hill outline made it leap at every section boundary).
-    var dot=svg.querySelector('.mdot'); if(dot) dot.setAttribute('cx', px);
+    var it=cdItems[i]; if(!it) return;
+    var g=cfMoundGeomCache[it.video_id]; if(!g) return;
+    var sweeps=svg.querySelectorAll('.msweep');
+    for(var k=0;k<g.sections.length&&k<sweeps.length;k++){
+      var s=g.sections[k];
+      sweeps[k].classList.toggle('on', t>=s.from&&t<s.to);
+    }
   }
   function cfMoundArm(i){
     cfMoundStop();
@@ -4201,10 +4240,9 @@
     var c=cfCards()[i]; if(!c||!c.classList.contains('hasmound')) return;
     cfMoundT=setInterval(function(){
       try{ var p=cfPlayers[i]; if(!p||!p.getCurrentTime) return;
-        var d=p.getDuration()||it.duration_sec||0; if(!(d>0)) return;
         var t=p.getCurrentTime()||0;
-        cfMoundPaint(i, t/d);
-        cfSecLine(i, t); // current-section text rides the tick (no-op unless section changed)
+        cfMoundPaint(i, t);
+        cfSecLine(i, t); // current-section caption rides the tick (no-op unless section changed)
         cfCoreTick(i, t); // V3: core-only steering rides the same 1s tick
       }catch(e){}
     },1000);
@@ -4212,7 +4250,11 @@
   // Supervisor condition: full chroma on pause/scrub, 40% tone-down of the
   // NON-highlight curve 3s into playback. Progress fill + peaks stay readable.
   function cfDimArm(i){ if(cfDimT) clearTimeout(cfDimT);
-    cfDimT=setTimeout(function(){ var c=cfCards()[i]; if(c&&c.classList.contains('hasmound')&&i===cfPlayIdx) c.classList.add('msunk'); },3000);
+    cfDimT=setTimeout(function(){
+      var c=cfCards()[i]; if(!c||!c.classList.contains('hasmound')||i!==cfPlayIdx) return;
+      try{ var p=cfPlayers[i]; if(!p||!p.getPlayerState||p.getPlayerState()!==1) return; }catch(e){ return; }
+      c.classList.add('msunk');           // sink only while actually PLAYING — paused stays up
+    },3000);
   }
   function cfDimWake(i){ var c=cfCards()[i]; if(c) c.classList.remove('msunk'); if(cfDimT){ clearTimeout(cfDimT); cfDimT=null; } }
   // Current-section text (James 07-31: PC shows per-section one-liners — the
@@ -4229,12 +4271,11 @@
     var t=forcedSec;
     if(t==null){ try{ var p=cfPlayers[i]; t=(p&&p.getCurrentTime)?(p.getCurrentTime()||0):0; }catch(e){ t=0; } }
     var s=cfSecAt(it.video_id, t);
-    if(!s){ if(el.getAttribute('data-k')){ el.removeAttribute('data-k'); el.innerHTML=''; } return; }
+    if(!s){ if(el.getAttribute('data-k')){ el.removeAttribute('data-k'); el.textContent=''; } return; }
     var key=String(s.from_sec);
     if(el.getAttribute('data-k')===key) return;
     el.setAttribute('data-k', key);
-    var esc=function(x){ return String(x==null?'':x).replace(/[<>&"]/g,function(ch){ return ch==='<'?'&lt;':ch==='>'?'&gt;':ch==='&'?'&amp;':'&quot;'; }); };
-    el.innerHTML='<b>'+esc(s.title||'')+'</b>'+(s.summary?'<span> · '+esc(s.summary)+'</span>':'');
+    el.textContent=s.summary||s.title||'';   // the one-liner itself, nothing else (James)
   }
 
   // ===== V3: core-only playback ==============================================
