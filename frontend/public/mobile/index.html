@@ -1407,30 +1407,38 @@
   .cf-prog{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:2; background:rgba(237,231,220,.16)}
   .cf-prog b{display:block; height:100%; width:0; background:#FF3B30}
   .cf-prog.none{display:none}   /* unwatched or duration-less = no line (A3/A4 rule) */
-  /* V2 relevance mound (video tab only, it.vtab) — a progress bar that grew
-     hills. ONE strip carries track + progress fill + per-section relevance
-     curve: height = relevance, fill = position, so the two axes never fight.
-     Curation cards never render it. Colors are colourway tokens only.
-     Shape + tiers + fill opacities = the PC PlayerChrome mound, ported
-     verbatim (James 07-31 "그냥 pc처럼"): per-section plateau mounds at three
-     discrete heights, hairline gaps, tier-hued top-down gradient fades. */
-  .cf-mound{position:relative;height:56px;margin:0 14px;display:none}
-  .cf-card.hasmound .cf-mound{display:block}
-  .cf-card.hasmound .cf-prog{display:none}  /* mound owns progress; never two bars */
+  /* V2 relevance mound (video tab only, it.vtab) — an OVERLAY ON THE VIDEO,
+     the PC PlayerChrome anatomy end to end (James 07-31 "pc 처럼 영상 위에"):
+     per-section plateau mounds parked above YouTube's bottom controls, a dark
+     scrim behind so the tier fills read over bright footage, current-section
+     text in the scrim band. Appears only once the player is revealed
+     (.cf-shown — PC renders only after playback starts). Only the strip band
+     accepts taps; everywhere else passes through to the player. Curation
+     cards never render it. Colors are colourway tokens only. */
+  .cf-mound{position:absolute;left:12px;right:12px;bottom:44px;height:56px;z-index:5;display:none;pointer-events:none}
+  .cf-card.hasmound.cf-shown .cf-mound{display:block}
+  .cf-mound::before{content:'';position:absolute;left:-12px;right:-12px;top:-30px;bottom:0;
+    background:linear-gradient(to top,rgba(var(--shade),.7),rgba(var(--shade),0));pointer-events:none}
+  /* Sunk = the WHOLE overlay fades out — playing means a clean picture, the
+     native-chrome rhythm. The invisible tap band stays armed: the first tap
+     raises (mzones), same as tapping the video would summon YouTube's own
+     chrome. Hills additionally sink (transform) so the raise/sink has motion. */
+  .cf-card.msunk .cf-mound{opacity:0}
   .cf-mound svg{display:block;width:100%;height:56px}
   .cf-mound .mtrack{fill:rgb(var(--shade))}
   .cf-mound .mprog{fill:var(--acc)}
   /* Base vs sweep = YouTube's own progress grammar (James, build 78 device
      pass): unplayed hills are a FAINT silhouette, only the played region gets
-     the vivid tier color. PC's base opacities read "already highlighted"
-     everywhere on the dark card, so the base runs far fainter here; the vivid
-     pair stays the PC FILL_OPACITY_VIVID (hover there, played sweep here). */
-  .cf-mound .mg-h-a{stop-color:var(--rel-high);stop-opacity:.2}
-  .cf-mound .mg-h-b{stop-color:var(--rel-high);stop-opacity:.03}
-  .cf-mound .mg-m-a{stop-color:var(--rel-mid);stop-opacity:.18}
-  .cf-mound .mg-m-b{stop-color:var(--rel-mid);stop-opacity:.03}
-  .cf-mound .mg-l-a{stop-color:var(--rel-low);stop-opacity:.15}
-  .cf-mound .mg-l-b{stop-color:var(--rel-low);stop-opacity:.02}
+     the vivid tier color. Overlay note: over bright footage the card-era
+     opacities (.2/.18/.15) vanished even behind the scrim (harness-measured),
+     so the base runs slightly higher here while staying clearly subordinate
+     to the .92/.88/.68 vivid pair. */
+  .cf-mound .mg-h-a{stop-color:var(--rel-high);stop-opacity:.35}
+  .cf-mound .mg-h-b{stop-color:var(--rel-high);stop-opacity:.05}
+  .cf-mound .mg-m-a{stop-color:var(--rel-mid);stop-opacity:.3}
+  .cf-mound .mg-m-b{stop-color:var(--rel-mid);stop-opacity:.04}
+  .cf-mound .mg-l-a{stop-color:var(--rel-low);stop-opacity:.24}
+  .cf-mound .mg-l-b{stop-color:var(--rel-low);stop-opacity:.03}
   .cf-mound .mv-h-a{stop-color:var(--rel-high);stop-opacity:.92}
   .cf-mound .mv-h-b{stop-color:var(--rel-high);stop-opacity:.22}
   .cf-mound .mv-m-a{stop-color:var(--rel-mid);stop-opacity:.88}
@@ -1438,7 +1446,7 @@
   .cf-mound .mv-l-a{stop-color:var(--rel-low);stop-opacity:.68}
   .cf-mound .mv-l-b{stop-color:var(--rel-low);stop-opacity:.14}
   .cf-mound .mdot{fill:var(--cd-chip-on-bg)}
-  .cf-mound .mzones{position:absolute;left:0;top:0;width:100%;height:100%;display:flex}
+  .cf-mound .mzones{position:absolute;left:0;top:0;width:100%;height:100%;display:flex;pointer-events:auto}
   .cf-mound .mzones i{display:block;height:100%}
   .cf-card.monly .cf-mound .mbase{opacity:.35}
   /* Mobile quiet gate (James 07-31 "지나치게 거슬려"): on PC the mound appears
@@ -1449,7 +1457,6 @@
      raises (no seek) — same two-tap grammar as the native controls. */
   .cf-mound .mbase,.cf-mound .msweep{transform-box:view-box;transform-origin:50% 95.5%}
   .cf-card.msunk .cf-mound .mbase,.cf-card.msunk .cf-mound .msweep{transform:scale(1,.03);opacity:0}
-  .cf-card.msunk .cf-mound .mdot{opacity:0}
   /* Current-section text in the empty band above the hills — ONE line
      (James, build 79 device pass: two stacked lines collided with the video
      edge and broke the card's calm). Title bold, summary dim, single shared
@@ -1460,8 +1467,9 @@
   .cf-secline b{font-weight:600;color:var(--cd-chip-on-bg)}
   .cf-secline span{color:var(--cd-chip-ink)}
   @media (prefers-reduced-motion: no-preference){
+    .cf-mound{transition:opacity .5s}
     .cf-mound .mbase,.cf-mound .msweep{transition:transform .6s cubic-bezier(.4,0,.2,1),opacity .6s}
-    .cf-mound .mdot,.cf-secline{transition:opacity .4s}
+    .cf-secline{transition:opacity .4s}
   }
   .cf-segchip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;color:var(--cd-chip-ink);background:var(--cd-chip-bg);border:1px solid var(--cd-chip-edge)}
   /* V3 core-only toggle — video decks only (body.vdeck). Default = full. */
@@ -2094,7 +2102,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-81';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-82';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4162,7 +4170,7 @@
       +'</svg>'
       +'<div class="cf-secline"></div>'
       +'<div class="mzones">'+g.zones.map(function(z){ return '<i style="flex-grow:'+z.w+'" data-sec="'+z.from+'"></i>'; }).join('')+'</div>';
-    media.insertAdjacentElement('afterend', el);
+    media.appendChild(el);   // overlay lives INSIDE the video box (PC anatomy)
     el.querySelector('.mzones').addEventListener('click', function(ev){
       var z=ev.target; if(!z||!z.getAttribute) return; var sec=+z.getAttribute('data-sec'); if(isNaN(sec)) return;
       if(c.classList.contains('msunk')){ c.classList.remove('msunk'); cfSecLine(i); cfDimArm(i); return; } // sunk: first tap only raises
