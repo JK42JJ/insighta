@@ -2028,8 +2028,8 @@
     <div class="cd-top">
       <button class="cd-back" id="cdBack" type="button">← 큐레이션</button>
       <span class="cd-title" id="cdTitle"></span>
-      <div class="cd-mode" id="cdMode" role="group" aria-label="재생 모드">
-        <i class="cd-mode-thumb" aria-hidden="true"></i><button type="button" data-m="core">핵심만</button><button type="button" data-m="full" class="on">전체</button>
+      <div class="cd-mode core" id="cdMode" role="group" aria-label="재생 모드">
+        <i class="cd-mode-thumb" aria-hidden="true"></i><button type="button" data-m="core" class="on">핵심만</button><button type="button" data-m="full">전체</button>
       </div>
       <span class="cd-count num" id="cdCount"></span>
     </div>
@@ -4284,11 +4284,13 @@
 
   // ===== V3: core-only playback ==============================================
   // Plays only the >=80 sections, chained through the SAME in-card player.
-  // Default is FULL (44% of videos have no v2 — core-only default would read
-  // as broken). Escape hatch inherited from the PC highlight reel: a manual
-  // scrub outside every core section stops the steering for THAT video —
-  // the mode never drags the user back. Toggle state is session-scoped.
-  var cfCoreOnly=false, cfCoreDisarm={}, cfCoreSeekAt=0;
+  // Default is CORE-ONLY (James, 07-31 — the tab's purpose is grasping the
+  // essentials fast). Safe because eligibility is per video: no v2 / low
+  // coverage / no core section simply plays full with its chip — the mode
+  // never reads as broken. Escape hatch inherited from the PC highlight reel:
+  // a manual scrub outside every core section stops the steering for THAT
+  // video — the mode never drags the user back. State is session-scoped.
+  var cfCoreOnly=true, cfCoreDisarm={}, cfCoreSeekAt=0;
   function cfCoreSegs(vid){
     var e=segCache[vid]; if(!e||!e.sections||!e.sections.length) return null;
     var out=e.sections.filter(function(s){ return s.relevance_pct!=null&&+s.relevance_pct>=80&&+s.to_sec>+s.from_sec; })
