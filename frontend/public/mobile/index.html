@@ -1421,8 +1421,11 @@
      progress bar must not interfere; the downward gradient fade does the rest. */
   .cf-mound{position:absolute;left:12px;right:12px;bottom:56px;height:56px;z-index:5;display:none;pointer-events:none}
   .cf-card.hasmound.cf-shown .cf-mound{display:block}
+  /* Light grounding only (James, build 83: the .7 scrim blackened the picture
+     — regression). The hills carry their own color now; the scrim just keeps
+     them from floating on very bright footage. */
   .cf-mound::before{content:'';position:absolute;left:-12px;right:-12px;top:-30px;bottom:0;
-    background:linear-gradient(to top,rgba(var(--shade),.7),rgba(var(--shade),0));pointer-events:none}
+    background:linear-gradient(to top,rgba(var(--shade),.3),rgba(var(--shade),0));pointer-events:none}
   /* Sunk = the WHOLE overlay fades out — playing means a clean picture, the
      native-chrome rhythm. The invisible tap band stays armed: the first tap
      raises (mzones), same as tapping the video would summon YouTube's own
@@ -1440,18 +1443,16 @@
      moment the overlay is up, so the next tap reaches the player itself. */
   .cf-mtap{display:none;position:absolute;inset:0;z-index:6}
   .cf-card.hasmound.cf-shown.msunk .cf-mtap{display:block}
-  /* Base vs sweep = YouTube's own progress grammar (James, build 78 device
-     pass): unplayed hills are a FAINT silhouette, only the played region gets
-     the vivid tier color. Overlay note: over bright footage the card-era
-     opacities (.2/.18/.15) vanished even behind the scrim (harness-measured),
-     so the base runs slightly higher here while staying clearly subordinate
-     to the .92/.88/.68 vivid pair. */
-  .cf-mound .mg-h-a{stop-color:var(--rel-high);stop-opacity:.35}
-  .cf-mound .mg-h-b{stop-color:var(--rel-high);stop-opacity:.05}
-  .cf-mound .mg-m-a{stop-color:var(--rel-mid);stop-opacity:.3}
-  .cf-mound .mg-m-b{stop-color:var(--rel-mid);stop-opacity:.04}
-  .cf-mound .mg-l-a{stop-color:var(--rel-low);stop-opacity:.24}
-  .cf-mound .mg-l-b{stop-color:var(--rel-low);stop-opacity:.03}
+  /* Colorful base, vivid current section (James, build 83: with the dark
+     scrim gone the base must carry its own color — "색상이 거의 안 보여").
+     Near-PC base opacities; the playing section still clearly outranks them
+     via the .92/.88/.68 vivid pair. */
+  .cf-mound .mg-h-a{stop-color:var(--rel-high);stop-opacity:.5}
+  .cf-mound .mg-h-b{stop-color:var(--rel-high);stop-opacity:.07}
+  .cf-mound .mg-m-a{stop-color:var(--rel-mid);stop-opacity:.45}
+  .cf-mound .mg-m-b{stop-color:var(--rel-mid);stop-opacity:.06}
+  .cf-mound .mg-l-a{stop-color:var(--rel-low);stop-opacity:.36}
+  .cf-mound .mg-l-b{stop-color:var(--rel-low);stop-opacity:.05}
   .cf-mound .mv-h-a{stop-color:var(--rel-high);stop-opacity:.92}
   .cf-mound .mv-h-b{stop-color:var(--rel-high);stop-opacity:.22}
   .cf-mound .mv-m-a{stop-color:var(--rel-mid);stop-opacity:.88}
@@ -1642,15 +1643,16 @@
        it is already clear of the safe area. */
     body.curdeck .cf-playing .cf-prog{display:none}
     body.curdeck .cf-playing .cf-meta{display:none}
-    /* V2 fix (device pass 07-30): the mound is portrait furniture too — without
-       this it rendered ACROSS THE TOP of the landscape fullscreen picture
-       (card goes fixed, media absolute, the in-flow strip floats up top).
-       Landscape mound ships separately with its own device-verified pass. */
-    /* Specificity note (device bug, build 82): the portrait show rule is
-       .cf-card.hasmound.cf-shown .cf-mound = (0,4,0), so this hide must
-       outrank it — carry the same class chain. */
-    body.curdeck .cf-card.cf-playing .cf-mound,
-    body.curdeck .cf-card.cf-playing .cf-mtap{display:none}
+    body.curdeck .cf-card.hasmound.cf-playing .cf-secline{display:none}  /* caption = portrait furniture */
+    /* Landscape mound: SHOWN (James, build 83 — "가로에서 관련도가 사라졌어").
+       The overlay lives inside .cf-media, which IS the fullscreen element
+       here, so it just needs landscape spacing: clear of the rotated
+       safe-areas and of YouTube's taller fullscreen bottom bar. The
+       below-video caption is portrait furniture and stays out of the frame. */
+    body.curdeck .cf-card.cf-playing .cf-mound{
+      left:calc(env(safe-area-inset-left, 0px) + 24px);
+      right:calc(env(safe-area-inset-right, 0px) + 24px);
+      bottom:72px}
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
        YouTube's bottom bar and its own progress scrubber. */
@@ -2116,7 +2118,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-83';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-84';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -4119,7 +4121,7 @@
   // slightly at the edges (never to the floor). Same path grammar and control
   // fractions as frontend/src/pages/learning/ui/PlayerChrome.tsx moundPath().
   var MOUND_BASE=53.5;                 // path floor, just over the 52.5 track
-  var MOUND_GAP=1.44;                  // PC GAP=4 of 1000 → 360-wide strip
+  var MOUND_GAP=2.2;                   // slightly over the PC 4/1000 scale — clear separation without scalloping
   var MOUND_MIN_W=1.1;                 // PC skips mounds under 3/1000
   var MOUND_TIER_H={h:22,m:17,l:12};   // PC Y_FOR heights on its 26 strip
   function cfMoundTier(s){ var v=s.relevance_pct; if(v==null) return 'l'; v=+v; return v>=80?'h':(v>=50?'m':'l'); }
@@ -4129,42 +4131,28 @@
     var secs=secsIn.filter(function(s){ return (+s.to_sec||0)>(+s.from_sec||0); })
       .slice().sort(function(a,b){ return (+a.from_sec||0)-(+b.from_sec||0); });
     var rnd=function(v){ return Math.round(v*10)/10; };
-    // Merge consecutive same-tier sections into ONE plateau (James, build 82
-    // device pass: a row of identical domes read as the segments of a bug).
-    // The skyline now steps only where the relevance tier actually changes;
-    // section boundaries survive invisibly in zones (tap) and sections (vivid).
-    var runs=[];
+    // Per-section mounds, FINE-TUNED lines (James, build 83: merging sections
+    // was a misread — "징그럽다" meant soften the curve, not restructure).
+    // The softening: capped shoulder ramps -> flat calm tops on long sections,
+    // a gentler edge settle (y+4/y+1.5 instead of y+6/y+2), and a slightly
+    // wider gap so neighbors read as separate without scalloping.
+    var mounds=[], last=secs.length-1;
     for(var i2=0;i2<secs.length;i2++){
-      var s=secs[i2], tier=cfMoundTier(s), prev=runs[runs.length-1];
-      if(prev&&prev.t===tier){ prev.to=+s.to_sec||0; prev.secs.push(s); }
-      else runs.push({ t:tier, from:+s.from_sec||0, to:+s.to_sec||0, secs:[s] });
-    }
-    var mounds=[], sections=[], lastRun=runs.length-1;
-    for(var r=0;r<runs.length;r++){
-      var run=runs[r];
-      var x0=run.from/dur*W+(r===0?0:MOUND_GAP/2);
-      var x1=run.to/dur*W-(r===lastRun?0:MOUND_GAP/2);
+      var s=secs[i2];
+      var x0=(+s.from_sec||0)/dur*W+(i2===0?0:MOUND_GAP/2);
+      var x1=(+s.to_sec||0)/dur*W-(i2===last?0:MOUND_GAP/2);
       if(x1-x0<MOUND_MIN_W) continue;
-      var w=x1-x0, y=base-MOUND_TIER_H[run.t];
-      var edgeInY=Math.min(base-4,y+6), edgeOutY=Math.min(base-4,y+2);
-      // PC shoulder grammar, but with the ramp span CAPPED so a long merged
-      // plateau keeps compact shoulders and a long FLAT top instead of a
-      // stretched hillside. Short runs degrade to near-PC dome proportions.
+      var w=x1-x0, tier=cfMoundTier(s), y=base-MOUND_TIER_H[tier];
+      var edgeInY=Math.min(base-4,y+4), edgeOutY=Math.min(base-4,y+1.5);
       var rin=Math.min(w*.5,26), rout=Math.min(w*.28,14);
       var d='M'+rnd(x0)+','+rnd(base)+' L'+rnd(x0)+','+rnd(edgeInY)
-        +' C'+rnd(x0+rin*.35)+','+rnd(y+2)+' '+rnd(x0+rin*.7)+','+rnd(y)+' '+rnd(x0+rin)+','+rnd(y)
+        +' C'+rnd(x0+rin*.35)+','+rnd(y+1.5)+' '+rnd(x0+rin*.7)+','+rnd(y)+' '+rnd(x0+rin)+','+rnd(y)
         +' L'+rnd(x1-rout)+','+rnd(y)
-        +' C'+rnd(x1-rout*.45)+','+rnd(y)+' '+rnd(x1)+','+rnd(y+1)+' '+rnd(x1)+','+rnd(edgeOutY)
+        +' C'+rnd(x1-rout*.45)+','+rnd(y)+' '+rnd(x1)+','+rnd(y+.8)+' '+rnd(x1)+','+rnd(edgeOutY)
         +' L'+rnd(x1)+','+rnd(base)+' Z';
-      mounds.push({ d:d, t:run.t });
-      var mi=mounds.length-1;
-      for(var k2=0;k2<run.secs.length;k2++){
-        var ss=run.secs[k2], sx0=(+ss.from_sec||0)/dur*W, sx1=(+ss.to_sec||0)/dur*W;
-        sections.push({ mi:mi, t:run.t, from:+ss.from_sec||0, to:+ss.to_sec||0,
-          x0:rnd(Math.max(x0,sx0)), x1:rnd(Math.min(x1,sx1)) });
-      }
+      mounds.push({ d:d, t:tier, from:+s.from_sec||0, to:+s.to_sec||0 });
     }
-    var g={ mounds:mounds, sections:sections, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
+    var g={ mounds:mounds, zones:secs.map(function(s){ return { from:+s.from_sec||0, w:Math.max(1,(+s.to_sec||0)-(+s.from_sec||0)) }; }) };
     cfMoundGeomCache[vid]=g; return g;
   }
   function cfMoundEnsure(i){
@@ -4191,15 +4179,11 @@
       return '<linearGradient id="mgb'+i+t+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mg-'+t+'-a"></stop><stop offset="1" class="mg-'+t+'-b"></stop></linearGradient>'
            +'<linearGradient id="mgs'+i+t+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="mv-'+t+'-a"></stop><stop offset="1" class="mv-'+t+'-b"></stop></linearGradient>'; }).join('');
     var baseP=g.mounds.map(function(m){ return '<path class="mbase" d="'+m.d+'" fill="url(#mgb'+i+m.t+')"></path>'; }).join('');
-    // Vivid layer is PER SECTION: the run silhouette clipped to that section's
-    // x-range, so inside a merged plateau only the playing slice lights up.
-    var clips=g.sections.map(function(s,k){
-      return '<clipPath id="ms'+i+'_'+k+'"><rect x="'+s.x0+'" y="0" width="'+Math.max(0,Math.round((s.x1-s.x0)*10)/10)+'" height="56"></rect></clipPath>'; }).join('');
-    var sweepP=g.sections.map(function(s,k){
-      return '<path class="msweep" d="'+g.mounds[s.mi].d+'" fill="url(#mgs'+i+s.t+')" clip-path="url(#ms'+i+'_'+k+')"></path>'; }).join('');
+    // Vivid twin per mound — only the one under the playhead gets .on.
+    var sweepP=g.mounds.map(function(m){ return '<path class="msweep" d="'+m.d+'" fill="url(#mgs'+i+m.t+')"></path>'; }).join('');
     var el=document.createElement('div'); el.className='cf-mound';
     el.innerHTML='<svg viewBox="0 0 360 56" preserveAspectRatio="none">'
-      +'<defs>'+grads+clips+'</defs>'
+      +'<defs>'+grads+'</defs>'
       +baseP+sweepP
       +'</svg>'
       +'<div class="mzones">'+g.zones.map(function(z){ return '<i style="flex-grow:'+z.w+'" data-sec="'+z.from+'"></i>'; }).join('')+'</div>';
@@ -4233,9 +4217,9 @@
     var it=cdItems[i]; if(!it) return;
     var g=cfMoundGeomCache[it.video_id]; if(!g) return;
     var sweeps=svg.querySelectorAll('.msweep');
-    for(var k=0;k<g.sections.length&&k<sweeps.length;k++){
-      var s=g.sections[k];
-      sweeps[k].classList.toggle('on', t>=s.from&&t<s.to);
+    for(var k=0;k<g.mounds.length&&k<sweeps.length;k++){
+      var m=g.mounds[k];
+      sweeps[k].classList.toggle('on', t>=m.from&&t<m.to);
     }
   }
   function cfMoundArm(i){
