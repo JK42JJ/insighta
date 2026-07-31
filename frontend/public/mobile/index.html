@@ -1415,7 +1415,11 @@
      (.cf-shown — PC renders only after playback starts). Only the strip band
      accepts taps; everywhere else passes through to the player. Curation
      cards never render it. Colors are colourway tokens only. */
-  .cf-mound{position:absolute;left:12px;right:12px;bottom:44px;height:56px;z-index:5;display:none;pointer-events:none}
+  /* bottom 56 = YouTube's mobile bottom bar (~40px) + a clear 16px void —
+     the PC keeps the strip 8px off its native bar for the same reason
+     (James 2026-07-03 there, re-confirmed 07-31 here): the mound and the
+     progress bar must not interfere; the downward gradient fade does the rest. */
+  .cf-mound{position:absolute;left:12px;right:12px;bottom:56px;height:56px;z-index:5;display:none;pointer-events:none}
   .cf-card.hasmound.cf-shown .cf-mound{display:block}
   .cf-mound::before{content:'';position:absolute;left:-12px;right:-12px;top:-30px;bottom:0;
     background:linear-gradient(to top,rgba(var(--shade),.7),rgba(var(--shade),0));pointer-events:none}
