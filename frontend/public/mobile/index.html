@@ -5625,7 +5625,15 @@
   function previewBeat(){                         // static view of current beat (no audio)
     var b=beats[bi]; if(!b) return;
     renderChapters(); if(typeof msUpdate==='function') msUpdate();
-    if(b.t==='n'){ try{ curSents=sentences(b.text); renderSents(b.title||'', curSents); }catch(e){} }
+    // Restore the body surfaces too — after finishNote() every content element
+    // is hidden (pShowState), and a paused landing must still SHOW something
+    // (device bug 07-31: jog back from the finish screen left an empty pane
+    // with only the progress row alive). Preview is text for every beat type.
+    pState.style.display='none'; ptrack.hidden=false; chcard.classList.remove('show');
+    document.body.classList.remove('clipmode');
+    clipbox.hidden=true; creditEl.hidden=true; readbox.hidden=false; streamEl.hidden=false;
+    var txt=(b.t==='ch')?((b.num||'')+'부 · '+(b.title||'')):(b.text||'');
+    try{ curSents=sentences(txt); renderSents(b.title||'', curSents); }catch(e){}
   }
   (function(){
     var visAngle=0, kick=0, rubber=0, rafId=null;
@@ -5814,7 +5822,7 @@
       if(finished){ // finished screen: right = no further, left = back to last segment
         if(dir>0){ wheelRubber(1); wheelEnd(); return; }
         finished=false; bi=Math.max(0,beats.length-1);
-        pState.style.display='none'; ptrack.hidden=false; renderChapters(); return;
+        previewBeat(); return; // restores pState/ptrack AND the beat body (empty-pane bug 07-31)
       }
       if(dir>0&&!guestFwdOk()){ guestFwdNotice(); return; }
       if(bi+dir>=beats.length){ wheelRubber(1); wheelEnd(); finishNote(); return; }
@@ -6325,7 +6333,7 @@
     if(finished){
       if(dir>0){ hudWake(); return; }
       finished=false; bi=Math.max(0,beats.length-1);
-      pState.style.display='none'; ptrack.hidden=false; renderChapters(); hudWake(); return;
+      previewBeat(); hudWake(); return; // restores the beat body too (empty-pane bug 07-31)
     }
     if(dir>0&&!guestFwdOk()){ guestFwdNotice(); hudWake(); return; }
     if(bi+dir>=beats.length){ finishNote(); return; }
