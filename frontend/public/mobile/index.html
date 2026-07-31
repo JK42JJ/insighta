@@ -1415,11 +1415,12 @@
      (.cf-shown — PC renders only after playback starts). Only the strip band
      accepts taps; everywhere else passes through to the player. Curation
      cards never render it. Colors are colourway tokens only. */
-  /* bottom 56 = YouTube's mobile bottom bar (~40px) + a clear 16px void —
-     the PC keeps the strip 8px off its native bar for the same reason
-     (James 2026-07-03 there, re-confirmed 07-31 here): the mound and the
-     progress bar must not interfere; the downward gradient fade does the rest. */
-  .cf-mound{position:absolute;left:12px;right:12px;bottom:56px;height:56px;z-index:5;display:none;pointer-events:none}
+  /* One rule for both orientations (James, build 84 device pass: portrait
+     gap too wide, landscape overlapping): the hill bases ride ~8pt ABOVE
+     YouTube's red scrub bar. Portrait paused chrome puts that bar ~55pt up
+     (control strip below it), so bottom 44 + the 2.5 in-strip baseline lands
+     ~8pt clear. Landscape value lives in the landscape block (bar ~91pt up). */
+  .cf-mound{position:absolute;left:12px;right:12px;bottom:44px;height:56px;z-index:5;display:none;pointer-events:none}
   .cf-card.hasmound.cf-shown .cf-mound{display:block}
   /* Light grounding only (James, build 83: the .7 scrim blackened the picture
      — regression). The hills carry their own color now; the scrim just keeps
@@ -1652,7 +1653,7 @@
     body.curdeck .cf-card.cf-playing .cf-mound{
       left:calc(env(safe-area-inset-left, 0px) + 24px);
       right:calc(env(safe-area-inset-right, 0px) + 24px);
-      bottom:72px}
+      bottom:96px}  /* fullscreen red bar sits ~91pt up (device-measured) — hills ride ~8pt above it */
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
        YouTube's bottom bar and its own progress scrubber. */
@@ -2118,7 +2119,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-07-31-84';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-07-31-85';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
