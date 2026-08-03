@@ -34,7 +34,7 @@ import { MS_PER_DAY } from '@/utils/time-constants';
 import { config } from '../../../config';
 import { nextKstWeekdayAt } from '@/utils/kst';
 import { collectChannelUploads } from '@/modules/curation/channel-uploads';
-import { curationFreshnessCutoffs } from '@/modules/curation/config';
+import { curationPickPlan } from '@/modules/curation/config';
 import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 
 /**
@@ -49,6 +49,10 @@ import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube
  * Seven days is what a weekly delivery means, so seven days is what it asks for.
  */
 const CHANNEL_LOOKBACK_DAYS = 7;
+
+/** Deep-pass widened retry window when the 7-day live search comes back empty
+ *  (niche topics; empty-week floor, 2026-08-03). One retry only — quota. */
+const CURATION_DEEP_RETRY_DAYS = 30;
 
 const log = logger.child({ module: 'queue/curation-build' });
 
@@ -75,7 +79,7 @@ async function servedHistory(
   prisma: ReturnType<typeof getPrismaClient>,
   sub: { id: string; user_id: string; topic: string },
   excludeWeekOf?: Date
-): Promise<Set<string>> {
+): Promise<Array<{ videoId: string; weekOf: Date }>> {
   const norm = (s: string) => s.trim().toLowerCase();
   const siblings = await prisma.curation_subscriptions.findMany({
     where: { user_id: sub.user_id },
@@ -87,10 +91,13 @@ async function servedHistory(
       subscription_id: { in: familyIds.length ? familyIds : [sub.id] },
       ...(excludeWeekOf ? { week_of: { not: excludeWeekOf } } : {}),
     },
-    select: { video_id: true },
+    // MOST RECENT week per video: the rung horizon asks "was this served
+    // recently", so keep the newest sighting of each video_id.
+    select: { video_id: true, week_of: true },
+    orderBy: [{ video_id: 'asc' }, { week_of: 'desc' }],
     distinct: ['video_id'],
   });
-  return new Set(rows.map((r) => r.video_id));
+  return rows.map((r) => ({ videoId: r.video_id, weekOf: r.week_of }));
 }
 
 async function deepEnrichCuration(
@@ -102,23 +109,28 @@ async function deepEnrichCuration(
 ): Promise<void> {
   // History exclusion rides the live search too (weekly-novelty fix): a video
   // served in ANY prior week must not come back through the enrichment door.
-  const everServed = await servedHistory(prisma, sub);
+  const everServed = new Set((await servedHistory(prisma, sub)).map((h) => h.videoId));
   // Layer B (weekly supply, 2026-08-03): the live search asks for THIS WEEK'S
   // uploads — publishedAfter = the trailing week before weekDate (the same
   // seven-days-is-a-week rule channel mode uses). v5 internally upserts its
   // picks into video_pool (reusePickedToPool), so each weekly deep run also
-  // feeds next week's pool rungs.
-  const v5 = await runV5Executor({
-    centerGoal: topic,
-    subGoals: [],
-    focusTags: [],
-    targetLevel: '',
-    language: 'ko',
-    includeEnCards: false,
-    excludeVideoIds: everServed,
-    publishedAfter: new Date(weekDate.getTime() - CHANNEL_LOOKBACK_DAYS * MS_PER_DAY).toISOString(),
-    env: process.env,
-  });
+  // feeds next week's pool rungs. Niche topics can yield zero in a 7-day
+  // window — one widened retry (30d) before accepting a quiet enrichment
+  // (empty-week floor, revised 2026-08-03).
+  const runSearch = (days: number) =>
+    runV5Executor({
+      centerGoal: topic,
+      subGoals: [],
+      focusTags: [],
+      targetLevel: '',
+      language: 'ko',
+      includeEnCards: false,
+      excludeVideoIds: everServed,
+      publishedAfter: new Date(weekDate.getTime() - days * MS_PER_DAY).toISOString(),
+      env: process.env,
+    });
+  let v5 = await runSearch(CHANNEL_LOOKBACK_DAYS);
+  if (!v5.cards.length) v5 = await runSearch(CURATION_DEEP_RETRY_DAYS);
   const existing = await prisma.curation_items.findMany({
     where: { subscription_id: subscriptionId, week_of: weekDate },
     select: { video_id: true },
@@ -289,42 +301,55 @@ export async function registerCurationBuildWorker(): Promise<void> {
       // runV5Executor's full pipeline (LLM×2 + search.list fanout + bulk embed) stalled
       // the build 20s+. ~1-2s. Thin-pool niche topics → async v5 enrichment = follow-up.
       //
-      // Weekly novelty (2026-08-03 defect fix — measured 55~95% week-over-week
-      // repeats): the pick now carries the two constraints the weekly contract
-      // implies. 1) HISTORY EXCLUSION — anything this subscription has ever
-      // served in a PRIOR week stays out for good. 2) FRESHNESS LADDER —
-      // prefer this week's uploads, widen (7d→14d→30d→any) only while the
-      // rung cannot fill CURATION_MIN_VIDEOS.
+      // Weekly novelty + empty-week floor (2026-08-03, revised after the
+      // empty-week incident): the pick walks CURATION_PICK_RUNGS and
+      // ACCUMULATES, freshest-first, until the week is full — this week's
+      // uploads > fresh > never-served > less-aligned never-served >
+      // long-ago-served re-entry. The last rungs shrink the exclusion horizon
+      // (a month-old good video returning beats a thin week), so a niche
+      // topic can no longer drain itself to zero.
       const [centerEmbedding] = await embedBatch([sub.topic]);
       if (!centerEmbedding) {
         log.warn('curation build: topic embed failed', { subscriptionId, topic: sub.topic });
         return;
       }
-      const served = await servedHistory(prisma, sub, new Date(weekOf));
-      picked = [];
-      let rungUsed: number | null = null;
-      for (const cutoff of curationFreshnessCutoffs(new Date(weekOf))) {
+      const history = await servedHistory(prisma, sub, new Date(weekOf));
+      const plan = curationPickPlan(new Date(weekOf));
+      const acc = new Map<string, { videoId: string; relevancePct: number }>();
+      const rungStats: Array<{ rung: number; added: number }> = [];
+      for (let r = 0; r < plan.length; r++) {
+        if (acc.size >= QUEUE_CONFIG.CURATION_TARGET_VIDEOS) break;
+        const step = plan[r]!;
+        const excluded = new Set(acc.keys());
+        for (const h of history) {
+          if (!step.exclusionAfter || h.weekOf >= step.exclusionAfter) excluded.add(h.videoId);
+        }
         const matches = await matchFromVideoPoolByCenterGoal({
           centerEmbedding,
           subGoals: [],
           language: 'ko',
           limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
-          excludeVideoIds: served,
-          publishedAfter: cutoff,
+          threshold: step.threshold,
+          excludeVideoIds: excluded,
+          publishedAfter: step.publishedAfter,
         });
-        picked = matches.map((m) => ({
-          videoId: m.videoId,
-          relevancePct: Math.max(1, Math.min(100, Math.round((m.score ?? 0) * 100))),
-        }));
-        rungUsed = cutoff
-          ? Math.round((new Date(weekOf).getTime() - cutoff.getTime()) / MS_PER_DAY)
-          : null;
-        if (picked.length >= QUEUE_CONFIG.CURATION_MIN_VIDEOS) break;
+        let added = 0;
+        for (const m of matches) {
+          if (acc.size >= QUEUE_CONFIG.CURATION_TARGET_VIDEOS) break;
+          if (acc.has(m.videoId)) continue;
+          acc.set(m.videoId, {
+            videoId: m.videoId,
+            relevancePct: Math.max(1, Math.min(100, Math.round((m.score ?? 0) * 100))),
+          });
+          added += 1;
+        }
+        if (added) rungStats.push({ rung: r, added });
       }
+      picked = Array.from(acc.values());
       log.info('curation build (topic mode)', {
         subscriptionId,
-        excludedHistory: served.size,
-        freshnessRungDays: rungUsed,
+        historySize: history.length,
+        rungStats,
         picked: picked.length,
       });
     }
@@ -340,33 +365,45 @@ export async function registerCurationBuildWorker(): Promise<void> {
     // caveat: delete-recreate must not turn "in progress" back into "new") — a
     // NEW week's rows are born NULL, which is the intended weekly reset.
     const weekDate = new Date(weekOf);
-    const prevWatched = new Map(
-      (
-        await prisma.curation_items.findMany({
-          where: { subscription_id: subscriptionId, week_of: weekDate, watched_at: { not: null } },
-          select: { video_id: true, watched_at: true },
-        })
-      ).map((r) => [r.video_id, r.watched_at])
-    );
-    await prisma.$transaction([
-      prisma.curation_items.deleteMany({
-        where: { subscription_id: subscriptionId, week_of: weekDate },
-      }),
-      ...(picked.length
-        ? [
-            prisma.curation_items.createMany({
-              data: picked.map((p, i) => ({
-                subscription_id: subscriptionId,
-                video_id: p.videoId,
-                relevance_pct: p.relevancePct,
-                position: i,
-                week_of: weekDate,
-                watched_at: prevWatched.get(p.videoId) ?? null,
-              })),
-            }),
-          ]
-        : []),
-    ]);
+    // Empty-week floor (2026-08-03 incident): the snapshot is REPLACED only
+    // when there is a replacement. picked=0 used to delete the week and write
+    // nothing — an empty feed. Now the previous snapshot is preserved and the
+    // deep pass still runs behind.
+    if (!picked.length) {
+      log.warn('curation build: nothing pickable — preserving existing week', {
+        subscriptionId,
+        topic: sub.topic,
+        mode: channelMode ? 'channel' : 'topic',
+      });
+    } else {
+      const prevWatched = new Map(
+        (
+          await prisma.curation_items.findMany({
+            where: {
+              subscription_id: subscriptionId,
+              week_of: weekDate,
+              watched_at: { not: null },
+            },
+            select: { video_id: true, watched_at: true },
+          })
+        ).map((r) => [r.video_id, r.watched_at])
+      );
+      await prisma.$transaction([
+        prisma.curation_items.deleteMany({
+          where: { subscription_id: subscriptionId, week_of: weekDate },
+        }),
+        prisma.curation_items.createMany({
+          data: picked.map((p, i) => ({
+            subscription_id: subscriptionId,
+            video_id: p.videoId,
+            relevance_pct: p.relevancePct,
+            position: i,
+            week_of: weekDate,
+            watched_at: prevWatched.get(p.videoId) ?? null,
+          })),
+        }),
+      ]);
+    }
 
     // Topic mode ALWAYS enqueues the deep pass now (weekly supply, 2026-08-03):
     // it is no longer just a thin-pool fallback — it is where this week's
