@@ -501,6 +501,10 @@ export const QUEUE_CONFIG = {
    *  Build aims for TARGET; ships if it can gather at least MIN after passesBookGate. */
   CURATION_MIN_VIDEOS: 15,
   CURATION_TARGET_VIDEOS: 20,
+  /** Weekly-supply guarantee (2026-08-03): at least this many slots of the
+   *  week go to THIS week's uploads (deep live-search results), evicting the
+   *  lowest-positioned unwatched pool picks when the week is already full. */
+  CURATION_FRESH_RESERVE: 5,
   /** Max concurrent enrichment workers */
   ENRICH_CONCURRENCY: 1,
   /**
