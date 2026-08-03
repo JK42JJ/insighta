@@ -2121,7 +2121,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-03-87';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-03-88';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
@@ -3989,7 +3989,7 @@
       // Paused: the picture dims back but stays visible. Fading the iframe out
       // would put the poster back over a video the user deliberately paused.
       if(c) c.classList.remove('cf-lit');
-      if(cdItems[i]&&cdItems[i].vtab) cfDimWake(i);                 // quiet gate: paused = hills up
+      if(cdItems[i]&&cdItems[i].vtab) vdChromeWake(i);              // paused = whole chrome up (wheel + graph, one rhythm)
     } else if(st===0){ cfCardEnded(i); }
   }
   function cfPlayerError(i, code){
@@ -4195,14 +4195,14 @@
     var tap=document.createElement('div'); tap.className='cf-mtap'; media.appendChild(tap);
     var sl=document.createElement('div'); sl.className='cf-secline'; media.insertAdjacentElement('afterend', sl);
     tap.addEventListener('click', function(){
-      c.classList.remove('msunk'); cfSecLine(i); cfDimArm(i);
+      c.classList.remove('msunk'); cfSecLine(i); vdChromeWake(i);
     });
     el.querySelector('.mzones').addEventListener('click', function(ev){
       var z=ev.target; if(!z||!z.getAttribute) return; var sec=+z.getAttribute('data-sec'); if(isNaN(sec)) return;
       try{ var p=cfPlayers[i]; if(p&&p.seekTo){ p.seekTo(sec,true); if(p.playVideo) p.playVideo(); } }catch(e){}
       cfMoundPaint(i, sec);
       cfSecLine(i, sec);
-      cfDimArm(i);           // touching the strip keeps it up for another 3s
+      vdChromeWake(i);       // touching the strip keeps the whole chrome up
     });
     c.classList.add('hasmound');
     cfMoundArm(i);
@@ -4255,6 +4255,47 @@
     var e=segCache[vid]; if(!e||!e.sections) return null;
     for(var k=0;k<e.sections.length;k++){ var s=e.sections[k]; if(t>=+s.from_sec&&t<+s.to_sec) return s; }
     return null;
+  }
+  // One chrome, one rhythm (James 08-03): on the video deck the wheel and the
+  // relevance graph wake together and linger together. The graph still only
+  // re-sinks while actually PLAYING (cfDimArm fire-time guard).
+  function vdChromeWake(i){
+    cfDimWake(i); cfDimArm(i);
+    wheelAwake(); wheelSleep();
+  }
+  // Section-unit jog (James 08-03): on the video tab a detent steps by v2
+  // SECTION — the mound's unit becomes the steering unit. Core-only mode steps
+  // the >=80 chain; back-detent restarts the current section first (>3s in),
+  // then steps back. Returns false at the edges or when the video has no
+  // usable sections, so the caller falls through to 1-detent-1-card. Fast
+  // rotation keeps its native acceleration: faster detents hop sections
+  // faster and chain across videos at the edges.
+  function cfSectionStep(dir){
+    var i=cfPlayIdx; if(i<0) return false;
+    var it=cdItems[i]; if(!it||!it.vtab||!it.has_segments) return false;
+    if(it.seg_coverage!=null&&it.seg_coverage<0.9) return false;
+    var entry=segCache[it.video_id]; if(!entry||!entry.sections||!entry.sections.length) return false;
+    var p=cfPlayers[i]; if(!p||!p.getCurrentTime||!p.seekTo) return false;
+    var segs=null;
+    if(cfCoreOnly&&!cfCoreDisarm[it.video_id]) segs=cfCoreSegs(it.video_id);
+    if(!segs){
+      segs=entry.sections.filter(function(s){ return +s.to_sec>+s.from_sec; })
+        .map(function(s){ return { from:+s.from_sec, to:+s.to_sec }; })
+        .sort(function(a,b){ return a.from-b.from; });
+    }
+    if(!segs.length) return false;
+    var t=p.getCurrentTime()||0, idx=-1;
+    for(var k=0;k<segs.length;k++){ if(t>=segs[k].from-0.5) idx=k; else break; }
+    var target=null;
+    if(dir>0){ if(idx+1<segs.length) target=segs[idx+1].from; }
+    else if(idx>=0&&t-segs[idx].from>3) target=segs[idx].from;   // back = restart current first
+    else if(idx>0) target=segs[idx-1].from;
+    if(target==null) return false;                               // edge → card nav
+    try{ p.seekTo(target,true); if(p.playVideo) p.playVideo(); }catch(e){ return false; }
+    cfMoundPaint(i, target);
+    cfSecLine(i, target);
+    vdChromeWake(i);
+    return true;
   }
   function cfSecLine(i, forcedSec){
     var c=cfCards()[i]; if(!c) return; var el=c.querySelector('.cf-secline'); if(!el) return;
@@ -5776,7 +5817,13 @@
   var suppressClickUntil=0;
   function wheelStole(){ return Date.now()<suppressClickUntil; } // 시간창(350ms): sticky 플래그 잔류 → 후속 정상 탭 삼킴 버그 제거
   function dispatchNotch(dir){
-    if(document.body.classList.contains('curdeck')){ cdNav(dir); return; } // deck: 1 detent = 1 card
+    if(document.body.classList.contains('curdeck')){
+      // Video deck: a detent steps by SECTION when the focus card has v2
+      // sections (James 08-03); edges and sectionless videos fall through to
+      // 1-detent-1-card. Curation deck: always cards (contract: no relevance UI).
+      if(document.body.classList.contains('vdeck')&&cfSectionStep(dir)) return;
+      cdNav(dir); return;
+    }
     if(document.body.classList.contains('hubsheet')){ var hr=hubRows(); if(!hr.length) return; var hx=selHub+dir; if(hx<0||hx>=hr.length){ wheelRubber(dir); return; } selHub=hx; updateSelHub(); return; }
     if(document.body.classList.contains('goalsheet')){ var gr=goalRows(); if(!gr.length) return; var gx=selGoal+dir; if(gx<0||gx>=gr.length){ wheelRubber(dir); return; } selGoal=gx; updateSelGoal(); return; }
     // Proposal deck: one detent = one card. The wheel is the primary way to move
@@ -6228,7 +6275,11 @@
   }
   (function(){
     var wz=document.querySelector('.wheelzone'); if(!wz) return;
-    wz.addEventListener('pointerdown',function(){ if(document.body.classList.contains('stage')||document.body.classList.contains('curdeck')) wheelAwake(); });
+    wz.addEventListener('pointerdown',function(){
+      if(document.body.classList.contains('stage')||document.body.classList.contains('curdeck')) wheelAwake();
+      // One-rhythm chrome: touching the wheel raises the relevance graph too.
+      if(document.body.classList.contains('vdeck')&&cfPlayIdx>=0){ cfDimWake(cfPlayIdx); cfDimArm(cfPlayIdx); }
+    });
     ['pointerup','pointercancel'].forEach(function(ev){
       wz.addEventListener(ev,function(){ if(document.body.classList.contains('stage')||document.body.classList.contains('curdeck')) wheelSleep(); });
     });
