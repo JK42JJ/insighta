@@ -197,6 +197,10 @@ APPLY_FILES=(
   # IF NOT EXISTS + NOTIFY pgrst — fully idempotent.
   "prisma/migrations/curation/001_create_curation_tables.sql"
   "prisma/migrations/curation/002_curation_personalization.sql"
+  # 2026-08-03 weekly-novelty follow-up: deactivate legacy same-user same-topic
+  # duplicate subscriptions + partial unique backstop. UPDATE no-ops once clean;
+  # index guarded by IF NOT EXISTS — idempotent.
+  "prisma/migrations/curation/003_dedupe_subscriptions_unique.sql"
   # curation-watched (2026-07-21): watched_at derived-only column for lineup row
   # meta (M/N listened / weekly complete). ADD COLUMN IF NOT EXISTS = idempotent.
   "prisma/migrations/curation-watched/001_watched_at.sql"
