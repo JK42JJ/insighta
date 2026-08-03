@@ -29,6 +29,7 @@ import { MS_PER_DAY } from '@/utils/time-constants';
 import { config } from '../../../config';
 import { nextKstWeekdayAt } from '@/utils/kst';
 import { collectChannelUploads } from '@/modules/curation/channel-uploads';
+import { curationFreshnessCutoffs } from '@/modules/curation/config';
 import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 
 /**
@@ -65,6 +66,13 @@ async function deepEnrichCuration(
   weekDate: Date,
   prisma: ReturnType<typeof getPrismaClient>
 ): Promise<void> {
+  // History exclusion rides the live search too (weekly-novelty fix): a video
+  // served in ANY prior week must not come back through the enrichment door.
+  const everServed = await prisma.curation_items.findMany({
+    where: { subscription_id: subscriptionId },
+    select: { video_id: true },
+    distinct: ['video_id'],
+  });
   const v5 = await runV5Executor({
     centerGoal: topic,
     subGoals: [],
@@ -72,7 +80,7 @@ async function deepEnrichCuration(
     targetLevel: '',
     language: 'ko',
     includeEnCards: false,
-    excludeVideoIds: new Set<string>(),
+    excludeVideoIds: new Set(everServed.map((r) => r.video_id)),
     env: process.env,
   });
   const existing = await prisma.curation_items.findMany({
@@ -173,21 +181,50 @@ export async function registerCurationBuildWorker(): Promise<void> {
       // on video_pool_embeddings → top-N. NO live search / candidate embed / LLM picker;
       // runV5Executor's full pipeline (LLM×2 + search.list fanout + bulk embed) stalled
       // the build 20s+. ~1-2s. Thin-pool niche topics → async v5 enrichment = follow-up.
+      //
+      // Weekly novelty (2026-08-03 defect fix — measured 55~95% week-over-week
+      // repeats): the pick now carries the two constraints the weekly contract
+      // implies. 1) HISTORY EXCLUSION — anything this subscription has ever
+      // served in a PRIOR week stays out for good. 2) FRESHNESS LADDER —
+      // prefer this week's uploads, widen (7d→14d→30d→any) only while the
+      // rung cannot fill CURATION_MIN_VIDEOS.
       const [centerEmbedding] = await embedBatch([sub.topic]);
       if (!centerEmbedding) {
         log.warn('curation build: topic embed failed', { subscriptionId, topic: sub.topic });
         return;
       }
-      const matches = await matchFromVideoPoolByCenterGoal({
-        centerEmbedding,
-        subGoals: [],
-        language: 'ko',
-        limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
+      const servedBefore = await prisma.curation_items.findMany({
+        where: { subscription_id: subscriptionId, week_of: { not: new Date(weekOf) } },
+        select: { video_id: true },
+        distinct: ['video_id'],
       });
-      picked = matches.map((m) => ({
-        videoId: m.videoId,
-        relevancePct: Math.max(1, Math.min(100, Math.round((m.score ?? 0) * 100))),
-      }));
+      const served = new Set(servedBefore.map((r) => r.video_id));
+      picked = [];
+      let rungUsed: number | null = null;
+      for (const cutoff of curationFreshnessCutoffs(new Date(weekOf))) {
+        const matches = await matchFromVideoPoolByCenterGoal({
+          centerEmbedding,
+          subGoals: [],
+          language: 'ko',
+          limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
+          excludeVideoIds: served,
+          publishedAfter: cutoff,
+        });
+        picked = matches.map((m) => ({
+          videoId: m.videoId,
+          relevancePct: Math.max(1, Math.min(100, Math.round((m.score ?? 0) * 100))),
+        }));
+        rungUsed = cutoff
+          ? Math.round((new Date(weekOf).getTime() - cutoff.getTime()) / MS_PER_DAY)
+          : null;
+        if (picked.length >= QUEUE_CONFIG.CURATION_MIN_VIDEOS) break;
+      }
+      log.info('curation build (topic mode)', {
+        subscriptionId,
+        excludedHistory: served.size,
+        freshnessRungDays: rungUsed,
+        picked: picked.length,
+      });
     }
 
     // build-4 — rich-summary is REUSE-ONLY for P0. video_rich_summaries is a
