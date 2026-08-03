@@ -22,19 +22,14 @@ import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database/client';
 import { JOB_NAMES, QUEUE_CONFIG } from '../types';
 import { getJobQueue } from '../manager';
-import { Prisma } from '@prisma/client';
 import { matchFromVideoPoolByCenterGoal } from '@/skills/plugins/video-discover/v3/cache-matcher';
-import {
-  embedBatch,
-  vectorToLiteral,
-  QWEN3_EMBED_MODEL,
-} from '@/skills/plugins/iks-scorer/embedding';
-import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
+import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { config } from '../../../config';
 import { nextKstWeekdayAt } from '@/utils/kst';
 import { collectChannelUploads } from '@/modules/curation/channel-uploads';
 import { curationPickPlan } from '@/modules/curation/config';
+import { fetchFreshTopicVideos } from '@/modules/curation/weekly-fresh';
 import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 
 /**
@@ -50,18 +45,20 @@ import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube
  */
 const CHANNEL_LOOKBACK_DAYS = 7;
 
-/** Deep-pass widened retry window when the 7-day live search comes back empty
- *  (niche topics; empty-week floor, 2026-08-03). One retry only — quota. */
-const CURATION_DEEP_RETRY_DAYS = 30;
-
 const log = logger.child({ module: 'queue/curation-build' });
 
 export interface CurationBuildPayload {
   subscriptionId: string;
   /** ISO date (Monday) this build belongs to — the curation_items.week_of key. */
   weekOf: string;
-  /** Background live-search enrichment for thin-pool topics (serve-first, §fallback). */
+  /** Fresh-append pass for immediate builds (serve-first follow-up). */
   deep?: boolean;
+  /**
+   * Build context (2026-08-03 redesign): 'immediate' = create-time, a user is
+   * waiting → instant pool serve + deep follow-up. Anything else (incl. legacy
+   * in-flight jobs without the field) = weekly → fresh-first inline.
+   */
+  mode?: 'immediate' | 'weekly';
 }
 
 /**
@@ -100,6 +97,12 @@ async function servedHistory(
   return rows.map((r) => ({ videoId: r.video_id, weekOf: r.week_of }));
 }
 
+/**
+ * Fresh append for IMMEDIATE builds (the deep job): the create-time build
+ * pool-serves instantly (the #1298 rationale — a user is waiting), then this
+ * appends the week's fresh uploads behind. Weekly scheduled builds do NOT come
+ * through here — their fresh leg runs inline and FIRST (weekly-fresh.ts).
+ */
 async function deepEnrichCuration(
   subscriptionId: string,
   topic: string,
@@ -107,120 +110,40 @@ async function deepEnrichCuration(
   prisma: ReturnType<typeof getPrismaClient>,
   sub: { id: string; user_id: string; topic: string }
 ): Promise<void> {
-  // History exclusion rides the live search too (weekly-novelty fix): a video
-  // served in ANY prior week must not come back through the enrichment door.
+  // History exclusion rides the live search too: a video served in ANY prior
+  // week must not come back through the enrichment door.
   const everServed = new Set((await servedHistory(prisma, sub)).map((h) => h.videoId));
-  // Layer B (weekly supply, 2026-08-03): the live search asks for THIS WEEK'S
-  // uploads — publishedAfter = the trailing week before weekDate (the same
-  // seven-days-is-a-week rule channel mode uses). v5 internally upserts its
-  // picks into video_pool (reusePickedToPool), so each weekly deep run also
-  // feeds next week's pool rungs. Niche topics can yield zero in a 7-day
-  // window — one widened retry (30d) before accepting a quiet enrichment
-  // (empty-week floor, revised 2026-08-03).
-  const runSearch = (days: number) =>
-    runV5Executor({
-      centerGoal: topic,
-      subGoals: [],
-      focusTags: [],
-      targetLevel: '',
-      language: 'ko',
-      includeEnCards: false,
-      excludeVideoIds: everServed,
-      publishedAfter: new Date(weekDate.getTime() - days * MS_PER_DAY).toISOString(),
-      env: process.env,
-    });
-  let v5 = await runSearch(CHANNEL_LOOKBACK_DAYS);
-  if (!v5.cards.length) v5 = await runSearch(CURATION_DEEP_RETRY_DAYS);
   const existing = await prisma.curation_items.findMany({
     where: { subscription_id: subscriptionId, week_of: weekDate },
     select: { video_id: true },
   });
-  // Fresh uploads REPLACE the tail of the pool-picked week rather than only
-  // topping it up: reserve room for at least CURATION_FRESH_RESERVE items.
-  const have = new Set(existing.map((e) => e.video_id));
-  const fresh = v5.cards.filter((c) => !have.has(c.videoId));
-  let room = QUEUE_CONFIG.CURATION_TARGET_VIDEOS - existing.length;
-  if (fresh.length && room < QUEUE_CONFIG.CURATION_FRESH_RESERVE) {
-    const evict = Math.min(
-      QUEUE_CONFIG.CURATION_FRESH_RESERVE - room,
-      Math.min(fresh.length, existing.length)
-    );
-    if (evict > 0) {
-      // Evict the lowest-positioned (least relevant) unwatched pool picks.
-      const evictable = await prisma.curation_items.findMany({
-        where: { subscription_id: subscriptionId, week_of: weekDate, watched_at: null },
-        orderBy: { position: 'desc' },
-        take: evict,
-        select: { id: true },
-      });
-      if (evictable.length) {
-        await prisma.curation_items.deleteMany({
-          where: { id: { in: evictable.map((e) => e.id) } },
-        });
-        room += evictable.length;
-      }
-    }
-  }
+  for (const e of existing) everServed.add(e.video_id);
+  const room = QUEUE_CONFIG.CURATION_TARGET_VIDEOS - existing.length;
   if (room <= 0) return;
-  const tail = await prisma.curation_items.count({
-    where: { subscription_id: subscriptionId, week_of: weekDate },
+  const fresh = await fetchFreshTopicVideos({
+    topic,
+    weekDate,
+    excludeVideoIds: everServed,
+    limit: room,
   });
-  const additions = fresh.slice(0, room).map((c, i) => ({
+  if (!fresh.picks.length) {
+    log.info('curation deep enrich: no fresh uploads this window', { subscriptionId, topic });
+    return;
+  }
+  const additions = fresh.picks.map((p, i) => ({
     subscription_id: subscriptionId,
-    video_id: c.videoId,
-    relevance_pct: Math.max(1, Math.min(100, Math.round((c.score ?? 0) * 100))),
-    position: tail + i,
+    video_id: p.videoId,
+    relevance_pct: p.relevancePct,
+    position: existing.length + i,
     week_of: weekDate,
   }));
-  if (additions.length) await prisma.curation_items.createMany({ data: additions });
-  // Embed the fresh arrivals NOW (reuse-from-v5 defers embeddings, which is why
-  // the pool held 0 embedded videos published within 7d): next week's 7d KNN
-  // rung only works if this week's supply lands with vectors.
-  await embedPoolVideos(
-    prisma,
-    additions.map((a) => a.video_id)
-  );
+  await prisma.curation_items.createMany({ data: additions });
   log.info('curation deep enrich complete', {
     subscriptionId,
     topic,
     added: additions.length,
-    freshCandidates: fresh.length,
+    windowDays: fresh.windowDays,
   });
-}
-
-/**
- * Embed pool rows that arrived without vectors (reuse-from-v5 defers this).
- * Mirrors the promote-from-* embedding write: title+description text,
- * ON CONFLICT DO NOTHING, best-effort per video.
- */
-async function embedPoolVideos(
-  prisma: ReturnType<typeof getPrismaClient>,
-  videoIds: string[]
-): Promise<void> {
-  if (!videoIds.length) return;
-  try {
-    const rows = await prisma.video_pool.findMany({
-      where: { video_id: { in: videoIds } },
-      select: { video_id: true, title: true, description: true },
-    });
-    if (!rows.length) return;
-    const texts = rows.map((r) => `${r.title}\n${(r.description ?? '').slice(0, 500)}`);
-    const vecs = await embedBatch(texts);
-    for (let i = 0; i < rows.length; i++) {
-      const vec = vecs[i];
-      const row = rows[i];
-      if (!vec || vec.length === 0 || !row) continue;
-      await prisma.$executeRaw(Prisma.sql`
-        INSERT INTO public.video_pool_embeddings (video_id, embedding, text_input, model_version)
-        VALUES (${row.video_id}, ${vectorToLiteral(vec)}::vector, ${texts[i]}, ${QWEN3_EMBED_MODEL})
-        ON CONFLICT (video_id, model_version) DO NOTHING
-      `);
-    }
-  } catch (err) {
-    log.warn('curation embedPoolVideos failed (non-fatal)', {
-      error: err instanceof Error ? err.message.slice(0, 200) : String(err),
-    });
-  }
 }
 
 /** teamSize per the pg-boss trap (CP498) — explicit, low concurrency. */
@@ -295,62 +218,94 @@ export async function registerCurationBuildWorker(): Promise<void> {
         picked: picked.length,
       });
     } else {
-      // Topic mode — INSTANT pool-cosine KNN (reuses add-cards Layer1,
-      // matchFromVideoPoolByCenterGoal). Embed the topic ONCE (~0.5s) → pgvector cosine
-      // on video_pool_embeddings → top-N. NO live search / candidate embed / LLM picker;
-      // runV5Executor's full pipeline (LLM×2 + search.list fanout + bulk embed) stalled
-      // the build 20s+. ~1-2s. Thin-pool niche topics → async v5 enrichment = follow-up.
+      // Topic mode. Two build modes with different primary sources (2026-08-03
+      // redesign, restores design §6):
       //
-      // Weekly novelty + empty-week floor (2026-08-03, revised after the
-      // empty-week incident): the pick walks CURATION_PICK_RUNGS and
-      // ACCUMULATES, freshest-first, until the week is full — this week's
-      // uploads > fresh > never-served > less-aligned never-served >
-      // long-ago-served re-entry. The last rungs shrink the exclusion horizon
-      // (a month-old good video returning beats a thin week), so a niche
-      // topic can no longer drain itself to zero.
-      const [centerEmbedding] = await embedBatch([sub.topic]);
-      if (!centerEmbedding) {
-        log.warn('curation build: topic embed failed', { subscriptionId, topic: sub.topic });
-        return;
-      }
+      //   weekly (scheduled, no one waiting) — PRIMARY = live v5 search over
+      //   THIS WEEK'S uploads (fetchFreshTopicVideos: fit-gated, pool-upserted
+      //   = render-safe, embedded best-effort). The pool rungs only FILL the
+      //   remainder. The #1298 pool-KNN swap was justified by the CREATE-time
+      //   wait ("curation building never finished") — a constraint the weekly
+      //   background path never had.
+      //
+      //   immediate (create-time, user waiting) — instant pool-KNN serve as
+      //   #1298 shipped it; the fresh leg follows via the deep job.
+      //
+      // Both accumulate through CURATION_PICK_RUNGS with history exclusion and
+      // the shrinking-horizon floor (empty-week incident, same day) so a niche
+      // topic can neither repeat itself nor drain to zero.
       const history = await servedHistory(prisma, sub, new Date(weekOf));
-      const plan = curationPickPlan(new Date(weekOf));
       const acc = new Map<string, { videoId: string; relevancePct: number }>();
-      const rungStats: Array<{ rung: number; added: number }> = [];
-      for (let r = 0; r < plan.length; r++) {
-        if (acc.size >= QUEUE_CONFIG.CURATION_TARGET_VIDEOS) break;
-        const step = plan[r]!;
-        const excluded = new Set(acc.keys());
-        for (const h of history) {
-          if (!step.exclusionAfter || h.weekOf >= step.exclusionAfter) excluded.add(h.videoId);
-        }
-        const matches = await matchFromVideoPoolByCenterGoal({
-          centerEmbedding,
-          subGoals: [],
-          language: 'ko',
+      const isWeekly = job.data.mode !== 'immediate';
+      let freshMeta: { windowDays: number; fitDropped: number; picks: number } | null = null;
+      if (isWeekly) {
+        const everServed = new Set(history.map((h) => h.videoId));
+        const fresh = await fetchFreshTopicVideos({
+          topic: sub.topic,
+          weekDate: new Date(weekOf),
+          excludeVideoIds: everServed,
           limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
-          threshold: step.threshold,
-          excludeVideoIds: excluded,
-          publishedAfter: step.publishedAfter,
         });
-        let added = 0;
-        for (const m of matches) {
-          if (acc.size >= QUEUE_CONFIG.CURATION_TARGET_VIDEOS) break;
-          if (acc.has(m.videoId)) continue;
-          acc.set(m.videoId, {
-            videoId: m.videoId,
-            relevancePct: Math.max(1, Math.min(100, Math.round((m.score ?? 0) * 100))),
-          });
-          added += 1;
+        for (const p of fresh.picks) acc.set(p.videoId, p);
+        freshMeta = {
+          windowDays: fresh.windowDays,
+          fitDropped: fresh.fitDropped,
+          picks: fresh.picks.length,
+        };
+      }
+      if (acc.size < QUEUE_CONFIG.CURATION_TARGET_VIDEOS) {
+        const [centerEmbedding] = await embedBatch([sub.topic]);
+        if (!centerEmbedding && acc.size === 0) {
+          log.warn('curation build: topic embed failed', { subscriptionId, topic: sub.topic });
+          return;
         }
-        if (added) rungStats.push({ rung: r, added });
+        if (centerEmbedding) {
+          const plan = curationPickPlan(new Date(weekOf));
+          const rungStats: Array<{ rung: number; added: number }> = [];
+          for (let r = 0; r < plan.length; r++) {
+            if (acc.size >= QUEUE_CONFIG.CURATION_TARGET_VIDEOS) break;
+            const step = plan[r]!;
+            const excluded = new Set(acc.keys());
+            for (const h of history) {
+              if (!step.exclusionAfter || h.weekOf >= step.exclusionAfter) excluded.add(h.videoId);
+            }
+            const matches = await matchFromVideoPoolByCenterGoal({
+              centerEmbedding,
+              subGoals: [],
+              language: 'ko',
+              limit: QUEUE_CONFIG.CURATION_TARGET_VIDEOS,
+              threshold: step.threshold,
+              excludeVideoIds: excluded,
+              publishedAfter: step.publishedAfter,
+            });
+            let added = 0;
+            for (const m of matches) {
+              if (acc.size >= QUEUE_CONFIG.CURATION_TARGET_VIDEOS) break;
+              if (acc.has(m.videoId)) continue;
+              acc.set(m.videoId, {
+                videoId: m.videoId,
+                relevancePct: Math.max(1, Math.min(100, Math.round((m.score ?? 0) * 100))),
+              });
+              added += 1;
+            }
+            if (added) rungStats.push({ rung: r, added });
+          }
+          if (rungStats.length) log.info('curation pool fill', { subscriptionId, rungStats });
+        }
       }
       picked = Array.from(acc.values());
+      // The weekly contract, finally measurable: how much of the week is new.
+      const histSet = new Set(history.map((h) => h.videoId));
+      const repeats = picked.filter((p) => histSet.has(p.videoId)).length;
       log.info('curation build (topic mode)', {
         subscriptionId,
+        buildMode: isWeekly ? 'weekly' : 'immediate',
         historySize: history.length,
-        rungStats,
+        fresh: freshMeta,
         picked: picked.length,
+        weeklyNoveltyPct: picked.length
+          ? Math.round(((picked.length - repeats) / picked.length) * 100)
+          : null,
       });
     }
 
@@ -414,9 +369,11 @@ export async function registerCurationBuildWorker(): Promise<void> {
     // NEVER in channel mode: a quiet week there is the honest answer (§2-d), and
     // topping it up with discovered videos would put channels in the feed that
     // the user did not follow — the exact thing this mode exists to prevent.
-    if (!channelMode) {
+    // Fresh follow-up is only needed for IMMEDIATE builds (the weekly path ran
+    // its fresh leg inline and first). Channel mode never (§2-d honest quiet week).
+    if (!channelMode && job.data.mode === 'immediate') {
       await enqueueCurationBuild(
-        { subscriptionId, weekOf, deep: true },
+        { subscriptionId, weekOf, deep: true, mode: 'immediate' },
         { singletonKey: `${subscriptionId}:deep` }
       );
     }

@@ -272,9 +272,12 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
 
     // "immediate" — first build enqueued at create time (not waiting for weekly cron).
+    // mode:'immediate' = a user is WAITING: instant pool serve + fresh follow-up
+    // (the weekly scheduled path runs its fresh leg inline instead).
     const jobId = await enqueueCurationBuild({
       subscriptionId: sub.id,
       weekOf: mondayOf(now),
+      mode: 'immediate',
     });
 
     // Reinforcement (N1): mark this topic SELECTED in the current week's proposal log
@@ -499,7 +502,11 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // until next Monday reads as a broken feature, and it was: a curation
       // built with one channel kept showing only that channel's week after a
       // second was added.
-      await enqueueCurationBuild({ subscriptionId: owned.id, weekOf: mondayOf(new Date()) });
+      await enqueueCurationBuild({
+        subscriptionId: owned.id,
+        weekOf: mondayOf(new Date()),
+        mode: 'immediate',
+      });
 
       return reply.send({ status: 'ok', data: { channel: row } });
     }
@@ -521,7 +528,11 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
       // Unfollowing has to take that channel's videos out of the week too,
       // otherwise the feed keeps delivering a channel the user just dropped.
-      await enqueueCurationBuild({ subscriptionId: owned.id, weekOf: mondayOf(new Date()) });
+      await enqueueCurationBuild({
+        subscriptionId: owned.id,
+        weekOf: mondayOf(new Date()),
+        mode: 'immediate',
+      });
       return reply.send({ status: 'ok', data: { removed: removed.count } });
     }
   );

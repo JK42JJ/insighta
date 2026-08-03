@@ -18,6 +18,8 @@
 
 import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database/client';
+import { MS_PER_DAY } from '@/utils/time-constants';
+import { CURATION_POOL_EXPIRES_DAYS } from './weekly-fresh';
 import {
   QUALITY_GOLD_VIEW_COUNT,
   QUALITY_SILVER_VIEW_COUNT,
@@ -158,6 +160,10 @@ async function storeUploadsInPool(
       thumbnail_url: thumbs['high']?.url ?? thumbs['medium']?.url ?? thumbs['default']?.url ?? null,
       is_active: true,
       refreshed_at: new Date(),
+      // Referenced-row longevity (2026-08-03): curation_items render via a pool
+      // join, and the default 30d TTL was deactivating rows under past weeks —
+      // the "inactive 191 items" class this file's backfill sibling repairs.
+      expires_at: new Date(Date.now() + CURATION_POOL_EXPIRES_DAYS * MS_PER_DAY),
     };
     try {
       await prisma.video_pool.upsert({

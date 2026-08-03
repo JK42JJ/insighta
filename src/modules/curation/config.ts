@@ -83,13 +83,14 @@ export interface CurationPickRung {
 }
 
 export const CURATION_PICK_RUNGS: readonly CurationPickRung[] = Object.freeze([
+  // Trimmed 2026-08-03 (same-day v3 redesign): freshness is now the weekly
+  // fresh leg's job (live v5, weekly-fresh.ts) — the pool rungs FILL. One
+  // fresh-pool rung stays first so embedded fresh supply (from prior fresh
+  // legs) is still preferred over the back catalog.
   { freshDays: 7, threshold: 0.5, exclusionWeeks: null },
-  { freshDays: 14, threshold: 0.5, exclusionWeeks: null },
-  { freshDays: 30, threshold: 0.5, exclusionWeeks: null },
   { freshDays: null, threshold: 0.5, exclusionWeeks: null },
   { freshDays: null, threshold: 0.35, exclusionWeeks: null },
   { freshDays: null, threshold: 0.35, exclusionWeeks: 4 },
-  { freshDays: null, threshold: 0.2, exclusionWeeks: 4 },
 ]);
 
 /** Concrete per-week plan: rungs resolved to dates against the week's Monday. */
