@@ -2202,6 +2202,8 @@
     }catch(e){}
   }
   if(DIAG){
+    // Real-path nav driver for motion verification (harness + on-device console).
+    try{ window.__show=function(n){ show(n); }; }catch(e){}
     // ① tap latency: only slow taps (>120ms) — quiet on a healthy device
     var _pdT=0;
     document.addEventListener('pointerdown',function(){ _pdT=performance.now(); },{capture:true,passive:true});
@@ -2337,18 +2339,28 @@
     var dTo  =(NAV_DEPTH[n]  ===undefined)?1:NAV_DEPTH[n];
     var popping=dTo<dFrom;
     var from=scr[cur], to=scr[n];
-    // The arriving screen has to be placed on its start edge BEFORE it is shown,
-    // or it animates from wherever it was left and the first frame is wrong.
+    // The arriving screen has to be placed on its start edge BEFORE it is shown.
+    // A forced reflow alone does NOT do that: with the transition live, the class
+    // flip retargets FROM the current value (measured: pop committed at +390, so
+    // the returning screen entered from the right like a push). Teleport needs the
+    // transition suspended for that one recalc; the jump is invisible because the
+    // z-order below keeps the incoming pop screen under the outgoing one.
     to.classList.remove('leaving');
     to.classList.toggle('pop', popping);
-    void to.offsetWidth;                       // commit that position, then animate
+    to.style.transition='none';
+    void to.offsetWidth;                       // commit that position without animating
+    to.style.transition='';
+    // Stacking must follow direction, not DOM order: push covers (incoming on
+    // top), pop reveals (incoming underneath).
+    to.style.zIndex=popping?'1':'3';
+    from.style.zIndex=popping?'3':'1';
     from.classList.remove('active');
     from.classList.toggle('pop', popping);
     from.classList.add('leaving');
     cur=n; to.classList.add('active');
     // Park the screen we left once it is out of sight, so it is not a live layer.
     clearTimeout(show._t);
-    show._t=setTimeout(function(){ from.classList.remove('leaving','pop'); }, NAV_SETTLE_MS);
+    show._t=setTimeout(function(){ from.classList.remove('leaving','pop'); from.style.zIndex=''; to.style.zIndex=''; }, NAV_SETTLE_MS);
     // Slider bead lives outside .scr now (sibling of .epaper); show it home-only.
     var _hsl=document.getElementById('hsl'); if(_hsl) _hsl.style.visibility=(n==='home')?'visible':'hidden';
     var _gf=document.getElementById('gearFab'); if(_gf) _gf.style.visibility=(n==='home')?'visible':'hidden';
