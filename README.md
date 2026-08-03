@@ -83,6 +83,13 @@ Embeddings live in Postgres (`video_pool_embeddings`,
 `mandala_embeddings`). No separate vector database; no separate operational
 surface to run.
 
+**Mobile dial — one wheel, one hand** (`frontend/public/mobile/`)
+A PWA where a single jog wheel drives everything: each detent steps
+between videos or within-video sections, and per-section relevance is
+drawn directly on the video as a quiet overlay that wakes and sleeps with
+the player chrome — the same relevance language as the desktop learning
+page.
+
 **v4 LLM-arbiter — exploration in progress**
 A three-model arbiter (Haiku / Sonnet / Gemini) that compares and scores
 candidates is under measurement: quality, cost, and latency. Not deployed

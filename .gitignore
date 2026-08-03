@@ -15,7 +15,6 @@ build/
 .env.production
 .env.docker.local
 .env.docker
-.env.example
 .env.production.example
 .env.*-tmp
 
