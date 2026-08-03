@@ -60,19 +60,44 @@ export interface CurationBuildPayload {
  * already served; this runs the (slow but async) live v5 search and APPENDS new videos
  * to the week — never blocks the user. Serve-first pattern.
  */
+/**
+ * Everything this user has been served for this topic, across the WHOLE
+ * subscription family (legacy duplicate rows were deactivated 2026-08-03, but
+ * their items are history too — a repeat through a deactivated twin is still
+ * a repeat to the user). `excludeWeekOf` keeps the current week rebuildable.
+ */
+async function servedHistory(
+  prisma: ReturnType<typeof getPrismaClient>,
+  sub: { id: string; user_id: string; topic: string },
+  excludeWeekOf?: Date
+): Promise<Set<string>> {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const siblings = await prisma.curation_subscriptions.findMany({
+    where: { user_id: sub.user_id },
+    select: { id: true, topic: true },
+  });
+  const familyIds = siblings.filter((s) => norm(s.topic) === norm(sub.topic)).map((s) => s.id);
+  const rows = await prisma.curation_items.findMany({
+    where: {
+      subscription_id: { in: familyIds.length ? familyIds : [sub.id] },
+      ...(excludeWeekOf ? { week_of: { not: excludeWeekOf } } : {}),
+    },
+    select: { video_id: true },
+    distinct: ['video_id'],
+  });
+  return new Set(rows.map((r) => r.video_id));
+}
+
 async function deepEnrichCuration(
   subscriptionId: string,
   topic: string,
   weekDate: Date,
-  prisma: ReturnType<typeof getPrismaClient>
+  prisma: ReturnType<typeof getPrismaClient>,
+  sub: { id: string; user_id: string; topic: string }
 ): Promise<void> {
   // History exclusion rides the live search too (weekly-novelty fix): a video
   // served in ANY prior week must not come back through the enrichment door.
-  const everServed = await prisma.curation_items.findMany({
-    where: { subscription_id: subscriptionId },
-    select: { video_id: true },
-    distinct: ['video_id'],
-  });
+  const everServed = await servedHistory(prisma, sub);
   const v5 = await runV5Executor({
     centerGoal: topic,
     subGoals: [],
@@ -80,7 +105,7 @@ async function deepEnrichCuration(
     targetLevel: '',
     language: 'ko',
     includeEnCards: false,
-    excludeVideoIds: new Set(everServed.map((r) => r.video_id)),
+    excludeVideoIds: everServed,
     env: process.env,
   });
   const existing = await prisma.curation_items.findMany({
@@ -133,7 +158,7 @@ export async function registerCurationBuildWorker(): Promise<void> {
     // Background enrichment pass (thin-pool topics) — append live-search results, don't
     // touch cadence or replace the week. The fast pool result is already live.
     if (job.data.deep) {
-      await deepEnrichCuration(subscriptionId, sub.topic, new Date(weekOf), prisma);
+      await deepEnrichCuration(subscriptionId, sub.topic, new Date(weekOf), prisma, sub);
       return;
     }
 
@@ -193,12 +218,7 @@ export async function registerCurationBuildWorker(): Promise<void> {
         log.warn('curation build: topic embed failed', { subscriptionId, topic: sub.topic });
         return;
       }
-      const servedBefore = await prisma.curation_items.findMany({
-        where: { subscription_id: subscriptionId, week_of: { not: new Date(weekOf) } },
-        select: { video_id: true },
-        distinct: ['video_id'],
-      });
-      const served = new Set(servedBefore.map((r) => r.video_id));
+      const served = await servedHistory(prisma, sub, new Date(weekOf));
       picked = [];
       let rungUsed: number | null = null;
       for (const cutoff of curationFreshnessCutoffs(new Date(weekOf))) {

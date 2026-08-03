@@ -229,18 +229,40 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         data: { tier, limit, current: distinctTopics },
       });
     }
-    const sub = await prisma.curation_subscriptions.create({
-      data: {
-        user_id: userId,
-        topic,
-        cadence: 'weekly',
-        source,
-        mandala_id: mandalaId,
-        is_active: true,
-        // recurring weekly refresh starts a week out; the FIRST build runs now.
-        next_run_at: new Date(now.getTime() + 7 * MS_PER_DAY),
-      },
-    });
+    let sub;
+    try {
+      sub = await prisma.curation_subscriptions.create({
+        data: {
+          user_id: userId,
+          topic,
+          cadence: 'weekly',
+          source,
+          mandala_id: mandalaId,
+          is_active: true,
+          // recurring weekly refresh starts a week out; the FIRST build runs now.
+          next_run_at: new Date(now.getTime() + 7 * MS_PER_DAY),
+        },
+      });
+    } catch (e: unknown) {
+      // uq_curation_subs_user_topic_active backstop: a concurrent create for the
+      // same normalised topic won the race — return the winner, same as the
+      // app-level dedup above would have.
+      if ((e as { code?: string }).code === 'P2002') {
+        const winner = (
+          await prisma.curation_subscriptions.findMany({
+            where: { user_id: userId, is_active: true },
+            select: { id: true, topic: true, source: true },
+          })
+        ).find((s) => norm(s.topic) === norm(topic));
+        if (winner) {
+          return reply.send({
+            status: 'ok',
+            data: { id: winner.id, topic: winner.topic, source: winner.source, buildJobId: null },
+          });
+        }
+      }
+      throw e;
+    }
 
     // The channel row must exist BEFORE the first build is enqueued: the builder
     // decides between channel and topic mode by whether any channels are
