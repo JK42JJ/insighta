@@ -36,6 +36,8 @@
     --cf-skel:#1B1A1F; --cf-skel-hi:#2A2830;
     /* S3: 물성 공통 토큰 — 전 표면 동일 계열 */
     --soft:cubic-bezier(.22,.9,.3,1); --spring:cubic-bezier(.34,1.4,.64,1); --snap:120ms;
+    /* Navigation. iOS's own: arriving decelerates hard, leaving accelerates away. */
+    --nav-dur:340ms; --nav-in:cubic-bezier(.32,.72,0,1); --nav-out:cubic-bezier(.4,0,.6,1);
     --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
   }
   *{box-sizing:border-box}
@@ -134,9 +136,51 @@
       0 1.5px 0 rgba(255,255,255,.9);
     color:var(--paper-ink);
   }
+  /* ===== Screen transitions ================================================
+     These used to cross-fade: both screens semi-transparent at once, sliding
+     14px -- three percent of the width. Two things follow from that. Nothing
+     ever occludes anything, so there is no answer to "which one is on top",
+     and 14px is a twitch rather than a movement. Together they read as paper
+     shuffling, which is the light feeling: a web page changing, not an app
+     moving between places.
+
+     A native push is opaque and full-width. The arriving screen covers the one
+     it replaces, and the one being left slides a shorter distance the other way
+     and darkens -- the parallax IS the depth cue, and it is what the eye reads
+     as one surface sitting above another. Direction carries meaning too: going
+     deeper enters from the right, coming back leaves to the right, and the
+     ordering below is what tells them apart.
+
+     Distances and curve are iOS's: 100% in, 28% out, 340ms, and separate
+     easings -- arriving decelerates, leaving accelerates. Only transform and
+     opacity animate, so each screen stays one composited layer. */
   .scr{position:absolute; inset:0; display:flex; flex-direction:column; padding:15px 16px 14px;
     opacity:0; transform:translateX(14px); transition:opacity .32s var(--soft), transform .32s var(--soft); pointer-events:none}
   .scr.active{opacity:1; transform:none; pointer-events:auto}
+  /* mnav flag = the native-motion grammar above, dark-shipped (deploy != release:
+     login lives on prod only, so the device pass must happen there). Default
+     stays the old crossfade; ?mnav=1 opts a device in (localStorage-persisted,
+     ?mnav=0 clears). The default flips and the flag retires after the pass. */
+  body.mnav .scr{opacity:1; background:var(--paper);
+    transform:translateX(100%);
+    transition:transform var(--nav-dur) var(--nav-in), filter var(--nav-dur) linear}
+  /* Promote only the two screens actually moving (active enters, leaving exits);
+     a base-rule will-change would pin all six full-viewport screens as composited
+     layers forever — on low-RAM iOS that layer churn is itself a flicker source. */
+  body.mnav .scr.active,body.mnav .scr.leaving{will-change:transform}
+  body.mnav .scr.active{transform:none}
+  /* Leaving: a shorter travel the other way, and dimmed, so it reads as going
+     underneath rather than away. */
+  body.mnav .scr.leaving{transform:translateX(-28%); filter:brightness(.84);
+    transition:transform var(--nav-dur) var(--nav-out), filter var(--nav-dur) linear}
+  /* Coming back reverses both roles. */
+  body.mnav .scr.pop{transform:translateX(-28%); filter:brightness(.84)}
+  body.mnav .scr.pop.active{transform:none; filter:none}
+  body.mnav .scr.leaving.pop{transform:translateX(100%); filter:none}
+  @media (prefers-reduced-motion:reduce){
+    body.mnav .scr,body.mnav .scr.active,body.mnav .scr.leaving,body.mnav .scr.pop{transition:opacity .12s linear; transform:none; filter:none}
+    body.mnav .scr{opacity:0} body.mnav .scr.active{opacity:1}
+  }
 
   /* 상태줄 — §1.1b: 10px / .14em */
   .top{display:flex; justify-content:space-between; align-items:center; gap:8px;
@@ -2131,7 +2175,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-03-92';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-03-93';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
 
   /* ===== diag probe (build 89) — opt-in instability triage, OFF by default.
@@ -2149,6 +2193,15 @@
       return localStorage.getItem('dialDiag')==='1';
     }catch(e){ return false; }
   })();
+  /* mnav flag — native-motion canary (deploy != release). Same opt-in shape as
+     diag: ?mnav=1 persists via localStorage so the standalone launch keeps it,
+     ?mnav=0 clears. Flag off = shipped behavior, byte-identical. */
+  try{
+    var _mq=location.search+location.hash;
+    if(/[?#&]mnav=1/.test(_mq)) localStorage.setItem('dialMnav','1');
+    if(/[?#&]mnav=0/.test(_mq)) localStorage.removeItem('dialMnav');
+    if(localStorage.getItem('dialMnav')==='1') document.body.classList.add('mnav');
+  }catch(e){}
   var diagBuf=[], diagEl=null;
   function diag(tag,msg){
     if(!DIAG) return;
@@ -2161,6 +2214,8 @@
     }catch(e){}
   }
   if(DIAG){
+    // Real-path nav driver for motion verification (harness + on-device console).
+    try{ window.__show=function(n){ show(n); }; }catch(e){}
     // ① tap latency: only slow taps (>120ms) — quiet on a healthy device
     var _pdT=0;
     document.addEventListener('pointerdown',function(){ _pdT=performance.now(); },{capture:true,passive:true});
@@ -2267,6 +2322,7 @@
     var b=document.getElementById('boot'); if(!b) return;
     b.style.opacity='0'; setTimeout(function(){ if(b.parentNode) b.parentNode.removeChild(b); },420);
   }
+  var NAV_SETTLE_MS=380;   // just past --nav-dur, so the class drops after the paint
   function show(n){
     bootDone();
     // ④ re-entry probe: a second nav inside the .32s transition window is the
@@ -2284,8 +2340,45 @@
     if(cur==='news'&&n!=='news'&&typeof clearNewsTimers==='function'){ clearNewsTimers(); } // stop countdown intervals on leave (no leak)
     if(n!=='player'){ document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true; } // 읽기 모드 = 플레이어 전용
     if(n===cur) return;
-    scr[cur].classList.remove('active');
-    cur=n; scr[cur].classList.add('active');
+    /* Depth order. A transition only means something if it knows which way it is
+       going: entering a deeper place comes from the right, coming back leaves to
+       the right. Home is the floor; login sits below it because arriving at the
+       app from login is coming UP, not going deeper. Anything unlisted is
+       treated as one level in, which is the safe default -- an unknown screen
+       pushes rather than popping into nowhere. */
+    var from=scr[cur], to=scr[n];
+    if(!document.body.classList.contains('mnav')){
+      // flag off = the shipped crossfade, byte-identical behavior
+      from.classList.remove('active');
+      cur=n; to.classList.add('active');
+    } else {
+    var NAV_DEPTH={login:-1, home:0, menu:1, news:1, invite:1, player:2};
+    var dFrom=(NAV_DEPTH[cur]===undefined)?1:NAV_DEPTH[cur];
+    var dTo  =(NAV_DEPTH[n]  ===undefined)?1:NAV_DEPTH[n];
+    var popping=dTo<dFrom;
+    // The arriving screen has to be placed on its start edge BEFORE it is shown.
+    // A forced reflow alone does NOT do that: with the transition live, the class
+    // flip retargets FROM the current value (measured: pop committed at +390, so
+    // the returning screen entered from the right like a push). Teleport needs the
+    // transition suspended for that one recalc; the jump is invisible because the
+    // z-order below keeps the incoming pop screen under the outgoing one.
+    to.classList.remove('leaving');
+    to.classList.toggle('pop', popping);
+    to.style.transition='none';
+    void to.offsetWidth;                       // commit that position without animating
+    to.style.transition='';
+    // Stacking must follow direction, not DOM order: push covers (incoming on
+    // top), pop reveals (incoming underneath).
+    to.style.zIndex=popping?'1':'3';
+    from.style.zIndex=popping?'3':'1';
+    from.classList.remove('active');
+    from.classList.toggle('pop', popping);
+    from.classList.add('leaving');
+    cur=n; to.classList.add('active');
+    // Park the screen we left once it is out of sight, so it is not a live layer.
+    clearTimeout(show._t);
+    show._t=setTimeout(function(){ from.classList.remove('leaving','pop'); from.style.zIndex=''; to.style.zIndex=''; }, NAV_SETTLE_MS);
+    }
     // Slider bead lives outside .scr now (sibling of .epaper); show it home-only.
     var _hsl=document.getElementById('hsl'); if(_hsl) _hsl.style.visibility=(n==='home')?'visible':'hidden';
     var _gf=document.getElementById('gearFab'); if(_gf) _gf.style.visibility=(n==='home')?'visible':'hidden';
