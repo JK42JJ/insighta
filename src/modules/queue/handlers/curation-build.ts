@@ -22,8 +22,13 @@ import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database/client';
 import { JOB_NAMES, QUEUE_CONFIG } from '../types';
 import { getJobQueue } from '../manager';
+import { Prisma } from '@prisma/client';
 import { matchFromVideoPoolByCenterGoal } from '@/skills/plugins/video-discover/v3/cache-matcher';
-import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
+import {
+  embedBatch,
+  vectorToLiteral,
+  QWEN3_EMBED_MODEL,
+} from '@/skills/plugins/iks-scorer/embedding';
 import { runV5Executor } from '@/skills/plugins/video-discover/v5/executor';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { config } from '../../../config';
@@ -98,6 +103,11 @@ async function deepEnrichCuration(
   // History exclusion rides the live search too (weekly-novelty fix): a video
   // served in ANY prior week must not come back through the enrichment door.
   const everServed = await servedHistory(prisma, sub);
+  // Layer B (weekly supply, 2026-08-03): the live search asks for THIS WEEK'S
+  // uploads — publishedAfter = the trailing week before weekDate (the same
+  // seven-days-is-a-week rule channel mode uses). v5 internally upserts its
+  // picks into video_pool (reusePickedToPool), so each weekly deep run also
+  // feeds next week's pool rungs.
   const v5 = await runV5Executor({
     centerGoal: topic,
     subGoals: [],
@@ -106,27 +116,99 @@ async function deepEnrichCuration(
     language: 'ko',
     includeEnCards: false,
     excludeVideoIds: everServed,
+    publishedAfter: new Date(weekDate.getTime() - CHANNEL_LOOKBACK_DAYS * MS_PER_DAY).toISOString(),
     env: process.env,
   });
   const existing = await prisma.curation_items.findMany({
     where: { subscription_id: subscriptionId, week_of: weekDate },
     select: { video_id: true },
   });
-  const room = QUEUE_CONFIG.CURATION_TARGET_VIDEOS - existing.length;
-  if (room <= 0) return;
+  // Fresh uploads REPLACE the tail of the pool-picked week rather than only
+  // topping it up: reserve room for at least CURATION_FRESH_RESERVE items.
   const have = new Set(existing.map((e) => e.video_id));
-  const additions = v5.cards
-    .filter((c) => !have.has(c.videoId))
-    .slice(0, room)
-    .map((c, i) => ({
-      subscription_id: subscriptionId,
-      video_id: c.videoId,
-      relevance_pct: Math.max(1, Math.min(100, Math.round((c.score ?? 0) * 100))),
-      position: existing.length + i,
-      week_of: weekDate,
-    }));
+  const fresh = v5.cards.filter((c) => !have.has(c.videoId));
+  let room = QUEUE_CONFIG.CURATION_TARGET_VIDEOS - existing.length;
+  if (fresh.length && room < QUEUE_CONFIG.CURATION_FRESH_RESERVE) {
+    const evict = Math.min(
+      QUEUE_CONFIG.CURATION_FRESH_RESERVE - room,
+      Math.min(fresh.length, existing.length)
+    );
+    if (evict > 0) {
+      // Evict the lowest-positioned (least relevant) unwatched pool picks.
+      const evictable = await prisma.curation_items.findMany({
+        where: { subscription_id: subscriptionId, week_of: weekDate, watched_at: null },
+        orderBy: { position: 'desc' },
+        take: evict,
+        select: { id: true },
+      });
+      if (evictable.length) {
+        await prisma.curation_items.deleteMany({
+          where: { id: { in: evictable.map((e) => e.id) } },
+        });
+        room += evictable.length;
+      }
+    }
+  }
+  if (room <= 0) return;
+  const tail = await prisma.curation_items.count({
+    where: { subscription_id: subscriptionId, week_of: weekDate },
+  });
+  const additions = fresh.slice(0, room).map((c, i) => ({
+    subscription_id: subscriptionId,
+    video_id: c.videoId,
+    relevance_pct: Math.max(1, Math.min(100, Math.round((c.score ?? 0) * 100))),
+    position: tail + i,
+    week_of: weekDate,
+  }));
   if (additions.length) await prisma.curation_items.createMany({ data: additions });
-  log.info('curation deep enrich complete', { subscriptionId, topic, added: additions.length });
+  // Embed the fresh arrivals NOW (reuse-from-v5 defers embeddings, which is why
+  // the pool held 0 embedded videos published within 7d): next week's 7d KNN
+  // rung only works if this week's supply lands with vectors.
+  await embedPoolVideos(
+    prisma,
+    additions.map((a) => a.video_id)
+  );
+  log.info('curation deep enrich complete', {
+    subscriptionId,
+    topic,
+    added: additions.length,
+    freshCandidates: fresh.length,
+  });
+}
+
+/**
+ * Embed pool rows that arrived without vectors (reuse-from-v5 defers this).
+ * Mirrors the promote-from-* embedding write: title+description text,
+ * ON CONFLICT DO NOTHING, best-effort per video.
+ */
+async function embedPoolVideos(
+  prisma: ReturnType<typeof getPrismaClient>,
+  videoIds: string[]
+): Promise<void> {
+  if (!videoIds.length) return;
+  try {
+    const rows = await prisma.video_pool.findMany({
+      where: { video_id: { in: videoIds } },
+      select: { video_id: true, title: true, description: true },
+    });
+    if (!rows.length) return;
+    const texts = rows.map((r) => `${r.title}\n${(r.description ?? '').slice(0, 500)}`);
+    const vecs = await embedBatch(texts);
+    for (let i = 0; i < rows.length; i++) {
+      const vec = vecs[i];
+      const row = rows[i];
+      if (!vec || vec.length === 0 || !row) continue;
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO public.video_pool_embeddings (video_id, embedding, text_input, model_version)
+        VALUES (${row.video_id}, ${vectorToLiteral(vec)}::vector, ${texts[i]}, ${QWEN3_EMBED_MODEL})
+        ON CONFLICT (video_id, model_version) DO NOTHING
+      `);
+    }
+  } catch (err) {
+    log.warn('curation embedPoolVideos failed (non-fatal)', {
+      error: err instanceof Error ? err.message.slice(0, 200) : String(err),
+    });
+  }
 }
 
 /** teamSize per the pg-boss trap (CP498) — explicit, low concurrency. */
@@ -286,14 +368,16 @@ export async function registerCurationBuildWorker(): Promise<void> {
         : []),
     ]);
 
-    // Thin pool (niche topic) → enqueue a background live-search enrichment (serve-first:
-    // the fast pool result is already served; v5 appends more behind). Separate singleton
-    // key so it doesn't collide with the weekly/immediate fast build.
+    // Topic mode ALWAYS enqueues the deep pass now (weekly supply, 2026-08-03):
+    // it is no longer just a thin-pool fallback — it is where this week's
+    // uploads actually come from (v5 live search with publishedAfter=7d,
+    // CURATION_FRESH_RESERVE slots guaranteed). Serve-first: the instant pool
+    // result is already live; fresh uploads append/replace minutes later.
     //
     // NEVER in channel mode: a quiet week there is the honest answer (§2-d), and
     // topping it up with discovered videos would put channels in the feed that
     // the user did not follow — the exact thing this mode exists to prevent.
-    if (!channelMode && picked.length < QUEUE_CONFIG.CURATION_MIN_VIDEOS) {
+    if (!channelMode) {
       await enqueueCurationBuild(
         { subscriptionId, weekOf, deep: true },
         { singletonKey: `${subscriptionId}:deep` }
