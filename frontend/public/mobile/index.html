@@ -1653,10 +1653,9 @@
     body.curdeck .cf-card.cf-playing .cf-mound{
       left:calc(env(safe-area-inset-left, 0px) + 24px);
       right:calc(env(safe-area-inset-right, 0px) + 24px);
-      bottom:68px}  /* device-corrected (08-03 screenshot): 96 rendered the hill
-        bases ~35pt ABOVE the red bar (an unmodeled ~28pt landscape offset —
-        computed target was right, rendered seat was not). 68 = 96 minus the
-        measured delta, seating the hills just above the bar. Re-verify on device. */
+      bottom:74px}  /* two-point device calibration (08-03): 96 floated ~35pt
+        high, 68 overlapped the bar by ~5pt. 74 interpolates the hill bases
+        onto the bar top (touching, not overlapping). */
     /* The mute chip STAYS. Hiding it with the rest of the portrait furniture
        left landscape playing silently with nothing to press. Moved clear of
        YouTube's bottom bar and its own progress scrubber. */
@@ -2122,7 +2121,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-03-86';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-03-87';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
