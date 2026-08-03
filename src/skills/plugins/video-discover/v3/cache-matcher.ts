@@ -212,6 +212,14 @@ export interface MatchByCenterGoalOpts {
   threshold?: number;
   /** Same default + override semantics as `matchFromVideoPool`. */
   sources?: ReadonlyArray<string>;
+  /**
+   * Video ids to keep OUT of the result (curation weekly-novelty, 2026-08-03:
+   * a subscription's already-served history). Plain CTE predicate — the CP467
+   * planner poison was the cosine-expression WHERE, not column filters.
+   */
+  excludeVideoIds?: ReadonlySet<string>;
+  /** Only admit videos published at/after this instant (weekly freshness). */
+  publishedAfter?: Date;
 }
 
 interface CenterMatchRow {
@@ -250,6 +258,17 @@ export async function matchFromVideoPoolByCenterGoal(
   const limit = opts.limit ?? 64;
   const threshold = opts.threshold ?? DEFAULT_RELEVANCE_THRESHOLD;
   const sources = opts.sources ?? ['v2_promoted'];
+  // Over-fetch so the post-fetch threshold gate cannot leave the caller short:
+  // LIMIT-then-filter used to return e.g. 17/20 with no refill (curation
+  // device report 2026-08-03). Bounded ×2 keeps the ANN top-k path cheap.
+  const fetchLimit = limit * 2;
+  const excludeIds = opts.excludeVideoIds ? Array.from(opts.excludeVideoIds) : [];
+  const publishedFilter = opts.publishedAfter
+    ? Prisma.sql`AND published_at >= ${opts.publishedAfter}`
+    : Prisma.empty;
+  const excludeFilter = excludeIds.length
+    ? Prisma.sql`AND NOT (video_id = ANY(${excludeIds}::text[]))`
+    : Prisma.empty;
   const db = getPrismaClient();
   const t0 = Date.now();
 
@@ -276,6 +295,8 @@ export async function matchFromVideoPoolByCenterGoal(
         AND language = ${opts.language}
         AND quality_tier IN ('gold', 'silver')
         AND source = ANY(${sources}::text[])
+        ${publishedFilter}
+        ${excludeFilter}
     )
     SELECT
       e.video_id,
@@ -293,12 +314,13 @@ export async function matchFromVideoPoolByCenterGoal(
     JOIN public.video_pool_embeddings vpe
       ON vpe.video_id = e.video_id
     ORDER BY vpe.embedding <=> ${vectorLiteral}::vector ASC
-    LIMIT ${limit}
+    LIMIT ${fetchLimit}
   `);
 
   // Post-fetch threshold gate — preserves semantic floor without
-  // poisoning the SQL planner.
-  const aboveThreshold = rows.filter((r) => r.score >= threshold);
+  // poisoning the SQL planner. Over-fetched ×2 above, so threshold drops
+  // are refilled up to `limit` before the final slice.
+  const aboveThreshold = rows.filter((r) => r.score >= threshold).slice(0, limit);
 
   const subTokens = opts.subGoals.map((sg) => tokenizeLower(sg ?? ''));
   const matches: CachedMatch[] = aboveThreshold.map((r) => {

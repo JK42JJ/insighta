@@ -8,6 +8,8 @@
  * modules — import from here.
  */
 
+import { MS_PER_DAY } from '@/utils/time-constants';
+
 /** Interest-signal weights (§4). Saved playlist videos = explicit intent → outrank subs. */
 export const INTEREST_WEIGHTS = Object.freeze({
   /** subscribed channel = passive interest */
@@ -61,6 +63,21 @@ export const CURATION_RELEVANCE_FLOOR = 40;
 
 /** recency window (days) for the discovery leg's publishedAfter — the rising bias (§4-B5). */
 export const CURATION_PUBLISHED_AFTER_DAYS = 365;
+
+/**
+ * Weekly-novelty freshness ladder (2026-08-03 defect fix): the topic-mode pick
+ * prefers this week's uploads and widens only when the pool is thin. The final
+ * `undefined` rung drops the time filter entirely — history exclusion alone
+ * then guarantees novelty. Ladder anchors on the week's Monday (weekStart).
+ */
+export const CURATION_FRESHNESS_LADDER_DAYS: readonly number[] = Object.freeze([7, 14, 30]);
+
+export function curationFreshnessCutoffs(weekStart: Date): Array<Date | undefined> {
+  return [
+    ...CURATION_FRESHNESS_LADDER_DAYS.map((d) => new Date(weekStart.getTime() - d * MS_PER_DAY)),
+    undefined,
+  ];
+}
 
 /** cooldown before re-attempting a failed interest-profile build — avoids the
  * suggest poll re-firing a doomed build every few seconds (P1). */
