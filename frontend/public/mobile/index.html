@@ -53,7 +53,12 @@
     display:flex; align-items:center; justify-content:center;
     padding:calc(var(--sat) + 8px) 10px calc(var(--sab) + 8px);
     -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none;
+    -webkit-touch-callout:none;  /* long-press on imgs (thumbnail/avatar) must not raise the iOS save sheet */
   }
+  /* Inner lists must not chain their overscroll to the app shell — the chained
+     rubber-band bounces the whole PWA and reads as a web page. #cdFeed already
+     carries this; these are the other eight scrollers. */
+  .cur-body,.cur-connect,.rows,.menu-list,.readbox,.rl-list,#ytsBody,#tkList{overscroll-behavior:contain}
   .num{font-variant-numeric:tabular-nums}
   :root{--butter:#F5D48A}
   /* Scene palette. Shared by every colourway on purpose: the drawing is the same
@@ -2126,7 +2131,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-03-89';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-03-92';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
 
   /* ===== diag probe (build 89) — opt-in instability triage, OFF by default.
