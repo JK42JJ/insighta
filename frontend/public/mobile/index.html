@@ -155,28 +155,31 @@
      easings -- arriving decelerates, leaving accelerates. Only transform and
      opacity animate, so each screen stays one composited layer. */
   .scr{position:absolute; inset:0; display:flex; flex-direction:column; padding:15px 16px 14px;
-    background:var(--paper); pointer-events:none;
+    opacity:0; transform:translateX(14px); transition:opacity .32s var(--soft), transform .32s var(--soft); pointer-events:none}
+  .scr.active{opacity:1; transform:none; pointer-events:auto}
+  /* mnav flag = the native-motion grammar above, dark-shipped (deploy != release:
+     login lives on prod only, so the device pass must happen there). Default
+     stays the old crossfade; ?mnav=1 opts a device in (localStorage-persisted,
+     ?mnav=0 clears). The default flips and the flag retires after the pass. */
+  body.mnav .scr{opacity:1; background:var(--paper);
     transform:translateX(100%);
     transition:transform var(--nav-dur) var(--nav-in), filter var(--nav-dur) linear}
   /* Promote only the two screens actually moving (active enters, leaving exits);
      a base-rule will-change would pin all six full-viewport screens as composited
      layers forever — on low-RAM iOS that layer churn is itself a flicker source. */
-  .scr.active,.scr.leaving{will-change:transform}
-  .scr.active{transform:none; pointer-events:auto}
+  body.mnav .scr.active,body.mnav .scr.leaving{will-change:transform}
+  body.mnav .scr.active{transform:none}
   /* Leaving: a shorter travel the other way, and dimmed, so it reads as going
      underneath rather than away. */
-  .scr.leaving{transform:translateX(-28%); filter:brightness(.84);
+  body.mnav .scr.leaving{transform:translateX(-28%); filter:brightness(.84);
     transition:transform var(--nav-dur) var(--nav-out), filter var(--nav-dur) linear}
   /* Coming back reverses both roles. */
-  .scr.pop{transform:translateX(-28%); filter:brightness(.84)}
-  .scr.pop.active{transform:none; filter:none}
-  .scr.leaving.pop{transform:translateX(100%); filter:none}
-  /* Not every screen change is a place change -- the first paint has nothing to
-     come from, and reduced motion means none of this. */
-  .scr.instant,.scr.instant.active,.scr.instant.leaving{transition:none}
+  body.mnav .scr.pop{transform:translateX(-28%); filter:brightness(.84)}
+  body.mnav .scr.pop.active{transform:none; filter:none}
+  body.mnav .scr.leaving.pop{transform:translateX(100%); filter:none}
   @media (prefers-reduced-motion:reduce){
-    .scr,.scr.active,.scr.leaving,.scr.pop{transition:opacity .12s linear; transform:none; filter:none}
-    .scr{opacity:0} .scr.active{opacity:1}
+    body.mnav .scr,body.mnav .scr.active,body.mnav .scr.leaving,body.mnav .scr.pop{transition:opacity .12s linear; transform:none; filter:none}
+    body.mnav .scr{opacity:0} body.mnav .scr.active{opacity:1}
   }
 
   /* 상태줄 — §1.1b: 10px / .14em */
@@ -2190,6 +2193,15 @@
       return localStorage.getItem('dialDiag')==='1';
     }catch(e){ return false; }
   })();
+  /* mnav flag — native-motion canary (deploy != release). Same opt-in shape as
+     diag: ?mnav=1 persists via localStorage so the standalone launch keeps it,
+     ?mnav=0 clears. Flag off = shipped behavior, byte-identical. */
+  try{
+    var _mq=location.search+location.hash;
+    if(/[?#&]mnav=1/.test(_mq)) localStorage.setItem('dialMnav','1');
+    if(/[?#&]mnav=0/.test(_mq)) localStorage.removeItem('dialMnav');
+    if(localStorage.getItem('dialMnav')==='1') document.body.classList.add('mnav');
+  }catch(e){}
   var diagBuf=[], diagEl=null;
   function diag(tag,msg){
     if(!DIAG) return;
@@ -2334,11 +2346,16 @@
        app from login is coming UP, not going deeper. Anything unlisted is
        treated as one level in, which is the safe default -- an unknown screen
        pushes rather than popping into nowhere. */
+    var from=scr[cur], to=scr[n];
+    if(!document.body.classList.contains('mnav')){
+      // flag off = the shipped crossfade, byte-identical behavior
+      from.classList.remove('active');
+      cur=n; to.classList.add('active');
+    } else {
     var NAV_DEPTH={login:-1, home:0, menu:1, news:1, invite:1, player:2};
     var dFrom=(NAV_DEPTH[cur]===undefined)?1:NAV_DEPTH[cur];
     var dTo  =(NAV_DEPTH[n]  ===undefined)?1:NAV_DEPTH[n];
     var popping=dTo<dFrom;
-    var from=scr[cur], to=scr[n];
     // The arriving screen has to be placed on its start edge BEFORE it is shown.
     // A forced reflow alone does NOT do that: with the transition live, the class
     // flip retargets FROM the current value (measured: pop committed at +390, so
@@ -2361,6 +2378,7 @@
     // Park the screen we left once it is out of sight, so it is not a live layer.
     clearTimeout(show._t);
     show._t=setTimeout(function(){ from.classList.remove('leaving','pop'); from.style.zIndex=''; to.style.zIndex=''; }, NAV_SETTLE_MS);
+    }
     // Slider bead lives outside .scr now (sibling of .epaper); show it home-only.
     var _hsl=document.getElementById('hsl'); if(_hsl) _hsl.style.visibility=(n==='home')?'visible':'hidden';
     var _gf=document.getElementById('gearFab'); if(_gf) _gf.style.visibility=(n==='home')?'visible':'hidden';
