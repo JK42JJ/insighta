@@ -1058,9 +1058,18 @@
        - core/full toggle in the header (mockup 핵심만/전체)
        - jog wheel = the EXISTING #wheel floating-mini mode (reading/stage pattern),
          NOT a bespoke widget. */
+  /* Deck entry/exit = the screen-nav push grammar (deck is one level in): an
+     opaque plate slides over the tab from the right and leaves the same way.
+     Replaces the D0 opacity crossfade — same cdin timing hook, new movement.
+     transform:none at rest matters twice over: fixed children (wheelzone,
+     cd-hint) re-anchor to the viewport, and no permanent composited layer. */
   #curDeck{position:fixed; inset:0; z-index:70; background:#12100E; display:none; flex-direction:column;
     padding:calc(var(--sat) + 8px) 14px calc(var(--sab) + 10px); color:#EDE7DC; overflow:hidden;
     opacity:0; transition:opacity .25s var(--soft)}
+  /* mnav canary: the deck rides the screen-nav push grammar instead of the D0
+     fade — one level in, slides over the tab and leaves the same way. */
+  body.mnav #curDeck{opacity:1; transform:translateX(100%);
+    transition:transform var(--nav-dur) var(--nav-in)}
   /* Ambient background (YouTube ambient-mode grammar): the current poster,
      heavily blurred + dimmed, fills the whole deck so the empty area below the
      video card carries the video's colors instead of a flat black void. */
@@ -1077,7 +1086,11 @@
     background:linear-gradient(180deg, rgba(18,16,14,.15) 0%, rgba(18,16,14,.55) 58%, rgba(18,16,14,.82) 100%)}
   @media (prefers-reduced-motion:reduce){ .cd-amb{transition:none} }
   body.curdeck #curDeck{display:flex}
-  body.curdeck.cdin #curDeck{opacity:1}   /* D0: cream->dark crossfade (studio entry) */
+  body.curdeck.cdin #curDeck{opacity:1}   /* D0: cream->dark crossfade (default, flag off) */
+  body.mnav.curdeck.cdin #curDeck{transform:none}   /* D0 hook, mnav: a directional push instead */
+  body.mnav.curdeck.cdout #curDeck{transform:translateX(100%);
+    transition:transform var(--nav-dur) var(--nav-out)}  /* exit accelerates, like a pop leaver */
+  @media (prefers-reduced-motion:reduce){ body.mnav #curDeck,body.mnav.curdeck.cdout #curDeck{transition:none} }
   /* D4 — weekly complete card (slides into the deck position) */
   .cd-fin{position:absolute; inset:0; z-index:6; background:#12100E; display:none; flex-direction:column;
     align-items:center; justify-content:center; gap:14px; text-align:center; padding:0 30px}
@@ -2175,7 +2188,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-03-93';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-03-94';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
 
   /* ===== diag probe (build 89) — opt-in instability triage, OFF by default.
@@ -3638,6 +3651,7 @@
     cfModeSet(cfCoreOnly); // repaint the pill to the session state on every open
     cdRenderWeeks();
     wheelAwake(); wheelSleep();          // brief hello on entry, as the note view does
+    clearTimeout(closeCurationDeck._t); document.body.classList.remove('cdout'); // re-open during an exit slide: cancel it
     document.body.classList.add('curdeck');
     // After the class, not before it. cfIsFeed asks whether the body is in the
     // deck AND portrait, so asking one line earlier answered "not the deck" every
@@ -3704,8 +3718,25 @@
     // deck). cdTeardown does not clear cdCtx, so read it after is also fine —
     // capture first anyway so the ordering never matters again.
     var back=(cdCtx&&cdCtx.returnTab)||'curation';
-    cdTeardown();
-    setHomeTab(back);
+    if(!document.body.classList.contains('mnav')){
+      // flag off = the shipped instant close
+      cdTeardown();
+      setHomeTab(back);
+      return;
+    }
+    if(document.body.classList.contains('cdout')) return;  // exit slide already playing
+    // Silence NOW - the slide-out must not carry audio. Both loops are
+    // idempotent; cdTeardown repeats them safely at the end of the slide.
+    try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
+    try{ Object.keys(cfPlayers).forEach(function(k){ var p=cfPlayers[k]; if(p&&p.pauseVideo) p.pauseVideo(); }); }catch(e){}
+    setHomeTab(back);                    // dress the tab behind the deck before the slide reveals it
+    document.body.classList.remove('cdin');
+    document.body.classList.add('cdout');
+    clearTimeout(closeCurationDeck._t);
+    closeCurationDeck._t=setTimeout(function(){
+      document.body.classList.remove('cdout');
+      cdTeardown();
+    }, reduce?0:NAV_SETTLE_MS);
   }
   function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
   /* Poster resolution follows the connection: high on a good one, the small
