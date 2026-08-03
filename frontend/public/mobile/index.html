@@ -1702,6 +1702,11 @@
   .uptoast:active{transform:translateX(-50%) translateY(0) scale(.97)}
   .uptoast .upbtn{background:rgba(245,242,236,.20); border-radius:99px; padding:3px 11px; font-weight:800}
 
+  /* diag HUD (build 89, ?diag=1 only) — display-only, never intercepts input */
+  #diagHud{position:fixed; left:8px; bottom:calc(var(--sab) + 8px); z-index:99; pointer-events:none;
+    background:var(--ink); color:var(--paper); opacity:.85; font-size:9px; line-height:1.5;
+    font-family:ui-monospace,Menlo,monospace; white-space:pre; padding:5px 8px; border-radius:8px; max-width:70vw; overflow:hidden}
+
   /* §5: 세로 짧은 뷰포트 — 하단 트림 압축, 회수분은 스크린이 흡수 */
   @media (max-height: 820px) and (orientation: portrait){
     body{padding-bottom:calc(var(--sab) + 4px)}
@@ -2121,8 +2126,48 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-03-88';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-03-89';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
+
+  /* ===== diag probe (build 89) — opt-in instability triage, OFF by default.
+     Enable: open /mobile?diag=1 once (persists via localStorage so the
+     home-screen standalone launch keeps it); disable with ?diag=0.
+     Separates the four instability candidates: slow tap (pointerdown→click),
+     wheel 350ms click-suppress window firing, frame stalls, show() re-entry.
+     HUD is pointer-events:none — it can never eat input; full ring buffer
+     at window.__dialDiag. When off: no listeners, no rAF loop, no DOM. */
+  var DIAG=(function(){
+    try{
+      var q=location.search+location.hash;
+      if(/[?#&]diag=1/.test(q)) localStorage.setItem('dialDiag','1');
+      if(/[?#&]diag=0/.test(q)) localStorage.removeItem('dialDiag');
+      return localStorage.getItem('dialDiag')==='1';
+    }catch(e){ return false; }
+  })();
+  var diagBuf=[], diagEl=null;
+  function diag(tag,msg){
+    if(!DIAG) return;
+    try{
+      diagBuf.push((performance.now()/1000).toFixed(2)+' '+tag+' '+msg);
+      if(diagBuf.length>120) diagBuf.shift();
+      window.__dialDiag=diagBuf;
+      if(!diagEl){ diagEl=document.createElement('div'); diagEl.id='diagHud'; document.body.appendChild(diagEl); }
+      diagEl.textContent=diagBuf.slice(-6).join('\n');
+    }catch(e){}
+  }
+  if(DIAG){
+    // ① tap latency: only slow taps (>120ms) — quiet on a healthy device
+    var _pdT=0;
+    document.addEventListener('pointerdown',function(){ _pdT=performance.now(); },{capture:true,passive:true});
+    document.addEventListener('click',function(e){
+      if(!_pdT) return;
+      var d=Math.round(performance.now()-_pdT); _pdT=0;
+      if(d>120) diag('tap',d+'ms '+String(e.target.id||e.target.className||e.target.tagName).slice(0,18));
+    },{capture:true,passive:true});
+    // ③ frame stalls: 3+ dropped frames (>50ms gap)
+    var _lf=performance.now();
+    (function lfLoop(){ var t=performance.now(); if(t-_lf>50) diag('frame',Math.round(t-_lf)+'ms stall'); _lf=t; requestAnimationFrame(lfLoop); })();
+  }
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
     fetch('/mobile/version.json?t='+now,{cache:'no-store'})
@@ -2219,6 +2264,9 @@
   }
   function show(n){
     bootDone();
+    // ④ re-entry probe: a second nav inside the .32s transition window is the
+    // "pressed and it bounced back" candidate — log it, change nothing.
+    if(DIAG){ var _nT=performance.now(); if(show._dt&&_nT-show._dt<400) diag('nav','re-entry '+Math.round(_nT-show._dt)+'ms'); show._dt=_nT; diag('nav',cur+'>'+n+(n===cur?' same':'')); }
     // 플레이어 이탈 = 재생 정지 [J:07-15 치명버그: 만다라/설정에서 노트 재생 지속].
     // 나브 토글·MENU·브레드크럼 모든 경로를 한곳에서 커버 (백그라운드 재생 오용 차단).
     if(cur==='player'&&n!=='player'){
@@ -5815,7 +5863,7 @@
     setVideoAmbient(); // wheel selection moves the mandala focus -> update the video ambient color
   }
   var suppressClickUntil=0;
-  function wheelStole(){ return Date.now()<suppressClickUntil; } // 시간창(350ms): sticky 플래그 잔류 → 후속 정상 탭 삼킴 버그 제거
+  function wheelStole(){ var s=Date.now()<suppressClickUntil; if(s) diag('sup','click eaten, '+(suppressClickUntil-Date.now())+'ms left'); return s; } // 시간창(350ms): sticky 플래그 잔류 → 후속 정상 탭 삼킴 버그 제거
   function dispatchNotch(dir){
     if(document.body.classList.contains('curdeck')){
       // Video deck: a detent steps by SECTION when the focus card has v2
