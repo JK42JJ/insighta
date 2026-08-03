@@ -157,8 +157,11 @@
   .scr{position:absolute; inset:0; display:flex; flex-direction:column; padding:15px 16px 14px;
     background:var(--paper); pointer-events:none;
     transform:translateX(100%);
-    transition:transform var(--nav-dur) var(--nav-in), filter var(--nav-dur) linear;
-    will-change:transform}
+    transition:transform var(--nav-dur) var(--nav-in), filter var(--nav-dur) linear}
+  /* Promote only the two screens actually moving (active enters, leaving exits);
+     a base-rule will-change would pin all six full-viewport screens as composited
+     layers forever — on low-RAM iOS that layer churn is itself a flicker source. */
+  .scr.active,.scr.leaving{will-change:transform}
   .scr.active{transform:none; pointer-events:auto}
   /* Leaving: a shorter travel the other way, and dimmed, so it reads as going
      underneath rather than away. */
