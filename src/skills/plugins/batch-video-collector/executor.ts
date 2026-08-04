@@ -77,6 +77,8 @@ interface HydratedState {
   limit: number;
   offset: number;
   runType: string;
+  /** Restrict this run to one edition's keywords. Undefined = all domains. */
+  domain?: string;
 }
 
 /**
@@ -141,8 +143,20 @@ export const executor: SkillExecutor = {
         ? parseInt(envOffset, 10)
         : computeRotationOffset(Date.now(), limit, BATCH_COLLECTOR_ROTATION_DAYS);
 
+    // Scope one run to a single edition ('policy', 'ai_ml', …). Unset = every
+    // domain, byte-identical to the shipped behaviour. The pilot uses it to
+    // measure one edition's pass rates without spending quota on the other eight.
+    const domain = ctx.env['BATCH_COLLECTOR_DOMAIN']?.trim() || undefined;
     const videosApiKeys = resolveVideosApiKeys(ctx.env);
-    const state: HydratedState = { apiKeys, videosApiKeys, ollamaUrl, limit, offset, runType };
+    const state: HydratedState = {
+      apiKeys,
+      videosApiKeys,
+      ollamaUrl,
+      limit,
+      offset,
+      runType,
+      domain,
+    };
     return { ok: true, hydrated: state as unknown as Record<string, unknown> };
   },
 
@@ -171,7 +185,10 @@ export const executor: SkillExecutor = {
       const keywords =
         state.runType === GOAL_RUN_TYPE
           ? await loadGoalKeywords(db, state.limit)
-          : await loadTrendKeywords(db, state.limit, { offset: state.offset });
+          : await loadTrendKeywords(db, state.limit, {
+              offset: state.offset,
+              ...(state.domain ? { domain: state.domain } : {}),
+            });
       if (keywords.length === 0) {
         await finalizeRun(db, run.id, {
           status: 'failed',

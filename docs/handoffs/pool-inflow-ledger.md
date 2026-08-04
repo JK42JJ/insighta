@@ -3,7 +3,7 @@
 > 범위: `video_pool` 에 **무엇이 들어오고 언제 나가는가** — 수집·태깅·품질채점·만료.
 > **전역 영향**: 위저드·add-cards·큐레이션이 전부 같은 풀을 읽는다. 그래서 T·C 와 분리한다 (James 2026-08-04).
 > 정책: `docs/LEDGERS.md`. 파라미터 상세: `docs/PERFORMANCE_PARAMETERS.md`.
-> **최신 번호: P1** (P2 = 설계 단계 · P2-보류 = Smart Shopping, 나중에 추가)
+> **최신 번호: P4** (P2 = 설계 · P2-보류 = Smart Shopping · P3 택소노미 · P4 수집기 스코프)
 
 ---
 
@@ -224,6 +224,78 @@ James 목표 "일 2,000~3,000편" 과 맞고, **shaping 이 내놓는 하위주�
   수집이 같이 죽었고, 트렌드만 별도 워크플로로 부활. **`batch-video-collector.yml` 은 여전히 비활성.**
 - 표적 수집분 TTL (기본 30일이면 서빙 전 만료)
 - LLM 판정 예산
+
+---
+
+## P3 — 택소노미 9축 + 도메인 백필 (2026-08-04, 배포·적용 완료)
+
+PR #1465. **`trend_signals.domain` 22,201행 전부 NULL → 전량 기록.**
+
+### 로직
+
+택소노미 7 → 9축(+other). `language`+`exam` → `learning` 병합. 그리고 **짧은 영문 패턴에
+단어 경계 요구** — `ai` 가 `appalachian trail`·`email marketing`·`detail`·`chair yoga` 를,
+`ml` 이 `html` 을 먹고 있었다(전부 실측). 경계 없이 백필했으면 그 오분류가 DB 에 박혔다.
+
+### 측정 — 백필 후 실제 DB 분포
+
+| domain | 전체 22,201 | 수집이 쓰는 창 (ok+7일) |
+|---|---:|---:|
+| ai_ml | 1,440 | **566** |
+| learning | 1,419 | 476 |
+| health | 1,120 | 331 |
+| investment | 1,133 | 294 |
+| lifestyle | 909 | 247 |
+| career | 522 | 209 |
+| startup | 519 | 181 |
+| creator | 610 | 166 |
+| **policy** | 215 | **93** |
+| other | 14,314 (64.5%) | 2,294 (47.2%) |
+
+**9축 전부 93건 이상.** `other` 가 전체에서 64.5% 로 높은 것은 만료행 15,575건(70%)이
+끌어올린 값이며, 수집이 실제 뽑는 창에서는 47.2%다.
+
+### 부수 효과 — 필터버블 가드가 처음으로 작동
+
+제안 창 300행에서 `distinct_domains=10`, `null_rows=0`. `MAX_PER_DOMAIN=2` 가 오늘까지
+**한 번도 작동한 적이 없었다** — 셀 대상이 전부 NULL 이었다.
+
+### 롤백
+
+파생 컬럼(`domain = f(keyword)`)이라 되돌릴 대상이 아니다. 택소노미를 바꾸면 백필 재실행으로
+갱신한다. 다른 컬럼 무변경.
+
+### 관측
+
+배포 후 컨테이너 실측(`CURATION_DOMAINS` 10, `appalachian trail → other`) + 백필 후 DB
+전수 대조 완료. **NULL 잔재 0.**
+
+---
+
+## P4 — 수집기 도메인 스코프 + judge 필터 (2026-08-04)
+
+PR #1465 후속. **착수 전 상태로 등재 — 배포·측정 미완.**
+
+### 세 결함
+
+1. **도메인 어휘 불일치.** 수집기가 `metadata.seed_domain`(한글 버킷)에서 도메인을 뽑고
+   `domain` 컬럼(CurationDomain)을 안 봤다. 그래서 `video_pool_domain_tags` 는 7버킷,
+   택소노미는 9축으로 **조인 불가**였다. → 컬럼 우선, seed_domain 은 폴백.
+2. **judge 무시.** `judge_state` 필터가 없어 **unfit 27% + unsafe 3.8%** 에도 검색을 돌렸다.
+   키워드당 100 유닛이며, 판정이 이미 거른 것들이다. → `judge_state='ok'` 한정.
+3. **스코프 불가.** 한 도메인만 재려면 9개 값을 다 내야 했다. → `BATCH_COLLECTOR_DOMAIN`,
+   미설정 = 기존 동작 바이트 동일.
+
+### 파라미터
+
+| 이름 | Default | 영향 | 비용 |
+|---|---|---|---|
+| `BATCH_COLLECTOR_DOMAIN` | unset (= 전 도메인) | 한 판(edition)으로 수집 한정 | 스코프 시 9분의 1 |
+| (내부) judge 필터 | 없음 → `'ok'` | unfit/unsafe 키워드 제외 | **절감** — 30.8% 의 헛검색 제거 |
+
+### 관측
+
+**미측정.** 파일럿(Policy, 93키워드) 실행 후 1~4단 통과율과 함께 기록한다.
 
 ---
 
