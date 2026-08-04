@@ -37,30 +37,29 @@
 | 파라미터 | 위치 | Default | Prod | 범위 | 영향 |
 |---|---|---|---|---|---|
 | **search.list units/콜** | youtube-client.ts:317 | 100 (고정) | 100 | — | YouTube 과금. 1콜=100 units. 일 한도 10,000 = 100콜/일. |
-| **search.list 키** | youtube-client.ts:169 `resolveSearchApiKeys` | 단일키(CP512) | **⚠️ 3자 불일치 — 표 아래 참조** | — | ★ToS: 다중키 로테이션 = 쿼터 우회 위반. |
+| **search.list 키** | youtube-client.ts:169 `resolveSearchApiKeys` | 단일키(CP512) | **8개 전부 활용 (단기안, James 2026-08-04)** | — | 일 80,000. ★ToS 리스크는 표 아래 기록 유지. |
 | V5_SEARCH_MAX_RESULTS | v5/config.ts:25 | 25 | **40** | 10-50 | 콜당 후보 수. ↑=같은 100units에 더 많은 후보(add-cards 재검색 지연). 상한 50(YouTube). |
 | V5_MAX_QUERIES | v5/config.ts:23 | 8 | 8 | 1-20 | 만다라당 search.list 콜 수(셀당 1). ×100 = units/만다라. |
 | V5_SEARCH_TIMEOUT_MS | v5/config.ts:24 | 2000 | 2000 | 500-8000 | fanout 콜 타임아웃. |
 | V3_YOUTUBE_SEARCH_TIMEOUT_MS | v3 env | 3000 | 3000 | — | v3 search.list 타임아웃. |
 | BATCH_COLLECTOR_SEARCH_MAX_RESULTS | batch/manifest.ts:39 | 30 | 30 | — | 트렌드 수집 search.list 후보 수. |
 
-> ### ⚠️ 미해결 — search.list 키 개수 (2026-08-04 실측)
+> ### search.list 키 개수 — 결정됨 (James 2026-08-04)
 >
-> 세 소스가 서로 다른 말을 한다.
+> **8개 전부 활용. 단기안(短期案)으로 채택.** 일 한도 80,000 을 전제로 설계한다.
+>
+> 결정 시점의 3자 상태는 이랬다.
 >
 > | 소스 | 값 |
 > |---|---|
 > | 이 문서 (2026-07-09 작성) | 1개. *"다중키 로테이션 금지(CP512 제거). 쿼터 우회 위반"* |
-> | 코드 `resolveSearchApiKeys` (origin/main) | slot 1~10 을 **전부 수집해 반환** |
-> | prod `printenv` | `YOUTUBE_API_KEY_SEARCH` ~ `_8` = **8개 존재** |
+> | 코드 `resolveSearchApiKeys` | slot 1~10 을 전부 수집해 반환 |
+> | prod `printenv` | `YOUTUBE_API_KEY_SEARCH` ~ `_8` = 8개 |
 >
-> **일 한도가 10,000 인지 80,000 인지가 여기서 갈린다.** 그리고 그 차이는 튜닝이 아니라
-> Google ToS 판단이다 — 다중 프로젝트로 쿼터를 넘기는 것은 약관 위반이다.
->
-> 이 값이 확정되기 전에는 **어떤 수집 파이프라인 설계도 쿼타 검산을 확정할 수 없다**
-> (`docs/handoffs/pool-inflow-ledger.md` P2 참조 — 현재 두 시나리오 병기 상태).
-> **James 판단 필요.** 1개가 맞다면 코드가 문서를 따라야 하고, 8개가 승인된 상태라면
-> 이 문서와 CP512 결정 기록이 갱신돼야 한다.
+> **★ToS 리스크는 해소된 것이 아니라 감수하기로 한 것이다.** 다중 프로젝트로 쿼터를
+> 넘기는 것은 YouTube Data API 약관 위반 소지가 있다. "단기안" 이라는 단서가 그 뜻이며,
+> 중장기에는 (a) 쿼터 증설 신청 (b) 수집량 축소 (c) 비-search 소스 확대 중 하나로 이행해야
+> 한다. CP512 의 단일키 결정 기록과 이 결정이 충돌하므로, 이행 시점에 둘 중 하나를 폐기한다.
 
 ## 2. 풀 우선 조회 (pool-first, quota-free) — **베타 후 검토**
 
