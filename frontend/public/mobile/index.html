@@ -1603,8 +1603,23 @@
     background:rgba(13,13,16,.72); color:#B8AE9E; font-size:13px; font-weight:650; letter-spacing:.01em}
   .cf-durchip{display:none}   /* duration lives in the meta sub uniformly; no per-card chip (avoids focus-change flicker) */
   .cf-meta{padding:14px 20px 6px}
-  .cf-vt{font-size:16px; font-weight:650; color:#EDE7DC; line-height:1.35;
+  /* Title and its keep-mark share a row. The title still governs the height —
+     the button is 30px against a two-line title's ~43px — so the uniform card
+     height below is untouched. */
+  .cf-titlerow{display:flex; align-items:flex-start; gap:10px}
+  .cf-vt{flex:1; min-width:0; font-size:16px; font-weight:650; color:#EDE7DC; line-height:1.35;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  /* Quiet until used: an outline in the meta's own dimmed ink, filling with the
+     accent once kept. Pulled 6px right so the glyph optically aligns with the
+     card padding rather than the button box. */
+  .cf-bm{flex:none; width:30px; height:30px; margin:-1px -6px 0 0; padding:0; display:grid; place-items:center;
+    border:none; background:none; cursor:pointer; color:var(--cd-chip-ink);
+    -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+    transition:color .18s var(--soft), transform var(--snap) var(--spring)}
+  .cf-bm:active{transform:scale(.86)}
+  .cf-bm.on{color:var(--acc)}
+  .cf-bm svg{display:block}
+  .cf-bm.on svg path{fill:currentColor}
   .cf-sub{margin-top:7px; font-size:12.5px; font-weight:600; color:rgba(237,231,220,.55); line-height:1.4;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   /* Every card carries the SAME meta (2-line title + channel/time/views) so card heights
@@ -2184,7 +2199,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-03-95';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-04-96';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
 
   /* ===== diag probe (build 89) — opt-in instability triage, OFF by default.
@@ -3899,12 +3914,49 @@
           +'<div class="cf-prog'+((w&&w.dur>0)?'':' none')+'"><b style="width:'+pc+'%"></b></div>'
           +'<button class="cf-play" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button>'
         +'</div>'
-        +'<div class="cf-meta"><div class="cf-vt">'+cfEsc(it.title)+'</div>'
+        +'<div class="cf-meta"><div class="cf-titlerow"><div class="cf-vt">'+cfEsc(it.title)+'</div>'
+          +'<button class="cf-bm'+(it.bookmarked_at?' on':'')+'" type="button"'
+            +' data-vid="'+cfEsc(it.video_id)+'" aria-pressed="'+(it.bookmarked_at?'true':'false')+'"'
+            +' aria-label="북마크"><svg width="16" height="20" viewBox="0 0 24 24" aria-hidden="true">'
+            +'<path d="M6 3.6h12a1.4 1.4 0 0 1 1.4 1.4v15.5L12 16.6l-7.4 3.9V5A1.4 1.4 0 0 1 6 3.6Z"'
+            +' fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>'
+        +'</div>'
         +(sub.length?'<div class="cf-sub">'+cfEsc(sub.join(' · '))+'</div>':'')+'</div>'
       +'</div>';
     }
     feed.innerHTML=html;
+    // Wired once, on the feed rather than per card: cfRender replaces innerHTML
+    // on every repaint, and close() clears innerHTML + onclick but never touches
+    // addEventListener, so a listener bound here survives exactly one time.
+    if(!feed.__bmWired){ feed.__bmWired=1; feed.addEventListener('click', cfBookmarkClick, true); }
     cfUpgradePosters();   // small sheet is already painted; swap in the big one if it is real
+  }
+
+  /* Keep-mark taps. Capture phase + stopPropagation because the card underneath
+     starts playback on click — the mark must not double as a play button. */
+  async function cfBookmarkClick(e){
+    var btn = e.target && e.target.closest && e.target.closest('.cf-bm');
+    if(!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    if(!cdCtx || !cdCtx.subId) return;
+    var vid = btn.getAttribute('data-vid'); if(!vid) return;
+    var next = !btn.classList.contains('on');
+    var it = null;
+    for(var k=0; k<cdItems.length; k++){ if(cdItems[k].video_id===vid){ it=cdItems[k]; break; } }
+    // Optimistic: a keep has to land under the thumb, not after a round trip.
+    var paint = function(on){
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if(it) it.bookmarked_at = on ? new Date().toISOString() : null;
+    };
+    paint(next);
+    try{
+      await api('/curations/'+cdCtx.subId+'/items/'+encodeURIComponent(vid)+'/bookmark',
+        {method:'PATCH', body:JSON.stringify({bookmarked:next})});
+    }catch(err){
+      paint(!next);   // put it back rather than show a mark the server does not have
+      toast('북마크를 저장하지 못했어요');
+    }
   }
   // ===== D: native-scroll dominant-card autoplay (portrait feed) =====
   // No iframe reparent (= no reload): the dual-player STAGE is placed as a fixed
