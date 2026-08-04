@@ -69,8 +69,14 @@ export const CURATION_PUBLISHED_AFTER_DAYS = 365;
  * incident): the topic-mode pick walks these rungs ACCUMULATING candidates,
  * freshest-first, until the week is full. Principle order is codified —
  * this week's uploads > fresh > never-served > less-aligned never-served >
- * long-ago-served re-entry — and NO rung combination may end at an empty
- * week ("덜 정렬된 카드 > 카드 0장", the converged serving principle).
+ * long-ago-served re-entry.
+ *
+ * RETIRED 2026-08-04: "NO rung combination may end at an empty week
+ * (덜 정렬된 카드 > 카드 0장)". Read as "any card beats none", it walked the
+ * ladder down to cosine 0.35 and put Spanish lessons under "파이썬". The owner's
+ * rule now: garbage does not enter, even at the cost of a thin or empty week.
+ * The rungs still widen WHERE we look; they no longer lower HOW GOOD it must
+ * be — curation-build.ts judges the assembled week at one chokepoint.
  *
  * exclusionWeeks: how far back the served-history exclusion reaches.
  * null = everything ever served stays out; 4 = only the last four weeks

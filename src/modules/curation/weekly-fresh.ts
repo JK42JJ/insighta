@@ -6,8 +6,10 @@
  *
  * Responsibilities, in serving-contract order:
  *   1. v5 live search, publishedAfter = 7d (one 30d retry when empty)
- *   2. fit gate — computeCardRelevance(centerGoal=topic) with the (previously
- *      orphaned) CURATION_RELEVANCE_FLOOR, fail-open on LLM errors
+ *   2. fit gate — computeCardRelevance(centerGoal=topic) against
+ *      CURATION_RELEVANCE_FLOOR, fail-CLOSED (2026-08-04). The build-level
+ *      gate in curation-build.ts judges every leg's picks again at the
+ *      chokepoint; this one only saves work by dropping early.
  *   3. pool upsert AWAITED — the deck renders items via a video_pool join
  *      (backfill-curation-pool.ts: absent row = renders as nothing), so this
  *      is a RENDERING precondition, not an optimization. Admission mirrors
@@ -249,7 +251,7 @@ export interface FreshPick {
 /**
  * The whole fresh leg: search → fit gate → pool (awaited) → embed (best
  * effort). Returns ONLY render-safe picks (pool row confirmed) with an honest
- * relevance (Haiku fit score; fail-open keeps the card at the floor value).
+ * relevance (Haiku fit score; an unjudged card is dropped, not floored).
  */
 export async function fetchFreshTopicVideos(args: {
   topic: string;
@@ -283,9 +285,12 @@ export async function fetchFreshTopicVideos(args: {
   }
   if (!v5.cards.length) return { picks: [], windowDays, fitDropped: 0 };
 
-  // Fit gate (design §6): score each fresh candidate against the topic; drop
-  // below the floor. Fail-open — an LLM outage must not empty the week, so an
-  // errored score keeps the card AT the floor (honest minimum, logged).
+  // Fit gate: score each fresh candidate against the topic; drop below the
+  // floor. fail-CLOSED — an unjudged video is one we do not know about, and
+  // garbage does not enter even at the cost of a thin week (owner, 2026-08-04).
+  // This used to keep an errored card AT the floor so an LLM outage could not
+  // empty the week; emptying the week is now the acceptable outcome, and a
+  // silent pass is not.
   const scored: Array<{ card: V5Card; relevancePct: number }> = [];
   let fitDropped = 0;
   for (const card of v5.cards.slice(0, limit * 2)) {
@@ -302,7 +307,7 @@ export async function fetchFreshTopicVideos(args: {
       }
       scored.push({ card, relevancePct: r.relevancePct });
     } else {
-      scored.push({ card, relevancePct: CURATION_RELEVANCE_FLOOR });
+      fitDropped += 1;
     }
     if (scored.length >= limit) break;
   }
