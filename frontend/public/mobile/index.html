@@ -229,7 +229,18 @@
   .gp-plus{width:13px; height:13px; border-radius:50%; background:var(--ui); position:relative; flex:none}
   .gp-plus::before,.gp-plus::after{content:""; position:absolute; background:#fff; left:50%; top:50%; transform:translate(-50%,-50%)}
   .gp-plus::before{width:7px; height:1.7px} .gp-plus::after{width:1.7px; height:7px}
-  .htabs{display:flex; gap:5px; margin-top:4px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
+  /* Status row (portrait). Says where you are and what this place is for; the
+     handle below does the moving. It also names the tab the handle's glyph
+     cannot — which is why the icons do not need to carry labels of their own. */
+  .hstat{display:flex; align-items:baseline; gap:7px; flex:none; margin-top:4px; padding:8px 4px 9px; min-width:0}
+  .hs-name{flex:none; font-size:13px; font-weight:800; letter-spacing:-.01em; color:var(--paper-ink)}
+  .hs-dot{flex:none; width:3px; height:3px; border-radius:50%; background:var(--paper-sub); opacity:.55; align-self:center}
+  .hs-desc{flex:1; min-width:0; font-size:11.5px; font-weight:600; color:var(--paper-sub);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  /* Portrait hands navigation to the handle; landscape has no handle, so the tab
+     row stays exactly as it shipped. One surface is a control at a time. */
+  .htabs{display:none; gap:5px; margin-top:4px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
+  @media (orientation:landscape){ .hstat{display:none} .htabs{display:flex} }
   /* gap = the space between a tab's icon and its word. The three tabs now name
      one sequence -- gather an interest, read it compressed, arrive at a single
      insight -- and the icon carries the step while the word names it. */
@@ -280,15 +291,33 @@
   .hsl-track{position:absolute; left:24px; right:24px; top:0; height:0; background:transparent} /* width ref on the card edge */
   @media (orientation:landscape){ .hsl{display:none} } /* landscape home = row layout; the bottom-edge bead is a portrait affordance */
   .hsl-fill{display:none}
-  .hsl-thumb{position:absolute; left:0; top:0; width:13px; height:13px; transform:translate(-50%,-50%);
+  /* The handle carries the icon of wherever it is. It was a 13px bead when the
+     labels lived above it; now that the row above only describes, the bead has
+     to say which of the three it is sitting on. 26px is the smallest that holds
+     a 14px glyph without the ring crowding it. */
+  .hsl-thumb{position:absolute; left:0; top:0; width:26px; height:26px; transform:translate(-50%,-50%);
     border:none; border-radius:50%; background:var(--paper); cursor:grab; touch-action:none;
+    display:grid; place-items:center; padding:0; color:var(--ui);
     box-shadow:0 1px 4px -1px rgba(94,86,72,.5), inset 0 0 0 1px rgba(94,86,72,.18); transition:left .42s var(--spring)}
-  .hsl-thumb::after{content:''; position:absolute; left:-14px; right:-14px; top:-16px; bottom:-8px} /* ~40px touch target, expanded upward */
+  .hsl-thumb::after{content:''; position:absolute; left:-9px; right:-9px; top:-12px; bottom:-9px} /* ~44px touch target, expanded upward */
+  /* All three glyphs are stacked in the same cell and cross-faded by position,
+     so dragging melts one into the next instead of swapping at a threshold.
+     Opacity is written from homePaintPos, which already receives the continuous
+     position — no separate animation to keep in step with the handle. */
+  .hs-ic{grid-area:1/1; display:grid; place-items:center; opacity:0; will-change:opacity, transform}
+  .hs-ic svg{display:block}
+  @media (prefers-reduced-motion:reduce){ .hs-ic{transition:none} }
   .hsl.drag .hsl-thumb{cursor:grabbing}
   .hsl.drag .hsl-thumb{transition:none}
   @media (prefers-reduced-motion:reduce){ .hstrip,.hsl-thumb,.hsl-fill{transition:none} }
   .pane[hidden]{display:none}
   .cur-body{flex:1; min-height:0; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:8px}
+  /* The curation pane nests .rows INSIDE .cur-body, while the video and note
+     panes have .rows as the pane's own child. Both carry margin-top:10px, and
+     .cur-body is a flex container so the two do not collapse — the curation
+     list alone sat 10px lower than the other two stops. The gap belongs to
+     whichever element is outermost, so the nested one gives it up. */
+  .cur-body > .rows{margin-top:0}
   /* Ambient background: a soft wash in the focused row's topic color, fading in
      behind the (translucent) row cards to fill the list and cue selection. */
   #paneCuration{position:relative}
@@ -1955,6 +1984,16 @@
 
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
+        <!-- Portrait: the row above the list stops being a control and starts
+             saying where you are and what this place is for. Navigation moved
+             down to the handle, which is where the thumb already rests.
+             Landscape keeps the tab row below, because the handle is a
+             portrait affordance and hiding both would leave no way across. -->
+        <div class="hstat" id="hstat" aria-live="polite">
+          <span class="hs-name" id="hsName">관심</span>
+          <span class="hs-dot" aria-hidden="true"></span>
+          <span class="hs-desc" id="hsDesc">광고 없이 구독한 관심 주제 시청</span>
+        </div>
         <div class="htabs" id="htabs">
           <button class="htab on" data-htab="curation" aria-label="관심"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.7" fill="none" stroke="currentColor" stroke-width="2.7"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/></svg><span>관심</span><span class="nd" aria-hidden="true"></span></button>
           <button class="htab" data-htab="video" aria-label="브리프"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><g stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4.8 7.6h14.4"/><path d="M4.8 12h14.4"/><path d="M4.8 16.4h9.6"/></g></svg><span>브리프</span></button>
@@ -2080,7 +2119,7 @@
     <!-- Slider bead on the epaper card's bottom edge — sibling of .epaper so the
          half-outside half is not clipped by epaper's overflow:hidden. Home-only. -->
     <div class="hsl" id="hsl">
-      <div class="hsl-track" id="hslTrack"><div class="hsl-fill" id="hslFill"></div><button class="hsl-thumb" id="hslThumb" type="button" aria-label="관심·브리프·인사이트 이동"></button></div>
+      <div class="hsl-track" id="hslTrack"><div class="hsl-fill" id="hslFill"></div><button class="hsl-thumb" id="hslThumb" type="button" aria-label="관심·브리프·인사이트 이동"><span class="hs-ic" data-i="0"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.7" fill="none" stroke="currentColor" stroke-width="2.7"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/></svg></span><span class="hs-ic" data-i="1"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><g stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4.8 7.6h14.4"/><path d="M4.8 12h14.4"/><path d="M4.8 16.4h9.6"/></g></svg></span><span class="hs-ic" data-i="2"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5c1.05 6.1 4.4 9.45 10.5 10.5-6.1 1.05-9.45 4.4-10.5 10.5-1.05-6.1-4.4-9.45-10.5-10.5C7.6 10.95 10.95 7.6 12 1.5Z" fill="currentColor"/></svg></span></button></div>
     </div>
 
     <div class="wheelzone">
@@ -2199,7 +2238,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-04-96';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-04-97';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
 
   /* ===== diag probe (build 89) — opt-in instability triage, OFF by default.
@@ -2630,20 +2669,47 @@
     var w=(tr&&tr.clientWidth)||0, tw=(th&&th.offsetWidth)||56;
     return {w:w, tw:tw, half:tw/2, usable:Math.max(1, w-tw)};
   }
-  // Thumb travel = curation-tab center → note-tab center (James: one-thumb reach, so the
-  // range is narrower than the full card). Align the track BOX to the outer tab centers;
-  // with the half-thumb inset the thumb CENTER then lands exactly on each tab center
-  // (cont0=curation, cont1=video=midpoint, cont2=note). Re-run on layout changes only.
+  // Thumb travel: one-thumb reach, so the range is narrower than the full card
+  // (James). It used to be derived from the outer tab centres, but in portrait
+  // the tab row is display:none now and a hidden element measures zero. The
+  // ratios below ARE those centres: three equal segments put them at 1/6, 3/6
+  // and 5/6 of the row, so the travel and the feel are unchanged — the number
+  // is written down instead of being read off an element that is still there.
+  var HSL_END_RATIO = 1 / 6;
   function syncSliderToTabs(){
     var track=document.getElementById('hslTrack'), hsl=document.getElementById('hsl'),
-        th=document.getElementById('hslThumb'), tabs=document.querySelectorAll('.htab[data-htab]');
-    if(!track||!hsl||tabs.length<3) return;
+        th=document.getElementById('hslThumb');
+    if(!track||!hsl) return;
     var hR=hsl.getBoundingClientRect(); if(!hR.width) return;
-    var half=((th&&th.offsetWidth)||13)/2;
-    var c0=tabs[0].getBoundingClientRect(), c2=tabs[tabs.length-1].getBoundingClientRect();
-    var curC=(c0.left+c0.width/2)-hR.left, noteC=(c2.left+c2.width/2)-hR.left;
-    track.style.left=(curC-half)+'px';
-    track.style.right=(hR.width-(noteC+half))+'px';
+    var half=((th&&th.offsetWidth)||26)/2;
+    var inset=hR.width*HSL_END_RATIO;
+    track.style.left=(inset-half)+'px';
+    track.style.right=(inset-half)+'px';
+  }
+  /* The handle's glyph is the position, not a consequence of it: each icon's
+     opacity is 1 minus its distance from the continuous position, so a drag
+     melts one into the next and a settle leaves exactly one. Driven from
+     homePaintPos so there is no second animation to keep in step. */
+  function homePaintHandle(cont){
+    var ics=document.querySelectorAll('#hslThumb .hs-ic');
+    for(var i=0;i<ics.length;i++){
+      var w=1-Math.min(1, Math.abs(cont-i));
+      ics[i].style.opacity=w;
+      ics[i].style.transform='scale('+(0.72+0.28*w)+')';
+    }
+  }
+  /* What the row above the list says. Names the stop the handle's glyph cannot,
+     and states what the stop is for. [J:2026-08-04] */
+  var HSTAT=[
+    {name:'관심',    desc:'광고 없이 구독한 관심 주제 시청'},
+    {name:'브리프',  desc:'핵심 구간만 시간 효율적인 학습'},
+    {name:'인사이트', desc:'한 주간의 필수 지식으로 성장'}
+  ];
+  function homePaintStatus(idx){
+    var s=HSTAT[Math.max(0,Math.min(2,idx))]; if(!s) return;
+    var n=document.getElementById('hsName'), d=document.getElementById('hsDesc');
+    if(n) n.textContent=s.name;
+    if(d) d.textContent=s.desc;
   }
   // cont = continuous position 0..2 (0=curation … 2=note). animate=false while dragging.
   function homePaintPos(cont, animate){
@@ -2656,6 +2722,10 @@
     var m=homeMetrics(), left=m.half+(cont/2)*m.usable;
     if(th) th.style.left=left+'px';
     if(fill) fill.style.width=left+'px';
+    homePaintHandle(cont);
+    // Mid-drag the row reads the nearest stop, so the words and the glyph agree
+    // at every moment instead of the text lagging until release.
+    homePaintStatus(Math.round(cont));
   }
   function homeGo(idx){
     idx=Math.max(0, Math.min(2, idx|0)); homeIdx=idx; homeTab=HTABS[idx];
