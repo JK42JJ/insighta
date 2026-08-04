@@ -38,6 +38,8 @@ import {
   MAX_DURATION_SEC,
 } from '@/skills/plugins/batch-video-collector/manifest';
 import { MS_PER_DAY } from '@/utils/time-constants';
+import { generateMandalaWithQueries } from '@/modules/mandala/generator';
+import { config } from '@/config/index';
 import { CURATION_RELEVANCE_FLOOR } from './config';
 
 const log = logger.child({ module: 'curation/weekly-fresh' });
@@ -63,6 +65,75 @@ export const CURATION_FRESH_RETRY_DAYS = 30;
 export function curationSubGoals(topic: string): string[] {
   const t = topic.trim();
   return [t, `${t} 최신`, `${t} 강의`, `${t} 사례`];
+}
+
+/** What the fresh leg hands to v5: cell labels, and queries when we have them. */
+export interface ShapedTopic {
+  subGoals: string[];
+  /** Full-coverage per-cell queries; undefined = let v5 run its own query-gen. */
+  precomputedQueries?: Array<{ cellIndex: number; query: string }>;
+  /** False = the suffix labels above (generation off, failed, or degraded). */
+  shaped: boolean;
+}
+
+/**
+ * Turn a one-word topic into something v5 was built to receive.
+ *
+ * v5 expects a mandala: a centre plus sub-goals a person actually wrote, each
+ * meaning something different. A curation subscription has one word, so the
+ * shipped code manufactured four near-identical labels by appending 최신/강의/
+ * 사례. Handed four labels that barely differ, the query generator has to
+ * invent the difference — and "<topic> 사례" refines into success stories.
+ * Measured on prod for "파이썬" (2026-08-03 04:03): the 7-day window returned
+ * raw=1/title=0, the 30-day retry recruited 4 candidates, and they came from
+ * 라이프해커·자청 / 유튜브신쌤 / 지투지 — self-help channels, not Python ones.
+ *
+ * `generateMandalaWithQueries` is the wizard's existing answer to exactly this
+ * problem: one call produces the structure AND its per-cell queries in a single
+ * continuous context, so the cells cannot collide. v5 already accepts those
+ * queries verbatim through `precomputedQueries`. Nothing here is new — the
+ * curation path simply never wired it up.
+ *
+ * Fail-open by construction: anything short of a full-coverage result returns
+ * the suffix labels, which is what ships today.
+ */
+export async function shapeTopic(topic: string): Promise<ShapedTopic> {
+  const fallback: ShapedTopic = { subGoals: curationSubGoals(topic), shaped: false };
+  if (!config.curationTopicShaping.enabled) return fallback;
+
+  try {
+    const gen = await generateMandalaWithQueries({ goal: topic, language: 'ko' });
+    const subGoals = (gen.structure.sub_goals ?? []).map((s) => s.trim()).filter(Boolean);
+    if (subGoals.length < 2) {
+      log.warn('curation topic shaping: too few sub-goals, using suffix labels', {
+        topic,
+        subGoals: subGoals.length,
+      });
+      return fallback;
+    }
+    // Partial coverage is worse than none: a sparse query set leaves some cells
+    // to v5's own generator and some to ours, which is the collision we are
+    // removing. The generator already reports this as `degraded`.
+    const usable = !gen.meta.degraded && (gen.cellQueries?.length ?? 0) === subGoals.length;
+    log.info('curation topic shaping', {
+      topic,
+      subGoals,
+      queryCount: gen.cellQueries?.length ?? 0,
+      degraded: gen.meta.degraded,
+      latencyMs: gen.meta.latencyMs,
+    });
+    return {
+      subGoals,
+      precomputedQueries: usable ? gen.cellQueries : undefined,
+      shaped: true,
+    };
+  } catch (err) {
+    log.warn('curation topic shaping failed, using suffix labels', {
+      topic,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return fallback;
+  }
 }
 
 /**
@@ -187,10 +258,14 @@ export async function fetchFreshTopicVideos(args: {
   limit: number;
 }): Promise<{ picks: FreshPick[]; windowDays: number; fitDropped: number }> {
   const { topic, weekDate, excludeVideoIds, limit } = args;
+  // Shaped once, above the window retry: the 30-day retry is the same topic,
+  // so re-running the generator for it would pay twice for one answer.
+  const shape = await shapeTopic(topic);
   const runSearch = (days: number) =>
     runV5Executor({
       centerGoal: topic,
-      subGoals: curationSubGoals(topic),
+      subGoals: shape.subGoals,
+      ...(shape.precomputedQueries ? { precomputedQueries: shape.precomputedQueries } : {}),
       focusTags: [],
       targetLevel: '',
       language: 'ko',
@@ -242,7 +317,12 @@ export async function fetchFreshTopicVideos(args: {
   log.info('curation fresh leg', {
     topic,
     windowDays,
+    // `searched` is the measurable that decides whether the shaping worked:
+    // it was 4 for "파이썬" over 30 days before this change.
     searched: v5.cards.length,
+    shaped: shape.shaped,
+    subGoalCount: shape.subGoals.length,
+    queryCount: shape.precomputedQueries?.length ?? 0,
     fitDropped,
     pooled: pooled.size,
     picks: picks.length,
