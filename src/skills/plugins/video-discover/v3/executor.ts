@@ -59,6 +59,7 @@ import { isSubgoalAnchorEnabled, buildAnchoredSubgoalQuery } from '@/config/subg
 import { placeAutoAddedCards } from '@/modules/mandala/place-auto-added-cards';
 import { isDiscoverNeverZeroFloorEnabled, getZeroFloorMax } from '@/config/discover-zero-floor';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
+import { ingestEnrichedToPool } from './pool-ingest';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 import { resolveLanguage } from '@/utils/detect-language';
 import { scheduleDomainFitShadow } from '@/modules/domain-fit-shadow/shadow';
@@ -1210,6 +1211,49 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   }
   debug.timing.filterMs = Date.now() - tFilterStart;
   debug.afterFilter = enriched.length;
+
+  // CP489 Phase 1 — fire-and-forget ingest Tier 2 raw (post-shorts/lang
+  // filter, pre-mandala-filter) into video_pool so the same videos hit
+  // the Tier 1 cache on subsequent searches. Measured baseline (CP489):
+  // GLOBAL Tier 2 → video_pool hit rate 3.6% / niche-mandala 1.5%.
+  // Persisting survivors here breaks the cold-fetch loop without
+  // affecting the in-flight discovery latency.
+  //
+  // Source tag distinguishes wizard precompute (`wizard_realtime`) from
+  // add-cards path (`add_cards_realtime`) — detected via the same
+  // `mandalaId` signal Tier2Input already carries for the center-goal
+  // cache (undefined ⇒ ephemeral wizard precompute).
+  void (async () => {
+    try {
+      const ingestSource: 'wizard_realtime' | 'add_cards_realtime' = input.mandalaId
+        ? 'add_cards_realtime'
+        : 'wizard_realtime';
+      const result = await ingestEnrichedToPool({
+        prisma: getPrismaClient(),
+        candidates: enriched.map((e) => ({
+          videoId: e.videoId,
+          title: e.title,
+          description: e.description ?? null,
+          channelTitle: e.channelTitle ?? null,
+          channelId: e.channelId ?? null,
+          thumbnail: e.thumbnail ?? null,
+          viewCount: e.viewCount,
+          likeCount: e.likeCount,
+          durationSec: e.durationSec,
+          publishedDate: e.publishedDate,
+        })),
+        language: input.state.language,
+        source: ingestSource,
+      });
+      log.info(
+        `pool-ingest: source=${ingestSource} attempted=${result.attempted} inserted=${result.inserted} errors=${result.errors}`
+      );
+    } catch (err) {
+      log.warn(
+        `pool-ingest threw (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  })();
 
   // Tier 2 quality gate — pure filter, flag-controlled. See quality-gate.ts.
   if (v3Config.enableQualityGate) {
