@@ -166,6 +166,8 @@ try {
 
 **Barrel exports**: Use `index.ts` for public API of a module directory. Internal files should not be imported directly from outside.
 
+**생성 콘텐츠 이모지 금지**: 생성 콘텐츠(노트/요약 등)에 이모지/picto 기호(✅❌⚠️✓✗) 금지 — 평문(맞음/틀림/주의)+구조(콜아웃/볼드)로.
+
 ```
 features/auth/
   model/

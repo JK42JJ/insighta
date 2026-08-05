@@ -48,7 +48,7 @@ export function buildMandalaWithQueriesPrompt(input: MergedGenPromptInput): stri
 
 [1단계 — 구조]
 - center_goal: 사용자가 입력한 목표를 그대로 사용. 절대 재작성/확장/축약하지 말 것.
-- center_label: center_goal의 2-4단어 요약 (최대 10자). 단어 사이 공백 (예: "미국 주식 1억" ✅).
+- center_label: center_goal의 2-4단어 요약 (최대 10자). 단어 사이 공백 (예: "미국 주식 1억" (올바름)).
 - sub_goals: 함께 모이면 목표를 달성하는 8개의 구체적이고 실행 가능한 영역. 목표 수준(${level})에 맞게 설계.
 ${koFocusLine ? '  - ' + koFocusLine.slice(2) + '을 자연스럽게 반영\n' : ''}- sub_labels: 각 sub_goal의 의미를 담은 짧은 라벨 (4-10자, 무의미한 축약/앞글자 자르기 금지, 단어 사이 공백).
 
