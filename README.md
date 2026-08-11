@@ -119,9 +119,11 @@ API reference: `http://localhost:3000/api-reference`
 ## Docs
 
 - [Vision](./docs/VISION.md) — product philosophy, persona model, trust graph
-- [Architecture](./docs/architecture/) — system topology
-- [SSOT](./docs/SSOT.md) — decision tracking
 - [README rewrite rationale](./docs/handoffs/readme-rewrite-cp490.md) — editing rules SSOT for this README
+
+Architecture notes and the SSOT decision log are kept out of this repo on
+purpose: they name production topology, which R3 above excludes. They are not
+missing, and they are not public.
 
 ## License
 
