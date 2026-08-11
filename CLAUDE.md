@@ -2,11 +2,14 @@
 
 ## 세션 시작 필수 로드 (매 세션 첫 번째 액션)
 
-아래 4개 파일을 읽기 전에는 어떤 작업도 시작하지 않는다:
+아래 3개 파일을 읽기 전에는 어떤 작업도 시작하지 않는다:
 - `.claude/agents/DELEGATION.md`
 - `memory/work-efficiency.md`
-- `memory/feedback-speed-agents.md`
 - `memory/troubleshooting.md`
+
+> `feedback-speed-agents.md` (memory 디렉토리) 는 **존재한 적이 없다** (2026-08-11 확인). 이 목록이
+> 없는 파일을 요구해 왔으므로, 매 세션 이 규칙은 조용히 미충족 상태였다. 다루려던 내용은
+> `work-efficiency.md` 와 `DELEGATION.md` 에 이미 있다.
 
 ## 팀 에이전트 강제 규칙
 
@@ -25,9 +28,15 @@
 
 ## UI 작업 전 필수 확인
 
-- **UI/프론트엔드 코드 수정 전에 반드시 `memory/ux-issues.md`를 읽고 기존 이슈 및 regression 체크리스트를 확인한 후 작업한다. 예외 없음.**
-- 카드/D&D/선택 관련 수정 시 ux-issues.md의 Regression Pattern Warning 체크리스트 6항목 확인
-- UI 수정 후 체크리스트 기반 영향 범위 자체 검증
+- **UI/프론트엔드 코드 수정 전에 반드시 `memory/troubleshooting.md` 의 LEVEL-2+ 시각/UI 패턴을 확인한 후 작업한다. 예외 없음.**
+- `scripts/cc-facts.sh` 가 매 `/init` 에 그 목록을 출력한다 — 별도로 찾을 필요 없다.
+- 카드/D&D/선택 관련 수정 시 `/check` 의 `[6ab]`(측정 셋업 assert) · `[6ac]`(실앱 재현 + 렌더레이어 전수) 항목 적용
+- UI 수정 후 영향 범위 자체 검증
+
+> 이 규칙은 2026-08-11 까지 `ux-issues.md` (memory 디렉토리) 를 가리켰고, **그 파일은 존재하지 않았다.**
+> "예외 없음" 이라고 쓰인 절대규칙이 매 UI 세션마다 조용히 통과했다는 뜻이다. 지금 주력
+> 개발 표면이 다이얼 PWA — 전부 UI 다. 실제로 UI 회귀 이력을 담고 있는 곳으로 재지정한다.
+> 빈 파일을 만들어 링크만 살리는 선택지는 버렸다: 지표는 초록이 되고 규칙은 여전히 비어 있게 된다.
 
 ## Hard Rules
 
