@@ -47,6 +47,30 @@ export const BATCH_COLLECTOR_SEARCH_PARALLELISM = 5;
  */
 export const BATCH_COLLECTOR_TTL_DAYS = 60;
 
+/**
+ * Freshness window in days for search.list `publishedAfter`.
+ *
+ * 0 = do not send the parameter, which is what every run before 2026-08-11
+ * did. The pool shows the cost of that: of the rows still active, 94 were
+ * published in the last 30 days and 316 are more than a year old, so a
+ * "this week" curation deck had nothing recent to pick from and surfaced
+ * videos four to nine years old. The 2026-08-04 pilot stored 121 videos and
+ * not one of them was from the last 30 days.
+ *
+ * Set BATCH_COLLECTOR_FRESH_DAYS to a positive number to bound the window.
+ * Unset keeps the old behaviour so this ships dark and rolls back by
+ * clearing the variable — no code revert.
+ */
+export const BATCH_COLLECTOR_FRESH_DAYS_DEFAULT = 0;
+/** Upper bound on the window; beyond a year "fresh" stops meaning anything. */
+export const BATCH_COLLECTOR_FRESH_DAYS_MAX = 365;
+/**
+ * search.list `order`. YouTube defaults to relevance, and the client drops
+ * the parameter when it equals 'relevance', so this default is also a no-op.
+ * 'date' returns newest-first within the window.
+ */
+export const BATCH_COLLECTOR_SEARCH_ORDER_DEFAULT: 'relevance' | 'viewCount' | 'date' = 'relevance';
+
 // Quality tier thresholds (view_count)
 export const QUALITY_GOLD_VIEW_COUNT = 100_000;
 export const QUALITY_SILVER_VIEW_COUNT = 10_000;
