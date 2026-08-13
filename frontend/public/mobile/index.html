@@ -1349,6 +1349,13 @@
      wheel, hint and journey bar; the feed owns the whole area under the header. */
   #cdFeed{display:none; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
     background:#0D0D10; scroll-behavior:auto; min-height:0}
+  /* The unmute chip is position:fixed at the bottom centre, so it sits on top of
+     whatever the feed has scrolled to that spot -- in practice a card title,
+     which it covers completely (device 2026-08-13). Moving the chip only moves
+     the problem, so the feed gives it a strip of its own while it is showing:
+     scrolling then ends above the chip instead of under it. Unmuting hides the
+     chip and this padding goes with it. */
+  body.curdeck.cffeedmuted #cdFeed{padding-bottom:calc(var(--sab) + 62px)}
   @media (orientation:portrait){
     /* Portrait curation deck = full-bleed native-scroll feed. #curDeck is a flex column:
        header (flex:none) sits above, the feed (flex:1) fills below, the stage is a fixed
@@ -1973,7 +1980,7 @@
         <div class="login-scr">
           <div class="login-mark">INSIGHTA</div>
           <div class="login-big">유튜브를<br>나만의 지식노트로.</div>
-          <div class="login-sub" id="loginSub">로그인하면 내 만다라가 이 기계에 도착합니다</div>
+          <div class="login-sub" id="loginSub">로그인하면 내 노트가 이 기계에 도착합니다</div>
           <button class="gbtn" id="bLogin">
             <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.5 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.6a14.5 14.5 0 0 1 0-9.2l-7.9-6.2a24 24 0 0 0 0 21.6l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.6-5.8l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-4-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>
             Google로 계속하기
@@ -2050,7 +2057,7 @@
       <div class="scr" data-s="news" id="scrNews">
         <div class="top"><span class="bc"><button class="up" data-back="menu">설정</button><span class="sep">›</span><span class="cur">새소식</span></span></div>
         <div class="menu-list" id="newsList"><div class="menu-note" style="margin-top:20px">아직 공지가 없어요</div></div>
-        <div class="menu-note">MENU를 누르면 내 만다라로</div>
+        <div class="menu-note">MENU를 누르면 내 노트로</div>
       </div>
 
       <!-- 초대권 -->
@@ -2216,7 +2223,7 @@
         </div>
         <div class="go-progress" id="goProgress" hidden>
           <div class="pulse"></div>
-          <div class="go-msg" id="goMsg">만다라 구조를 그리는 중…</div>
+          <div class="go-msg" id="goMsg">노트 구조를 그리는 중…</div>
         </div>
       </div>
       <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span class="ytsBackT">돌아가기</span></button>
@@ -2238,7 +2245,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-13-98';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-13-99';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
 
   /* ===== diag probe (build 89) — opt-in instability triage, OFF by default.
@@ -2642,7 +2649,7 @@
     if(!rows) return;
     var items=homeItems();
     if(!items.length){
-      rows.innerHTML='<button class="row-empty" id="emptyStart" type="button" style="display:block;width:100%;border:none;background:none;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent">아직 만다라가 없어요<br><span style="color:var(--acc,#E8804C);font-weight:700">첫 목표를 적어보세요<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-left:4px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>';
+      rows.innerHTML='<button class="row-empty" id="emptyStart" type="button" style="display:block;width:100%;border:none;background:none;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent">아직 노트가 없어요<br><span style="color:var(--acc,#E8804C);font-weight:700">첫 목표를 적어보세요<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-left:4px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>';
       var _es=document.getElementById('emptyStart'); if(_es) _es.onclick=openHub;
       return;
     }
@@ -7165,7 +7172,7 @@
     try{
       var tok=await freshToken(); if(!tok){ loginRedirect(); return; }
       var sessionId=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2));
-      goMsg.innerHTML='만다라 구조를 그리는 중…<small>10~20초</small>';
+      goMsg.innerHTML='노트 구조를 그리는 중…<small>10~20초</small>';
       var st=await wizardStream(goal,sessionId,tok);
       if(!st) throw new Error('구조 생성 실패');
       goMsg.innerHTML='카드를 모아 저장하는 중…<small>거의 다 됐어요</small>';
