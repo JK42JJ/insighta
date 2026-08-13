@@ -1,0 +1,89 @@
+{{- if .Values.worker.enabled }}
+# Queue consumer and scheduler host. Same image as the api, different
+# entrypoint mode -- see docker/entrypoint.sh `worker`.
+#
+# Exactly one deployment may hold the node-cron schedulers, because their
+# overlap guards are per-process variables. That is this one, and it stays at
+# a single replica until those schedules move to pg-boss, which arbitrates in
+# the database and collapses across processes.
+#
+# The pg-boss workers themselves are safe at any replica count; if queue
+# depth ever becomes the constraint, the path is to move the schedulers out
+# and then raise this number -- not to raise it now.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insighta.fullname" . }}-worker
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  # Never two at once. The default RollingUpdate would briefly overlap the
+  # old and new pod, and during that overlap every schedule fires twice.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "insighta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      # AutoSyncScheduler waits up to 30s for in-flight syncs on shutdown.
+      # A worker has no user waiting on it, so give it room to finish rather
+      # than leaving sync_status=IN_PROGRESS rows behind.
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: worker
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          args: ["worker"]
+          ports:
+            - name: probe
+              containerPort: {{ .Values.worker.port }}
+          env:
+            - name: WORKER_PORT
+              value: {{ .Values.worker.port | quote }}
+            - name: REDIS_HOST
+              value: {{ include "insighta.fullname" . }}-redis
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: REDIS_USER
+              value: insighta
+            # Explicit rather than relying on the defaults: this is the one
+            # process that must hold them.
+            - name: RUN_QUEUE_WORKERS
+              value: "true"
+            - name: RUN_SCHEDULERS
+              value: "true"
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envSecretName }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /health, port: probe }
+            initialDelaySeconds: 40
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            # Goes 503 as soon as SIGTERM arrives, so the pod leaves the
+            # endpoint list before draining starts.
+            httpGet: { path: /health/ready, port: probe }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: cache
+              mountPath: /app/cache
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: cache
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+{{- end }}

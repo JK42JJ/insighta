@@ -75,7 +75,20 @@ case "$1" in
         exec node dist/api/server.js
         ;;
 
+    worker)
+        # Job queue consumer + schedulers, no application HTTP surface.
+        # Same background work the api process runs (src/api/background.ts),
+        # split out so the web tier can scale past one replica -- the
+        # node-cron schedulers are guarded per-process and must run in
+        # exactly one place.
+        echo "Starting worker (queue + schedulers)..."
+        exec node dist/api/worker.js
+        ;;
+
     scheduler)
+        # Legacy: the node-cron SchedulerManager alone, without the pg-boss
+        # workers. Superseded by `worker`; kept because it is a documented
+        # entrypoint. Prefer `worker`.
         echo "Starting scheduler daemon..."
         exec node dist/cli/index.js schedule-start
         ;;

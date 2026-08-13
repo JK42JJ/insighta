@@ -48,6 +48,15 @@ spec:
               value: {{ .Values.redis.port | quote }}
             - name: REDIS_USER
               value: insighta
+{{- if .Values.worker.enabled }}
+            # A worker deployment holds the queue and the schedulers, so
+            # these pods serve HTTP only. Without this the schedulers would
+            # run here as well and fire once per replica.
+            - name: RUN_QUEUE_WORKERS
+              value: "false"
+            - name: RUN_SCHEDULERS
+              value: "false"
+{{- end }}
           envFrom:
             - secretRef:
                 name: {{ .Values.envSecretName }}

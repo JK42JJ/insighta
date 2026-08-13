@@ -49,6 +49,24 @@ api:
     initialDelaySeconds: 10
     periodSeconds: 10
 
+# Queue consumer and scheduler host. Same image as api, entrypoint `worker`.
+#
+# When this is off, the api process keeps doing everything, which is what the
+# compose deployment does today. Turning it on moves the queue and the
+# schedulers here and switches the api pods to serving HTTP only -- which is
+# what lets api.replicaCount go above 1.
+worker:
+  enabled: true
+  replicaCount: 1
+  port: 3001
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 768Mi     # batch work peaks higher than request handling
+      cpu: 1000m
+
 frontend:
   replicaCount: 1
   image:
