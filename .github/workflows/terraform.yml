@@ -1,6 +1,13 @@
 name: Terraform
 
 on:
+  schedule:
+    # Daily drift check. ArgoCD will watch inside the cluster; nothing watches
+    # outside it, and that is where the t2.micro/t3.medium disagreement lived
+    # unnoticed — state and tfvars both said t2.micro while the machine had
+    # been t3.medium for months.
+    - cron: '40 4 * * *'
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
@@ -31,29 +38,27 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Check for .tf files
-        id: check-tf
+      # This used to emit a warning and pass. It meant the job stayed green for
+      # months while terraform/ held zero .tf files and the infrastructure it
+      # describes existed only in remote state — the audit reported success
+      # because it had nothing to audit. Nothing to check is not a pass.
+      - name: Require .tf files
         run: |
-          if find . -name '*.tf' -maxdepth 1 | grep -q .; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No .tf files found in ${{ env.WORKING_DIR }} — skipping validation"
+          if ! find . -name '*.tf' -maxdepth 1 | grep -q .; then
+            echo "::error::no .tf files in ${{ env.WORKING_DIR }} — there is nothing to validate, which is a failure, not a skip"
+            exit 1
           fi
         working-directory: ${{ env.WORKING_DIR }}
 
       - name: Terraform fmt check
-        if: steps.check-tf.outputs.found == 'true'
         run: terraform fmt -check -recursive
         working-directory: terraform
 
       - name: Terraform init (validate only)
-        if: steps.check-tf.outputs.found == 'true'
         run: terraform init -backend=false
         working-directory: ${{ env.WORKING_DIR }}
 
       - name: Terraform validate
-        if: steps.check-tf.outputs.found == 'true'
         run: terraform validate
         working-directory: ${{ env.WORKING_DIR }}
 
@@ -130,3 +135,82 @@ jobs:
       - name: Terraform apply
         run: terraform apply -auto-approve -var-file=terraform.tfvars
         working-directory: ${{ env.WORKING_DIR }}
+
+  drift:
+    name: Drift Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      issues: write
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform init
+        run: terraform init
+        working-directory: ${{ env.WORKING_DIR }}
+
+      # -detailed-exitcode is the whole point. A bare `plan` exits 0 whether or
+      # not it found changes, so a job that only checks the exit status reports
+      # success on a drifted estate. 0 means no changes, 2 means changes, 1 is
+      # an error.
+      - name: Plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -input=false -lock=false -detailed-exitcode -no-color > plan.txt 2>&1
+          CODE=$?
+          set -e
+          echo "exitcode=$CODE" >> "$GITHUB_OUTPUT"
+          tail -60 plan.txt
+          case "$CODE" in
+            0) echo "no drift" ;;
+            2) echo "::warning::drift detected" ;;
+            *) echo "::error::plan failed"; exit 1 ;;
+          esac
+        working-directory: ${{ env.WORKING_DIR }}
+
+      - name: Open an issue when drift is found
+        if: steps.plan.outputs.exitcode == '2'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.WORKING_DIR }}/plan.txt', 'utf8').slice(0, 55000);
+            const today = new Date().toISOString().split('T')[0];
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              labels: 'terraform-drift', state: 'open',
+            });
+            const body = `Infrastructure no longer matches \`terraform/\` as of ${today}.\n\n` +
+              `Something changed outside Terraform. Reconcile with \`terraform apply -refresh-only\` ` +
+              `if reality is correct, or \`terraform apply\` if the code is.\n\n` +
+              `[Workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n\n` +
+              `<details><summary>plan</summary>\n\n\`\`\`\n${plan}\n\`\`\`\n</details>`;
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing.data[0].number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title: 'Terraform drift detected', body,
+                labels: ['terraform-drift', 'bug'],
+              });
+            }
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.plan.outputs.exitcode }}" = "0" ]; then
+            echo "### No drift — infrastructure matches the code" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Drift detected — see the open \`terraform-drift\` issue" >> "$GITHUB_STEP_SUMMARY"
+          fi
