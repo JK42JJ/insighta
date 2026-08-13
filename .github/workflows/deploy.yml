@@ -42,6 +42,7 @@ jobs:
       mobile_only: ${{ steps.d.outputs.mobile_only }}
       api: ${{ steps.d.outputs.api }}
       frontend: ${{ steps.d.outputs.frontend }}
+      deployable: ${{ steps.d.outputs.deployable }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,6 +54,7 @@ jobs:
             echo "mobile_only=false" >> "$GITHUB_OUTPUT"
             echo "api=true"          >> "$GITHUB_OUTPUT"
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "deployable=true"   >> "$GITHUB_OUTPUT"
             echo "manual run -> full pipeline"; exit 0
           fi
 
@@ -65,6 +67,7 @@ jobs:
             echo "mobile_only=false" >> "$GITHUB_OUTPUT"
             echo "api=true"          >> "$GITHUB_OUTPUT"
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "deployable=true"   >> "$GITHUB_OUTPUT"
             echo "no usable base ($BEFORE) -> full pipeline"; exit 0
           fi
 
@@ -77,6 +80,7 @@ jobs:
             echo "mobile_only=false" >> "$GITHUB_OUTPUT"
             echo "api=true"          >> "$GITHUB_OUTPUT"
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "deployable=true"   >> "$GITHUB_OUTPUT"
             echo "empty diff -> full pipeline"; exit 0
           fi
 
@@ -91,10 +95,33 @@ jobs:
           if echo "$FILES" | grep -qv '^frontend/'; then API=true; else API=false; fi
           if echo "$FILES" | grep -q  '^frontend/';  then FE=true;  else FE=false;  fi
 
+          # Does anything here reach production at all?
+          #
+          # Every path below is excluded from the API image by .dockerignore,
+          # is not copied to the box by the deploy job (which ships only
+          # docker-compose.prod.yml and docker/redis/), and cannot arrive
+          # through a bind mount — compose declares named volumes only
+          # (cache_data, logs_data, redis_data). So a change confined to them
+          # provably cannot alter what runs.
+          #
+          # Written as an exclusion rather than an allowlist on purpose. A new
+          # top-level directory nobody thought about falls through to
+          # deployable=true, which wastes a deploy; an allowlist would silently
+          # skip it, and a deploy that should have happened and did not is the
+          # failure this repository can least afford.
+          IRRELEVANT='^(terraform|docs|prompt|tests|scripts|\.github|\.claude)/|^[^/]*\.md$'
+          if echo "$FILES" | grep -Eqv "$IRRELEVANT"; then
+            DEPLOYABLE=true
+          else
+            DEPLOYABLE=false
+            echo "every changed path is excluded from the image and the box -> nothing to deploy"
+          fi
+
           echo "mobile_only=$MOBILE_ONLY" >> "$GITHUB_OUTPUT"
           echo "api=$API"                 >> "$GITHUB_OUTPUT"
           echo "frontend=$FE"             >> "$GITHUB_OUTPUT"
-          echo "mobile_only=$MOBILE_ONLY api=$API frontend=$FE"
+          echo "deployable=$DEPLOYABLE"   >> "$GITHUB_OUTPUT"
+          echo "mobile_only=$MOBILE_ONLY api=$API frontend=$FE deployable=$DEPLOYABLE"
 
   # The dial's only gate. Nothing in ci.yml reads frontend/public/mobile:
   # tsc looks at src, vitest looks at src, and vite copies public/ verbatim.
@@ -125,7 +152,7 @@ jobs:
     needs: [scope]
     # The ref guard matters for workflow_dispatch, which can be started from any
     # branch; the push trigger is already main-only.
-    if: github.ref == 'refs/heads/main' && needs.scope.outputs.mobile_only != 'true'
+    if: github.ref == 'refs/heads/main' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -151,7 +178,7 @@ jobs:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
     needs: [scope]
-    if: needs.scope.outputs.mobile_only != 'true'
+    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     permissions:
       contents: read
       packages: write
@@ -327,7 +354,7 @@ jobs:
     name: Database Schema Sync
     runs-on: ubuntu-latest
     needs: [scope]
-    if: needs.scope.outputs.mobile_only != 'true'
+    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -378,7 +405,7 @@ jobs:
     name: Deploy to EC2
     runs-on: ubuntu-latest
     needs: [scope, migrate, build-and-push]
-    if: needs.scope.outputs.mobile_only != 'true'
+    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     environment: production
     env:
       SG_ID: sg-079aa1ca6855e587b
@@ -801,6 +828,36 @@ jobs:
         run: |
           sleep 5
           curl -sf https://${{ secrets.DOMAIN }}/health || echo "External health check pending (DNS may not be configured yet)"
+
+      # Every deploy leaves its SHA-tagged image on the box and nothing removed
+      # them: measured 2026-08-13, images held 4.92 GB with 1.767 GB reclaimable
+      # after five weeks, on a 20 GB disk already at 66%. No systemd timer, no
+      # crontab. A one-off cleanup would put us back here in a month, so the
+      # collection happens where the images are created.
+      #
+      # Deliberately not `prune -a`. That keeps only what is running and would
+      # delete every local rollback target. rollback.yml pulls from GHCR, which
+      # would make that safe — except GHCR's own retention has not been
+      # confirmed (the token lacks read:packages), and rollback is not something
+      # to stake on an unverified assumption. 30 days keeps a month of targets
+      # locally; revisit once GHCR retention is known.
+      #
+      # Runs only after Verify, so a deploy that failed leaves everything alone.
+      - name: Reclaim old images
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            BEFORE=$(df --output=used -BM / | tail -1 | tr -dc '0-9')
+            # Images in use by a running container are never touched by prune.
+            docker image prune -af --filter 'until=720h' || true
+            docker builder prune -f --filter 'until=720h' || true
+            AFTER=$(df --output=used -BM / | tail -1 | tr -dc '0-9')
+            echo "disk used: ${BEFORE}M -> ${AFTER}M (freed $((BEFORE - AFTER))M)"
+            df -h / | tail -1
+            docker system df
 
       - name: Close SSH for runner IP
         if: always()

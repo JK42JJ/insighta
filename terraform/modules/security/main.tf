@@ -2,15 +2,22 @@
 # an explicit list.
 #
 # ingress is under ignore_changes because two automations edit this group at
-# runtime — deploy.yml opens the CI runner's address for the duration of a
-# deploy, and scripts/ssh-connect.sh rewrites it on every operator connection.
-# Without this, each of those leaves the group permanently out of sync with the
-# code and any apply would revoke a rule someone is actively using.
+# runtime, and they are distinguishable by what they write:
 #
-# This is a concession, not a design. It means the firewall is only partly
-# declarative, and the rule list here is a floor rather than the whole truth:
-# measured 2026-08-13, the live group carried four SSH CIDRs against the one in
-# state, because revocation is best-effort and failures leave entries behind.
+#   deploy.yml          tags the rule Purpose=github-actions-deploy, no Description
+#   scripts/ssh-connect.sh  writes Description "JK dynamic SSH <date>"
+#
+# Without this, each of those leaves the group out of sync with the code and an
+# apply would revoke a rule someone is actively using.
+#
+# This is a concession, not a design. The rule list here is a floor rather than
+# the whole truth: on 2026-08-13 the live group carried four port-22 CIDRs
+# against the one in state. CloudTrail shows the CI pairs its Authorize with a
+# Revoke, so those four were not failed cleanups — they came from ssh-connect.sh,
+# which only reaches its cleanup loop on the public-IP path. When Tailscale
+# succeeds the script exits before ensure_sg_rule is ever called, so nothing is
+# collected, and entries survive until some later run happens to fall through.
+#
 # The bastion design retires this by giving the group a single fixed source.
 resource "aws_security_group" "this" {
   name_prefix = var.name_prefix
