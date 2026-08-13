@@ -1,0 +1,21 @@
+---
+# Values below were measured on the production box on 2026-08-13, not chosen.
+# Changing one changes production; check the measurement first.
+
+# Upstreams that host nginx proxies to. Both are container-published ports
+# on the loopback interface.
+api_upstream:      "127.0.0.1:3000"
+frontend_upstream: "127.0.0.1:8081"
+
+# ACME webroot. The directory already exists on the box (created 2026-03-04)
+# and insighta.conf already serves /.well-known/acme-challenge/ from it.
+acme_webroot: /var/www/certbot
+
+sites:
+  insighta:
+    server_names: "insighta.one www.insighta.one"
+    cert_name: insighta.one
+  portfolio:
+    server_names: "portfolio.insighta.one"
+    cert_name: portfolio.insighta.one
+    docroot: /var/www/portfolio

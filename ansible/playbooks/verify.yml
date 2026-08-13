@@ -1,0 +1,90 @@
+---
+# Checks that the running stack matches what is declared. Writes nothing.
+#
+# The design lists a third playbook, deploy.yml, that would place the compose
+# file and run the stack. It is deliberately not implemented.
+#
+# .github/workflows/deploy.yml already deploys to this host over ssh. An
+# Ansible deploy path would be a second declaration of the same desired
+# state, which is the exact failure the design's first principle exists to
+# prevent: two declarations drift, and nothing reports it. Until the CI path
+# is retired, deployment has one owner and it is CI.
+#
+# What was missing was not a second way to deploy but a way to check that
+# what deployed is what was meant. That is this playbook.
+#
+#   bash scripts/ssh-connect.sh --update-sg
+#   cd ansible && ansible-playbook playbooks/verify.yml
+#
+# Non-zero exit means the host drifted from the declaration.
+- name: Verify the deployed stack
+  hosts: prod
+  gather_facts: false
+  vars:
+    compose_file: /opt/tubearchive/docker-compose.prod.yml
+    expected_containers:
+      - insighta-api
+      - insighta-redis
+      - insighta-frontend
+
+  tasks:
+    - name: Check the compose file is present
+      become: true
+      ansible.builtin.stat:
+        path: "{{ compose_file }}"
+      register: compose
+
+    - name: Fail if the compose file is missing
+      ansible.builtin.assert:
+        that: compose.stat.exists
+        fail_msg: "{{ compose_file }} is absent; the stack has no declaration on this host."
+
+    - name: Read container state
+      ansible.builtin.command: >-
+        docker ps --format '{% raw %}{{.Names}}|{{.Status}}|{{.Image}}{% endraw %}'
+      register: ps
+      changed_when: false
+
+    - name: Read restart policies
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        docker inspect -f '{% raw %}{{.Name}} {{.HostConfig.RestartPolicy.Name}}{% endraw %}' $(docker ps -q)
+      args:
+        executable: /bin/bash
+      register: policies
+      changed_when: false
+
+    - name: Every expected container is running
+      ansible.builtin.assert:
+        that: ps.stdout is search('^' ~ item ~ '\|', multiline=True)
+        fail_msg: "{{ item }} is not running. Running: {{ ps.stdout_lines | map('split', '|') | map('first') | list }}"
+      loop: "{{ expected_containers }}"
+
+    # A container can be up and still failing its healthcheck. "Up" alone is
+    # not evidence the service works.
+    - name: Every expected container reports healthy
+      ansible.builtin.assert:
+        that: ps.stdout is search('^' ~ item ~ '\|Up[^|]*\(healthy\)', multiline=True)
+        fail_msg: >-
+          {{ item }} is not reporting healthy.
+          {{ ps.stdout_lines | select('search', '^' ~ item ~ '\|') | list }}
+      loop: "{{ expected_containers }}"
+
+    - name: Every container restarts on reboot
+      ansible.builtin.assert:
+        that: policies.stdout is search('/' ~ item ~ ' unless-stopped')
+        fail_msg: >-
+          {{ item }} does not have restart=unless-stopped; it will not come
+          back after a host reboot.
+      loop: "{{ expected_containers }}"
+
+    - name: The public endpoint answers
+      ansible.builtin.uri:
+        url: https://insighta.one/health
+        status_code: [200]
+        timeout: 15
+      changed_when: false
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: "{{ ps.stdout_lines }}"

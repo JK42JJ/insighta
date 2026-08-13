@@ -11,6 +11,7 @@ docs
 prompt
 scripts
 terraform
+ansible
 frontend
 *.md
 *.pem

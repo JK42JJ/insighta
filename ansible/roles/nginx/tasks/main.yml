@@ -1,0 +1,114 @@
+---
+# Owns the two host nginx sites. Idempotent: a second run must report
+# changed=0. See ansible/README.md for the run procedure and rollback.
+
+- name: Assert the box matches what the templates were written against
+  become: true
+  block:
+    - name: Read sites-enabled
+      ansible.builtin.command: ls -1 /etc/nginx/sites-enabled/
+      register: enabled_sites
+      changed_when: false
+
+    - name: Fail if the enabled set is not the expected two sites
+      ansible.builtin.assert:
+        that:
+          - enabled_sites.stdout_lines | sort == ['insighta', 'portfolio']
+        fail_msg: >-
+          sites-enabled holds {{ enabled_sites.stdout_lines | sort }}, not
+          ['insighta', 'portfolio']. The templates in this role reproduce the
+          two sites measured on 2026-08-13. A third site means someone added
+          config this role does not know about, and applying it would delete
+          nothing but would leave that site unmanaged. Stop and re-measure.
+
+    - name: Check the ACME webroot exists
+      ansible.builtin.stat:
+        path: "{{ acme_webroot }}"
+      register: webroot
+
+    - name: Fail if the ACME webroot is missing
+      ansible.builtin.assert:
+        that: webroot.stat.isdir | default(false)
+        fail_msg: >-
+          {{ acme_webroot }} does not exist. Both site templates serve
+          /.well-known/acme-challenge/ from it; without the directory the
+          webroot authenticator cannot renew either certificate.
+
+# Backups are taken by the template module itself (backup: yes) so a failed
+# config test can be undone from the box. The off-box copies live in the
+# private mirror under backups/box/nginx/.
+- name: Render site configs
+  become: true
+  ansible.builtin.template:
+    src: "{{ item }}.conf.j2"
+    dest: "/etc/nginx/sites-available/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop:
+    - insighta
+    - portfolio
+  register: rendered
+
+- name: Enable sites
+  become: true
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ item }}"
+    dest: "/etc/nginx/sites-enabled/{{ item }}"
+    state: link
+    owner: root
+    group: root
+  loop:
+    - insighta
+    - portfolio
+
+# nginx -t is the gate. It runs whether or not the template changed, so a
+# config broken by something else is caught here rather than at reload.
+- name: Test the nginx configuration
+  become: true
+  ansible.builtin.command: nginx -t
+  register: nginx_test
+  changed_when: false
+  failed_when: false
+
+- name: Restore backups if the configuration is invalid
+  become: true
+  ansible.builtin.copy:
+    src: "{{ item.backup_file }}"
+    dest: "{{ item.dest }}"
+    remote_src: true
+    mode: "0644"
+  loop: "{{ rendered.results | selectattr('backup_file', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  when: nginx_test.rc != 0
+
+- name: Fail on invalid configuration
+  ansible.builtin.fail:
+    msg: |
+      nginx -t failed; the previous configs have been restored from their
+      on-box backups and nginx was not reloaded. The running server is
+      untouched.
+
+      {{ nginx_test.stderr }}
+  when: nginx_test.rc != 0
+
+- name: Reload nginx
+  ansible.builtin.debug:
+    msg: "config valid; reload handler will run if anything changed"
+  changed_when: rendered.changed
+  notify: Reload nginx
+
+# Proves the site actually answers, rather than proving nginx started.
+- name: Verify both sites respond over TLS
+  become: true
+  ansible.builtin.uri:
+    url: "https://{{ item }}/"
+    method: GET
+    status_code: [200, 301, 302]
+    timeout: 15
+  loop:
+    - insighta.one
+    - portfolio.insighta.one
+  changed_when: false
