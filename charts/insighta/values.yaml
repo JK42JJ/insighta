@@ -41,7 +41,11 @@ api:
     periodSeconds: 30
     failureThreshold: 3
   readinessProbe:
-    httpGet: { path: /health, port: 3000 }
+    # /health is static and answers 200 with no database attached, so it
+    # cannot express "not ready". /health/ready is the endpoint the
+    # application provides for this -- its schema declares a 503 carrying
+    # the database status (src/api/server.ts:231).
+    httpGet: { path: /health/ready, port: 3000 }
     initialDelaySeconds: 10
     periodSeconds: 10
 
@@ -78,6 +82,11 @@ redis:
     tag: local
     pullPolicy: IfNotPresent
   port: 6379
+  # docker/redis/redis.conf ships maxmemory 2gb with maxmemory-policy
+  # noeviction. Measured use is 4.7 MiB. Left at 2gb the container limit is
+  # reached first and the process is OOMKilled, which is not what noeviction
+  # is for -- redis should refuse the write itself.
+  maxmemory: 256mb
   persistence:
     enabled: true
     size: 1Gi

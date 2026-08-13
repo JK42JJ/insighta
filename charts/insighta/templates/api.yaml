@@ -17,6 +17,12 @@ spec:
         {{- include "insighta.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
     spec:
+      # modules/scheduler/auto-sync.ts:174 waits up to 30s for in-flight
+      # syncs, which is exactly the default grace period -- shutdown would be
+      # SIGKILLed mid-sync, leaving sync_status=IN_PROGRESS rows that only a
+      # 10-minute staleness check clears. SSE streams (mandalas.ts:3119) also
+      # hold sockets open past fastify.close().
+      terminationGracePeriodSeconds: 90
       containers:
         - name: api
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
@@ -51,11 +57,21 @@ spec:
             {{- toYaml .Values.api.livenessProbe | nindent 12 }}
           readinessProbe:
             {{- toYaml .Values.api.readinessProbe | nindent 12 }}
+          lifecycle:
+            preStop:
+              # Give the endpoint controller time to pull this pod out of the
+              # Service before the process starts refusing work.
+              exec: { command: ["sh", "-c", "sleep 5"] }
           volumeMounts:
             - name: cache
               mountPath: /app/cache
             - name: logs
               mountPath: /app/logs
+            # routes/admin/pool-health.ts:161 writes a snapshot here and reads
+            # it back as the fallback when the live query fails; without a
+            # mount it lands on the container's root filesystem.
+            - name: state
+              mountPath: /var/insighta
       # compose used named volumes for these. They hold regenerable data, so
       # emptyDir is correct here -- a PVC would imply the contents must
       # survive rescheduling, and they do not.
@@ -63,6 +79,8 @@ spec:
         - name: cache
           emptyDir: {}
         - name: logs
+          emptyDir: {}
+        - name: state
           emptyDir: {}
 ---
 apiVersion: v1
