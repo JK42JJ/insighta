@@ -9,11 +9,15 @@
       ansible.builtin.command: ls -1 /etc/nginx/sites-enabled/
       register: enabled_sites
       changed_when: false
+      # Ansible skips command tasks under --check. Skipping this one would
+      # leave the assertions below with no input, so a --check run would
+      # report success without having checked its own preconditions.
+      check_mode: false
 
     - name: Fail if the enabled set is not the expected two sites
       ansible.builtin.assert:
         that:
-          - enabled_sites.stdout_lines | sort == ['insighta', 'portfolio']
+          - enabled_sites.stdout_lines | sort == (sites | dict2items | map(attribute='value.enabled') | sort)
         fail_msg: >-
           sites-enabled holds {{ enabled_sites.stdout_lines | sort }}, not
           ['insighta', 'portfolio']. The templates in this role reproduce the
@@ -40,28 +44,32 @@
 - name: Render site configs
   become: true
   ansible.builtin.template:
-    src: "{{ item }}.conf.j2"
-    dest: "/etc/nginx/sites-available/{{ item }}"
+    src: "{{ item.key }}.conf.j2"
+    dest: "/etc/nginx/sites-available/{{ item.value.available }}"
     owner: root
     group: root
     mode: "0644"
     backup: true
-  loop:
-    - insighta
-    - portfolio
+  loop: "{{ sites | dict2items }}"
+  loop_control:
+    label: "{{ item.value.available }}"
   register: rendered
 
+# In check mode the rendered file does not exist yet, so the link cannot be
+# created; skip rather than report a failure that only exists because
+# nothing was written.
 - name: Enable sites
   become: true
   ansible.builtin.file:
-    src: "/etc/nginx/sites-available/{{ item }}"
-    dest: "/etc/nginx/sites-enabled/{{ item }}"
+    src: "/etc/nginx/sites-available/{{ item.value.available }}"
+    dest: "/etc/nginx/sites-enabled/{{ item.value.enabled }}"
     state: link
     owner: root
     group: root
-  loop:
-    - insighta
-    - portfolio
+  loop: "{{ sites | dict2items }}"
+  loop_control:
+    label: "{{ item.value.enabled }} -> {{ item.value.available }}"
+  when: not ansible_check_mode
 
 # nginx -t is the gate. It runs whether or not the template changed, so a
 # config broken by something else is caught here rather than at reload.
@@ -71,6 +79,10 @@
   register: nginx_test
   changed_when: false
   failed_when: false
+  # Under --check nothing was written, so this tests the config currently on
+  # disk. That is still worth knowing before an apply, and it keeps
+  # nginx_test defined for the tasks that read it.
+  check_mode: false
 
 - name: Restore backups if the configuration is invalid
   become: true
