@@ -23,10 +23,10 @@
 
 import http from 'http';
 import { startBackgroundWork, stopBackgroundWork, BackgroundLogger } from './background';
-import { runsSchedulers } from '../config/process-role';
+import { runsSchedulers, workerProbePort, workerProbeHost } from '../config/process-role';
 
-const PORT = Number(process.env['WORKER_PORT'] ?? 3001);
-const HOST = process.env['WORKER_HOST'] ?? '0.0.0.0';
+const PORT = workerProbePort();
+const HOST = workerProbeHost();
 
 const log: BackgroundLogger = {
   info: (msg) => console.log(JSON.stringify({ level: 'info', role: 'worker', msg })),

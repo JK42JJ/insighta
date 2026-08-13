@@ -59,3 +59,17 @@ export function runsSchedulers(env: NodeJS.ProcessEnv = process.env): boolean {
 export function describeProcessRole(env: NodeJS.ProcessEnv = process.env): string {
   return `queueWorkers=${runsQueueWorkers(env)} schedulers=${runsSchedulers(env)}`;
 }
+
+/**
+ * Port the worker answers probes on. Not the application port: a worker
+ * serves no application traffic, only /health and /health/ready.
+ */
+export function workerProbePort(env: NodeJS.ProcessEnv = process.env): number {
+  const n = Number.parseInt(String(env['WORKER_PORT'] ?? '').trim(), 10);
+  return Number.isFinite(n) && n > 0 && n < 65536 ? n : 3001;
+}
+
+export function workerProbeHost(env: NodeJS.ProcessEnv = process.env): string {
+  const v = String(env['WORKER_HOST'] ?? '').trim();
+  return v === '' ? '0.0.0.0' : v;
+}

@@ -55,6 +55,22 @@ api:
 # compose deployment does today. Turning it on moves the queue and the
 # schedulers here and switches the api pods to serving HTTP only -- which is
 # what lets api.replicaCount go above 1.
+# Feature flags that together let the web tier run more than one replica.
+# All default off in code; the chart turns them on where the preconditions are
+# met, so a cluster deploy is explicit about which behaviour it is running.
+#
+#   playlistSyncViaQueue     one scheduled tick claims due playlists instead
+#                            of one node-cron timer per playlist
+#   ontologyChatDbStore      chat history in a table, not process memory
+#   youtubeSharedInvalidation  cache invalidation published to every replica
+#
+# Each requires its migration to have been applied. Leaving one off is safe;
+# turning it on without the table degrades to the previous behaviour.
+statelessness:
+  playlistSyncViaQueue: true
+  ontologyChatDbStore: true
+  youtubeSharedInvalidation: true
+
 worker:
   enabled: true
   replicaCount: 1

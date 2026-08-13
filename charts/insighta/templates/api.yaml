@@ -57,6 +57,12 @@ spec:
             - name: RUN_SCHEDULERS
               value: "false"
 {{- end }}
+            - name: PLAYLIST_SYNC_VIA_QUEUE
+              value: {{ .Values.statelessness.playlistSyncViaQueue | quote }}
+            - name: ONTOLOGY_CHAT_DB_STORE
+              value: {{ .Values.statelessness.ontologyChatDbStore | quote }}
+            - name: YOUTUBE_CACHE_SHARED_INVALIDATION
+              value: {{ .Values.statelessness.youtubeSharedInvalidation | quote }}
           envFrom:
             - secretRef:
                 name: {{ .Values.envSecretName }}
