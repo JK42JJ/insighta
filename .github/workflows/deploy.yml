@@ -109,7 +109,7 @@ jobs:
           # deployable=true, which wastes a deploy; an allowlist would silently
           # skip it, and a deploy that should have happened and did not is the
           # failure this repository can least afford.
-          IRRELEVANT='^(terraform|docs|prompt|tests|scripts|\.github|\.claude)/|^[^/]*\.md$'
+          IRRELEVANT='^(terraform|ansible|docs|prompt|tests|scripts|\.github|\.claude)/|^[^/]*\.md$'
           if echo "$FILES" | grep -Eqv "$IRRELEVANT"; then
             DEPLOYABLE=true
           else
