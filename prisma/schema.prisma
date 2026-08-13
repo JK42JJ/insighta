@@ -2873,3 +2873,14 @@ model ontology_conversations {
   @@index([last_access], map: "idx_ontology_conversations_last_access")
   @@schema("public")
 }
+
+/// When a user's YouTube response cache was invalidated. The cache stays in
+/// process memory to protect API quota; only the invalidation moment is
+/// shared, because clearYouTubeCache() otherwise clears one replica and the
+/// others keep serving a disconnected account for up to 6 hours.
+model youtube_cache_epochs {
+  user_id        String   @id @db.Uuid
+  invalidated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
