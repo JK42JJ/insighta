@@ -1,0 +1,18 @@
+# staging -- shaped like prod but single-replica. Its job is to catch what
+# breaks on promotion, not to survive a node loss.
+api:
+  replicaCount: 1
+frontend:
+  replicaCount: 1
+redis:
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 1Gi
+
+ingress:
+  enabled: true
+  host: staging.insighta.one
+  tls:
+    enabled: true
+    secretName: insighta-staging-tls

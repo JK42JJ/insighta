@@ -1,0 +1,59 @@
+# prod
+#
+# frontend runs 2 replicas. It is a static file server that proxies to the
+# api and holds no state, so a second copy is free and covers rolling
+# updates and node drains. Measured traffic is under one request per minute;
+# this is an availability figure, not a load one.
+#
+# api runs 1. It cannot currently run more.
+#
+# The api process carries per-process state that is the only copy, and
+# schedulers whose overlap guards are in-process booleans. At 2 replicas
+# these break, verified by reading the source:
+#
+#   modules/ontology/chat.ts:61        conversation history, no DB backing
+#   modules/youtube/api.ts:26          6h library cache; the post-disconnect
+#                                      invalidation is process-local, so
+#                                      other replicas keep serving a
+#                                      disconnected account's library
+#   api/routes/admin/enrichment.ts:30  fork()s a worker behind a local guard
+#   modules/mandala/wizard-precompute.ts:684  session dedup set
+#   modules/quota-alert/index.ts:32    6h email throttle
+#   api/routes/copilotkit-provider-poller.ts:34  per-replica chat backend
+#   modules/scheduler/auto-sync.ts:58  enabled by default; its DB fallback
+#                                      at playlist/manager.ts:274-287 reads
+#                                      and writes sync_status in separate
+#                                      statements, so two replicas ticking
+#                                      the same second both pass
+#
+# There is no leader election anywhere in src/ -- grep for pg_advisory,
+# advisory_lock, leaderElection, isLeader returns nothing.
+#
+# Raising this to 2 requires, in order:
+#   1. the scheduler moved out of the api process into its own 1-replica
+#      Deployment (docker/entrypoint.sh already has a `scheduler` mode that
+#      nothing uses), with the in-process schedulers disabled in api pods
+#   2. the seven in-memory stores above moved to Redis or the database
+#   3. rate-limit.ts:72 fixed -- it exempts any ip starting "172." while
+#      trustProxy is on, which on a 172.x pod CIDR disables rate limiting
+#      rather than multiplying it
+#
+# pg-boss is not part of this: its cron scheduling collapses across replicas
+# via singletonKey (pg-boss/src/timekeeper.js:186-194), so its 7 schedules
+# are safe as they are.
+api:
+  replicaCount: 1
+frontend:
+  replicaCount: 2
+redis:
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 8Gi
+
+ingress:
+  enabled: true
+  host: insighta.one
+  tls:
+    enabled: true
+    secretName: insighta-tls

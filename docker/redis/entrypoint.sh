@@ -33,4 +33,8 @@ done
 envsubst < /etc/redis/redis.acl.template > /tmp/redis.acl
 chmod 600 /tmp/redis.acl
 
-exec redis-server /etc/redis/redis.conf --aclfile /tmp/redis.acl
+# "$@" last so the orchestrator can override a baked-in directive --
+# redis-server applies the final occurrence. Needed because redis.conf
+# sets maxmemory 2gb, which has to track the container memory limit
+# wherever this runs.
+exec redis-server /etc/redis/redis.conf --aclfile /tmp/redis.acl "$@"

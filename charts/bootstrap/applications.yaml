@@ -1,0 +1,49 @@
+# One Application per environment, all sourced from the same chart.
+#
+# syncPolicy is empty on purpose. Design P3: ArgoCD reports the difference
+# first, a human reads it, and automated sync is enabled only once the app
+# stays InSync without help.
+#
+# There is no prod Application yet. Production still runs as docker compose
+# on EC2, so a prod Application would report every resource Missing --
+# noise, not information. It is added at P4, with the cutover.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: insighta-dev
+  namespace: argocd
+spec:
+  project: insighta-dev
+  source:
+    repoURL: https://github.com/JK42JJ/insighta
+    targetRevision: feat/p2-helm-chart-t0
+    path: charts/insighta
+    helm:
+      releaseName: insighta
+      valueFiles:
+        - environments/dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: insighta-dev
+  syncPolicy: {}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: insighta-staging
+  namespace: argocd
+spec:
+  project: insighta-staging
+  source:
+    repoURL: https://github.com/JK42JJ/insighta
+    targetRevision: feat/p2-helm-chart-t0
+    path: charts/insighta
+    helm:
+      releaseName: insighta
+      valueFiles:
+        - environments/staging.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: insighta-staging
+  syncPolicy: {}
