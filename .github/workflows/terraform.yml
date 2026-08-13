@@ -81,11 +81,22 @@ jobs:
         run: terraform init
         working-directory: ${{ env.WORKING_DIR }}
 
+      # `terraform plan | tee` reports the exit code of tee, not of terraform, so
+      # a plan that failed outright still recorded the step as successful — the
+      # `outcome == 'failure'` guard below could never fire and the PR comment
+      # said "Plan: success" over an AccessDenied. Capture the real code before
+      # anything else touches it.
       - name: Terraform plan
         id: plan
-        run: terraform plan -no-color -var-file=terraform.tfvars 2>&1 | tee plan.txt
+        run: |
+          set +e
+          terraform plan -no-color -input=false -var-file=terraform.tfvars > plan.txt 2>&1
+          CODE=$?
+          set -e
+          echo "exitcode=$CODE" >> "$GITHUB_OUTPUT"
+          cat plan.txt
+          exit 0
         working-directory: ${{ env.WORKING_DIR }}
-        continue-on-error: true
 
       - name: Comment plan on PR
         uses: actions/github-script@v7
@@ -99,7 +110,7 @@ jobs:
             \`\`\`
             ${truncated}
             \`\`\`
-            *Plan: ${{ steps.plan.outcome }}*`;
+            *Plan exit code: ${{ steps.plan.outputs.exitcode }} (0 = clean)*`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -109,8 +120,10 @@ jobs:
             });
 
       - name: Fail if plan failed
-        if: steps.plan.outcome == 'failure'
-        run: exit 1
+        if: steps.plan.outputs.exitcode != '0'
+        run: |
+          echo "::error::terraform plan exited ${{ steps.plan.outputs.exitcode }} — see the plan comment on the PR"
+          exit 1
 
   apply:
     name: Apply
