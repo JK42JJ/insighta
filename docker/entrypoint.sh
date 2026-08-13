@@ -46,7 +46,12 @@ wait_for_db() {
 # =============================================================================
 run_migrations() {
     echo "Running database schema sync (prisma db push)..."
-    npx prisma db push --skip-generate
+    # Pin the CLI. This image carries @prisma/client but not the prisma CLI,
+    # so a bare `npx prisma` downloads whatever is newest -- Prisma 7 dropped
+    # --skip-generate and the command fails with a usage error. The version
+    # tracks the client bundled in the image.
+    PRISMA_CLI_VERSION="${PRISMA_CLI_VERSION:-$(node -e "console.log(require('@prisma/client/package.json').version)" 2>/dev/null || echo 5.22.0)}"
+    npx "prisma@${PRISMA_CLI_VERSION}" db push --skip-generate
     echo "Database schema updated successfully"
 }
 

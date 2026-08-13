@@ -1,0 +1,110 @@
+{{- if .Values.postgresDev.enabled }}
+# Development-only database.
+#
+# The design keeps production on Supabase Cloud and explicitly rules out
+# self-hosting it. That decision is about production. dev is different: the
+# api will not start without a reachable database, so tying dev to a cloud
+# database would mean a laptop cluster can never come up on its own -- which
+# contradicts the goal of infrastructure that can be stood up at any time.
+#
+# So: dev runs its own postgres, staging and prod point at Supabase. This
+# template renders only when postgresDev.enabled is true, and only the dev
+# values file sets it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "insighta.fullname" . }}-postgres-init
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+data:
+  # prisma/schema.prisma declares schemas = ["auth", "public"]. "auth" is
+  # supplied by Supabase and does not exist in stock postgres, so
+  # `prisma db push` fails against it. Created here at first initialisation.
+  00-schemas.sql: |
+    CREATE SCHEMA IF NOT EXISTS auth;
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS vector;
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insighta.fullname" . }}-postgres
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  clusterIP: None
+  ports:
+    - port: 5432
+      targetPort: postgres
+      name: postgres
+  selector:
+    {{- include "insighta.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "insighta.fullname" . }}-postgres
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: {{ include "insighta.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "insighta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.postgresDev.image.repository }}:{{ .Values.postgresDev.image.tag }}"
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresDev.database }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresDev.user }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.envSecretName }}
+                  key: POSTGRES_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            {{- toYaml .Values.postgresDev.resources | nindent 12 }}
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "{{ .Values.postgresDev.user }}", "-d", "{{ .Values.postgresDev.database }}"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            # Runs once, on an empty data directory only.
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init
+          configMap:
+            name: {{ include "insighta.fullname" . }}-postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.postgresDev.persistence.size }}
+{{- end }}

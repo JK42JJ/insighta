@@ -1,0 +1,25 @@
+# prod
+#
+# api and frontend run 2 replicas. That is not a load figure -- measured
+# traffic is under one request per minute. One replica goes down during a
+# rolling update and when its node is drained; 2 is the minimum that keeps
+# the service up through either, and nothing more is justified.
+#
+# redis stays at 1 and is a single point of failure. Replication needs
+# Sentinel or a managed service, which is oversized for 4.7 MiB of data.
+api:
+  replicaCount: 2
+frontend:
+  replicaCount: 2
+redis:
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 8Gi
+
+ingress:
+  enabled: true
+  host: insighta.one
+  tls:
+    enabled: true
+    secretName: insighta-tls
