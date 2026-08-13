@@ -5,22 +5,21 @@ name: Notify Runbook
 # means a change here can invalidate a chapter there with nothing over there
 # noticing, so this tells it.
 #
-# Paths are the ones runbook chapters actually cite. Adding a cite over there
-# without adding the path here is the way this silently stops working, so the
-# lists are kept identical on purpose — the mirror's daily schedule is the
-# backstop for exactly that mistake.
+# Every push to main, with no path filter — deliberately.
+#
+# The first version listed the eight paths the chapters cite, which made this
+# file a second copy of a list that already exists over there, in each chapter's
+# cites header. Two declarations of the same thing drift: someone adds a cite,
+# forgets this list, and the notification silently stops covering it. Where the
+# relevant paths are is knowledge the mirror already has and this repository
+# does not, so the filtering belongs there.
+#
+# The cost of dropping the filter is a dispatch on pushes that turn out to be
+# irrelevant. The mirror's check takes about a minute and decides that for
+# itself, which is cheap next to a stale runbook nobody was told about.
 on:
   push:
     branches: [main]
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/deploy.yml'
-      - '.github/workflows/terraform.yml'
-      - '.github/workflows/backup.yml'
-      - 'scripts/audit/hardcode-audit.ts'
-      - 'Dockerfile'
-      - '.dockerignore'
-      - 'docker-compose.prod.yml'
   workflow_dispatch:
 
 permissions:
