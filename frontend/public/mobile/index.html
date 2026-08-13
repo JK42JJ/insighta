@@ -1978,7 +1978,7 @@
             <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.5 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.6a14.5 14.5 0 0 1 0-9.2l-7.9-6.2a24 24 0 0 0 0 21.6l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.6-5.8l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-4-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>
             Google로 계속하기
           </button>
-          <button class="sample-btn" id="bSample">샘플 에피소드 들어보기</button>
+          <button class="sample-btn" id="bSample">샘플 노트 보기</button>
         </div>
       </div>
 
@@ -2238,7 +2238,7 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-04-97';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-13-98';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
 
   /* ===== diag probe (build 89) — opt-in instability triage, OFF by default.
@@ -2587,6 +2587,37 @@
     ]}
   };
 
+  /* Sample mode covers all three stops, not just the note.
+     The three tabs read three different sources -- curation calls /curations,
+     the video tab calls /mandalas/:id/videos, and the note reads m.book -- so a
+     sample that only carried a book left the other two empty (video showed the
+     no-mandala prompt, curation showed a load error, because api() throws
+     without a token). Signed out that is the whole product looking broken, and
+     it is also what a store reviewer sees.
+
+     Every video below is one already cited by the sample note, so nothing new
+     is introduced and the three stops describe the same subject. Titles and
+     channels are the real ones, verified against YouTube oEmbed 2026-08-13.
+     Percentages are illustrative of the layout, not measurements. */
+  var SAMPLE_VIDEOS=[
+    { vtab:true, video_id:'G67K0nKNaNE', title:'달러가 세계의 패권 화폐가 될 수 있었던 이유는? | 달러, 기축통화, 역사',
+      channel:'김지윤의 지식Play', thumbnail:'https://i.ytimg.com/vi/G67K0nKNaNE/hqdefault.jpg',
+      duration_sec:912, views:1240000, relevance_pct:92, has_segments:true, seg_coverage:0.68 },
+    { vtab:true, video_id:'jpNc3XdQp_4', title:'석유보다 무서운 자원, 중국은 조용히 웃고있다?',
+      channel:'이교수 - 이 세대의 교양수업', thumbnail:'https://i.ytimg.com/vi/jpNc3XdQp_4/hqdefault.jpg',
+      duration_sec:1043, views:387000, relevance_pct:86, has_segments:true, seg_coverage:0.54 },
+    { vtab:true, video_id:'a6-PaZXtj-s', title:'[월요지식회] Ep.80 원자재 게임: 희토류, 셰일가스, 헬륨3',
+      channel:'별별TV', thumbnail:'https://i.ytimg.com/vi/a6-PaZXtj-s/hqdefault.jpg',
+      duration_sec:1580, views:96000, relevance_pct:74, has_segments:false, seg_coverage:null }
+  ];
+  /* Shaped like a row from /curations. item_count drives the row's own copy
+     ("새 영상 N편"), so it must equal the list length or the row lies. */
+  var SAMPLE_CURATIONS=[
+    { id:'__sample_cur__', sample:true, topic:'지정학', item_count:SAMPLE_VIDEOS.length,
+      watched_count:0, next_run_at:null }
+  ];
+  var SAMPLE_MODE=false;
+
   /* ================= 홈 — §1.2 상태 머신 ================= */
   var PALETTE=[['#C1633B','#8A3A1B'],['#4D5C99','#2C3763'],['#4A7B60','#2C4E3A'],['#9A7A38','#6B5220'],['#7C5077','#4E2F4A'],['#4E7A85','#2E4C54']];
   function jkColor(title){
@@ -2595,7 +2626,7 @@
   }
   var mandalas=[], selIdx=0, bookCache={};
   function rowState(m){
-    if(m.sample) return {kind:'ready', line:'샘플 에피소드'};
+    if(m.sample) return {kind:'ready', line:'샘플 노트'};
     var cache=bookCache[m.id];
     var res=loadResume(m.id);
     if(!cache) return {kind:'loading', line:'확인 중…', skt:true};
@@ -2916,6 +2947,11 @@
     var sig=curSig(subs); if(sig===curRenderedSig&&Array.isArray(subs)) return; renderCurationRows(subs); curRenderedSig=sig; }
   async function renderCuration(){
     var el=document.getElementById('curBody'); if(!el) return;
+    // Sample mode never calls the API. Without a token api() throws
+    // 'unauthenticated', which has no .status, so it lands in the generic catch
+    // and paints "편성표를 불러오지 못했어요" -- an error screen as the first
+    // thing a signed-out visitor sees.
+    if(SAMPLE_MODE){ curPaint(SAMPLE_CURATIONS); return; }
     var haveCache=Array.isArray(curCache);
     if(haveCache){
       curPaint(curCache); // instant — no skeleton on re-entry / revalidate
@@ -3037,6 +3073,10 @@
   // Long-press: row expands inline into a 2-step unsubscribe action.
   // Open an EXISTING curation week — read-only, never triggers a rebuild.
   async function openExistingCuration(sub){
+    if(sub&&sub.sample){
+      openCurationDeck(sub.topic, SAMPLE_VIDEOS, {backLabel:'← 관심'});
+      return;
+    }
     try{
       var r=await api('/curations/'+sub.id+'/items');
       var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
@@ -5149,6 +5189,10 @@
        (That old path also violated the clip-boundary rule with 0..99999
        windows; the deck is full-play by design, so no synthetic windows.)
        The note path (openNote → flatten(book)) is untouched. */
+    if(m&&m.sample){
+      openCurationDeck(m.title, SAMPLE_VIDEOS, {returnTab:'video', backLabel:'← 브리프'});
+      return;
+    }
     try{
       var r=await api('/mandalas/'+m.id+'/videos?limit=100');
       var j=await r.json(); var list=(j&&j.items)||[];
@@ -5819,7 +5863,7 @@
     pState.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center;padding:0 14px">'
       +'<svg class="finsig" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg>'
       +'<div class="big" style="font-size:15px;font-weight:750;margin-top:4px">이번 회차, 다 들었어요</div>'
-      +'<div class="sm" style="font-size:11px;color:var(--paper-sub);font-weight:600">'+(srcN?('이 에피소드는 '+srcN+'개 영상에서 만들어졌어요'):'가운데 버튼 = 처음부터 다시')+'</div>'
+      +'<div class="sm" style="font-size:11px;color:var(--paper-sub);font-weight:600">'+(srcN?('이 노트는 '+srcN+'개 영상에서 만들어졌어요'):'가운데 버튼 = 처음부터 다시')+'</div>'
       +(nextM?'<button class="fin-next" id="finNext">다음: <b></b></button>':'')
       +'</div>';
     if(nextM){ pState.querySelector('#finNext b').textContent=nextM.title;
@@ -5867,14 +5911,14 @@
           book=j.data&&j.data.book; m.sourceVideos=j.data&&j.data.sourceVideos;
           bookCache[m.id]={book:book, sourceVideos:m.sourceVideos};
         }catch(e){
-          if(e.status===404) pShowState('노트 준비 중','카드가 모이면 에피소드가 자동으로 생겨요');
+          if(e.status===404) pShowState('노트 준비 중','카드가 모이면 노트가 자동으로 생겨요');
           else pShowState('열지 못했어요','연결 확인 후 다시 시도해주세요');
           return;
         }
       }
     }
     flatten(book);
-    if(!beats.length){ pShowState('노트 준비 중','카드가 모이면 에피소드가 자동으로 생겨요'); return; }
+    if(!beats.length){ pShowState('노트 준비 중','카드가 모이면 노트가 자동으로 생겨요'); return; }
     buildRail();
     if(!m.sample) prefetchBounds();
     // 실보이스 준비를 짧게 기다림 (1.5s 한도) — 첫 비트부터 일레븐랩스 (전환 혼선 방지)
@@ -6768,7 +6812,18 @@
 
   /* ================= 메뉴 항목 ================= */
   document.getElementById('bLogin').onclick=loginRedirect;
-  document.getElementById('bSample').onclick=function(){ openNote(SAMPLE) };
+  /* Sample opens the home screen, not the note. Jumping straight into the note
+     showed one screen out of three and left the two tabs beside it empty, so
+     the thing most people saw first was the least of it. Home puts the same
+     note one tap away and the other two stops beside it. */
+  document.getElementById('bSample').onclick=function(){
+    SAMPLE_MODE=true;
+    mandalas=[SAMPLE];          // feeds both the video and note lists
+    selIdx=0; curCache=null; curRenderedSig='';
+    show('home');
+    homeGo(0);                  // land on 관심, which is where the tabs read left-to-right
+    toast('샘플 화면입니다 — 로그인하면 내 주제로 채워집니다');
+  };
   document.getElementById('clipFit').onclick=function(e){
     e.stopPropagation(); e.preventDefault();
     var cover=clipbox.classList.toggle('cover');
