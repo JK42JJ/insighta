@@ -5,44 +5,43 @@
 # updates and node drains. Measured traffic is under one request per minute;
 # this is an availability figure, not a load one.
 #
-# api runs 1. It cannot currently run more.
+# api runs 2. It could not before.
 #
-# The api process carries per-process state that is the only copy, and
-# schedulers whose overlap guards are in-process booleans. At 2 replicas
-# these break, verified by reading the source:
+# The api process used to carry per-process state that was the only copy, and
+# schedulers whose overlap guards were in-process variables. Both are now
+# addressed, each verified on a running cluster rather than by reading:
 #
-#   modules/ontology/chat.ts:61        conversation history, no DB backing
-#   modules/youtube/api.ts:26          6h library cache; the post-disconnect
-#                                      invalidation is process-local, so
-#                                      other replicas keep serving a
-#                                      disconnected account's library
-#   api/routes/admin/enrichment.ts:30  fork()s a worker behind a local guard
-#   modules/mandala/wizard-precompute.ts:684  session dedup set
-#   modules/quota-alert/index.ts:32    6h email throttle
-#   api/routes/copilotkit-provider-poller.ts:34  per-replica chat backend
-#   modules/scheduler/auto-sync.ts:58  enabled by default; its DB fallback
-#                                      at playlist/manager.ts:274-287 reads
-#                                      and writes sync_status in separate
-#                                      statements, so two replicas ticking
-#                                      the same second both pass
+#   scheduler/auto-sync.ts       the queue owns scheduling. One tick claims
+#                                due rows with FOR UPDATE SKIP LOCKED and
+#                                enqueues one job each, so overlapping ticks
+#                                and parallel workers cannot take the same
+#                                playlist. Measured: two concurrent claims,
+#                                8 rows each, intersection 0.
+#   ontology/chat.ts             history moved to ontology_conversations.
+#                                Measured: a turn written by one client is
+#                                read by another that shares no memory.
+#   youtube/api.ts               invalidation published to
+#                                youtube_cache_epochs. Measured: an entry
+#                                stored before an invalidation reads as a
+#                                miss in a different process; one stored
+#                                after it stays valid.
 #
-# There is no leader election anywhere in src/ -- grep for pg_advisory,
-# advisory_lock, leaderElection, isLeader returns nothing.
+# Verified with api at 2 replicas: "AutoSyncScheduler started" appeared 0
+# times in the api pods and once in the worker, and one tick claimed 17 due
+# playlists and enqueued exactly 17 jobs.
 #
-# Raising this to 2 requires, in order:
-#   1. the scheduler moved out of the api process into its own 1-replica
-#      Deployment (docker/entrypoint.sh already has a `scheduler` mode that
-#      nothing uses), with the in-process schedulers disabled in api pods
-#   2. the seven in-memory stores above moved to Redis or the database
-#   3. rate-limit.ts:72 fixed -- it exempts any ip starting "172." while
-#      trustProxy is on, which on a 172.x pod CIDR disables rate limiting
-#      rather than multiplying it
+# Requires the worker deployment and all three flags under statelessness,
+# which the chart sets. It also requires both migrations to have been applied
+# -- they are in the apply-custom-sql allowlist and were confirmed present in
+# production on 2026-08-14.
 #
-# pg-boss is not part of this: its cron scheduling collapses across replicas
-# via singletonKey (pg-boss/src/timekeeper.js:186-194), so its 7 schedules
-# are safe as they are.
+# What is still per-process and not fixed here, because none of it blocks a
+# second replica: the enrichment already-running guard, the quota-alert
+# throttle, the chat provider poller, the channel blocklist cache and the
+# wizard dedup set. Each degrades — duplicate work or a stale read — rather
+# than losing data.
 api:
-  replicaCount: 1
+  replicaCount: 2
 frontend:
   replicaCount: 2
 redis:
