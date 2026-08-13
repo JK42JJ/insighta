@@ -11,11 +11,22 @@ frontend_upstream: "127.0.0.1:8081"
 # and insighta.conf already serves /.well-known/acme-challenge/ from it.
 acme_webroot: /var/www/certbot
 
+# The two sites do not follow one naming convention on the box. insighta is
+# available as "insighta.conf" but enabled as "insighta"; portfolio uses the
+# same name for both. Deriving one from the other creates a second file and
+# orphans the original, so both names are recorded.
+#
+#   sites-available/insighta.conf  <- sites-enabled/insighta
+#   sites-available/portfolio      <- sites-enabled/portfolio
 sites:
   insighta:
+    available: insighta.conf
+    enabled: insighta
     server_names: "insighta.one www.insighta.one"
     cert_name: insighta.one
   portfolio:
+    available: portfolio
+    enabled: portfolio
     server_names: "portfolio.insighta.one"
     cert_name: portfolio.insighta.one
     docroot: /var/www/portfolio
