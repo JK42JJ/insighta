@@ -829,6 +829,36 @@ jobs:
           sleep 5
           curl -sf https://${{ secrets.DOMAIN }}/health || echo "External health check pending (DNS may not be configured yet)"
 
+      # Every deploy leaves its SHA-tagged image on the box and nothing removed
+      # them: measured 2026-08-13, images held 4.92 GB with 1.767 GB reclaimable
+      # after five weeks, on a 20 GB disk already at 66%. No systemd timer, no
+      # crontab. A one-off cleanup would put us back here in a month, so the
+      # collection happens where the images are created.
+      #
+      # Deliberately not `prune -a`. That keeps only what is running and would
+      # delete every local rollback target. rollback.yml pulls from GHCR, which
+      # would make that safe — except GHCR's own retention has not been
+      # confirmed (the token lacks read:packages), and rollback is not something
+      # to stake on an unverified assumption. 30 days keeps a month of targets
+      # locally; revisit once GHCR retention is known.
+      #
+      # Runs only after Verify, so a deploy that failed leaves everything alone.
+      - name: Reclaim old images
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            BEFORE=$(df --output=used -BM / | tail -1 | tr -dc '0-9')
+            # Images in use by a running container are never touched by prune.
+            docker image prune -af --filter 'until=720h' || true
+            docker builder prune -f --filter 'until=720h' || true
+            AFTER=$(df --output=used -BM / | tail -1 | tr -dc '0-9')
+            echo "disk used: ${BEFORE}M -> ${AFTER}M (freed $((BEFORE - AFTER))M)"
+            df -h / | tail -1
+            docker system df
+
       - name: Close SSH for runner IP
         if: always()
         run: |
