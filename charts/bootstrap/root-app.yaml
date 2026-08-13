@@ -1,0 +1,21 @@
+# The only Application registered by hand. Everything under charts/bootstrap
+# is managed by it, so adding an environment is a file in git rather than a
+# kubectl apply or a click in the console.
+#
+# Terraform installs ArgoCD and registers this one object; from here down,
+# git decides.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/JK42JJ/insighta
+    targetRevision: feat/p2-helm-chart-t0
+    path: charts/bootstrap
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy: {}
