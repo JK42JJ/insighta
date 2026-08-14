@@ -1,72 +1,63 @@
-# prod
+# Production on Kubernetes.
 #
-# frontend runs 2 replicas. It is a static file server that proxies to the
-# api and holds no state, so a second copy is free and covers rolling
-# updates and node drains. Measured traffic is under one request per minute;
-# this is an availability figure, not a load one.
-#
-# api runs 2. It could not before.
-#
-# The api process used to carry per-process state that was the only copy, and
-# schedulers whose overlap guards were in-process variables. Both are now
-# addressed, each verified on a running cluster rather than by reading:
-#
-#   scheduler/auto-sync.ts       the queue owns scheduling. One tick claims
-#                                due rows with FOR UPDATE SKIP LOCKED and
-#                                enqueues one job each, so overlapping ticks
-#                                and parallel workers cannot take the same
-#                                playlist. Measured: two concurrent claims,
-#                                8 rows each, intersection 0.
-#   ontology/chat.ts             history moved to ontology_conversations.
-#                                Measured: a turn written by one client is
-#                                read by another that shares no memory.
-#   youtube/api.ts               invalidation published to
-#                                youtube_cache_epochs. Measured: an entry
-#                                stored before an invalidation reads as a
-#                                miss in a different process; one stored
-#                                after it stays valid.
-#
-# Verified with api at 2 replicas: "AutoSyncScheduler started" appeared 0
-# times in the api pods and once in the worker, and one tick claimed 17 due
-# playlists and enqueued exactly 17 jobs.
-#
-# Requires the worker deployment and all three flags under statelessness,
-# which the chart sets. It also requires both migrations to have been applied
-# -- they are in the apply-custom-sql allowlist and were confirmed present in
-# production on 2026-08-14.
-#
-# What is still per-process and not fixed here, because none of it blocks a
-# second replica: the enrichment already-running guard, the quota-alert
-# throttle, the chat provider poller, the channel blocklist cache and the
-# wizard dedup set. Each degrades — duplicate work or a stale read — rather
-# than losing data.
+# During the parallel run this deployment and the compose host are both live
+# and both hold connections to the same Supabase instance. Supabase allows 60
+# and the host was measured using 27 on 2026-08-14, so the cluster's budget is
+# what is left, not what the end state can afford.
+
+# Images come from ECR with the node's instance profile. The registry host is
+# not committed -- it contains the AWS account id and this repository is
+# public -- so it is supplied to the cluster, and a render without it fails
+# with a message that says so.
+requireImageRegistry: true
+
 api:
-  replicaCount: 2
-  # Off at 2 replicas, deliberately. A ReadWriteOnce claim cannot back two
-  # pods, and k3s local-path offers nothing else. The two directories are not
-  # equivalent, so the trade differs:
+  # One, not two, until the compose host is decommissioned.
   #
-  #   /app/cache  each pod warms its own copy of the YouTube response cache.
-  #               The cost is one warm-up per pod, not a continuous one --
-  #               acceptable. The shared-cache answer is redis, which is
-  #               deployed and holds nothing (6.1 risk 3); this is the first
-  #               concrete consumer it would have.
-  #   /app/logs   lost on reschedule, and nothing ships them off the pod.
-  #               This is the same gap the design records for journald
-  #               (6.1 risk 5) and it is NOT solved here. Log shipping is a
-  #               P2 item; until then a rescheduled pod loses its history.
+  #   PRISMA_POOL_LIMIT is 15 in production.
+  #   2 replicas          = 30 connections
+  #   + worker            ~ 10
+  #   + compose host      = 27  (measured 2026-08-14)
+  #                       -------
+  #                         67  against a limit of 60
   #
-  # Do not turn this on while replicaCount is above 1 -- the second pod will
-  # sit Pending on a volume it cannot attach.
+  # Raise this to 2 in the same change that removes the host, not before.
+  replicaCount: 1
+
+  # emptyDir, not a claim. Two consequences, both deliberate:
+  #
+  # /app/logs  -- module logs also go to stdout since the logger change, so
+  #               `kubectl logs` carries them and a reschedule loses nothing
+  #               that is not already elsewhere.
+  # /app/cache -- 13 MB of YouTube API responses, refetched after a reschedule
+  #               at the cost of quota. This is the constraint that keeps
+  #               replicaCount at 1 even after the budget allows 2: the claim
+  #               is ReadWriteOnce, so moving this cache to redis is what
+  #               actually unblocks horizontal scale.
   persistence:
     enabled: false
+
 frontend:
+  # Static files, no shared state, ~4 MiB resident. Nothing here consumes a
+  # database connection.
   replicaCount: 2
+
 redis:
   replicaCount: 1
   persistence:
     enabled: true
     size: 8Gi
+
+# CI owns the schema. deploy.yml's migrate job runs `prisma db push` against
+# Supabase on every deployable change, independently of where the application
+# runs. A second pusher inside the chart would race it against the database
+# production reads.
+schemaSync:
+  enabled: false
+
+# Supabase, not an in-cluster database.
+postgresDev:
+  enabled: false
 
 ingress:
   enabled: true
