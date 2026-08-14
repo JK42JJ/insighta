@@ -1,0 +1,10 @@
+apiVersion: v2
+name: insighta
+description: Insighta application - API, frontend, and Redis
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+# One chart, three values files. Copying the chart per environment is how
+# environments start to diverge; the difference belongs in values only.
+# See charts/insighta/environments/.

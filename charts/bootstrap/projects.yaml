@@ -1,0 +1,65 @@
+# One AppProject per environment.
+#
+# The default project permits any namespace and any cluster-scoped resource.
+# An Application placed there can reach outside the environment it belongs
+# to, which defeats the point of splitting environments by namespace on a
+# single cluster.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: insighta-dev
+  namespace: argocd
+spec:
+  description: Development environment
+  sourceRepos:
+    - https://github.com/JK42JJ/insighta
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: insighta-dev
+  clusterResourceWhitelist: []      # empty = no cluster-scoped resources
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: insighta-staging
+  namespace: argocd
+spec:
+  description: Staging environment
+  sourceRepos:
+    - https://github.com/JK42JJ/insighta
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: insighta-staging
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: insighta-prod
+  namespace: argocd
+spec:
+  description: Production environment
+  sourceRepos:
+    - https://github.com/JK42JJ/insighta
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: insighta-prod
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  # Deliberately narrower than the others: prod changes are approved, not
+  # synced on arrival.
+  syncWindows:
+    - kind: deny
+      schedule: "* * * * *"
+      duration: 24h
+      applications: ["*"]
+      manualSync: true

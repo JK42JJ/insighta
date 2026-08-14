@@ -11,6 +11,10 @@
 export const JOB_NAMES = {
   ENRICH_VIDEO: 'enrich-video',
   BATCH_SCAN: 'batch-scan',
+  /** One scheduled tick that claims due playlists (replaces per-playlist timers). */
+  PLAYLIST_SYNC_TICK: 'playlist-sync-tick',
+  /** One sync for one claimed playlist. */
+  PLAYLIST_SYNC: 'playlist-sync',
   /** CP462+ Issue #649 — Heart-click on-demand rich summary (direct enrichRichSummary). */
   ENRICH_RICH_SUMMARY: 'enrich-rich-summary',
   /** CP499+ pool-serve — async deficit-cell fill from the ko pool through the

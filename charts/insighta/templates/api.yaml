@@ -1,0 +1,183 @@
+{{- /*
+   A ReadWriteOnce claim cannot be attached by two pods. Left to a comment,
+   enabling persistence at two replicas leaves the second pod Pending on a
+   volume it will never get -- a failure that looks like a scheduling problem
+   and is not. Fail at render instead.
+*/ -}}
+{{- if and .Values.api.persistence.enabled (gt (int .Values.api.replicaCount) 1) }}
+{{- fail (printf "api.persistence.enabled=true with api.replicaCount=%d: the cache and logs claims are ReadWriteOnce and cannot back more than one pod. Either drop to one replica or turn persistence off and accept per-pod cache warm-up." (int .Values.api.replicaCount)) }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insighta.fullname" . }}-api
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "insighta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      # modules/scheduler/auto-sync.ts:174 waits up to 30s for in-flight
+      # syncs, which is exactly the default grace period -- shutdown would be
+      # SIGKILLed mid-sync, leaving sync_status=IN_PROGRESS rows that only a
+      # 10-minute staleness check clears. SSE streams (mandalas.ts:3119) also
+      # hold sockets open past fastify.close().
+      terminationGracePeriodSeconds: 90
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          args: {{ toYaml .Values.api.command | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.port }}
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: API_HOST
+              value: "0.0.0.0"
+            - name: API_PORT
+              value: {{ .Values.api.port | quote }}
+            # Compose reached redis over the bridge network's DNS name. In
+            # the cluster that becomes the Service name, which is why redis
+            # needs a Service even though nothing outside the namespace
+            # talks to it.
+            - name: REDIS_HOST
+              value: {{ include "insighta.fullname" . }}-redis
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: REDIS_USER
+              value: insighta
+{{- if .Values.worker.enabled }}
+            # A worker deployment holds the queue and the schedulers, so
+            # these pods serve HTTP only. Without this the schedulers would
+            # run here as well and fire once per replica.
+            - name: RUN_QUEUE_WORKERS
+              value: "false"
+            - name: RUN_SCHEDULERS
+              value: "false"
+{{- end }}
+            - name: PLAYLIST_SYNC_VIA_QUEUE
+              value: {{ .Values.statelessness.playlistSyncViaQueue | quote }}
+            - name: ONTOLOGY_CHAT_DB_STORE
+              value: {{ .Values.statelessness.ontologyChatDbStore | quote }}
+            - name: YOUTUBE_CACHE_SHARED_INVALIDATION
+              value: {{ .Values.statelessness.youtubeSharedInvalidation | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envSecretName }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.api.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.api.readinessProbe | nindent 12 }}
+          lifecycle:
+            preStop:
+              # Give the endpoint controller time to pull this pod out of the
+              # Service before the process starts refusing work.
+              exec: { command: ["sh", "-c", "sleep 5"] }
+          volumeMounts:
+            - name: cache
+              mountPath: /app/cache
+            - name: logs
+              mountPath: /app/logs
+            # routes/admin/pool-health.ts:161 writes a snapshot here and reads
+            # it back as the fallback when the live query fails; without a
+            # mount it lands on the container's root filesystem.
+            - name: state
+              mountPath: /var/insighta
+      # An earlier revision called these regenerable and used emptyDir for
+      # both. That was written without looking at what they hold. Measured on
+      # production 2026-08-14:
+      #
+      #   /app/cache  13 MB  base64-named JSON, one file per playlist --
+      #               persisted YouTube API responses. Starting cold means
+      #               re-fetching them, and a subscriptions call costs 100
+      #               quota units. This is why redis is empty: the app caches
+      #               to disk, not to redis.
+      #   /app/logs   34 MB  combined*.log and error*.log going back to May.
+      #               The only copy; nothing ships them anywhere.
+      #
+      # Neither is user data, but neither is free to discard either. Both get
+      # a volume by default; emptyDir stays available for ephemeral
+      # environments through persistence.enabled.
+      volumes:
+{{- if .Values.api.persistence.enabled }}
+        - name: cache
+          persistentVolumeClaim:
+            claimName: {{ include "insighta.fullname" . }}-api-cache
+        - name: logs
+          persistentVolumeClaim:
+            claimName: {{ include "insighta.fullname" . }}-api-logs
+{{- else }}
+        - name: cache
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+{{- end }}
+        # Rebuilt on demand by pool-health; losing it costs one stale-query
+        # fallback, not history.
+        - name: state
+          emptyDir: {}
+{{- if .Values.api.persistence.enabled }}
+---
+# ReadWriteOnce, so these are only correct while api.replicaCount is 1.
+# Raising replicas requires either ReadWriteMany or accepting that each pod
+# keeps its own cache -- which is a decision, not a default.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insighta.fullname" . }}-api-cache
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.api.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.api.persistence.cacheSize }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insighta.fullname" . }}-api-logs
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.api.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.api.persistence.logsSize }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insighta.fullname" . }}-api
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.api.port }}
+      targetPort: http
+      name: http
+  selector:
+    {{- include "insighta.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: api

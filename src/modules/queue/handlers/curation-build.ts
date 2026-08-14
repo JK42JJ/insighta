@@ -28,6 +28,9 @@ import { MS_PER_DAY } from '@/utils/time-constants';
 import { config } from '../../../config';
 import { nextKstWeekdayAt } from '@/utils/kst';
 import { collectChannelUploads } from '@/modules/curation/channel-uploads';
+import { computeCardRelevance } from '@/modules/relevance/compute-card-relevance';
+import { CURATION_RELEVANCE_FLOOR } from '@/modules/curation/config';
+import { getPoolTitles } from '@/modules/curation/pool-titles';
 import { curationPickPlan } from '@/modules/curation/config';
 import { fetchFreshTopicVideos } from '@/modules/curation/weekly-fresh';
 import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
@@ -294,6 +297,23 @@ export async function registerCurationBuildWorker(): Promise<void> {
         }
       }
       picked = Array.from(acc.values());
+
+      // One judge, at the one place every leg arrives.
+      //
+      // The fit gate used to live inside the fresh leg only, so anything the
+      // pool ladder contributed entered with no topic judgement at all —
+      // measured 2026-08-04 on a "파이썬" subscription: 16 of 17 items came
+      // from the ladder at cosine >= 0.35, and nine of them were unrelated
+      // (Spanish lessons, a makeup exam course, guitar practice, a lofi
+      // playlist). Duplicating the gate per leg is what let it be missed; the
+      // guarantee moves to the chokepoint instead.
+      //
+      // fail-CLOSED. An unjudged video is one we do not know about, and the
+      // rule is that garbage does not enter even at the cost of a thin week.
+      // The fresh leg's own fail-open (keep at floor on judge error) is the
+      // opposite of that and is retired by this.
+      picked = await gateByFit(prisma, sub.topic, picked);
+
       // The weekly contract, finally measurable: how much of the week is new.
       const histSet = new Set(history.map((h) => h.videoId));
       const repeats = picked.filter((p) => histSet.has(p.videoId)).length;
@@ -410,3 +430,71 @@ export async function registerCurationBuildWorker(): Promise<void> {
     });
   });
 }
+
+/**
+ * Drop every pick the topic judge does not pass. Runs on the assembled week,
+ * whichever leg produced each item.
+ *
+ * Titles come from video_pool because that is the same row the deck renders
+ * from — judging a title the user will never see would be judging the wrong
+ * thing. A pick with no pool row cannot render anyway, so it is dropped here
+ * rather than surviving as a ghost card.
+ */
+async function gateByFit(
+  prisma: ReturnType<typeof getPrismaClient>,
+  topic: string,
+  picks: Array<{ videoId: string; relevancePct: number }>
+): Promise<Array<{ videoId: string; relevancePct: number }>> {
+  if (!picks.length) return picks;
+
+  const titles = await getPoolTitles(
+    prisma,
+    picks.map((p) => p.videoId)
+  );
+
+  const kept: Array<{ videoId: string; relevancePct: number }> = [];
+  let noTitle = 0;
+  let judgeFailed = 0;
+  let belowFloor = 0;
+
+  for (const pick of picks) {
+    const title = titles.get(pick.videoId);
+    if (!title) {
+      noTitle += 1;
+      continue;
+    }
+    const r = await computeCardRelevance({
+      videoId: pick.videoId,
+      title,
+      centerGoal: topic,
+      language: 'ko',
+    });
+    if (!r.ok) {
+      judgeFailed += 1;
+      continue;
+    }
+    if (r.relevancePct < CURATION_RELEVANCE_FLOOR) {
+      belowFloor += 1;
+      continue;
+    }
+    // One scale from here on. The ladder used to store cosine x 100 in the same
+    // column the fresh leg filled with a judge score, so the ordering mixed two
+    // units that do not compare.
+    kept.push({ videoId: pick.videoId, relevancePct: r.relevancePct });
+  }
+
+  log.info('curation fit gate', {
+    topic,
+    inPicks: picks.length,
+    kept: kept.length,
+    noTitle,
+    judgeFailed,
+    belowFloor,
+    floor: CURATION_RELEVANCE_FLOOR,
+  });
+  return kept.sort((a, b) => b.relevancePct - a.relevancePct);
+}
+
+/** Test seam — the gate is internal to the build, but it is the one piece
+ *  whose behaviour a reviewer needs pinned independently of a live queue. */
+export const __testing = { gateByFit };

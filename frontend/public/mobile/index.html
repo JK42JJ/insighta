@@ -36,6 +36,8 @@
     --cf-skel:#1B1A1F; --cf-skel-hi:#2A2830;
     /* S3: 물성 공통 토큰 — 전 표면 동일 계열 */
     --soft:cubic-bezier(.22,.9,.3,1); --spring:cubic-bezier(.34,1.4,.64,1); --snap:120ms;
+    /* Navigation. iOS's own: arriving decelerates hard, leaving accelerates away. */
+    --nav-dur:340ms; --nav-in:cubic-bezier(.32,.72,0,1); --nav-out:cubic-bezier(.4,0,.6,1);
     --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
   }
   *{box-sizing:border-box}
@@ -53,7 +55,12 @@
     display:flex; align-items:center; justify-content:center;
     padding:calc(var(--sat) + 8px) 10px calc(var(--sab) + 8px);
     -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none;
+    -webkit-touch-callout:none;  /* long-press on imgs (thumbnail/avatar) must not raise the iOS save sheet */
   }
+  /* Inner lists must not chain their overscroll to the app shell — the chained
+     rubber-band bounces the whole PWA and reads as a web page. #cdFeed already
+     carries this; these are the other eight scrollers. */
+  .cur-body,.cur-connect,.rows,.menu-list,.readbox,.rl-list,#ytsBody,#tkList{overscroll-behavior:contain}
   .num{font-variant-numeric:tabular-nums}
   :root{--butter:#F5D48A}
   /* Scene palette. Shared by every colourway on purpose: the drawing is the same
@@ -129,9 +136,51 @@
       0 1.5px 0 rgba(255,255,255,.9);
     color:var(--paper-ink);
   }
+  /* ===== Screen transitions ================================================
+     These used to cross-fade: both screens semi-transparent at once, sliding
+     14px -- three percent of the width. Two things follow from that. Nothing
+     ever occludes anything, so there is no answer to "which one is on top",
+     and 14px is a twitch rather than a movement. Together they read as paper
+     shuffling, which is the light feeling: a web page changing, not an app
+     moving between places.
+
+     A native push is opaque and full-width. The arriving screen covers the one
+     it replaces, and the one being left slides a shorter distance the other way
+     and darkens -- the parallax IS the depth cue, and it is what the eye reads
+     as one surface sitting above another. Direction carries meaning too: going
+     deeper enters from the right, coming back leaves to the right, and the
+     ordering below is what tells them apart.
+
+     Distances and curve are iOS's: 100% in, 28% out, 340ms, and separate
+     easings -- arriving decelerates, leaving accelerates. Only transform and
+     opacity animate, so each screen stays one composited layer. */
   .scr{position:absolute; inset:0; display:flex; flex-direction:column; padding:15px 16px 14px;
     opacity:0; transform:translateX(14px); transition:opacity .32s var(--soft), transform .32s var(--soft); pointer-events:none}
   .scr.active{opacity:1; transform:none; pointer-events:auto}
+  /* mnav flag = the native-motion grammar above, dark-shipped (deploy != release:
+     login lives on prod only, so the device pass must happen there). Default
+     stays the old crossfade; ?mnav=1 opts a device in (localStorage-persisted,
+     ?mnav=0 clears). The default flips and the flag retires after the pass. */
+  body.mnav .scr{opacity:1; background:var(--paper);
+    transform:translateX(100%);
+    transition:transform var(--nav-dur) var(--nav-in), filter var(--nav-dur) linear}
+  /* Promote only the two screens actually moving (active enters, leaving exits);
+     a base-rule will-change would pin all six full-viewport screens as composited
+     layers forever — on low-RAM iOS that layer churn is itself a flicker source. */
+  body.mnav .scr.active,body.mnav .scr.leaving{will-change:transform}
+  body.mnav .scr.active{transform:none}
+  /* Leaving: a shorter travel the other way, and dimmed, so it reads as going
+     underneath rather than away. */
+  body.mnav .scr.leaving{transform:translateX(-28%); filter:brightness(.84);
+    transition:transform var(--nav-dur) var(--nav-out), filter var(--nav-dur) linear}
+  /* Coming back reverses both roles. */
+  body.mnav .scr.pop{transform:translateX(-28%); filter:brightness(.84)}
+  body.mnav .scr.pop.active{transform:none; filter:none}
+  body.mnav .scr.leaving.pop{transform:translateX(100%); filter:none}
+  @media (prefers-reduced-motion:reduce){
+    body.mnav .scr,body.mnav .scr.active,body.mnav .scr.leaving,body.mnav .scr.pop{transition:opacity .12s linear; transform:none; filter:none}
+    body.mnav .scr{opacity:0} body.mnav .scr.active{opacity:1}
+  }
 
   /* 상태줄 — §1.1b: 10px / .14em */
   .top{display:flex; justify-content:space-between; align-items:center; gap:8px;
@@ -180,20 +229,27 @@
   .gp-plus{width:13px; height:13px; border-radius:50%; background:var(--ui); position:relative; flex:none}
   .gp-plus::before,.gp-plus::after{content:""; position:absolute; background:#fff; left:50%; top:50%; transform:translate(-50%,-50%)}
   .gp-plus::before{width:7px; height:1.7px} .gp-plus::after{width:1.7px; height:7px}
-  .htabs{display:flex; gap:5px; margin-top:4px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
-  .htab{position:relative; flex:1; display:flex; align-items:center; justify-content:center; border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:700; letter-spacing:.01em; color:var(--paper-sub); padding:9px 0; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
-  .htab svg{display:block}
-  /* Tab beta marker. 영상 has no relevance ordering yet and 노트 is still
-     settling, so the tab says so rather than letting the first visit discover
-     it.
-
-     No box: the tab row is already a segmented control, and a bordered pill
-     inside one reads as a second control instead of a note about the tab. It
-     inherits the tab's own colour and dims, so there is no second palette to
-     keep in step and it brightens with the tab when that tab becomes active. */
-  .htab .tb{flex:none; align-self:center; margin-left:5px; font-size:8.5px; font-weight:800;
-    letter-spacing:.1em; text-transform:uppercase; line-height:1; opacity:.45}
-  .htab.on .tb{opacity:.55}
+  /* Status row (portrait). Says where you are and what this place is for; the
+     handle below does the moving. It also names the tab the handle's glyph
+     cannot — which is why the icons do not need to carry labels of their own. */
+  .hstat{display:flex; align-items:baseline; gap:7px; flex:none; margin-top:4px; padding:8px 4px 9px; min-width:0}
+  .hs-name{flex:none; font-size:13px; font-weight:800; letter-spacing:-.01em; color:var(--paper-ink)}
+  .hs-dot{flex:none; width:3px; height:3px; border-radius:50%; background:var(--paper-sub); opacity:.55; align-self:center}
+  .hs-desc{flex:1; min-width:0; font-size:11.5px; font-weight:600; color:var(--paper-sub);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  /* Portrait hands navigation to the handle; landscape has no handle, so the tab
+     row stays exactly as it shipped. One surface is a control at a time. */
+  .htabs{display:none; gap:5px; margin-top:4px; flex:none; background:rgba(94,86,72,.08); padding:3px; border-radius:12px; box-shadow:inset 0 0 0 1px rgba(94,86,72,.06)}
+  @media (orientation:landscape){ .hstat{display:none} .htabs{display:flex} }
+  /* gap = the space between a tab's icon and its word. The three tabs now name
+     one sequence -- gather an interest, read it compressed, arrive at a single
+     insight -- and the icon carries the step while the word names it. */
+  .htab{position:relative; flex:1; display:flex; align-items:center; justify-content:center; gap:5px; border:none; background:none; font-family:inherit; font-size:12.5px; font-weight:700; letter-spacing:.01em; color:var(--paper-sub); padding:9px 0; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:color .2s, background .2s, box-shadow .2s}
+  .htab svg{display:block; flex:none}
+  /* The beta markers that used to ride here are gone. Measured first: a tab is
+     (viewport - 76) / 3 wide -- 99.7px on a 375pt phone -- and icon 13 + gap 5
+     + 인사이트 ~63 + marker ~29 overflows it on the two most common handsets.
+     The rename is itself the "this is new" signal the marker was carrying. */
   .htab.on{color:var(--paper-ink); background:var(--paper); box-shadow:0 1px 2px rgba(94,86,72,.18)}
   /* D1 -- says "something new is here" and stops. It settles in once and pulses
      twice; a marker that keeps blinking is not a notice, it is nagging. It also
@@ -235,15 +291,33 @@
   .hsl-track{position:absolute; left:24px; right:24px; top:0; height:0; background:transparent} /* width ref on the card edge */
   @media (orientation:landscape){ .hsl{display:none} } /* landscape home = row layout; the bottom-edge bead is a portrait affordance */
   .hsl-fill{display:none}
-  .hsl-thumb{position:absolute; left:0; top:0; width:13px; height:13px; transform:translate(-50%,-50%);
+  /* The handle carries the icon of wherever it is. It was a 13px bead when the
+     labels lived above it; now that the row above only describes, the bead has
+     to say which of the three it is sitting on. 26px is the smallest that holds
+     a 14px glyph without the ring crowding it. */
+  .hsl-thumb{position:absolute; left:0; top:0; width:26px; height:26px; transform:translate(-50%,-50%);
     border:none; border-radius:50%; background:var(--paper); cursor:grab; touch-action:none;
+    display:grid; place-items:center; padding:0; color:var(--ui);
     box-shadow:0 1px 4px -1px rgba(94,86,72,.5), inset 0 0 0 1px rgba(94,86,72,.18); transition:left .42s var(--spring)}
-  .hsl-thumb::after{content:''; position:absolute; left:-14px; right:-14px; top:-16px; bottom:-8px} /* ~40px touch target, expanded upward */
+  .hsl-thumb::after{content:''; position:absolute; left:-9px; right:-9px; top:-12px; bottom:-9px} /* ~44px touch target, expanded upward */
+  /* All three glyphs are stacked in the same cell and cross-faded by position,
+     so dragging melts one into the next instead of swapping at a threshold.
+     Opacity is written from homePaintPos, which already receives the continuous
+     position — no separate animation to keep in step with the handle. */
+  .hs-ic{grid-area:1/1; display:grid; place-items:center; opacity:0; will-change:opacity, transform}
+  .hs-ic svg{display:block}
+  @media (prefers-reduced-motion:reduce){ .hs-ic{transition:none} }
   .hsl.drag .hsl-thumb{cursor:grabbing}
   .hsl.drag .hsl-thumb{transition:none}
   @media (prefers-reduced-motion:reduce){ .hstrip,.hsl-thumb,.hsl-fill{transition:none} }
   .pane[hidden]{display:none}
   .cur-body{flex:1; min-height:0; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:8px}
+  /* The curation pane nests .rows INSIDE .cur-body, while the video and note
+     panes have .rows as the pane's own child. Both carry margin-top:10px, and
+     .cur-body is a flex container so the two do not collapse — the curation
+     list alone sat 10px lower than the other two stops. The gap belongs to
+     whichever element is outermost, so the nested one gives it up. */
+  .cur-body > .rows{margin-top:0}
   /* Ambient background: a soft wash in the focused row's topic color, fading in
      behind the (translucent) row cards to fill the list and cue selection. */
   #paneCuration{position:relative}
@@ -1009,9 +1083,18 @@
        - core/full toggle in the header (mockup 핵심만/전체)
        - jog wheel = the EXISTING #wheel floating-mini mode (reading/stage pattern),
          NOT a bespoke widget. */
+  /* Deck entry/exit = the screen-nav push grammar (deck is one level in): an
+     opaque plate slides over the tab from the right and leaves the same way.
+     Replaces the D0 opacity crossfade — same cdin timing hook, new movement.
+     transform:none at rest matters twice over: fixed children (wheelzone,
+     cd-hint) re-anchor to the viewport, and no permanent composited layer. */
   #curDeck{position:fixed; inset:0; z-index:70; background:#12100E; display:none; flex-direction:column;
     padding:calc(var(--sat) + 8px) 14px calc(var(--sab) + 10px); color:#EDE7DC; overflow:hidden;
     opacity:0; transition:opacity .25s var(--soft)}
+  /* mnav canary: the deck rides the screen-nav push grammar instead of the D0
+     fade — one level in, slides over the tab and leaves the same way. */
+  body.mnav #curDeck{opacity:1; transform:translateX(100%);
+    transition:transform var(--nav-dur) var(--nav-in)}
   /* Ambient background (YouTube ambient-mode grammar): the current poster,
      heavily blurred + dimmed, fills the whole deck so the empty area below the
      video card carries the video's colors instead of a flat black void. */
@@ -1028,7 +1111,11 @@
     background:linear-gradient(180deg, rgba(18,16,14,.15) 0%, rgba(18,16,14,.55) 58%, rgba(18,16,14,.82) 100%)}
   @media (prefers-reduced-motion:reduce){ .cd-amb{transition:none} }
   body.curdeck #curDeck{display:flex}
-  body.curdeck.cdin #curDeck{opacity:1}   /* D0: cream->dark crossfade (studio entry) */
+  body.curdeck.cdin #curDeck{opacity:1}   /* D0: cream->dark crossfade (default, flag off) */
+  body.mnav.curdeck.cdin #curDeck{transform:none}   /* D0 hook, mnav: a directional push instead */
+  body.mnav.curdeck.cdout #curDeck{transform:translateX(100%);
+    transition:transform var(--nav-dur) var(--nav-out)}  /* exit accelerates, like a pop leaver */
+  @media (prefers-reduced-motion:reduce){ body.mnav #curDeck,body.mnav.curdeck.cdout #curDeck{transition:none} }
   /* D4 — weekly complete card (slides into the deck position) */
   .cd-fin{position:absolute; inset:0; z-index:6; background:#12100E; display:none; flex-direction:column;
     align-items:center; justify-content:center; gap:14px; text-align:center; padding:0 30px}
@@ -1262,6 +1349,13 @@
      wheel, hint and journey bar; the feed owns the whole area under the header. */
   #cdFeed{display:none; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
     background:#0D0D10; scroll-behavior:auto; min-height:0}
+  /* The unmute chip is position:fixed at the bottom centre, so it sits on top of
+     whatever the feed has scrolled to that spot -- in practice a card title,
+     which it covers completely (device 2026-08-13). Moving the chip only moves
+     the problem, so the feed gives it a strip of its own while it is showing:
+     scrolling then ends above the chip instead of under it. Unmuting hides the
+     chip and this padding goes with it. */
+  body.curdeck.cffeedmuted #cdFeed{padding-bottom:calc(var(--sab) + 62px)}
   @media (orientation:portrait){
     /* Portrait curation deck = full-bleed native-scroll feed. #curDeck is a flex column:
        header (flex:none) sits above, the feed (flex:1) fills below, the stage is a fixed
@@ -1545,8 +1639,23 @@
     background:rgba(13,13,16,.72); color:#B8AE9E; font-size:13px; font-weight:650; letter-spacing:.01em}
   .cf-durchip{display:none}   /* duration lives in the meta sub uniformly; no per-card chip (avoids focus-change flicker) */
   .cf-meta{padding:14px 20px 6px}
-  .cf-vt{font-size:16px; font-weight:650; color:#EDE7DC; line-height:1.35;
+  /* Title and its keep-mark share a row. The title still governs the height —
+     the button is 30px against a two-line title's ~43px — so the uniform card
+     height below is untouched. */
+  .cf-titlerow{display:flex; align-items:flex-start; gap:10px}
+  .cf-vt{flex:1; min-width:0; font-size:16px; font-weight:650; color:#EDE7DC; line-height:1.35;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  /* Quiet until used: an outline in the meta's own dimmed ink, filling with the
+     accent once kept. Pulled 6px right so the glyph optically aligns with the
+     card padding rather than the button box. */
+  .cf-bm{flex:none; width:30px; height:30px; margin:-1px -6px 0 0; padding:0; display:grid; place-items:center;
+    border:none; background:none; cursor:pointer; color:var(--cd-chip-ink);
+    -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+    transition:color .18s var(--soft), transform var(--snap) var(--spring)}
+  .cf-bm:active{transform:scale(.86)}
+  .cf-bm.on{color:var(--acc)}
+  .cf-bm svg{display:block}
+  .cf-bm.on svg path{fill:currentColor}
   .cf-sub{margin-top:7px; font-size:12.5px; font-weight:600; color:rgba(237,231,220,.55); line-height:1.4;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   /* Every card carries the SAME meta (2-line title + channel/time/views) so card heights
@@ -1701,6 +1810,11 @@
   .uptoast.show{opacity:1; transform:translateX(-50%) translateY(0)}
   .uptoast:active{transform:translateX(-50%) translateY(0) scale(.97)}
   .uptoast .upbtn{background:rgba(245,242,236,.20); border-radius:99px; padding:3px 11px; font-weight:800}
+
+  /* diag HUD (build 89, ?diag=1 only) — display-only, never intercepts input */
+  #diagHud{position:fixed; left:8px; bottom:calc(var(--sab) + 8px); z-index:99; pointer-events:none;
+    background:var(--ink); color:var(--paper); opacity:.85; font-size:9px; line-height:1.5;
+    font-family:ui-monospace,Menlo,monospace; white-space:pre; padding:5px 8px; border-radius:8px; max-width:70vw; overflow:hidden}
 
   /* §5: 세로 짧은 뷰포트 — 하단 트림 압축, 회수분은 스크린이 흡수 */
   @media (max-height: 820px) and (orientation: portrait){
@@ -1866,21 +1980,31 @@
         <div class="login-scr">
           <div class="login-mark">INSIGHTA</div>
           <div class="login-big">유튜브를<br>나만의 지식노트로.</div>
-          <div class="login-sub" id="loginSub">로그인하면 내 만다라가 이 기계에 도착합니다</div>
+          <div class="login-sub" id="loginSub">로그인하면 내 노트가 이 기계에 도착합니다</div>
           <button class="gbtn" id="bLogin">
             <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.5 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.6a14.5 14.5 0 0 1 0-9.2l-7.9-6.2a24 24 0 0 0 0 21.6l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.6-5.8l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-4-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>
             Google로 계속하기
           </button>
-          <button class="sample-btn" id="bSample">샘플 에피소드 들어보기</button>
+          <button class="sample-btn" id="bSample">샘플 노트 보기</button>
         </div>
       </div>
 
       <!-- 홈 -->
       <div class="scr" data-s="home" id="scrHome">
+        <!-- Portrait: the row above the list stops being a control and starts
+             saying where you are and what this place is for. Navigation moved
+             down to the handle, which is where the thumb already rests.
+             Landscape keeps the tab row below, because the handle is a
+             portrait affordance and hiding both would leave no way across. -->
+        <div class="hstat" id="hstat" aria-live="polite">
+          <span class="hs-name" id="hsName">관심</span>
+          <span class="hs-dot" aria-hidden="true"></span>
+          <span class="hs-desc" id="hsDesc">광고 없이 구독한 관심 주제 시청</span>
+        </div>
         <div class="htabs" id="htabs">
-          <button class="htab on" data-htab="curation" aria-label="큐레이션"><span>큐레이션</span><span class="nd" aria-hidden="true"></span></button>
-          <button class="htab" data-htab="video" aria-label="영상 (베타)"><span>영상</span><span class="tb" aria-hidden="true">beta</span></button>
-          <button class="htab" data-htab="note" aria-label="노트 (베타)"><span>노트</span><span class="tb" aria-hidden="true">beta</span></button>
+          <button class="htab on" data-htab="curation" aria-label="관심"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.7" fill="none" stroke="currentColor" stroke-width="2.7"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/></svg><span>관심</span><span class="nd" aria-hidden="true"></span></button>
+          <button class="htab" data-htab="video" aria-label="브리프"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><g stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4.8 7.6h14.4"/><path d="M4.8 12h14.4"/><path d="M4.8 16.4h9.6"/></g></svg><span>브리프</span></button>
+          <button class="htab" data-htab="note" aria-label="인사이트"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5c1.05 6.1 4.4 9.45 10.5 10.5-6.1 1.05-9.45 4.4-10.5 10.5-1.05-6.1-4.4-9.45-10.5-10.5C7.6 10.95 10.95 7.6 12 1.5Z" fill="currentColor"/></svg><span>인사이트</span></button>
         </div>
         <div class="hstrip-clip" id="hstripClip">
           <div class="hstrip" id="hstrip">
@@ -1933,7 +2057,7 @@
       <div class="scr" data-s="news" id="scrNews">
         <div class="top"><span class="bc"><button class="up" data-back="menu">설정</button><span class="sep">›</span><span class="cur">새소식</span></span></div>
         <div class="menu-list" id="newsList"><div class="menu-note" style="margin-top:20px">아직 공지가 없어요</div></div>
-        <div class="menu-note">MENU를 누르면 내 만다라로</div>
+        <div class="menu-note">MENU를 누르면 내 노트로</div>
       </div>
 
       <!-- 초대권 -->
@@ -2002,7 +2126,7 @@
     <!-- Slider bead on the epaper card's bottom edge — sibling of .epaper so the
          half-outside half is not clipped by epaper's overflow:hidden. Home-only. -->
     <div class="hsl" id="hsl">
-      <div class="hsl-track" id="hslTrack"><div class="hsl-fill" id="hslFill"></div><button class="hsl-thumb" id="hslThumb" type="button" aria-label="큐레이션·영상·노트 이동"></button></div>
+      <div class="hsl-track" id="hslTrack"><div class="hsl-fill" id="hslFill"></div><button class="hsl-thumb" id="hslThumb" type="button" aria-label="관심·브리프·인사이트 이동"><span class="hs-ic" data-i="0"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.7" fill="none" stroke="currentColor" stroke-width="2.7"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/></svg></span><span class="hs-ic" data-i="1"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><g stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4.8 7.6h14.4"/><path d="M4.8 12h14.4"/><path d="M4.8 16.4h9.6"/></g></svg></span><span class="hs-ic" data-i="2"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5c1.05 6.1 4.4 9.45 10.5 10.5-6.1 1.05-9.45 4.4-10.5 10.5-1.05-6.1-4.4-9.45-10.5-10.5C7.6 10.95 10.95 7.6 12 1.5Z" fill="currentColor"/></svg></span></button></div>
     </div>
 
     <div class="wheelzone">
@@ -2031,7 +2155,7 @@
   <div id="curDeck" aria-hidden="true">
     <div class="cd-amb" id="cdAmb" aria-hidden="true"></div>
     <div class="cd-top">
-      <button class="cd-back" id="cdBack" type="button">← 큐레이션</button>
+      <button class="cd-back" id="cdBack" type="button">← 관심</button>
       <span class="cd-title" id="cdTitle"></span>
       <div class="cd-mode core" id="cdMode" role="group" aria-label="재생 모드">
         <i class="cd-mode-thumb" aria-hidden="true"></i><button type="button" data-m="core" class="on">핵심만</button><button type="button" data-m="full">전체</button>
@@ -2099,7 +2223,7 @@
         </div>
         <div class="go-progress" id="goProgress" hidden>
           <div class="pulse"></div>
-          <div class="go-msg" id="goMsg">만다라 구조를 그리는 중…</div>
+          <div class="go-msg" id="goMsg">노트 구조를 그리는 중…</div>
         </div>
       </div>
       <button class="yts-exit" id="ytsBack" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span class="ytsBackT">돌아가기</span></button>
@@ -2121,8 +2245,59 @@
      itself to /mobile/version.json (fetched no-store) on load + every foreground
      return; on mismatch it offers a one-tap update that clears caches and reloads
      to a fresh URL. version.json is written from APP_BUILD at deploy. ===== */
-  var APP_BUILD='2026-08-03-88';   // bump every mobile deploy (deploy writes version.json to match)
+  var APP_BUILD='2026-08-13-99';   // bump every mobile deploy (deploy writes version.json to match)
   var upShown=false, upLast=0;
+
+  /* ===== diag probe (build 89) — opt-in instability triage, OFF by default.
+     Enable: open /mobile?diag=1 once (persists via localStorage so the
+     home-screen standalone launch keeps it); disable with ?diag=0.
+     Separates the four instability candidates: slow tap (pointerdown→click),
+     wheel 350ms click-suppress window firing, frame stalls, show() re-entry.
+     HUD is pointer-events:none — it can never eat input; full ring buffer
+     at window.__dialDiag. When off: no listeners, no rAF loop, no DOM. */
+  var DIAG=(function(){
+    try{
+      var q=location.search+location.hash;
+      if(/[?#&]diag=1/.test(q)) localStorage.setItem('dialDiag','1');
+      if(/[?#&]diag=0/.test(q)) localStorage.removeItem('dialDiag');
+      return localStorage.getItem('dialDiag')==='1';
+    }catch(e){ return false; }
+  })();
+  /* mnav flag — native-motion canary (deploy != release). Same opt-in shape as
+     diag: ?mnav=1 persists via localStorage so the standalone launch keeps it,
+     ?mnav=0 clears. Flag off = shipped behavior, byte-identical. */
+  try{
+    var _mq=location.search+location.hash;
+    if(/[?#&]mnav=1/.test(_mq)) localStorage.setItem('dialMnav','1');
+    if(/[?#&]mnav=0/.test(_mq)) localStorage.removeItem('dialMnav');
+    if(localStorage.getItem('dialMnav')==='1') document.body.classList.add('mnav');
+  }catch(e){}
+  var diagBuf=[], diagEl=null;
+  function diag(tag,msg){
+    if(!DIAG) return;
+    try{
+      diagBuf.push((performance.now()/1000).toFixed(2)+' '+tag+' '+msg);
+      if(diagBuf.length>120) diagBuf.shift();
+      window.__dialDiag=diagBuf;
+      if(!diagEl){ diagEl=document.createElement('div'); diagEl.id='diagHud'; document.body.appendChild(diagEl); }
+      diagEl.textContent=diagBuf.slice(-6).join('\n');
+    }catch(e){}
+  }
+  if(DIAG){
+    // Real-path nav driver for motion verification (harness + on-device console).
+    try{ window.__show=function(n){ show(n); }; }catch(e){}
+    // ① tap latency: only slow taps (>120ms) — quiet on a healthy device
+    var _pdT=0;
+    document.addEventListener('pointerdown',function(){ _pdT=performance.now(); },{capture:true,passive:true});
+    document.addEventListener('click',function(e){
+      if(!_pdT) return;
+      var d=Math.round(performance.now()-_pdT); _pdT=0;
+      if(d>120) diag('tap',d+'ms '+String(e.target.id||e.target.className||e.target.tagName).slice(0,18));
+    },{capture:true,passive:true});
+    // ③ frame stalls: 3+ dropped frames (>50ms gap)
+    var _lf=performance.now();
+    (function lfLoop(){ var t=performance.now(); if(t-_lf>50) diag('frame',Math.round(t-_lf)+'ms stall'); _lf=t; requestAnimationFrame(lfLoop); })();
+  }
   function checkAppVersion(){
     var now=Date.now(); if(now-upLast<30000) return; upLast=now; // throttle
     fetch('/mobile/version.json?t='+now,{cache:'no-store'})
@@ -2217,8 +2392,12 @@
     var b=document.getElementById('boot'); if(!b) return;
     b.style.opacity='0'; setTimeout(function(){ if(b.parentNode) b.parentNode.removeChild(b); },420);
   }
+  var NAV_SETTLE_MS=380;   // just past --nav-dur, so the class drops after the paint
   function show(n){
     bootDone();
+    // ④ re-entry probe: a second nav inside the .32s transition window is the
+    // "pressed and it bounced back" candidate — log it, change nothing.
+    if(DIAG){ var _nT=performance.now(); if(show._dt&&_nT-show._dt<400) diag('nav','re-entry '+Math.round(_nT-show._dt)+'ms'); show._dt=_nT; diag('nav',cur+'>'+n+(n===cur?' same':'')); }
     // 플레이어 이탈 = 재생 정지 [J:07-15 치명버그: 만다라/설정에서 노트 재생 지속].
     // 나브 토글·MENU·브레드크럼 모든 경로를 한곳에서 커버 (백그라운드 재생 오용 차단).
     if(cur==='player'&&n!=='player'){
@@ -2231,8 +2410,45 @@
     if(cur==='news'&&n!=='news'&&typeof clearNewsTimers==='function'){ clearNewsTimers(); } // stop countdown intervals on leave (no leak)
     if(n!=='player'){ document.body.classList.remove('reading'); var _rv=document.getElementById('readview'); if(_rv) _rv.hidden=true; } // 읽기 모드 = 플레이어 전용
     if(n===cur) return;
-    scr[cur].classList.remove('active');
-    cur=n; scr[cur].classList.add('active');
+    /* Depth order. A transition only means something if it knows which way it is
+       going: entering a deeper place comes from the right, coming back leaves to
+       the right. Home is the floor; login sits below it because arriving at the
+       app from login is coming UP, not going deeper. Anything unlisted is
+       treated as one level in, which is the safe default -- an unknown screen
+       pushes rather than popping into nowhere. */
+    var from=scr[cur], to=scr[n];
+    if(!document.body.classList.contains('mnav')){
+      // flag off = the shipped crossfade, byte-identical behavior
+      from.classList.remove('active');
+      cur=n; to.classList.add('active');
+    } else {
+    var NAV_DEPTH={login:-1, home:0, menu:1, news:1, invite:1, player:2};
+    var dFrom=(NAV_DEPTH[cur]===undefined)?1:NAV_DEPTH[cur];
+    var dTo  =(NAV_DEPTH[n]  ===undefined)?1:NAV_DEPTH[n];
+    var popping=dTo<dFrom;
+    // The arriving screen has to be placed on its start edge BEFORE it is shown.
+    // A forced reflow alone does NOT do that: with the transition live, the class
+    // flip retargets FROM the current value (measured: pop committed at +390, so
+    // the returning screen entered from the right like a push). Teleport needs the
+    // transition suspended for that one recalc; the jump is invisible because the
+    // z-order below keeps the incoming pop screen under the outgoing one.
+    to.classList.remove('leaving');
+    to.classList.toggle('pop', popping);
+    to.style.transition='none';
+    void to.offsetWidth;                       // commit that position without animating
+    to.style.transition='';
+    // Stacking must follow direction, not DOM order: push covers (incoming on
+    // top), pop reveals (incoming underneath).
+    to.style.zIndex=popping?'1':'3';
+    from.style.zIndex=popping?'3':'1';
+    from.classList.remove('active');
+    from.classList.toggle('pop', popping);
+    from.classList.add('leaving');
+    cur=n; to.classList.add('active');
+    // Park the screen we left once it is out of sight, so it is not a live layer.
+    clearTimeout(show._t);
+    show._t=setTimeout(function(){ from.classList.remove('leaving','pop'); from.style.zIndex=''; to.style.zIndex=''; }, NAV_SETTLE_MS);
+    }
     // Slider bead lives outside .scr now (sibling of .epaper); show it home-only.
     var _hsl=document.getElementById('hsl'); if(_hsl) _hsl.style.visibility=(n==='home')?'visible':'hidden';
     var _gf=document.getElementById('gearFab'); if(_gf) _gf.style.visibility=(n==='home')?'visible':'hidden';
@@ -2378,6 +2594,37 @@
     ]}
   };
 
+  /* Sample mode covers all three stops, not just the note.
+     The three tabs read three different sources -- curation calls /curations,
+     the video tab calls /mandalas/:id/videos, and the note reads m.book -- so a
+     sample that only carried a book left the other two empty (video showed the
+     no-mandala prompt, curation showed a load error, because api() throws
+     without a token). Signed out that is the whole product looking broken, and
+     it is also what a store reviewer sees.
+
+     Every video below is one already cited by the sample note, so nothing new
+     is introduced and the three stops describe the same subject. Titles and
+     channels are the real ones, verified against YouTube oEmbed 2026-08-13.
+     Percentages are illustrative of the layout, not measurements. */
+  var SAMPLE_VIDEOS=[
+    { vtab:true, video_id:'G67K0nKNaNE', title:'달러가 세계의 패권 화폐가 될 수 있었던 이유는? | 달러, 기축통화, 역사',
+      channel:'김지윤의 지식Play', thumbnail:'https://i.ytimg.com/vi/G67K0nKNaNE/hqdefault.jpg',
+      duration_sec:912, views:1240000, relevance_pct:92, has_segments:true, seg_coverage:0.68 },
+    { vtab:true, video_id:'jpNc3XdQp_4', title:'석유보다 무서운 자원, 중국은 조용히 웃고있다?',
+      channel:'이교수 - 이 세대의 교양수업', thumbnail:'https://i.ytimg.com/vi/jpNc3XdQp_4/hqdefault.jpg',
+      duration_sec:1043, views:387000, relevance_pct:86, has_segments:true, seg_coverage:0.54 },
+    { vtab:true, video_id:'a6-PaZXtj-s', title:'[월요지식회] Ep.80 원자재 게임: 희토류, 셰일가스, 헬륨3',
+      channel:'별별TV', thumbnail:'https://i.ytimg.com/vi/a6-PaZXtj-s/hqdefault.jpg',
+      duration_sec:1580, views:96000, relevance_pct:74, has_segments:false, seg_coverage:null }
+  ];
+  /* Shaped like a row from /curations. item_count drives the row's own copy
+     ("새 영상 N편"), so it must equal the list length or the row lies. */
+  var SAMPLE_CURATIONS=[
+    { id:'__sample_cur__', sample:true, topic:'지정학', item_count:SAMPLE_VIDEOS.length,
+      watched_count:0, next_run_at:null }
+  ];
+  var SAMPLE_MODE=false;
+
   /* ================= 홈 — §1.2 상태 머신 ================= */
   var PALETTE=[['#C1633B','#8A3A1B'],['#4D5C99','#2C3763'],['#4A7B60','#2C4E3A'],['#9A7A38','#6B5220'],['#7C5077','#4E2F4A'],['#4E7A85','#2E4C54']];
   function jkColor(title){
@@ -2386,7 +2633,7 @@
   }
   var mandalas=[], selIdx=0, bookCache={};
   function rowState(m){
-    if(m.sample) return {kind:'ready', line:'샘플 에피소드'};
+    if(m.sample) return {kind:'ready', line:'샘플 노트'};
     var cache=bookCache[m.id];
     var res=loadResume(m.id);
     if(!cache) return {kind:'loading', line:'확인 중…', skt:true};
@@ -2402,7 +2649,7 @@
     if(!rows) return;
     var items=homeItems();
     if(!items.length){
-      rows.innerHTML='<button class="row-empty" id="emptyStart" type="button" style="display:block;width:100%;border:none;background:none;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent">아직 만다라가 없어요<br><span style="color:var(--acc,#E8804C);font-weight:700">첫 목표를 적어보세요<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-left:4px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>';
+      rows.innerHTML='<button class="row-empty" id="emptyStart" type="button" style="display:block;width:100%;border:none;background:none;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent">아직 노트가 없어요<br><span style="color:var(--acc,#E8804C);font-weight:700">첫 목표를 적어보세요<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-left:4px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>';
       var _es=document.getElementById('emptyStart'); if(_es) _es.onclick=openHub;
       return;
     }
@@ -2460,20 +2707,47 @@
     var w=(tr&&tr.clientWidth)||0, tw=(th&&th.offsetWidth)||56;
     return {w:w, tw:tw, half:tw/2, usable:Math.max(1, w-tw)};
   }
-  // Thumb travel = curation-tab center → note-tab center (James: one-thumb reach, so the
-  // range is narrower than the full card). Align the track BOX to the outer tab centers;
-  // with the half-thumb inset the thumb CENTER then lands exactly on each tab center
-  // (cont0=curation, cont1=video=midpoint, cont2=note). Re-run on layout changes only.
+  // Thumb travel: one-thumb reach, so the range is narrower than the full card
+  // (James). It used to be derived from the outer tab centres, but in portrait
+  // the tab row is display:none now and a hidden element measures zero. The
+  // ratios below ARE those centres: three equal segments put them at 1/6, 3/6
+  // and 5/6 of the row, so the travel and the feel are unchanged — the number
+  // is written down instead of being read off an element that is still there.
+  var HSL_END_RATIO = 1 / 6;
   function syncSliderToTabs(){
     var track=document.getElementById('hslTrack'), hsl=document.getElementById('hsl'),
-        th=document.getElementById('hslThumb'), tabs=document.querySelectorAll('.htab[data-htab]');
-    if(!track||!hsl||tabs.length<3) return;
+        th=document.getElementById('hslThumb');
+    if(!track||!hsl) return;
     var hR=hsl.getBoundingClientRect(); if(!hR.width) return;
-    var half=((th&&th.offsetWidth)||13)/2;
-    var c0=tabs[0].getBoundingClientRect(), c2=tabs[tabs.length-1].getBoundingClientRect();
-    var curC=(c0.left+c0.width/2)-hR.left, noteC=(c2.left+c2.width/2)-hR.left;
-    track.style.left=(curC-half)+'px';
-    track.style.right=(hR.width-(noteC+half))+'px';
+    var half=((th&&th.offsetWidth)||26)/2;
+    var inset=hR.width*HSL_END_RATIO;
+    track.style.left=(inset-half)+'px';
+    track.style.right=(inset-half)+'px';
+  }
+  /* The handle's glyph is the position, not a consequence of it: each icon's
+     opacity is 1 minus its distance from the continuous position, so a drag
+     melts one into the next and a settle leaves exactly one. Driven from
+     homePaintPos so there is no second animation to keep in step. */
+  function homePaintHandle(cont){
+    var ics=document.querySelectorAll('#hslThumb .hs-ic');
+    for(var i=0;i<ics.length;i++){
+      var w=1-Math.min(1, Math.abs(cont-i));
+      ics[i].style.opacity=w;
+      ics[i].style.transform='scale('+(0.72+0.28*w)+')';
+    }
+  }
+  /* What the row above the list says. Names the stop the handle's glyph cannot,
+     and states what the stop is for. [J:2026-08-04] */
+  var HSTAT=[
+    {name:'관심',    desc:'광고 없이 구독한 관심 주제 시청'},
+    {name:'브리프',  desc:'핵심 구간만 시간 효율적인 학습'},
+    {name:'인사이트', desc:'한 주간의 필수 지식으로 성장'}
+  ];
+  function homePaintStatus(idx){
+    var s=HSTAT[Math.max(0,Math.min(2,idx))]; if(!s) return;
+    var n=document.getElementById('hsName'), d=document.getElementById('hsDesc');
+    if(n) n.textContent=s.name;
+    if(d) d.textContent=s.desc;
   }
   // cont = continuous position 0..2 (0=curation … 2=note). animate=false while dragging.
   function homePaintPos(cont, animate){
@@ -2486,6 +2760,10 @@
     var m=homeMetrics(), left=m.half+(cont/2)*m.usable;
     if(th) th.style.left=left+'px';
     if(fill) fill.style.width=left+'px';
+    homePaintHandle(cont);
+    // Mid-drag the row reads the nearest stop, so the words and the glyph agree
+    // at every moment instead of the text lagging until release.
+    homePaintStatus(Math.round(cont));
   }
   function homeGo(idx){
     idx=Math.max(0, Math.min(2, idx|0)); homeIdx=idx; homeTab=HTABS[idx];
@@ -2676,6 +2954,11 @@
     var sig=curSig(subs); if(sig===curRenderedSig&&Array.isArray(subs)) return; renderCurationRows(subs); curRenderedSig=sig; }
   async function renderCuration(){
     var el=document.getElementById('curBody'); if(!el) return;
+    // Sample mode never calls the API. Without a token api() throws
+    // 'unauthenticated', which has no .status, so it lands in the generic catch
+    // and paints "편성표를 불러오지 못했어요" -- an error screen as the first
+    // thing a signed-out visitor sees.
+    if(SAMPLE_MODE){ curPaint(SAMPLE_CURATIONS); return; }
     var haveCache=Array.isArray(curCache);
     if(haveCache){
       curPaint(curCache); // instant — no skeleton on re-entry / revalidate
@@ -2797,6 +3080,10 @@
   // Long-press: row expands inline into a 2-step unsubscribe action.
   // Open an EXISTING curation week — read-only, never triggers a rebuild.
   async function openExistingCuration(sub){
+    if(sub&&sub.sample){
+      openCurationDeck(sub.topic, SAMPLE_VIDEOS, {backLabel:'← 관심'});
+      return;
+    }
     try{
       var r=await api('/curations/'+sub.id+'/items');
       var j=await r.json(); var items=(j&&j.data&&j.data.items)||[];
@@ -3093,7 +3380,7 @@
       }
       setSheetFoot('');
       b.innerHTML='<div class="yts-h2">잠시만요</div>'
-        +'<div class="yts-sub">개인 추천을 확인하는 중이에요.<br>큐레이션 탭에서 곧 확인할 수 있어요.</div>'
+        +'<div class="yts-sub">개인 추천을 확인하는 중이에요.<br>관심 탭에서 곧 확인할 수 있어요.</div>'
         +'<button class="yts-ghost" id="ytsDone">돌아가기</button>';
       var c=document.getElementById('ytsDone'); if(c) c.onclick=closeYtSheet;
       return;
@@ -3480,7 +3767,7 @@
     cdTopic=topic||'큐레이션'; cdItems=items||[]; cdIdx=0; cdEndRolled=false; cdCtx=ctx||null;
     document.getElementById('cdTitle').textContent=cdTopic;
     // V1: the deck serves two tabs now — the back button names where you came from.
-    var _bk=document.getElementById('cdBack'); if(_bk) _bk.textContent=(ctx&&ctx.backLabel)||'← 큐레이션';
+    var _bk=document.getElementById('cdBack'); if(_bk) _bk.textContent=(ctx&&ctx.backLabel)||'← 관심';
     // V3: video decks get the core/full toggle (body.vdeck shows it); the mode
     // itself is session-scoped so it carries across decks until reload.
     document.body.classList.toggle('vdeck', !!(ctx&&ctx.returnTab==='video'));
@@ -3492,6 +3779,7 @@
     cfModeSet(cfCoreOnly); // repaint the pill to the session state on every open
     cdRenderWeeks();
     wheelAwake(); wheelSleep();          // brief hello on entry, as the note view does
+    clearTimeout(closeCurationDeck._t); document.body.classList.remove('cdout'); // re-open during an exit slide: cancel it
     document.body.classList.add('curdeck');
     // After the class, not before it. cfIsFeed asks whether the body is in the
     // deck AND portrait, so asking one line earlier answered "not the deck" every
@@ -3558,8 +3846,25 @@
     // deck). cdTeardown does not clear cdCtx, so read it after is also fine —
     // capture first anyway so the ordering never matters again.
     var back=(cdCtx&&cdCtx.returnTab)||'curation';
-    cdTeardown();
-    setHomeTab(back);
+    if(!document.body.classList.contains('mnav')){
+      // flag off = the shipped instant close
+      cdTeardown();
+      setHomeTab(back);
+      return;
+    }
+    if(document.body.classList.contains('cdout')) return;  // exit slide already playing
+    // Silence NOW - the slide-out must not carry audio. Both loops are
+    // idempotent; cdTeardown repeats them safely at the end of the slide.
+    try{ cdP.forEach(function(p){ if(p&&p.stopVideo) p.stopVideo(); }); }catch(e){}
+    try{ Object.keys(cfPlayers).forEach(function(k){ var p=cfPlayers[k]; if(p&&p.pauseVideo) p.pauseVideo(); }); }catch(e){}
+    setHomeTab(back);                    // dress the tab behind the deck before the slide reveals it
+    document.body.classList.remove('cdin');
+    document.body.classList.add('cdout');
+    clearTimeout(closeCurationDeck._t);
+    closeCurationDeck._t=setTimeout(function(){
+      document.body.classList.remove('cdout');
+      cdTeardown();
+    }, reduce?0:NAV_SETTLE_MS);
   }
   function cdThumb(it){ return (it&&it.thumbnail)||('https://i.ytimg.com/vi/'+(it?it.video_id:'')+'/hqdefault.jpg'); }
   /* Poster resolution follows the connection: high on a good one, the small
@@ -3726,12 +4031,49 @@
           +'<div class="cf-prog'+((w&&w.dur>0)?'':' none')+'"><b style="width:'+pc+'%"></b></div>'
           +'<button class="cf-play" type="button" aria-label="재생"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button>'
         +'</div>'
-        +'<div class="cf-meta"><div class="cf-vt">'+cfEsc(it.title)+'</div>'
+        +'<div class="cf-meta"><div class="cf-titlerow"><div class="cf-vt">'+cfEsc(it.title)+'</div>'
+          +'<button class="cf-bm'+(it.bookmarked_at?' on':'')+'" type="button"'
+            +' data-vid="'+cfEsc(it.video_id)+'" aria-pressed="'+(it.bookmarked_at?'true':'false')+'"'
+            +' aria-label="북마크"><svg width="16" height="20" viewBox="0 0 24 24" aria-hidden="true">'
+            +'<path d="M6 3.6h12a1.4 1.4 0 0 1 1.4 1.4v15.5L12 16.6l-7.4 3.9V5A1.4 1.4 0 0 1 6 3.6Z"'
+            +' fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></button>'
+        +'</div>'
         +(sub.length?'<div class="cf-sub">'+cfEsc(sub.join(' · '))+'</div>':'')+'</div>'
       +'</div>';
     }
     feed.innerHTML=html;
+    // Wired once, on the feed rather than per card: cfRender replaces innerHTML
+    // on every repaint, and close() clears innerHTML + onclick but never touches
+    // addEventListener, so a listener bound here survives exactly one time.
+    if(!feed.__bmWired){ feed.__bmWired=1; feed.addEventListener('click', cfBookmarkClick, true); }
     cfUpgradePosters();   // small sheet is already painted; swap in the big one if it is real
+  }
+
+  /* Keep-mark taps. Capture phase + stopPropagation because the card underneath
+     starts playback on click — the mark must not double as a play button. */
+  async function cfBookmarkClick(e){
+    var btn = e.target && e.target.closest && e.target.closest('.cf-bm');
+    if(!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    if(!cdCtx || !cdCtx.subId) return;
+    var vid = btn.getAttribute('data-vid'); if(!vid) return;
+    var next = !btn.classList.contains('on');
+    var it = null;
+    for(var k=0; k<cdItems.length; k++){ if(cdItems[k].video_id===vid){ it=cdItems[k]; break; } }
+    // Optimistic: a keep has to land under the thumb, not after a round trip.
+    var paint = function(on){
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if(it) it.bookmarked_at = on ? new Date().toISOString() : null;
+    };
+    paint(next);
+    try{
+      await api('/curations/'+cdCtx.subId+'/items/'+encodeURIComponent(vid)+'/bookmark',
+        {method:'PATCH', body:JSON.stringify({bookmarked:next})});
+    }catch(err){
+      paint(!next);   // put it back rather than show a mark the server does not have
+      toast('북마크를 저장하지 못했어요');
+    }
   }
   // ===== D: native-scroll dominant-card autoplay (portrait feed) =====
   // No iframe reparent (= no reload): the dual-player STAGE is placed as a fixed
@@ -4854,6 +5196,10 @@
        (That old path also violated the clip-boundary rule with 0..99999
        windows; the deck is full-play by design, so no synthetic windows.)
        The note path (openNote → flatten(book)) is untouched. */
+    if(m&&m.sample){
+      openCurationDeck(m.title, SAMPLE_VIDEOS, {returnTab:'video', backLabel:'← 브리프'});
+      return;
+    }
     try{
       var r=await api('/mandalas/'+m.id+'/videos?limit=100');
       var j=await r.json(); var list=(j&&j.items)||[];
@@ -4864,7 +5210,7 @@
           has_segments:!!it.hasSegments, seg_coverage:(it.segCoverage!=null?it.segCoverage:null) };
       });
       if(!items.length){ toast('영상이 아직 없어요 — 카드가 모이면 여기서 이어봐요'); return; }
-      openCurationDeck(m.title||'영상', items, { returnTab:'video', backLabel:'← 영상' });
+      openCurationDeck(m.title||'영상', items, { returnTab:'video', backLabel:'← 브리프' });
       // Fire-and-forget: start scoring this mandala's unscored cards so the
       // relevance order (and the V2 mound later) fills in on the next open.
       api('/mandalas/'+m.id+'/relevance-trigger',{method:'POST'}).catch(function(){});
@@ -5524,7 +5870,7 @@
     pState.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center;padding:0 14px">'
       +'<svg class="finsig" viewBox="0 0 17 17" aria-hidden="true"><rect class="c" x="0.5" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="0.5" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="12.1" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="6.3" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="12.1" width="4.4" height="4.4" rx="1.2"/><rect class="c" x="0.5" y="6.3" width="4.4" height="4.4" rx="1.2"/><rect class="c core" x="6.3" y="6.3" width="4.4" height="4.4" rx="1.2"/></svg>'
       +'<div class="big" style="font-size:15px;font-weight:750;margin-top:4px">이번 회차, 다 들었어요</div>'
-      +'<div class="sm" style="font-size:11px;color:var(--paper-sub);font-weight:600">'+(srcN?('이 에피소드는 '+srcN+'개 영상에서 만들어졌어요'):'가운데 버튼 = 처음부터 다시')+'</div>'
+      +'<div class="sm" style="font-size:11px;color:var(--paper-sub);font-weight:600">'+(srcN?('이 노트는 '+srcN+'개 영상에서 만들어졌어요'):'가운데 버튼 = 처음부터 다시')+'</div>'
       +(nextM?'<button class="fin-next" id="finNext">다음: <b></b></button>':'')
       +'</div>';
     if(nextM){ pState.querySelector('#finNext b').textContent=nextM.title;
@@ -5572,14 +5918,14 @@
           book=j.data&&j.data.book; m.sourceVideos=j.data&&j.data.sourceVideos;
           bookCache[m.id]={book:book, sourceVideos:m.sourceVideos};
         }catch(e){
-          if(e.status===404) pShowState('노트 준비 중','카드가 모이면 에피소드가 자동으로 생겨요');
+          if(e.status===404) pShowState('노트 준비 중','카드가 모이면 노트가 자동으로 생겨요');
           else pShowState('열지 못했어요','연결 확인 후 다시 시도해주세요');
           return;
         }
       }
     }
     flatten(book);
-    if(!beats.length){ pShowState('노트 준비 중','카드가 모이면 에피소드가 자동으로 생겨요'); return; }
+    if(!beats.length){ pShowState('노트 준비 중','카드가 모이면 노트가 자동으로 생겨요'); return; }
     buildRail();
     if(!m.sample) prefetchBounds();
     // 실보이스 준비를 짧게 기다림 (1.5s 한도) — 첫 비트부터 일레븐랩스 (전환 혼선 방지)
@@ -5815,7 +6161,7 @@
     setVideoAmbient(); // wheel selection moves the mandala focus -> update the video ambient color
   }
   var suppressClickUntil=0;
-  function wheelStole(){ return Date.now()<suppressClickUntil; } // 시간창(350ms): sticky 플래그 잔류 → 후속 정상 탭 삼킴 버그 제거
+  function wheelStole(){ var s=Date.now()<suppressClickUntil; if(s) diag('sup','click eaten, '+(suppressClickUntil-Date.now())+'ms left'); return s; } // 시간창(350ms): sticky 플래그 잔류 → 후속 정상 탭 삼킴 버그 제거
   function dispatchNotch(dir){
     if(document.body.classList.contains('curdeck')){
       // Video deck: a detent steps by SECTION when the focus card has v2
@@ -6473,7 +6819,18 @@
 
   /* ================= 메뉴 항목 ================= */
   document.getElementById('bLogin').onclick=loginRedirect;
-  document.getElementById('bSample').onclick=function(){ openNote(SAMPLE) };
+  /* Sample opens the home screen, not the note. Jumping straight into the note
+     showed one screen out of three and left the two tabs beside it empty, so
+     the thing most people saw first was the least of it. Home puts the same
+     note one tap away and the other two stops beside it. */
+  document.getElementById('bSample').onclick=function(){
+    SAMPLE_MODE=true;
+    mandalas=[SAMPLE];          // feeds both the video and note lists
+    selIdx=0; curCache=null; curRenderedSig='';
+    show('home');
+    homeGo(0);                  // land on 관심, which is where the tabs read left-to-right
+    toast('샘플 화면입니다 — 로그인하면 내 주제로 채워집니다');
+  };
   document.getElementById('clipFit').onclick=function(e){
     e.stopPropagation(); e.preventDefault();
     var cover=clipbox.classList.toggle('cover');
@@ -6815,7 +7172,7 @@
     try{
       var tok=await freshToken(); if(!tok){ loginRedirect(); return; }
       var sessionId=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2));
-      goMsg.innerHTML='만다라 구조를 그리는 중…<small>10~20초</small>';
+      goMsg.innerHTML='노트 구조를 그리는 중…<small>10~20초</small>';
       var st=await wizardStream(goal,sessionId,tok);
       if(!st) throw new Error('구조 생성 실패');
       goMsg.innerHTML='카드를 모아 저장하는 중…<small>거의 다 됐어요</small>';

@@ -22,18 +22,26 @@ name: batch-video-collector
 
 on:
   schedule:
-    # CP489 — 1×/day → 2×/day to double pool-growth rate toward the
-    # 30k-active target. 07:30 UTC (= 16:30 KST) right after the YouTube
-    # quota reset (00:00 PT), 19:30 UTC (= 04:30 KST) 12h later. Quota
-    # impact 6k/day → 12k/day at default limit=60, still safely under
-    # the 80k/day headroom (8 keys × 10k). With CP489 manifest bump to
-    # limit=200 the total becomes 40k/day — same headroom.
+    # 2026-08-11 [P5] — back to 1×/day for the restart.
+    #
+    # CP489 had taken this to 2×/day (07:30 + 19:30 UTC) chasing a 30k-active
+    # pool. The workflow was then disabled 2026-06-06 for burning ~40k units/day
+    # with no consumer, and stayed disabled through 06-04 → 08-11 while curation
+    # quietly became that consumer. Restarting straight back at 2×/day would
+    # spend the same 40k before anyone has looked at a single pass rate, so the
+    # second run is removed until a day of numbers exists. 07:30 UTC (16:30 KST)
+    # is right after the YouTube quota reset at 00:00 PT, which is why the run
+    # sits there: the earlier 04:00 UTC slot competed with user-facing discover
+    # traffic for the shared search key and returned videos_new=0 in 6 of 7 runs
+    # (CP417 /retro).
     - cron: '30 7 * * *'
-    - cron: '30 19 * * *'
   workflow_dispatch:
     inputs:
       limit:
-        description: 'Max trend keywords (default 180). Empty = use default.'
+        # Advisory only. The queue handler forwards this on the payload but the
+        # executor reads BATCH_COLLECTOR_LIMIT from its frozen env snapshot, so
+        # the real size lives in docker-compose.prod.yml. Kept for forensics.
+        description: 'Advisory — real limit is BATCH_COLLECTOR_LIMIT in compose.'
         required: false
         type: string
       runType:

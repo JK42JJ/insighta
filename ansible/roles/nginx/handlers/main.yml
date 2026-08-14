@@ -1,0 +1,8 @@
+---
+# Reload, never restart: reload keeps existing connections and cannot drop
+# the site if the new config is bad, because the config test runs first.
+- name: Reload nginx
+  become: true
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
