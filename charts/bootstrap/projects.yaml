@@ -63,3 +63,20 @@ spec:
       duration: 24h
       applications: ["*"]
       manualSync: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: insighta-validation
+  namespace: argocd
+spec:
+  description: AWS validation node -- no traffic, no DNS, nothing depends on it
+  sourceRepos:
+    - https://github.com/JK42JJ/insighta
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: insighta
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

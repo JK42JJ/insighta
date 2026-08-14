@@ -106,6 +106,51 @@ for env in $ENVS; do
   [ "$FAIL" -eq 1 ] && say "$env: $count objects"
 done
 
+# The Argo bootstrap points at a branch and a values file. Both can rot without
+# any render failing: on 2026-08-14 all four manifests still referenced
+# feat/p2-helm-chart-t0, which had been merged and deleted, so every
+# Application would have failed to sync with nothing in the chart to explain
+# why.
+echo "bootstrap:"
+for f in charts/bootstrap/*.yaml; do
+  [ -f "$f" ] || continue
+
+  while read -r ref; do
+    [ -z "$ref" ] && continue
+    case "$ref" in
+      # A 40-char hex string is a commit and cannot be checked this way.
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) continue ;;
+    esac
+    # Only the remote answers this. A local refs/remotes entry is not
+    # evidence: a branch deleted on origin stays in the local repository until
+    # someone prunes, and an earlier version of this check consulted it as a
+    # fallback -- which made the check incapable of failing. Verified by
+    # reintroducing the dead branch: the check passed.
+    #
+    # ls-remote exits 0 when found and 2 when the ref does not exist. Any
+    # other status means the remote could not be reached, which is reported
+    # rather than treated as a pass.
+    set +e
+    git ls-remote --exit-code --heads origin "$ref" >/dev/null 2>&1
+    rc=$?
+    set -e
+    case "$rc" in
+      0) ok  "$(basename "$f"): targetRevision $ref exists" ;;
+      2) bad "$(basename "$f"): targetRevision '$ref' is not a branch on origin" ;;
+      *) say "$(basename "$f"): could not reach origin (git ls-remote exit $rc) -- targetRevision unchecked" ;;
+    esac
+  done < <(grep -h 'targetRevision:' "$f" | awk '{print $2}' | sort -u)
+
+  while read -r vf; do
+    [ -z "$vf" ] && continue
+    if [ -f "$CHART/$vf" ]; then
+      ok "$(basename "$f"): $vf exists"
+    else
+      bad "$(basename "$f"): valueFile $vf does not exist"
+    fi
+  done < <(sed -n '/valueFiles:/,/^ *[a-z]/p' "$f" | grep -oE '^ *- [a-zA-Z0-9._/-]+\.yaml' | awk '{print $2}' | sort -u)
+done
+
 if command -v kubeconform >/dev/null; then
   echo "kubeconform:"
   for env in $ENVS; do

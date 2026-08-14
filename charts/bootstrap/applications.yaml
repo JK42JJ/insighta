@@ -17,7 +17,7 @@ spec:
   project: insighta-dev
   source:
     repoURL: https://github.com/JK42JJ/insighta
-    targetRevision: feat/p2-helm-chart-t0
+    targetRevision: main
     path: charts/insighta
     helm:
       releaseName: insighta
@@ -37,7 +37,7 @@ spec:
   project: insighta-staging
   source:
     repoURL: https://github.com/JK42JJ/insighta
-    targetRevision: feat/p2-helm-chart-t0
+    targetRevision: main
     path: charts/insighta
     helm:
       releaseName: insighta
@@ -46,4 +46,27 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: insighta-staging
+  syncPolicy: {}
+---
+# The AWS validation node. Deployed by hand first, then handed to Argo so the
+# handover itself is the thing being tested: whether a release created by the
+# helm CLI can be adopted without recreating it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: insighta-validation
+  namespace: argocd
+spec:
+  project: insighta-validation
+  source:
+    repoURL: https://github.com/JK42JJ/insighta
+    targetRevision: main
+    path: charts/insighta
+    helm:
+      releaseName: insighta
+      valueFiles:
+        - environments/validation.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: insighta
   syncPolicy: {}
