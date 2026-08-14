@@ -25,3 +25,12 @@ ssh_cidrs = []
 # Phase 2 features
 enable_ssm        = false
 enable_cloudwatch = true
+
+# P2 — the k3s validation node. Turning this on is the first line in this file
+# that costs money: one t3.small, roughly $15/month, running until P2 and P3
+# are done and it is destroyed.
+#
+# It is declared here rather than passed as a command flag so the desired state
+# stays in code. With the flag, the instance would exist while the repository
+# said it did not, and the nightly drift job would be right to complain.
+enable_k3s_node = true
