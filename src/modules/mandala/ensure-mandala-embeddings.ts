@@ -23,6 +23,7 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { embedBatch, vectorToLiteral } from '@/skills/plugins/iks-scorer/embedding';
+import { recordErrorEvent } from '@/modules/observability/error-events';
 import { servingEmbedOptions } from '@/config/embed-serving-timeout';
 
 const log = logger.child({ module: 'ensure-mandala-embeddings' });
@@ -173,12 +174,25 @@ export async function ensureMandalaEmbeddings(mandalaId: string): Promise<Ensure
     // provider from eating the whole race; missing cells backfill next call.
     vectors = await embedBatch(subjectsToEmbed, servingEmbedOptions());
   } catch (err) {
+    const reason = `embedBatch failed: ${err instanceof Error ? err.message : String(err)}`;
+    // error_events: total embed failure for this mandala. Since CP512/#1135 this
+    // is non-fatal to serving (embeddings backfill async), but it IS a real
+    // degradation (the 0-card incident's root) whose only other signal is a
+    // returned ok:false + winston. severity=warn — recovers on the next call.
+    recordErrorEvent({
+      subsystem: 'embedding',
+      stage: 'mandala_embed_batch_fail',
+      severity: 'warn',
+      message: reason,
+      context: { toEmbed: subjectsToEmbed.length, okCount },
+      mandalaId,
+    });
     return {
       ok: false,
       alreadyPresent: false,
       finalCount: okCount,
       embedMs: Date.now() - t0,
-      reason: `embedBatch failed: ${err instanceof Error ? err.message : String(err)}`,
+      reason,
     };
   }
   const embedMs = Date.now() - t0;

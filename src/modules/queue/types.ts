@@ -99,6 +99,12 @@ export const JOB_NAMES = {
    * + funnel from the Phase 1 trail log into search_metrics_daily (one row/day).
    */
   SEARCH_METRICS_ROLLUP: 'search-metrics-rollup',
+  /**
+   * Incident-response follow-up (2026-07-09) — daily digest of failures across
+   * every queryable error source (llm_call_logs, pgboss failed jobs, mandala/
+   * skill/sync errors, error_events blind spots), mailed to the operator.
+   */
+  ERROR_LOG_CHECK: 'error-log-check',
   /** Perf-monitor PR4 — 15-min wizard-funnel collapse watch + daily dead-man heartbeat. */
   COLLAPSE_WATCH: 'collapse-watch',
   COLLAPSE_WATCH_HEARTBEAT: 'collapse-watch-heartbeat',
@@ -485,6 +491,8 @@ export const QUEUE_CONFIG = {
   KEY_ALARM_CRON: '7 8 * * *',
   /** Observability Phase 2-B daily metrics rollup: daily at 08:13 (off-hour). */
   SEARCH_METRICS_ROLLUP_CRON: '13 8 * * *',
+  /** Daily error-log digest: daily at 08:19 (off-hour, after the rollup). */
+  ERROR_LOG_CHECK_CRON: '19 8 * * *',
   // PR4 — every 15 min; heartbeat daily 08:30 KST (23:30 UTC).
   COLLAPSE_WATCH_CRON: '*/15 * * * *',
   COLLAPSE_WATCH_HEARTBEAT_CRON: '30 23 * * *',

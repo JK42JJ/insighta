@@ -60,6 +60,7 @@ APPLY_FILES=(
   "prisma/migrations/ontology/017_fix_sync_mandala_seqscan.sql"
   "prisma/migrations/ontology/020_ontology_conversations.sql"
   "prisma/migrations/youtube/001_youtube_cache_epochs.sql"
+  "prisma/migrations/error-events/001_create_error_events.sql"
   "prisma/migrations/mandala-timings/001_create_table.sql"
   "prisma/migrations/video_chunk_embeddings/001_create_table.sql"
   "prisma/migrations/video_rich_summaries/001_add_user_id.sql"

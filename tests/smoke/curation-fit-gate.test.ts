@@ -101,7 +101,11 @@ describe('fail-closed', () => {
       scores.set(id, { ok: false, relevancePct: 0 });
     }
 
-    const out = await gate(prisma, '파이썬', ['a', 'b', 'c'].map((i) => pick(i)));
+    const out = await gate(
+      prisma,
+      '파이썬',
+      ['a', 'b', 'c'].map((i) => pick(i))
+    );
 
     expect(out).toEqual([]);
   });
@@ -127,7 +131,11 @@ describe('one scale', () => {
       scores.set(id, { ok: true, relevancePct: s });
     }
 
-    const out = await gate(prisma, '파이썬', ['low', 'high', 'mid'].map((i) => pick(i)));
+    const out = await gate(
+      prisma,
+      '파이썬',
+      ['low', 'high', 'mid'].map((i) => pick(i))
+    );
 
     expect(out.map((p) => p.videoId)).toEqual(['high', 'mid', 'low']);
   });

@@ -58,7 +58,12 @@ function generated(subGoals: string[], queries: string[] | null, degraded = fals
   return {
     structure: { sub_goals: subGoals },
     cellQueries: queries?.map((query, cellIndex) => ({ cellIndex, query })),
-    meta: { degraded, latencyMs: 1, totalCells: subGoals.length, cellQueryCount: queries?.length ?? 0 },
+    meta: {
+      degraded,
+      latencyMs: 1,
+      totalCells: subGoals.length,
+      cellQueryCount: queries?.length ?? 0,
+    },
   };
 }
 
@@ -83,8 +88,18 @@ describe('shapeTopic', () => {
   });
 
   it('hands v5 the real sub-goals and their queries when generation is clean', async () => {
-    const subGoals = ['파이썬 문법 기초', '파이썬 자료구조', '파이썬 웹 개발', '파이썬 데이터 분석'];
-    const queries = ['파이썬 문법 강의', '파이썬 자료구조 설명', '파이썬 장고 튜토리얼', '파이썬 판다스'];
+    const subGoals = [
+      '파이썬 문법 기초',
+      '파이썬 자료구조',
+      '파이썬 웹 개발',
+      '파이썬 데이터 분석',
+    ];
+    const queries = [
+      '파이썬 문법 강의',
+      '파이썬 자료구조 설명',
+      '파이썬 장고 튜토리얼',
+      '파이썬 판다스',
+    ];
     genImpl = async () => generated(subGoals, queries);
 
     const shaped = await shapeTopic(TOPIC);
