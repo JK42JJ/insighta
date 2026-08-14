@@ -54,3 +54,60 @@ describe('deploy predicate vs .dockerignore', () => {
     expect(pretend.filter((d) => !ignored.has(d))).toEqual(['not-in-dockerignore']);
   });
 });
+
+/**
+ * The directory list above is only half the predicate. The other half decides
+ * top-level files, and it read `^[^/]*\.md$` alone -- so a .gitignore edit was
+ * a deployable change.
+ *
+ * That is not theoretical: PR #1497 changed .gitignore, scripts/ and tests/,
+ * and rebuilt and redeployed production at 06:01:47Z on 2026-08-14. Nothing in
+ * it could reach the running application.
+ *
+ * The fix names files individually rather than matching dotfiles as a class,
+ * because .dockerignore is a dotfile and decides what the image contains --
+ * the opposite of irrelevant. These cases pin both directions.
+ */
+describe('deploy predicate: which paths trigger a deploy', () => {
+  function predicate(): RegExp {
+    const wf = readFileSync(join(ROOT, '.github/workflows/deploy.yml'), 'utf8');
+    const line = wf.split('\n').find((l) => l.includes('IRRELEVANT='));
+    if (!line) throw new Error('IRRELEVANT= not found in deploy.yml');
+    const body = line.split("'")[1];
+    if (!body) throw new Error(`could not extract the pattern from: ${line.trim()}`);
+    return new RegExp(body);
+  }
+
+  // true  = a change to this path must rebuild and redeploy
+  // false = it provably cannot alter what runs, so it must not
+  const CASES: Array<[string, boolean]> = [
+    ['src/api/server.ts', true],
+    ['frontend/src/App.tsx', true],
+    ['package.json', true],
+    ['docker/redis/Dockerfile', true],
+    // Decides what goes into the image. A dotfile, and the opposite of irrelevant.
+    ['.dockerignore', true],
+
+    ['.gitignore', false],
+    ['.gitattributes', false],
+    ['.editorconfig', false],
+    ['LICENSE', false],
+    ['README.md', false],
+    ['scripts/ops/ssh.sh', false],
+    ['tests/smoke/x.test.ts', false],
+    ['charts/insighta/values.yaml', false],
+    ['terraform/main.tf', false],
+    ['.github/workflows/ci.yml', false],
+  ];
+
+  it.each(CASES)('%s -> deploys=%s', (path, shouldDeploy) => {
+    expect(!predicate().test(path)).toBe(shouldDeploy);
+  });
+
+  // Negative control: a path nobody classified must fall through to deploying.
+  // An allowlist would silently skip it, and a deploy that should have happened
+  // and did not is the failure this repository can least afford.
+  it('an unknown top-level directory still deploys', () => {
+    expect(predicate().test('some-new-thing/file.ts')).toBe(false);
+  });
+});

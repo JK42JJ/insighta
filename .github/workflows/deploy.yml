@@ -117,7 +117,12 @@ jobs:
           # deployable=true, which wastes a deploy; an allowlist would silently
           # skip it, and a deploy that should have happened and did not is the
           # failure this repository can least afford.
-          IRRELEVANT='^(terraform|ansible|charts|docs|prompt|tests|scripts|\.github|\.claude)/|^[^/]*\.md$'
+          # Top-level metadata files are named individually rather than by a
+          # pattern. A rule like "any dotfile" would swallow .dockerignore,
+          # which decides what goes into the image and is the opposite of
+          # irrelevant. Verified 2026-08-14 by listing /app inside the running
+          # image: none of these are present.
+          IRRELEVANT='^(terraform|ansible|charts|docs|prompt|tests|scripts|\.github|\.claude)/|^[^/]*\.md$|^(\.gitignore|\.gitattributes|\.editorconfig|LICENSE)$'
           if echo "$FILES" | grep -Eqv "$IRRELEVANT"; then
             DEPLOYABLE=true
           else
