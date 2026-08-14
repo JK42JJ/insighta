@@ -63,6 +63,7 @@ spec:
         {{- include "insighta.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: postgres
     spec:
+      {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: postgres
           image: "{{ .Values.postgresDev.image.repository }}:{{ .Values.postgresDev.image.tag }}"

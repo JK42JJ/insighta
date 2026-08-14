@@ -1,3 +1,4 @@
+{{- if .Values.redis.enabled }}
 # StatefulSet, not Deployment. docker/redis/redis.conf enables AOF
 # (appendonly yes, appendfsync everysec) with RDB snapshots as a secondary
 # net, so this holds state; a Deployment with a PVC would let a rolling
@@ -22,6 +23,7 @@ spec:
         {{- include "insighta.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: redis
     spec:
+      {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: redis
           image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
@@ -87,3 +89,4 @@ spec:
   selector:
     {{- include "insighta.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: redis
+{{- end }}
