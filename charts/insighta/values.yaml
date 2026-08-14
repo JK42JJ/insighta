@@ -35,6 +35,17 @@ api:
       cpu: 1000m
   # Memory limits kill the process; CPU limits only throttle it. Keep the
   # memory ceiling generous relative to the request.
+  # /app/cache and /app/logs hold 13 MB and 34 MB on production. The cache is
+  # persisted YouTube API responses -- discarding it spends quota to rebuild
+  # -- and the logs are the only copy. Off means emptyDir, which is right for
+  # a throwaway environment and wrong for a lasting one.
+  #
+  # ReadWriteOnce: correct only while replicaCount is 1. See prod.yaml.
+  persistence:
+    enabled: true
+    cacheSize: 2Gi
+    logsSize: 2Gi
+    storageClass: ""
   livenessProbe:
     httpGet: { path: /health, port: 3000 }
     initialDelaySeconds: 40

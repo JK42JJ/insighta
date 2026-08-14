@@ -2,6 +2,10 @@
 # breaks on promotion, not to survive a node loss.
 api:
   replicaCount: 1
+  # Single replica, so a ReadWriteOnce claim is valid and the YouTube
+  # response cache survives a restart instead of spending quota to rebuild.
+  persistence:
+    enabled: true
 frontend:
   replicaCount: 1
 redis:
