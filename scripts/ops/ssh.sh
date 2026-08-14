@@ -37,13 +37,14 @@ die() { printf '[ssh] %s\n' "$*" >&2; exit 1; }
 target_spec() {
   case "$1" in
     prod) echo "insighta-prod:ubuntu:insighta-ec2-ts" ;;
-    k3s)  echo "insighta-k3s-1:ubuntu:" ;;
-    *)    die "unknown target '$1' (prod|k3s)" ;;
+    k3s|k3s1) echo "insighta-k3s-1:ubuntu:" ;;
+    k3s2) echo "insighta-k3s-2:ubuntu:" ;;
+    *)    die "unknown target '$1' (prod|k3s|k3s2)" ;;
   esac
 }
 
 TARGET="${1:-}"
-[ -n "$TARGET" ] || die "usage: $0 <prod|k3s> [--update-sg|--print-host|command...]"
+[ -n "$TARGET" ] || die "usage: $0 <prod|k3s|k3s2> [--update-sg|--print-host|command...]"
 shift || true
 
 IFS=: read -r NAME_TAG SSH_USER TS_ALIAS <<<"$(target_spec "$TARGET")"
