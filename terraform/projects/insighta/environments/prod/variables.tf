@@ -86,3 +86,36 @@ variable "k3s_instance_profile" {
   default     = "insighta-k3s-node"
 }
 
+variable "k3s_node_count" {
+  description = <<-EOT
+    Number of k3s nodes.
+
+    Two while the architecture is verified and operated by hand, so that
+    scheduling, draining and rescheduling are observed rather than read about.
+    Planned reduction to one on 2026-09-14.
+
+    This is not high availability. The control plane, the ingress and the
+    Elastic IP all stay on the first node, so losing it still takes the service
+    down regardless of how many nodes exist.
+  EOT
+  type        = number
+  default     = 1
+}
+
+variable "k3s_extra_instance_type" {
+  description = <<-EOT
+    Size of nodes after the first.
+
+    Measured requirement for an agent running one api and one frontend pod:
+    180 MB operating system, 230 MB agent and containerd, 177 MB api, 6 MB
+    frontend -- about 593 MB, or 31% of what t3a.small provides. Under the
+    api container's 512 Mi limit it reaches 49%.
+
+    t3a.small rather than t3.small: same x86 architecture, so the existing
+    amd64 images run unchanged, at $13.70 a month against $15.20. t4g.small is
+    cheaper still at $12.30 but is ARM, and deploy.yml builds no arm64 image.
+  EOT
+  type        = string
+  default     = "t3a.small"
+}
+

@@ -23,6 +23,7 @@ spec:
       # keeps it out of the Service until it serves, and the ingress routes
       # /api to the api Service independently. Startup order stops mattering.
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
+      {{- include "insighta.spread" (dict "root" $ "component" "frontend") | nindent 6 }}
       containers:
         - name: frontend
           image: {{ include "insighta.image" (dict "root" $ "img" .Values.frontend.image) | quote }}

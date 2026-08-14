@@ -33,6 +33,7 @@ spec:
       # 10-minute staleness check clears. SSE streams (mandalas.ts:3119) also
       # hold sockets open past fastify.close().
       terminationGracePeriodSeconds: 90
+      {{- include "insighta.spread" (dict "root" $ "component" "api") | nindent 6 }}
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: api

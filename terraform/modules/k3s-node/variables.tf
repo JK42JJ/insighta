@@ -1,3 +1,20 @@
+variable "node_count" {
+  description = <<-EOT
+    How many nodes this module creates. Names are suffixed with the index.
+
+    Two exists for a fixed reason and a fixed period: to run the application
+    across separate machines while the architecture is being verified and
+    operated by hand, so that scheduling, draining and rescheduling can be
+    observed rather than read about.
+
+    Planned reduction to one on 2026-09-14. This is not a high-availability
+    configuration and adding a node does not make it one -- the control plane,
+    the ingress and the Elastic IP all remain on the first node.
+  EOT
+  type        = number
+  default     = 1
+}
+
 variable "name" {
   description = "Instance name tag."
   type        = string
@@ -78,6 +95,12 @@ variable "iam_instance_profile" {
     role and profile are created once by an administrator; terraform attaches
     what already exists and CI holds only iam:PassRole for that one ARN.
   EOT
+  type        = string
+  default     = ""
+}
+
+variable "extra_instance_type" {
+  description = "Size for nodes after the first. The first carries the control plane and is sized separately."
   type        = string
   default     = ""
 }

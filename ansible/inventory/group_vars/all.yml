@@ -23,7 +23,7 @@ frontend_upstream: "127.0.0.1:8081"
 # 0 means the cluster is configured and receiving nothing. Raise it in steps,
 # watching error rate and p95 per upstream -- nginx logs upstream_addr and
 # upstream_response_time, so the two backends are separable in the access log.
-k3s_weight: 100
+k3s_weight: 0
 
 # Private address. Both instances sit in 172.31.0.0/16, so this traffic never
 # leaves the VPC and is not billed.

@@ -56,8 +56,10 @@ resource "aws_security_group" "this" {
 }
 
 resource "aws_instance" "this" {
+  count = var.node_count
+
   ami                    = var.ami_id
-  instance_type          = var.instance_type
+  instance_type          = count.index == 0 ? var.instance_type : var.extra_instance_type
   key_name               = var.key_name
   subnet_id              = var.subnet_id
   vpc_security_group_ids = concat([aws_security_group.this.id], var.security_group_ids)
@@ -78,7 +80,7 @@ resource "aws_instance" "this" {
   }
 
   tags = merge(var.tags, {
-    Name = var.name
+    Name = format("%s-%d", var.name, count.index + 1)
     Role = "k3s-validation"
   })
 

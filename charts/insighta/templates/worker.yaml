@@ -37,6 +37,7 @@ spec:
       # A worker has no user waiting on it, so give it room to finish rather
       # than leaving sync_status=IN_PROGRESS rows behind.
       terminationGracePeriodSeconds: 120
+      {{- include "insighta.spread" (dict "root" $ "component" "worker") | nindent 6 }}
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: worker
