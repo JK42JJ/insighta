@@ -29,6 +29,7 @@ import { getPrismaClient } from '@/modules/database/client';
 import { logger } from '@/utils/logger';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, POOL_MAINTENANCE_RUN_OPTIONS, type PoolMaintenanceRunPayload } from '../types';
+import { runPoolMetadataRefresh } from '@/modules/video-pool/refresh-metadata';
 
 const log = logger.child({ module: 'queue/pool-maintenance' });
 
@@ -49,18 +50,24 @@ export const EXPIRE_SQL = `
 `;
 
 /**
- * Op2 — scrub regulated YouTube metadata from rows whose metadata is older than
- * the TTL. NULL where the column is nullable; '' / 0 where NOT NULL (title,
- * view_count, like_count). video_id / language / quality_tier / embeddings /
- * domain_tags are preserved. Idempotency guard `title <> ''`: already-scrubbed
- * rows (title='') are skipped, so re-runs scrub 0 rows.
+ * Op2 — scrub regulated YouTube metadata from RETIRED rows whose metadata is
+ * older than the TTL. NULL where nullable; '' / 0 where NOT NULL. video_id /
+ * language / quality_tier / embeddings / domain_tags preserved. Idempotency
+ * guard `title <> ''`: already-scrubbed rows are skipped.
+ *
+ * CP512 — **`is_active = false` guard added**: scrubbing a still-SERVED (active)
+ * row emptied its title mid-serve, so users got title-less cards (the P0 defect).
+ * Active rows must instead be kept ToS-compliant by REFRESH (videos.list re-fetch
+ * + refreshed_at reset — see refresh-pool-metadata), NOT by scrub-to-empty.
+ * Scrub-to-delete is only correct for rows already retired from serving.
  */
 export const SCRUB_SQL = `
   UPDATE public.video_pool
      SET title = '', description = NULL, channel_name = NULL, channel_id = NULL,
          view_count = 0, like_count = 0, duration_seconds = NULL,
          published_at = NULL, thumbnail_url = NULL
-   WHERE refreshed_at < now() - interval '${METADATA_TTL_DAYS} days' AND title <> ''
+   WHERE is_active = false
+     AND refreshed_at < now() - interval '${METADATA_TTL_DAYS} days' AND title <> ''
 `;
 
 export interface PoolMaintenanceResult {
@@ -112,9 +119,17 @@ async function handlePoolMaintenanceRun(job: PgBoss.Job<PoolMaintenanceRunPayloa
 
   try {
     const result = await runPoolMaintenance(getPrismaClient(), { enabled });
+    // Op3 (CP512) — refresh active rows' metadata before it ages past the TTL,
+    // so served rows stay ToS-compliant AND keep their titles (the correct
+    // "refresh" branch of the 30-day rule, vs the scrub "delete" branch).
+    let refresh = { candidates: 0, refreshed: 0, retired: 0 };
+    if (enabled && config.poolMaintenance.refreshEnabled) {
+      refresh = await runPoolMetadataRefresh();
+    }
     log.info('pool-maintenance: completed', {
       jobId: job.id,
       ...result,
+      refresh,
       durationMs: Date.now() - startedAt,
     });
   } catch (err) {

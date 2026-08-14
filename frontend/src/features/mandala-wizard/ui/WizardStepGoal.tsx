@@ -474,15 +474,15 @@ export default function WizardStepGoal({
           )}
         </div>
         <div className="text-center">
+          {/* Beta-launch decision (2026-07-28): blank creation is a dead end
+              today — disabled until the flow is reworked. */}
           <button
             type="button"
-            onClick={onCreateBlank}
-            disabled={isCreatingBlank}
-            className="text-[13px] font-medium text-muted-foreground/70 underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+            disabled
+            aria-disabled
+            className="text-[13px] font-medium text-muted-foreground/70 underline-offset-4 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {isCreatingBlank
-              ? t('wizard.domain.creating', 'Creating...')
-              : t('wizard.domain.createBlank', 'Start from scratch →')}
+            {t('wizard.domain.createBlank', 'Start from scratch →')}
           </button>
         </div>
         <div />

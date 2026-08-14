@@ -103,10 +103,24 @@ export function LearningShareMenu({ mandalaId, videoId }: LearningShareMenuProps
     staleTime: 5 * 60_000,
   });
 
+  // Share v2 — mint a short link (insighta.one/s/CODE) when the popover
+  // opens; the BE reuses a live link so repeated opens don't pile up rows.
+  // The legacy /og/learning URL stays as fallback if the mint fails.
+  const shortLinkQuery = useQuery({
+    queryKey: ['learning-share-short', mandalaId, videoId],
+    queryFn: () =>
+      apiClient.mintShortLink({ targetType: 'learning_video', targetId: mandalaId, videoId }),
+    enabled: open && Boolean(mandalaId) && Boolean(videoId),
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+
   const previewTitle = ogQuery.data?.title ?? '';
   const previewDescription = ogQuery.data?.description ?? '';
   const previewThumbnail = ogQuery.data?.thumbnail ?? '';
-  const shareUrl = buildShareUrl({ origin: window.location.origin, mandalaId, videoId });
+  const shareUrl =
+    shortLinkQuery.data?.data?.url ??
+    buildShareUrl({ origin: window.location.origin, mandalaId, videoId });
 
   // Outbound share text — used as the tweet body / Naver share title.
   // Priority: BE-resolved description (AI summary first sentence) >

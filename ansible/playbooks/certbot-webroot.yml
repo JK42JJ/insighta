@@ -1,0 +1,168 @@
+---
+# Moves certificate renewal from the nginx authenticator to the webroot
+# authenticator, so certbot stops editing the nginx configuration.
+#
+# WHY THIS IS NEEDED
+#
+# Measured on 2026-08-13, both renewal configs read:
+#
+#   authenticator = nginx
+#   installer     = nginx
+#
+# The nginx installer writes directives into the site config and marks them
+# "# managed by Certbot". playbooks/nginx.yml renders that same file from a
+# template. Left as-is, the two write to the same file on different
+# schedules: certbot edits it at renewal, Ansible reverts the edit on its
+# next run. Whichever ran last wins, and neither reports a conflict.
+#
+# With authenticator=webroot and no installer, certbot writes only to
+# {{ acme_webroot }} and to /etc/letsencrypt. The nginx config has one owner.
+#
+# WHAT IT DEPENDS ON
+#
+# Both site templates serve /.well-known/acme-challenge/ from the webroot.
+# insighta.conf already did before this change; portfolio did not, which is
+# why playbooks/nginx.yml must be applied first.
+#
+# HOW TO RUN
+#
+#   bash scripts/ssh-connect.sh --update-sg
+#   cd ansible && ansible-playbook playbooks/nginx.yml          # prerequisite
+#   cd ansible && ansible-playbook playbooks/certbot-webroot.yml \
+#                   -e confirm_certbot_migration=yes
+#
+# The confirmation flag is required. This playbook edits live TLS renewal
+# state; it must not run as a side effect of running everything in the
+# directory.
+#
+# ROLLBACK
+#
+# Every renewal config is copied to <name>.conf.pre-webroot before the edit.
+# To undo:
+#
+#   sudo cp /etc/letsencrypt/renewal/NAME.conf.pre-webroot \
+#           /etc/letsencrypt/renewal/NAME.conf
+#   sudo certbot renew --dry-run --cert-name NAME
+#
+# Certificates themselves are never touched, so a failed migration cannot
+# expire anything. The certificates in force at the time of writing run to
+# 2026-09-30 (insighta.one) and 2026-11-01 (portfolio), which is the window
+# available to detect and undo a mistake.
+- name: Move certbot to the webroot authenticator
+  hosts: prod
+  gather_facts: false
+  vars:
+    confirm_certbot_migration: "no"
+    cert_names:
+      - insighta.one
+      - portfolio.insighta.one
+
+  tasks:
+    - name: Require explicit confirmation
+      ansible.builtin.assert:
+        that: confirm_certbot_migration | bool
+        fail_msg: >-
+          Refusing to run. This playbook changes live certificate renewal.
+          Re-run with -e confirm_certbot_migration=yes once the nginx
+          playbook has been applied and both sites serve
+          /.well-known/acme-challenge/.
+
+    # The challenge path must work BEFORE the authenticator switches to it.
+    # Verifying afterwards would mean discovering the failure at renewal,
+    # up to 60 days later and unattended.
+    # copy does not create parent directories, and the webroot was measured
+    # empty on 2026-08-13 -- the challenge subdirectory does not exist yet.
+    - name: Ensure the challenge directory exists
+      become: true
+      ansible.builtin.file:
+        path: "{{ acme_webroot }}/.well-known/acme-challenge"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Place a probe file in the webroot
+      become: true
+      ansible.builtin.copy:
+        content: "ansible-webroot-probe\n"
+        dest: "{{ acme_webroot }}/.well-known/acme-challenge/probe"
+        mode: "0644"
+
+    - name: Fetch the probe over plain HTTP for every domain
+      ansible.builtin.uri:
+        url: "http://{{ item }}/.well-known/acme-challenge/probe"
+        return_content: true
+        follow_redirects: none
+        status_code: [200]
+      register: probe
+      failed_when: probe.content is not defined or 'ansible-webroot-probe' not in probe.content
+      changed_when: false
+      loop: "{{ cert_names }}"
+
+    - name: Remove the probe file
+      become: true
+      ansible.builtin.file:
+        path: "{{ acme_webroot }}/.well-known/acme-challenge/probe"
+        state: absent
+
+    - name: Back up each renewal config
+      become: true
+      ansible.builtin.copy:
+        src: "/etc/letsencrypt/renewal/{{ item }}.conf"
+        dest: "/etc/letsencrypt/renewal/{{ item }}.conf.pre-webroot"
+        remote_src: true
+        force: false          # never overwrite an earlier rollback point
+        mode: "0644"
+      loop: "{{ cert_names }}"
+
+    - name: Point the authenticator at the webroot
+      become: true
+      ansible.builtin.lineinfile:
+        path: "/etc/letsencrypt/renewal/{{ item }}.conf"
+        regexp: '^authenticator\s*='
+        line: "authenticator = webroot"
+      loop: "{{ cert_names }}"
+
+    - name: Drop the nginx installer
+      become: true
+      ansible.builtin.lineinfile:
+        path: "/etc/letsencrypt/renewal/{{ item }}.conf"
+        regexp: '^installer\s*='
+        state: absent
+      loop: "{{ cert_names }}"
+
+    - name: Record the webroot path
+      become: true
+      ansible.builtin.lineinfile:
+        path: "/etc/letsencrypt/renewal/{{ item }}.conf"
+        regexp: '^webroot_path\s*='
+        line: "webroot_path = {{ acme_webroot }},"
+        insertafter: '^\[renewalparams\]'
+      loop: "{{ cert_names }}"
+
+    # Without an installer certbot no longer reloads nginx, so the renewed
+    # certificate would sit on disk unserved until something else reloaded.
+    - name: Reload nginx after renewal
+      become: true
+      ansible.builtin.lineinfile:
+        path: "/etc/letsencrypt/renewal/{{ item }}.conf"
+        regexp: '^renew_hook\s*='
+        line: "renew_hook = systemctl reload nginx"
+        insertafter: '^\[renewalparams\]'
+      loop: "{{ cert_names }}"
+
+    # Uses the Let's Encrypt staging endpoint. It exercises the real
+    # challenge path without consuming a rate limit or replacing a cert.
+    - name: Verify renewal against the staging endpoint
+      become: true
+      ansible.builtin.command: "certbot renew --dry-run --cert-name {{ item }}"
+      register: dry_run
+      changed_when: false
+      loop: "{{ cert_names }}"
+
+    - name: Report the dry-run result
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: dry-run rc={{ item.rc }}"
+      loop: "{{ dry_run.results }}"
+      loop_control:
+        label: "{{ item.item }}"

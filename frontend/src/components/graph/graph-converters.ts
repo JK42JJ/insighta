@@ -3,26 +3,19 @@
 // Transforms API response into react-force-graph-2d format.
 // ============================================================================
 
-import type {
-  OntologyNode,
-  OntologyEdge,
-  GraphNode,
-  GraphLink,
-  GraphData,
-} from './types';
+import type { OntologyNode, OntologyEdge, GraphNode, GraphLink, GraphData } from './types';
 import { getNodeCategory, STRUCTURAL_RELATIONS } from './types';
 
-const MAX_LABEL_LENGTH = 30;
+// Reference-demo labels are 1-3 words; long video titles turn the label layer into a
+// text wall, so clamp harder (full title lives in the detail panel/search).
+const MAX_LABEL_LENGTH = 18;
 
 function truncateLabel(title: string): string {
   if (title.length <= MAX_LABEL_LENGTH) return title;
   return title.slice(0, MAX_LABEL_LENGTH - 1) + '…';
 }
 
-export function convertNode(
-  node: OntologyNode,
-  edgeCountMap: Map<string, number>
-): GraphNode {
+export function convertNode(node: OntologyNode, edgeCountMap: Map<string, number>): GraphNode {
   const edgeCount = edgeCountMap.get(node.id) ?? 0;
   return {
     id: node.id,
@@ -32,6 +25,7 @@ export function convertNode(
     category: getNodeCategory(node.type),
     val: Math.max(1, Math.min(edgeCount + 1, 10)),
     properties: node.properties,
+    sourceRef: node.source_ref ?? null,
   };
 }
 
@@ -44,10 +38,7 @@ export function convertEdge(edge: OntologyEdge): GraphLink {
   };
 }
 
-export function buildGraphData(
-  nodes: OntologyNode[],
-  edges: OntologyEdge[]
-): GraphData {
+export function buildGraphData(nodes: OntologyNode[], edges: OntologyEdge[]): GraphData {
   // Build edge count map for node sizing
   const edgeCountMap = new Map<string, number>();
   for (const edge of edges) {
@@ -57,9 +48,7 @@ export function buildGraphData(
 
   // Filter edges to only include those where both endpoints exist
   const nodeIdSet = new Set(nodes.map((n) => n.id));
-  const validEdges = edges.filter(
-    (e) => nodeIdSet.has(e.source_id) && nodeIdSet.has(e.target_id)
-  );
+  const validEdges = edges.filter((e) => nodeIdSet.has(e.source_id) && nodeIdSet.has(e.target_id));
 
   return {
     nodes: nodes.map((n) => convertNode(n, edgeCountMap)),

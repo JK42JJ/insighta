@@ -147,6 +147,15 @@ export async function maybeAutoAddRecommendations(
   let totalInserted = 0;
 
   for (let cellIndex = 0; cellIndex < CELLS_PER_MANDALA; cellIndex++) {
+    // Guard (CP512-regression, 2026-07-10): if discover returned NO recs for
+    // this cell, do NOT touch existing cards. Previously the deleteMany below
+    // ran BEFORE this check, so an empty/failed discover (quota 429 → 0
+    // results, or an orphaned run) deleted the un-touched auto_added rows with
+    // no replacement → card loss. Only delete-and-replace a cell when we
+    // actually have new cards to place there.
+    const allRecsForCell = recsByCell.get(cellIndex) ?? [];
+    if (allRecsForCell.length === 0) continue;
+
     // Selective replace: count user-trace rows in this cell, then delete
     // only the un-touched auto_added rows. ANY trace = preserved forever.
     const preservedCount = await db.userVideoState.count({
@@ -181,9 +190,6 @@ export async function maybeAutoAddRecommendations(
 
     totalPreserved += preservedCount;
     totalDeleted += deleted.count;
-
-    const allRecsForCell = recsByCell.get(cellIndex) ?? [];
-    if (allRecsForCell.length === 0) continue;
 
     const placed = await placeAutoAddedCards(
       db,

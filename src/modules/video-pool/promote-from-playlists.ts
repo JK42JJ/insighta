@@ -182,7 +182,9 @@ export async function promotePlaylistsToVideoPool(
 
   for (const videoId of toImport) {
     const meta = metaByVideoId.get(videoId);
-    if (!meta || !meta.title) {
+    // CP512 — reject blank/whitespace titles too (insertion integrity guard):
+    // an empty-title pool row can't be served and reads as a title-loss defect.
+    if (!meta || !meta.title || !meta.title.trim()) {
       errors.push({ video_id: videoId, error: 'metadata missing or no title' });
       continue;
     }

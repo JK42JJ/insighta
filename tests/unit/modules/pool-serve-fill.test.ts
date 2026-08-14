@@ -72,6 +72,16 @@ jest.mock('@/skills/plugins/video-discover/v3/hybrid-rerank', () => ({
   tsvectorKeywordCandidatesPerCell: (...a: unknown[]) => mockPoolCandidates(...a),
 }));
 
+// R23 — SERVE-edge domain-fit shadow call. Fully mocked so the unit suite
+// never makes a real Ollama call; default env (no DOMAIN_FIT_SERVE_SHADOW)
+// means the REAL loadDomainFitShadowConfig() (unmocked below) resolves
+// serveShadowEnabled=false, so scheduleDomainFitShadow's cfgOverride.enabled
+// is false regardless — this mock only lets tests assert the CALL SHAPE.
+const mockScheduleDomainFitShadow = jest.fn();
+jest.mock('@/modules/domain-fit-shadow/shadow', () => ({
+  scheduleDomainFitShadow: (...a: unknown[]) => mockScheduleDomainFitShadow(...a),
+}));
+
 // Partial mock: stub the network fns, keep the REAL title gates so the test
 // exercises the actual hygiene posture (#905 included via the v5 gate below).
 const mockSearchVideos = jest.fn();
@@ -133,6 +143,7 @@ import {
 } from '../../../src/modules/queue/handlers/pool-serve-fill';
 import { JOB_NAMES, type PoolServeFillPayload } from '../../../src/modules/queue/types';
 import { loadPoolServeConfig } from '../../../src/config/pool-serve';
+import { loadDomainFitShadowConfig } from '../../../src/config/domain-fit-shadow';
 
 type Handler = (job: { id: string; data: PoolServeFillPayload }) => Promise<void>;
 
@@ -178,6 +189,8 @@ beforeEach(() => {
   mockYvFindUnique.mockResolvedValue({ id: 'uuid-yv-1' });
   mockUvsCreateMany.mockResolvedValue({ count: 1 });
   delete process.env['RELEVANCE_RUBRIC_ENABLED'];
+  delete process.env['POOL_SERVE_SOURCES_EXTRA'];
+  delete process.env['DOMAIN_FIT_SERVE_SHADOW'];
 });
 
 async function getHandler(): Promise<Handler> {
@@ -405,6 +418,79 @@ describe('CP500+ shorts gate — guard-replication fix', () => {
     await handler({ id: 'js4', data: basePayload });
 
     expect(mockIsShortCached).toHaveBeenCalledWith('liveUnknown', null, expect.anything());
+    expect(mockUvsCreateMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── R23 — POOL_SOURCES config-driven extension + SERVE-edge domain-fit shadow ──
+
+describe('R23 — POOL_SERVE_SOURCES_EXTRA (config, not hardcoded)', () => {
+  it('default (unset): recruit sources = base v2_promoted only (byte-identical to pre-R23)', async () => {
+    mockPoolCandidates.mockResolvedValueOnce([]);
+    mockSearchVideos.mockResolvedValueOnce([]);
+    const handler = await getHandler();
+
+    await handler({ id: 'jr1', data: basePayload });
+
+    expect(mockPoolCandidates).toHaveBeenCalledTimes(1);
+    expect(mockPoolCandidates.mock.calls[0][3]).toEqual(['v2_promoted']);
+  });
+
+  it('POOL_SERVE_SOURCES_EXTRA=yt_promoted widens the MAIN keyword recruit call', async () => {
+    process.env['POOL_SERVE_SOURCES_EXTRA'] = 'yt_promoted';
+    mockPoolCandidates.mockResolvedValueOnce([]);
+    mockSearchVideos.mockResolvedValueOnce([]);
+    const handler = await getHandler();
+
+    await handler({ id: 'jr2', data: basePayload });
+
+    expect(mockPoolCandidates.mock.calls[0][3]).toEqual(['v2_promoted', 'yt_promoted']);
+  });
+});
+
+describe('R23 — pool-serve SERVE-edge domain-fit shadow (DOMAIN_FIT_SERVE_SHADOW)', () => {
+  it('config default: serveShadowEnabled is false (unset env, no behavior change)', () => {
+    const cfg = loadDomainFitShadowConfig({} as NodeJS.ProcessEnv);
+    expect(cfg.serveShadowEnabled).toBe(false);
+  });
+
+  it('always schedules the shadow call shape (fire-and-forget) with the FINAL passed set, cfgOverride carrying the flag — never blocks/reorders the insert', async () => {
+    mockPoolCandidates.mockResolvedValueOnce([poolCand('vidA1234567', '쿠버네티스 모니터링 입문')]);
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 82 });
+    const handler = await getHandler();
+
+    await handler({ id: 'jr3', data: basePayload });
+
+    expect(mockScheduleDomainFitShadow).toHaveBeenCalledTimes(1);
+    const [input, cfgOverride] = mockScheduleDomainFitShadow.mock.calls[0];
+    expect(input).toMatchObject({
+      stage: 'pool_serve',
+      centerGoal: basePayload.centerGoal,
+      candidates: [
+        expect.objectContaining({
+          videoId: 'vidA1234567',
+          cellIndex: basePayload.cellIndex,
+          rank: 0,
+        }),
+      ],
+    });
+    // Default env ⇒ serveShadowEnabled false ⇒ cfgOverride.enabled false (no-op
+    // inside the REAL scheduleDomainFitShadow — this mock only pins call shape).
+    expect(cfgOverride.enabled).toBe(false);
+    // The insert still happened — the shadow call never gated it.
+    expect(mockUvsCreateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('DOMAIN_FIT_SERVE_SHADOW=true flips cfgOverride.enabled to true (still async, still never gates)', async () => {
+    process.env['DOMAIN_FIT_SERVE_SHADOW'] = 'true';
+    mockPoolCandidates.mockResolvedValueOnce([poolCand('vidB1234567', '쿠버네티스 실전')]);
+    mockCompute.mockResolvedValueOnce({ ok: true, relevancePct: 90 });
+    const handler = await getHandler();
+
+    await handler({ id: 'jr4', data: basePayload });
+
+    const [, cfgOverride] = mockScheduleDomainFitShadow.mock.calls[0];
+    expect(cfgOverride.enabled).toBe(true);
     expect(mockUvsCreateMany).toHaveBeenCalledTimes(1);
   });
 });

@@ -52,6 +52,19 @@ describe('audioLanguageMismatch', () => {
     expect(audioLanguageMismatch('ko-KR', 'en')).toBe(true);
     expect(audioLanguageMismatch('th', 'ko')).toBe(true);
   });
+  test('non-linguistic ISO 639 codes fail-open — zxx/und/mul/mis are not a language mismatch (T1 2026-07-03)', () => {
+    // YouTube mis-tags Korean ETF videos as zxx; must not drop them.
+    expect(audioLanguageMismatch('zxx', 'ko')).toBe(false);
+    expect(audioLanguageMismatch('zxx', 'en')).toBe(false);
+    expect(audioLanguageMismatch('und', 'ko')).toBe(false);
+    expect(audioLanguageMismatch('mul', 'ko')).toBe(false);
+    expect(audioLanguageMismatch('mis', 'en')).toBe(false);
+  });
+  test('regression: zxx pass does NOT open determinate mismatches — ar still drops', () => {
+    expect(audioLanguageMismatch('ar', 'ko')).toBe(true);
+    expect(audioLanguageMismatch('ja', 'ko')).toBe(true);
+    expect(audioLanguageMismatch('ja', 'en')).toBe(true);
+  });
 });
 
 describe('gateLiveSearchCards', () => {
@@ -97,10 +110,48 @@ describe('gateLiveSearchCards', () => {
     expect(r.gcDropped).toBe(1);
   });
 
-  test('audio mismatch hides before scoring', async () => {
+  test('audio mismatch hides before scoring + logs the dropped item detail', async () => {
     mockCompute.mockResolvedValue({ ok: true, relevancePct: 99 });
     const r = await gateLiveSearchCards([card('a', 'ar'), card('b', 'ko')], CTX);
     expect(r.langDropped).toBe(1);
     expect(r.exposed.map((c) => c.videoId)).toEqual(['b']);
+    // L2 canary blocker — dropped-item audio label logged for false-positive eyeball
+    expect(r.langDroppedItems).toEqual([{ videoId: 'a', audioLang: 'ar', target: 'ko' }]);
+  });
+});
+
+describe('orderByCachedGc (ON전략 A rank-demote)', () => {
+  beforeEach(() => {
+    mockFindMany.mockReset();
+  });
+
+  test('orders by cached gc desc; uncached keep pick order below cached (no-flicker)', async () => {
+    const { orderByCachedGc } = await import('../../src/modules/inflow-gate/live-search-gate');
+    mockFindMany.mockResolvedValue([
+      { video_id: 'b', relevance_pct: 90 },
+      { video_id: 'a', relevance_pct: 50 },
+    ]);
+    const items = [card('a'), card('b'), card('c'), card('d')]; // c,d uncached
+    const r = await orderByCachedGc(items, '00000000-0000-0000-0000-000000000000');
+    // cached first (b90, a50) then uncached in original pick order (c, d)
+    expect(r.ordered.map((x) => x.videoId)).toEqual(['b', 'a', 'c', 'd']);
+    expect(r.cacheOrderedCount).toBe(2);
+  });
+
+  test('no cache = pick order preserved (first search supply-first, +0ms)', async () => {
+    const { orderByCachedGc } = await import('../../src/modules/inflow-gate/live-search-gate');
+    mockFindMany.mockResolvedValue([]);
+    const items = [card('a'), card('b'), card('c')];
+    const r = await orderByCachedGc(items, '00000000-0000-0000-0000-000000000000');
+    expect(r.ordered.map((x) => x.videoId)).toEqual(['a', 'b', 'c']);
+    expect(r.cacheOrderedCount).toBe(0);
+  });
+
+  test('cache read failure falls back to pick order (nothing hidden — floor lesson)', async () => {
+    const { orderByCachedGc } = await import('../../src/modules/inflow-gate/live-search-gate');
+    mockFindMany.mockRejectedValue(new Error('db down'));
+    const items = [card('a'), card('b')];
+    const r = await orderByCachedGc(items, '00000000-0000-0000-0000-000000000000');
+    expect(r.ordered.map((x) => x.videoId)).toEqual(['a', 'b']);
   });
 });

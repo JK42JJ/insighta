@@ -91,7 +91,7 @@ export function CenterPanel({
 
   // Highlight reel — auto-skip to sections whose relevance_pct >= threshold.
   // Dormant until pre-CP474 rows are backfilled with segments + relevance.
-  const { richSummary: highlightRich } = useRichSummary(videoId);
+  const { richSummary: highlightRich, isLoading: richLoading } = useRichSummary(videoId);
   const highlightSections = highlightRich?.segments?.sections ?? undefined;
   const highlightReel = useHighlightReel({
     sections: highlightSections,
@@ -580,6 +580,7 @@ export function CenterPanel({
             {centerTab === 'chapters' && (
               <ChapterList
                 sections={chapterSections}
+                loading={richLoading}
                 playerRef={playerRef}
                 onUserPlayed={onUserPlayed}
                 onGoSummary={() => setCenterTab('summary')}
@@ -619,11 +620,13 @@ function RelevanceMeter({ level }: { level: RelevanceLevel }) {
  *  Subscribes to player time HERE so the 1s tick re-renders only this list. */
 function ChapterList({
   sections,
+  loading = false,
   playerRef,
   onUserPlayed,
   onGoSummary,
 }: {
   sections: VideoRichSummarySection[];
+  loading?: boolean;
   playerRef: React.MutableRefObject<YTPlayer | null>;
   onUserPlayed?: () => void;
   onGoSummary: () => void;
@@ -631,6 +634,21 @@ function ChapterList({
   const { t } = useTranslation();
   const playerTimeSec = useLearningStore((s) => s.playerTimeSec);
   const playerState = useLearningStore((s) => s.playerState);
+
+  // First load with no data yet — show quiet skeleton rows, NOT the "not
+  // ready" empty state (which used to flash on every navigation, CP512).
+  if (sections.length === 0 && loading) {
+    return (
+      <div className="mt-2 flex flex-col gap-2" aria-hidden>
+        {[0, 1, 2, 3].map((k) => (
+          <div
+            key={k}
+            className="h-[52px] animate-pulse rounded-xl border border-[var(--lp-line-6)] bg-[var(--lp-surface)]"
+          />
+        ))}
+      </div>
+    );
+  }
 
   if (sections.length === 0) {
     return (

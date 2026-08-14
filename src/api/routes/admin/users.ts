@@ -9,6 +9,7 @@ import {
   PaginationQuerySchema,
 } from '../../schemas/common.schema';
 import { DEFAULT_TIER, TIER_LIMITS, UNLIMITED_LIMIT } from '@/config/quota';
+import { sendProUpgradeEmail } from '@/modules/email/transactional';
 
 const UserListQuerySchema = PaginationQuerySchema.extend({
   search: z.string().optional(),
@@ -20,6 +21,8 @@ const SubscriptionUpdateSchema = z.object({
   localCardsLimit: z.number().int().min(0).optional(),
   mandalaLimit: z.number().int().min(0).optional(),
   reason: z.string().max(500).optional(),
+  /** Force the pro-upgrade email even without a tier transition (re-send). */
+  notify: z.boolean().optional(),
 });
 
 const StatusUpdateSchema = z.object({
@@ -235,6 +238,22 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         VALUES (gen_random_uuid(), ${adminId}::uuid, 'tier_change', 'user_subscription', ${id}::uuid,
           ${JSON.stringify(oldValues)}::jsonb, ${JSON.stringify(auditNewValue)}::jsonb)
       `;
+
+      // Beta-tester courtesy: announce the benefit upgrade to the member.
+      // Fires on the transition into any premium tier (pro or lifetime — beta
+      // testers get lifetime per James 2026-07-15); `notify: true` re-sends for
+      // an account already on that tier. Flag-gated + non-fatal inside sender.
+      const PREMIUM_TIERS = new Set(['pro', 'lifetime']);
+      const becamePremium = PREMIUM_TIERS.has(String(newValues.tier ?? ''));
+      const wasPremium = PREMIUM_TIERS.has(String(oldValues['tier'] ?? ''));
+      if (becamePremium && (!wasPremium || body.notify === true)) {
+        const emailRows = await db.$queryRaw<Array<{ email: string | null }>>`
+          SELECT email FROM auth.users WHERE id = ${id}::uuid
+        `;
+        if (emailRows[0]?.email) {
+          await sendProUpgradeEmail(emailRows[0].email, {});
+        }
+      }
 
       return reply.send(createSuccessResponse(result[0]));
     }

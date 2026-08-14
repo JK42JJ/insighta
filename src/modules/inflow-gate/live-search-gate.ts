@@ -64,6 +64,8 @@ export interface LiveGateResult<T> {
   wouldDropSub1000: number;
   gcDropped: number;
   langDropped: number;
+  /** L2 canary blocker — per-item audio labels of the language-dropped candidates. */
+  langDroppedItems: Array<{ videoId: string; audioLang: string | null; target: 'ko' | 'en' }>;
   cacheHits: number;
   scored: number;
   demoted: number;
@@ -71,17 +73,62 @@ export interface LiveGateResult<T> {
 }
 
 /**
- * Audio-language mismatch: null passes (fail-open); primary subtag must be
- * the target language or English (en content is globally acceptable per the
- * CP492 off-language gate contract: ko ∪ en survives on ko mandalas).
+ * ISO 639 codes that denote NO determinate spoken language — not a language
+ * mismatch. YouTube frequently mis-tags Korean/English speech as `zxx` (T1
+ * 2026-07-03: 3/3 dropped ETF videos were Korean but tagged zxx). Treating
+ * these as a mismatch drops legit content, so they fail-open like null:
+ *   zxx = no linguistic content, und = undetermined, mul = multiple,
+ *   mis = uncoded. (Determinate mismatches like `ar` / `ja` still drop.)
+ */
+const NON_LINGUISTIC_AUDIO = new Set(['zxx', 'und', 'mul', 'mis']);
+
+/**
+ * Audio-language mismatch: null / non-linguistic codes pass (fail-open);
+ * a determinate primary subtag must be the target language or English (en
+ * content is globally acceptable per the CP492 off-language gate contract:
+ * ko ∪ en survives on ko mandalas).
  */
 export function audioLanguageMismatch(audioLanguage: string | null, target: 'ko' | 'en'): boolean {
   if (!audioLanguage) return false;
   const primary = audioLanguage.trim().toLowerCase().split(/[-_]/)[0];
   if (!primary) return false;
+  if (NON_LINGUISTIC_AUDIO.has(primary)) return false;
   if (primary === 'en') return false;
   if (target === 'ko' && primary === 'ko') return false;
   return true;
+}
+
+/**
+ * ON전략 A (rank-demote, 2026-07-03) — order candidates by CACHED gc without
+ * scoring or hiding. First search of a mandala has no cache → pick order
+ * preserved (supply-first, +0ms). Re-search benefits from the cache the async
+ * shadow scoring populated. Nothing is hidden; below-min items sink, they do
+ * not disappear (floor-incident lesson: empty screen worse than low relevance).
+ * No-flicker by construction: each round is one response ordered at request
+ * time; the async scoring of THIS round only improves the NEXT round.
+ */
+export async function orderByCachedGc<T extends LiveGateCandidate>(
+  candidates: T[],
+  mandalaId: string
+): Promise<{ ordered: T[]; cacheOrderedCount: number }> {
+  if (candidates.length === 0) return { ordered: candidates, cacheOrderedCount: 0 };
+  const prisma = getPrismaClient();
+  const rows = await prisma.video_mandala_relevance
+    .findMany({
+      where: { mandala_id: mandalaId, video_id: { in: candidates.map((c) => c.videoId) } },
+      select: { video_id: true, relevance_pct: true },
+    })
+    .catch(() => [] as Array<{ video_id: string; relevance_pct: number }>);
+  const gcById = new Map(rows.map((r) => [r.video_id, r.relevance_pct]));
+  // Stable sort: cached-gc desc first, uncached keep original pick order (after).
+  const withIdx = candidates.map((c, i) => ({ c, i, gc: gcById.get(c.videoId) ?? null }));
+  withIdx.sort((a, b) => {
+    if (a.gc == null && b.gc == null) return a.i - b.i; // both uncached: pick order
+    if (a.gc == null) return 1; // uncached sinks below cached
+    if (b.gc == null) return -1;
+    return b.gc - a.gc; // both cached: gc desc
+  });
+  return { ordered: withIdx.map((x) => x.c), cacheOrderedCount: gcById.size };
 }
 
 /**
@@ -100,9 +147,22 @@ export async function gateLiveSearchCards<T extends LiveGateCandidate>(
 
   // 1. Audio-language gate — free, applies to every candidate.
   let langDropped = 0;
+  const langDroppedItems: Array<{
+    videoId: string;
+    audioLang: string | null;
+    target: 'ko' | 'en';
+  }> = [];
   const langOk = candidates.filter((c) => {
     if (audioLanguageMismatch(c.audioLanguage, ctx.language)) {
       langDropped += 1;
+      // L2 canary blocker (2026-07-03): log the dropped item's audio label so
+      // "correctly dropped (真 off-lang)" vs "false positive (legit en mislabeled)"
+      // can be eyeballed before the lang axis is armed. count alone is not enough.
+      langDroppedItems.push({
+        videoId: c.videoId,
+        audioLang: c.audioLanguage,
+        target: ctx.language,
+      });
       return false;
     }
     return true;
@@ -246,6 +306,7 @@ export async function gateLiveSearchCards<T extends LiveGateCandidate>(
     wouldDropSub1000,
     gcDropped,
     langDropped,
+    langDroppedItems,
     cacheHits,
     scored,
     demoted: demotedScored.length + tail.length,

@@ -47,10 +47,21 @@ import { v3Config, type V3Config } from './config';
 import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
-import { embedBatch } from '@/skills/plugins/iks-scorer/embedding';
+import { embedBatch, cosineToRelevance } from '@/skills/plugins/iks-scorer/embedding';
+import { servingEmbedOptions } from '@/config/embed-serving-timeout';
+import {
+  isProgressiveFillEnabled,
+  getProgressiveFillConfig,
+  planProgressiveChunks,
+} from '@/config/discover-progressive-fill';
+import { getSearchVideoDuration, isSkipRuleQueriesEnabled } from '@/config/discover-t5';
+import { isSubgoalAnchorEnabled, buildAnchoredSubgoalQuery } from '@/config/subgoal-anchor';
+import { placeAutoAddedCards } from '@/modules/mandala/place-auto-added-cards';
+import { isDiscoverNeverZeroFloorEnabled, getZeroFloorMax } from '@/config/discover-zero-floor';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 import { resolveLanguage } from '@/utils/detect-language';
+import { scheduleDomainFitShadow } from '@/modules/domain-fit-shadow/shadow';
 
 import {
   buildRuleBasedQueriesSync,
@@ -121,6 +132,12 @@ export interface AssembledSlot {
   publishedAt: Date | null;
   cellIndex: number;
   score: number;
+  /**
+   * P3 Stage 2 (CP513) — display-only A-stage relevance (0-100) for the 관련도순
+   * sort. Set on the Tier-1 semantic path from the mandala-filter score; null on
+   * paths that don't compute it (backfill covers those). NEVER feeds rec_score.
+   */
+  relevancePct?: number | null;
   /** 'cache' = Tier 1 (video_pool), 'realtime' = Tier 2 (YouTube fresh). */
   tier: 'cache' | 'realtime';
 }
@@ -159,44 +176,54 @@ export const executor: SkillExecutor = {
       return { ok: false, reason: `Mandala ${ctx.mandalaId} not found or not owned` };
     }
 
-    // Level=1 embeddings must exist for Tier 1 matching.
-    const embedCountRows = await db.$queryRaw<{ cnt: bigint }[]>(
-      Prisma.sql`SELECT COUNT(*)::bigint AS cnt FROM public.mandala_embeddings
-                 WHERE mandala_id = ${ctx.mandalaId} AND level = 1 AND embedding IS NOT NULL`
+    // CP512 (EMBED_ASYNC_SERVE) — embeddings are NO LONGER a hard precondition.
+    // They drive semantic cell-assignment; their absence only degrades ordering,
+    // it must not block card serving (search.list finds cards; embeddings sort
+    // them). So load the sub_goal TEXT from its own source (user_mandala_levels,
+    // independent of the embedding rows) and attach embeddings when present. With
+    // the flag off, keep the legacy hard-gate for an exact behavioral rollback.
+    const asyncServe = (ctx.env ?? {})['EMBED_ASYNC_SERVE'] !== 'false';
+
+    // Embeddings (level=1), keyed by sub_goal_index — may be partial or empty.
+    const embRows = await db.$queryRaw<{ sub_goal_index: number; embedding: string | null }[]>(
+      Prisma.sql`SELECT sub_goal_index, embedding::text AS embedding
+                 FROM public.mandala_embeddings
+                 WHERE mandala_id = ${ctx.mandalaId} AND level = 1 AND embedding IS NOT NULL
+                 ORDER BY sub_goal_index ASC`
     );
-    const cnt = Number(embedCountRows[0]?.cnt ?? 0n);
-    if (cnt < V3_NUM_CELLS) {
+    const embByIdx = new Map<number, number[]>();
+    for (const r of embRows) {
+      if (r.embedding) embByIdx.set(r.sub_goal_index, parseVectorLiteral(r.embedding));
+    }
+    const cnt = embByIdx.size;
+
+    if (!asyncServe && cnt < V3_NUM_CELLS) {
+      // Legacy hard-gate — only when the flag is explicitly disabled (rollback).
       return {
         ok: false,
         reason: `Only ${cnt}/${V3_NUM_CELLS} sub_goal embeddings available — wait for embeddings step`,
       };
     }
 
-    // Load sub_goal text AND embeddings. Embeddings are used for semantic
-    // cell assignment in applyMandalaFilterWithStats (replaces lexical
-    // jaccard+bigram path — see mandala-filter.ts SEMANTIC_MIN_CELL_COSINE).
-    const subGoalRows = await db.$queryRaw<
-      {
-        sub_goal_index: number;
-        sub_goal: string | null;
-        center_goal: string | null;
-        embedding: string | null;
-      }[]
-    >(
-      Prisma.sql`SELECT sub_goal_index, sub_goal, center_goal, embedding::text AS embedding
-                 FROM public.mandala_embeddings
-                 WHERE mandala_id = ${ctx.mandalaId} AND level = 1
-                 ORDER BY sub_goal_index ASC`
-    );
+    // Sub_goal TEXT + center_goal from user_mandala_levels (depth=0) — the source
+    // of record for cell subjects, populated at mandala creation regardless of
+    // embedding status. This is what makes degraded (embedding-less) serve work.
+    const root = await db.user_mandala_levels.findFirst({
+      where: { mandala_id: ctx.mandalaId, depth: 0 },
+      select: { center_goal: true, subjects: true },
+    });
+    const subjects = (root?.subjects ?? []).filter((s): s is string => typeof s === 'string');
     const subGoals: string[] = new Array(V3_NUM_CELLS).fill('');
     const subGoalEmbeddings: number[][] = new Array(V3_NUM_CELLS).fill([]);
-    let centerGoal = mandala.title ?? '';
-    for (const r of subGoalRows) {
-      const idx = r.sub_goal_index;
-      if (idx < 0 || idx >= V3_NUM_CELLS) continue;
-      subGoals[idx] = r.sub_goal ?? '';
-      if (r.embedding) subGoalEmbeddings[idx] = parseVectorLiteral(r.embedding);
-      if (r.center_goal && !centerGoal) centerGoal = r.center_goal;
+    const centerGoal = mandala.title ?? root?.center_goal ?? '';
+    for (let idx = 0; idx < V3_NUM_CELLS; idx++) {
+      subGoals[idx] = subjects[idx] ?? '';
+      const emb = embByIdx.get(idx);
+      if (emb) subGoalEmbeddings[idx] = emb;
+    }
+    // No subjects at all → nothing to search for. (mandala misconfigured.)
+    if (subGoals.every((s) => !s.trim())) {
+      return { ok: false, reason: 'no sub_goal subjects on user_mandala_levels (depth=0)' };
     }
 
     // CP458: a stored 'ko'/'en' wins; otherwise detect from the goal text
@@ -366,7 +393,12 @@ async function executeImpl(
               { is_watched: true },
               { is_in_ideation: true },
               { user_note: { not: null } },
-              { watch_position_seconds: { gt: 0 } },
+              // CP512 — `watch_position_seconds > 0` dropped here to match the
+              // CP490 exclude SSOT (getExcludedVideoIds, "Explicit > Inferred").
+              // Since /learning now persists watch position (for the grid bar +
+              // resume), keeping it would make merely *watching* a video block it
+              // from future auto-discovery — an unwanted re-recommendation block
+              // (James, CP512). Watch position stays display + eviction-preserve only.
               { pinned_at: { not: null } },
               { auto_added: false },
             ],
@@ -440,6 +472,10 @@ async function executeImpl(
     // Without this, cross-domain noise (e.g. cell 6 "모의고사" sub_goal
     // matching 28 토익스피킹 videos at cosine 0.55+) surfaces unfiltered.
     let filteredTier1: typeof fresh = fresh;
+    // P3 Stage 2 (CP513) — capture the mandala-filter per-candidate relevance
+    // (0.5·center + 0.5·bestCell) so the placement write can persist relevance_pct.
+    // Display-only; does NOT affect the gate or rec_score. Empty on unfiltered paths.
+    const relevanceByVideoId = new Map<string, number>();
     if (fresh.length > 0 && v3Config.centerGateMode === 'semantic') {
       try {
         const cap = v3Config.semanticMaxCandidates;
@@ -449,7 +485,7 @@ async function executeImpl(
         const titles = capped.map((m) => m.title);
         const [centerVec, titleVecs] = await Promise.all([
           getCenterGoalEmbedding(mandalaId, state.centerGoal),
-          embedBatch(titles),
+          embedBatch(titles, servingEmbedOptions()),
         ]);
         const vectorsOk = centerVec != null && titleVecs.length === titles.length;
         if (vectorsOk) {
@@ -479,10 +515,15 @@ async function executeImpl(
             candidateEmbeddings,
             semanticMinCosine: v3Config.semanticMinCosine,
             subGoalEmbeddings: state.subGoalEmbeddings,
+            emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
+            emptyTitleGate: v3Config.emptyTitleGate,
           });
           const keptIds = new Set<string>();
           for (const assignments of byCell.values()) {
-            for (const a of assignments) keptIds.add(a.candidate.videoId);
+            for (const a of assignments) {
+              keptIds.add(a.candidate.videoId);
+              relevanceByVideoId.set(a.candidate.videoId, a.score);
+            }
           }
           filteredTier1 = capped.filter((m) => keptIds.has(m.videoId));
           log.info(
@@ -507,6 +548,23 @@ async function executeImpl(
               byCell_counts: Array.from({ length: 8 }, (_, i) => byCell.get(i)?.length ?? 0),
             },
             latencyMs: Date.now() - mfT0,
+          });
+
+          // R13-1 — domain-fit shadow (Tier 1). Fire-and-forget; enforce-0:
+          // reads byCell for logging only, never mutates it or filteredTier1.
+          scheduleDomainFitShadow({
+            stage: 'tier1',
+            centerGoal: state.centerGoal,
+            subGoals: state.subGoals,
+            candidates: Array.from(byCell.entries()).flatMap(([cellIndex, assignments]) =>
+              assignments.map((a, rank) => ({
+                videoId: a.candidate.videoId,
+                title: a.candidate.title,
+                cellIndex,
+                rank,
+                score: a.score,
+              }))
+            ),
           });
         } else {
           log.warn(
@@ -535,6 +593,9 @@ async function executeImpl(
         publishedAt: m.publishedAt,
         cellIndex: m.cellIndex,
         score: m.score,
+        relevancePct: relevanceByVideoId.has(m.videoId)
+          ? Math.round(cosineToRelevance(relevanceByVideoId.get(m.videoId)!) * 100)
+          : null,
         tier: 'cache',
       });
       existingVideoIds.add(m.videoId);
@@ -580,6 +641,51 @@ async function executeImpl(
       existingVideoIds,
       // CP489 — enable center_goal cache for mandala-bound runs.
       mandalaId,
+      // Progressive fill: each gated chunk upserts immediately (SSE fires per
+      // row) so the grid fills over seconds. Final full-set upsert below still
+      // runs and refreshes rec_score (idempotent upsert). Flag default OFF.
+      onPartialSlots: isProgressiveFillEnabled()
+        ? async (partial) => {
+            // rec_cache first (SSE card_added fires per row)...
+            await upsertSlots(ctx.userId, mandalaId, partial, state.subGoals);
+            // ...then straight into user_video_states so the DASHBOARD GRID
+            // (which renders uvs, not rec_cache) paints within seconds on the
+            // precompute-MISS path. Step3 auto-add later delete-and-replaces
+            // the cell from rec_cache — the same videos are in rec_cache by
+            // then, so the final set converges (brief re-insert, no card loss).
+            const byCell = new Map<number, typeof partial>();
+            for (const s of partial) {
+              if (!byCell.has(s.cellIndex)) byCell.set(s.cellIndex, []);
+              byCell.get(s.cellIndex)!.push(s);
+            }
+            for (const [cellIndex, slots] of byCell) {
+              try {
+                await placeAutoAddedCards(
+                  getPrismaClient(),
+                  ctx.userId,
+                  mandalaId,
+                  cellIndex,
+                  slots.map((sl) => ({
+                    videoId: sl.videoId,
+                    title: sl.title,
+                    description: sl.description,
+                    thumbnail: sl.thumbnail,
+                    channelTitle: sl.channelName,
+                    durationSec: sl.durationSec,
+                    viewCount: sl.viewCount,
+                    publishedAt: sl.publishedAt,
+                    recScore: sl.score,
+                  })),
+                  { notify: true }
+                );
+              } catch (err) {
+                log.warn(
+                  `[progressive] partial uvs place failed (non-fatal, cell=${cellIndex}): ${err instanceof Error ? err.message : String(err)}`
+                );
+              }
+            }
+          }
+        : undefined,
     });
     slots.push(...tier2Fill.slots);
     tier2Count = tier2Fill.slots.length;
@@ -811,6 +917,14 @@ interface Tier2Input {
    * to fresh embed.
    */
   mandalaId?: string;
+  /**
+   * Progressive fill (2026-07-11) — when set AND DISCOVER_PROGRESSIVE_FILL is
+   * on, each embedded+gated candidate CHUNK is handed out immediately so the
+   * caller can upsert it (cardPublisher SSE fires per row → grid fills over
+   * seconds). Cards never move or vanish: the final full-set gate pass still
+   * runs and converges to the same placement (deterministic argmax).
+   */
+  onPartialSlots?: (slots: AssembledSlot[]) => Promise<void>;
 }
 
 interface Tier2Debug {
@@ -845,6 +959,8 @@ interface Tier2Debug {
   mandalaFilterSubGoalTokenCounts: number[];
   perCellAssigned: Record<number, number>;
   scoredCandidates: number;
+  /** P0 2026-07-11 — candidates admitted by the never-zero floor (gate emptied). */
+  floorAdmitted: number;
   finalSlots: number;
   centerGoal: string;
   subGoalsSample: string[];
@@ -896,6 +1012,7 @@ function makeEmptyDebug(input: Tier2Input): Tier2Debug {
     mandalaFilterSubGoalTokenCounts: [],
     perCellAssigned: {},
     scoredCandidates: 0,
+    floorAdmitted: 0,
     finalSlots: 0,
     centerGoal: input.state.centerGoal,
     subGoalsSample: [...input.state.subGoals],
@@ -921,16 +1038,23 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   }
 
   const tKwRuleStart = Date.now();
-  const ruleQueries = buildRuleBasedQueriesSync(
-    {
-      centerGoal: input.state.centerGoal,
-      subGoals: deficitSubGoals,
-      focusTags: input.state.focusTags,
-      targetLevel: input.state.targetLevel,
-      language: input.state.language,
-    },
-    v3Config.maxQueries
-  );
+  // T5 — measured: concat rule queries returned 0-7 items each (mostly 0)
+  // while LLM queries returned 50 each (run 1710a7c8). Skipping the rule
+  // round saves ~10 search units and shortens discover (raising precompute
+  // HIT rate); the zero-hit fallback + LLM queries carry cell targeting.
+  const skipRuleQueries = isSkipRuleQueriesEnabled();
+  const ruleQueries = skipRuleQueries
+    ? []
+    : buildRuleBasedQueriesSync(
+        {
+          centerGoal: input.state.centerGoal,
+          subGoals: deficitSubGoals,
+          focusTags: input.state.focusTags,
+          targetLevel: input.state.targetLevel,
+          language: input.state.language,
+        },
+        v3Config.maxQueries
+      );
   debug.timing.keywordRuleMs = Date.now() - tKwRuleStart;
 
   const tKwLlmStart = Date.now();
@@ -970,8 +1094,30 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   const llmQueries = await llmPromise;
   debug.timing.keywordLlmMs = Date.now() - tKwLlmStart;
   debug.llmQuotaHit = llmQueries.length === 0 && Boolean(input.openRouterApiKey);
+  // T5 cell-coverage (2026-07-12): LLM queries carry no cellIndex, so cells
+  // the LLM didn't happen to cover get NO targeted supply and end up empty
+  // (measured: 3 empty cells on run 8dbb3e67 with only 5 LLM queries). Add
+  // one query PER deficit cell using the sub-goal text itself — natural
+  // phrases ("장거리 러닝", "부상 예방"), not the junk centerGoal-concat that
+  // DISCOVER_SKIP_RULE_QUERIES removed — tagged with cellIndex so results
+  // land in their cell via cellIndexHint.
+  const subGoalQueries: SearchQuery[] = [];
+  if (isSkipRuleQueriesEnabled()) {
+    for (const { cellIndex } of input.deficitCells) {
+      const sg = (input.state.subGoals[cellIndex] ?? '').trim();
+      if (!sg) continue;
+      // T9 (matrix F6): raw subgoals like "청취 회화" harvest English-learning
+      // junk on Korean YouTube. Prefix a domain anchor from the center goal.
+      const q = isSubgoalAnchorEnabled()
+        ? buildAnchoredSubgoalQuery(input.state.centerGoal, sg)
+        : sg;
+      subGoalQueries.push({ query: q, source: 'subgoal', cellIndex });
+    }
+  }
   const usedQueryTexts = new Set(ruleQueries.map((q) => q.query.toLowerCase()));
-  const extraLLM = llmQueries.filter((q) => !usedQueryTexts.has(q.query.toLowerCase()));
+  const extraLLM = [...llmQueries, ...subGoalQueries].filter(
+    (q) => !usedQueryTexts.has(q.query.toLowerCase())
+  );
   for (const q of extraLLM) {
     debug.queries.push({ query: q.query, source: 'llm', cellIndex: q.cellIndex ?? null });
   }
@@ -1138,44 +1284,162 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     // Ephemeral path (input.mandalaId undefined) falls back to embedBatch
     // for the center as well via plain embedBatch call.
     const titles = cappedFilterInputs.map((f) => f.title);
-    try {
-      const [centerVec, titleVecs] = await Promise.all([
-        input.mandalaId
-          ? getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
-          : (async () => {
-              const [v] = await embedBatch([input.state.centerGoal]);
-              return v ?? null;
-            })(),
-        embedBatch(titles),
-      ]);
-      if (centerVec != null && titleVecs.length === titles.length) {
-        centerEmbedding = centerVec;
-        candidateEmbeddings = new Map<string, number[]>();
-        for (let i = 0; i < cappedFilterInputs.length; i++) {
-          const vec = titleVecs[i];
-          const id = cappedFilterInputs[i]?.videoId;
-          if (vec && id) candidateEmbeddings.set(id, vec);
+    const progressive = isProgressiveFillEnabled() && input.onPartialSlots != null;
+    if (progressive) {
+      // Progressive fill (supervisor-approved 2026-07-11): embed+gate per
+      // CHUNK and hand each gated chunk out for immediate upsert (early
+      // visibility only). The full-set gate below still runs over the
+      // accumulated embeddings and remains the authoritative placement.
+      const pfCfg = getProgressiveFillConfig();
+      const deficitSet = new Set(input.deficitCells.map((c) => c.cellIndex));
+      try {
+        const centerVec = input.mandalaId
+          ? await getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
+          : ((await embedBatch([input.state.centerGoal], servingEmbedOptions()))[0] ?? null);
+        if (centerVec != null) {
+          centerEmbedding = centerVec;
+          const embMap = new Map<string, number[]>();
+          candidateEmbeddings = embMap;
+          const streamedIds = new Set<string>();
+          const chunks = planProgressiveChunks(
+            cappedFilterInputs,
+            pfCfg,
+            (f) => enrichedById.get(f.videoId)?.cellIndexHint ?? null
+          );
+          // T5-perf (2026-07-12): chunks run CONCURRENTLY — the sequential
+          // loop serialized embed calls (measured 23.1s gate_embed on run
+          // 8dbb3e67: 5.3+5.8+5.1+1.9+11.9+2.7s). Wall-clock is now
+          // max(chunk) while early chunks still paint the grid first.
+          await Promise.allSettled(
+            chunks.map(async (chunk) => {
+              try {
+                const vecs = await embedBatch(
+                  chunk.map((f) => f.title),
+                  servingEmbedOptions()
+                );
+                for (let i = 0; i < chunk.length; i++) {
+                  const vec = vecs[i];
+                  const id = chunk[i]?.videoId;
+                  if (vec && id) embMap.set(id, vec);
+                }
+                const { byCell: chunkByCell } = applyMandalaFilterWithStats(chunk, {
+                  centerGoal: input.state.centerGoal,
+                  subGoals: input.state.subGoals,
+                  language: input.state.language,
+                  focusTags: input.state.focusTags,
+                  recencyWeight: v3Config.recencyWeight,
+                  recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
+                  centerGateMode: v3Config.centerGateMode,
+                  centerEmbedding: centerVec,
+                  candidateEmbeddings: embMap,
+                  semanticMinCosine: v3Config.semanticMinCosine,
+                  subGoalEmbeddings: input.state.subGoalEmbeddings,
+                  emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
+                  emptyTitleGate: v3Config.emptyTitleGate,
+                });
+                const partial: AssembledSlot[] = [];
+                const perCell = new Map<number, number>();
+                for (const [cellIndex, list] of chunkByCell) {
+                  if (!deficitSet.has(cellIndex)) continue;
+                  for (const a of [...list].sort((x, y) => y.score - x.score)) {
+                    if (streamedIds.has(a.candidate.videoId)) continue;
+                    if ((perCell.get(cellIndex) ?? 0) >= pfCfg.perChunkCellCap) break;
+                    const ev = enrichedById.get(a.candidate.videoId);
+                    if (!ev) continue;
+                    partial.push({
+                      videoId: ev.videoId,
+                      title: ev.title,
+                      description: ev.description,
+                      channelName: ev.channelTitle,
+                      channelId: ev.channelId,
+                      thumbnail: ev.thumbnail,
+                      viewCount: ev.viewCount,
+                      likeCount: ev.likeCount,
+                      durationSec: ev.durationSec,
+                      publishedAt: ev.publishedDate,
+                      cellIndex,
+                      score: a.score,
+                      tier: 'realtime',
+                    });
+                    perCell.set(cellIndex, (perCell.get(cellIndex) ?? 0) + 1);
+                    streamedIds.add(a.candidate.videoId);
+                  }
+                }
+                if (partial.length > 0) {
+                  try {
+                    await input.onPartialSlots!(partial);
+                    log.info(
+                      `[progressive] streamed chunk: ${partial.length} slots (chunk size ${chunk.length})`
+                    );
+                  } catch (err) {
+                    log.warn(
+                      `[progressive] partial upsert failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+                    );
+                  }
+                }
+              } catch (err) {
+                log.warn(
+                  `[progressive] chunk embed failed — continuing without it: ${err instanceof Error ? err.message : String(err)}`
+                );
+              }
+            })
+          );
+        } else {
+          log.warn('[progressive] center embed unavailable — substring fallback');
         }
-      } else {
+      } catch (err) {
         log.warn(
-          `semantic gate embed vector mismatch: center=${centerVec != null} titles=${titleVecs.length}/${titles.length} — falling back to substring`
+          `[progressive] setup failed — substring fallback: ${err instanceof Error ? err.message : String(err)}`
         );
       }
-    } catch (err) {
-      log.warn(
-        `semantic gate embed failed: ${err instanceof Error ? err.message : String(err)} — falling back to substring`
+      debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
+      log.info(
+        `semantic gate (progressive): candidates=${filterInputs.length} capped=${cappedFilterInputs.length} embedMs=${debug.timing.semanticGateEmbedMs}`
+      );
+    } else {
+      try {
+        const [centerVec, titleVecs] = await Promise.all([
+          input.mandalaId
+            ? getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
+            : (async () => {
+                const [v] = await embedBatch([input.state.centerGoal], servingEmbedOptions());
+                return v ?? null;
+              })(),
+          embedBatch(titles, servingEmbedOptions()),
+        ]);
+        if (centerVec != null && titleVecs.length === titles.length) {
+          centerEmbedding = centerVec;
+          candidateEmbeddings = new Map<string, number[]>();
+          for (let i = 0; i < cappedFilterInputs.length; i++) {
+            const vec = titleVecs[i];
+            const id = cappedFilterInputs[i]?.videoId;
+            if (vec && id) candidateEmbeddings.set(id, vec);
+          }
+        } else {
+          log.warn(
+            `semantic gate embed vector mismatch: center=${centerVec != null} titles=${titleVecs.length}/${titles.length} — falling back to substring`
+          );
+        }
+      } catch (err) {
+        log.warn(
+          `semantic gate embed failed: ${err instanceof Error ? err.message : String(err)} — falling back to substring`
+        );
+      }
+      debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
+      log.info(
+        `semantic gate: candidates=${filterInputs.length} capped=${cappedFilterInputs.length} ` +
+          `overflow=${overflow} cap=${cap} embedMs=${debug.timing.semanticGateEmbedMs}`
       );
     }
-    debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
-    log.info(
-      `semantic gate: candidates=${filterInputs.length} capped=${cappedFilterInputs.length} ` +
-        `overflow=${overflow} cap=${cap} embedMs=${debug.timing.semanticGateEmbedMs}`
-    );
   }
 
   const tMandalaFilterStart = Date.now();
   const deficitCellSet = new Set(input.deficitCells.map((c) => c.cellIndex));
   const scored: ScoredCandidate[] = [];
+  // R13-1 domain-fit shadow — true only when applyMandalaFilterWithStats ran
+  // (the useYoutubeRankingOnly bypass branch below skips the mandala filter
+  // entirely, so there is no domain-fit-relevant filter output to shadow).
+  let mandalaFilterRanTier2 = false;
 
   if (v3Config.useYoutubeRankingOnly) {
     // CP436 PR-Y0d (Issue #543) — bypass mandala-filter, trust YouTube's
@@ -1219,6 +1483,8 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
       candidateEmbeddings,
       semanticMinCosine: v3Config.semanticMinCosine,
       subGoalEmbeddings: input.state.subGoalEmbeddings,
+      emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
+      emptyTitleGate: v3Config.emptyTitleGate,
     });
     debug.timing.mandalaFilterMs = Date.now() - tMandalaFilterStart;
 
@@ -1256,7 +1522,39 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
         scored.push({ video: enrichedVideo, cellIndex, score: a.score });
       }
     }
+    mandalaFilterRanTier2 = true;
   }
+
+  // P0 2026-07-11 — never-zero floor. When the RANKING gate (center cosine /
+  // jaccard) drops every candidate, the run used to return "No recommendations"
+  // → 0 cards, even though search found candidates and the SAFETY gates
+  // (shorts / lang / blocklist / quality) already passed them (kapasi
+  // 87960287: 108 found → gate input 10 → center-gate -8 → 0). Principle:
+  // "덜 정렬된 카드 > 카드 0장" — admit the top-N in search-rank order into
+  // deficit cells; async relevance backfill re-ranks them later. Flag off =
+  // legacy fail-closed. See config/discover-zero-floor.ts.
+  if (scored.length === 0 && filterable.length > 0 && isDiscoverNeverZeroFloorEnabled()) {
+    const deficitCellList = input.deficitCells.map((c) => c.cellIndex);
+    const cap = Math.min(getZeroFloorMax(), filterable.length);
+    let floorScore = 0.05;
+    for (let i = 0; i < cap; i++) {
+      const v = filterable[i]!;
+      const hinted = v.cellIndexHint;
+      const cellIndex =
+        hinted != null && deficitCellSet.has(hinted)
+          ? hinted
+          : deficitCellList[i % deficitCellList.length]!;
+      scored.push({ video: enrichedById.get(v.videoId)!, cellIndex, score: floorScore });
+      floorScore = Math.max(0.01, floorScore - 0.001);
+    }
+    debug.floorAdmitted = scored.length;
+    // Per-fire mandala id (supervisor): floor-served mandalas bypass the
+    // ranking gate — stratified quality checks must identify them.
+    log.warn(
+      `[zero-floor] mandala=${input.mandalaId ?? 'ephemeral'} ranking gate emptied ${filterable.length} candidates — floor-admitted ${scored.length} (cap ${cap})`
+    );
+  }
+
   const tScoringStart = Date.now();
   debug.scoredCandidates = scored.length;
 
@@ -1265,6 +1563,25 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   const pickedVideoIds = new Set<string>();
   const channelPerCell = new Map<number, Map<string, number>>();
   scored.sort((a, b) => b.score - a.score);
+
+  // R13-1 — domain-fit shadow (Tier 2). Fire-and-forget; enforce-0: reads
+  // `scored` (already sorted, unmodified below) for logging only. The
+  // in-array index IS the candidate's current serve rank for this run.
+  if (mandalaFilterRanTier2) {
+    scheduleDomainFitShadow({
+      stage: 'tier2',
+      centerGoal: input.state.centerGoal,
+      subGoals: input.state.subGoals,
+      candidates: scored.map((sc, rank) => ({
+        videoId: sc.video.videoId,
+        title: sc.video.title,
+        cellIndex: sc.cellIndex,
+        rank,
+        score: sc.score,
+      })),
+    });
+  }
+
   const slots: AssembledSlot[] = [];
   for (const sc of scored) {
     const need = input.deficitCells.find((c) => c.cellIndex === sc.cellIndex)?.need ?? 0;
@@ -1370,6 +1687,10 @@ async function runSearchTraced(
           timeoutMs: v3Config.youtubeSearchTimeoutMs,
           ...(publishedAfter ? { publishedAfter } : {}),
           ...(opts?.videoCategoryId ? { videoCategoryId: opts.videoCategoryId } : {}),
+          // T5 — long-form-only harvest (v1 always sent medium; the v2/v3
+          // rewrite dropped it → 53% of supply arrived as Shorts and was
+          // discarded post-hoc). Unset env = legacy (no param).
+          ...(getSearchVideoDuration() ? { videoDuration: getSearchVideoDuration()! } : {}),
         });
         return { q, items, error: undefined as string | undefined };
       } catch (err) {
@@ -1538,6 +1859,9 @@ async function upsertSlots(
         ? Math.min(slot.likeCount / slot.viewCount, 1)
         : null,
     recScore: Math.max(0, Math.min(1, slot.score)),
+    // P3 Stage 2 (CP513) — display-only relevance_pct write. null → COALESCE keeps
+    // any backfilled value on re-serve. Never part of rec_score.
+    relevancePct: slot.relevancePct ?? null,
   }));
 
   // ------------------------------------------------------------------
@@ -1547,7 +1871,7 @@ async function upsertSlots(
   try {
     // Build a VALUES list: one Prisma.sql fragment per row, then join.
     const valueFragments = prepared.map(
-      ({ slot, keyword, likeRatio, recScore }) =>
+      ({ slot, keyword, likeRatio, recScore, relevancePct }) =>
         Prisma.sql`(
         ${userId}::uuid,
         ${mandalaId}::uuid,
@@ -1561,6 +1885,7 @@ async function upsertSlots(
         ${likeRatio}::float8,
         ${slot.durationSec}::int,
         ${recScore}::float8,
+        ${relevancePct}::int,
         ${slot.tier},
         ${RECOMMENDATION_STATUS_PENDING}::varchar(20),
         ${WEIGHT_VERSION}::int,
@@ -1573,11 +1898,12 @@ async function upsertSlots(
       INSERT INTO recommendation_cache (
         user_id, mandala_id, cell_index, keyword, video_id,
         title, thumbnail, channel, view_count, like_ratio,
-        duration_sec, rec_score, rec_reason, status, weight_version,
+        duration_sec, rec_score, relevance_pct, rec_reason, status, weight_version,
         expires_at, published_at
       )
       VALUES ${Prisma.join(valueFragments)}
       ON CONFLICT (user_id, mandala_id, video_id) DO UPDATE SET
+        relevance_pct  = COALESCE(EXCLUDED.relevance_pct, recommendation_cache.relevance_pct),
         cell_index     = EXCLUDED.cell_index,
         keyword        = EXCLUDED.keyword,
         title          = EXCLUDED.title,
@@ -1609,7 +1935,7 @@ async function upsertSlots(
   // ------------------------------------------------------------------
   if (upsertedRows === null) {
     let count = 0;
-    for (const { slot, keyword, likeRatio, recScore } of prepared) {
+    for (const { slot, keyword, likeRatio, recScore, relevancePct } of prepared) {
       try {
         const row = await db.recommendation_cache.upsert({
           where: {
@@ -1632,6 +1958,8 @@ async function upsertSlots(
             like_ratio: likeRatio,
             duration_sec: slot.durationSec,
             rec_score: recScore,
+            // P3 Stage 2 (CP513) — display-only relevance_pct (null if uncomputed).
+            relevance_pct: relevancePct,
             rec_reason: slot.tier,
             status: RECOMMENDATION_STATUS_PENDING,
             weight_version: WEIGHT_VERSION,
@@ -1648,6 +1976,8 @@ async function upsertSlots(
             like_ratio: likeRatio,
             duration_sec: slot.durationSec,
             rec_score: recScore,
+            // Only overwrite when computed — preserves any backfilled value (COALESCE parity).
+            ...(relevancePct != null ? { relevance_pct: relevancePct } : {}),
             rec_reason: slot.tier,
             weight_version: WEIGHT_VERSION,
             expires_at: expiresAt,
@@ -1915,7 +2245,7 @@ async function runDiscoverEphemeralImpl(
   const existingVideoIds = new Set(redisSlots.map((s) => s.videoId));
   if (v3Config.enableTier1Cache) {
     try {
-      const [centerVec] = await embedBatch([input.centerGoal]);
+      const [centerVec] = await embedBatch([input.centerGoal], servingEmbedOptions());
       if (centerVec && centerVec.length > 0) {
         const tier1Matches = await matchFromVideoPoolByCenterGoal({
           centerEmbedding: centerVec,
@@ -2015,7 +2345,7 @@ async function runDiscoverEphemeralImpl(
       const cappedSlots = allSlots.slice(0, cap);
       const texts = [input.centerGoal, ...cappedSlots.map((s) => s.title)];
       const embedT0 = Date.now();
-      const vectors = await embedBatch(texts);
+      const vectors = await embedBatch(texts, servingEmbedOptions());
       const embedMs = Date.now() - embedT0;
       if (vectors.length === texts.length) {
         const centerEmbedding = vectors[0] ?? undefined;
@@ -2043,6 +2373,8 @@ async function runDiscoverEphemeralImpl(
           centerEmbedding,
           candidateEmbeddings,
           semanticMinCosine: v3Config.semanticMinCosine,
+          emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
+          emptyTitleGate: v3Config.emptyTitleGate,
         });
         const slotById = new Map(allSlots.map((s) => [s.videoId, s]));
         const flattened: AssembledSlot[] = [];

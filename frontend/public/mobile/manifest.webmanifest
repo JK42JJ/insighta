@@ -1,0 +1,16 @@
+{
+  "name": "다이얼 — Insighta",
+  "short_name": "다이얼",
+  "description": "유튜브에서 내 목표에 맞는 것만 골라 노트로 모아둡니다 — Insighta 모바일",
+  "start_url": "/mobile/",
+  "scope": "/mobile/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#F5F2EC",
+  "background_color": "#F5F2EC",
+  "icons": [
+    { "src": "/mobile/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/mobile/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/mobile/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

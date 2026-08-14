@@ -1,0 +1,76 @@
+# prod
+#
+# frontend runs 2 replicas. It is a static file server that proxies to the
+# api and holds no state, so a second copy is free and covers rolling
+# updates and node drains. Measured traffic is under one request per minute;
+# this is an availability figure, not a load one.
+#
+# api runs 2. It could not before.
+#
+# The api process used to carry per-process state that was the only copy, and
+# schedulers whose overlap guards were in-process variables. Both are now
+# addressed, each verified on a running cluster rather than by reading:
+#
+#   scheduler/auto-sync.ts       the queue owns scheduling. One tick claims
+#                                due rows with FOR UPDATE SKIP LOCKED and
+#                                enqueues one job each, so overlapping ticks
+#                                and parallel workers cannot take the same
+#                                playlist. Measured: two concurrent claims,
+#                                8 rows each, intersection 0.
+#   ontology/chat.ts             history moved to ontology_conversations.
+#                                Measured: a turn written by one client is
+#                                read by another that shares no memory.
+#   youtube/api.ts               invalidation published to
+#                                youtube_cache_epochs. Measured: an entry
+#                                stored before an invalidation reads as a
+#                                miss in a different process; one stored
+#                                after it stays valid.
+#
+# Verified with api at 2 replicas: "AutoSyncScheduler started" appeared 0
+# times in the api pods and once in the worker, and one tick claimed 17 due
+# playlists and enqueued exactly 17 jobs.
+#
+# Requires the worker deployment and all three flags under statelessness,
+# which the chart sets. It also requires both migrations to have been applied
+# -- they are in the apply-custom-sql allowlist and were confirmed present in
+# production on 2026-08-14.
+#
+# What is still per-process and not fixed here, because none of it blocks a
+# second replica: the enrichment already-running guard, the quota-alert
+# throttle, the chat provider poller, the channel blocklist cache and the
+# wizard dedup set. Each degrades — duplicate work or a stale read — rather
+# than losing data.
+api:
+  replicaCount: 2
+  # Off at 2 replicas, deliberately. A ReadWriteOnce claim cannot back two
+  # pods, and k3s local-path offers nothing else. The two directories are not
+  # equivalent, so the trade differs:
+  #
+  #   /app/cache  each pod warms its own copy of the YouTube response cache.
+  #               The cost is one warm-up per pod, not a continuous one --
+  #               acceptable. The shared-cache answer is redis, which is
+  #               deployed and holds nothing (6.1 risk 3); this is the first
+  #               concrete consumer it would have.
+  #   /app/logs   lost on reschedule, and nothing ships them off the pod.
+  #               This is the same gap the design records for journald
+  #               (6.1 risk 5) and it is NOT solved here. Log shipping is a
+  #               P2 item; until then a rescheduled pod loses its history.
+  #
+  # Do not turn this on while replicaCount is above 1 -- the second pod will
+  # sit Pending on a volume it cannot attach.
+  persistence:
+    enabled: false
+frontend:
+  replicaCount: 2
+redis:
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 8Gi
+
+ingress:
+  enabled: true
+  host: insighta.one
+  tls:
+    enabled: true
+    secretName: insighta-tls

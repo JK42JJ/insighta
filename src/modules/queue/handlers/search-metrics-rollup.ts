@@ -13,6 +13,7 @@
  * which the daily report (chunk iii) labels distinctly from an actual 0.
  */
 
+import { buildFlagsFingerprint } from '@/config/config-change-events';
 import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database/client';
 import { config } from '@/config/index';
@@ -205,7 +206,12 @@ export async function computeDailyMetrics(start: Date, end: Date): Promise<Daily
     active_search_keys: resolveSearchApiKeys(process.env).length,
     funnel,
     algorithm_version: algo?.algorithm_version ?? null,
-    flags_snapshot: { search_trace_enabled: config.searchTrace.enabled },
+    // PR1 (2026-07-13): full non-secret discover-flag fingerprint (was a
+    // single flag). Same whitelist as the boot self-report — one source.
+    flags_snapshot: {
+      search_trace_enabled: config.searchTrace.enabled,
+      ...buildFlagsFingerprint(),
+    },
   };
 }
 

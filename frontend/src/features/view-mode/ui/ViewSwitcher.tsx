@@ -14,12 +14,32 @@ interface ViewSwitcherProps {
   onChange: (mode: ViewMode) => void;
 }
 
+// `disabled` = not ready for beta (2026-07-28 launch decision): list,
+// list-detail and insights stay visible but unclickable until they ship.
 const VIEW_OPTIONS = [
-  { value: 'grid' as const, icon: LayoutGrid, labelKey: 'view.grid', isBeta: false },
-  { value: 'list' as const, icon: List, labelKey: 'view.list', isBeta: true },
-  { value: 'list-detail' as const, icon: Columns2, labelKey: 'view.listDetail', isBeta: true },
-  { value: 'graph' as const, icon: Network, labelKey: 'view.graph', isBeta: true },
-  { value: 'insights' as const, icon: BarChart3, labelKey: 'view.insights', isBeta: true },
+  {
+    value: 'grid' as const,
+    icon: LayoutGrid,
+    labelKey: 'view.grid',
+    isBeta: false,
+    disabled: false,
+  },
+  { value: 'list' as const, icon: List, labelKey: 'view.list', isBeta: true, disabled: true },
+  {
+    value: 'list-detail' as const,
+    icon: Columns2,
+    labelKey: 'view.listDetail',
+    isBeta: true,
+    disabled: true,
+  },
+  { value: 'graph' as const, icon: Network, labelKey: 'view.graph', isBeta: true, disabled: false },
+  {
+    value: 'insights' as const,
+    icon: BarChart3,
+    labelKey: 'view.insights',
+    isBeta: true,
+    disabled: true,
+  },
 ];
 
 export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
@@ -50,12 +70,15 @@ export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-44">
-        {VIEW_OPTIONS.map(({ value: v, icon: Icon, labelKey, isBeta }) => {
+        {VIEW_OPTIONS.map(({ value: v, icon: Icon, labelKey, isBeta, disabled }) => {
           const isActive = v === value;
           return (
             <DropdownMenuItem
               key={v}
-              onSelect={() => onChange(v)}
+              disabled={disabled}
+              onSelect={() => {
+                if (!disabled) onChange(v);
+              }}
               className="flex items-center gap-2 text-[13px] focus:text-foreground"
             >
               <Icon className="h-4 w-4 flex-shrink-0" />

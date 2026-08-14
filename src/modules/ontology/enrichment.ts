@@ -380,6 +380,8 @@ export async function enrichVideo(
      */
     withRichSummary?: boolean;
     userId?: string;
+    /** Book-chain relink (2026-07-12): enables the post-v2 book/note fill. */
+    mandalaId?: string;
   }
 ): Promise<VideoSummaryResult> {
   const prisma = getPrismaClient();
@@ -527,6 +529,25 @@ export async function enrichVideo(
         transcript,
         segments: richSummarySegments,
       });
+      // Book-chain relink (2026-07-12): v2 now flows through THIS inline path
+      // (wizard trigger -> enrich-video), so card -> v2 -> note must re-fire here.
+      // Route through the completion gate (2026-07-16): this used to enqueue a
+      // book-fill DIRECTLY per video, bypassing the barrier — the second ungated
+      // emitter behind early stub notes + uncontrolled Sonnet re-fills. maybeTrigger
+      // keeps exact legacy behavior when the barrier flag is off. Non-fatal.
+      if (options.mandalaId) {
+        const { maybeTriggerBookFill } = await import('@/modules/queue/handlers/book-fill-gate');
+        await maybeTriggerBookFill({
+          userId: options.userId,
+          mandalaId: options.mandalaId,
+        }).catch((err) => {
+          logger.warn('book re-fill gate failed (non-fatal)', {
+            videoId,
+            mandalaId: options.mandalaId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
     } catch (err) {
       logger.warn('Rich summary generation failed (non-fatal)', {
         videoId,

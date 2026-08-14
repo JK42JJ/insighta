@@ -2,11 +2,14 @@
 
 ## 세션 시작 필수 로드 (매 세션 첫 번째 액션)
 
-아래 4개 파일을 읽기 전에는 어떤 작업도 시작하지 않는다:
+아래 3개 파일을 읽기 전에는 어떤 작업도 시작하지 않는다:
 - `.claude/agents/DELEGATION.md`
 - `memory/work-efficiency.md`
-- `memory/feedback-speed-agents.md`
 - `memory/troubleshooting.md`
+
+> `feedback-speed-agents.md` (memory 디렉토리) 는 **존재한 적이 없다** (2026-08-11 확인). 이 목록이
+> 없는 파일을 요구해 왔으므로, 매 세션 이 규칙은 조용히 미충족 상태였다. 다루려던 내용은
+> `work-efficiency.md` 와 `DELEGATION.md` 에 이미 있다.
 
 ## 팀 에이전트 강제 규칙
 
@@ -25,9 +28,15 @@
 
 ## UI 작업 전 필수 확인
 
-- **UI/프론트엔드 코드 수정 전에 반드시 `memory/ux-issues.md`를 읽고 기존 이슈 및 regression 체크리스트를 확인한 후 작업한다. 예외 없음.**
-- 카드/D&D/선택 관련 수정 시 ux-issues.md의 Regression Pattern Warning 체크리스트 6항목 확인
-- UI 수정 후 체크리스트 기반 영향 범위 자체 검증
+- **UI/프론트엔드 코드 수정 전에 반드시 `memory/troubleshooting.md` 의 LEVEL-2+ 시각/UI 패턴을 확인한 후 작업한다. 예외 없음.**
+- `scripts/cc-facts.sh` 가 매 `/init` 에 그 목록을 출력한다 — 별도로 찾을 필요 없다.
+- 카드/D&D/선택 관련 수정 시 `/check` 의 `[6ab]`(측정 셋업 assert) · `[6ac]`(실앱 재현 + 렌더레이어 전수) 항목 적용
+- UI 수정 후 영향 범위 자체 검증
+
+> 이 규칙은 2026-08-11 까지 `ux-issues.md` (memory 디렉토리) 를 가리켰고, **그 파일은 존재하지 않았다.**
+> "예외 없음" 이라고 쓰인 절대규칙이 매 UI 세션마다 조용히 통과했다는 뜻이다. 지금 주력
+> 개발 표면이 다이얼 PWA — 전부 UI 다. 실제로 UI 회귀 이력을 담고 있는 곳으로 재지정한다.
+> 빈 파일을 만들어 링크만 살리는 선택지는 버렸다: 지표는 초록이 되고 규칙은 여전히 비어 있게 된다.
 
 ## Hard Rules
 
@@ -46,6 +55,15 @@
 - 어떤 스크립트에서든 위 API 호출 코드 작성/실행 금지
 - 데이터셋 생성: **CC 콘솔 직접 생성(Write tool)만 허용**. LLM API 호출 없이 CC 자체 지식으로 생성.
 - 위반 시: 해당 세션 즉시 종료. 사고 기록은 `memory/troubleshooting.md` 참조.
+
+### 🚨 메일 발송 = James 고유 권한 (불변, 예외 없음, 2026-07-28 무단발송 사고)
+- **어떤 메일도 James 의 내용 컨펌 없이 발송 금지.** 검수 사본도 발송이다.
+- CC 가 할 수 있는 것: 초안 작성 → 렌더 → 화면 제시 → **정지.**
+- **승인**: "보내" / "발송해" 등 그 행위를 지목한 명시적 지시만.
+- **승인 아님**: 문구 수정 지시 · 명단 확정("다 넣어") · AskUserQuestion 응답 · 침묵 · CC 자신의 "발송할까요?" 에 대한 무응답.
+- **물어봤으면 기다린다.** 질문을 던진 것 자체가 답이 필요함을 알았다는 증거다.
+- 사고: 지인 10명에게 컨펌 없이 발송 → 직후 "샘플 보내봐 검수할게" → 수정본 재발송으로 **같은 분들이 두 통 수신**. 되돌릴 수 없음.
+- 상세: `memory/feedback_email_send_is_james_authority.md`
 
 ### Credentials
 - NEVER guess secret names/API keys — read `memory/credentials.md`
@@ -208,7 +226,15 @@
   - 호스트 · IP → `tailscale status | grep <keyword>` · `gh secret list` · `ssh <alias> echo ok` 로 사전 검증. hostname 추측 금지.
   - **Visual/UI mismatch 보고 (CP443/CP446 sub-rule, CP447+1 /retro #4)**: 사용자가 "X 가 Y 처럼 보임" / "어긋남" / "사라짐" / "얼룩덜룩" 류 시각 보고 시 0순위 액션 = 관련 className/file `Read` 또는 `grep` (예: `grep -n "className=" frontend/src/.../Foo.tsx`). hypothesis-first 응답 ("캐시 문제일까?" / "환경 차이?" / "리로드 해보세요") **금지** — 사용자 환경 추측은 trust burn. 1순위 = fact 1줄 보고 (예: "Foo.tsx:42 className=`bg-card`, parent button opacity-50 inherit"). 2순위 = fix proposal.
   - **Quantitative tuning fix (CP467 sub-rule, /retro 11th #2)**: timeout / retry count / poll interval / cache TTL / pool size 등 **수치 limit bump** 을 ship 전에 perf-probe 또는 EXPLAIN ANALYZE 또는 log trace 中 **1개 측정 증거 필수**. "느림 → 한계 늘리기" 가 root cause 식별 전에 ship 되면 같은 bug 를 두 PR 으로 처리하게 됨 (CP467 PR #661 timeout 15→60s symptom patch → PR #662 EXPLAIN 측정 후 진짜 fix = SQL planner 가 ivfflat 회피 → 10s→1.4s). limit bump 자체가 안전한 case (root cause 식별됐고 BE upper-bound 안에 있음) 에는 PR description 에 측정 증거 + "root cause 는 X, 본 PR 은 client-side guard" 명시 의무.
-- 위반 시 패턴: 잘못된 버전 핀 / 잘못된 토픽 slug / 잘못된 hostname / 값 leak 을 유발하는 `sed` 마스킹 regex / 존재하지 않는 함수 이름으로 만든 grep / visual mismatch 에 대한 hypothesis-first 응답.
+  - **설계 전 전체 정독 + "신규" 前 기존 존재 확인 (CP512 sub-rule, /retro 2026-07-08 #1)**: 기능 설계/구현 착수 전에 **관련 코드 경로 전체를 정독**한다(부분 grep snippet 만으로 설계 금지). 특히 **"새 컬럼 / 새 API / 새 필드 / 새 저장경로 를 추가"** 하겠다는 판단 전에는, 동일 이름·의미의 컬럼/엔드포인트/필드가 이미 존재하는지 `grep -rn` 으로 전수 확인 의무. 근거: CP512 watch-progress 설계 v1 이 `watch_position_seconds` 컬럼 · `update-video-state` API · `lastWatchPosition` 필드 가 **전부 이미 존재**함을 못 보고 "새 컬럼 + 새 API" 로 설계 → James "코드 전체 읽어라" 2회 지적 → 전체 정독 후 "기존 시스템 배선 결함" 으로 v2 전면 재작성. 버그가 "새 기능 부재" 인지 "기존 기능 미배선" 인지부터 코드로 판정.
+  - **기능 게이트 신호는 DB 실측으로 확정 (CP512 sub-rule, /retro 2026-07-08 #2)**: UI 표시 조건(배지 / 필터 / 정렬)을 특정 필드로 게이트할 때, 그 필드의 **실제 값 분포를 prod DB 에서 1회 확인 후** 게이트 신호를 확정한다. 코드·필드명 추측으로 게이트를 짜지 말 것. 근거: CP512 "추가됨" 배지 게이트를 `id.startsWith('stream-')` 로 추측 → 여전히 전 카드 노출(PR #1112 재작업) → prod 실측 후에야 `auto_added=false` 가 정타 신호임을 확정(PR #1113).
+  - **Dead-code first-pass: wiring 前 consumer-count grep (CP521 sub-rule, LEVEL-3 승격 recurrence=3)**: 새 component/hook/function 에 prop·handler·setter wiring 을 추가하거나, 특정 파일을 "이 기능의 소스"로 단정하기 **전에**, `grep -rn "<Symbol>" <scope> | grep -v "<defining_file>"` 로 self-reference 제거 후 **consumer count 를 확인**한다. count==0 = dead code → wiring 금지, 실 mount root 재확인. V1/V2 versioned naming 발견 시 path-prefix + import grep 둘 다. 근거: CP442 → CP447 → CP519(#1214 잘못된 픽 → #1216 재작업). **근본 = 사실확인 필수 지점에서 grep 스킵 = 추측.**
+  - **새 메커니즘 작성 前 동일 기능 존재 확인 — 동사 grep (CP527 sub-rule, recurrence 4)**: 새 함수·CSS 규칙·상태 관리를 작성하기 전에, 같은 파일/모듈에서 그 기능의 **동사**로 grep 한다 (`summon|show|probe|fallback|retry|resize|relayout` 등). 심볼 이름이 아니라 **하는 일**로 찾는다 — 이름이 다르면 grep 이 빗나가고, 그래서 3함수 거리의 정답을 두 번 놓쳤다 (CP527 `cdWheelShow`·`cdBestPoster` 기존재, 둘 다 재발명 쪽이 회귀 유발). 발견 시 그것을 쓴다; 못 쓰는 이유가 있으면 PR 설명에 1줄.
+  - **측정을 증거로 인용하기 전 셋업 실효 assert (CP522 sub-rule, LEVEL-2)**: `resize_window`·viewport·class 부여·mock 등 **셋업에 의존하는 측정**은, 셋업 전제가 실제로 먹었는지 먼저 확인한 뒤에만 결과를 증거로 쓴다. 미확인 셋업의 측정 = 추측과 동급. 트랜지션 있는 값은 완료 후 또는 transition 무효화 후 측정. 근거: CP522 `resize_window` success 리턴했으나 실제 뷰포트 불변 → "전폭" 오판 → James "거짓말".
+  - **유저 보고 런타임/시각 버그 = 실 로그인앱(실데이터·실뷰포트) 재현 후 판정 (CP522 sub-rule)**: forced-render·stub·강제 `show()` 는 로직만 검증하며 렌더 결과가 아니다. 근거: CP522 홈 목록 진동·슬라이더 크라우딩이 실 로그인 세션에서만 발견, James "니가 직접해".
+  - **시각 shift/overflow/balance = 렌더트리 전 레이어 전수 열거+측정 (CP522 강화)**: "왔다갔다/쏠림/무너짐/잘림" 위치 버그는 관련 요소 하나만 재지 말고 조상·형제 중 **모든 positioned / overflow(hidden·clip) / transform 레이어**를 열거해 각각 측정한다. 근거: CP522 진범(포스터 `cp-back`)·슬라이더 클립(`epaper overflow:hidden`)이 5~6라운드 측정범위 밖.
+  - **읽은 것이 편집할 그 리비전인가 (CP530 sub-rule, /retro 2026-08-03)**: ⑴ 라인번호·심볼 위치를 **보고/계획서에 인용**할 때는 **편집 대상 경로 그 파일**에서 뽑는다 — 스크래치패드 추출본의 좌표 인용 금지(추출본은 읽기용, 좌표는 대상에서). ⑵ 같은 파일을 두 번 이상 추출했다면 **오래된 사본을 즉시 지운다** — 두 사본 공존이 사고 지점. ⑶ 시간의존 상태(PR state / CI / 배포 / prod version) 보고에는 **관측 시각을 병기**하고, 그것을 근거로 side-effect 를 실행하기 전 **재측정**한다. 근거: CP530 탭 네이밍 계획서가 build 92 추출본 좌표(`:1890-1894`)를 인용했으나 대상은 build 94(`:1944-1946`) — 두 머지가 ~50줄을 밀어냄. 편집 직전 자가검출했으나 틀린 좌표는 이미 사용자에게 나감. **"소스를 읽었다"는 자기 판정이 통과해 버리는 것이 이 룰의 사각.**
+- 위반 시 패턴: 잘못된 버전 핀 / 잘못된 토픽 slug / 잘못된 hostname / 값 leak 을 유발하는 `sed` 마스킹 regex / 존재하지 않는 함수 이름으로 만든 grep / visual mismatch 에 대한 hypothesis-first 응답 / 기존 컬럼·API 존재 확인 없이 "신규" 설계 / DB 실측 없이 추측 게이트 신호 / consumer-count grep 없이 파일을 기능 소스로 단정 / 미확인 셋업(resize·mock)의 측정을 사실로 단정 / forced-render 로 유저버그 판정 / 렌더레이어 일부만 측정 / stale 리비전 추출본의 좌표 인용.
 - **발생 시 즉시 재작업**: 추측으로 만들어진 코드/명령은 삭제하고 소스 read → 재구성. 부분 수정으로 봉합 금지.
 - 근거: CP391 (`transformers<4.30` 추측 pin), CP396 (`cut -d= -f2` base64 drop), CP412 (`sed mask regex` 반대 방향 → 4 redis 비번 leak), CP413 (`kpop-choreo` / `recipe` fabricated slug → pilot seed 실패), CP443 (4 visual user-corrections), CP446 (5+ visual user-corrections + 5+ meta-frustrations + D2=0.45 Rule K marker fire). 5회+ 재발 → memory-only feedback file enforcement 실패 증명 → LEVEL-3 승격 + visual-domain sub-rule.
 
@@ -219,6 +245,13 @@
 - Read-only 명령 (`ls`, `grep`, `git status`, `cat`) 은 plan 불필요.
 - 범위 이탈 ("이왕이면 이것도") 발견 시 별도 plan.
 - 위반 4회 (CP391×2, CP392×2) 후 CLAUDE.md 본문 승격. 상세: `memory/feedback_plan_before_execute.md`.
+
+### 신뢰·투명성 규약 (절대 규칙, 감독+CC 공통, 2026-07-07 /retro CP513 — 복구세션 신뢰붕괴 6-인터럽트 근거, 감독 판정)
+> 근거: 세션유실 복구 중 side-effect 0·감독승인·§4게이트 준수 = 내용은 정상이었으나, plan 선공지 없는 read-only 다량 활동이 계정 소유자에게 "혼자 위험"으로 읽혀 인터럽트 6회 발생. "read-only/승인받음"은 불투명 활동의 면허가 아니다 — 소유자에게 보이는 것은 무해성이 아니라 활동의 불투명성. 4조항은 CC·감독 양 에이전트 공통 신뢰 규약.
+- **② Plain-language + 조어 호칭 금지 (0순위, 비용 0)**: user 가 "자연어로/뭐냐" 신호 시 즉시 jargon 제거. 영어 기술용어 남발·'형님' 등 조어 호칭 금지 = 페르소나 드리프트 신호. 역할 호칭은 **감독 / CC / James 기능명**으로 고정.
+- **① Plan 1줄 선공지 (1순위, 구조적 핵심)**: 멀티툴 활동 batch 시작 **前** 무엇을·왜 할지 plain 1줄 plan 을 user 에게 먼저 가시화. veto-by-exception 과 양립 — 침묵=진행이되 **plan 은 항상 가시화**(승인루프 부활 아니라 가시성 의무 추가).
+- **③ 자율루프 자가정지 (보이게)**: 자율루프가 동일 human-gate 블록에서 2회+ 반복 발화 시 cron 자가정지. 단 조용히 멈추면 그것도 불투명 → 정지 시 **"자가정지: 사유 + 대기 대상" 1줄 반드시 발화 + 감독 에스컬레이션** (서킷브레이커는 보이게 내려간다).
+- **④ 재진입 램프업**: 크래시복구·세션유실 등 재진입 직후는 **자율모드 축소 상태로 시작**. 첫 보고(재검증 + plan)에 대한 **명시 ack(감독 또는 James) 받기 전엔 실행 활동 금지 — 보고·질의만**. 자율은 재개(resume)가 아니라 점증(ramp) — 재진입 시점이 소유자 신뢰가 가장 얇은 때.
 
 ### Coding Conventions -> [상세: docs/CODING_CONVENTIONS.md]
 - 기존 코드 수정 시 해당 파일 Phase 1 위반도 함께 수정 (점진적 개선)

@@ -6,6 +6,9 @@ import { adminStatsRoutes } from './stats';
 import { adminPromotionRoutes } from './promotions';
 import { adminAuditRoutes } from './audit';
 import { adminChannelBlocklistRoutes } from './channel-blocklist';
+import { adminBetaApplicationRoutes } from './beta-applications';
+import { adminNoticeRoutes } from './notices';
+import { adminPerformanceRoutes } from './performance';
 import { adminRedemptionRoutes, adminBulkRoutes } from './redemption';
 // Stripe scaffold moved to payments.legacy.ts on 2026-05-13 (superseded by
 // Lemon Squeezy under /api/v1/billing/*). See payments.legacy.ts header.
@@ -14,6 +17,7 @@ import { adminAnalyticsRoutes } from './analytics';
 import { adminContentRoutes } from './content';
 import { adminReportRoutes } from './reports';
 import { adminHealthRoutes } from './health';
+import { adminFeatureStatusRoutes } from './feature-status';
 import { adminLlmRoutes } from './llm';
 import { adminEnrichmentRoutes } from './enrichment';
 import { adminClawbotRoutes } from './clawbot';
@@ -32,6 +36,7 @@ import { adminSegmentRelevanceFillRoutes } from './segment-relevance-fill';
 import { adminPoolServeRoutes } from './pool-serve';
 import { adminSearchTraceExplorerRoutes } from './search-trace-explorer';
 import { adminEvalHarnessRoutes } from './eval-harness';
+import { adminEmailRoutes } from './email';
 
 /**
  * Admin routes plugin.
@@ -50,12 +55,15 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminBulkRoutes, { prefix: '/users/bulk' });
   await fastify.register(adminAuditRoutes, { prefix: '/audit-log' });
   await fastify.register(adminChannelBlocklistRoutes, { prefix: '/channel-blocklist' });
+  await fastify.register(adminBetaApplicationRoutes);
+  await fastify.register(adminNoticeRoutes);
   await fastify.register(adminAnalyticsRoutes, { prefix: '/analytics' });
   await fastify.register(adminContentRoutes, { prefix: '/content' });
   await fastify.register(adminReportRoutes, { prefix: '/reports' });
   // Stripe scaffold de-registered 2026-05-13 (see payments.legacy.ts).
   // await fastify.register(adminPaymentRoutes, { prefix: '/payments' });
   await fastify.register(adminHealthRoutes, { prefix: '/health' });
+  await fastify.register(adminFeatureStatusRoutes);
   await fastify.register(adminLlmRoutes, { prefix: '/llm' });
   await fastify.register(adminEnrichmentRoutes, { prefix: '/enrichment' });
   await fastify.register(adminClawbotRoutes, { prefix: '/clawbot' });
@@ -64,6 +72,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminQualityMetricsRoutes, { prefix: '/quality-metrics' });
   await fastify.register(adminSystemSettingsRoutes, { prefix: '/settings' });
   await fastify.register(adminDiscoverTracesRoutes, { prefix: '/discover-traces' });
+  await fastify.register(adminPerformanceRoutes, { prefix: '/performance' });
   // CP488 — Search Quality Overhaul: algorithm catalog + per-mandala override
   // + A/B comparison view (D11 measurement oracle).
   await fastify.register(adminSearchAlgorithmsRoutes, { prefix: '/search-algorithms' });
@@ -90,5 +99,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Observability G2-b — Phase 3 Eval Harness (golden-cohort gc baseline).
   // gc miss-scoring is prod-only Haiku (admin-triggered); cacheOnly=safe verify.
   await fastify.register(adminEvalHarnessRoutes, { prefix: '/eval-harness' });
+  // Sample-only email trigger (owner-allowlisted; no broadcast).
+  await fastify.register(adminEmailRoutes);
   // await fastify.register(stripeWebhookRoutes, { prefix: '/webhooks/stripe' });
 }

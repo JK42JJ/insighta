@@ -53,7 +53,7 @@ const OG_DEFAULTS = {
 /** Resolve title / description / thumbnail / spaPath for a learning share
  *  target. Same logic feeds both the HTML response (SNS bot) and the
  *  `?format=json` response (FE preview card) so the two stay drift-free. */
-async function resolveOgMeta(
+export async function resolveOgMeta(
   mandalaId: string,
   videoId: string
 ): Promise<{ title: string; description: string; thumbnail: string; spaPath: string }> {
