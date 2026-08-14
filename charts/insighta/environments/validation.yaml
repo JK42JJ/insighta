@@ -1,0 +1,80 @@
+# The AWS validation cluster (P2). One t3.small, no DNS, no traffic.
+#
+# Its job is to prove the chart deploys on a real cluster rather than on k3d,
+# where every image was built locally and every gap in the chart was hidden by
+# that. It is not a staging environment and nothing depends on it.
+
+# ghcr.io/jk42jj/* is private. Without this the pods sit in ImagePullBackOff.
+# Created out of band:
+#   kubectl -n <ns> create secret docker-registry ghcr \
+#     --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT>
+imagePullSecrets:
+  - ghcr
+
+api:
+  replicaCount: 1
+  persistence:
+    enabled: true
+  # The images are imported into this node's containerd directly from the
+  # production box, which already holds them. GHCR needs a read:packages
+  # credential that does not exist yet; the box's stored one is a CI
+  # GITHUB_TOKEN and was measured expired on 2026-08-14 (401, docker pull
+  # fails). Pulling from the registry is what P3 and P4 need and is where
+  # that credential has to be solved -- it is not solved here.
+  image:
+    pullPolicy: IfNotPresent
+
+worker:
+  enabled: true
+  replicaCount: 1
+
+frontend:
+  replicaCount: 1
+  image:
+    pullPolicy: IfNotPresent
+
+# No image for this exists in any registry. deploy.yml pushes insighta-api and
+# insighta-frontend and nothing else; the box builds redis from docker/redis/
+# through compose, which a cluster cannot do.
+#
+# Measured on production before switching it off: DBSIZE 0, 368 commands since
+# start, V3_ENABLE_REDIS_PROVIDER=false. Nothing is lost here.
+#
+# This is deferred, not solved. A cutover needs the image in GHCR or needs
+# redis gone -- see the note in the migration chapter.
+redis:
+  enabled: false
+
+# The cluster brings its own database. Production Supabase was measured at
+# 23 of 60 connections in use on 2026-08-14, and a previous cluster of mine
+# took 20 of them and stalled the application. A validation cluster does not
+# get to spend that budget.
+postgresDev:
+  enabled: true
+
+# Off. Measured on this cluster 2026-08-14:
+#
+#   Error: ERROR: cannot use column reference in DEFAULT expression
+#     step=CreateTable { table_id: TableId(3) }
+#
+# Two fields cause it, both in Supabase-managed auth tables:
+#   identities.email    DEFAULT lower((identity_data ->> 'email'::text))
+#   users.confirmed_at  DEFAULT LEAST(email_confirmed_at, phone_confirmed_at)
+#
+# In Supabase these are generated columns. Prisma 5 has no generated-column
+# support, so introspection recorded them as defaults. Against Supabase the
+# columns already exist and the push is a no-op; against a fresh postgres it
+# tries to create them and postgres rejects a column reference in DEFAULT.
+#
+# Not fixed here: removing those defaults edits the schema production runs on,
+# which is a change with its own risk and its own review, and P2 is not it.
+# The consequence is that this cluster's database has no application tables --
+# the api connects and reports ready, but a real query would fail. That is
+# what this environment is for and is not for.
+schemaSync:
+  enabled: false
+
+# Traffic 0. There is no DNS record and no certificate; an Ingress here would
+# be an object nothing routes to.
+ingress:
+  enabled: false

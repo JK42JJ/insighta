@@ -21,6 +21,7 @@ spec:
       # equivalent and does not need one: the frontend's readiness probe
       # keeps it out of the Service until it serves, and the ingress routes
       # /api to the api Service independently. Startup order stops mattering.
+      {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: frontend
           image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"

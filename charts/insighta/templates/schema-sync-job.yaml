@@ -18,9 +18,24 @@ metadata:
     {{- include "insighta.labels" . | nindent 4 }}
     app.kubernetes.io/component: schema-sync
   annotations:
+{{- if .Values.postgresDev.enabled }}
+    # Deliberately not a hook here. A pre-install hook runs before any ordinary
+    # resource exists, so with the in-cluster database it would run before that
+    # database and fail with P1001 every time -- measured on the validation
+    # cluster 2026-08-14, three attempts, BackoffLimitExceeded. The dev
+    # environment never caught it because it sets schemaSync.enabled=false.
+    #
+    # As a normal resource the Job is created alongside postgres and its init
+    # container waits for it. The api may report not-ready for the few seconds
+    # before the schema lands, which is correct: it is not ready.
+    "helm.sh/resource-policy": keep
+{{- else }}
+    # With an external database (Supabase) the database genuinely pre-exists,
+    # and running the schema before the pods roll is the point.
     helm.sh/hook: pre-install,pre-upgrade
     helm.sh/hook-weight: "-5"
     helm.sh/hook-delete-policy: before-hook-creation
+{{- end }}
 spec:
   backoffLimit: 2
   template:
@@ -30,6 +45,23 @@ spec:
         app.kubernetes.io/component: schema-sync
     spec:
       restartPolicy: Never
+      {{- include "insighta.imagePullSecrets" . | nindent 6 }}
+{{- if .Values.postgresDev.enabled }}
+      initContainers:
+        - name: wait-for-postgres
+          image: "{{ .Values.postgresDev.image.repository }}:{{ .Values.postgresDev.image.tag }}"
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ include "insighta.fullname" . }}-postgres -p 5432 -U {{ .Values.postgresDev.user }}; do
+                echo "waiting for postgres"
+                sleep 2
+              done
+          resources:
+            requests: { memory: 32Mi, cpu: 10m }
+            limits:   { memory: 64Mi, cpu: 100m }
+{{- end }}
       containers:
         - name: schema-sync
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"

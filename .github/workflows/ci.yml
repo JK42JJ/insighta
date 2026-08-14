@@ -67,6 +67,32 @@ jobs:
         run: cd frontend && rm -rf node_modules package-lock.json && npm install --no-audit --legacy-peer-deps
       - run: cd frontend && npx vitest run
 
+  # The Kubernetes manifests had no CI coverage at all while TypeScript had
+  # eight jobs. Measured cost on 2026-08-14: a `redis.enabled` guard added
+  # without its default removed the redis Service and StatefulSet from dev,
+  # staging and prod simultaneously, and `helm lint` passed.
+  chart-verify:
+    name: Chart Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+      - name: Install kubeconform
+        run: |
+          curl -sSLo /tmp/kc.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kc.tar.gz -C /tmp kubeconform
+          sudo install /tmp/kubeconform /usr/local/bin/
+      - name: helm lint
+        run: |
+          for e in dev staging prod validation; do
+            helm lint charts/insighta -f charts/insighta/environments/$e.yaml
+          done
+      - name: Render and check every environment
+        run: bash scripts/ci/check-charts.sh
+
   hardcode-audit:
     name: Hardcode Audit
     runs-on: ubuntu-latest

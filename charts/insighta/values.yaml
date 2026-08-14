@@ -18,6 +18,12 @@ fullnameOverride: ""
 # populates it from SSM.
 envSecretName: insighta-env
 
+# Names of pre-created docker-registry secrets. Empty by default: the k3d
+# cluster builds its images locally and needs none. Any cluster that pulls
+# ghcr.io/jk42jj/* does need one -- those packages are private, and without
+# this every pod sits in ImagePullBackOff with no other symptom.
+imagePullSecrets: []
+
 api:
   replicaCount: 1
   image:
@@ -118,6 +124,11 @@ frontend:
     periodSeconds: 10
 
 redis:
+  # Measured on production 2026-08-14: DBSIZE 0, 368 commands since start,
+  # V3_ENABLE_REDIS_PROVIDER=false. It holds nothing today. Kept on by default
+  # anyway -- the box runs a redis container, and switching that off is a
+  # production decision, not a chart default.
+  enabled: true
   # Always 1. RDB persistence is on, so this is stateful. Replication needs
   # Sentinel or a managed service, which is oversized for 4.7 MiB of data.
   # This is a single point of failure and is recorded as one in the design.
