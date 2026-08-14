@@ -175,10 +175,13 @@ metadata:
     {{- include "insighta.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
 spec:
-  type: ClusterIP
+  type: {{ .Values.api.service.type }}
   ports:
     - port: {{ .Values.api.port }}
       targetPort: http
+      {{- if eq .Values.api.service.type "NodePort" }}
+      nodePort: {{ .Values.api.service.nodePort }}
+      {{- end }}
       name: http
   selector:
     {{- include "insighta.selectorLabels" . | nindent 4 }}

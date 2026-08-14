@@ -13,6 +13,44 @@
 # Rate limiting zone
 limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
 
+# ---------------------------------------------------------------------------
+# Backends
+#
+# The compose containers on this host, and -- when k3s_weight is above zero --
+# the Kubernetes cluster over the private network.
+#
+# max_fails/fail_timeout give health gating without a health-check service: a
+# backend that fails 3 requests inside 10 seconds is taken out for 10 seconds
+# and put back automatically. proxy_next_upstream (set per location below)
+# retries the other backend rather than returning the error to the client, so
+# a cluster that falls over during the shift costs latency, not availability.
+#
+# nginx omits a server with weight=0 from selection but still parses it, which
+# is what makes 0 a real state rather than a commented-out line.
+# ---------------------------------------------------------------------------
+upstream insighta_api {
+    server {{ api_upstream }} weight={{ 100 - k3s_weight }} max_fails=3 fail_timeout=10s;
+{% if k3s_weight | int > 0 %}
+    server {{ k3s_node }}:{{ k3s_api_port }} weight={{ k3s_weight }} max_fails=3 fail_timeout=10s;
+{% endif %}
+    keepalive 32;
+}
+
+upstream insighta_frontend {
+    server {{ frontend_upstream }} weight={{ 100 - k3s_weight }} max_fails=3 fail_timeout=10s;
+{% if k3s_weight | int > 0 %}
+    server {{ k3s_node }}:{{ k3s_frontend_port }} weight={{ k3s_weight }} max_fails=3 fail_timeout=10s;
+{% endif %}
+    keepalive 32;
+}
+
+# Which backend served a request, and how long it took there. Without this the
+# two are indistinguishable in the access log and a weight change cannot be
+# evaluated.
+log_format upstream_split '$remote_addr - $status $request_time '
+                          'upstream=$upstream_addr ut=$upstream_response_time '
+                          '"$request"';
+
 # Redirect HTTP to HTTPS
 server {
     listen 80;
@@ -68,7 +106,7 @@ server {
     location /api/ {
         limit_req zone=api burst=50 nodelay;
 
-        proxy_pass http://{{ api_upstream }};
+        proxy_pass http://insighta_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -89,7 +127,7 @@ server {
 
 {% for path in ['/health', '/oauth/callback', '/documentation', '/api-reference'] %}
     location {{ path }} {
-        proxy_pass http://{{ api_upstream }};
+        proxy_pass http://insighta_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -108,7 +146,7 @@ server {
 
     # Frontend (React SPA)
     location / {
-        proxy_pass http://{{ frontend_upstream }};
+        proxy_pass http://insighta_frontend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -120,7 +158,7 @@ server {
 
     # Static asset caching
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        proxy_pass http://{{ frontend_upstream }};
+        proxy_pass http://insighta_frontend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         expires 30d;
@@ -131,7 +169,7 @@ server {
     # rule below, hence the exact match -- a prefix location would lose to it.
     # The file is served by the frontend container from the build output.
     location = /.well-known/assetlinks.json {
-        proxy_pass http://{{ frontend_upstream }};
+        proxy_pass http://insighta_frontend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

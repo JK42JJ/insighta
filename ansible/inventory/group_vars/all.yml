@@ -7,6 +7,30 @@
 api_upstream:      "127.0.0.1:3000"
 frontend_upstream: "127.0.0.1:8081"
 
+# ── Cutover to the Kubernetes cluster ───────────────────────────────────────
+#
+# The traffic split happens here, at the proxy, not in DNS.
+#
+# DNS weighting would mean moving insighta.one off GoDaddy, where the domain
+# also carries Google Workspace MX and SPF records -- a mistake there stops
+# mail, and a rollback waits on TTL and on client caches that ignore it.
+#
+# An nginx upstream weight reverses in a reload, splits per request rather than
+# per client, and takes a failing backend out on its own through max_fails.
+# It costs nothing. The weight is a variable in git, so a traffic shift is a
+# pull request and a playbook run.
+#
+# 0 means the cluster is configured and receiving nothing. Raise it in steps,
+# watching error rate and p95 per upstream -- nginx logs upstream_addr and
+# upstream_response_time, so the two backends are separable in the access log.
+k3s_weight: 0
+
+# Private address. Both instances sit in 172.31.0.0/16, so this traffic never
+# leaves the VPC and is not billed.
+k3s_node: "172.31.11.236"
+k3s_api_port: 30300
+k3s_frontend_port: 30810
+
 # ACME webroot. The directory already exists on the box (created 2026-03-04)
 # and insighta.conf already serves /.well-known/acme-challenge/ from it.
 acme_webroot: /var/www/certbot
