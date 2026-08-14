@@ -47,6 +47,13 @@ api:
     pullPolicy: IfNotPresent
   command: ["api"]
   port: 3000
+  service:
+    # ClusterIP by default. NodePort exists for the cutover: the production
+    # host's nginx proxies to the cluster over the private network, and the
+    # traffic split is an nginx upstream weight rather than a DNS record --
+    # instant to reverse, per-request rather than per-client, and free.
+    type: ClusterIP
+    nodePort: 30300
   resources:
     requests:
       memory: 256Mi        # measured 182 MiB + ~40% headroom
@@ -122,6 +129,9 @@ frontend:
     tag: latest
     pullPolicy: IfNotPresent
   port: 8081
+  service:
+    type: ClusterIP
+    nodePort: 30810
   resources:
     requests:
       memory: 32Mi         # measured 3.8 MiB -- static serving
