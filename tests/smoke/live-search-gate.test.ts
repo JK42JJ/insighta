@@ -24,6 +24,7 @@ jest.mock('@/config/relevance-rubric', () => ({
 import {
   gateLiveSearchCards,
   audioLanguageMismatch,
+  promoPenaltyMatch,
 } from '../../src/modules/inflow-gate/live-search-gate';
 
 const CFG = { mode: 'on' as const, topN: 3, burst: 3, relevanceMin: 60 };
@@ -64,6 +65,37 @@ describe('audioLanguageMismatch', () => {
     expect(audioLanguageMismatch('ar', 'ko')).toBe(true);
     expect(audioLanguageMismatch('ja', 'ko')).toBe(true);
     expect(audioLanguageMismatch('ja', 'en')).toBe(true);
+  });
+});
+
+describe('promoPenaltyMatch (축3 commercial-bias, demote-only)', () => {
+  test('flags scam-adjacent / aggro / FUD titles (before-anchor top-6: 1·4·6)', () => {
+    // #1 aggro pump, #4 scam-adjacent affiliate, #6 FUD dismissal.
+    expect(promoPenaltyMatch('비트코인 한 번 더 털고 갑니다 (대응 전략)', '트레이더')).toBe(
+      'aggro'
+    );
+    expect(
+      promoPenaltyMatch('[코인거래소추천] 참여시 100$ 수익률차이 만드는조건', '코인거래소')
+    ).toBe('scam');
+    expect(promoPenaltyMatch('이더리움? 리플? 다 쉿코인입니다. 절대 사지 마세요', '주식쟁이')).toBe(
+      'fud'
+    );
+  });
+  test('trade axis requires COMPOUND channel + title mechanics', () => {
+    // "거래소 홍보맨" + 배율/청산가 → trade; channel alone or title alone → clean.
+    expect(promoPenaltyMatch('레버리지 배율 설정·청산가 관리', '비트코인 거래소 홍보맨')).toBe(
+      'trade'
+    );
+    expect(promoPenaltyMatch('비트코인 기초 개념 정리', '비트코인 거래소 홍보맨')).toBe(null);
+    expect(promoPenaltyMatch('레버리지 배율 설정 강의', '정상 교육 채널')).toBe(null);
+  });
+  test('regression: legit content is NOT flagged (bare 수익률/사기/위험 disproved)', () => {
+    // Naive word cuts學살 these — the compound/specific design must pass them.
+    expect(promoPenaltyMatch('나스닥 100 ETF 적립식 투자, 개미의 마지막 무기', '토스')).toBe(null);
+    expect(promoPenaltyMatch('신용카드 사기 검출 실습: 분류 평가 지표', '박홍규')).toBe(null);
+    expect(promoPenaltyMatch('위험자산 ETF 운용 전략', '우리투자증권')).toBe(null);
+    expect(promoPenaltyMatch('클라우드 서버 조심히 써야하는 이유', '조코딩 JoCoding')).toBe(null);
+    expect(promoPenaltyMatch(null, null)).toBe(null);
   });
 });
 
@@ -145,6 +177,33 @@ describe('orderByCachedGc (ON전략 A rank-demote)', () => {
     const r = await orderByCachedGc(items, '00000000-0000-0000-0000-000000000000');
     expect(r.ordered.map((x) => x.videoId)).toEqual(['a', 'b', 'c']);
     expect(r.cacheOrderedCount).toBe(0);
+  });
+
+  test('shadow invariant: promo-penalty status does NOT change exposure order (logging-only, floor lesson)', async () => {
+    // Supervisor condition 1: promo_penalty_hits is observation-only. A card
+    // whose TITLE matches the promo penalty must keep its gc-based rank — the
+    // shadow signal never demotes. Here a promo-titled card holds gc 90 and
+    // stays #1; ordering is by gc alone, promo status ignored.
+    const { orderByCachedGc } = await import('../../src/modules/inflow-gate/live-search-gate');
+    const promoCard = {
+      videoId: 'p',
+      title: '한 번 더 털고 갑니다',
+      cellIndex: 0,
+      audioLanguage: null,
+    };
+    const cleanCard = {
+      videoId: 'q',
+      title: '비트코인 기초 개념',
+      cellIndex: 0,
+      audioLanguage: null,
+    };
+    mockFindMany.mockResolvedValue([
+      { video_id: 'p', relevance_pct: 90 },
+      { video_id: 'q', relevance_pct: 40 },
+    ]);
+    const r = await orderByCachedGc([cleanCard, promoCard], '00000000-0000-0000-0000-000000000000');
+    // promo card (gc 90) ranks above clean card (gc 40) — penalty NOT applied.
+    expect(r.ordered.map((x) => x.videoId)).toEqual(['p', 'q']);
   });
 
   test('cache read failure falls back to pick order (nothing hidden — floor lesson)', async () => {
