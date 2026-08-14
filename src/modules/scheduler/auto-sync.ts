@@ -14,6 +14,7 @@ import * as cron from 'node-cron';
 import { getSyncEngine, SyncResult } from '../sync/engine';
 import { getQuotaManager } from '../quota/manager';
 import { getSchedulerManager, ScheduleInfo } from './manager';
+import { isPlaylistSyncViaQueue } from '../../config/playlist-sync';
 import { getPrismaClient } from '../database';
 import { logger } from '../../utils/logger';
 import { SyncStatus } from '../../types/enums';
@@ -87,12 +88,22 @@ export class AutoSyncScheduler {
       // Load all enabled schedules
       const schedules = await this.schedulerManager.listSchedules(true);
 
-      // Start cron jobs for each schedule
-      for (const schedule of schedules) {
-        await this.startSchedule(schedule.playlistId);
+      if (isPlaylistSyncViaQueue()) {
+        // The queue owns scheduling: a single tick claims due rows and
+        // enqueues one job each. Starting timers here as well would run every
+        // playlist twice, once from each path.
+        logger.info('AutoSyncScheduler: timers skipped (PLAYLIST_SYNC_VIA_QUEUE)', {
+          scheduleCount: schedules.length,
+        });
+      } else {
+        // Start cron jobs for each schedule
+        for (const schedule of schedules) {
+          await this.startSchedule(schedule.playlistId);
+        }
       }
 
       logger.info('AutoSyncScheduler started', {
+        mode: isPlaylistSyncViaQueue() ? 'queue' : 'timers',
         scheduleCount: schedules.length,
         schedules: schedules.map((s) => ({
           playlistId: s.playlistId,

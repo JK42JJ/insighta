@@ -1,5 +1,11 @@
 # Dependencies
 node_modules/
+# Without the bare form, a symlink named node_modules is not matched --
+# a trailing slash restricts the pattern to directories, and git does not
+# treat a symlink as one. One was committed that way and kept returning
+# on `git add -A` after being untracked. ArgoCD refuses an entire
+# repository containing a symlink that escapes the repo root.
+node_modules
 yarn.lock
 pnpm-lock.yaml
 

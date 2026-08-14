@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insighta.fullname" . }}-frontend
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "insighta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+    spec:
+      # compose had depends_on: api service_healthy. Kubernetes has no
+      # equivalent and does not need one: the frontend's readiness probe
+      # keeps it out of the Service until it serves, and the ingress routes
+      # /api to the api Service independently. Startup order stops mattering.
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.frontend.port }}
+          env:
+            # The image renders its nginx config from a template whose only
+            # variable is API_URL. compose passed http://api:3000, the
+            # bridge-network service name; here it is the api Service. Left
+            # unset, nginx fails to start with "host not found in upstream".
+            - name: API_URL
+              value: "http://{{ include "insighta.fullname" . }}-api:{{ .Values.api.port }}"
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.frontend.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.frontend.readinessProbe | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insighta.fullname" . }}-frontend
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.frontend.port }}
+      targetPort: http
+      name: http
+  selector:
+    {{- include "insighta.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend

@@ -60,24 +60,7 @@ import {
   resetConnectionPool,
 } from '../modules/database/client';
 import { getClawbot } from '../modules/scheduler/clawbot';
-import { initJobQueue, getJobQueue } from '../modules/queue';
-import { getAutoSyncScheduler } from '../modules/scheduler/auto-sync';
-import {
-  startRichSummaryV2Cron,
-  stopRichSummaryV2Cron,
-} from '../modules/scheduler/rich-summary-v2-cron';
-import {
-  startYouTubeMetadataCron,
-  stopYouTubeMetadataCron,
-} from '../modules/scheduler/youtube-metadata-cron';
-import {
-  startV2QualityAuditCron,
-  stopV2QualityAuditCron,
-} from '../modules/scheduler/v2-quality-audit-cron';
-import {
-  startV2QualityRegenCron,
-  stopV2QualityRegenCron,
-} from '../modules/scheduler/v2-quality-regen-cron';
+import { startBackgroundWork, stopBackgroundWork } from './background';
 
 // Load environment variables
 dotenv.config();
@@ -613,94 +596,18 @@ export async function startServer() {
     // Job Queue (pg-boss) — persistent job scheduling
     // Replaces EnrichmentScheduler (Phase 2 complete)
     // batch-scan: cron */30 → enrich-video jobs (health-adaptive)
-    try {
-      await initJobQueue();
-      fastify.log.info('JobQueue initialized (pg-boss + enrich-video + batch-scan)');
-    } catch (err) {
-      fastify.log.warn({ err }, 'JobQueue init failed (non-fatal)');
-    }
-
-    // Auto-sync scheduler — periodic playlist synchronization
-    try {
-      await getAutoSyncScheduler().start();
-      fastify.log.info('AutoSyncScheduler started');
-    } catch (err) {
-      fastify.log.warn({ err }, 'AutoSyncScheduler init failed (non-fatal)');
-    }
-
-    // CP437 — Rich Summary v2 cron (prod-runtime backfill of v2 columns).
-    // Default OFF; flip RICH_SUMMARY_V2_CRON_ENABLED=true once Track A is
-    // ready to absorb the LLM call volume.
-    try {
-      startRichSummaryV2Cron();
-    } catch (err) {
-      fastify.log.warn({ err }, 'RichSummaryV2Cron init failed (non-fatal)');
-    }
-
-    // CP437 — YouTube metadata backfill cron (videos.list parts expansion).
-    // Default OFF; flip YOUTUBE_METADATA_BACKFILL_ENABLED=true once the
-    // 6 new columns are ready to receive data.
-    try {
-      startYouTubeMetadataCron();
-    } catch (err) {
-      fastify.log.warn({ err }, 'YouTubeMetadataCron init failed (non-fatal)');
-    }
-
-    // CP488+ — v2 Quality Audit cron (daily score scan of v2 rows).
-    // Default OFF; flip V2_QUALITY_AUDIT_ENABLED=true once the admin
-    // dashboard is reviewed. Design:
-    // docs/design/v2-quality-audit-system-2026-05-27.md
-    try {
-      startV2QualityAuditCron();
-    } catch (err) {
-      fastify.log.warn({ err }, 'V2QualityAuditCron init failed (non-fatal)');
-    }
-
-    // CP488+ Phase 3 — v2 Quality Regen worker (drains regen queue
-    // populated by the audit cron above). Default OFF; flip
-    // V2_QUALITY_REGEN_ENABLED=true once the audit has been running
-    // long enough for the operator to trust the score signal.
-    try {
-      startV2QualityRegenCron();
-    } catch (err) {
-      fastify.log.warn({ err }, 'V2QualityRegenCron init failed (non-fatal)');
-    }
+    await startBackgroundWork(fastify.log);
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       fastify.log.info(`${signal} received, shutting down gracefully...`);
       try {
+        await stopBackgroundWork(fastify.log);
+      } catch {
+        /* ignore */
+      }
+      try {
         await getClawbot().stop();
-      } catch {
-        /* ignore */
-      }
-      try {
-        await getJobQueue().stop();
-      } catch {
-        /* ignore */
-      }
-      try {
-        await getAutoSyncScheduler().stop();
-      } catch {
-        /* ignore */
-      }
-      try {
-        stopRichSummaryV2Cron();
-      } catch {
-        /* ignore */
-      }
-      try {
-        stopYouTubeMetadataCron();
-      } catch {
-        /* ignore */
-      }
-      try {
-        stopV2QualityAuditCron();
-      } catch {
-        /* ignore */
-      }
-      try {
-        stopV2QualityRegenCron();
       } catch {
         /* ignore */
       }
