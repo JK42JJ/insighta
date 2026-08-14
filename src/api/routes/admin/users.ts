@@ -133,7 +133,46 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         .send(createErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, 'User not found', request.url));
     }
 
-    return reply.send(createSuccessResponse(users[0]));
+    // Every mail this address has received, from all three places a send can be
+    // recorded. Sending cannot be undone, so "what went to this person, when,
+    // and did it land" has to be answerable from the screen. On 2026-07-28 it
+    // was not, and the only way to find out was to query prod by hand.
+    //
+    // Keyed by address, not user id, on purpose: a beta invitation goes out
+    // before an account exists, and that is the same person.
+    const email = String(users[0]?.['email'] ?? '');
+    const emailHistory = email
+      ? await db.$queryRaw<
+          Array<{
+            kind: string;
+            campaign: string | null;
+            subject: string | null;
+            status: string;
+            error: string | null;
+            sent_at: Date;
+          }>
+        >`
+        SELECT 'broadcast' AS kind, campaign, NULL::text AS subject,
+               status, error, sent_at
+          FROM public.email_broadcast_sends
+         WHERE lower(email) = lower(${email})
+        UNION ALL
+        SELECT 'beta-invite' AS kind, NULL AS campaign, NULL::text AS subject,
+               COALESCE(invite_email_status, 'unknown') AS status,
+               invite_email_error AS error, invite_email_at AS sent_at
+          FROM public.beta_applications
+         WHERE lower(email) = lower(${email}) AND invite_email_at IS NOT NULL
+        UNION ALL
+        SELECT 'note-ready' AS kind, NULL AS campaign, NULL::text AS subject,
+               'sent' AS status, NULL AS error, sent_at
+          FROM public.note_ready_email_sends
+         WHERE lower(COALESCE(to_email, '')) = lower(${email})
+         ORDER BY sent_at DESC
+         LIMIT 50
+      `
+      : [];
+
+    return reply.send(createSuccessResponse({ ...users[0], email_history: emailHistory }));
   });
 
   // PATCH /api/v1/admin/users/:id/subscription — Update subscription tier/limits
