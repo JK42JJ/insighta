@@ -48,7 +48,21 @@ for env in $ENVS; do
   vals="$CHART/environments/$env.yaml"
   [ -f "$vals" ] || { bad "$env: $vals missing"; continue; }
 
-  if ! out=$(helm template insighta "$CHART" -f "$vals" --namespace insighta 2>&1); then
+  # An environment whose images only exist in a registry whose host is not
+  # committed declares requireImageRegistry. Supply a placeholder so the render
+  # can be checked, and assert first that omitting it is an error -- a
+  # requirement nothing enforces is a comment.
+  extra=()
+  if grep -q '^requireImageRegistry: true' "$vals"; then
+    if helm template insighta "$CHART" -f "$vals" --namespace insighta >/dev/null 2>&1; then
+      bad "$env: declares requireImageRegistry but renders without one"
+    else
+      ok "$env: refuses to render without imageRegistry"
+    fi
+    extra=(--set "imageRegistry=registry.invalid")
+  fi
+
+  if ! out=$(helm template insighta "$CHART" -f "$vals" --namespace insighta ${extra[@]+"${extra[@]}"} 2>&1); then
     bad "$env: render failed"
     printf '%s\n' "$out" | sed 's/^/        /' | head -20
     continue
@@ -86,7 +100,8 @@ for env in $ENVS; do
 
   # Private registry pulls need a secret. Without one every pod sits in
   # ImagePullBackOff and nothing else in the render looks wrong.
-  wantsecret=$(grep -c '^imagePullSecrets:' "$vals" || true)
+  # An empty list is a declaration that none are wanted, not a request for them.
+  wantsecret=$(grep -cE '^imagePullSecrets:[[:space:]]*$' "$vals" || true)
   gotsecret=$(printf '%s\n' "$out" | grep -c 'imagePullSecrets:' || true)
   podspecs=$(printf '%s\n' "$out" | grep -c '^      containers:' || true)
   if [ "$wantsecret" -gt 0 ] && [ "$gotsecret" -ne "$podspecs" ]; then
@@ -154,7 +169,9 @@ done
 if command -v kubeconform >/dev/null; then
   echo "kubeconform:"
   for env in $ENVS; do
-    if helm template insighta "$CHART" -f "$CHART/environments/$env.yaml" --namespace insighta \
+    reg=()
+    grep -q '^requireImageRegistry: true' "$CHART/environments/$env.yaml" && reg=(--set "imageRegistry=registry.invalid")
+    if helm template insighta "$CHART" -f "$CHART/environments/$env.yaml" --namespace insighta ${reg[@]+"${reg[@]}"} \
        | kubeconform -strict -summary -ignore-missing-schemas 2>&1 | sed "s/^/    $env /"; then :; else
       bad "$env: kubeconform"
     fi

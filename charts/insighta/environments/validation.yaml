@@ -8,8 +8,21 @@
 # Created out of band:
 #   kubectl -n <ns> create secret docker-registry ghcr \
 #     --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT>
-imagePullSecrets:
-  - ghcr
+# Images live in ECR and the node pulls them with an instance profile, so no
+# pull secret exists in this namespace at all. Left empty deliberately.
+imagePullSecrets: []
+
+# The registry host is not committed: it embeds the AWS account id and this
+# repository is public. Supplied to the cluster instead, alongside the
+# insighta-env secret:
+#
+#   kubectl -n argocd patch application insighta-validation --type merge -p \
+#     '{"spec":{"source":{"helm":{"parameters":[
+#       {"name":"imageRegistry","value":"<acct>.dkr.ecr.us-west-2.amazonaws.com"}]}}}}'
+#
+# requireImageRegistry makes a forgotten parameter a render failure that names
+# itself, rather than four pods in ImagePullBackOff.
+requireImageRegistry: true
 
 api:
   replicaCount: 1

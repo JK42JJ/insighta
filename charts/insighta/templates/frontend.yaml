@@ -1,3 +1,4 @@
+{{- include "insighta.checkRegistry" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,7 +25,7 @@ spec:
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: frontend
-          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.frontend.image) | quote }}
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
           ports:
             - name: http
