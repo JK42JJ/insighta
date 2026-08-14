@@ -86,9 +86,9 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
     mandalas: 3,
     curations: 1,
     curationChannels: 3,
-    cards: 150,
+    cards: 300,
     aiSummaries: 150,
-    richSummaries: 30,
+    richSummaries: 50,
     weeklyReports: 10,
     skills: {
       newsletter: {
@@ -127,9 +127,9 @@ export const TIER_LIMITS: Record<Tier, TierLimitConfig> = {
     mandalas: 20,
     curations: 5,
     curationChannels: 10,
-    cards: 1_000,
+    cards: 2_000,
     aiSummaries: 1_000,
-    richSummaries: 200,
+    richSummaries: 1_000,
     weeklyReports: null,
     skills: {
       newsletter: {

@@ -29,11 +29,11 @@ function mockPrisma(opts: { tier?: string | null | undefined; usedThisMonth: num
 }
 
 describe('TIER_LIMITS.richSummaries values (CP423 spec)', () => {
-  it('free = 30', () => {
-    expect(TIER_LIMITS.free.richSummaries).toBe(30);
+  it('free = 50', () => {
+    expect(TIER_LIMITS.free.richSummaries).toBe(50);
   });
-  it('pro = 200', () => {
-    expect(TIER_LIMITS.pro.richSummaries).toBe(200);
+  it('pro = 1000', () => {
+    expect(TIER_LIMITS.pro.richSummaries).toBe(1_000);
   });
   it('lifetime = unlimited (null)', () => {
     expect(TIER_LIMITS.lifetime.richSummaries).toBeNull();
@@ -46,27 +46,27 @@ describe('TIER_LIMITS.richSummaries values (CP423 spec)', () => {
 describe('assertRichSummaryQuota', () => {
   const uid = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
-  it('free tier: passes when used=29 (under limit 30)', async () => {
-    const p = mockPrisma({ tier: 'free', usedThisMonth: 29 });
+  it('free tier: passes when used=49 (under limit 50)', async () => {
+    const p = mockPrisma({ tier: 'free', usedThisMonth: 49 });
     const r = await assertRichSummaryQuota(p as any, uid);
-    expect(r).toEqual({ tier: 'free', used: 29, limit: 30 });
+    expect(r).toEqual({ tier: 'free', used: 49, limit: 50 });
   });
 
-  it('free tier: throws at used=30 (at limit)', async () => {
-    const p = mockPrisma({ tier: 'free', usedThisMonth: 30 });
+  it('free tier: throws at used=50 (at limit)', async () => {
+    const p = mockPrisma({ tier: 'free', usedThisMonth: 50 });
     await expect(assertRichSummaryQuota(p as any, uid)).rejects.toThrow(
       RichSummaryQuotaExceededError
     );
   });
 
-  it('pro tier: passes at used=199', async () => {
-    const p = mockPrisma({ tier: 'pro', usedThisMonth: 199 });
+  it('pro tier: passes at used=999', async () => {
+    const p = mockPrisma({ tier: 'pro', usedThisMonth: 999 });
     const r = await assertRichSummaryQuota(p as any, uid);
-    expect(r).toEqual({ tier: 'pro', used: 199, limit: 200 });
+    expect(r).toEqual({ tier: 'pro', used: 999, limit: 1_000 });
   });
 
-  it('pro tier: throws at used=200', async () => {
-    const p = mockPrisma({ tier: 'pro', usedThisMonth: 200 });
+  it('pro tier: throws at used=1000', async () => {
+    const p = mockPrisma({ tier: 'pro', usedThisMonth: 1_000 });
     await expect(assertRichSummaryQuota(p as any, uid)).rejects.toThrow(
       RichSummaryQuotaExceededError
     );
@@ -90,7 +90,7 @@ describe('assertRichSummaryQuota', () => {
     const p = mockPrisma({ tier: undefined, usedThisMonth: 5 });
     const r = await assertRichSummaryQuota(p as any, uid);
     expect(r.tier).toBe('free');
-    expect(r.limit).toBe(30);
+    expect(r.limit).toBe(50);
   });
 
   it('defaults to free when tier column is null', async () => {
@@ -106,7 +106,7 @@ describe('assertRichSummaryQuota', () => {
   });
 
   it('thrown error carries tier/used/limit in details', async () => {
-    const p = mockPrisma({ tier: 'free', usedThisMonth: 30 });
+    const p = mockPrisma({ tier: 'free', usedThisMonth: 50 });
     try {
       await assertRichSummaryQuota(p as any, uid);
       fail('expected throw');
@@ -114,7 +114,7 @@ describe('assertRichSummaryQuota', () => {
       const e = err as RichSummaryQuotaExceededError;
       expect(e.code).toBe('RICH_SUMMARY_QUOTA_EXCEEDED');
       expect(e.statusCode).toBe(429);
-      expect(e.details).toMatchObject({ userId: uid, tier: 'free', used: 30, limit: 30 });
+      expect(e.details).toMatchObject({ userId: uid, tier: 'free', used: 50, limit: 50 });
     }
   });
 });
