@@ -81,4 +81,14 @@ jobs:
             fi
           done
 
-          [ "$flagged" -eq 0 ] && echo "No stale PRs. 🎉" >> "$GITHUB_STEP_SUMMARY"
+          # An `[ cond ] && cmd` as the final line under `set -e` exits with the
+          # test's status. With even one stale PR the test is false, so the job
+          # reported failure for having found something — it passed only when
+          # there was nothing to report. Written as an if so the exit status is
+          # the script's, not the last test's.
+          if [ "$flagged" -eq 0 ]; then
+            echo "No stale PRs. 🎉" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**$flagged PR(s) awaiting a decision.** This job reports; it never closes." >> "$GITHUB_STEP_SUMMARY"
+          fi
