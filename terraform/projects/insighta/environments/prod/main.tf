@@ -40,6 +40,29 @@ module "compute" {
   tags               = local.common_tags
 }
 
+# The k3s validation node (P2). Separate instance, no traffic, no DNS.
+#
+# Sized for validation rather than service: t3.small leaves roughly 600-800 MB
+# after k3s and the application pods, against production's 2,971 MB. It exists
+# so the cluster can be built and broken without the machine that serves the
+# site being involved.
+#
+# enable_k3s_node = false by default. Nothing is created until it is set, so
+# this module costs nothing until someone decides to spend.
+module "k3s_node" {
+  source = "../../../../modules/k3s-node"
+  count  = var.enable_k3s_node ? 1 : 0
+
+  name          = "insighta-k3s-1"
+  ami_id        = var.ami_id
+  instance_type = var.k3s_instance_type
+  key_name      = var.key_name
+  subnet_id     = local.subnet_id
+  vpc_id        = module.networking.vpc_id
+
+  tags = merge(local.common_tags, { Phase = "P2" })
+}
+
 module "backup" {
   source = "../../../../modules/backup"
 

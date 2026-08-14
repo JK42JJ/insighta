@@ -53,3 +53,19 @@ variable "backup_bucket_name" {
   type        = string
   default     = "insighta-backups"
 }
+
+variable "enable_k3s_node" {
+  description = <<-EOT
+    Create the k3s validation node. Default false: this is the only variable in
+    this stack whose flip costs money, so it is off until someone turns it on
+    rather than on until someone notices.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "k3s_instance_type" {
+  description = "Validation node size. See modules/k3s-node for the memory arithmetic behind t3.small."
+  type        = string
+  default     = "t3.small"
+}
