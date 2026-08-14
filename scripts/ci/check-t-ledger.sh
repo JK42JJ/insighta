@@ -17,10 +17,14 @@ set -euo pipefail
 BASE_REF="${BASE_REF:-origin/main}"
 PR_TEXT="${PR_TITLE:-} ${PR_BODY:-}"
 
-# Search-performance code paths (keep in sync with the T-ledger §11 scope).
-PERF_PATHS_RE='^src/(skills/plugins/(video-discover|iks-scorer)/|modules/(judge|relevance)/|modules/mandala/(wizard-precompute|pipeline-runner|place-auto-added-cards|auto-add-recommendations)\.ts|config/(discover-|judge-|wizard-|precompute-|pool-serve|subgoal-anchor|inflow-gate|embed-))'
-# Perf flags inside compose (the file itself hosts many unrelated envs).
-PERF_FLAG_RE='(V3_|V5_|DISCOVER_|JUDGE_|WIZARD_|PRECOMPUTE_|INFLOW_GATE|EMBED_SERVING_|OPENROUTER_EMBED_|POOL_SERVE|AUTO_ADD_)'
+# Ledger-scoped code paths. Three axes now (docs/LEDGERS.md, 2026-08-04):
+#   T = search logic · C = curation · P = pool inflow
+# The curation and pool paths were added after three PRs changed curation search
+# on 2026-08-04 and all three passed with no number, because the scope below
+# only knew about T. The guard was not wrong; an axis was missing.
+PERF_PATHS_RE='^src/(skills/plugins/(video-discover|iks-scorer|batch-video-collector)/|modules/(judge|relevance|curation|video-pool)/|modules/queue/handlers/(curation-|batch-video-collector|pool-maintenance)|modules/mandala/(wizard-precompute|pipeline-runner|place-auto-added-cards|auto-add-recommendations)\.ts|config/(discover-|judge-|wizard-|precompute-|pool-serve|subgoal-anchor|inflow-gate|embed-|domains))'
+# Flags inside compose (the file itself hosts many unrelated envs).
+PERF_FLAG_RE='(V3_|V5_|DISCOVER_|JUDGE_|WIZARD_|PRECOMPUTE_|INFLOW_GATE|EMBED_SERVING_|OPENROUTER_EMBED_|POOL_SERVE|AUTO_ADD_|CURATION_|BATCH_COLLECTOR_)'
 
 CHANGED=$(git diff --name-only "${BASE_REF}...HEAD" 2>/dev/null || true)
 
@@ -40,19 +44,23 @@ if echo "$CHANGED" | grep -q '^docker-compose.prod.yml$'; then
 fi
 
 if [ -z "$touched_perf" ]; then
-  echo "t-ledger: OK — no search-performance paths touched"
+  echo "ledger: OK — no ledger-scoped paths touched"
   exit 0
 fi
 
-if echo "$PR_TEXT" | grep -qE '\bT[0-9]+(-[A-Z]+)?\b'; then
-  echo "t-ledger: OK — T number present for perf change"
+if echo "$PR_TEXT" | grep -qE '\b[TCP][0-9]+(-[A-Z]+)?\b'; then
+  echo "ledger: OK — ledger number present"
   exit 0
 fi
 
-echo "t-ledger: FAIL — search-performance paths changed without a T number."
+echo "ledger: FAIL — ledger-scoped paths changed without a T/C/P number."
 echo "Touched:"
 printf "%b" "$touched_perf" | sed 's/^/  - /'
 echo ""
-echo "Fix: register the change in docs/handoffs/version-archetype-matrix-2026-07-12.md"
-echo "and put its T number (e.g. 'T11') in the PR title or body."
+echo "Pick the axis by asking what reverting it restores (docs/LEDGERS.md):"
+echo "  T — search logic      docs/handoffs/version-archetype-matrix-2026-07-12.md"
+echo "  C — curation          docs/handoffs/curation-ledger.md"
+echo "  P — pool inflow       docs/handoffs/pool-inflow-ledger.md"
+echo ""
+echo "Register the change there, then put its number (e.g. 'C3') in the PR title or body."
 exit 1

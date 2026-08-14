@@ -1,0 +1,121 @@
+---
+# Records what the production host already has installed, so the host can be
+# rebuilt rather than reconstructed from memory.
+#
+# This playbook is written to be a no-op against the current box. Every
+# version below was measured on it on 2026-08-13; the playbook asserts those
+# versions rather than upgrading to them, because an unplanned docker
+# upgrade on the box that runs production is not a bootstrap step.
+#
+#   bash scripts/ssh-connect.sh --update-sg
+#   cd ansible && ansible-playbook playbooks/bootstrap.yml --check --diff
+#   cd ansible && ansible-playbook playbooks/bootstrap.yml
+#   cd ansible && ansible-playbook playbooks/bootstrap.yml   # must be changed=0
+#
+# On a NEW host, run with -e bootstrap_install=yes to actually install.
+- name: Host packages and users
+  hosts: prod
+  gather_facts: true
+  vars:
+    bootstrap_install: "no"
+
+    # Measured on the production box, 2026-08-13.
+    expected:
+      distribution: Ubuntu
+      release: "22.04"
+      arch: x86_64
+      docker: "29.2.1"
+      compose: "v5.1.0"
+      python: "3.10"
+
+  tasks:
+    - name: Assert the platform is what the playbook was written for
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == expected.distribution
+          - ansible_distribution_version is version(expected.release, '>=')
+          - ansible_architecture == expected.arch
+        fail_msg: >-
+          Host is {{ ansible_distribution }} {{ ansible_distribution_version }}
+          on {{ ansible_architecture }}; the apt repository and package names
+          below are pinned to {{ expected.distribution }} {{ expected.release }}
+          on {{ expected.arch }}.
+
+    - name: Install docker from the upstream repository
+      when: bootstrap_install | bool
+      become: true
+      block:
+        - name: Install prerequisites
+          ansible.builtin.apt:
+            name:
+              - ca-certificates
+              - curl
+              - gnupg
+            state: present
+            update_cache: true
+
+        - name: Add the docker apt key
+          ansible.builtin.get_url:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            dest: /etc/apt/keyrings/docker.asc
+            mode: "0644"
+
+        - name: Add the docker apt repository
+          ansible.builtin.apt_repository:
+            repo: >-
+              deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
+              https://download.docker.com/linux/ubuntu
+              {{ ansible_distribution_release }} stable
+            filename: docker
+            state: present
+
+        # Package set measured on the box; docker-ce-rootless-extras is
+        # present there and is a dependency of docker-ce, so it is not listed.
+        - name: Install docker packages
+          ansible.builtin.apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-buildx-plugin
+              - docker-compose-plugin
+            state: present
+            update_cache: true
+
+    - name: Enable docker at boot
+      become: true
+      ansible.builtin.service:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Put the deploy user in the docker group
+      become: true
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+
+    # Version drift is reported, not corrected. Upgrading docker under a
+    # running production stack is a scheduled action, not a side effect of
+    # a configuration run.
+    - name: Read installed versions
+      ansible.builtin.command: "{{ item.cmd }}"
+      register: versions
+      changed_when: false
+      loop:
+        - { name: docker, cmd: "docker --version" }
+        - { name: compose, cmd: "docker compose version" }
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Report any version drift from the measured baseline
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item.name }}: {{ item.stdout }}
+          {{ '(matches baseline)'
+             if (expected[item.item.name] in item.stdout)
+             else '*** DRIFT: baseline is ' ~ expected[item.item.name] ~ ' ***' }}
+      loop: "{{ versions.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"

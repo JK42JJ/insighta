@@ -1,0 +1,61 @@
+# {{ ansible_managed }}
+# =============================================================================
+# portfolio.insighta.one -- static single-file site
+# =============================================================================
+# Rendered from ansible/roles/nginx/templates/portfolio.conf.j2.
+#
+# The file this replaces was written by certbot's nginx installer (8 lines
+# carried "# managed by Certbot"). Two things change here and nothing else:
+#
+#   1. The :80 block gains a /.well-known/acme-challenge/ location. Without
+#      it the webroot authenticator cannot validate this domain -- certbot's
+#      version answers every :80 request with 301 or 404.
+#   2. certbot's "if ($host = ...)" idiom is replaced by a plain redirect.
+#      server_name already restricts this block to one host, so the test was
+#      always true and the "return 404" after it was unreachable.
+#
+# The TLS directives are reproduced exactly, including the certbot-supplied
+# options file and dhparams.
+# =============================================================================
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ sites.portfolio.server_names }};
+
+    location /.well-known/acme-challenge/ {
+        root {{ acme_webroot }};
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl ipv6only=on;
+    server_name {{ sites.portfolio.server_names }};
+
+    root {{ sites.portfolio.docroot }};
+    index index.html;
+
+    ssl_certificate     /etc/letsencrypt/live/{{ sites.portfolio.cert_name }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ sites.portfolio.cert_name }}/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {
+        try_files $uri /index.html;
+    }
+
+    # single self-contained file -- short cache + revalidate
+    location = /index.html {
+        add_header Cache-Control "public, max-age=300, must-revalidate";
+    }
+
+    location = /robots.txt {
+        return 200 "User-agent: *\nDisallow:\n";
+        add_header Content-Type text/plain;
+    }
+}

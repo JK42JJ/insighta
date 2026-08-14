@@ -1,0 +1,19 @@
+---
+# Puts the host nginx configuration under version control.
+#
+# This closes the gap recorded in the infrastructure design as 0.2: the two
+# site configs exist only on the instance. Losing the instance loses the
+# routing rules, and nothing detects a hand edit.
+#
+#   bash scripts/ssh-connect.sh --update-sg
+#   cd ansible && ansible-playbook playbooks/nginx.yml --check --diff
+#   cd ansible && ansible-playbook playbooks/nginx.yml
+#   cd ansible && ansible-playbook playbooks/nginx.yml    # must be changed=0
+#
+# Does NOT touch certbot. Renewal keeps using authenticator=nginx until
+# playbooks/certbot-webroot.yml is run deliberately.
+- name: Host nginx configuration
+  hosts: prod
+  gather_facts: true
+  roles:
+    - nginx

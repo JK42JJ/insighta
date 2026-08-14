@@ -28,6 +28,7 @@ export { enqueueEpisodeNarrationRender } from './handlers/episode-narration-rend
 import { getJobQueue } from './manager';
 import { registerEnrichVideoWorker } from './handlers/enrich-video';
 import { registerBatchScanWorker } from './handlers/batch-scan';
+import { registerPlaylistSyncWorker } from './handlers/playlist-sync';
 import { registerEnrichRichSummaryWorker } from './handlers/enrich-rich-summary';
 import { registerBatchVideoCollectorWorker } from './handlers/batch-video-collector';
 import { registerPoolMaintenanceWorker } from './handlers/pool-maintenance';
@@ -63,6 +64,7 @@ export async function initJobQueue(): Promise<void> {
   // Register workers
   await registerEnrichVideoWorker();
   await registerBatchScanWorker();
+  await registerPlaylistSyncWorker();
   await registerEnrichRichSummaryWorker();
   await registerBatchVideoCollectorWorker();
   await registerPoolMaintenanceWorker();

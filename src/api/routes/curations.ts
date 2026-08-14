@@ -72,7 +72,7 @@ async function attachChannel(
   prisma: ReturnType<typeof getPrismaClient>,
   subscriptionId: string,
   ch: NonNullable<Awaited<ReturnType<typeof resolveChannel>>>,
-  addedVia: 'manual' | 'picked'
+  addedVia: 'manual' | 'picked' | 'bookmark'
 ) {
   return prisma.curation_channels.upsert({
     where: {
@@ -229,18 +229,40 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         data: { tier, limit, current: distinctTopics },
       });
     }
-    const sub = await prisma.curation_subscriptions.create({
-      data: {
-        user_id: userId,
-        topic,
-        cadence: 'weekly',
-        source,
-        mandala_id: mandalaId,
-        is_active: true,
-        // recurring weekly refresh starts a week out; the FIRST build runs now.
-        next_run_at: new Date(now.getTime() + 7 * MS_PER_DAY),
-      },
-    });
+    let sub;
+    try {
+      sub = await prisma.curation_subscriptions.create({
+        data: {
+          user_id: userId,
+          topic,
+          cadence: 'weekly',
+          source,
+          mandala_id: mandalaId,
+          is_active: true,
+          // recurring weekly refresh starts a week out; the FIRST build runs now.
+          next_run_at: new Date(now.getTime() + 7 * MS_PER_DAY),
+        },
+      });
+    } catch (e: unknown) {
+      // uq_curation_subs_user_topic_active backstop: a concurrent create for the
+      // same normalised topic won the race — return the winner, same as the
+      // app-level dedup above would have.
+      if ((e as { code?: string }).code === 'P2002') {
+        const winner = (
+          await prisma.curation_subscriptions.findMany({
+            where: { user_id: userId, is_active: true },
+            select: { id: true, topic: true, source: true },
+          })
+        ).find((s) => norm(s.topic) === norm(topic));
+        if (winner) {
+          return reply.send({
+            status: 'ok',
+            data: { id: winner.id, topic: winner.topic, source: winner.source, buildJobId: null },
+          });
+        }
+      }
+      throw e;
+    }
 
     // The channel row must exist BEFORE the first build is enqueued: the builder
     // decides between channel and topic mode by whether any channels are
@@ -250,9 +272,12 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     }
 
     // "immediate" — first build enqueued at create time (not waiting for weekly cron).
+    // mode:'immediate' = a user is WAITING: instant pool serve + fresh follow-up
+    // (the weekly scheduled path runs its fresh leg inline instead).
     const jobId = await enqueueCurationBuild({
       subscriptionId: sub.id,
       weekOf: mondayOf(now),
+      mode: 'immediate',
     });
 
     // Reinforcement (N1): mark this topic SELECTED in the current week's proposal log
@@ -477,7 +502,11 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // until next Monday reads as a broken feature, and it was: a curation
       // built with one channel kept showing only that channel's week after a
       // second was added.
-      await enqueueCurationBuild({ subscriptionId: owned.id, weekOf: mondayOf(new Date()) });
+      await enqueueCurationBuild({
+        subscriptionId: owned.id,
+        weekOf: mondayOf(new Date()),
+        mode: 'immediate',
+      });
 
       return reply.send({ status: 'ok', data: { channel: row } });
     }
@@ -499,7 +528,11 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       }
       // Unfollowing has to take that channel's videos out of the week too,
       // otherwise the feed keeps delivering a channel the user just dropped.
-      await enqueueCurationBuild({ subscriptionId: owned.id, weekOf: mondayOf(new Date()) });
+      await enqueueCurationBuild({
+        subscriptionId: owned.id,
+        weekOf: mondayOf(new Date()),
+        mode: 'immediate',
+      });
       return reply.send({ status: 'ok', data: { removed: removed.count } });
     }
   );
@@ -553,7 +586,14 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const items = await prisma.curation_items.findMany({
         where: { subscription_id: request.params.id, week_of: weekOf },
         orderBy: { position: 'asc' },
-        select: { video_id: true, relevance_pct: true, position: true },
+        select: {
+          video_id: true,
+          relevance_pct: true,
+          position: true,
+          // The column shipped with the table and nothing ever read it, so the
+          // deck could not know which items the caller had kept.
+          bookmarked_at: true,
+        },
       });
       // Join pool metadata (title/channel/duration/thumbnail) for the deck UI —
       // items carry only ids; the deck must never fabricate durations (99999 bug).
@@ -635,6 +675,93 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
         data: { watched_at: new Date() },
       });
       return reply.send({ status: 'ok', data: { marked: updated.count > 0 } });
+    }
+  );
+
+  /**
+   * PATCH /curations/:id/items/:videoId/bookmark — keep (or release) one item.
+   *
+   * Body `{ bookmarked: boolean }`. Sets or clears `bookmarked_at`, a column
+   * that shipped with the table and had no reader or writer until now.
+   *
+   * Keeping an item also remembers its CHANNEL, as `curation_channels` with
+   * added_via='bookmark'. That row is what a later build reads: a kept channel
+   * gets its recent uploads pulled into the candidate pool, so a channel worth
+   * keeping cannot be missed just because the week's search did not surface it.
+   * It buys admission to the pool and nothing else — the same gates still judge
+   * the video, because "a channel I like" is not "a video about this topic".
+   *
+   * Releasing does NOT drop the channel. Several items can share one channel,
+   * and un-keeping one of them is not a statement about the rest.
+   */
+  fastify.patch<{ Params: { id: string; videoId: string }; Body: { bookmarked?: unknown } }>(
+    '/:id/items/:videoId/bookmark',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      if (!request.user || !('userId' in request.user)) {
+        return reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
+      }
+      const bookmarked = (request.body ?? {}).bookmarked;
+      if (typeof bookmarked !== 'boolean') {
+        return reply.code(400).send({ status: 'error', code: 'INVALID_BOOKMARK' });
+      }
+      const prisma = getPrismaClient();
+      const sub = await prisma.curation_subscriptions.findUnique({
+        where: { id: request.params.id },
+        select: { user_id: true },
+      });
+      if (!sub || sub.user_id !== request.user.userId) {
+        return reply.code(404).send({ status: 'error', code: 'CURATION_NOT_FOUND' });
+      }
+
+      const updated = await prisma.curation_items.updateMany({
+        where: { subscription_id: request.params.id, video_id: request.params.videoId },
+        data: { bookmarked_at: bookmarked ? new Date() : null },
+      });
+      if (updated.count === 0) {
+        return reply.code(404).send({ status: 'error', code: 'ITEM_NOT_FOUND' });
+      }
+
+      // Remember the channel on the way in only. A video with no pool row, or a
+      // pool row with no channel id, still bookmarks fine — the mark is the
+      // user's, and the channel is an optimisation we either can or cannot make.
+      let channelRemembered = false;
+      if (bookmarked) {
+        const meta = await prisma.video_pool.findUnique({
+          where: { video_id: request.params.videoId },
+          select: { channel_id: true, channel_name: true },
+        });
+        if (meta?.channel_id) {
+          await prisma.curation_channels.upsert({
+            where: {
+              subscription_id_channel_id: {
+                subscription_id: request.params.id,
+                channel_id: meta.channel_id,
+              },
+            },
+            // A channel the user picked by hand outranks one we inferred, so an
+            // existing row keeps its added_via and only refreshes last_seen_at.
+            update: { last_seen_at: new Date() },
+            create: {
+              subscription_id: request.params.id,
+              channel_id: meta.channel_id,
+              channel_title: meta.channel_name,
+              // 'bookmark' is 8 characters and the column is VarChar(8). The
+              // obvious 'bookmarked' does not fit and would fail on write.
+              added_via: 'bookmark',
+              // uploads_playlist_id is deliberately left null: resolving it
+              // costs a YouTube call, and keeping an item should be instant and
+              // quota-free. The weekly build is where that call belongs, and it
+              // already has resolveChannelIds — wired up in the follow-up that
+              // actually recruits from these channels.
+              last_seen_at: new Date(),
+            },
+          });
+          channelRemembered = true;
+        }
+      }
+
+      return reply.send({ status: 'ok', data: { bookmarked, channelRemembered } });
     }
   );
 

@@ -312,7 +312,27 @@ export class SchedulerManager {
         },
       });
 
-      // Execute sync
+      await this.runSyncForPlaylist(playlistId, schedule.retry_count, schedule.max_retries);
+    } catch (error) {
+      logger.error('Failed to execute sync job', { playlistId, error });
+    }
+  }
+
+  /**
+   * Run the sync and account for the outcome. Split out of executeSyncJob so
+   * the queue path can reuse it.
+   *
+   * The caller owns rescheduling. On the timer path executeSyncJob has just
+   * written next_run; on the queue path the tick handler claimed the row and
+   * moved next_run forward in the same statement, which is what stops two
+   * processes from picking up the same playlist.
+   */
+  public async runSyncForPlaylist(
+    playlistId: string,
+    retryCount: number,
+    maxRetries: number
+  ): Promise<void> {
+    {
       try {
         const result = await this.syncEngine.syncPlaylist(playlistId);
 
@@ -325,7 +345,7 @@ export class SchedulerManager {
         logger.info('Scheduled sync completed', { playlistId, result });
       } catch (error) {
         // Increment retry count
-        const newRetryCount = schedule.retry_count + 1;
+        const newRetryCount = retryCount + 1;
         await this.db.sync_schedules.update({
           where: { playlist_id: playlistId },
           data: { retry_count: newRetryCount },
@@ -334,18 +354,16 @@ export class SchedulerManager {
         logger.error('Scheduled sync failed', {
           playlistId,
           retryCount: newRetryCount,
-          maxRetries: schedule.max_retries,
+          maxRetries,
           error,
         });
 
         // Disable schedule if max retries exceeded
-        if (newRetryCount >= schedule.max_retries) {
+        if (newRetryCount >= maxRetries) {
           await this.disableSchedule(playlistId);
           logger.warn('Schedule disabled due to max retries', { playlistId });
         }
       }
-    } catch (error) {
-      logger.error('Failed to execute sync job', { playlistId, error });
     }
   }
 

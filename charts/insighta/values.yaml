@@ -1,0 +1,183 @@
+# Defaults shared by every environment. Per-environment overrides live in
+# charts/insighta/environments/.
+#
+# Resource values come from production measurement on 2026-08-13, not from
+# docker-compose.prod.yml. The compose limits have no basis -- redis is
+# capped at 2200M while using 4.7 MiB.
+#
+#   api       182 MiB   0.14% CPU
+#   frontend  3.8 MiB   0.00% CPU
+#   redis     4.7 MiB   0.48% CPU
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Name of a Secret holding the application environment (86 keys on the box,
+# supplied there by .env). It is NOT created by this chart: secrets do not
+# belong in git. Locally, create it by hand; in a cluster, External Secrets
+# populates it from SSM.
+envSecretName: insighta-env
+
+api:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/jk42jj/insighta-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  command: ["api"]
+  port: 3000
+  resources:
+    requests:
+      memory: 256Mi        # measured 182 MiB + ~40% headroom
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 1000m
+  # Memory limits kill the process; CPU limits only throttle it. Keep the
+  # memory ceiling generous relative to the request.
+  # /app/cache and /app/logs hold 13 MB and 34 MB on production. The cache is
+  # persisted YouTube API responses -- discarding it spends quota to rebuild
+  # -- and the logs are the only copy. Off means emptyDir, which is right for
+  # a throwaway environment and wrong for a lasting one.
+  #
+  # ReadWriteOnce: correct only while replicaCount is 1. See prod.yaml.
+  persistence:
+    enabled: true
+    cacheSize: 2Gi
+    logsSize: 2Gi
+    storageClass: ""
+  livenessProbe:
+    httpGet: { path: /health, port: 3000 }
+    initialDelaySeconds: 40
+    periodSeconds: 30
+    failureThreshold: 3
+  readinessProbe:
+    # /health is static and answers 200 with no database attached, so it
+    # cannot express "not ready". /health/ready is the endpoint the
+    # application provides for this -- its schema declares a 503 carrying
+    # the database status (src/api/server.ts:231).
+    httpGet: { path: /health/ready, port: 3000 }
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+# Queue consumer and scheduler host. Same image as api, entrypoint `worker`.
+#
+# When this is off, the api process keeps doing everything, which is what the
+# compose deployment does today. Turning it on moves the queue and the
+# schedulers here and switches the api pods to serving HTTP only -- which is
+# what lets api.replicaCount go above 1.
+# Feature flags that together let the web tier run more than one replica.
+# All default off in code; the chart turns them on where the preconditions are
+# met, so a cluster deploy is explicit about which behaviour it is running.
+#
+#   playlistSyncViaQueue     one scheduled tick claims due playlists instead
+#                            of one node-cron timer per playlist
+#   ontologyChatDbStore      chat history in a table, not process memory
+#   youtubeSharedInvalidation  cache invalidation published to every replica
+#
+# Each requires its migration to have been applied. Leaving one off is safe;
+# turning it on without the table degrades to the previous behaviour.
+statelessness:
+  playlistSyncViaQueue: true
+  ontologyChatDbStore: true
+  youtubeSharedInvalidation: true
+
+worker:
+  enabled: true
+  replicaCount: 1
+  port: 3001
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 768Mi     # batch work peaks higher than request handling
+      cpu: 1000m
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/jk42jj/insighta-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 8081
+  resources:
+    requests:
+      memory: 32Mi         # measured 3.8 MiB -- static serving
+      cpu: 10m
+    limits:
+      memory: 128Mi
+      cpu: 200m
+  livenessProbe:
+    httpGet: { path: /, port: 8081 }
+    initialDelaySeconds: 10
+    periodSeconds: 30
+  readinessProbe:
+    httpGet: { path: /, port: 8081 }
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+redis:
+  # Always 1. RDB persistence is on, so this is stateful. Replication needs
+  # Sentinel or a managed service, which is oversized for 4.7 MiB of data.
+  # This is a single point of failure and is recorded as one in the design.
+  replicaCount: 1
+  image:
+    repository: insighta-redis
+    tag: local
+    pullPolicy: IfNotPresent
+  port: 6379
+  # docker/redis/redis.conf ships maxmemory 2gb with maxmemory-policy
+  # noeviction. Measured use is 4.7 MiB. Left at 2gb the container limit is
+  # reached first and the process is OOMKilled, which is not what noeviction
+  # is for -- redis should refuse the write itself.
+  maxmemory: 256mb
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi        # compose said 2200M; measured use is 4.7 MiB
+      cpu: 500m
+
+# Applies the Prisma schema as a pre-install/pre-upgrade hook. The container
+# entrypoint does not do it -- on the box that step lives in deploy.yml, and a
+# cluster deploy has no equivalent.
+schemaSync:
+  enabled: true
+  # The runtime image ships @prisma/client but no prisma CLI, so `npx prisma`
+  # resolves to whatever is newest on the registry. Prisma 7 removed
+  # --skip-generate, which turned the sync job into a usage-error loop.
+  # Pinned to the client version present in the image.
+  cliVersion: "5.22.0"
+
+# Development-only postgres. Off by default; only environments/dev.yaml
+# turns it on. staging and prod point at Supabase, per the design.
+postgresDev:
+  enabled: false
+  image:
+    # Not stock postgres: prisma/schema.prisma declares
+    # Unsupported("vector(4096)") columns, so `prisma db push` needs the
+    # pgvector extension present. This image bundles it and publishes arm64.
+    repository: pgvector/pgvector
+    tag: "pg16"
+  database: insighta
+  user: insighta
+  persistence:
+    size: 2Gi
+  resources:
+    requests: { memory: 128Mi, cpu: 100m }
+    limits:   { memory: 512Mi, cpu: 1000m }
+
+ingress:
+  enabled: true
+  className: ""
+  host: insighta.local
+  tls:
+    enabled: false
+    secretName: ""
+  annotations: {}

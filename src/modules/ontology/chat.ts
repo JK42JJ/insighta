@@ -47,11 +47,22 @@ const MAX_SEARCH_RESULTS = 5;
 const NEIGHBOR_DEPTH = 1;
 const MAX_CONVERSATION_TURNS = 5;
 const MAX_CONTEXT_TOKENS = 2000;
+import { getPrismaClient } from '../database/client';
+import { isOntologyChatDbStore } from '../../config/ontology-chat';
+
 const CONVERSATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // ============================================================================
-// In-memory conversation store (MVP — no DB persistence)
+// Conversation store
 // ============================================================================
+//
+// Two implementations behind one pair of functions. The in-memory Map is the
+// default and is what this file has always done; the database store exists
+// because the Map is per-process, so with two api replicas the second turn of
+// a conversation can land on a replica that has never seen it.
+//
+// Semantics are identical either way: a 30-minute idle TTL enforced on read,
+// and a cap of MAX_CONVERSATION_TURNS exchanges applied on write.
 
 interface ConversationEntry {
   turns: ConversationTurn[];
@@ -60,7 +71,15 @@ interface ConversationEntry {
 
 const conversations = new Map<string, ConversationEntry>();
 
-function getConversation(id: string): ConversationTurn[] {
+function trimTurns(turns: ConversationTurn[]): ConversationTurn[] {
+  return turns.length > MAX_CONVERSATION_TURNS * 2
+    ? turns.slice(-MAX_CONVERSATION_TURNS * 2)
+    : turns;
+}
+
+// --- in-memory ---
+
+function getConversationMemory(id: string): ConversationTurn[] {
   const entry = conversations.get(id);
   if (!entry) return [];
   if (Date.now() - entry.lastAccess > CONVERSATION_TTL_MS) {
@@ -71,21 +90,18 @@ function getConversation(id: string): ConversationTurn[] {
   return entry.turns;
 }
 
-function addTurn(id: string, role: 'user' | 'assistant', content: string): void {
+function addTurnMemory(id: string, role: 'user' | 'assistant', content: string): void {
   let entry = conversations.get(id);
   if (!entry) {
     entry = { turns: [], lastAccess: Date.now() };
     conversations.set(id, entry);
   }
   entry.turns.push({ role, content });
-  // Keep only last N turns
-  if (entry.turns.length > MAX_CONVERSATION_TURNS * 2) {
-    entry.turns = entry.turns.slice(-MAX_CONVERSATION_TURNS * 2);
-  }
+  entry.turns = trimTurns(entry.turns);
   entry.lastAccess = Date.now();
 }
 
-/** Periodic cleanup of expired conversations */
+/** Periodic cleanup of expired conversations (in-memory path only). */
 function cleanupExpired(): void {
   const now = Date.now();
   for (const [id, entry] of conversations) {
@@ -97,6 +113,98 @@ function cleanupExpired(): void {
 
 // Run cleanup every 10 minutes
 setInterval(cleanupExpired, 10 * 60 * 1000).unref();
+
+// --- database ---
+
+/**
+ * Deleting expired rows is idempotent, so several replicas doing it is
+ * harmless. This timestamp is a throttle to keep the DELETE off the hot path,
+ * not a correctness mechanism -- unlike the guards this change exists to
+ * remove, nothing breaks if two processes sweep at once.
+ */
+let lastSweepMs = 0;
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+
+async function sweepExpired(): Promise<void> {
+  const now = Date.now();
+  if (now - lastSweepMs < SWEEP_INTERVAL_MS) return;
+  lastSweepMs = now;
+  try {
+    await getPrismaClient().ontology_conversations.deleteMany({
+      where: { last_access: { lt: new Date(now - CONVERSATION_TTL_MS) } },
+    });
+  } catch {
+    /* best effort */
+  }
+}
+
+async function getConversationDb(id: string): Promise<ConversationTurn[]> {
+  const db = getPrismaClient();
+  const row = await db.ontology_conversations.findUnique({ where: { id } });
+  if (!row) return [];
+
+  // Expiry is checked on read, as the in-memory path does, so an idle
+  // conversation resumes empty rather than stale.
+  if (Date.now() - row.last_access.getTime() > CONVERSATION_TTL_MS) {
+    await db.ontology_conversations.delete({ where: { id } }).catch(() => undefined);
+    return [];
+  }
+
+  await db.ontology_conversations
+    .update({ where: { id }, data: { last_access: new Date() } })
+    .catch(() => undefined);
+  void sweepExpired();
+  return (row.turns as unknown as ConversationTurn[]) ?? [];
+}
+
+async function addTurnDb(
+  id: string,
+  role: 'user' | 'assistant',
+  content: string,
+  userId?: string
+): Promise<void> {
+  const db = getPrismaClient();
+  const row = await db.ontology_conversations.findUnique({ where: { id } });
+  const turns = trimTurns([
+    ...((row?.turns as unknown as ConversationTurn[]) ?? []),
+    { role, content },
+  ]);
+
+  await db.ontology_conversations.upsert({
+    where: { id },
+    create: { id, user_id: userId ?? null, turns: turns as never, last_access: new Date() },
+    update: { turns: turns as never, last_access: new Date() },
+  });
+}
+
+// --- dispatch ---
+
+async function getConversation(id: string): Promise<ConversationTurn[]> {
+  if (!isOntologyChatDbStore()) return getConversationMemory(id);
+  try {
+    return await getConversationDb(id);
+  } catch (error) {
+    // A missing table or an unreachable database degrades to the previous
+    // behaviour rather than failing the chat request.
+    logger.warn('ontology chat: db store read failed, using memory', { error });
+    return getConversationMemory(id);
+  }
+}
+
+async function addTurn(
+  id: string,
+  role: 'user' | 'assistant',
+  content: string,
+  userId?: string
+): Promise<void> {
+  if (!isOntologyChatDbStore()) return addTurnMemory(id, role, content);
+  try {
+    await addTurnDb(id, role, content, userId);
+  } catch (error) {
+    logger.warn('ontology chat: db store write failed, using memory', { error });
+    addTurnMemory(id, role, content);
+  }
+}
 
 // ============================================================================
 // Chat Pipeline
@@ -148,11 +256,11 @@ export async function chat(userId: string, request: ChatRequest): Promise<ChatRe
     });
     // Fallback: answer without graph context
     const provider = await getProvider();
-    const history = getConversation(conversationId);
+    const history = await getConversation(conversationId);
     const prompt = buildChatPrompt(query, '', history);
     const answer = await provider.generate(prompt);
-    addTurn(conversationId, 'user', query);
-    addTurn(conversationId, 'assistant', answer);
+    await addTurn(conversationId, 'user', query, userId);
+    await addTurn(conversationId, 'assistant', answer, userId);
     return { answer, sources: [], conversationId };
   }
 
@@ -214,14 +322,14 @@ export async function chat(userId: string, request: ChatRequest): Promise<ChatRe
 
   // 5. Generate answer via LLM
   const provider = await getProvider();
-  const history = getConversation(conversationId);
+  const history = await getConversation(conversationId);
   const prompt = buildChatPrompt(query, contextText, history);
 
   const answer = await provider.generate(prompt, { temperature: 0.7 });
 
   // 6. Store conversation turn
-  addTurn(conversationId, 'user', query);
-  addTurn(conversationId, 'assistant', answer);
+  await addTurn(conversationId, 'user', query, userId);
+  await addTurn(conversationId, 'assistant', answer, userId);
 
   logger.info('Chat response generated', {
     conversationId,

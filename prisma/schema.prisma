@@ -2858,3 +2858,29 @@ model invite_links {
   @@index([invitee_id])
   @@schema("public")
 }
+
+/// Ontology chat history. Was a Map in the api process ("MVP — no DB
+/// persistence"), which meant the second turn of a conversation landed on
+/// whichever replica served it and found nothing. Moved here so the web tier
+/// can run more than one pod. 30-minute idle TTL, enforced on read.
+model ontology_conversations {
+  id          String   @id @db.Uuid
+  user_id     String?  @db.Uuid
+  turns       Json     @default("[]")
+  last_access DateTime @default(now()) @db.Timestamptz(6)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([last_access], map: "idx_ontology_conversations_last_access")
+  @@schema("public")
+}
+
+/// When a user's YouTube response cache was invalidated. The cache stays in
+/// process memory to protect API quota; only the invalidation moment is
+/// shared, because clearYouTubeCache() otherwise clears one replica and the
+/// others keep serving a disconnected account for up to 6 hours.
+model youtube_cache_epochs {
+  user_id        String   @id @db.Uuid
+  invalidated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
