@@ -12,6 +12,10 @@
 #
 # Two things it sets up.
 #
+# secrets-encryption
+#   The cluster is going to hold production credentials. etcd stores secrets
+#   base64-encoded by default, which is not encryption.
+#
 # --disable traefik --disable servicelb
 #   k3s otherwise claims 80 and 443. Nothing else holds them on this host, but
 #   the production host's nginx does, and a node whose defaults differ from the
@@ -89,6 +93,13 @@ disable:
   - traefik
   - servicelb
 write-kubeconfig-mode: "644"
+# Secrets are stored in etcd. Without this they are stored base64-encoded,
+# which is an encoding, not encryption. The flag makes the server load
+# server/cred/encryption-config.json; without it, status reports
+# "Disabled, no configuration file found" while that file sits there.
+#
+# The flag alone does not turn encryption on. See the note in the block below.
+secrets-encryption: true
 kubelet-arg:
   - "image-credential-provider-config=$CP_CFG"
   - "image-credential-provider-bin-dir=$CP_DIR/bin"
@@ -116,6 +127,29 @@ if [ "$changed" -eq 1 ] && systemctl is-active --quiet k3s; then
 fi
 
 # ── report, from the node's own view ────────────────────────────────────────
+# Encryption is reported, not asserted.
+#
+# `k3s secrets-encrypt enable` fails on this cluster (k3s v1.36.3):
+#
+#   Put "https://127.0.0.1:6443/v1-k3s/encrypt/config": EOF
+#
+# with nothing in the server log, and with /readyz returning ok beforehand.
+# Four attempts, including one that waited for API readiness explicitly.
+#
+# So this script sets the flag and reports the status rather than pretending
+# the feature is on. Verified by control rather than by trusting the status
+# line: an existing secret's value is greppable in server/db/state.db, and a
+# canary that showed zero matches was a false negative from the probe, not
+# evidence of encryption.
+#
+# What this means in practice: secrets in etcd are base64-encoded. The compose
+# host keeps the same secrets in a plaintext .env on disk, so this is parity
+# with production, not a regression -- but it is not the improvement it was
+# meant to be, and long-lived credentials belong in AWS Secrets Manager read
+# through External Secrets Operator rather than in etcd at all.
+note "secrets: $(k3s secrets-encrypt status 2>/dev/null | head -1)"
+
 note "k3s: $(k3s --version 2>/dev/null | head -1)"
+note "secrets: $(k3s secrets-encrypt status 2>/dev/null | head -1)"
 note "provider: $("$CP_BIN" --version 2>/dev/null | head -1 || echo 'installed')"
 note "node: $(k3s kubectl get nodes --no-headers 2>/dev/null | awk '{print $1, $2}')"
