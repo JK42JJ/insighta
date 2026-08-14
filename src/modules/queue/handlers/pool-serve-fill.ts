@@ -49,11 +49,19 @@ import { isShortCached, SHORT_MAX_DURATION_SEC } from '@/modules/video-pool/is-s
 import { getV5Config } from '@/skills/plugins/video-discover/v5/config';
 import { parseIsoDurationSeconds } from '@/skills/plugins/video-discover/v5/executor';
 import { isOffLanguageTitleToggled } from '@/skills/plugins/video-discover/v5/youtube-fanout';
-import { dedupeSeries, softChannelCap } from '@/skills/plugins/video-discover/diversity-guard';
-import { loadDiversityGuardConfig } from '@/config/diversity-guard';
+import {
+  dedupeSeries,
+  softChannelCap,
+  hardChannelCap,
+} from '@/skills/plugins/video-discover/diversity-guard';
+import { loadDiversityGuardConfig, type DiversityGuardConfig } from '@/config/diversity-guard';
 import { logger } from '@/utils/logger';
 import { config } from '@/config/index';
 import { writeSearchTrace, type SearchTraceCandidateInput } from '@/modules/search-trace';
+import { loadDomainFitShadowConfig } from '@/config/domain-fit-shadow';
+import { scheduleDomainFitShadow } from '@/modules/domain-fit-shadow/shadow';
+import { runDomainFitServeEnforce } from '@/modules/domain-fit-shadow/serve-enforce';
+import { createPrismaDomainFitServeCache } from '@/modules/domain-fit-shadow/serve-cache';
 import { getJobQueue } from '../manager';
 import { JOB_NAMES, POOL_SERVE_FILL_RETRY_OPTIONS, type PoolServeFillPayload } from '../types';
 import { richSummaryWorkOptions } from './rich-summary-work-options';
@@ -65,12 +73,15 @@ const log = logger.child({ module: 'pool-serve-fill' });
 const SCORE_BURST_SIZE = 4;
 /** Live fallback fetch size — one search.list call, gated downstream. */
 const LIVE_FALLBACK_MAX_RESULTS = 10;
-/** Pool recruitment source whitelist (single tier today — v2_promoted only). */
-const POOL_SOURCES = ['v2_promoted'] as const;
-/** Per-candidate source_tier for pool recruits. When the whitelist is a single
- *  tier every recruit carries it; if it ever becomes multi-tier, add `source`
- *  to the hybrid-rerank SELECT to attribute per-candidate instead. */
-const POOL_SOURCE_TIER: string | null = POOL_SOURCES.length === 1 ? POOL_SOURCES[0] : null;
+/** Pool recruitment source whitelist — BASE tier (always included, current
+ *  default behavior). R23: EXTRA sources are appended per-job from
+ *  `POOL_SERVE_SOURCES_EXTRA` (config, not a second hardcoded array — see
+ *  `loadPoolServeConfig` in `@/config/pool-serve`); default empty ⇒ the
+ *  effective source list is exactly this BASE tuple, byte-identical to
+ *  pre-R23. Computed per-job (not module-level) in `handlePoolServeFill` so
+ *  it reflects the env at call time, matching `loadPoolServeConfig`'s own
+ *  reload-per-call contract. */
+const POOL_SOURCES_BASE = ['v2_promoted'] as const;
 /** search.list = 100 units/call; videos.list batch = 1 unit (youtube-client). */
 const SEARCH_LIST_UNITS = 100;
 export const POOL_SERVE_SKILL_ID = 'pool-serve-fill';
@@ -110,6 +121,30 @@ interface PassedCandidate extends GateCandidate {
   gatePct: number;
 }
 
+/**
+ * Pool-serve diversity transform — series-dedup + soft channel cap (existing
+ * behavior) PLUS the global channel hard cap (measured gap — hardChannelCap
+ * was wired only in v5/executor.ts, never here; see diversity-guard.ts's
+ * V5_CHANNEL_HARD_CAP doc comment for the rationale/measurement). Same
+ * demote-only semantics as the v5 executor usage: cap<=0 is a no-op
+ * (byte-identical to pre-existing behavior). Exported as a pure function so
+ * the wiring is directly unit-testable without spinning the full pg-boss job
+ * handler.
+ */
+export function applyPoolServeDiversity<T extends GateCandidate>(
+  cands: T[],
+  against: T[],
+  cfg: DiversityGuardConfig
+): T[] {
+  if (!cfg.enabled) return cands;
+  const d = dedupeSeries(cands, { simThreshold: cfg.seriesSim, against });
+  let out = softChannelCap(d.kept, cfg.channelSoftCap);
+  if (cfg.channelHardCap > 0) {
+    out = hardChannelCap(out, cfg.channelHardCap, cfg.channelHardCapMinCandidates).reordered;
+  }
+  return out;
+}
+
 export interface PoolServeCellResult {
   recruited: number;
   scored: number;
@@ -127,7 +162,19 @@ export interface PoolServeCellResult {
 async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promise<void> {
   const p = job.data;
   const cfg = loadPoolServeConfig();
+  // R23 — pool-serve recruit sources (BASE + optional extra, config not
+  // hardcoded) and the SERVE-edge domain-fit shadow config, loaded once per
+  // job. Both default to current behavior (extra=[] / serveShadowEnabled=false).
+  const poolSources: readonly string[] =
+    cfg.sourcesExtra.length > 0 ? [...POOL_SOURCES_BASE, ...cfg.sourcesExtra] : POOL_SOURCES_BASE;
+  const poolSourceTier: string | null = poolSources.length === 1 ? (poolSources[0] ?? null) : null;
+  const domainFitCfg = loadDomainFitShadowConfig();
   const prisma = getPrismaClient();
+  // R24 — ENFORCE cache scoped to this mandala (video-intrinsic per-mandala,
+  // table video_domain_fit_cache). Construction itself is zero-I/O; get/set
+  // only fire when DOMAIN_FIT_SERVE_ENFORCE is actually on (see
+  // runDomainFitServeEnforce's flag-gated short-circuit).
+  const domainFitServeCache = createPrismaDomainFitServeCache(prisma, p.mandalaId);
   const result: PoolServeCellResult = {
     recruited: 0,
     scored: 0,
@@ -179,11 +226,8 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
     // limit: already-OWNED cards' titles are not loaded (id-only exclude), so
     // cross-run series dups are out of scope here (backlog).
     const diversity = loadDiversityGuardConfig();
-    const applyDiversity = (cands: GateCandidate[], against: GateCandidate[]): GateCandidate[] => {
-      if (!diversity.enabled) return cands;
-      const d = dedupeSeries(cands, { simThreshold: diversity.seriesSim, against });
-      return softChannelCap(d.kept, diversity.channelSoftCap);
-    };
+    const applyDiversity = (cands: GateCandidate[], against: GateCandidate[]): GateCandidate[] =>
+      applyPoolServeDiversity(cands, against, diversity);
 
     // CP500+ shorts gate — EXACT replica of the v5 placement gate
     // (v5/executor.ts step 6): duration>=180 short-circuits with no HTTP;
@@ -315,7 +359,7 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
       [{ cellIndex: p.cellIndex, query: p.cellQuery }],
       [...seen],
       cfg.candidatesLimit,
-      POOL_SOURCES
+      poolSources
     );
     // Optional COSINE recruit pass (flag-gated): surfaces pool supply whose
     // TITLE doesn't literally match the cell goal (keyword misses it). Broadens
@@ -330,32 +374,50 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
         p.language,
         [...seen, ...keywordRecruits.map((c) => c.videoId)],
         cfg.cosineK,
-        [...POOL_SOURCES, 'yt_promoted'],
+        Array.from(new Set([...poolSources, 'yt_promoted'])),
         cfg.cosineDistMax
       );
       recruits = [...keywordRecruits, ...cosineRecruits.filter((c) => !kwIds.has(c.videoId))];
     }
     result.recruited = recruits.length;
     const passed: PassedCandidate[] = [];
+    const poolPreGate = await dropShorts(
+      applyDiversity(
+        hygienic(
+          recruits.map((c) => ({
+            youtubeVideoId: c.videoId,
+            title: c.title,
+            description: c.description,
+            channelTitle: c.channelName,
+            thumbnail: c.thumbnail,
+            publishedAt: c.publishedAt,
+            durationSec: c.durationSec,
+            tsRank: c.rec_score,
+            sourceKind: 'pool' as const,
+            sourceTier: poolSourceTier,
+          }))
+        ),
+        []
+      )
+    );
+    // R24 — SERVE-edge domain-fit ENFORCE (real reorder, demote-only, never
+    // drop — see serve-enforce.ts). Runs BEFORE the relevance gate's per-cell
+    // budget cutoff so a low domain-fit candidate can genuinely lose a
+    // limited slot to a better-fit candidate further down the recruit-rank
+    // order. Gated by `DOMAIN_FIT_SERVE_ENFORCE` (default false ⇒ zero-cost
+    // no-op, same array reference returned — byte-identical to pre-R24).
     await gate(
-      await dropShorts(
-        applyDiversity(
-          hygienic(
-            recruits.map((c) => ({
-              youtubeVideoId: c.videoId,
-              title: c.title,
-              description: c.description,
-              channelTitle: c.channelName,
-              thumbnail: c.thumbnail,
-              publishedAt: c.publishedAt,
-              durationSec: c.durationSec,
-              tsRank: c.rec_score,
-              sourceKind: 'pool' as const,
-              sourceTier: POOL_SOURCE_TIER,
-            }))
-          ),
-          []
-        )
+      await runDomainFitServeEnforce(
+        {
+          stage: 'pool',
+          centerGoal: p.centerGoal,
+          cellIndex: p.cellIndex,
+          mandalaId: p.mandalaId,
+          userId: p.userId,
+          candidates: poolPreGate,
+        },
+        domainFitCfg,
+        domainFitServeCache
       ),
       passed
     );
@@ -410,7 +472,24 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
           }
         }
         const before = passed.length;
-        await gate(await dropShorts(applyDiversity(liveCands, passed)), passed);
+        const livePreGate = await dropShorts(applyDiversity(liveCands, passed));
+        // R24 — same ENFORCE reorder as the pool stage above (demote-only,
+        // flag-gated no-op by default).
+        await gate(
+          await runDomainFitServeEnforce(
+            {
+              stage: 'live',
+              centerGoal: p.centerGoal,
+              cellIndex: p.cellIndex,
+              mandalaId: p.mandalaId,
+              userId: p.userId,
+              candidates: livePreGate,
+            },
+            domainFitCfg,
+            domainFitServeCache
+          ),
+          passed
+        );
         result.livePassed = passed.length - before;
       } catch (err) {
         // Live failure never fails the job — pool passes still insert.
@@ -419,6 +498,28 @@ async function handlePoolServeFill(job: PgBoss.Job<PoolServeFillPayload>): Promi
         );
       }
     }
+
+    // R23 — SERVE-edge domain-fit SHADOW (would-serve, enforce-0). Fire-and-
+    // forget (`scheduleDomainFitShadow` never awaited — shadow.ts contract),
+    // scored against the FINAL passed set for this cell (post relevance-gate,
+    // pre-insert) WITHOUT altering the insert order/set below. Gated by
+    // `DOMAIN_FIT_SERVE_SHADOW` (cfgOverride swaps `enabled` to that flag —
+    // shadow.ts itself is unmodified); default off = zero extra Ollama calls.
+    scheduleDomainFitShadow(
+      {
+        stage: 'pool_serve',
+        centerGoal: p.centerGoal,
+        subGoals: [],
+        candidates: passed.map((c, rank) => ({
+          videoId: c.youtubeVideoId,
+          title: c.title,
+          cellIndex: p.cellIndex,
+          rank,
+          score: c.gatePct,
+        })),
+      },
+      { ...domainFitCfg, enabled: domainFitCfg.serveShadowEnabled }
+    );
 
     // ── Insert (1차+2차 합산) via the shared auto-add chokepoint
     //    `placeAutoAddedCards` — CP500++ PR-2 (INV-CHOKEPOINT-ENFORCED). The

@@ -3,6 +3,12 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { PageLoader } from '@/shared/ui/PageLoader';
 import { ProtectedRoute } from './ProtectedRoute';
 import { AdminRoute } from './AdminRoute';
+import { MobileGateNotice } from './MobileGateNotice';
+import {
+  isMobileDevice,
+  isPathAllowedOnMobile,
+  MOBILE_GATE_FLAG_KEY,
+} from '@/shared/lib/mobile-gate';
 import { AdminLayout } from '@/pages/admin/ui/AdminLayout';
 import { AdminDashboard } from '@/pages/admin/ui/AdminDashboard';
 import { AdminUsers } from '@/pages/admin/ui/AdminUsers';
@@ -14,11 +20,11 @@ import { AdminModeration } from '@/pages/admin/ui/AdminModeration';
 import { AdminHealth } from '@/pages/admin/ui/AdminHealth';
 import { AdminBilling } from '@/pages/admin/ui/AdminBilling';
 import { AdminChatbotModels } from '@/pages/admin/ui/AdminChatbotModels';
-import { AdminSearchAlgorithms } from '@/pages/admin/ui/AdminSearchAlgorithms';
+import { AdminPerformanceMonitor } from '@/pages/admin/ui/AdminPerformanceMonitor';
 import { AdminV2QualityAudit } from '@/pages/admin/ui/AdminV2QualityAudit';
-import { AdminV4ArbiterRuns } from '@/pages/admin/ui/AdminV4ArbiterRuns';
 import { AdminPoolHealth } from '@/pages/admin/ui/AdminPoolHealth';
 import { AdminSearchTraceExplorer } from '@/pages/admin/ui/AdminSearchTraceExplorer';
+import { AdminBetaCampaign } from '@/pages/admin/ui/AdminBetaCampaign';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -42,6 +48,7 @@ const LearningPage = lazy(() => import('@/pages/learning'));
 const HelpPage = lazy(() => import('@/pages/help'));
 const NotFoundPage = lazy(() => import('@/pages/not-found'));
 const LandingPage = lazy(() => import('@/pages/landing'));
+const BetaApplyPage = lazy(() => import('@/pages/beta'));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -52,13 +59,28 @@ function ScrollToTop() {
 }
 
 export function AppRouter() {
+  const { pathname } = useLocation();
+
+  // Closed-beta mobile gate: app routes are desktop-only until the mobile
+  // redesign — mobile devices land on the marketing pages instead.
+  if (isMobileDevice() && !isPathAllowedOnMobile(pathname)) {
+    try {
+      sessionStorage.setItem(MOBILE_GATE_FLAG_KEY, '1');
+    } catch {
+      /* noop */
+    }
+    return <Navigate to="/landing" replace />;
+  }
+
   return (
     <Suspense fallback={<PageLoader />}>
       <ScrollToTop />
+      <MobileGateNotice />
       <Routes>
         <Route path="/" element={<IndexPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/landing" element={<LandingPage />} />
+        <Route path="/beta" element={<BetaApplyPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/templates" element={<TemplatesPage />} />
         <Route path="/templates/:slug" element={<TemplatesPage />} />
@@ -152,16 +174,17 @@ export function AppRouter() {
           <Route path="health" element={<AdminHealth />} />
           <Route path="audit-log" element={<AdminAuditLog />} />
           <Route path="chatbot-models" element={<AdminChatbotModels />} />
-          {/* CP488 — search algorithm catalog + per-mandala override. */}
-          <Route path="search-algorithms" element={<AdminSearchAlgorithms />} />
-          {/* CP488+ — v2 quality audit daily scan dashboard. */}
-          <Route path="v2-quality-audit" element={<AdminV2QualityAudit />} />
-          {/* CP489+ — v4 LLM-arbiter PoC runs dashboard (embeds /v4-arbiter-dashboard.html). */}
-          <Route path="v4-arbiter-runs" element={<AdminV4ArbiterRuns />} />
-          {/* Content Pool Health — 5-section pool dashboard. */}
-          <Route path="pool-health" element={<AdminPoolHealth />} />
+          {/* Perf-monitor PR3 — consolidation page (타임라인/파라미터/공급/품질). */}
+          <Route path="performance" element={<AdminPerformanceMonitor />} />
+          {/* Folded into /admin/performance tabs — old links keep working. */}
+          <Route path="search-algorithms" element={<Navigate to="/admin/performance" replace />} />
+          <Route path="v2-quality-audit" element={<Navigate to="/admin/performance" replace />} />
+          <Route path="v4-arbiter-runs" element={<Navigate to="/admin/performance" replace />} />
+          <Route path="pool-health" element={<Navigate to="/admin/performance" replace />} />
           {/* Observability G2 — Search-Trace Explorer (Card Journey debug view). */}
           <Route path="search-trace" element={<AdminSearchTraceExplorer />} />
+          {/* Closed-beta campaign — signup gate + application inbox. */}
+          <Route path="beta-campaign" element={<AdminBetaCampaign />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

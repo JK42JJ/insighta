@@ -10,6 +10,7 @@ import { CardList } from '@/widgets/card-list/ui/CardList';
 import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { GraphView } from '@/components/graph/GraphView';
+import { extractYouTubeVideoId } from '@/features/card-management/lib/youtubeToInsightCard';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
 import {
   LayoutGrid,
@@ -17,9 +18,8 @@ import {
   Plus,
   GripVertical,
   ArrowDownWideNarrow,
-  ArrowUpWideNarrow,
-  ArrowDownAZ,
-  ArrowDownZA,
+  Eye,
+  ChevronDown,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -29,30 +29,54 @@ import {
   DropdownMenuRadioItem,
 } from '@/shared/ui/dropdown-menu';
 import { Slider } from '@/shared/ui/slider';
+import { toast } from '@/shared/lib/use-toast';
 import { ContextHeader, SORT_OPTIONS, type SortMode } from './ContextHeader';
 import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
 
-/**
- * CP498 PR3c — A-stage relevance comparator: DESC, NULLS LAST. `?? -1` sinks
- * null/undefined relevancePct below any real 0-100 score. Pure + exported so
- * the ordering contract (highest-first, unscored-last) is unit-tested against a
- * sign-flip regression. NEVER reads the video-keyed v2MandalaRelevancePct.
- */
-export const compareByRelevanceDesc = (a: InsightCard, b: InsightCard): number => {
-  // DESC by relevancePct (NULLS LAST via ?? -1) + stable tiebreak by id so the
-  // large equal-score band (title-only "70s cluster") does NOT reshuffle on
-  // refetch — e.g. after a Heart/like invalidates the cards query. CP498 PR3c.
-  const d = (b.relevancePct ?? -1) - (a.relevancePct ?? -1);
-  return d !== 0 ? d : a.id.localeCompare(b.id);
+// P3 Stage 1 (CP513) — global (cross-mandala) sort persistence keys.
+
+const GLOBAL_SORT_KEY = 'insighta:cardSortMode';
+const GLOBAL_SORT_TOAST_KEY = 'insighta:cardSortMode:toastShown';
+
+// P3 Stage 2 (CP513, James finalize) — NULL-relevance cards must NOT be dumped
+// to the bottom ("createdAt 혼합 폴백, 최하단 강등 금지"). An unscored card falls
+// back to a recency proxy: createdAt mapped onto a [0, NULL_RECENCY_CAP] band so
+// a brand-new card interleaves near the mid tier instead of sinking below every
+// scored card. Capped below the 추천(70)/핵심(80) tiers so a real high-relevance
+// hit still outranks a fresh unscored card. Post-backfill NULLs are rare.
+const NULL_RECENCY_CAP = 60;
+const NULL_RECENCY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000; // 90d linear fade to 0
+
+/** Relevance sort value: real 0-100 score, or a recency proxy when unscored. */
+export const relevanceSortValue = (c: InsightCard, nowMs: number): number => {
+  if (c.relevancePct != null) return c.relevancePct;
+  const created = c.createdAt ? new Date(c.createdAt).getTime() : 0;
+  const frac = Math.max(0, 1 - (nowMs - created) / NULL_RECENCY_WINDOW_MS);
+  return frac * NULL_RECENCY_CAP;
 };
+
+/**
+ * A-stage relevance comparator: DESC by relevance, NULL cards interleaved by
+ * recency (see relevanceSortValue). `nowMs` is threaded so the comparator stays
+ * pure/testable. Stable id tiebreak keeps the equal-score band from reshuffling
+ * on refetch. NEVER reads the video-keyed v2MandalaRelevancePct.
+ */
+export const makeRelevanceComparator =
+  (nowMs: number) =>
+  (a: InsightCard, b: InsightCard): number => {
+    const d = relevanceSortValue(b, nowMs) - relevanceSortValue(a, nowMs);
+    return d !== 0 ? d : a.id.localeCompare(b.id);
+  };
+
+/** Back-compat default comparator (uses current time). */
+export const compareByRelevanceDesc = (a: InsightCard, b: InsightCard): number =>
+  makeRelevanceComparator(Date.now())(a, b);
 
 const SORT_ICON_BY_VALUE: Record<SortMode, typeof ArrowDownWideNarrow> = {
   latest: ArrowDownWideNarrow,
-  oldest: ArrowUpWideNarrow,
-  'title-asc': ArrowDownAZ,
-  'title-desc': ArrowDownZA,
-  // CP498 PR3c — reuse the descending icon; a dedicated relevance glyph /
-  // numeric badge is deferred (visual signal = later per spec).
+  views: Eye,
+  // relevance-desc stays in the type (hidden from SORT_OPTIONS until coverage
+  // ≥60%); reuse the descending icon for when it is re-exposed.
   'relevance-desc': ArrowDownWideNarrow,
 };
 
@@ -111,6 +135,8 @@ function useContainerColumns(ref: React.RefObject<HTMLElement>): number {
 interface CardListViewProps {
   cards: InsightCard[];
   isLoading?: boolean;
+  /** Wizard fill in progress — ContextHeader shows the streaming spinner. */
+  isFilling?: boolean;
   title: string;
   /** Render title as a shimmer placeholder while mandala detail query is loading. */
   titleLoading?: boolean;
@@ -171,6 +197,7 @@ interface CardListViewProps {
 export function CardListView({
   cards,
   isLoading,
+  isFilling,
   title,
   titleLoading,
   viewMode,
@@ -221,36 +248,39 @@ export function CardListView({
   const [activeCard, setActiveCard] = useState<InsightCard | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
-  const [sortMode, setSortMode] = useState<SortMode>('latest');
+  const [sortMode, setSortMode] = useState<SortMode>('relevance-desc');
   // CP499 freeze — snapshot of the relevance order (id→rank), captured when
   // relevance-sort is (re)selected, so background scoring (~17s of relevance_pct
   // updates) does NOT live-reorder cards under the user. Cleared on sort/mandala
   // change → re-snapshot with the latest scores on re-pick.
   const [relevanceRank, setRelevanceRank] = useState<Map<string, number> | null>(null);
 
-  // CP499 #1 — persist sort PER-MANDALA (was ephemeral useState → reset to
-  // 'latest' on every refresh). Each mandala keeps its own fit (new w/ scores →
-  // relevance, old → latest).
-  const sortStorageKey = mandalaId ? `insighta:cardSortMode:${mandalaId}` : null;
+  // P3 Stage 1 (CP513, 2026-07-07 supervisor) — sort is now a GLOBAL setting:
+  // one key applies to ALL mandalas (James's original "글로벌 일괄 적용" order).
+  // Supersedes the CP499 per-mandala key. Old `insighta:cardSortMode:<id>` keys
+  // are ignored (no migration — dead-option values are meaningless to carry;
+  // global default is now 'relevance-desc' — P3 Stage 2 (James finalize) makes
+  // relevance the default once the pgvector backfill populates coverage). First
+  // change fires a one-time toast.
   useEffect(() => {
-    if (!sortStorageKey) {
-      setSortMode('latest');
-      setRelevanceRank(null);
-      return;
-    }
-    const saved = localStorage.getItem(sortStorageKey);
+    const saved = localStorage.getItem(GLOBAL_SORT_KEY);
     const valid = SORT_OPTIONS.some((o) => o.value === saved);
-    setSortMode(valid ? (saved as SortMode) : 'latest');
+    setSortMode(valid ? (saved as SortMode) : 'relevance-desc');
     setRelevanceRank(null); // freeze effect re-snapshots below if relevance
-  }, [sortStorageKey]);
+  }, [mandalaId]);
 
   const handleSortChange = useCallback(
     (v: SortMode) => {
       setSortMode(v);
       setRelevanceRank(null); // clear → freeze effect re-snapshots if relevance
-      if (sortStorageKey) localStorage.setItem(sortStorageKey, v);
+      localStorage.setItem(GLOBAL_SORT_KEY, v);
+      // First-ever global sort change → one-time notice that it applies everywhere.
+      if (!localStorage.getItem(GLOBAL_SORT_TOAST_KEY)) {
+        localStorage.setItem(GLOBAL_SORT_TOAST_KEY, '1');
+        toast({ title: t('contextHeader.sortGlobalNotice', '정렬이 모든 만다라에 적용됩니다') });
+      }
     },
-    [sortStorageKey]
+    [t]
   );
 
   const [isExternalDragOver, setIsExternalDragOver] = useState(false);
@@ -403,21 +433,15 @@ export function CardListView({
           if (!aHas && !bHas) return 0;
           return mb - ma;
         });
-      case 'oldest':
+      case 'views':
+        // P3 Stage 1 (CP513) — YouTube view_count DESC, NULLS LAST. Honest
+        // "조회수" (global popularity), NOT "많이 본" (user watch — that axis has
+        // no data yet, behavioural-signal backlog). Stable tiebreak by id.
         return arr.sort((a, b) => {
-          const ma = getPublishedMs(a);
-          const mb = getPublishedMs(b);
-          const aHas = Number.isFinite(ma);
-          const bHas = Number.isFinite(mb);
-          if (aHas && !bHas) return -1;
-          if (!aHas && bHas) return 1;
-          if (!aHas && !bHas) return 0;
-          return ma - mb;
+          const va = a.viewCount ?? -1;
+          const vb = b.viewCount ?? -1;
+          return vb !== va ? vb - va : a.id.localeCompare(b.id);
         });
-      case 'title-asc':
-        return arr.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-      case 'title-desc':
-        return arr.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
       case 'relevance-desc':
         // CP499 — render in the FROZEN snapshot order (relevanceRank) so the
         // ~17s of background relevance_pct updates don't reorder cards under the
@@ -498,6 +522,7 @@ export function CardListView({
     <ContextHeader
       title={title}
       titleLoading={titleLoading}
+      isFilling={isFilling}
       totalCardCount={effectiveCards.length}
       viewMode={effectiveViewMode}
       onViewModeChange={onViewModeChange}
@@ -599,7 +624,24 @@ export function CardListView({
           </div>
         </div>
         <div className="flex-1 min-h-0 relative">
-          <GraphView mandalaId={mandalaId} />
+          <GraphView
+            mandalaId={mandalaId}
+            onOpenVideo={({ youtubeId, url }) => {
+              const targetId = youtubeId ?? (url ? extractYouTubeVideoId(url) : null);
+              if (targetId) {
+                const card = cards.find((c) => extractYouTubeVideoId(c.videoUrl) === targetId);
+                if (card && onCardClick) {
+                  onCardClick(card);
+                  return;
+                }
+              }
+              // Node's video is not in this mandala's cards (cross-mandala or
+              // stale) — fall back to the source URL so it stays reachable.
+              const fallback =
+                url ?? (youtubeId ? `https://www.youtube.com/watch?v=${youtubeId}` : null);
+              if (fallback) window.open(fallback, '_blank', 'noopener,noreferrer');
+            }}
+          />
         </div>
       </div>
     );

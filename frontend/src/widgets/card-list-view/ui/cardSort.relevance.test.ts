@@ -1,73 +1,72 @@
 /**
- * CP498 PR3c — "관련도순" comparator: DESC, NULLS LAST.
+ * "관련도순" comparator contract (P3 Stage 2, CP513 James finalize).
  *
- * Locks the ordering contract against a sign-flip / null-handling regression:
  *   - higher relevancePct ranks first;
- *   - cards with null/undefined relevancePct sink to the bottom (never removed).
+ *   - a real 0 is a score (ranks above any lower/proxied value);
+ *   - NULL-relevance cards are NOT dumped to the bottom — they fall back to a
+ *     recency proxy (createdAt) so a fresh unscored card interleaves near the
+ *     mid tier (cap 60, below 추천 70 / 핵심 80), and an old unscored card fades
+ *     toward 0. `makeRelevanceComparator(nowMs)` is pure (now is threaded).
+ *   - ties break by id ascending — stable across refetch.
  */
 import { describe, it, expect } from 'vitest';
-import { compareByRelevanceDesc } from './CardListView';
+import { makeRelevanceComparator, relevanceSortValue } from './CardListView';
 import type { InsightCard } from '@/entities/card/model/types';
 
-function card(id: string, relevancePct: number | null | undefined): InsightCard {
+const NOW = new Date('2026-07-08T00:00:00Z').getTime();
+const cmp = makeRelevanceComparator(NOW);
+const daysAgo = (d: number) => new Date(NOW - d * 24 * 60 * 60 * 1000);
+
+function card(
+  id: string,
+  relevancePct: number | null | undefined,
+  createdAt = daysAgo(200)
+): InsightCard {
   return {
     id,
     videoUrl: `https://x/${id}`,
     title: id,
     thumbnail: '',
     userNote: '',
-    createdAt: new Date('2026-01-01'),
+    createdAt,
     cellIndex: 0,
     levelId: 'root',
     relevancePct,
   } as InsightCard;
 }
 
-describe('compareByRelevanceDesc — DESC NULLS LAST', () => {
-  it('orders by relevancePct descending, unscored last', () => {
+describe('relevance comparator — DESC, NULL interleaved by recency', () => {
+  it('orders scored cards by relevancePct descending', () => {
+    const arr = [card('off-low', 5), card('rel-high', 82), card('mid', 62)];
+    expect([...arr].sort(cmp).map((c) => c.id)).toEqual(['rel-high', 'mid', 'off-low']);
+  });
+
+  it('an OLD unscored card sinks toward the bottom (proxy → 0), below scored cards', () => {
+    const arr = [card('null-old', null, daysAgo(200)), card('off-low', 5), card('mid', 62)];
+    // null-old proxy ≈ 0 (>90d) → below 5 and 62.
+    expect([...arr].sort(cmp).map((c) => c.id)).toEqual(['mid', 'off-low', 'null-old']);
+  });
+
+  it('a FRESH unscored card interleaves (NOT bottom) — above low scores, below high', () => {
     const arr = [
-      card('off-low', 5),
-      card('null-a', null),
       card('rel-high', 82),
-      card('undef', undefined),
-      card('mid', 62),
+      card('null-fresh', null, daysAgo(0)), // proxy = 60
+      card('off-low', 5),
     ];
-    const sorted = [...arr].sort(compareByRelevanceDesc).map((c) => c.id);
-    // 82 > 62 > 5 > (null/undefined at the bottom, in any order among themselves)
-    expect(sorted.slice(0, 3)).toEqual(['rel-high', 'mid', 'off-low']);
-    expect(sorted.slice(3).sort()).toEqual(['null-a', 'undef']);
+    // 82 > 60(fresh null) > 5 → fresh null must sit in the MIDDLE, not last.
+    expect([...arr].sort(cmp).map((c) => c.id)).toEqual(['rel-high', 'null-fresh', 'off-low']);
   });
 
-  it('a real 0 still ranks above null (0 is a score, null is "unscored")', () => {
-    const sorted = [card('null', null), card('zero', 0)]
-      .sort(compareByRelevanceDesc)
-      .map((c) => c.id);
-    expect(sorted).toEqual(['zero', 'null']);
+  it('recency proxy is capped below the 추천/핵심 tiers', () => {
+    // A fresh null (60) never outranks a real 70+ score.
+    expect(relevanceSortValue(card('n', null, daysAgo(0)), NOW)).toBeLessThan(70);
+    expect(relevanceSortValue(card('n', null, daysAgo(0)), NOW)).toBeGreaterThan(0);
   });
 
-  it('mirrors the measured fixed-sample ordering (relevant cluster above off-target)', () => {
-    // From the 1-mandala gate: relevant 72-82 must all rank above off-target 5-62.
-    const arr = [
-      card('off-젠레스', 5),
-      card('rel-8가지', 82),
-      card('off-수능체대', 62),
-      card('rel-결심', 72),
-      card('off-미식', 15),
-      card('rel-성공이유', 72),
-    ];
-    const sorted = [...arr].sort(compareByRelevanceDesc).map((c) => c.id);
-    const firstThree = new Set(sorted.slice(0, 3));
-    expect(firstThree).toEqual(new Set(['rel-8가지', 'rel-결심', 'rel-성공이유']));
-  });
-
-  it('ties (equal relevancePct) break by id ascending — stable, no reshuffle on refetch', () => {
-    // The title-only "70s cluster" produces many equal scores; without a
-    // tiebreak they reshuffled when a Heart/like invalidated + refetched the
-    // cards query (input order changed → tie order changed). id-asc pins it.
+  it('ties (equal relevancePct) break by id ascending — stable across refetch', () => {
     const a = [card('z-id', 72), card('a-id', 72), card('m-id', 72)];
-    const b = [card('m-id', 72), card('z-id', 72), card('a-id', 72)]; // different input order
-    expect([...a].sort(compareByRelevanceDesc).map((c) => c.id)).toEqual(['a-id', 'm-id', 'z-id']);
-    // same output regardless of input order = stable across refetch
-    expect([...b].sort(compareByRelevanceDesc).map((c) => c.id)).toEqual(['a-id', 'm-id', 'z-id']);
+    const b = [card('m-id', 72), card('z-id', 72), card('a-id', 72)];
+    expect([...a].sort(cmp).map((c) => c.id)).toEqual(['a-id', 'm-id', 'z-id']);
+    expect([...b].sort(cmp).map((c) => c.id)).toEqual(['a-id', 'm-id', 'z-id']);
   });
 });

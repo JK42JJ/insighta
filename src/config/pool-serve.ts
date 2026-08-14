@@ -54,6 +54,15 @@ export const poolServeEnvSchema = z.object({
   V5_POOL_SERVE_COSINE_DIST_MAX: z.coerce.number().min(0).max(1).default(0.45),
   /** Max cosine candidates recruited per cell. */
   V5_POOL_SERVE_COSINE_K: z.coerce.number().int().min(1).max(50).default(10),
+  /**
+   * R23 — comma-separated EXTRA pool-serve recruit sources appended to the
+   * BASE whitelist (['v2_promoted'], see pool-serve-fill.ts POOL_SOURCES_BASE),
+   * e.g. "yt_promoted". Independent of V5_POOL_SERVE_COSINE_RECRUIT (which
+   * only broadens the SEPARATE cosine-pass sources) — this widens the MAIN
+   * keyword-recruit sources too. Default empty = current behavior
+   * (v2_promoted only, byte-identical).
+   */
+  POOL_SERVE_SOURCES_EXTRA: z.string().default(''),
 });
 
 export interface PoolServeConfig {
@@ -67,6 +76,8 @@ export interface PoolServeConfig {
   cosineRecruit: boolean;
   cosineDistMax: number;
   cosineK: number;
+  /** R23 — extra recruit sources beyond the base v2_promoted whitelist. */
+  sourcesExtra: string[];
 }
 
 const DEFAULTS: PoolServeConfig = {
@@ -80,7 +91,16 @@ const DEFAULTS: PoolServeConfig = {
   cosineRecruit: false,
   cosineDistMax: 0.45,
   cosineK: 10,
+  sourcesExtra: [],
 };
+
+/** Parse a comma-separated env value into a trimmed, non-empty string[]. */
+function parseSourcesExtra(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
 
 export function loadPoolServeConfig(env: NodeJS.ProcessEnv = process.env): PoolServeConfig {
   const parsed = poolServeEnvSchema.safeParse({
@@ -94,6 +114,7 @@ export function loadPoolServeConfig(env: NodeJS.ProcessEnv = process.env): PoolS
     V5_POOL_SERVE_COSINE_RECRUIT: env['V5_POOL_SERVE_COSINE_RECRUIT'],
     V5_POOL_SERVE_COSINE_DIST_MAX: env['V5_POOL_SERVE_COSINE_DIST_MAX'],
     V5_POOL_SERVE_COSINE_K: env['V5_POOL_SERVE_COSINE_K'],
+    POOL_SERVE_SOURCES_EXTRA: env['POOL_SERVE_SOURCES_EXTRA'],
   });
   if (!parsed.success) return DEFAULTS;
   return {
@@ -107,5 +128,6 @@ export function loadPoolServeConfig(env: NodeJS.ProcessEnv = process.env): PoolS
     cosineRecruit: parsed.data.V5_POOL_SERVE_COSINE_RECRUIT,
     cosineDistMax: parsed.data.V5_POOL_SERVE_COSINE_DIST_MAX,
     cosineK: parsed.data.V5_POOL_SERVE_COSINE_K,
+    sourcesExtra: parseSourcesExtra(parsed.data.POOL_SERVE_SOURCES_EXTRA),
   };
 }

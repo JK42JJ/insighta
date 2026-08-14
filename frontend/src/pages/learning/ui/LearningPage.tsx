@@ -3,7 +3,8 @@ import { useRef, useCallback, useState, useLayoutEffect, useEffect } from 'react
 import { useParams, useSearchParams } from 'react-router-dom';
 import { CenterPanel } from './CenterPanel';
 import { RightPanel } from './RightPanel';
-import { useLearningStore } from '@/pages/learning/model/useLearningStore';
+import { useLearningStore, isNoteViewParam } from '@/pages/learning/model/useLearningStore';
+import { useSaveWatchPosition } from '@/pages/learning/model/useSaveWatchPosition';
 import type { YTPlayer } from '@/widgets/video-player/model/youtube-api';
 
 export default function LearningPage() {
@@ -30,6 +31,14 @@ export default function LearningPage() {
   }, [videoId]);
 
   const centerViewMode = useLearningStore((s) => s.centerViewMode);
+  const setCenterViewMode = useLearningStore((s) => s.setCenterViewMode);
+
+  // ?view=note — email deep links promise the note, not the player. Store
+  // default is 'player', so external entries need this to land in note mode.
+  const viewParam = searchParams.get('view');
+  useEffect(() => {
+    if (isNoteViewParam(viewParam)) setCenterViewMode('note');
+  }, [viewParam, setCenterViewMode]);
 
   // CP438+1: ?t=N query param drives in-page seek. When the user clicks
   // an atom timestamp link in the sidebar/panel, the same-video case
@@ -67,6 +76,10 @@ export default function LearningPage() {
   const handlePlayStateChange = useCallback((playing: boolean) => {
     setIsPlaying(playing);
   }, []);
+
+  // Persist watch position to user_video_states (dashboard bar + reload-resume).
+  // Additive: reads playerRef, writes via the shared updateVideoState mutation.
+  useSaveWatchPosition(videoId, playerRef, isPlaying);
 
   const startTime = playbackMapRef.current.get(videoId!) ?? 0;
 

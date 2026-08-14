@@ -11,6 +11,10 @@
 export const JOB_NAMES = {
   ENRICH_VIDEO: 'enrich-video',
   BATCH_SCAN: 'batch-scan',
+  /** One scheduled tick that claims due playlists (replaces per-playlist timers). */
+  PLAYLIST_SYNC_TICK: 'playlist-sync-tick',
+  /** One sync for one claimed playlist. */
+  PLAYLIST_SYNC: 'playlist-sync',
   /** CP462+ Issue #649 — Heart-click on-demand rich summary (direct enrichRichSummary). */
   ENRICH_RICH_SUMMARY: 'enrich-rich-summary',
   /** CP499+ pool-serve — async deficit-cell fill from the ko pool through the
@@ -52,6 +56,13 @@ export const JOB_NAMES = {
    */
   MANDALA_BOOK_FILL: 'mandala-book-fill',
   /**
+   * ElevenLabs episode narration pre-produce (2026-07-13) — lazy render of a
+   * mandala book into per-beat narration mp3s + manifest. Flag-gated
+   * (NARRATION_PREPRODUCE_ENABLED); singleton per mandala.
+   */
+  EPISODE_NARRATION_RENDER: 'episode-narration-render',
+  JUDGE_DEBOOST: 'judge-deboost',
+  /**
    * v2 translations (PR-T1) — bulk-translate a mandala's off-language v2 atoms
    * into the mandala language. Triggered on card-add panel CLOSE (one job per
    * mandala, debounced). Dedup + global translations cache; OpenRouter Haiku.
@@ -88,6 +99,25 @@ export const JOB_NAMES = {
    * + funnel from the Phase 1 trail log into search_metrics_daily (one row/day).
    */
   SEARCH_METRICS_ROLLUP: 'search-metrics-rollup',
+  /** Perf-monitor PR4 — 15-min wizard-funnel collapse watch + daily dead-man heartbeat. */
+  COLLAPSE_WATCH: 'collapse-watch',
+  COLLAPSE_WATCH_HEARTBEAT: 'collapse-watch-heartbeat',
+  /**
+   * P0 (2026-07-10) — durable mandala post-creation VIDEO pipeline (embeddings
+   * → discover → auto-add). Replaces the fire-and-forget setImmediate path that
+   * died on container restart (deploy/redeploy/crash) → 0-card orphan runs.
+   */
+  MANDALA_PIPELINE: 'mandala-pipeline',
+  /** Re-enqueues pipeline runs stuck at status=running (orphaned by restart). */
+  MANDALA_PIPELINE_WATCHDOG: 'mandala-pipeline-watchdog',
+  /**
+   * Growth Hub weekly curation (2026-07-16). CURATION_WEEKLY scans due
+   * subscriptions and fans out one CURATION_BUILD per subscription (singletonKey
+   * = subscription id). CURATION_BUILD discovers relevance-ordered videos
+   * (passesBookGate) and writes a week's curation_items snapshot. NO note/Sonnet.
+   */
+  CURATION_WEEKLY: 'curation-weekly',
+  CURATION_BUILD: 'curation-build',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
@@ -95,6 +125,17 @@ export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];
 // ============================================================================
 // Job Payloads
 // ============================================================================
+
+export interface JudgeDeboostPayload {
+  userId: string;
+  mandalaId: string;
+}
+
+/** judge-deboost: 1 retry, fail-open (deboost is an enhancement). */
+export const JUDGE_DEBOOST_RETRY_OPTIONS = {
+  retryLimit: 1,
+  retryDelay: 60,
+} as const;
 
 export interface EnrichVideoPayload {
   videoId: string;
@@ -109,6 +150,14 @@ export interface EnrichVideoPayload {
    */
   withRichSummary?: boolean;
   userId?: string;
+  /**
+   * Book-chain relink (2026-07-12): the wizard trigger routes v2 through
+   * enrich-video (inline enrichRichSummary), which never carried mandalaId —
+   * so the book/note fill (enqueued on v2 completion) was orphaned once the
+   * standalone enrich-rich-summary job path fell out of use. Threading the
+   * id restores 카드 → v2 → 노트.
+   */
+  mandalaId?: string;
 }
 
 export interface BatchScanPayload {
@@ -324,6 +373,28 @@ export interface MandalaActionsFillPayload {
 }
 
 /**
+ * Mandala post-creation VIDEO pipeline — embeddings → discover → auto-add
+ * (drives recommendation_cache). ~55s observed worst case (embeddings on Mac
+ * Mini + discover + Haiku keyword gen). 2 retries with backoff so a transient
+ * embedding/discover failure OR a container restart mid-run does not leave the
+ * mandala at 0 cards — the exact durability guarantee the fire-and-forget
+ * setImmediate path lacked (P0 incident 2026-07-10: restart 12s into a run →
+ * orphaned status=running, no retry, 0 cards).
+ */
+export const MANDALA_PIPELINE_OPTIONS = {
+  retryLimit: 2,
+  retryDelay: 60,
+  retryBackoff: true,
+  expireInMinutes: 10,
+} as const;
+
+export interface MandalaPipelinePayload {
+  mandalaId: string;
+  userId: string;
+  trigger?: string;
+}
+
+/**
  * Book-index fill — pure DB+assembly, no LLM. Retry on transient DB errors so a
  * triggered fill is not lost; the work is idempotent (version bump + overwrite).
  */
@@ -333,6 +404,21 @@ export const MANDALA_BOOK_FILL_OPTIONS = {
   retryBackoff: true,
   expireInMinutes: 10,
 } as const;
+
+/**
+ * Episode narration render (narration pre-produce) — retries resume from the
+ * persisted manifest, so a generous retry budget cannot double-bill.
+ */
+export const EPISODE_NARRATION_RENDER_OPTIONS = {
+  retryLimit: 3,
+  retryDelay: 60,
+  retryBackoff: true,
+  expireInMinutes: 30,
+} as const;
+
+export interface EpisodeNarrationRenderPayload {
+  mandalaId: string;
+}
 
 export interface MandalaBookFillPayload {
   userId: string;
@@ -399,6 +485,26 @@ export const QUEUE_CONFIG = {
   KEY_ALARM_CRON: '7 8 * * *',
   /** Observability Phase 2-B daily metrics rollup: daily at 08:13 (off-hour). */
   SEARCH_METRICS_ROLLUP_CRON: '13 8 * * *',
+  // PR4 — every 15 min; heartbeat daily 08:30 KST (23:30 UTC).
+  COLLAPSE_WATCH_CRON: '*/15 * * * *',
+  COLLAPSE_WATCH_HEARTBEAT_CRON: '30 23 * * *',
+  /** Orphaned-pipeline-run watchdog: every 10 minutes. */
+  MANDALA_PIPELINE_WATCHDOG_CRON: '*/10 * * * *',
+  /** A pipeline run stuck at status=running past this age is treated orphaned. */
+  MANDALA_PIPELINE_STALE_MINUTES: 10,
+  /** Legacy weekly curation scan: Mondays 08:17 KST (Sun 23:17 UTC), off-minute.
+   *  Used when CURATION_SCHED_KST_ENABLED is off. */
+  CURATION_WEEKLY_CRON: '17 23 * * 0',
+  /** KST-calendar scan: every day 08:17 KST (23:17 UTC). The weekday filter lives
+   *  in the handler, so any delivery day fires exactly once a week. */
+  CURATION_DAILY_CRON: '17 23 * * *',
+  /** Delivery slot in KST — keeps next_run_at (display-only) on the same clock. */
+  CURATION_DELIVERY_HOUR_KST: 8,
+  CURATION_DELIVERY_MINUTE_KST: 17,
+  /** Weekly curation build — a full week's feed = 15~20 videos (James 2026-07-17).
+   *  Build aims for TARGET; ships if it can gather at least MIN after passesBookGate. */
+  CURATION_MIN_VIDEOS: 15,
+  CURATION_TARGET_VIDEOS: 20,
   /** Max concurrent enrichment workers */
   ENRICH_CONCURRENCY: 1,
   /**

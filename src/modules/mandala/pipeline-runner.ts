@@ -17,10 +17,12 @@ import { skillRegistry } from '@/modules/skills';
 import { getPrismaClient } from '@/modules/database';
 import { createGenerationProvider } from '@/modules/llm';
 import type { Tier } from '@/config/quota';
+import { config } from '@/config/index';
 import { logger } from '@/utils/logger';
 import { ensureMandalaEmbeddings } from './ensure-mandala-embeddings';
 import { maybeAutoAddRecommendations } from './auto-add-recommendations';
 import { withTraceContext } from '@/modules/discover-tracing';
+import { isPrecomputeAttachEnabled, ATTACH_INFLIGHT_MAX_AGE_MS } from '@/config/precompute-attach';
 
 const log = logger.child({ module: 'pipeline-runner' });
 
@@ -170,12 +172,22 @@ export async function executePipelineRun(runId: string): Promise<void> {
     }
   }
 
-  if (!embeddingsReady) {
+  // CP512 (EMBED_ASYNC_SERVE) — embeddings are NOT a hard precondition for
+  // serving. They drive semantic cell-assignment/ordering; search.list finds the
+  // cards regardless. Blocking steps 2-3 on step1 made an embedding timeout
+  // produce 0 cards (P0). Now: step1 failure/timeout does NOT skip discovery —
+  // video_discover runs in degraded (lexical) mode; embeddings backfill later.
+  // Flag off = legacy hard-skip (exact rollback).
+  const asyncServe = config.embedAsyncServe;
+  if (!embeddingsReady && !asyncServe) {
     await updateStep(runId, 2, 'skipped', null, 'embeddings not ready');
     await updateStep(runId, 3, 'skipped', null, 'embeddings not ready');
     await markRunStatus(runId, 'partial');
     log.info(`[${runId}] pipeline partial — step1 failed, steps 2-3 skipped`);
     return;
+  }
+  if (!embeddingsReady) {
+    log.info(`[${runId}] step1 not ready — proceeding to discover in degraded (lexical) mode`);
   }
 
   // ── Step 2: Video Discover (opt-in gated) ───────────────────
@@ -323,6 +335,24 @@ async function checkDiscoverPreconditions(
     select: { id: true },
   });
   if (recent) return 'recent discover within 5min window';
+
+  // T7 attach — a YOUNG in-flight wizard precompute owns placement: its
+  // watcher re-consumes on done (or re-triggers this pipeline on failure/
+  // timeout), so running discover here would double the YouTube quota for
+  // the same goal. Age-capped so an anomalous hung precompute can never
+  // starve discover: past ATTACH_INFLIGHT_MAX_AGE_MS this gate opens again.
+  if (isPrecomputeAttachEnabled()) {
+    const inflightCutoff = new Date(Date.now() - ATTACH_INFLIGHT_MAX_AGE_MS);
+    const inflight = await db.mandala_wizard_precompute.findFirst({
+      where: {
+        user_id: userId,
+        status: { in: ['pending', 'running'] },
+        created_at: { gt: inflightCutoff },
+      },
+      select: { session_id: true },
+    });
+    if (inflight) return 'wizard precompute in flight (attach owns placement)';
+  }
 
   // Opt-in gate
   const config = await db.user_skill_config.findFirst({

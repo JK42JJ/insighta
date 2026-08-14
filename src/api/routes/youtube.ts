@@ -116,7 +116,9 @@ export const youtubeRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
     if (!request.user || !('userId' in request.user)) {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
-    clearYouTubeCache(request.user.userId);
+    // Awaited: the response says the cache is clear, so the invalidation
+    // has to be published before it is sent, not after.
+    await clearYouTubeCache(request.user.userId);
     return reply.send({ status: 'ok' });
   });
 

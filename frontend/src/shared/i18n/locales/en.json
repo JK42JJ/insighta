@@ -31,6 +31,115 @@
     "comingSoon": "Coming soon",
     "all": "All"
   },
+  "mobileGate": {
+    "notice": "The mobile experience is still in the works. Please use Insighta on desktop.",
+    "dismiss": "Dismiss"
+  },
+  "beta": {
+    "title": "Turn YouTube into your curriculum.",
+    "subtitle": "You already watch world-class lectures every day — they are just scattered. The Insighta closed beta runs on a small number of invites.",
+    "emailPlaceholder": "Email address",
+    "submit": "Request an invite",
+    "submitting": "Submitting...",
+    "doneTitle": "Your request is in",
+    "doneDesc": "We will email an invite to this address as seats open up.",
+    "error": "Please check the email address.",
+    "note": "6-week beta · Pro membership included · two outstanding members receive Lifetime.",
+    "hero": {
+      "line1": "Turn YouTube into",
+      "line2pre": "your ",
+      "line2hl": "curriculum",
+      "line2post": ".",
+      "desc": "You already watch world-class lectures every day — they are just scattered.\nInsighta turns the algorithm to your side, so today's videos stack into tomorrow's skill.",
+      "cta": "Request beta invite",
+      "ctaNote": "Invite-only · early-member Lifetime"
+    },
+    "mock": {
+      "header": "My curriculum",
+      "goalLabel": "GOAL",
+      "goal": "Master linear algebra",
+      "module": "Module 3 · Eigenvalues & SVD",
+      "moduleCount": "4 videos",
+      "v1": "Why vector spaces matter",
+      "v2": "Seeing linear transformations",
+      "v3": "Eigenvalue intuition",
+      "v4": "SVD — the full picture",
+      "aiBadge": "AI NOTE",
+      "aiSummary": "An eigenvector is the axis a transformation cannot turn — SVD extends that idea to any matrix."
+    },
+    "s1": {
+      "label": "THE PROBLEM",
+      "title": "You opened it to learn.\n40 minutes vanished.",
+      "desc": "The algorithm optimizes your watch time — not your goals.\nHowever good the videos, the learning slips through your hands.",
+      "feedTitle": "Today's picks, chosen by the algorithm",
+      "channel": "Recommended feed",
+      "f1": "100 hours to beat this game",
+      "f2": "Shocking true story | what happened next",
+      "f3": "Cafe vlog · a rainy day",
+      "f4": "3-hour binge compilation",
+      "f5": "The perfect ramen recipe",
+      "f6": "Best memes of all time.zip",
+      "caption": "It is not your fault — the tool was never on your side."
+    },
+    "s2": {
+      "label": "THE FIX",
+      "title": "We turn the algorithm around.",
+      "desc": "Same videos, same hours — now they stack toward your goal.",
+      "before": "Scattered watching",
+      "after": "Goal curriculum",
+      "step1t": "Declare a goal",
+      "step1d": "\"Linear algebra, properly.\" One sentence sets the axis of your curriculum.",
+      "step2t": "Videos find their place",
+      "step2d": "What you watch is filed into the right module, with the key points summarized by AI.",
+      "step3t": "Knowledge connects and stacks",
+      "step3d": "Scattered sessions link into one path — and the next recommendation gets sharper."
+    },
+    "s3": {
+      "label": "WHY IT COMPOUNDS",
+      "title": "Videos get consumed. Knowledge remains.",
+      "desc": "Every video becomes a node in your knowledge graph.\nThe more nodes connect, the better Insighta knows you — and the sharper the next pick.",
+      "graphLabel": "Knowledge graph · Linear algebra",
+      "accuracy": "Recommendation accuracy",
+      "caption": "It gets smarter for you, and only you."
+    },
+    "s4": {
+      "label": "NOTE DENSITY",
+      "title": "Start light,\ndig deep.",
+      "freeTag": "Quick summary",
+      "proTag": "Deep notes"
+    },
+    "s5": {
+      "label": "BETA PERKS",
+      "title": "For the few who come first.",
+      "cardSub": "Early-member lifetime perks",
+      "p1t": "Early-member Lifetime",
+      "p1d": "Two outstanding members receive a Lifetime membership with Pro's core benefits, forever.",
+      "p2t": "Invite-only, in small waves",
+      "p2d": "To keep the product steady, we let in a small group at a time.",
+      "p3t": "Free Pro during the beta",
+      "p3d": "Pro membership is free for the six weeks of the beta.",
+      "inviteLabel": "Invites",
+      "seatsNote": "You can only request an invite right now — once the remaining {{seats}} seats fill, the next cohort waits."
+    },
+    "s6": {
+      "label": "APPLY",
+      "title": "What are you learning\non YouTube right now?",
+      "desc": "This one sentence becomes the seed of your first curriculum.",
+      "goalPlaceholder": "e.g. Linear algebra from scratch, 3D motion graphics, on-device LLM fine-tuning...",
+      "submit": "Request invite",
+      "privacy": "No spam. Used only for invite notifications."
+    },
+    "logoHome": "Go to home",
+    "countdown": {
+      "toStart": "Beta starts in",
+      "toEnd": "Beta closes in",
+      "ended": "The beta has ended",
+      "days": "days",
+      "hours": "hrs",
+      "mins": "min",
+      "secs": "sec"
+    }
+  },
   "sources": {
     "youtube": {
       "name": "YouTube",
@@ -651,6 +760,9 @@
     "retryEnrichmentTooltip": "Retry caption fetch",
     "enrichingAria": "Analyzing"
   },
+  "gridView": {
+    "badgeNew": "Added"
+  },
   "contextHeader": {
     "home": "Home",
     "mandala": "Mandala",
@@ -661,9 +773,8 @@
     "clearAll": "Clear all",
     "noFilterResults": "No cards match the selected filters",
     "sortLatest": "Latest",
-    "sortOldest": "Oldest",
-    "sortTitleAZ": "Title A-Z",
-    "sortTitleZA": "Title Z-A",
+    "sortViews": "Views",
+    "sortGlobalNotice": "Sort applies to all mandalas",
     "sortRelevance": "By relevance",
     "selectSectorFirst": "Select a sector",
     "selectSectorDesc": "Choose a sector from the pills above to assign cards."
@@ -1237,7 +1348,10 @@
     "ctaUrgency": "This pioneer discount will soon switch to a monthly subscription.",
     "footerDesc": "Capture ideas from any source, structure them with the Mandala framework, and let AI connect the dots.",
     "footerProduct": "Product",
-    "footerLegal": "Legal"
+    "footerLegal": "Legal",
+    "betaBanner": "The Insighta closed beta is open — free Pro during the beta · Lifetime for two outstanding members.",
+    "betaBannerShort": "Closed beta — applications open",
+    "betaBannerCta": "Request invite"
   },
   "pricing": {
     "title": "Pioneer Lifetime Deal",
@@ -1438,7 +1552,11 @@
   },
   "graph": {
     "empty": "No knowledge nodes yet.",
-    "emptyHint": "Save cards and create mandalas to build your knowledge graph."
+    "emptyHint": "Save cards and create mandalas to build your knowledge graph.",
+    "searchPlaceholder": "Find in my knowledge…",
+    "noResults": "No matches",
+    "openVideo": "Open video",
+    "connections": "connections"
   },
   "privacy": {
     "title": "Privacy Policy",

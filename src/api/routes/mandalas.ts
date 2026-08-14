@@ -35,6 +35,15 @@ import { config } from '../../config';
 import { MemoryCache } from '../../utils/memory-cache';
 import { cardPublisher, type CardPayload } from '../../modules/recommendations/publisher';
 import { lookupChunkAnchors } from '../../modules/recommendations/chunk-anchor';
+import { getArchivedVideoIds } from '../../modules/exclude/archived-videos';
+import {
+  VIDEO_LIST_DEFAULT_LIMIT,
+  VIDEO_LIST_MAX_LIMIT,
+  dedupeByVideoId,
+  makeVideoListComparator,
+  segCoverage,
+  type VideoListEntry,
+} from '../../modules/mandala/video-list';
 import { generateMandalaActions } from '../../modules/mandala/generator';
 import { logger } from '../../utils/logger';
 
@@ -2067,6 +2076,12 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       source: row.weight_version === 0 ? ('manual' as const) : ('auto_recommend' as const),
       recReason: row.rec_reason,
       publishedAt: row.published_at?.toISOString() ?? null,
+      // P3 Stage 1 (CP513) — pure additive field for the FE 조회수 sort. Does NOT
+      // touch ranking/filter/write (rec_score ordering + selection unchanged).
+      viewCount: row.view_count ?? null,
+      // P3 Stage 2 (CP513) — display-only A-stage relevance (0-100) for the
+      // 관련도순 sort. Additive; NEVER summed into rec_score.
+      relevancePct: row.relevance_pct ?? null,
       startSec: anchors.get(row.video_id) ?? null,
       pinnedAt: pinnedAtByVideoId.get(row.video_id)?.toISOString() ?? null,
     }));
@@ -2083,6 +2098,187 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       mode: RECOMMENDATION_DEFAULT_MODE,
       items,
       lastRefreshed,
+    });
+  });
+
+  /**
+   * GET /api/v1/mandalas/:id/videos — the user's PLACED videos for this
+   * mandala, relevance-first (dial video tab V0, 2026-07-30).
+   *
+   * This is deliberately NOT `/recommendations`: that endpoint serves the
+   * 7d-TTL candidate cache. The video tab plays what the user actually kept
+   * (uvs ∪ ulc, cell_index >= 0), minus videos archived in this mandala —
+   * the same population fill-book synthesises the note from, so what you
+   * watch here is what the book grows from.
+   *
+   * Server-side sort mirrors the dashboard relevance-sort comparator (NULL →
+   * recency proxy capped at 60; see modules/mandala/video-list.ts).
+   * Offset pagination is bounded per-mandala, which structurally avoids
+   * the get-all-video-states 1000-row PostgREST cap (#834).
+   */
+  fastify.get<{
+    Params: { id: string };
+    Querystring: { limit?: string; offset?: string };
+  }>('/:id/videos', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const mandalaId = request.params.id;
+    const mandala = await getMandalaManager().getMandalaById(userId, mandalaId);
+    if (!mandala) {
+      return reply.code(404).send({ error: 'Mandala not found' });
+    }
+
+    const limitRaw = request.query.limit !== undefined ? Number(request.query.limit) : NaN;
+    const offsetRaw = request.query.offset !== undefined ? Number(request.query.offset) : NaN;
+    const limit = Number.isInteger(limitRaw)
+      ? Math.min(Math.max(limitRaw, 1), VIDEO_LIST_MAX_LIMIT)
+      : VIDEO_LIST_DEFAULT_LIMIT;
+    const offset = Number.isInteger(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+
+    const prisma = getPrismaClient();
+    const [videoStates, localCards, archivedIds] = await Promise.all([
+      prisma.userVideoState.findMany({
+        where: { user_id: userId, mandala_id: mandalaId, cell_index: { gte: 0 } },
+        select: {
+          relevance_pct: true,
+          pinned_at: true,
+          createdAt: true,
+          video: {
+            select: {
+              youtube_video_id: true,
+              title: true,
+              thumbnail_url: true,
+              channel_title: true,
+              duration_seconds: true,
+              view_count: true,
+            },
+          },
+        },
+      }),
+      prisma.user_local_cards.findMany({
+        where: {
+          user_id: userId,
+          mandala_id: mandalaId,
+          cell_index: { gte: 0 },
+          video_id: { not: null },
+        },
+        select: {
+          video_id: true,
+          title: true,
+          metadata_title: true,
+          thumbnail: true,
+          relevance_pct: true,
+          pinned_at: true,
+          created_at: true,
+        },
+      }),
+      getArchivedVideoIds(prisma, userId, mandalaId),
+    ]);
+
+    const entries: VideoListEntry[] = [];
+    for (const r of videoStates) {
+      const vid = r.video?.youtube_video_id;
+      if (!vid || archivedIds.has(vid)) continue;
+      entries.push({
+        videoId: vid,
+        title: r.video?.title ?? vid,
+        channel: r.video?.channel_title ?? null,
+        thumbnail: r.video?.thumbnail_url ?? null,
+        durationSec: r.video?.duration_seconds ?? null,
+        views: r.video?.view_count != null ? Number(r.video.view_count) : null,
+        relevancePct: r.relevance_pct ?? null,
+        pinnedAt: r.pinned_at?.toISOString() ?? null,
+        createdAtMs: r.createdAt.getTime(),
+        source: 'uvs',
+      });
+    }
+    for (const r of localCards) {
+      if (!r.video_id || archivedIds.has(r.video_id)) continue;
+      entries.push({
+        videoId: r.video_id,
+        title: r.title ?? r.metadata_title ?? r.video_id,
+        channel: null,
+        thumbnail: r.thumbnail ?? null,
+        durationSec: null,
+        views: null,
+        relevancePct: r.relevance_pct ?? null,
+        pinnedAt: r.pinned_at?.toISOString() ?? null,
+        createdAtMs: r.created_at?.getTime() ?? 0,
+        source: 'ulc',
+      });
+    }
+
+    const deduped = dedupeByVideoId(entries).sort(makeVideoListComparator(Date.now()));
+    const total = deduped.length;
+    const page = deduped.slice(offset, offset + limit);
+
+    // ulc-sourced rows carry no youtube_videos metadata — bridge the page's
+    // gaps in one batch (page-scoped, never the whole population).
+    const gapIds = page.filter((e) => e.source === 'ulc').map((e) => e.videoId);
+    if (gapIds.length > 0) {
+      const metaRows = await prisma.youtube_videos.findMany({
+        where: { youtube_video_id: { in: gapIds } },
+        select: {
+          youtube_video_id: true,
+          title: true,
+          thumbnail_url: true,
+          channel_title: true,
+          duration_seconds: true,
+          view_count: true,
+        },
+      });
+      const metaByVid = new Map(metaRows.map((m) => [m.youtube_video_id, m]));
+      for (const e of page) {
+        const m = metaByVid.get(e.videoId);
+        if (!m) continue;
+        e.channel = e.channel ?? m.channel_title ?? null;
+        e.thumbnail = e.thumbnail ?? m.thumbnail_url ?? null;
+        e.durationSec = e.durationSec ?? m.duration_seconds ?? null;
+        e.views = e.views ?? (m.view_count != null ? Number(m.view_count) : null);
+      }
+    }
+
+    // v2 clip-boundary probe for the page only: hasSegments gates the mound,
+    // segCoverage gates core-only mode (mirrors the PC < 0.9 hide + #1078 truncation).
+    const pageIds = page.map((e) => e.videoId);
+    const segByVid = new Map<string, { hasSegments: boolean; coverage: number | null }>();
+    if (pageIds.length > 0) {
+      const v2Rows = await prisma.video_rich_summaries.findMany({
+        where: { video_id: { in: pageIds }, template_version: 'v2' },
+        select: { video_id: true, segments: true },
+      });
+      const durByVid = new Map(page.map((e) => [e.videoId, e.durationSec]));
+      for (const row of v2Rows) {
+        const segments = (row.segments ?? null) as {
+          sections?: Array<{ to_sec?: unknown }>;
+        } | null;
+        const sections = Array.isArray(segments?.sections) ? segments.sections : null;
+        const hasSegments = sections != null && sections.length > 0;
+        segByVid.set(row.video_id, {
+          hasSegments,
+          coverage: hasSegments ? segCoverage(sections, durByVid.get(row.video_id) ?? null) : null,
+        });
+      }
+    }
+
+    return reply.send({
+      mandalaId,
+      total,
+      limit,
+      offset,
+      items: page.map((e) => ({
+        videoId: e.videoId,
+        title: e.title,
+        channel: e.channel,
+        thumbnail: e.thumbnail,
+        durationSec: e.durationSec,
+        views: e.views,
+        relevancePct: e.relevancePct,
+        pinnedAt: e.pinnedAt,
+        hasSegments: segByVid.get(e.videoId)?.hasSegments ?? false,
+        segCoverage: segByVid.get(e.videoId)?.coverage ?? null,
+      })),
     });
   });
 
@@ -2869,6 +3065,8 @@ export const mandalaRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           source: row.weight_version === 0 ? 'manual' : 'auto_recommend',
           recReason: row.rec_reason,
           publishedAt: row.published_at?.toISOString() ?? null,
+          // P3 Stage 2 (CP513) — display-only relevance for 관련도순 (additive).
+          relevancePct: row.relevance_pct ?? null,
           startSec: backlogAnchors.get(row.video_id) ?? null,
           pinnedAt: backlogPinnedAtByVideoId.get(row.video_id)?.toISOString() ?? null,
         };

@@ -137,7 +137,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
             logLLMCall({
               videoId: options?.videoId,
               userId: options?.userId,
-              module: 'openrouter',
+              module: options?.purpose ?? 'openrouter',
               model: this.model,
               latencyMs,
               status: 'error',
@@ -148,7 +148,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
           logLLMCall({
             videoId: options?.videoId,
             userId: options?.userId,
-            module: 'openrouter',
+            module: options?.purpose ?? 'openrouter',
             model: this.model,
             latencyMs,
             status: 'error',
@@ -159,7 +159,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
         logLLMCall({
           videoId: options?.videoId,
           userId: options?.userId,
-          module: 'openrouter',
+          module: options?.purpose ?? 'openrouter',
           model: this.model,
           latencyMs,
           status: 'error',
@@ -179,7 +179,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
         logLLMCall({
           videoId: options?.videoId,
           userId: options?.userId,
-          module: 'openrouter',
+          module: options?.purpose ?? 'openrouter',
           model: this.model,
           latencyMs: Date.now() - startTime,
           status: 'error',
@@ -196,7 +196,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       logLLMCall({
         videoId: options?.videoId,
         userId: options?.userId,
-        module: 'openrouter',
+        module: options?.purpose ?? 'openrouter',
         model: this.model,
         latencyMs: Date.now() - startTime,
         status: 'error',
@@ -224,7 +224,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       logLLMCall({
         videoId: options?.videoId,
         userId: options?.userId,
-        module: 'openrouter',
+        module: options?.purpose ?? 'openrouter',
         model: this.model,
         inputTokens: data.usage?.prompt_tokens,
         outputTokens: data.usage?.completion_tokens,
@@ -243,7 +243,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     logLLMCall({
       videoId: options?.videoId,
       userId: options?.userId,
-      module: 'openrouter',
+      module: options?.purpose ?? 'openrouter',
       model: this.model,
       inputTokens: data.usage?.prompt_tokens,
       outputTokens: data.usage?.completion_tokens,

@@ -19,6 +19,7 @@
  */
 
 import { logger } from '@/utils/logger';
+import { isPipelineDurableEnabled } from '@/config/pipeline-durable';
 import { createPipelineRun, executePipelineRun } from './pipeline-runner';
 
 const log = logger.child({ module: 'mandala-post-creation' });
@@ -44,6 +45,26 @@ export function triggerMandalaPostCreationAsync(
     // priority puts the pipeline on the faster path (cards) while actions
     // fill in progressively for the edit view.
     (async () => {
+      // P0 (2026-07-10) — durable path: when PIPELINE_DURABLE_ENABLED, route
+      // the video pipeline through pg-boss (persists across restarts + 2
+      // retries + orphan watchdog) instead of this in-process promise that
+      // died on any container restart → 0-card orphan runs. Enqueue only; the
+      // worker calls createPipelineRun + executePipelineRun. If the queue is
+      // down, fall through to the legacy inline run so cards still have SOME
+      // execution path right now.
+      if (isPipelineDurableEnabled()) {
+        try {
+          const { enqueueMandalaPipeline } =
+            await import('@/modules/queue/handlers/mandala-pipeline');
+          const jobId = await enqueueMandalaPipeline({ mandalaId, userId, trigger });
+          log.info(`pipeline enqueued (durable): job=${jobId} mandala=${mandalaId}`);
+          return;
+        } catch (enqueueErr) {
+          log.warn(
+            `pipeline enqueue failed (${enqueueErr instanceof Error ? enqueueErr.message : String(enqueueErr)}) — falling back to inline run for mandala=${mandalaId}`
+          );
+        }
+      }
       const runId = await createPipelineRun(mandalaId, userId, trigger);
       log.info(`Pipeline run created: ${runId} mandala=${mandalaId} trigger=${trigger}`);
       await executePipelineRun(runId);

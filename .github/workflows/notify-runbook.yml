@@ -1,0 +1,60 @@
+name: Notify Runbook
+
+# The runbook lives in the private mirror because it carries account and
+# resource identifiers this repository is public and cannot hold. That split
+# means a change here can invalidate a chapter there with nothing over there
+# noticing, so this tells it.
+#
+# Every push to main, with no path filter — deliberately.
+#
+# The first version listed the eight paths the chapters cite, which made this
+# file a second copy of a list that already exists over there, in each chapter's
+# cites header. Two declarations of the same thing drift: someone adds a cite,
+# forgets this list, and the notification silently stops covering it. Where the
+# relevant paths are is knowledge the mirror already has and this repository
+# does not, so the filtering belongs there.
+#
+# The cost of dropping the filter is a dispatch on pushes that turn out to be
+# irrelevant. The mirror's check takes about a minute and decides that for
+# itself, which is cheap next to a stale runbook nobody was told about.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    name: Tell the mirror to re-check
+    runs-on: ubuntu-latest
+    steps:
+      # RUNBOOK_DISPATCH_TOKEN is a fine-grained PAT with Contents: read and
+      # Actions: write on JK42JJ/insighta-private and nothing else. Without it
+      # this job is skipped rather than failed: a missing token should not turn
+      # every push to main red, and the mirror still catches drift on its daily
+      # run — a day later instead of a minute later.
+      - name: Dispatch
+        env:
+          TOKEN: ${{ secrets.RUNBOOK_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::warning::RUNBOOK_DISPATCH_TOKEN is not set; the mirror picks this up on its daily schedule instead of now"
+            exit 0
+          fi
+          CODE=$(curl -sS -o /tmp/resp.txt -w '%{http_code}' \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/JK42JJ/insighta-private/dispatches \
+            -d "{\"event_type\":\"app-main-push\",\"client_payload\":{\"sha\":\"${{ github.sha }}\"}}")
+          echo "dispatch -> HTTP $CODE"
+          # 204 is the documented success for this endpoint; anything else is a
+          # real failure and should be visible rather than swallowed.
+          if [ "$CODE" != "204" ]; then
+            cat /tmp/resp.txt
+            echo "::error::dispatch failed with HTTP $CODE"
+            exit 1
+          fi

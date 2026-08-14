@@ -212,6 +212,14 @@ export async function promoteV2ToVideoPool(opts: PromoteOptions = {}): Promise<P
       // Cap title/description column lengths to match existing schema use
       // (batch-video-collector slices to 5000).
       const titleSafe = c.yv_title.slice(0, 5000);
+      // CP512 — insertion integrity guard: never promote an empty-title row into
+      // the serving pool (recommender can't display it; it read as a title-loss
+      // defect). The v2_promoted empties recovered in the P0 backfill came from a
+      // time when the joined youtube_videos.title was blank — this stops a recur.
+      if (!titleSafe.trim()) {
+        errors.push({ video_id: c.video_id, error: 'empty title — skipped' });
+        continue;
+      }
       const descSafe = c.yv_description ? c.yv_description.slice(0, 5000) : null;
       const channelSafe = c.yv_channel_title ? c.yv_channel_title.slice(0, 200) : null;
       const langSafe = (c.yv_default_language ?? c.source_language ?? 'ko').slice(0, 5);

@@ -238,6 +238,7 @@ async function attemptPerspective(
       format: 'json',
       temperature: TEMPERATURE,
       maxTokens: MAX_TOKENS,
+      purpose: 'book_research', // CP504 §3 per-stage cost attribution
     });
   } catch (err) {
     return {

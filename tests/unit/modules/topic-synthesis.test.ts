@@ -118,29 +118,75 @@ describe('synthesizeCellTopics (compression)', () => {
     expect(r.reason).toContain('json_parse');
   });
 
+  // CP504 §11 — the actual observed failure: the model emits a RAW newline inside
+  // a string value, which JSON.parse rejects. This is now salvaged in-attempt
+  // (escape-in-string) with NO second LLM call (was: burned a retry).
+  it('salvages an unescaped newline in content IN-ATTEMPT (no LLM retry)', async () => {
+    // Raw newline inside "content" — invalid JSON as-is (mirrors real Sonnet output).
+    mockGenerate.mockResolvedValue(
+      '{"sections":[{"title":"API","content":"line1\nline2","atom_idx":[0,1]}]}'
+    );
+    const r = await synthesizeCellTopics('c', atoms, GOAL);
+    expect(mockGenerate).toHaveBeenCalledTimes(1); // salvaged, NOT retried
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.topics[0]!.topic_title).toBe('API');
+    expect(r.topics[0]!.summary).toBe('line1 line2'); // newline restored then collapsed (no loss)
+    expect(r.topics[0]!.atom_refs).toEqual([
+      { vid: 'vidA', ts: 10 },
+      { vid: 'vidA', ts: 50 },
+    ]);
+  });
+
+  // A parse failure is NO LONGER a retry reason (CP504 §11) — it either salvages
+  // in-attempt or hard-fails on the first attempt without a wasted second call.
+  it('does NOT retry on an unsalvageable parse failure (one call, honest fail)', async () => {
+    mockGenerate.mockResolvedValue('not json at all {{{');
+    const r = await synthesizeCellTopics('c', atoms, GOAL);
+    expect(mockGenerate).toHaveBeenCalledTimes(1); // parse failure ⇒ no retry
+    expect(r.ok).toBe(false);
+  });
+
   it('honest fail when atoms empty (no LLM call)', async () => {
     const r = await synthesizeCellTopics('c', [], GOAL);
     expect(r.ok).toBe(false);
     expect(mockGenerate).not.toHaveBeenCalled();
   });
 
-  it('retries once on a truncated/parse failure, then succeeds (no silent revert)', async () => {
+  // CP504 §11 — a maxTokens truncation is salvaged in-attempt (close the open
+  // brackets) rather than paying a fresh Sonnet call. One call, partial-but-valid.
+  it('salvages a truncated response IN-ATTEMPT (no LLM retry)', async () => {
+    mockGenerate.mockResolvedValue('{"sections":[{"title":"T","content":"x","atom_idx":[0,1'); // truncated
+    const r = await synthesizeCellTopics('c', atoms, GOAL);
+    expect(mockGenerate).toHaveBeenCalledTimes(1); // salvaged, NOT retried
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.topics[0]!.topic_title).toBe('T');
+    expect(r.topics[0]!.atom_refs).toEqual([
+      { vid: 'vidA', ts: 10 },
+      { vid: 'vidA', ts: 50 },
+    ]);
+  });
+
+  // Retries are reserved for PROVIDER faults (network/API), which a fresh
+  // generation can actually fix — SYNTHESIS_ATTEMPTS covers only these now.
+  it('retries a provider error, then succeeds (no silent revert)', async () => {
     mockGenerate
-      .mockResolvedValueOnce('{"sections":[{"title":"T","atom_idx":[0,1') // truncated
+      .mockRejectedValueOnce(new Error('ECONNRESET')) // transient provider fault
       .mockResolvedValueOnce(
         JSON.stringify({ sections: [{ title: 'API', content: '', atom_idx: [0, 1, 2] }] })
       );
     const r = await synthesizeCellTopics('c', atoms, GOAL);
-    expect(mockGenerate).toHaveBeenCalledTimes(2); // retried
+    expect(mockGenerate).toHaveBeenCalledTimes(2); // retried the provider error
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.topics[0]!.topic_title).toBe('API');
   });
 
-  it('hard-fails (loud) after all retries exhausted', async () => {
-    mockGenerate.mockResolvedValue('not json'); // both attempts fail
+  it('hard-fails (loud) after provider retries exhausted', async () => {
+    mockGenerate.mockRejectedValue(new Error('provider down')); // both attempts fault
     const r = await synthesizeCellTopics('c', atoms, GOAL);
-    expect(mockGenerate).toHaveBeenCalledTimes(2);
+    expect(mockGenerate).toHaveBeenCalledTimes(2); // SYNTHESIS_ATTEMPTS (provider only)
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toContain('hard_fail'); // surfaced as hard fail, not silent

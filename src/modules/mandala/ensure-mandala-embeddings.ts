@@ -23,6 +23,7 @@ import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { embedBatch, vectorToLiteral } from '@/skills/plugins/iks-scorer/embedding';
+import { servingEmbedOptions } from '@/config/embed-serving-timeout';
 
 const log = logger.child({ module: 'ensure-mandala-embeddings' });
 
@@ -167,7 +168,10 @@ export async function ensureMandalaEmbeddings(mandalaId: string): Promise<Ensure
   const t0 = Date.now();
   let vectors: (number[] | null)[];
   try {
-    vectors = await embedBatch(subjectsToEmbed);
+    // P0 2026-07-11 — step1 sits on the wizard critical path (30s race in
+    // pipeline-runner). Serving budget (12s/0-retry when flag on) keeps a hung
+    // provider from eating the whole race; missing cells backfill next call.
+    vectors = await embedBatch(subjectsToEmbed, servingEmbedOptions());
   } catch (err) {
     return {
       ok: false,
@@ -179,14 +183,19 @@ export async function ensureMandalaEmbeddings(mandalaId: string): Promise<Ensure
   }
   const embedMs = Date.now() - t0;
 
+  // CP512 — partial success. Previously a length mismatch (some chunks returned
+  // null) discarded ALL vectors → one cell's embed failure killed the whole
+  // mandala's embeddings (P0). embedBatch already returns per-slot null
+  // (per-chunk isolation) and the INSERT loop below skips null slots
+  // (`if (!vec) continue`). So we align the arrays by index and insert whatever
+  // succeeded; the failed indexes simply stay missing and get picked up on the
+  // next ensure call (idempotent backfill). All-or-nothing is removed.
   if (vectors.length !== indexesToGenerate.length) {
-    return {
-      ok: false,
-      alreadyPresent: false,
-      finalCount: okCount,
-      embedMs,
-      reason: `embedBatch returned ${vectors.length}/${indexesToGenerate.length} vectors`,
-    };
+    log.warn(
+      `embedBatch returned ${vectors.length}/${indexesToGenerate.length} vectors for mandala=${mandalaId} — inserting the successful subset, missing indexes will backfill on next call`
+    );
+    // Pad to the expected length so index alignment holds in the loop below.
+    while (vectors.length < indexesToGenerate.length) vectors.push(null);
   }
 
   // ── Step 5: DELETE stale/missing rows at those indexes, then INSERT ─

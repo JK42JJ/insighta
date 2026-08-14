@@ -35,6 +35,9 @@ import {
   BATCH_COLLECTOR_ROTATION_DAYS,
   BATCH_COLLECTOR_SEARCH_MAX_RESULTS,
   BATCH_COLLECTOR_SEARCH_PARALLELISM,
+  BATCH_COLLECTOR_FRESH_DAYS_DEFAULT,
+  BATCH_COLLECTOR_FRESH_DAYS_MAX,
+  BATCH_COLLECTOR_SEARCH_ORDER_DEFAULT,
 } from './manifest';
 import { loadTrendKeywords, type TrendKeyword } from './sources/trend-source';
 import { loadGoalKeywords } from './sources/goal-source';
@@ -77,6 +80,41 @@ interface HydratedState {
   limit: number;
   offset: number;
   runType: string;
+  /** Restrict this run to one edition's keywords. Undefined = all domains. */
+  domain?: string;
+  /** Days back for search.list publishedAfter. 0 = omit the parameter. */
+  freshDays: number;
+  /** search.list order. 'relevance' is dropped by the client (= YouTube default). */
+  searchOrder: 'relevance' | 'viewCount' | 'date';
+}
+
+/**
+ * Parse BATCH_COLLECTOR_FRESH_DAYS. Anything that is not a positive integer —
+ * unset, empty, '0', 'abc', '-3' — means "no window", the shipped behaviour.
+ * Values above the cap are clamped rather than rejected so a fat-fingered
+ * 3650 still collects instead of silently disabling the filter.
+ */
+export function normalizeFreshDays(raw: unknown): number {
+  const parsed = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return BATCH_COLLECTOR_FRESH_DAYS_DEFAULT;
+  return Math.min(Math.floor(parsed), BATCH_COLLECTOR_FRESH_DAYS_MAX);
+}
+
+/** Parse BATCH_COLLECTOR_SEARCH_ORDER. Unknown values fall back to the default. */
+export function normalizeSearchOrder(raw: unknown): 'relevance' | 'viewCount' | 'date' {
+  const v = String(raw ?? '').trim();
+  if (v === 'date' || v === 'viewCount' || v === 'relevance') return v;
+  return BATCH_COLLECTOR_SEARCH_ORDER_DEFAULT;
+}
+
+/**
+ * RFC3339 timestamp `days` before `nowMs`, which is the format search.list
+ * expects for publishedAfter. Returns undefined when the window is off, so
+ * callers can spread it and omit the key entirely.
+ */
+export function freshWindowStart(nowMs: number, days: number): string | undefined {
+  if (days <= 0) return undefined;
+  return new Date(nowMs - days * 86_400_000).toISOString();
 }
 
 /**
@@ -141,8 +179,29 @@ export const executor: SkillExecutor = {
         ? parseInt(envOffset, 10)
         : computeRotationOffset(Date.now(), limit, BATCH_COLLECTOR_ROTATION_DAYS);
 
+    // Scope one run to a single edition ('policy', 'ai_ml', …). Unset = every
+    // domain, byte-identical to the shipped behaviour. The pilot uses it to
+    // measure one edition's pass rates without spending quota on the other eight.
+    const domain = ctx.env['BATCH_COLLECTOR_DOMAIN']?.trim() || undefined;
+
+    // Freshness. Both default to the pre-2026-08-11 behaviour, so an
+    // unconfigured deploy collects exactly what it collected before and the
+    // rollback is `unset`, not a revert.
+    const freshDays = normalizeFreshDays(ctx.env['BATCH_COLLECTOR_FRESH_DAYS']);
+    const searchOrder = normalizeSearchOrder(ctx.env['BATCH_COLLECTOR_SEARCH_ORDER']);
+
     const videosApiKeys = resolveVideosApiKeys(ctx.env);
-    const state: HydratedState = { apiKeys, videosApiKeys, ollamaUrl, limit, offset, runType };
+    const state: HydratedState = {
+      apiKeys,
+      videosApiKeys,
+      ollamaUrl,
+      limit,
+      offset,
+      runType,
+      domain,
+      freshDays,
+      searchOrder,
+    };
     return { ok: true, hydrated: state as unknown as Record<string, unknown> };
   },
 
@@ -171,7 +230,10 @@ export const executor: SkillExecutor = {
       const keywords =
         state.runType === GOAL_RUN_TYPE
           ? await loadGoalKeywords(db, state.limit)
-          : await loadTrendKeywords(db, state.limit, { offset: state.offset });
+          : await loadTrendKeywords(db, state.limit, {
+              offset: state.offset,
+              ...(state.domain ? { domain: state.domain } : {}),
+            });
       if (keywords.length === 0) {
         await finalizeRun(db, run.id, {
           status: 'failed',
@@ -196,6 +258,12 @@ export const executor: SkillExecutor = {
 
       // 3. YouTube search per keyword (bounded parallelism)
       const hitsByVideoId = new Map<string, SearchHit>();
+      const publishedAfter = freshWindowStart(Date.now(), state.freshDays);
+      log.info('search window', {
+        freshDays: state.freshDays,
+        publishedAfter: publishedAfter ?? '(none)',
+        order: state.searchOrder,
+      });
       const queriesExecuted = await searchAllKeywords(
         keywords,
         state.apiKeys,
@@ -205,7 +273,8 @@ export const executor: SkillExecutor = {
         },
         () => {
           quotaExhausted = true;
-        }
+        },
+        { publishedAfter, order: state.searchOrder }
       );
       videosFound = hitsByVideoId.size;
       log.info(`search phase done: ${queriesExecuted} queries, ${videosFound} unique candidates`);
@@ -391,7 +460,10 @@ async function searchAllKeywords(
   apiKeys: string[],
   hitsByVideoId: Map<string, SearchHit>,
   onQuotaUsed: (units: number) => void,
-  onQuotaExhausted: () => void
+  onQuotaExhausted: () => void,
+  // Same window for every keyword in a run, computed once by the caller so a
+  // long run does not drift its own lower bound as it goes.
+  window: { publishedAfter?: string; order: 'relevance' | 'viewCount' | 'date' }
 ): Promise<number> {
   let executed = 0;
   // Bounded parallelism — chunk the keyword list and await each chunk.
@@ -406,6 +478,8 @@ async function searchAllKeywords(
             maxResults: BATCH_COLLECTOR_SEARCH_MAX_RESULTS,
             relevanceLanguage: kw.language || 'ko',
             regionCode: (kw.language || 'ko') === 'en' ? 'US' : 'KR',
+            ...(window.publishedAfter ? { publishedAfter: window.publishedAfter } : {}),
+            order: window.order,
           });
           onQuotaUsed(100); // search.list cost
           return { kw, items, error: null as string | null };

@@ -25,6 +25,17 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().optional(),
   SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
+  // ── Narration pre-produce (ElevenLabs, 2026-07-13) ─────────────────────
+  // Default off = current behaviour exactly (browser TTS on /mobile).
+  // Rollback = flag off, no code revert. Key: see credentials.md ElevenLabs.
+  NARRATION_PREPRODUCE_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+  ELEVENLABS_API_KEY: z.string().optional(),
+  // Per-episode character ceiling — cost guard against runaway books.
+  NARRATION_MAX_CHARS_PER_EPISODE: z.coerce.number().int().positive().default(60000),
   SUPABASE_JWT_SECRET: z.string().optional(),
 
   // YouTube API
@@ -175,6 +186,12 @@ const envSchema = z.object({
   GMAIL_SMTP_PORT: z.coerce.number().default(587),
   GMAIL_SMTP_FROM: z.string().default('noreply@insighta.one'),
 
+  // Share v2 — public origin used to build short share URLs (/s/:code).
+  PUBLIC_ORIGIN: z.string().default('https://insighta.one'),
+
+  // Invite tickets — default allowance per beta member.
+  INVITE_TICKETS_DEFAULT: z.coerce.number().default(2),
+
   // Observability Phase 2-A — ops alarm recipient (admin inbox). Empty = the
   // alarm job logs the count but sends NO email (inert until the operator sets a
   // real inbox). An email address is config, not a secret (CP392).
@@ -230,6 +247,56 @@ const envSchema = z.object({
   // Default true: this is a compliance job. Kill-switch only — set 'false' to
   // pause the maintenance worker (the GHA cron will then no-op at the handler).
   POOL_MAINTENANCE_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
+    .default(true),
+
+  // Weekly curation schedule on the KST calendar (2026-07-27). Off (default) keeps
+  // the shipped behaviour exactly: a Sunday-only scan plus `last_run_at + 7d` as the
+  // due time, which measured an 8-14 day effective period and built nothing on
+  // 2026-07-26. On: the scan runs daily and a subscription is due when today's KST
+  // weekday matches its `weekday` column and this KST week has not been built.
+  // Rollback is a config flip, not a revert.
+  CURATION_SCHED_KST_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+
+  // Channel-mode curation (2026-07-27). Off (default) keeps the shipped behaviour
+  // exactly: a subscription with source='youtube_subs' still builds through the
+  // discover path, so the column can be set before the leg exists. On: such a
+  // subscription is built from its followed channels' uploads instead.
+  // Rollback is a config flip, not a revert.
+  CURATION_CHANNEL_SOURCE_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+
+  // Topic shaping for the weekly fresh leg (2026-08-04). Off (default) keeps the
+  // shipped behaviour exactly: the topic is expanded by appending three suffixes
+  // ("최신"/"강의"/"사례") and those four near-identical labels are handed to v5.
+  // Measured on prod 2026-08-03 for topic "파이썬": the 7-day window returned
+  // raw=1/title=0 and the 30-day retry recruited 4 candidates — from self-help
+  // channels, because a label as vague as "<topic> 사례" refines into success
+  // stories. The fresh leg yielded 1 pick and the pool ladder filled 16 slots.
+  // On: the topic is shaped by generateMandalaWithQueries (the wizard's proven
+  // merged structure+queries call) into real sub-goals plus per-cell queries,
+  // which v5 already accepts via `precomputedQueries`. Generation failure or a
+  // degraded (partial-coverage) result falls back to the suffix labels, so the
+  // worst case is today's behaviour. Rollback is a config flip, not a revert.
+  CURATION_TOPIC_SHAPING_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+
+  // CP512 — metadata REFRESH for active rows (videos.list re-fetch, keeps served
+  // rows ToS-compliant AND titled). Default true; set 'false' to pause refresh
+  // (scrub still only touches inactive rows, so active rows just stop aging-out).
+  POOL_METADATA_REFRESH_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
+    .default(true),
+
+  // CP512 — embeddings decoupled from card serving. Default true: a mandala's
+  // cards serve even when embeddings fail/timeout (degraded lexical), embeddings
+  // backfill later. Set 'false' for the legacy hard-gate (embeddings required
+  // before serving) — exact rollback.
+  EMBED_ASYNC_SERVE: z
     .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
     .default(true),
 
@@ -291,6 +358,11 @@ export const config = {
   },
 
   // Supabase
+  narration: {
+    enabled: env.NARRATION_PREPRODUCE_ENABLED,
+    elevenLabsApiKey: env.ELEVENLABS_API_KEY,
+    maxCharsPerEpisode: env.NARRATION_MAX_CHARS_PER_EPISODE,
+  },
   supabase: {
     url: env.SUPABASE_URL,
     anonKey: env.SUPABASE_ANON_KEY,
@@ -420,10 +492,30 @@ export const config = {
     enabled: env.SEARCH_TRACE_ENABLED,
   },
 
+  // Weekly curation schedule — KST calendar instead of UTC wall-clock (2026-07-27).
+  curationSchedule: {
+    kstEnabled: env.CURATION_SCHED_KST_ENABLED,
+  },
+
+  // Channel-mode curation — build from followed channels' uploads (2026-07-27).
+  curationChannelSource: {
+    enabled: env.CURATION_CHANNEL_SOURCE_ENABLED,
+  },
+
+  // Weekly fresh leg — shape the topic into real sub-goals before searching,
+  // instead of appending suffixes to it (2026-08-04).
+  curationTopicShaping: {
+    enabled: env.CURATION_TOPIC_SHAPING_ENABLED,
+  },
+
   // video_pool ToS hygiene cron (CP494).
   poolMaintenance: {
     enabled: env.POOL_MAINTENANCE_ENABLED,
+    refreshEnabled: env.POOL_METADATA_REFRESH_ENABLED,
   },
+
+  // CP512 — embeddings decoupled from serving (degraded lexical serve on fail).
+  embedAsyncServe: env.EMBED_ASYNC_SERVE,
 
   // Supply bridge: youtube_videos → video_pool promotion (CP494 ②).
   supplyYtBridge: {
@@ -475,6 +567,14 @@ export const config = {
     smtpHost: env.GMAIL_SMTP_HOST,
     smtpPort: env.GMAIL_SMTP_PORT,
     smtpFrom: env.GMAIL_SMTP_FROM,
+  },
+
+  share: {
+    publicOrigin: env.PUBLIC_ORIGIN,
+  },
+
+  invites: {
+    defaultTickets: env.INVITE_TICKETS_DEFAULT,
   },
 
   // Observability Phase 2-A — ops alarms.

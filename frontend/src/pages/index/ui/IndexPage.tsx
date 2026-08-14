@@ -294,14 +294,28 @@ function AuthenticatedApp() {
     };
   }, [isNewMandalaActive, queryClient, clearJustCreated]);
 
-  // Auto-stop polling when cards appear. Keeping isNewMandalaActive true until
-  // the grid actually has cards is what holds the skeleton (isLoading) through
-  // the slow get-all-video-states fetch — clearing it earlier (e.g. on pipeline
-  // status) drops the skeleton before the grid loads and flashes the empty
-  // state. See the isLoading expression on CardListView below.
+  // Auto-stop polling when the card count is STABLE (T5 fix, 2026-07-12).
+  // The old condition (totalCards > 0) stopped the poll on the FIRST card —
+  // with progressive fill placing an early chunk, the screen froze at 2 cards
+  // while the pipeline kept writing 36 more (measured: run d5ba94ce, DB 38 vs
+  // screen 2). Now the poll survives while the count keeps growing and stops
+  // only after 3 consecutive unchanged ticks (~6s) — HIT paths (full set on
+  // first fetch) stop just as fast; the 90s timeout above still caps it.
+  const revealStableRef = useRef<{ last: number; ticks: number }>({ last: -1, ticks: 0 });
   useEffect(() => {
-    if (isNewMandalaActive && cards.totalCards > 0) {
-      clearJustCreated(null);
+    if (!isNewMandalaActive) {
+      revealStableRef.current = { last: -1, ticks: 0 };
+      return;
+    }
+    const st = revealStableRef.current;
+    if (cards.totalCards > 0 && cards.totalCards === st.last) {
+      st.ticks += 1;
+      if (st.ticks >= 3) {
+        clearJustCreated(null);
+      }
+    } else {
+      st.last = cards.totalCards;
+      st.ticks = 0;
     }
   }, [isNewMandalaActive, cards.totalCards, clearJustCreated]);
 
@@ -1016,6 +1030,7 @@ function AuthenticatedApp() {
                       <CardDiscoveryProgress mandalaId={effectiveMandalaId} isComplete={false} />
                     )}
                     <CardListView
+                      isFilling={isNewMandalaActive}
                       cards={search.isSearchActive ? search.results : cards.displayCards}
                       isLoading={
                         search.isSearchActive

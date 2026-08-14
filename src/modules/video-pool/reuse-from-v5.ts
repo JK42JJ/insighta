@@ -19,6 +19,11 @@
  *   - fire-and-forget at the call site → zero hot-path impact (12s add-cards cap).
  *
  * Flag-gated by V5_REUSE_LOOP (default off → no write, current behavior).
+ *
+ * R23 addition — an enforce-capable domain-fit WRITE gate
+ * (`domain-fit-shadow/write-gate.ts`) sits alongside the existing R19-A1
+ * shadow-log call, gated INDEPENDENTLY by `DOMAIN_FIT_WRITE_ENFORCE` (default
+ * false — see `reusePickedToPool`). Off = zero behavior change.
  */
 
 import { Prisma } from '@prisma/client';
@@ -27,6 +32,9 @@ import { shortGateFields } from '@/modules/video-pool/is-short';
 import { getPrismaClient } from '@/modules/database/client';
 import { MS_PER_DAY } from '@/utils/time-constants';
 import { logger } from '@/utils/logger';
+import { scheduleDomainFitWriteShadow } from '@/modules/domain-fit-shadow/write-shadow';
+import { loadDomainFitShadowConfig } from '@/config/domain-fit-shadow';
+import { runDomainFitWriteEnforce } from '@/modules/domain-fit-shadow/write-gate';
 
 const log = logger.child({ module: 'video-pool/reuse-from-v5' });
 
@@ -53,6 +61,13 @@ export interface ReuseInput {
   /** videos.list full metadata (carries like_count that V5Card drops). */
   metaById: Map<string, { statistics?: { likeCount?: string } }>;
   language: 'ko' | 'en';
+  /**
+   * R19 — mandala centerGoal, forwarded so `reusePickedToPool` can schedule a
+   * domain-fit WRITE-edge shadow judgment per card (see write-shadow.ts).
+   * Optional: undefined/empty ⇒ the shadow call is skipped for that card
+   * (never blocks or alters the upsert either way — enforce-0).
+   */
+  centerGoal?: string;
 }
 
 interface ShortGate {
@@ -155,6 +170,11 @@ export async function reusePickedToPool(
   input: ReuseInput
 ): Promise<{ reused: number; skipped: number }> {
   const prisma = getPrismaClient();
+  // R23 — loaded once per reuse batch (cheap zod parse). Drives the NEW
+  // enforce-capable gate below ONLY; the existing scheduleDomainFitWriteShadow
+  // call right above the gate check is completely untouched by this cfg
+  // (R19-A1 invariant: that call keeps loading its own config internally).
+  const domainFitCfg = loadDomainFitShadowConfig();
   let reused = 0;
   let skipped = 0;
   for (const card of input.cards) {
@@ -170,6 +190,40 @@ export async function reusePickedToPool(
       if (!row) {
         skipped += 1;
         continue;
+      }
+      // R19 — domain-fit WRITE-edge shadow (measure-only, enforce-0). Same
+      // fire-and-forget shape as the serve-side shadow hook; never awaited,
+      // never gates the upsert below (docs/qa/domain-fit-r14-write-gate-and-goal-level.md §R14-2 #1).
+      if (input.centerGoal) {
+        scheduleDomainFitWriteShadow({
+          stage: 'reuse',
+          centerGoal: input.centerGoal,
+          videoId: card.videoId,
+          title: card.title,
+          source: REUSE_SOURCE,
+        });
+        // R23 — enforce-capable domain-fit WRITE gate. Off (default,
+        // domainFitCfg.writeEnforceEnabled=false) ⇒ the schedule call above
+        // is the ONLY thing that ran, byte-identical to pre-R23 (R19-A1
+        // unchanged). On ⇒ an AWAITED composite T3+lexical judgment decides
+        // whether this card reaches the upsert below; a block skips it
+        // (counted the same as a quality-gate reject).
+        if (domainFitCfg.writeEnforceEnabled) {
+          const gate = await runDomainFitWriteEnforce(
+            {
+              stage: 'reuse',
+              centerGoal: input.centerGoal,
+              videoId: card.videoId,
+              title: card.title,
+              source: REUSE_SOURCE,
+            },
+            domainFitCfg
+          );
+          if (!gate.passed) {
+            skipped += 1;
+            continue;
+          }
+        }
       }
       await prisma.video_pool.upsert({
         where: { video_id: card.videoId },

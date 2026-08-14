@@ -209,3 +209,15 @@ export function isVisualCvEnabled(env: NodeJS.ProcessEnv = process.env): boolean
     .toLowerCase();
   return v === 'true' || v === '1' || v === 'yes'; // unset ⇒ false (default off)
 }
+
+// CP516 — completion-gated book-fill. Default OFF. When on, the note is built
+// ONCE per mandala after every video's v2 settles, then updated only every ≥5
+// new summaries — replacing the per-video re-fill that ran the book's Sonnet
+// stages 3-4× per mandala. Rollback = unset / BOOK_FILL_BARRIER_ENABLED=false
+// → legacy debounced re-fill per enrich.
+export function isBookFillBarrierEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = String(env['BOOK_FILL_BARRIER_ENABLED'] ?? '')
+    .trim()
+    .toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes'; // unset ⇒ false (default off)
+}

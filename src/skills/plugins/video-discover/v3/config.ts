@@ -285,6 +285,38 @@ const semanticMaxCandidates = z
   )
   .transform((v) => v ?? DEFAULT_SEMANTIC_MAX_CANDIDATES);
 
+/**
+ * R4 shadow guard kill switch (2026-07-04, BL-17).
+ *
+ * When `true`, `applyMandalaFilterWithStats` classifies blank/whitespace-
+ * only title candidates as `stats.wouldRejectEmptyTitle` WITHOUT dropping
+ * them — read-only instrumentation for measuring blast radius before any
+ * enforcement decision. Default `false` (unset = no-op): the classification
+ * branch never runs and `byCell` output is bit-identical to pre-R4
+ * behavior regardless of this flag's value (enforce = 0, always).
+ *
+ * See `mandala-filter.ts::MandalaFilterInput.emptyTitleGateShadow` for the
+ * root-cause writeup (stale Tier 1 embeddings surviving a title SCRUB).
+ * Rollback: unset the env var — no code change required.
+ */
+export const DEFAULT_EMPTY_TITLE_GATE_SHADOW = false;
+
+/**
+ * R4 enforce kill switch (2026-07-04, BL-17).
+ *
+ * When `true`, `applyMandalaFilterWithStats` actually drops (real
+ * `continue`) blank/whitespace-only title candidates instead of only
+ * counting them — separate from `V3_EMPTY_TITLE_GATE_SHADOW` above, so
+ * shadow-only measurement runs are unaffected by shipping this switch.
+ * Default `false` (unset = no-op): pre-R4 behavior is bit-identical.
+ *
+ * This PR ships the code path only — flag stays OFF until a separate,
+ * explicit flip decision (James gate) based on the R4 shadow-measurement
+ * data (blast-radius: sparse/empty-cell counts). Rollback: unset the env
+ * var — no code change required.
+ */
+export const DEFAULT_EMPTY_TITLE_GATE = false;
+
 export const v3EnvSchema = z.object({
   V3_ENABLE_TIER1_CACHE: booleanFlag.optional().default(false as unknown as string),
   V3_RECENCY_WEIGHT: clampedUnit,
@@ -312,6 +344,8 @@ export const v3EnvSchema = z.object({
   V3_ENABLE_SIGNAL_EXCLUDE: booleanFlag.optional().default(true as unknown as string),
   V3_ENABLE_ZERO_HIT_RETRY: booleanFlag.optional().default(true as unknown as string),
   V3_ENABLE_USER_CURATED_INGEST: booleanFlag.optional().default(true as unknown as string),
+  V3_EMPTY_TITLE_GATE_SHADOW: booleanFlag.optional().default(false as unknown as string),
+  V3_EMPTY_TITLE_GATE: booleanFlag.optional().default(false as unknown as string),
 });
 
 export interface V3Config {
@@ -361,6 +395,19 @@ export interface V3Config {
    * false, Heart only records signals + pins; pool unchanged (pre-CP488).
    */
   enableUserCuratedIngest: boolean;
+  /**
+   * R4 shadow guard (2026-07-04, BL-17) — see `DEFAULT_EMPTY_TITLE_GATE_SHADOW`
+   * for the full writeup. Default false = no-op (classification skipped,
+   * `mandala-filter.ts` stats.wouldRejectEmptyTitle stays 0).
+   */
+  emptyTitleGateShadow: boolean;
+  /**
+   * R4 enforce (2026-07-04, BL-17) — see `DEFAULT_EMPTY_TITLE_GATE` for the
+   * full writeup. Default false = no-op (real drop skipped,
+   * `mandala-filter.ts` stats.droppedByEmptyTitle stays 0). Separate kill
+   * switch from `emptyTitleGateShadow` above.
+   */
+  emptyTitleGate: boolean;
 }
 
 export function loadV3Config(env: V3EnvInput = process.env): V3Config {
@@ -388,6 +435,8 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     V3_ENABLE_SIGNAL_EXCLUDE: env['V3_ENABLE_SIGNAL_EXCLUDE'],
     V3_ENABLE_ZERO_HIT_RETRY: env['V3_ENABLE_ZERO_HIT_RETRY'],
     V3_ENABLE_USER_CURATED_INGEST: env['V3_ENABLE_USER_CURATED_INGEST'],
+    V3_EMPTY_TITLE_GATE_SHADOW: env['V3_EMPTY_TITLE_GATE_SHADOW'],
+    V3_EMPTY_TITLE_GATE: env['V3_EMPTY_TITLE_GATE'],
   });
   if (!parsed.success) {
     return {
@@ -414,6 +463,8 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
       enableSignalExclude: true,
       enableZeroHitRetry: true,
       enableUserCuratedIngest: true,
+      emptyTitleGateShadow: DEFAULT_EMPTY_TITLE_GATE_SHADOW,
+      emptyTitleGate: DEFAULT_EMPTY_TITLE_GATE,
     };
   }
   return {
@@ -440,6 +491,8 @@ export function loadV3Config(env: V3EnvInput = process.env): V3Config {
     enableSignalExclude: parsed.data.V3_ENABLE_SIGNAL_EXCLUDE,
     enableZeroHitRetry: parsed.data.V3_ENABLE_ZERO_HIT_RETRY,
     enableUserCuratedIngest: parsed.data.V3_ENABLE_USER_CURATED_INGEST,
+    emptyTitleGateShadow: parsed.data.V3_EMPTY_TITLE_GATE_SHADOW,
+    emptyTitleGate: parsed.data.V3_EMPTY_TITLE_GATE,
   };
 }
 

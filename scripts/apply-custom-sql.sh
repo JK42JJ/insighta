@@ -58,6 +58,8 @@ APPLY_FILES=(
   "prisma/migrations/ontology/014_fix_trigger_seq_scans.sql"
   "prisma/migrations/ontology/016_mentions_similar_to_relation_types.sql"
   "prisma/migrations/ontology/017_fix_sync_mandala_seqscan.sql"
+  "prisma/migrations/ontology/020_ontology_conversations.sql"
+  "prisma/migrations/youtube/001_youtube_cache_epochs.sql"
   "prisma/migrations/mandala-timings/001_create_table.sql"
   "prisma/migrations/video_chunk_embeddings/001_create_table.sql"
   "prisma/migrations/video_rich_summaries/001_add_user_id.sql"
@@ -95,6 +97,10 @@ APPLY_FILES=(
   # (PK video_id+mandala_id+segment_idx). CREATE TABLE IF NOT EXISTS + CHECK
   # constraints — idempotent. Inert until the slidegen gate / fill job consume it.
   "prisma/migrations/bookindex/001_video_mandala_segment_relevance.sql"
+  # P3 Stage 2 (CP513) — display-only relevance_pct on recommendation_cache for
+  # the "관련도순" grid sort. ADD COLUMN IF NOT EXISTS — idempotent. Must apply
+  # before the new Prisma client selects the column (CP499+ LEVEL-3).
+  "prisma/migrations/rec-cache-relevance/001_add_columns.sql"
   # CP466 — Add Cards Phase 1 (surfacing). `surfaced_at` column + partial
   # index on user_video_states for Layer 1 Coverage dedup. ADD COLUMN IF
   # NOT EXISTS / CREATE INDEX IF NOT EXISTS — idempotent.
@@ -170,6 +176,36 @@ APPLY_FILES=(
   # change); inert until /api/v1/search is called.
   "prisma/migrations/global-search/001_pg_trgm_indexes.sql"
   "prisma/migrations/channel-blocklist/001_create_channel_blocklist.sql"
+  # Search redesign R24 — video_domain_fit_cache (per-mandala domain-fit
+  # verdict cache for SERVE-edge enforce). CREATE TABLE/INDEX IF NOT EXISTS —
+  # fully idempotent. Inert (never read or written) until
+  # DOMAIN_FIT_SERVE_ENFORCE flips on.
+  "prisma/migrations/domain-fit-serve-cache/001_create_video_domain_fit_cache.sql"
+  # Closed-beta application inbox (2026-07-08) — CREATE TABLE IF NOT EXISTS, idempotent.
+  "prisma/migrations/beta/001_beta_applications.sql"
+  "prisma/migrations/beta/002_add_goal.sql"
+  # In-app 새소식 (2026-07-15/16) — 001 created the table (was applied manually,
+  # now tracked here); 002 adds banner kind/event_at/cta columns; 003 seeds the
+  # two launch notices. All CREATE/ALTER ... IF NOT EXISTS + INSERT ... WHERE NOT
+  # EXISTS — fully idempotent.
+  "prisma/migrations/app-notices/001_create_app_notices.sql"
+  "prisma/migrations/app-notices/002_add_kind_cta.sql"
+  "prisma/migrations/app-notices/003_seed_beta_notices.sql"
+  "prisma/migrations/app-notices/004_align_cta_urls.sql"
+  # Growth Hub curation (2026-07-16 / 2026-07-20). Weekly personalized curation:
+  # 001 = curation_subscriptions + curation_items (feed, applied manually at CP521,
+  # now tracked here). 002 = curation_interest_profile (async YouTube interest vector)
+  # + curation_proposals (append-only reinforcement log). All CREATE TABLE/INDEX
+  # IF NOT EXISTS + NOTIFY pgrst — fully idempotent.
+  "prisma/migrations/curation/001_create_curation_tables.sql"
+  "prisma/migrations/curation/002_curation_personalization.sql"
+  # 2026-08-03 weekly-novelty follow-up: deactivate legacy same-user same-topic
+  # duplicate subscriptions + partial unique backstop. UPDATE no-ops once clean;
+  # index guarded by IF NOT EXISTS — idempotent.
+  "prisma/migrations/curation/003_dedupe_subscriptions_unique.sql"
+  # curation-watched (2026-07-21): watched_at derived-only column for lineup row
+  # meta (M/N listened / weekly complete). ADD COLUMN IF NOT EXISTS = idempotent.
+  "prisma/migrations/curation-watched/001_watched_at.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

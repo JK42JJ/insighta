@@ -1,7 +1,7 @@
 import { FastifyPluginCallback } from 'fastify';
 import { getOntologyManager } from '../../modules/ontology';
 import { getPrismaClient } from '../../modules/database/client';
-import { getNeighbors } from '../../modules/ontology/graph';
+import { getNeighbors, getMandalaSubgraph } from '../../modules/ontology/graph';
 import { searchByVector, searchByText } from '../../modules/ontology/search';
 import { generateEmbedding } from '../../modules/ontology/embedding';
 import {
@@ -9,6 +9,7 @@ import {
   CreateNodeBodySchema,
   UpdateNodeBodySchema,
   NeighborsQuerySchema,
+  SubgraphQuerySchema,
   HistoryQuerySchema,
   ListEdgesQuerySchema,
   CreateEdgeBodySchema,
@@ -152,6 +153,17 @@ export const ontologyRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       return reply.send({ status: 'ok', data: neighbors });
     }
   );
+
+  // GET /subgraph — the user's whole knowledge graph (structures + placed
+  // cards, projections included). Replaces the FE's flat first-1000 fetch.
+  fastify.get('/subgraph', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request, reply);
+    if (!userId) return;
+
+    const query = SubgraphQuerySchema.parse(request.query);
+    const result = await getMandalaSubgraph(query.mandala_id ?? null, userId, query.depth);
+    return reply.send({ status: 'ok', data: result });
+  });
 
   // GET /nodes/:id/history — action_log
   fastify.get(

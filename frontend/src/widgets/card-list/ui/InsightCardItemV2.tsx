@@ -31,6 +31,10 @@ import { ScrollableChipRow } from '@/shared/ui/scrollable-chip-row';
 // never shown to the user, so these are display-only thresholds).
 const RELEVANCE_TIER_CORE = 80; // ≥80 → "핵심"
 const RELEVANCE_TIER_PICK = 70; // 70–79 → "추천" ; <70 → no badge (number never shown)
+
+// P3 Stage 1 (CP513) — "NEW" corner badge shows while a card is younger than this.
+const NEW_BADGE_HOURS = 48;
+const NEW_BADGE_MS = NEW_BADGE_HOURS * 60 * 60 * 1000;
 const RELEVANCE_DIM_MAX = 30; // ≤30 relevance → toned down (unless bookmarked)
 
 // Tier badge styles — complete class strings (RING_STYLES pattern, NO dynamic
@@ -389,9 +393,7 @@ export function InsightCardItemV2({
   // simply stays empty until the next refetch lands the real value.
   // Honest label: a missing publish date must not masquerade as one —
   // the createdAt fallback is rendered as "added N days ago" instead.
-  const relDate = metadataComplete
-    ? formatCardDateLabel(ytMeta.publishedAt, card.createdAt)
-    : null;
+  const relDate = metadataComplete ? formatCardDateLabel(ytMeta.publishedAt, card.createdAt) : null;
   const hasNote = !!card.userNote?.trim();
   // CP475+ blockquote source priority (user-confirmed 2026-05-20):
   // The v2 quick path's `core_argument` is a heavily-simplified Korean
@@ -450,6 +452,31 @@ export function InsightCardItemV2({
   // Hover restores full tone so the card stays inspectable.
   const dimLowRelevance =
     card.relevancePct != null && card.relevancePct <= RELEVANCE_DIM_MAX && !liked;
+
+  // P3 Stage 2 (CP513, James) — "추가됨" badge only on USER-ADDED cards within 48h.
+  // The signal is `auto_added=false` = an explicit user action (like/pin/panel-pick;
+  // place-auto-added-cards.ts:13 "User-action placements = auto_added:false"). Cards
+  // that flowed in automatically — mandala generation, auto-serve, recommendation
+  // discovery — are `auto_added=true` and must NOT badge (James: 생성 배치는 추가 아님).
+  // Recommendation-feed stream cards carry no autoAdded (undefined) → also excluded.
+  // createdAt = added_to_ideation_at (the add moment) so the 48h window is real.
+  const isNew =
+    card.autoAdded === false &&
+    card.createdAt != null &&
+    Date.now() - new Date(card.createdAt).getTime() < NEW_BADGE_MS;
+
+  // Watched-progress bar (YouTube-style). Only for user_video_states-sourced
+  // YouTube cards that carry BOTH a saved position and a known duration — so
+  // recommendation/stream cards (no position) and content-entity cards (whose
+  // lastWatchPosition is mis-typed as duration) never render a bogus bar.
+  const watchPct =
+    card.sourceTable === 'user_video_states' &&
+    typeof card.lastWatchPosition === 'number' &&
+    card.lastWatchPosition > 0 &&
+    typeof ytMeta.durationSec === 'number' &&
+    ytMeta.durationSec > 0
+      ? Math.min(100, Math.round((card.lastWatchPosition / ytMeta.durationSec) * 100))
+      : null;
 
   return (
     <Card
@@ -538,11 +565,23 @@ export function InsightCardItemV2({
         {/* CP463 — TL relevance badge moved to the new footer row
             (sector ◀ ▶ relevance %). The thumbnail TL slot is now free. */}
 
-        {/* Top-right: Duration (moved from BR — Pin slot retired) */}
-        {duration && (
-          <span className="absolute top-1.5 right-1.5 text-[10px] font-mono font-medium px-[5px] py-[2px] rounded bg-black/75 text-white/85">
-            {duration}
-          </span>
+        {/* Top-right chip stack (P3 Stage 2, CP513 James): a VERTICAL stack —
+            duration keeps the top-right corner, the "추가됨" badge sits BELOW it
+            (James: 하단이 적합, not left). Right-aligned; badge sized to the
+            duration chip. With no duration the badge simply takes the corner. */}
+        {(isNew || duration) && (
+          <div className="absolute top-1.5 right-1.5 z-10 flex flex-col items-end gap-1">
+            {duration && (
+              <span className="text-[10px] font-mono font-medium leading-none px-[5px] py-[2px] rounded bg-black/75 text-white/85">
+                {duration}
+              </span>
+            )}
+            {isNew && (
+              <span className="text-[10px] font-medium leading-none tracking-[0.2px] px-[5px] py-[2px] rounded bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+                {t('gridView.badgeNew', '추가됨')}
+              </span>
+            )}
+          </div>
         )}
 
         {/* CP463 — top-center 3-phase chip removed per user directive
@@ -640,6 +679,18 @@ export function InsightCardItemV2({
             (right slot, where the % normally sits) per user directive
             2026-05-17. The BL thumbnail slot is reserved for the
             in-progress chip and the Archive icon. */}
+
+        {/* Watched-progress bar — pinned to the thumbnail's bottom edge (3px),
+            YouTube-style. Always visible (not hover-only) so "have I watched
+            this, and how far?" is answerable at a glance. */}
+        {watchPct != null && (
+          <div className="absolute inset-x-0 bottom-0 z-10 h-[3px] bg-black/30 pointer-events-none">
+            <div
+              className="h-full bg-[hsl(var(--watch-progress))]"
+              style={{ width: `${watchPct}%` }}
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Body: title → meta row → summary ──
