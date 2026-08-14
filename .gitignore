@@ -228,6 +228,11 @@ scripts/*
 # CP500++ — CI guards (tracked so GitHub Actions can run them).
 !scripts/ci/
 !scripts/ci/**
+# Operational entry points. scripts/ssh-connect.sh predates this and is still
+# ignored, which is why its Tailscale-first ordering and its IP-detection fix
+# have never been reviewable.
+!scripts/ops/
+!scripts/ops/**
 prompt/
 
 # Dev tool configs
