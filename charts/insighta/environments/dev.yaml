@@ -12,6 +12,10 @@
 # in the design as 8.4, and it blocks T0 outright.
 api:
   replicaCount: 1
+  # Single replica, so a ReadWriteOnce claim is valid and the YouTube
+  # response cache survives a restart instead of spending quota to rebuild.
+  persistence:
+    enabled: true
   image:
     repository: insighta-api
     tag: local

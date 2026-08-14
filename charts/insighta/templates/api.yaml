@@ -1,3 +1,12 @@
+{{- /*
+   A ReadWriteOnce claim cannot be attached by two pods. Left to a comment,
+   enabling persistence at two replicas leaves the second pod Pending on a
+   volume it will never get -- a failure that looks like a scheduling problem
+   and is not. Fail at render instead.
+*/ -}}
+{{- if and .Values.api.persistence.enabled (gt (int .Values.api.replicaCount) 1) }}
+{{- fail (printf "api.persistence.enabled=true with api.replicaCount=%d: the cache and logs claims are ReadWriteOnce and cannot back more than one pod. Either drop to one replica or turn persistence off and accept per-pod cache warm-up." (int .Values.api.replicaCount)) }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -87,16 +96,74 @@ spec:
             # mount it lands on the container's root filesystem.
             - name: state
               mountPath: /var/insighta
-      # compose used named volumes for these. They hold regenerable data, so
-      # emptyDir is correct here -- a PVC would imply the contents must
-      # survive rescheduling, and they do not.
+      # An earlier revision called these regenerable and used emptyDir for
+      # both. That was written without looking at what they hold. Measured on
+      # production 2026-08-14:
+      #
+      #   /app/cache  13 MB  base64-named JSON, one file per playlist --
+      #               persisted YouTube API responses. Starting cold means
+      #               re-fetching them, and a subscriptions call costs 100
+      #               quota units. This is why redis is empty: the app caches
+      #               to disk, not to redis.
+      #   /app/logs   34 MB  combined*.log and error*.log going back to May.
+      #               The only copy; nothing ships them anywhere.
+      #
+      # Neither is user data, but neither is free to discard either. Both get
+      # a volume by default; emptyDir stays available for ephemeral
+      # environments through persistence.enabled.
       volumes:
+{{- if .Values.api.persistence.enabled }}
+        - name: cache
+          persistentVolumeClaim:
+            claimName: {{ include "insighta.fullname" . }}-api-cache
+        - name: logs
+          persistentVolumeClaim:
+            claimName: {{ include "insighta.fullname" . }}-api-logs
+{{- else }}
         - name: cache
           emptyDir: {}
         - name: logs
           emptyDir: {}
+{{- end }}
+        # Rebuilt on demand by pool-health; losing it costs one stale-query
+        # fallback, not history.
         - name: state
           emptyDir: {}
+{{- if .Values.api.persistence.enabled }}
+---
+# ReadWriteOnce, so these are only correct while api.replicaCount is 1.
+# Raising replicas requires either ReadWriteMany or accepting that each pod
+# keeps its own cache -- which is a decision, not a default.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insighta.fullname" . }}-api-cache
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.api.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.api.persistence.cacheSize }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insighta.fullname" . }}-api-logs
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.api.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.api.persistence.logsSize }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

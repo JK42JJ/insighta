@@ -42,6 +42,24 @@
 # than losing data.
 api:
   replicaCount: 2
+  # Off at 2 replicas, deliberately. A ReadWriteOnce claim cannot back two
+  # pods, and k3s local-path offers nothing else. The two directories are not
+  # equivalent, so the trade differs:
+  #
+  #   /app/cache  each pod warms its own copy of the YouTube response cache.
+  #               The cost is one warm-up per pod, not a continuous one --
+  #               acceptable. The shared-cache answer is redis, which is
+  #               deployed and holds nothing (6.1 risk 3); this is the first
+  #               concrete consumer it would have.
+  #   /app/logs   lost on reschedule, and nothing ships them off the pod.
+  #               This is the same gap the design records for journald
+  #               (6.1 risk 5) and it is NOT solved here. Log shipping is a
+  #               P2 item; until then a rescheduled pod loses its history.
+  #
+  # Do not turn this on while replicaCount is above 1 -- the second pod will
+  # sit Pending on a volume it cannot attach.
+  persistence:
+    enabled: false
 frontend:
   replicaCount: 2
 redis:
