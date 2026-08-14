@@ -29,9 +29,7 @@ import { loadTranscriptConfig } from '@/config/transcript';
 // Tailscale; the EC2 caption-extractor falls back to direct youtube-
 // transcript only if the proxy is unreachable (defence in depth).
 const TRANSCRIPT_CONFIG = loadTranscriptConfig();
-const MAC_MINI_URL = TRANSCRIPT_CONFIG.macMiniUrl;
-const MAC_MINI_TOKEN = TRANSCRIPT_CONFIG.macMiniToken;
-const MAC_MINI_TIMEOUT_MS = 30_000;
+const PROXY_TIMEOUT_MS = 30_000;
 
 interface MacMiniSegment {
   text: string;
@@ -46,26 +44,36 @@ interface MacMiniResponse {
   error?: string;
 }
 
-async function fetchViaMacMini(youtubeId: string, lang: string): Promise<MacMiniSegment[] | null> {
-  if (!MAC_MINI_URL || !MAC_MINI_TOKEN) return null;
+/**
+ * Fetch a transcript through ONE proxy host (Azure App Service or Mac Mini —
+ * same Webshare-backed service, same token). Returns segments on success, `[]`
+ * when the proxy REACHED YouTube but there are no captions in this language,
+ * and `null` when the proxy is unreachable (so the caller tries the next proxy).
+ */
+async function fetchViaProxy(
+  proxy: { name: string; url: string; token: string },
+  youtubeId: string,
+  lang: string
+): Promise<MacMiniSegment[] | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), MAC_MINI_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
   try {
     const resp = await fetch(
-      `${MAC_MINI_URL.replace(/\/$/, '')}/transcript/${encodeURIComponent(youtubeId)}?lang=${encodeURIComponent(lang)}`,
+      `${proxy.url.replace(/\/$/, '')}/transcript/${encodeURIComponent(youtubeId)}?lang=${encodeURIComponent(lang)}`,
       {
         method: 'GET',
-        headers: { 'x-transcript-token': MAC_MINI_TOKEN },
+        headers: { 'x-transcript-token': proxy.token },
         signal: controller.signal,
       }
     );
     if (resp.status === 404) {
-      // service reachable, captions absent in this language — bubble up
-      // as "no captions" so the outer loop can try the next language
+      // service reachable, captions absent in this language — bubble up as
+      // "no captions" so the outer loop can try the next language.
       return [];
     }
     if (!resp.ok) {
-      logger.warn('Mac Mini transcript proxy non-200', {
+      logger.warn('transcript proxy non-200', {
+        proxy: proxy.name,
         youtubeId,
         lang,
         status: resp.status,
@@ -74,7 +82,8 @@ async function fetchViaMacMini(youtubeId: string, lang: string): Promise<MacMini
     }
     const data = (await resp.json()) as MacMiniResponse;
     if (!data.success || !Array.isArray(data.segments)) {
-      logger.warn('Mac Mini transcript proxy returned no segments', {
+      logger.warn('transcript proxy returned no segments', {
+        proxy: proxy.name,
         youtubeId,
         lang,
         error: data.error,
@@ -83,7 +92,8 @@ async function fetchViaMacMini(youtubeId: string, lang: string): Promise<MacMini
     }
     return data.segments;
   } catch (err) {
-    logger.warn('Mac Mini transcript proxy fetch failed (falling back)', {
+    logger.warn('transcript proxy fetch failed (falling back)', {
+      proxy: proxy.name,
       youtubeId,
       lang,
       error: err instanceof Error ? err.message : String(err),
@@ -92,6 +102,20 @@ async function fetchViaMacMini(youtubeId: string, lang: string): Promise<MacMini
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Try each configured proxy in order (Azure → Mac Mini). Returns the result of
+ * the FIRST proxy that reaches YouTube (segments or `[]` = no captions); returns
+ * `null` only when every proxy is unreachable (caller then tries direct).
+ */
+async function fetchViaProxies(youtubeId: string, lang: string): Promise<MacMiniSegment[] | null> {
+  for (const proxy of TRANSCRIPT_CONFIG.proxies) {
+    const r = await fetchViaProxy(proxy, youtubeId, lang);
+    if (r !== null) return r; // reached (segments or 404 no-captions) — stop
+    // r === null → this proxy is unreachable; try the next one.
+  }
+  return null; // all proxies unreachable
 }
 import type {
   CaptionSegment,
@@ -128,11 +152,12 @@ export class CaptionExtractor {
       for (const lang of LANG_PRIORITY) {
         logger.info('Extracting captions', { videoId: youtubeId, language: lang });
 
-        // Path 1 — Mac Mini Tailscale proxy (preferred). EC2 outbound IP
-        // is blocked by YouTube for caption fetch; Mac Mini uses a KR ISP
-        // residential IP that successfully fetches. When the env vars are
-        // configured and the proxy returns a usable result, skip path 2.
-        const macMini = await fetchViaMacMini(youtubeId, lang);
+        // Path 1 — Webshare-backed proxies (Azure primary → Mac Mini fallback).
+        // EC2 outbound IP is blocked by YouTube AND scraping must not run on EC2
+        // (ToS); the proxies fetch through a Webshare residential IP off-EC2.
+        // Azure is an always-on cloud host (fixes the Mac Mini SPOF). When a
+        // proxy returns a usable result, skip path 2.
+        const macMini = await fetchViaProxies(youtubeId, lang);
         if (macMini && macMini.length > 0) {
           segments = macMini.map((item) => ({
             text: item.text,

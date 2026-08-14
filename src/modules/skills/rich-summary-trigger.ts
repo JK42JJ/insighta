@@ -12,6 +12,10 @@
 
 import { getPrismaClient } from '@/modules/database/client';
 import { enqueueEnrichVideo } from '@/modules/queue/handlers/enrich-video';
+import { maybeTriggerBookFill } from '@/modules/queue/handlers/book-fill-gate';
+import { enqueueJudgeDeboost } from '@/modules/queue/handlers/judge-deboost';
+import { isJudgeDeboostEnabled } from '@/config/judge-deboost';
+import { isV2AutoEnrichEnabled } from '@/config/v2-auto-enrich';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'RichSummaryTrigger' });
@@ -87,7 +91,12 @@ export async function enqueueRichSummaryForMandalaCards(params: {
 
   let enqueued = 0;
   let skipped = 0;
-  for (const [videoId, meta] of uniqueByVideo) {
+  // T6 cost gate — enrich burst + trigger book fill pause together; judge
+  // deboost (below) keeps firing so 품질 판정 stays testable while paused.
+  const v2Enabled = isV2AutoEnrichEnabled();
+  for (const [videoId, meta] of v2Enabled
+    ? uniqueByVideo
+    : new Map<string, { title: string | null; url: string }>()) {
     try {
       await enqueueEnrichVideo({
         videoId,
@@ -96,6 +105,7 @@ export async function enqueueRichSummaryForMandalaCards(params: {
         source: 'user',
         withRichSummary: true,
         userId: params.userId,
+        mandalaId: params.mandalaId,
       });
       enqueued += 1;
     } catch (err) {
@@ -113,9 +123,42 @@ export async function enqueueRichSummaryForMandalaCards(params: {
     userId: params.userId,
     mandalaId: params.mandalaId,
     uniqueVideos: uniqueByVideo.size,
+    v2Enabled,
     enqueued,
     skipped,
   });
+
+  // Book-chain guarantee (2026-07-12): the per-v2 book enqueue (enrichment.ts)
+  // only fires when a video takes the FULL inline v2 path — cache-hit videos
+  // early-return before it, so an all-cached mandala would never get its note.
+  // Enqueue ONE debounced book fill here unconditionally (singletonKey per
+  // mandala; 120s startAfter lets the enrich burst land first). Non-fatal.
+  if (uniqueByVideo.size > 0 && isJudgeDeboostEnabled()) {
+    // gA judge deboost — one shot per mandala (singleton, 240s). Fail-open.
+    await enqueueJudgeDeboost({ userId: params.userId, mandalaId: params.mandalaId }).catch(
+      (err) => {
+        log.warn('judge-deboost enqueue failed (non-fatal)', {
+          mandalaId: params.mandalaId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    );
+  }
+  if (uniqueByVideo.size > 0 && v2Enabled) {
+    // Route through the completion gate (2026-07-16): this used to enqueue a
+    // book-fill DIRECTLY, bypassing the barrier — one of two ungated emitters
+    // that caused early stub notes + uncontrolled Sonnet re-fills. maybeTrigger
+    // keeps the exact legacy behavior when the barrier flag is off, and honors
+    // the barrier when on, so all book-fill emission has a single choke point.
+    await maybeTriggerBookFill({ userId: params.userId, mandalaId: params.mandalaId }).catch(
+      (err) => {
+        log.warn('trigger-level book fill gate failed (non-fatal)', {
+          mandalaId: params.mandalaId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    );
+  }
 
   return { enqueued, skipped };
 }

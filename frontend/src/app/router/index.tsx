@@ -20,9 +20,8 @@ import { AdminModeration } from '@/pages/admin/ui/AdminModeration';
 import { AdminHealth } from '@/pages/admin/ui/AdminHealth';
 import { AdminBilling } from '@/pages/admin/ui/AdminBilling';
 import { AdminChatbotModels } from '@/pages/admin/ui/AdminChatbotModels';
-import { AdminSearchAlgorithms } from '@/pages/admin/ui/AdminSearchAlgorithms';
+import { AdminPerformanceMonitor } from '@/pages/admin/ui/AdminPerformanceMonitor';
 import { AdminV2QualityAudit } from '@/pages/admin/ui/AdminV2QualityAudit';
-import { AdminV4ArbiterRuns } from '@/pages/admin/ui/AdminV4ArbiterRuns';
 import { AdminPoolHealth } from '@/pages/admin/ui/AdminPoolHealth';
 import { AdminSearchTraceExplorer } from '@/pages/admin/ui/AdminSearchTraceExplorer';
 import { AdminBetaCampaign } from '@/pages/admin/ui/AdminBetaCampaign';
@@ -175,14 +174,13 @@ export function AppRouter() {
           <Route path="health" element={<AdminHealth />} />
           <Route path="audit-log" element={<AdminAuditLog />} />
           <Route path="chatbot-models" element={<AdminChatbotModels />} />
-          {/* CP488 — search algorithm catalog + per-mandala override. */}
-          <Route path="search-algorithms" element={<AdminSearchAlgorithms />} />
-          {/* CP488+ — v2 quality audit daily scan dashboard. */}
-          <Route path="v2-quality-audit" element={<AdminV2QualityAudit />} />
-          {/* CP489+ — v4 LLM-arbiter PoC runs dashboard (embeds /v4-arbiter-dashboard.html). */}
-          <Route path="v4-arbiter-runs" element={<AdminV4ArbiterRuns />} />
-          {/* Content Pool Health — 5-section pool dashboard. */}
-          <Route path="pool-health" element={<AdminPoolHealth />} />
+          {/* Perf-monitor PR3 — consolidation page (타임라인/파라미터/공급/품질). */}
+          <Route path="performance" element={<AdminPerformanceMonitor />} />
+          {/* Folded into /admin/performance tabs — old links keep working. */}
+          <Route path="search-algorithms" element={<Navigate to="/admin/performance" replace />} />
+          <Route path="v2-quality-audit" element={<Navigate to="/admin/performance" replace />} />
+          <Route path="v4-arbiter-runs" element={<Navigate to="/admin/performance" replace />} />
+          <Route path="pool-health" element={<Navigate to="/admin/performance" replace />} />
           {/* Observability G2 — Search-Trace Explorer (Card Journey debug view). */}
           <Route path="search-trace" element={<AdminSearchTraceExplorer />} />
           {/* Closed-beta campaign — signup gate + application inbox. */}

@@ -1,0 +1,44 @@
+{{- if .Values.schemaSync.enabled }}
+# Applies the Prisma schema before the app rolls out.
+#
+# The container entrypoint defines run_migrations() but never calls it --
+# docker/entrypoint.sh says "Schema sync is handled by CI/CD pipeline
+# (deploy.yml)", and on the box it is: deploy.yml has a Database Schema Sync
+# job. A cluster deploy has no such step, so the pods come up against an
+# empty database. /health does not read any table, so the pods report Ready
+# and the gap stays invisible until the first real query.
+#
+# A Helm hook is the equivalent step. `prisma db push` converges rather than
+# replays, so re-running it is safe.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "insighta.fullname" . }}-schema-sync
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: schema-sync
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: schema-sync
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: schema-sync
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["npx", "prisma@{{ .Values.schemaSync.cliVersion }}", "db", "push", "--skip-generate", "--accept-data-loss"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envSecretName }}
+          resources:
+            requests: { memory: 256Mi, cpu: 100m }
+            limits:   { memory: 1Gi,   cpu: 1000m }
+{{- end }}

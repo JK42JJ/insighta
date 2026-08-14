@@ -596,6 +596,67 @@ export class ApiHttpError extends Error {
   }
 }
 
+// Admin Performance Monitor — kept in sync with src/api/routes/admin/performance.ts
+export interface PerfKpiMandalaDay {
+  day: string;
+  mandalas: number;
+  place_off_p50_s: number | null;
+  place_off_p95_s: number | null;
+  cards_p50: number | null;
+  cells_p50: number | null;
+  shorts: number;
+  deboost_rate: number | null;
+}
+
+export interface PerfKpiPrecomputeDay {
+  day: string;
+  total: number;
+  consumed: number;
+  dur_p50_s: number | null;
+  dur_p95_s: number | null;
+}
+
+export interface PerfKpiTraceDay {
+  day: string;
+  gate_pass_ratio: number | null;
+  embed_p95_ms: number | null;
+}
+
+export interface PerfChangeEvent {
+  id: string;
+  created_at: string;
+  source: string;
+  git_sha: string | null;
+  flags: Record<string, string> | null;
+  diff: Record<string, { from: string | null; to: string | null }> | null;
+  note: string | null;
+  experiment: string | null;
+  experiment_criteria: string | null;
+}
+
+export interface PerfViolation {
+  metric: string;
+  value: number;
+  threshold: number;
+  direction: 'above' | 'below';
+}
+
+export interface AdminPerformanceDiagnosis {
+  generated_at: string;
+  interpretation: { rules: readonly string[] };
+  current: { git_sha: string | null; flags: Record<string, string> };
+  thresholds: Record<string, number>;
+  window_24h: Record<string, number | null> | null;
+  violations: PerfViolation[];
+  kpi_7d: {
+    mandala_days: PerfKpiMandalaDay[];
+    precompute_days: PerfKpiPrecomputeDay[];
+    trace_days: PerfKpiTraceDay[];
+  };
+  events_30d: PerfChangeEvent[];
+  weak_runs_7d: { mandala_id: string; created_at: string; cards: number; goal: string | null }[];
+}
+
 // Admin Pool Health — kept in sync with src/api/routes/admin/pool-health.ts
 // (PoolHealthSnapshot) + src/config/pool-health.ts (POOL_HEALTH_THRESHOLDS).
 export type PoolHealthStatus = 'ok' | 'warn' | 'critical' | 'na';
@@ -1092,6 +1153,24 @@ class ApiClient {
    * single source of truth for the FE share-menu preview card so what the
    * user sees matches the SNS-rendered card byte-for-byte. CP454+.
    */
+  /**
+   * Share v2 — mint a short link (insighta.one/s/CODE). One backbone for
+   * every share surface; BE reuses a live link for the same target+mode.
+   */
+  async mintShortLink(input: {
+    targetType: 'note_episode' | 'learning_video' | 'mandala';
+    targetId: string;
+    videoId?: string;
+  }): Promise<{
+    status: string;
+    data: { code: string; url: string; expiresAt: string | null };
+  }> {
+    return this.request('/share-links', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
   async getLearningShareOgMeta(
     mandalaId: string,
     videoId: string
@@ -1621,6 +1700,10 @@ class ApiClient {
       status: string;
       created_at: string;
       invited_at: string | null;
+      /** 'sent' | 'failed' | 'skipped'. null = invited before this was recorded. */
+      invite_email_status: string | null;
+      invite_email_at: string | null;
+      invite_email_error: string | null;
     }>;
     total: number;
   }> {
@@ -1632,6 +1715,9 @@ class ApiClient {
   async markBetaInvited(id: string): Promise<{ application: { id: string; status: string } }> {
     return this.request(`/admin/beta-applications/${encodeURIComponent(id)}/mark-invited`, {
       method: 'POST',
+      // request() always sets Content-Type: application/json — a body-less POST
+      // 400s with FST_ERR_CTP_EMPTY_JSON_BODY before the route runs (#935 class).
+      body: JSON.stringify({}),
     });
   }
 
@@ -2836,6 +2922,30 @@ class ApiClient {
   }
 
   // ========================================
+  // Admin Performance Monitor (diagnosis + manual markers)
+  // ========================================
+
+  async getAdminPerformanceDiagnosis(): Promise<AdminPerformanceDiagnosis> {
+    const res = await this.request<{ success: boolean; data: AdminPerformanceDiagnosis }>(
+      '/admin/performance/diagnosis',
+      { timeoutMs: 30_000 }
+    );
+    return res.data;
+  }
+
+  async postAdminPerformanceEvent(body: {
+    note: string;
+    experiment?: 'candidate' | 'adopted' | 'reverted';
+    experiment_criteria?: string;
+  }): Promise<{ id: string; created_at: string }> {
+    const res = await this.request<{ success: boolean; data: { id: string; created_at: string } }>(
+      '/admin/performance/events',
+      { method: 'POST', body: JSON.stringify(body) }
+    );
+    return res.data;
+  }
+
+  // ========================================
   // Admin Pool Health (5-section content pool dashboard)
   // ========================================
 
@@ -2933,6 +3043,25 @@ class ApiClient {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+  }
+
+  /** Whether each user-facing feature actually works, measured — not whether
+   *  the process is up. See src/api/routes/admin/feature-status.ts. */
+  async getAdminFeatureStatus(): Promise<{
+    status: string;
+    data: {
+      overall: 'ok' | 'warn' | 'fail';
+      checked_at: string;
+      checks: Array<{
+        key: string;
+        label: string;
+        status: 'ok' | 'warn' | 'fail';
+        detail: string;
+        action?: string;
+      }>;
+    };
+  }> {
+    return this.request('/admin/feature-status');
   }
 
   async getAdminHealth(): Promise<{

@@ -10,8 +10,17 @@ import { CardList } from '@/widgets/card-list/ui/CardList';
 import { ListView } from '@/widgets/list-view';
 import { DetailPanel } from '@/widgets/detail-panel';
 import { GraphView } from '@/components/graph/GraphView';
+import { extractYouTubeVideoId } from '@/features/card-management/lib/youtubeToInsightCard';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/shared/ui/resizable';
-import { LayoutGrid, Grid3X3, Plus, GripVertical, ArrowDownWideNarrow, Eye } from 'lucide-react';
+import {
+  LayoutGrid,
+  Grid3X3,
+  Plus,
+  GripVertical,
+  ArrowDownWideNarrow,
+  Eye,
+  ChevronDown,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -25,6 +34,7 @@ import { ContextHeader, SORT_OPTIONS, type SortMode } from './ContextHeader';
 import { LabelFilterPillsV2 } from './LabelFilterPillsV2';
 
 // P3 Stage 1 (CP513) — global (cross-mandala) sort persistence keys.
+
 const GLOBAL_SORT_KEY = 'insighta:cardSortMode';
 const GLOBAL_SORT_TOAST_KEY = 'insighta:cardSortMode:toastShown';
 
@@ -125,6 +135,8 @@ function useContainerColumns(ref: React.RefObject<HTMLElement>): number {
 interface CardListViewProps {
   cards: InsightCard[];
   isLoading?: boolean;
+  /** Wizard fill in progress — ContextHeader shows the streaming spinner. */
+  isFilling?: boolean;
   title: string;
   /** Render title as a shimmer placeholder while mandala detail query is loading. */
   titleLoading?: boolean;
@@ -185,6 +197,7 @@ interface CardListViewProps {
 export function CardListView({
   cards,
   isLoading,
+  isFilling,
   title,
   titleLoading,
   viewMode,
@@ -509,6 +522,7 @@ export function CardListView({
     <ContextHeader
       title={title}
       titleLoading={titleLoading}
+      isFilling={isFilling}
       totalCardCount={effectiveCards.length}
       viewMode={effectiveViewMode}
       onViewModeChange={onViewModeChange}
@@ -610,7 +624,24 @@ export function CardListView({
           </div>
         </div>
         <div className="flex-1 min-h-0 relative">
-          <GraphView mandalaId={mandalaId} />
+          <GraphView
+            mandalaId={mandalaId}
+            onOpenVideo={({ youtubeId, url }) => {
+              const targetId = youtubeId ?? (url ? extractYouTubeVideoId(url) : null);
+              if (targetId) {
+                const card = cards.find((c) => extractYouTubeVideoId(c.videoUrl) === targetId);
+                if (card && onCardClick) {
+                  onCardClick(card);
+                  return;
+                }
+              }
+              // Node's video is not in this mandala's cards (cross-mandala or
+              // stale) — fall back to the source URL so it stays reachable.
+              const fallback =
+                url ?? (youtubeId ? `https://www.youtube.com/watch?v=${youtubeId}` : null);
+              if (fallback) window.open(fallback, '_blank', 'noopener,noreferrer');
+            }}
+          />
         </div>
       </div>
     );

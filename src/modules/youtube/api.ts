@@ -10,6 +10,7 @@ import { getPrismaClient } from '../database';
 import { config } from '@/config/index';
 import { logger } from '@/utils/logger';
 import { MS_PER_HOUR } from '@/utils/time-constants';
+import { isYouTubeCacheSharedInvalidation } from '../../config/youtube-cache';
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 const MAX_RESULTS = 50;
@@ -23,12 +24,39 @@ const MAX_RESULTS = 50;
  * subscriptions) while keeping data reasonably fresh.
  */
 const CACHE_TTL_MS = 6 * MS_PER_HOUR; // 6 hours
-const responseCache = new Map<string, { data: unknown; expiry: number }>();
+const responseCache = new Map<string, { data: unknown; expiry: number; storedAt: number }>();
 
-function getCached<T>(key: string): T | null {
+/**
+ * The cache stays in memory — it exists to protect YouTube quota, and the
+ * payloads do not belong in the database. The invalidation cannot stay in
+ * memory: clearing one process leaves every other replica serving the account
+ * of a user who has just disconnected, for as long as the TTL runs.
+ *
+ * So one row per user records when their cache was invalidated, and an entry
+ * stored before that moment is a miss wherever it is held.
+ */
+async function invalidatedAfter(userId: string, storedAt: number): Promise<boolean> {
+  if (!isYouTubeCacheSharedInvalidation()) return false;
+  try {
+    const row = await getPrismaClient().youtube_cache_epochs.findUnique({
+      where: { user_id: userId },
+    });
+    return !!row && row.invalidated_at.getTime() > storedAt;
+  } catch {
+    // Unreachable database must not turn a cache lookup into an error; the
+    // TTL still bounds how long a stale entry can live.
+    return false;
+  }
+}
+
+async function getCached<T>(key: string, userId: string): Promise<T | null> {
   const entry = responseCache.get(key);
   if (!entry) return null;
   if (Date.now() > entry.expiry) {
+    responseCache.delete(key);
+    return null;
+  }
+  if (await invalidatedAfter(userId, entry.storedAt)) {
     responseCache.delete(key);
     return null;
   }
@@ -36,15 +64,30 @@ function getCached<T>(key: string): T | null {
 }
 
 function setCache(key: string, data: unknown): void {
-  responseCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
+  const now = Date.now();
+  responseCache.set(key, { data, expiry: now + CACHE_TTL_MS, storedAt: now });
 }
 
 /** Clear cache for a user (call after YouTube reconnect/disconnect) */
-export function clearYouTubeCache(userId: string): void {
+export async function clearYouTubeCache(userId: string): Promise<void> {
   for (const key of responseCache.keys()) {
     if (key.startsWith(`${userId}:`)) {
       responseCache.delete(key);
     }
+  }
+
+  if (!isYouTubeCacheSharedInvalidation()) return;
+  try {
+    const now = new Date();
+    await getPrismaClient().youtube_cache_epochs.upsert({
+      where: { user_id: userId },
+      create: { user_id: userId, invalidated_at: now },
+      update: { invalidated_at: now },
+    });
+  } catch (error) {
+    // The local clear has already happened; failing to publish it leaves the
+    // other replicas bounded by the TTL, which is the previous behaviour.
+    logger.warn('YouTube cache: failed to publish invalidation', { error });
   }
 }
 
@@ -140,7 +183,7 @@ export async function getUserSubscriptions(
   type SubResult = { items: YouTubeSubscription[]; nextPageToken?: string; totalResults: number };
 
   const cacheKey = `${userId}:subscriptions:${pageToken ?? ''}`;
-  const cached = getCached<SubResult>(cacheKey);
+  const cached = await getCached<SubResult>(cacheKey, userId);
   if (cached) return cached;
 
   const accessToken = await getAccessToken(userId);
@@ -196,7 +239,7 @@ export async function getUserPlaylists(
   type PlResult = { items: YouTubePlaylist[]; nextPageToken?: string; totalResults: number };
 
   const cacheKey = `${userId}:playlists:${pageToken ?? ''}`;
-  const cached = getCached<PlResult>(cacheKey);
+  const cached = await getCached<PlResult>(cacheKey, userId);
   if (cached) return cached;
 
   const accessToken = await getAccessToken(userId);
@@ -267,7 +310,7 @@ export async function getPlaylistItems(
   };
 
   const cacheKey = `${userId}:playlistItems:${playlistId}:${pageToken ?? ''}`;
-  const cached = getCached<PlItemResult>(cacheKey);
+  const cached = await getCached<PlItemResult>(cacheKey, userId);
   if (cached) return cached;
 
   const accessToken = await getAccessToken(userId);

@@ -48,6 +48,16 @@ import { resolveAlgorithm } from '@/modules/search/algorithm-resolver';
 import { filterByQualityGate } from './quality-gate';
 import { applyHybridRerank } from './hybrid-rerank';
 import { embedBatch, cosineToRelevance } from '@/skills/plugins/iks-scorer/embedding';
+import { servingEmbedOptions } from '@/config/embed-serving-timeout';
+import {
+  isProgressiveFillEnabled,
+  getProgressiveFillConfig,
+  planProgressiveChunks,
+} from '@/config/discover-progressive-fill';
+import { getSearchVideoDuration, isSkipRuleQueriesEnabled } from '@/config/discover-t5';
+import { isSubgoalAnchorEnabled, buildAnchoredSubgoalQuery } from '@/config/subgoal-anchor';
+import { placeAutoAddedCards } from '@/modules/mandala/place-auto-added-cards';
+import { isDiscoverNeverZeroFloorEnabled, getZeroFloorMax } from '@/config/discover-zero-floor';
 import { getCenterGoalEmbedding } from '@/modules/mandala/center-goal-embedding';
 import { withTraceContext, recordTrace } from '@/modules/discover-tracing';
 import { resolveLanguage } from '@/utils/detect-language';
@@ -475,7 +485,7 @@ async function executeImpl(
         const titles = capped.map((m) => m.title);
         const [centerVec, titleVecs] = await Promise.all([
           getCenterGoalEmbedding(mandalaId, state.centerGoal),
-          embedBatch(titles),
+          embedBatch(titles, servingEmbedOptions()),
         ]);
         const vectorsOk = centerVec != null && titleVecs.length === titles.length;
         if (vectorsOk) {
@@ -631,6 +641,51 @@ async function executeImpl(
       existingVideoIds,
       // CP489 — enable center_goal cache for mandala-bound runs.
       mandalaId,
+      // Progressive fill: each gated chunk upserts immediately (SSE fires per
+      // row) so the grid fills over seconds. Final full-set upsert below still
+      // runs and refreshes rec_score (idempotent upsert). Flag default OFF.
+      onPartialSlots: isProgressiveFillEnabled()
+        ? async (partial) => {
+            // rec_cache first (SSE card_added fires per row)...
+            await upsertSlots(ctx.userId, mandalaId, partial, state.subGoals);
+            // ...then straight into user_video_states so the DASHBOARD GRID
+            // (which renders uvs, not rec_cache) paints within seconds on the
+            // precompute-MISS path. Step3 auto-add later delete-and-replaces
+            // the cell from rec_cache — the same videos are in rec_cache by
+            // then, so the final set converges (brief re-insert, no card loss).
+            const byCell = new Map<number, typeof partial>();
+            for (const s of partial) {
+              if (!byCell.has(s.cellIndex)) byCell.set(s.cellIndex, []);
+              byCell.get(s.cellIndex)!.push(s);
+            }
+            for (const [cellIndex, slots] of byCell) {
+              try {
+                await placeAutoAddedCards(
+                  getPrismaClient(),
+                  ctx.userId,
+                  mandalaId,
+                  cellIndex,
+                  slots.map((sl) => ({
+                    videoId: sl.videoId,
+                    title: sl.title,
+                    description: sl.description,
+                    thumbnail: sl.thumbnail,
+                    channelTitle: sl.channelName,
+                    durationSec: sl.durationSec,
+                    viewCount: sl.viewCount,
+                    publishedAt: sl.publishedAt,
+                    recScore: sl.score,
+                  })),
+                  { notify: true }
+                );
+              } catch (err) {
+                log.warn(
+                  `[progressive] partial uvs place failed (non-fatal, cell=${cellIndex}): ${err instanceof Error ? err.message : String(err)}`
+                );
+              }
+            }
+          }
+        : undefined,
     });
     slots.push(...tier2Fill.slots);
     tier2Count = tier2Fill.slots.length;
@@ -862,6 +917,14 @@ interface Tier2Input {
    * to fresh embed.
    */
   mandalaId?: string;
+  /**
+   * Progressive fill (2026-07-11) — when set AND DISCOVER_PROGRESSIVE_FILL is
+   * on, each embedded+gated candidate CHUNK is handed out immediately so the
+   * caller can upsert it (cardPublisher SSE fires per row → grid fills over
+   * seconds). Cards never move or vanish: the final full-set gate pass still
+   * runs and converges to the same placement (deterministic argmax).
+   */
+  onPartialSlots?: (slots: AssembledSlot[]) => Promise<void>;
 }
 
 interface Tier2Debug {
@@ -896,6 +959,8 @@ interface Tier2Debug {
   mandalaFilterSubGoalTokenCounts: number[];
   perCellAssigned: Record<number, number>;
   scoredCandidates: number;
+  /** P0 2026-07-11 — candidates admitted by the never-zero floor (gate emptied). */
+  floorAdmitted: number;
   finalSlots: number;
   centerGoal: string;
   subGoalsSample: string[];
@@ -947,6 +1012,7 @@ function makeEmptyDebug(input: Tier2Input): Tier2Debug {
     mandalaFilterSubGoalTokenCounts: [],
     perCellAssigned: {},
     scoredCandidates: 0,
+    floorAdmitted: 0,
     finalSlots: 0,
     centerGoal: input.state.centerGoal,
     subGoalsSample: [...input.state.subGoals],
@@ -972,16 +1038,23 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   }
 
   const tKwRuleStart = Date.now();
-  const ruleQueries = buildRuleBasedQueriesSync(
-    {
-      centerGoal: input.state.centerGoal,
-      subGoals: deficitSubGoals,
-      focusTags: input.state.focusTags,
-      targetLevel: input.state.targetLevel,
-      language: input.state.language,
-    },
-    v3Config.maxQueries
-  );
+  // T5 — measured: concat rule queries returned 0-7 items each (mostly 0)
+  // while LLM queries returned 50 each (run 1710a7c8). Skipping the rule
+  // round saves ~10 search units and shortens discover (raising precompute
+  // HIT rate); the zero-hit fallback + LLM queries carry cell targeting.
+  const skipRuleQueries = isSkipRuleQueriesEnabled();
+  const ruleQueries = skipRuleQueries
+    ? []
+    : buildRuleBasedQueriesSync(
+        {
+          centerGoal: input.state.centerGoal,
+          subGoals: deficitSubGoals,
+          focusTags: input.state.focusTags,
+          targetLevel: input.state.targetLevel,
+          language: input.state.language,
+        },
+        v3Config.maxQueries
+      );
   debug.timing.keywordRuleMs = Date.now() - tKwRuleStart;
 
   const tKwLlmStart = Date.now();
@@ -1021,8 +1094,30 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
   const llmQueries = await llmPromise;
   debug.timing.keywordLlmMs = Date.now() - tKwLlmStart;
   debug.llmQuotaHit = llmQueries.length === 0 && Boolean(input.openRouterApiKey);
+  // T5 cell-coverage (2026-07-12): LLM queries carry no cellIndex, so cells
+  // the LLM didn't happen to cover get NO targeted supply and end up empty
+  // (measured: 3 empty cells on run 8dbb3e67 with only 5 LLM queries). Add
+  // one query PER deficit cell using the sub-goal text itself — natural
+  // phrases ("장거리 러닝", "부상 예방"), not the junk centerGoal-concat that
+  // DISCOVER_SKIP_RULE_QUERIES removed — tagged with cellIndex so results
+  // land in their cell via cellIndexHint.
+  const subGoalQueries: SearchQuery[] = [];
+  if (isSkipRuleQueriesEnabled()) {
+    for (const { cellIndex } of input.deficitCells) {
+      const sg = (input.state.subGoals[cellIndex] ?? '').trim();
+      if (!sg) continue;
+      // T9 (matrix F6): raw subgoals like "청취 회화" harvest English-learning
+      // junk on Korean YouTube. Prefix a domain anchor from the center goal.
+      const q = isSubgoalAnchorEnabled()
+        ? buildAnchoredSubgoalQuery(input.state.centerGoal, sg)
+        : sg;
+      subGoalQueries.push({ query: q, source: 'subgoal', cellIndex });
+    }
+  }
   const usedQueryTexts = new Set(ruleQueries.map((q) => q.query.toLowerCase()));
-  const extraLLM = llmQueries.filter((q) => !usedQueryTexts.has(q.query.toLowerCase()));
+  const extraLLM = [...llmQueries, ...subGoalQueries].filter(
+    (q) => !usedQueryTexts.has(q.query.toLowerCase())
+  );
   for (const q of extraLLM) {
     debug.queries.push({ query: q.query, source: 'llm', cellIndex: q.cellIndex ?? null });
   }
@@ -1189,39 +1284,153 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     // Ephemeral path (input.mandalaId undefined) falls back to embedBatch
     // for the center as well via plain embedBatch call.
     const titles = cappedFilterInputs.map((f) => f.title);
-    try {
-      const [centerVec, titleVecs] = await Promise.all([
-        input.mandalaId
-          ? getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
-          : (async () => {
-              const [v] = await embedBatch([input.state.centerGoal]);
-              return v ?? null;
-            })(),
-        embedBatch(titles),
-      ]);
-      if (centerVec != null && titleVecs.length === titles.length) {
-        centerEmbedding = centerVec;
-        candidateEmbeddings = new Map<string, number[]>();
-        for (let i = 0; i < cappedFilterInputs.length; i++) {
-          const vec = titleVecs[i];
-          const id = cappedFilterInputs[i]?.videoId;
-          if (vec && id) candidateEmbeddings.set(id, vec);
+    const progressive = isProgressiveFillEnabled() && input.onPartialSlots != null;
+    if (progressive) {
+      // Progressive fill (supervisor-approved 2026-07-11): embed+gate per
+      // CHUNK and hand each gated chunk out for immediate upsert (early
+      // visibility only). The full-set gate below still runs over the
+      // accumulated embeddings and remains the authoritative placement.
+      const pfCfg = getProgressiveFillConfig();
+      const deficitSet = new Set(input.deficitCells.map((c) => c.cellIndex));
+      try {
+        const centerVec = input.mandalaId
+          ? await getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
+          : ((await embedBatch([input.state.centerGoal], servingEmbedOptions()))[0] ?? null);
+        if (centerVec != null) {
+          centerEmbedding = centerVec;
+          const embMap = new Map<string, number[]>();
+          candidateEmbeddings = embMap;
+          const streamedIds = new Set<string>();
+          const chunks = planProgressiveChunks(
+            cappedFilterInputs,
+            pfCfg,
+            (f) => enrichedById.get(f.videoId)?.cellIndexHint ?? null
+          );
+          // T5-perf (2026-07-12): chunks run CONCURRENTLY — the sequential
+          // loop serialized embed calls (measured 23.1s gate_embed on run
+          // 8dbb3e67: 5.3+5.8+5.1+1.9+11.9+2.7s). Wall-clock is now
+          // max(chunk) while early chunks still paint the grid first.
+          await Promise.allSettled(
+            chunks.map(async (chunk) => {
+              try {
+                const vecs = await embedBatch(
+                  chunk.map((f) => f.title),
+                  servingEmbedOptions()
+                );
+                for (let i = 0; i < chunk.length; i++) {
+                  const vec = vecs[i];
+                  const id = chunk[i]?.videoId;
+                  if (vec && id) embMap.set(id, vec);
+                }
+                const { byCell: chunkByCell } = applyMandalaFilterWithStats(chunk, {
+                  centerGoal: input.state.centerGoal,
+                  subGoals: input.state.subGoals,
+                  language: input.state.language,
+                  focusTags: input.state.focusTags,
+                  recencyWeight: v3Config.recencyWeight,
+                  recencyHalfLifeMonths: v3Config.recencyHalfLifeMonths,
+                  centerGateMode: v3Config.centerGateMode,
+                  centerEmbedding: centerVec,
+                  candidateEmbeddings: embMap,
+                  semanticMinCosine: v3Config.semanticMinCosine,
+                  subGoalEmbeddings: input.state.subGoalEmbeddings,
+                  emptyTitleGateShadow: v3Config.emptyTitleGateShadow,
+                  emptyTitleGate: v3Config.emptyTitleGate,
+                });
+                const partial: AssembledSlot[] = [];
+                const perCell = new Map<number, number>();
+                for (const [cellIndex, list] of chunkByCell) {
+                  if (!deficitSet.has(cellIndex)) continue;
+                  for (const a of [...list].sort((x, y) => y.score - x.score)) {
+                    if (streamedIds.has(a.candidate.videoId)) continue;
+                    if ((perCell.get(cellIndex) ?? 0) >= pfCfg.perChunkCellCap) break;
+                    const ev = enrichedById.get(a.candidate.videoId);
+                    if (!ev) continue;
+                    partial.push({
+                      videoId: ev.videoId,
+                      title: ev.title,
+                      description: ev.description,
+                      channelName: ev.channelTitle,
+                      channelId: ev.channelId,
+                      thumbnail: ev.thumbnail,
+                      viewCount: ev.viewCount,
+                      likeCount: ev.likeCount,
+                      durationSec: ev.durationSec,
+                      publishedAt: ev.publishedDate,
+                      cellIndex,
+                      score: a.score,
+                      tier: 'realtime',
+                    });
+                    perCell.set(cellIndex, (perCell.get(cellIndex) ?? 0) + 1);
+                    streamedIds.add(a.candidate.videoId);
+                  }
+                }
+                if (partial.length > 0) {
+                  try {
+                    await input.onPartialSlots!(partial);
+                    log.info(
+                      `[progressive] streamed chunk: ${partial.length} slots (chunk size ${chunk.length})`
+                    );
+                  } catch (err) {
+                    log.warn(
+                      `[progressive] partial upsert failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
+                    );
+                  }
+                }
+              } catch (err) {
+                log.warn(
+                  `[progressive] chunk embed failed — continuing without it: ${err instanceof Error ? err.message : String(err)}`
+                );
+              }
+            })
+          );
+        } else {
+          log.warn('[progressive] center embed unavailable — substring fallback');
         }
-      } else {
+      } catch (err) {
         log.warn(
-          `semantic gate embed vector mismatch: center=${centerVec != null} titles=${titleVecs.length}/${titles.length} — falling back to substring`
+          `[progressive] setup failed — substring fallback: ${err instanceof Error ? err.message : String(err)}`
         );
       }
-    } catch (err) {
-      log.warn(
-        `semantic gate embed failed: ${err instanceof Error ? err.message : String(err)} — falling back to substring`
+      debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
+      log.info(
+        `semantic gate (progressive): candidates=${filterInputs.length} capped=${cappedFilterInputs.length} embedMs=${debug.timing.semanticGateEmbedMs}`
+      );
+    } else {
+      try {
+        const [centerVec, titleVecs] = await Promise.all([
+          input.mandalaId
+            ? getCenterGoalEmbedding(input.mandalaId, input.state.centerGoal)
+            : (async () => {
+                const [v] = await embedBatch([input.state.centerGoal], servingEmbedOptions());
+                return v ?? null;
+              })(),
+          embedBatch(titles, servingEmbedOptions()),
+        ]);
+        if (centerVec != null && titleVecs.length === titles.length) {
+          centerEmbedding = centerVec;
+          candidateEmbeddings = new Map<string, number[]>();
+          for (let i = 0; i < cappedFilterInputs.length; i++) {
+            const vec = titleVecs[i];
+            const id = cappedFilterInputs[i]?.videoId;
+            if (vec && id) candidateEmbeddings.set(id, vec);
+          }
+        } else {
+          log.warn(
+            `semantic gate embed vector mismatch: center=${centerVec != null} titles=${titleVecs.length}/${titles.length} — falling back to substring`
+          );
+        }
+      } catch (err) {
+        log.warn(
+          `semantic gate embed failed: ${err instanceof Error ? err.message : String(err)} — falling back to substring`
+        );
+      }
+      debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
+      log.info(
+        `semantic gate: candidates=${filterInputs.length} capped=${cappedFilterInputs.length} ` +
+          `overflow=${overflow} cap=${cap} embedMs=${debug.timing.semanticGateEmbedMs}`
       );
     }
-    debug.timing.semanticGateEmbedMs = Date.now() - tSemEmbedStart;
-    log.info(
-      `semantic gate: candidates=${filterInputs.length} capped=${cappedFilterInputs.length} ` +
-        `overflow=${overflow} cap=${cap} embedMs=${debug.timing.semanticGateEmbedMs}`
-    );
   }
 
   const tMandalaFilterStart = Date.now();
@@ -1315,6 +1524,37 @@ async function runTier2(input: Tier2Input): Promise<Tier2Output> {
     }
     mandalaFilterRanTier2 = true;
   }
+
+  // P0 2026-07-11 — never-zero floor. When the RANKING gate (center cosine /
+  // jaccard) drops every candidate, the run used to return "No recommendations"
+  // → 0 cards, even though search found candidates and the SAFETY gates
+  // (shorts / lang / blocklist / quality) already passed them (kapasi
+  // 87960287: 108 found → gate input 10 → center-gate -8 → 0). Principle:
+  // "덜 정렬된 카드 > 카드 0장" — admit the top-N in search-rank order into
+  // deficit cells; async relevance backfill re-ranks them later. Flag off =
+  // legacy fail-closed. See config/discover-zero-floor.ts.
+  if (scored.length === 0 && filterable.length > 0 && isDiscoverNeverZeroFloorEnabled()) {
+    const deficitCellList = input.deficitCells.map((c) => c.cellIndex);
+    const cap = Math.min(getZeroFloorMax(), filterable.length);
+    let floorScore = 0.05;
+    for (let i = 0; i < cap; i++) {
+      const v = filterable[i]!;
+      const hinted = v.cellIndexHint;
+      const cellIndex =
+        hinted != null && deficitCellSet.has(hinted)
+          ? hinted
+          : deficitCellList[i % deficitCellList.length]!;
+      scored.push({ video: enrichedById.get(v.videoId)!, cellIndex, score: floorScore });
+      floorScore = Math.max(0.01, floorScore - 0.001);
+    }
+    debug.floorAdmitted = scored.length;
+    // Per-fire mandala id (supervisor): floor-served mandalas bypass the
+    // ranking gate — stratified quality checks must identify them.
+    log.warn(
+      `[zero-floor] mandala=${input.mandalaId ?? 'ephemeral'} ranking gate emptied ${filterable.length} candidates — floor-admitted ${scored.length} (cap ${cap})`
+    );
+  }
+
   const tScoringStart = Date.now();
   debug.scoredCandidates = scored.length;
 
@@ -1447,6 +1687,10 @@ async function runSearchTraced(
           timeoutMs: v3Config.youtubeSearchTimeoutMs,
           ...(publishedAfter ? { publishedAfter } : {}),
           ...(opts?.videoCategoryId ? { videoCategoryId: opts.videoCategoryId } : {}),
+          // T5 — long-form-only harvest (v1 always sent medium; the v2/v3
+          // rewrite dropped it → 53% of supply arrived as Shorts and was
+          // discarded post-hoc). Unset env = legacy (no param).
+          ...(getSearchVideoDuration() ? { videoDuration: getSearchVideoDuration()! } : {}),
         });
         return { q, items, error: undefined as string | undefined };
       } catch (err) {
@@ -2001,7 +2245,7 @@ async function runDiscoverEphemeralImpl(
   const existingVideoIds = new Set(redisSlots.map((s) => s.videoId));
   if (v3Config.enableTier1Cache) {
     try {
-      const [centerVec] = await embedBatch([input.centerGoal]);
+      const [centerVec] = await embedBatch([input.centerGoal], servingEmbedOptions());
       if (centerVec && centerVec.length > 0) {
         const tier1Matches = await matchFromVideoPoolByCenterGoal({
           centerEmbedding: centerVec,
@@ -2101,7 +2345,7 @@ async function runDiscoverEphemeralImpl(
       const cappedSlots = allSlots.slice(0, cap);
       const texts = [input.centerGoal, ...cappedSlots.map((s) => s.title)];
       const embedT0 = Date.now();
-      const vectors = await embedBatch(texts);
+      const vectors = await embedBatch(texts, servingEmbedOptions());
       const embedMs = Date.now() - embedT0;
       if (vectors.length === texts.length) {
         const centerEmbedding = vectors[0] ?? undefined;

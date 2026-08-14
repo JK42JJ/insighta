@@ -1,0 +1,116 @@
+/**
+ * Transactional user emails (CP516) — send layer. HTML lives in ./templates
+ * (pure, shared with the sample tool). Sending reuses the shared Gmail-SMTP
+ * transporter, is non-fatal to the caller, and is gated by
+ * TRANSACTIONAL_EMAIL_ENABLED (default off) for a controlled beta rollout.
+ */
+
+import { transporter } from '@/modules/skills/mailer';
+import { config } from '@/config/index';
+import { logger } from '@/utils/logger';
+import {
+  buildWelcomeEmail,
+  buildNoteReadyEmail,
+  buildBetaInviteEmail,
+  buildProUpgradeEmail,
+  buildMobileGuideEmail,
+  type WelcomeEmailParams,
+  type NoteReadyEmailParams,
+  type BetaInviteEmailParams,
+  type ProUpgradeEmailParams,
+  type MobileGuideEmailParams,
+} from './templates';
+
+const log = logger.child({ module: 'email/transactional' });
+
+/**
+ * Master gate — James flips on for the beta once the send path is verified.
+ *
+ * Exported so anything that reports on the send path asks this function rather
+ * than reading the variable again with slightly different truthiness rules.
+ */
+export function isTransactionalEmailEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = String(env['TRANSACTIONAL_EMAIL_ENABLED'] ?? '')
+    .trim()
+    .toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes';
+}
+
+/**
+ * Outcome of one send attempt. `send` used to return void, which collapsed three
+ * very different endings — delivered, refused by SMTP, and never attempted
+ * because the flag is off — into the same silence. Callers that record state
+ * (admin invite marking an application `invited`) had no way to tell them apart,
+ * so the row claimed an invitation had gone out even when nothing was sent.
+ */
+export type EmailSendResult =
+  | { status: 'sent' }
+  | { status: 'skipped'; reason: 'disabled' | 'no-recipient' }
+  | { status: 'failed'; error: string };
+
+async function send(
+  to: string,
+  subject: string,
+  html: string,
+  tag: string
+): Promise<EmailSendResult> {
+  if (!isTransactionalEmailEnabled()) {
+    log.info(`${tag}: transactional email disabled (TRANSACTIONAL_EMAIL_ENABLED unset) — skipped`);
+    return { status: 'skipped', reason: 'disabled' };
+  }
+  if (!to) {
+    log.warn(`${tag}: recipient empty — skipped`);
+    return { status: 'skipped', reason: 'no-recipient' };
+  }
+  try {
+    // Display name "Insighta" (not the bare noreply@ local-part).
+    await transporter.sendMail({ from: `Insighta <${config.gmail.smtpFrom}>`, to, subject, html });
+    log.info(`${tag}: sent to ${to}`);
+    return { status: 'sent' };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    log.warn(`${tag}: send failed (non-fatal): ${error}`);
+    // Still non-fatal to the caller — the result is returned, not thrown.
+    return { status: 'failed', error };
+  }
+}
+
+export async function sendWelcomeEmail(
+  to: string,
+  params: WelcomeEmailParams
+): Promise<EmailSendResult> {
+  const { subject, html } = buildWelcomeEmail(params);
+  return send(to, subject, html, 'welcome-email');
+}
+
+export async function sendBetaInviteEmail(
+  to: string,
+  params: BetaInviteEmailParams
+): Promise<EmailSendResult> {
+  const { subject, html } = buildBetaInviteEmail(params);
+  return send(to, subject, html, 'beta-invite-email');
+}
+
+export async function sendNoteReadyEmail(
+  to: string,
+  params: NoteReadyEmailParams
+): Promise<EmailSendResult> {
+  const { subject, html } = buildNoteReadyEmail(params);
+  return send(to, subject, html, 'note-ready-email');
+}
+
+export async function sendProUpgradeEmail(
+  to: string,
+  params: ProUpgradeEmailParams
+): Promise<EmailSendResult> {
+  const { subject, html } = buildProUpgradeEmail(params);
+  return send(to, subject, html, 'pro-upgrade-email');
+}
+
+export async function sendMobileGuideEmail(
+  to: string,
+  params: MobileGuideEmailParams = {}
+): Promise<EmailSendResult> {
+  const { subject, html } = buildMobileGuideEmail(params);
+  return send(to, subject, html, 'mobile-guide-email');
+}

@@ -1,0 +1,80 @@
+name: trend-collector
+
+# Keeps `trend_signals` fresh on its own schedule, independent of
+# batch-video-collector.
+#
+# Why this file exists: the two jobs shared batch-video-collector.yml, and when
+# that workflow was disabled (2026-06-06, the video collector was burning ~40k
+# YouTube units/day with no consumer) the trend collector went down with it. It
+# had a consumer — the weekly curation suggester reads trend_signals — so the
+# curation proposals have been served off a 2026-06-04 snapshot ever since.
+#
+# Cost is not the reason to keep this off. Measured from the source:
+#   - suggest source (suggestqueries autocomplete) .... 0 units, unofficial endpoint
+#   - youtube source (videos.list chart=mostPopular) .. 1 unit/call
+#     × 5 educational categories = 5 units/run, 2 runs = 10 units/day
+# That is 0.0125% of the 80k/day headroom (8 keys × 10k). search.list (100
+# units) is deliberately not used — see sources/youtube.ts.
+#
+# batch-video-collector.yml stays disabled and keeps its own trend-collector
+# step, so re-enabling it later does not double-collect in a harmful way (the
+# upsert key is (source, keyword, language) — a second run refreshes scores).
+#
+# Manual: `gh workflow run trend-collector.yml`
+#
+# Secrets required:
+#   - INTERNAL_BATCH_TOKEN — shared token matching prod /opt/tubearchive/.env
+#   - DOMAIN               — e.g. insighta.one
+
+on:
+  schedule:
+    # 07:30 UTC (16:30 KST) just after the YouTube quota reset at 00:00 PT,
+    # and 19:30 UTC (04:30 KST) twelve hours later — the cadence the collector
+    # ran on before it was switched off.
+    - cron: '30 7 * * *'
+    - cron: '30 19 * * *'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    name: Collect trend signals
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check secrets
+        run: |
+          if [ -z "${{ secrets.INTERNAL_BATCH_TOKEN }}" ]; then
+            echo "::error::INTERNAL_BATCH_TOKEN is not configured"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOMAIN }}" ]; then
+            echo "::error::DOMAIN is not configured"
+            exit 1
+          fi
+
+      - name: Run trend-collector
+        env:
+          TOKEN: ${{ secrets.INTERNAL_BATCH_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          echo "POST → https://${DOMAIN}/api/v1/internal/skills/trend-collector/run"
+          RESPONSE=$(curl -sS --fail --show-error \
+            --max-time 300 \
+            -X POST "https://${DOMAIN}/api/v1/internal/skills/trend-collector/run" \
+            -H "content-type: application/json" \
+            -H "x-internal-token: $TOKEN" \
+            -d '{}')
+          echo "$RESPONSE" | jq . || echo "$RESPONSE"
+          echo "$RESPONSE" | jq -e '.success == true' >/dev/null || {
+            echo "::error::trend-collector returned success=false"
+            exit 1
+          }
+
+      - name: Report what landed
+        env:
+          TOKEN: ${{ secrets.INTERNAL_BATCH_TOKEN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          # Surfaced in the run log so a stalled collector is visible without
+          # opening the DB — the previous outage went unnoticed for seven weeks.
+          echo "Collector finished. Check trend_signals.fetched_at for freshness."

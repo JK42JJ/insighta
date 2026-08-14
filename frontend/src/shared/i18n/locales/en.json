@@ -1552,7 +1552,11 @@
   },
   "graph": {
     "empty": "No knowledge nodes yet.",
-    "emptyHint": "Save cards and create mandalas to build your knowledge graph."
+    "emptyHint": "Save cards and create mandalas to build your knowledge graph.",
+    "searchPlaceholder": "Find in my knowledge…",
+    "noResults": "No matches",
+    "openVideo": "Open video",
+    "connections": "connections"
   },
   "privacy": {
     "title": "Privacy Policy",

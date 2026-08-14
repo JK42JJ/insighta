@@ -1,0 +1,89 @@
+# StatefulSet, not Deployment. docker/redis/redis.conf enables AOF
+# (appendonly yes, appendfsync everysec) with RDB snapshots as a secondary
+# net, so this holds state; a Deployment with a PVC would let a rolling
+# update run two pods against one volume.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "insighta.fullname" . }}-redis
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  serviceName: {{ include "insighta.fullname" . }}-redis
+  replicas: {{ .Values.redis.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "insighta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      containers:
+        - name: redis
+          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          # Overrides maxmemory from redis.conf so it stays below the
+          # container limit; the image's entrypoint forwards these.
+          args: ["--maxmemory", "{{ .Values.redis.maxmemory }}"]
+          ports:
+            - name: redis
+              containerPort: {{ .Values.redis.port }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envSecretName }}
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          # The compose healthcheck authenticates as admin. Reproduced here
+          # so a pod that answers but rejects auth is not counted as ready.
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli --user admin -a "$REDIS_ADMIN_PASSWORD" ping | grep -q PONG
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  {{- if .Values.redis.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.redis.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.redis.persistence.size }}
+  {{- else }}
+      volumes:
+        - name: data
+          emptyDir: {}
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insighta.fullname" . }}-redis
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  # Headless: a StatefulSet member is addressed by its stable name, and
+  # nothing outside the namespace should reach redis at all.
+  clusterIP: None
+  ports:
+    - port: {{ .Values.redis.port }}
+      targetPort: redis
+      name: redis
+  selector:
+    {{- include "insighta.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: redis

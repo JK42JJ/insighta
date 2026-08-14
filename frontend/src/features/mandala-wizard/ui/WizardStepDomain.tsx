@@ -159,10 +159,13 @@ export default function WizardStepDomain({
         {t('wizard.domain.separator')}
       </div>
       <div className="text-center">
+        {/* Beta-launch decision (2026-07-28): blank creation is a dead end
+            today — disabled until the flow is reworked. */}
         <button
           type="button"
-          onClick={onCreateBlank}
-          className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-transparent px-5 py-2.5 text-[13px] font-semibold text-muted-foreground transition-all duration-[180ms] hover:border-foreground/10 hover:bg-foreground/[0.02] hover:text-foreground"
+          disabled
+          aria-disabled
+          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-[10px] border border-border bg-transparent px-5 py-2.5 text-[13px] font-semibold text-muted-foreground opacity-40"
         >
           {t('wizard.domain.createBlank')} &rarr;
         </button>

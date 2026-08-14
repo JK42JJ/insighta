@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "one.insighta.app",
+    "sha256_cert_fingerprints": ["70:F9:53:D9:BD:4E:3C:9A:66:21:99:07:99:3C:C2:4D:22:20:8A:8D:4A:B6:E2:6E:95:46:B0:5E:CF:27:C5:F0"]
+  }
+}]

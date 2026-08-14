@@ -44,3 +44,30 @@ describe('Raw fetch URL contract (no double /api prefix)', () => {
     expect(violations).toEqual([]);
   });
 });
+
+// Graph data hook bypasses api-client methods (private request()) with its own
+// authed fetch — pin its URL construction to the BE route contract
+// (src/api/routes/ontology.ts GET /subgraph + SubgraphQuerySchema.mandala_id).
+describe('Ontology raw-fetch URL contract (useGraphData)', () => {
+  const HOOK_PATH = path.resolve(ROOT, 'components/graph/useGraphData.ts');
+  const content = fs.readFileSync(HOOK_PATH, 'utf-8');
+
+  it('builds URLs from the normalized apiClient baseUrl, not VITE_API_URL', () => {
+    expect(content).not.toContain('VITE_API_URL');
+    expect(content).toContain('apiClient');
+    expect(content).toContain('${baseUrl}/api/v1/ontology${endpoint}');
+  });
+
+  it('endpoints carry no /api prefix of their own (single-prefix invariant)', () => {
+    const endpoints = [...content.matchAll(/fetchWithAuth\(\s*[`'"]([^`'"]+)/g)].map((m) => m[1]);
+    expect(endpoints.length).toBeGreaterThanOrEqual(3); // nodes, subgraph, stats
+    for (const endpoint of endpoints) {
+      expect(endpoint.startsWith('/')).toBe(true);
+      expect(endpoint.startsWith('/api')).toBe(false);
+    }
+  });
+
+  it('user graph call matches the BE route (user-wide /subgraph, no scope param)', () => {
+    expect(content).toContain("fetchWithAuth('/subgraph')");
+  });
+});

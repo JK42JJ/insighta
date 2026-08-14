@@ -28,14 +28,32 @@ const optionalStr = z.preprocess((v) => {
 export const transcriptEnvSchema = z.object({
   MAC_MINI_TRANSCRIPT_URL: optionalStr.default(''),
   MAC_MINI_TRANSCRIPT_TOKEN: optionalStr.default(''),
+  // Azure App Service transcript proxy (2026-07-09) — an always-on cloud host
+  // running the SAME Webshare-backed service, off EC2 (ToS: scraping must not
+  // run on EC2). Fixes the Mac Mini SPOF (home machine + Tailscale cold-path).
+  // Reuses MAC_MINI_TRANSCRIPT_TOKEN (the Azure service validates the same token).
+  AZURE_TRANSCRIPT_URL: optionalStr.default(''),
 });
 
+/** One transcript proxy the extractor can forward a caption fetch to. */
+export interface TranscriptProxy {
+  name: string;
+  url: string;
+  token: string;
+}
+
 export interface TranscriptConfig {
-  /** Mac Mini proxy base URL. Empty string ⇒ proxy disabled. */
+  /**
+   * Ordered proxy list — the extractor tries each in sequence and uses the
+   * first that REACHES YouTube (segments or an authoritative "no captions").
+   * Azure first (reliable always-on cloud), Mac Mini second (KR-IP fallback).
+   */
+  proxies: TranscriptProxy[];
+  /** Mac Mini proxy base URL. Empty string ⇒ proxy disabled. (back-compat) */
   macMiniUrl: string;
   /** Bearer token (`x-transcript-token` header) for the Mac Mini proxy. */
   macMiniToken: string;
-  /** True iff both URL and token are non-empty. */
+  /** True iff at least one proxy (Azure or Mac Mini) is configured. */
   macMiniEnabled: boolean;
 }
 
@@ -43,14 +61,28 @@ export function loadTranscriptConfig(env: NodeJS.ProcessEnv = process.env): Tran
   const parsed = transcriptEnvSchema.safeParse({
     MAC_MINI_TRANSCRIPT_URL: env['MAC_MINI_TRANSCRIPT_URL'],
     MAC_MINI_TRANSCRIPT_TOKEN: env['MAC_MINI_TRANSCRIPT_TOKEN'],
+    AZURE_TRANSCRIPT_URL: env['AZURE_TRANSCRIPT_URL'],
   });
   if (!parsed.success) {
-    return { macMiniUrl: '', macMiniToken: '', macMiniEnabled: false };
+    return { proxies: [], macMiniUrl: '', macMiniToken: '', macMiniEnabled: false };
   }
-  const { MAC_MINI_TRANSCRIPT_URL: url, MAC_MINI_TRANSCRIPT_TOKEN: token } = parsed.data;
+  const {
+    MAC_MINI_TRANSCRIPT_URL: macUrl,
+    MAC_MINI_TRANSCRIPT_TOKEN: token,
+    AZURE_TRANSCRIPT_URL: azureUrl,
+  } = parsed.data;
+
+  // The shared token gates both proxies. Azure first, then Mac Mini.
+  const proxies: TranscriptProxy[] = [];
+  if (token.length > 0) {
+    if (azureUrl.length > 0) proxies.push({ name: 'azure', url: azureUrl, token });
+    if (macUrl.length > 0) proxies.push({ name: 'mac-mini', url: macUrl, token });
+  }
+
   return {
-    macMiniUrl: url,
+    proxies,
+    macMiniUrl: macUrl,
     macMiniToken: token,
-    macMiniEnabled: url.length > 0 && token.length > 0,
+    macMiniEnabled: proxies.length > 0,
   };
 }

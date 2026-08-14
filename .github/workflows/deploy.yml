@@ -30,22 +30,138 @@ env:
   FRONTEND_IMAGE: ghcr.io/jk42jj/insighta-frontend
 
 jobs:
-  ci:
-    name: CI Checks
-    uses: ./.github/workflows/ci.yml
-    secrets: inherit
+  # What actually changed. The dial is a single static file that nginx serves
+  # verbatim (vite copies public/ without touching it), so a dial-only commit
+  # needs no image build and no test suite -- it needs one file copied. Before
+  # this job every such commit paid the full 14-22 minute pipeline for a 322KB
+  # file, and the EC2 step inside that was 1m26s.
+  scope:
+    name: Detect scope
+    runs-on: ubuntu-latest
+    outputs:
+      mobile_only: ${{ steps.d.outputs.mobile_only }}
+      api: ${{ steps.d.outputs.api }}
+      frontend: ${{ steps.d.outputs.frontend }}
+      deployable: ${{ steps.d.outputs.deployable }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: d
+        run: |
+          # workflow_dispatch has no diff to inspect -- treat it as "everything".
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "mobile_only=false" >> "$GITHUB_OUTPUT"
+            echo "api=true"          >> "$GITHUB_OUTPUT"
+            echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "deployable=true"   >> "$GITHUB_OUTPUT"
+            echo "manual run -> full pipeline"; exit 0
+          fi
+
+          BEFORE='${{ github.event.before }}'
+          # First push to a branch, or a force-push whose base we no longer
+          # have, reports an all-zero SHA. Fall back to the full pipeline
+          # rather than guessing a range.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "mobile_only=false" >> "$GITHUB_OUTPUT"
+            echo "api=true"          >> "$GITHUB_OUTPUT"
+            echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "deployable=true"   >> "$GITHUB_OUTPUT"
+            echo "no usable base ($BEFORE) -> full pipeline"; exit 0
+          fi
+
+          FILES=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
+          echo "changed:"; echo "$FILES" | sed 's/^/  /'
+
+          # An empty diff (re-run, merge with no changes) is not a licence to
+          # skip -- fall through to the full pipeline.
+          if [ -z "$FILES" ]; then
+            echo "mobile_only=false" >> "$GITHUB_OUTPUT"
+            echo "api=true"          >> "$GITHUB_OUTPUT"
+            echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "deployable=true"   >> "$GITHUB_OUTPUT"
+            echo "empty diff -> full pipeline"; exit 0
+          fi
+
+          if echo "$FILES" | grep -qv '^frontend/public/mobile/'; then
+            MOBILE_ONLY=false
+          else
+            MOBILE_ONLY=true
+          fi
+
+          # Which image actually needs rebuilding. The API image is built from
+          # the repo root, so anything outside frontend/ can affect it.
+          if echo "$FILES" | grep -qv '^frontend/'; then API=true; else API=false; fi
+          if echo "$FILES" | grep -q  '^frontend/';  then FE=true;  else FE=false;  fi
+
+          # Does anything here reach production at all?
+          #
+          # Every path below is excluded from the API image by .dockerignore,
+          # is not copied to the box by the deploy job (which ships only
+          # docker-compose.prod.yml and docker/redis/), and cannot arrive
+          # through a bind mount — compose declares named volumes only
+          # (cache_data, logs_data, redis_data). So a change confined to them
+          # provably cannot alter what runs.
+          #
+          # Written as an exclusion rather than an allowlist on purpose. A new
+          # top-level directory nobody thought about falls through to
+          # deployable=true, which wastes a deploy; an allowlist would silently
+          # skip it, and a deploy that should have happened and did not is the
+          # failure this repository can least afford.
+          IRRELEVANT='^(terraform|ansible|charts|docs|prompt|tests|scripts|\.github|\.claude)/|^[^/]*\.md$'
+          if echo "$FILES" | grep -Eqv "$IRRELEVANT"; then
+            DEPLOYABLE=true
+          else
+            DEPLOYABLE=false
+            echo "every changed path is excluded from the image and the box -> nothing to deploy"
+          fi
+
+          echo "mobile_only=$MOBILE_ONLY" >> "$GITHUB_OUTPUT"
+          echo "api=$API"                 >> "$GITHUB_OUTPUT"
+          echo "frontend=$FE"             >> "$GITHUB_OUTPUT"
+          echo "deployable=$DEPLOYABLE"   >> "$GITHUB_OUTPUT"
+          echo "mobile_only=$MOBILE_ONLY api=$API frontend=$FE deployable=$DEPLOYABLE"
+
+  # The dial's only gate. Nothing in ci.yml reads frontend/public/mobile:
+  # tsc looks at src, vitest looks at src, and vite copies public/ verbatim.
+  # So a syntax error in this file has always been shippable. It is not now.
+  mobile-gate:
+    name: Dial syntax gate
+    runs-on: ubuntu-latest
+    needs: [scope]
+    if: needs.scope.outputs.mobile_only == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse every inline script and check the build stamp
+        run: node scripts/ci/check-dial.mjs
+
+  # CI does NOT run here. It ran on the pull request, and as of 2026-07-27 main
+  # requires those 8 checks with `strict` on -- a branch must be up to date with
+  # main to merge, so the tree CI validated IS the tree that lands. Re-running
+  # the identical suite cost 5-13 minutes on every merge and could not reach a
+  # different verdict.
+  #
+  # This is a pair, not two independent settings. If branch protection is ever
+  # removed, main has no gate at all: restore it with
+  #   bash scripts/rollback-branch-protection.sh restore
+  # A backup of the rule lives at ~/.insighta-env-backup/branch-protection-main-20260727.json.
 
   deploy-edge-functions:
     name: Deploy Edge Functions
-    needs: ci
+    needs: [scope]
+    # The ref guard matters for workflow_dispatch, which can be started from any
+    # branch; the push trigger is already main-only.
+    if: github.ref == 'refs/heads/main' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: 'latest' resolves via unauthenticated GitHub API and rate-limits
+          # on shared runners (2 consecutive EF-deploy failures, 2026-07-14).
+          version: 2.109.1
 
       - name: Deploy Edge Functions
         env:
@@ -61,7 +177,8 @@ jobs:
   build-and-push:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    needs: [ci]
+    needs: [scope]
+    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     permissions:
       contents: read
       packages: write
@@ -78,7 +195,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Only the image whose source actually moved. A backend-only commit used
+      # to rebuild the frontend image and vice versa; the other side's :latest
+      # is already correct, so the rebuild was pure wall-clock.
       - name: Build & push API image
+        if: needs.scope.outputs.api == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -86,10 +207,13 @@ jobs:
           tags: |
             ${{ env.API_IMAGE }}:latest
             ${{ env.API_IMAGE }}:${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Build & push Frontend image
+        if: needs.scope.outputs.frontend == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -106,10 +230,131 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # The 2-minute path. Copies the committed dial files straight into the running
+  # nginx root: no npm install, no vite build, no image, no container restart.
+  # There is no drift risk because it only ever copies what is in git -- the next
+  # full deploy rebuilds the image from those same files.
+  fast-mobile:
+    name: Fast dial deploy
+    runs-on: ubuntu-latest
+    needs: [scope, mobile-gate]
+    if: needs.scope.outputs.mobile_only == 'true'
+    environment: production
+    env:
+      SG_ID: sg-079aa1ca6855e587b
+    steps:
+      # Skipping the image build is only safe if the image on the box is already
+      # current. If the previous deploy failed -- Docker Hub timed out on
+      # 718bd88f -- the backend change it carried is still unshipped, and this
+      # job would sail past it and report green, leaving the failure to be found
+      # by hand. Refuse instead, and say what to do about it.
+      - name: Refuse to skip the build over a failed deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # -R explicitly: this step runs before checkout, so there is no git
+          # repo for gh to infer the remote from and it exits 1 -- which the
+          # guard then reported as "the previous deploy failed". The guard was
+          # blocking every fast dial deploy on its own lookup error.
+          PREV=$(gh run list -R "${{ github.repository }}" \
+                   --workflow deploy.yml --branch main --limit 20 \
+                   --json databaseId,conclusion,headSha \
+                   --jq "[.[] | select(.databaseId != ${{ github.run_id }}) | select(.conclusion != null and .conclusion != \"cancelled\" and .conclusion != \"skipped\")][0]") \
+            || { echo "::warning::could not read deploy history; proceeding without the staleness check"; PREV=""; }
+          CONC=$(echo "$PREV" | jq -r '.conclusion // "none"')
+          SHA=$(echo "$PREV"  | jq -r '.headSha  // "none"')
+          echo "previous completed deploy: $CONC ($SHA)"
+          if [ "$CONC" != "success" ] && [ "$CONC" != "none" ]; then
+            echo "::error::the last deploy ($SHA) ended in '$CONC', so the image on the box may be stale. Re-run that deploy first, then re-run this one."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - uses: actions/checkout@v4
+
+      - name: Open SSH for runner IP
+        run: |
+          RUNNER_IP=$(curl -s ifconfig.me)
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp --port 22 \
+            --cidr "$RUNNER_IP/32" \
+            --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=Purpose,Value=github-actions-deploy}]"
+
+      # A new ingress rule is not usable the instant the API returns. The full
+      # deploy job never noticed because several steps run between opening the
+      # rule and its first scp; this job goes straight there and timed out on
+      # its first live run. Wait for the port to actually answer rather than
+      # sleeping a guessed number of seconds.
+      - name: Wait for SSH to become reachable
+        run: |
+          for i in $(seq 1 30); do
+            if timeout 3 bash -c "cat < /dev/null > /dev/tcp/${{ secrets.EC2_HOST }}/22" 2>/dev/null; then
+              echo "port 22 reachable after ${i} attempt(s)"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::port 22 never became reachable from $RUNNER_IP after 60s"
+          exit 1
+
+      - name: Copy dial files to EC2
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "frontend/public/mobile/*"
+          target: "/tmp/dial/"
+          strip_components: 3
+          overwrite: true
+
+      - name: Install into the running nginx and verify
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            docker cp /tmp/dial/. insighta-frontend:/usr/share/nginx/html/mobile/
+            rm -rf /tmp/dial
+            # nginx serves from disk per request, so no reload is needed. Prove
+            # the file the browser will receive is the one we just shipped.
+            docker exec insighta-frontend cat /usr/share/nginx/html/mobile/version.json
+
+      - name: Verify over HTTPS
+        run: |
+          WANT=$(node -p "require('./frontend/public/mobile/version.json').build")
+          for i in $(seq 1 10); do
+            GOT=$(curl -sf "https://${{ secrets.DOMAIN }}/mobile/version.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).build" 2>/dev/null || true)
+            [ "$GOT" = "$WANT" ] && { echo "live build = $GOT"; exit 0; }
+            sleep 3
+          done
+          echo "::error::dial still serving '$GOT', expected '$WANT'"
+          exit 1
+
+      - name: Close SSH for runner IP
+        if: always()
+        run: |
+          if [ -n "$RUNNER_IP" ]; then
+            aws ec2 revoke-security-group-ingress \
+              --group-id "$SG_ID" \
+              --protocol tcp --port 22 \
+              --cidr "$RUNNER_IP/32" 2>/dev/null || true
+          fi
+
   migrate:
     name: Database Schema Sync
     runs-on: ubuntu-latest
-    needs: [ci]
+    needs: [scope]
+    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -159,7 +404,8 @@ jobs:
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
-    needs: [migrate, build-and-push]
+    needs: [scope, migrate, build-and-push]
+    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     environment: production
     env:
       SG_ID: sg-079aa1ca6855e587b
@@ -214,6 +460,12 @@ jobs:
           OR_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OR_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           COHERE_KEY: ${{ secrets.COHERE_API_KEY }}
+          # Naver Open API — book research/factcheck Korean evidence leg
+          # (2026-07-14 provider swap; Google CSE closed to new customers).
+          NAVER_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          ELEVEN_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          NARRATION_PREPRODUCE_ENABLED: ${{ vars.NARRATION_PREPRODUCE_ENABLED }}
           YT_SEARCH_KEY: ${{ secrets.YOUTUBE_API_KEY_SEARCH }}
           YT_SEARCH_KEY_2: ${{ secrets.YOUTUBE_API_KEY_SEARCH_2 }}
           YT_SEARCH_KEY_3: ${{ secrets.YOUTUBE_API_KEY_SEARCH_3 }}
@@ -270,6 +522,11 @@ jobs:
           # youtube-transcript on EC2 (known to fail) — set both to enable.
           MAC_MINI_TRANSCRIPT_URL: ${{ secrets.MAC_MINI_TRANSCRIPT_URL }}
           MAC_MINI_TRANSCRIPT_TOKEN: ${{ secrets.MAC_MINI_TRANSCRIPT_TOKEN }}
+          # Azure App Service transcript proxy (2026-07-09) — always-on cloud
+          # host running the same Webshare-backed service, off EC2 (ToS). Tried
+          # BEFORE Mac Mini (fixes the Mac Mini SPOF). Non-secret URL = literal
+          # (reuses MAC_MINI_TRANSCRIPT_TOKEN for x-transcript-token auth).
+          AZURE_TRANSCRIPT_URL: https://insighta-transcript-proxy-dqaxe5f7hqgddmdz.eastus2-01.azurewebsites.net
           # ⑤ snapshot get-or-extract — pod slidegen-service. URL = Variable
           # (CP392, not a credential), TOKEN = Secret. Both unset ⇒ extract
           # disabled (numerize-client returns []); serve-from-cache still works.
@@ -281,19 +538,40 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           # CP500++ CONFIG-SSOT — toggle keys removed from this forward list
           # (now compose-SSOT); only secrets + non-conflicting config remain.
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN,SNAPSHOT_SERVICE_URL,SNAPSHOT_SERVICE_TOKEN
+          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN,AZURE_TRANSCRIPT_URL,SNAPSHOT_SERVICE_URL,SNAPSHOT_SERVICE_TOKEN,ELEVEN_KEY,NARRATION_PREPRODUCE_ENABLED,NAVER_ID,NAVER_SECRET
           script: |
             set -e
             cd /opt/tubearchive
             # Add OPENROUTER keys if missing, update if present
             grep -q '^OPENROUTER_API_KEY=' .env 2>/dev/null && sed -i "s|^OPENROUTER_API_KEY=.*|OPENROUTER_API_KEY=${OR_KEY}|" .env || echo "OPENROUTER_API_KEY=${OR_KEY}" >> .env
             grep -q '^OPENROUTER_MODEL=' .env 2>/dev/null && sed -i "s|^OPENROUTER_MODEL=.*|OPENROUTER_MODEL=${OR_MODEL}|" .env || echo "OPENROUTER_MODEL=${OR_MODEL}" >> .env
+            # 2026-07-13 — ElevenLabs narration pre-produce key (flag-gated by
+            # NARRATION_PREPRODUCE_ENABLED; see src/modules/narration/). Guarded
+            # like CHATBOT_FAILOVER_ENABLED so an unset secret never blanks .env.
+            if [ -n "${ELEVEN_KEY}" ]; then
+              grep -q '^ELEVENLABS_API_KEY=' .env 2>/dev/null && sed -i "s|^ELEVENLABS_API_KEY=.*|ELEVENLABS_API_KEY=${ELEVEN_KEY}|" .env || echo "ELEVENLABS_API_KEY=${ELEVEN_KEY}" >> .env
+            fi
+            # Narration flag — GitHub Variable NARRATION_PREPRODUCE_ENABLED=true
+            # to activate; unset leaves .env untouched (config default false).
+            if [ -n "${NARRATION_PREPRODUCE_ENABLED}" ]; then
+              grep -q '^NARRATION_PREPRODUCE_ENABLED=' .env 2>/dev/null && sed -i "s|^NARRATION_PREPRODUCE_ENABLED=.*|NARRATION_PREPRODUCE_ENABLED=${NARRATION_PREPRODUCE_ENABLED}|" .env || echo "NARRATION_PREPRODUCE_ENABLED=${NARRATION_PREPRODUCE_ENABLED}" >> .env
+            fi
             # 2026-05-12 — Cohere Rerank API key (hybrid-retrieval spec, Issue #610).
             # Used by src/modules/rerank/cohere-client.ts. Same idempotent pattern.
             # Flag V3_ENABLE_HYBRID_RERANK stays in docker-compose.prod.yml as
             # tuning knob (CP392 non-secret rule).
             if [ -n "${COHERE_KEY}" ]; then
               grep -q '^COHERE_API_KEY=' .env 2>/dev/null && sed -i "s|^COHERE_API_KEY=.*|COHERE_API_KEY=${COHERE_KEY}|" .env || echo "COHERE_API_KEY=${COHERE_KEY}" >> .env
+            fi
+            # Naver Open API (book research/factcheck Korean evidence).
+            # Absent = skip — graceful naverEnabled=false, fill-book logs the
+            # degradation loudly (silent-0 class, 2026-07-14). The global leg
+            # rides OPENROUTER_API_KEY (already synced above).
+            if [ -n "${NAVER_ID}" ]; then
+              grep -q '^NAVER_CLIENT_ID=' .env 2>/dev/null && sed -i "s|^NAVER_CLIENT_ID=.*|NAVER_CLIENT_ID=${NAVER_ID}|" .env || echo "NAVER_CLIENT_ID=${NAVER_ID}" >> .env
+            fi
+            if [ -n "${NAVER_SECRET}" ]; then
+              grep -q '^NAVER_CLIENT_SECRET=' .env 2>/dev/null && sed -i "s|^NAVER_CLIENT_SECRET=.*|NAVER_CLIENT_SECRET=${NAVER_SECRET}|" .env || echo "NAVER_CLIENT_SECRET=${NAVER_SECRET}" >> .env
             fi
             # CP500++ CONFIG-SSOT (2026-06-16) — runtime TOGGLES removed from the
             # .env-write path. Toggle activation SSOT = docker-compose.prod.yml
@@ -325,6 +603,9 @@ jobs:
             fi
             if [ -n "${MAC_MINI_TRANSCRIPT_TOKEN}" ]; then
               grep -q '^MAC_MINI_TRANSCRIPT_TOKEN=' .env 2>/dev/null && sed -i "s|^MAC_MINI_TRANSCRIPT_TOKEN=.*|MAC_MINI_TRANSCRIPT_TOKEN=${MAC_MINI_TRANSCRIPT_TOKEN}|" .env || echo "MAC_MINI_TRANSCRIPT_TOKEN=${MAC_MINI_TRANSCRIPT_TOKEN}" >> .env
+            fi
+            if [ -n "${AZURE_TRANSCRIPT_URL}" ]; then
+              grep -q '^AZURE_TRANSCRIPT_URL=' .env 2>/dev/null && sed -i "s|^AZURE_TRANSCRIPT_URL=.*|AZURE_TRANSCRIPT_URL=${AZURE_TRANSCRIPT_URL}|" .env || echo "AZURE_TRANSCRIPT_URL=${AZURE_TRANSCRIPT_URL}" >> .env
             fi
             # ⑤ snapshot get-or-extract — pod slidegen-service URL + token. New
             # keys (not in docker-compose.prod.yml `environment:` literals) so the
@@ -547,6 +828,36 @@ jobs:
         run: |
           sleep 5
           curl -sf https://${{ secrets.DOMAIN }}/health || echo "External health check pending (DNS may not be configured yet)"
+
+      # Every deploy leaves its SHA-tagged image on the box and nothing removed
+      # them: measured 2026-08-13, images held 4.92 GB with 1.767 GB reclaimable
+      # after five weeks, on a 20 GB disk already at 66%. No systemd timer, no
+      # crontab. A one-off cleanup would put us back here in a month, so the
+      # collection happens where the images are created.
+      #
+      # Deliberately not `prune -a`. That keeps only what is running and would
+      # delete every local rollback target. rollback.yml pulls from GHCR, which
+      # would make that safe — except GHCR's own retention has not been
+      # confirmed (the token lacks read:packages), and rollback is not something
+      # to stake on an unverified assumption. 30 days keeps a month of targets
+      # locally; revisit once GHCR retention is known.
+      #
+      # Runs only after Verify, so a deploy that failed leaves everything alone.
+      - name: Reclaim old images
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            BEFORE=$(df --output=used -BM / | tail -1 | tr -dc '0-9')
+            # Images in use by a running container are never touched by prune.
+            docker image prune -af --filter 'until=720h' || true
+            docker builder prune -f --filter 'until=720h' || true
+            AFTER=$(df --output=used -BM / | tail -1 | tr -dc '0-9')
+            echo "disk used: ${BEFORE}M -> ${AFTER}M (freed $((BEFORE - AFTER))M)"
+            df -h / | tail -1
+            docker system df
 
       - name: Close SSH for runner IP
         if: always()
