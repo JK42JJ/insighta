@@ -69,3 +69,10 @@ variable "k3s_instance_type" {
   type        = string
   default     = "t3.small"
 }
+
+variable "k3s_instance_profile" {
+  description = "Existing instance profile for the k3s node. Empty disables the attachment."
+  type        = string
+  default     = "insighta-k3s-node"
+}
+

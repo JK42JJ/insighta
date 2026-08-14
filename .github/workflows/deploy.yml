@@ -42,6 +42,7 @@ jobs:
       mobile_only: ${{ steps.d.outputs.mobile_only }}
       api: ${{ steps.d.outputs.api }}
       frontend: ${{ steps.d.outputs.frontend }}
+      redis: ${{ steps.d.outputs.redis }}
       deployable: ${{ steps.d.outputs.deployable }}
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +55,7 @@ jobs:
             echo "mobile_only=false" >> "$GITHUB_OUTPUT"
             echo "api=true"          >> "$GITHUB_OUTPUT"
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "redis=true"        >> "$GITHUB_OUTPUT"
             echo "deployable=true"   >> "$GITHUB_OUTPUT"
             echo "manual run -> full pipeline"; exit 0
           fi
@@ -67,6 +69,7 @@ jobs:
             echo "mobile_only=false" >> "$GITHUB_OUTPUT"
             echo "api=true"          >> "$GITHUB_OUTPUT"
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "redis=true"        >> "$GITHUB_OUTPUT"
             echo "deployable=true"   >> "$GITHUB_OUTPUT"
             echo "no usable base ($BEFORE) -> full pipeline"; exit 0
           fi
@@ -80,6 +83,7 @@ jobs:
             echo "mobile_only=false" >> "$GITHUB_OUTPUT"
             echo "api=true"          >> "$GITHUB_OUTPUT"
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
+            echo "redis=true"        >> "$GITHUB_OUTPUT"
             echo "deployable=true"   >> "$GITHUB_OUTPUT"
             echo "empty diff -> full pipeline"; exit 0
           fi
@@ -94,6 +98,10 @@ jobs:
           # the repo root, so anything outside frontend/ can affect it.
           if echo "$FILES" | grep -qv '^frontend/'; then API=true; else API=false; fi
           if echo "$FILES" | grep -q  '^frontend/';  then FE=true;  else FE=false;  fi
+          # The redis image is a Dockerfile plus three files. Rebuilding it on
+          # every backend commit is 20 wasted seconds; rebuilding it never is
+          # how the cluster ended up with no redis image at all.
+          if echo "$FILES" | grep -q  '^docker/redis/'; then RD=true; else RD=false; fi
 
           # Does anything here reach production at all?
           #
@@ -117,6 +125,7 @@ jobs:
             echo "every changed path is excluded from the image and the box -> nothing to deploy"
           fi
 
+          echo "redis=$RD"                >> "$GITHUB_OUTPUT"
           echo "mobile_only=$MOBILE_ONLY" >> "$GITHUB_OUTPUT"
           echo "api=$API"                 >> "$GITHUB_OUTPUT"
           echo "frontend=$FE"             >> "$GITHUB_OUTPUT"
@@ -195,6 +204,26 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # The cluster pulls from ECR with an instance profile, so nothing has to
+      # hold a registry credential. GHCR keeps receiving the same images for
+      # the compose host, which is unchanged.
+      #
+      # The registry host is derived at runtime rather than written down: it
+      # contains the AWS account id and this repository is public.
+      - name: Log in to ECR
+        id: ecr
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-west-2
+        run: |
+          ACCT=$(aws sts get-caller-identity --query Account --output text)
+          REG="${ACCT}.dkr.ecr.us-west-2.amazonaws.com"
+          aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin "$REG"
+          echo "registry=$REG" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$ACCT"
+          echo "::add-mask::$REG"
+
       # Only the image whose source actually moved. A backend-only commit used
       # to rebuild the frontend image and vice versa; the other side's :latest
       # is already correct, so the rebuild was pure wall-clock.
@@ -207,6 +236,8 @@ jobs:
           tags: |
             ${{ env.API_IMAGE }}:latest
             ${{ env.API_IMAGE }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/insighta-api:latest
+            ${{ steps.ecr.outputs.registry }}/insighta-api:${{ github.sha }}
           build-args: |
             GIT_SHA=${{ github.sha }}
           cache-from: type=gha
@@ -221,12 +252,31 @@ jobs:
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/insighta-frontend:latest
+            ${{ steps.ecr.outputs.registry }}/insighta-frontend:${{ github.sha }}
           build-args: |
             VITE_API_URL=/api
             VITE_SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_ANON_KEY }}
             VITE_POSTHOG_KEY=${{ secrets.VITE_POSTHOG_KEY }}
             VITE_CHATBOT_PROVIDER=qwen-lora
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # This image existed in no registry until 2026-08-14: deploy.yml pushed
+      # api and frontend, and the box built redis itself through compose. A
+      # cluster cannot build, so a cutover had no redis to pull.
+      - name: Build & push Redis image
+        if: needs.scope.outputs.redis == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker/redis
+          push: true
+          tags: |
+            ghcr.io/jk42jj/insighta-redis:latest
+            ghcr.io/jk42jj/insighta-redis:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/insighta-redis:latest
+            ${{ steps.ecr.outputs.registry }}/insighta-redis:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

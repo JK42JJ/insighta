@@ -53,12 +53,13 @@ module "k3s_node" {
   source = "../../../../modules/k3s-node"
   count  = var.enable_k3s_node ? 1 : 0
 
-  name          = "insighta-k3s-1"
-  ami_id        = var.ami_id
-  instance_type = var.k3s_instance_type
-  key_name      = var.key_name
-  subnet_id     = local.subnet_id
-  vpc_id        = module.networking.vpc_id
+  name                 = "insighta-k3s-1"
+  iam_instance_profile = var.k3s_instance_profile
+  ami_id               = var.ami_id
+  instance_type        = var.k3s_instance_type
+  key_name             = var.key_name
+  subnet_id            = local.subnet_id
+  vpc_id               = module.networking.vpc_id
 
   tags = merge(local.common_tags, { Phase = "P2" })
 }
@@ -87,4 +88,55 @@ locals {
     ManagedBy   = "terraform"
     Project     = "insighta"
   }
+}
+
+# ── Container images ────────────────────────────────────────────────────────
+#
+# The cluster could not pull ghcr.io/jk42jj/* because those packages are
+# private and no long-lived credential for them exists: the token stored on the
+# production box is a CI GITHUB_TOKEN and was measured expired (401) on
+# 2026-08-14. Handing a personal access token to a cluster replaces that with a
+# secret that has to be rotated and cannot be revoked without breaking pulls.
+#
+# ECR removes the credential instead of managing it. The node carries an
+# instance profile with ECR read; the kubelet authenticates with it and there
+# is no pull secret in any namespace. GHCR keeps receiving the same images, so
+# the compose host is untouched.
+#
+# Storage is bounded to the last 5 tags per repository -- roughly 2 GB, about
+# $0.20 a month at us-west-2 rates.
+resource "aws_ecr_repository" "images" {
+  for_each = toset(["insighta-api", "insighta-frontend", "insighta-redis"])
+
+  name                 = each.key
+  image_tag_mutability = "MUTABLE" # :latest is expected to move
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_ecr_lifecycle_policy" "images" {
+  for_each   = aws_ecr_repository.images
+  repository = each.value.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep the last 5 images; older tags are reachable by digest in the deploy log if ever needed."
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 5
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+output "ecr_registry" {
+  description = "Registry host for the image repositories."
+  value       = split("/", values(aws_ecr_repository.images)[0].repository_url)[0]
 }

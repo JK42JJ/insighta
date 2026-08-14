@@ -1,3 +1,4 @@
+{{- include "insighta.checkRegistry" . }}
 {{- if .Values.schemaSync.enabled }}
 # Applies the Prisma schema before the app rolls out.
 #
@@ -64,7 +65,7 @@ spec:
 {{- end }}
       containers:
         - name: schema-sync
-          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image) | quote }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           command: ["npx", "prisma@{{ .Values.schemaSync.cliVersion }}", "db", "push", "--skip-generate", "--accept-data-loss"]
           envFrom:

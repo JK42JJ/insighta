@@ -1,3 +1,4 @@
+{{- include "insighta.checkRegistry" . }}
 {{- if .Values.redis.enabled }}
 # StatefulSet, not Deployment. docker/redis/redis.conf enables AOF
 # (appendonly yes, appendfsync everysec) with RDB snapshots as a secondary
@@ -26,7 +27,7 @@ spec:
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: redis
-          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.redis.image) | quote }}
           imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
           # Overrides maxmemory from redis.conf so it stays below the
           # container limit; the image's entrypoint forwards these.

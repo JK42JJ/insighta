@@ -24,6 +24,21 @@ envSecretName: insighta-env
 # this every pod sits in ImagePullBackOff with no other symptom.
 imagePullSecrets: []
 
+# Registry host to prefix onto every image repository, or "" to use each
+# repository exactly as written.
+#
+# The AWS registry host embeds the account id and this repository is public, so
+# it is supplied per-cluster rather than committed -- the same way the
+# insighta-env secret is. An environment that requires it says so and fails
+# loudly when it is missing, rather than silently rendering an image reference
+# that resolves nowhere.
+imageRegistry: ""
+
+# Set true in an environment whose images only exist in a registry that
+# imageRegistry has to name. Rendering without it is then an error, not a pull
+# failure discovered later in ImagePullBackOff.
+requireImageRegistry: false
+
 api:
   replicaCount: 1
   image:
@@ -134,8 +149,10 @@ redis:
   # This is a single point of failure and is recorded as one in the design.
   replicaCount: 1
   image:
-    repository: insighta-redis
-    tag: local
+    # Pushed by deploy.yml since 2026-08-14. Before that it existed in no
+    # registry and the default here named an image only the compose host had.
+    repository: ghcr.io/jk42jj/insighta-redis
+    tag: latest
     pullPolicy: IfNotPresent
   port: 6379
   # docker/redis/redis.conf ships maxmemory 2gb with maxmemory-policy

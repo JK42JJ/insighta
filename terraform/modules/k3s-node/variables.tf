@@ -67,3 +67,18 @@ variable "ssh_cidrs" {
   type        = list(string)
   default     = []
 }
+
+variable "iam_instance_profile" {
+  description = <<-EOT
+    Name of an existing instance profile to attach, or "" for none.
+
+    Deliberately a name rather than a managed resource. Creating the role here
+    would require CI's terraform principal to hold iam:CreateRole, which is the
+    standard path from "CI can deploy" to "CI can mint an administrator". The
+    role and profile are created once by an administrator; terraform attaches
+    what already exists and CI holds only iam:PassRole for that one ARN.
+  EOT
+  type        = string
+  default     = ""
+}
+

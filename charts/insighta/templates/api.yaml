@@ -1,3 +1,4 @@
+{{- include "insighta.checkRegistry" . }}
 {{- /*
    A ReadWriteOnce claim cannot be attached by two pods. Left to a comment,
    enabling persistence at two replicas leaves the second pod Pending on a
@@ -35,7 +36,7 @@ spec:
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: api
-          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image) | quote }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           args: {{ toYaml .Values.api.command | nindent 12 }}
           ports:
