@@ -74,6 +74,12 @@ server {
     listen [::]:443 ssl http2;
     server_name {{ sites.insighta.server_names }};
 
+    # Defining log_format alone changes nothing: without naming it here, nginx
+    # keeps using the default `combined` from nginx.conf, which carries no
+    # upstream_addr. The weight would then be unobservable -- traffic shifted
+    # with no way to tell which backend served what, or how slowly.
+    access_log /var/log/nginx/insighta-access.log upstream_split;
+
     # SSL certificates (issued by certbot)
     ssl_certificate     /etc/letsencrypt/live/{{ sites.insighta.cert_name }}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/{{ sites.insighta.cert_name }}/privkey.pem;
