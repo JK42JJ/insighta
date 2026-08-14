@@ -148,7 +148,7 @@ fi
 # in the environment, which is what makes it join rather than start a control
 # plane of its own.
 if ! command -v k3s >/dev/null; then
-  would "installing k3s ($AGENT && echo agent || echo server)"
+  would "installing k3s ($($AGENT && echo agent || echo server))"
   if ! $CHECK; then
     if $AGENT; then
       curl -sfL https://get.k3s.io | K3S_URL="$K3S_URL" K3S_TOKEN="$K3S_TOKEN" \
