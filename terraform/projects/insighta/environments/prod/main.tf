@@ -29,9 +29,15 @@ module "iam" {
 module "compute" {
   source = "../../../../modules/compute"
 
-  name               = "insighta-prod"
-  ami_id             = var.ami_id
-  instance_type      = var.instance_type
+  name          = "insighta-prod"
+  ami_id        = var.ami_id
+  instance_type = var.instance_type
+
+  # The service address now answers from the cluster. Declared here rather than
+  # left as drift: terraform.yml applies on every push to main, and a plan that
+  # still believed the address belonged to this instance would move it back --
+  # silently, as a side effect of an unrelated merge.
+  eip_instance_id    = var.enable_k3s_node ? module.k3s_node[0].instance_id : ""
   key_name           = var.key_name
   subnet_id          = local.subnet_id
   security_group_ids = [module.security.security_group_id]
@@ -139,4 +145,29 @@ resource "aws_ecr_lifecycle_policy" "images" {
 output "ecr_registry" {
   description = "Registry host for the image repositories."
   value       = split("/", values(aws_ecr_repository.images)[0].repository_url)[0]
+}
+
+# ── Standby address for the former edge ─────────────────────────────────────
+#
+# insighta-prod carried the service address until 2026-08-14. When that address
+# moved to the cluster, the host was left with no public IP at all -- and this
+# subnet routes through an internet gateway, not a NAT, so no public IP means
+# no outbound internet.
+#
+# That matters because the host is the rollback target. Its containers talk to
+# Supabase; without egress they fail their health checks, and a rollback to a
+# stack that has been failing for two weeks is not a rollback anyone should
+# trust.
+#
+# Roughly $3.60/month, and it is released when the host is decommissioned.
+resource "aws_eip" "prod_standby" {
+  count  = var.enable_k3s_node ? 1 : 0
+  domain = "vpc"
+  tags   = merge(local.common_tags, { Name = "insighta-prod-standby-eip" })
+}
+
+resource "aws_eip_association" "prod_standby" {
+  count         = var.enable_k3s_node ? 1 : 0
+  instance_id   = module.compute.instance_id
+  allocation_id = aws_eip.prod_standby[0].id
 }

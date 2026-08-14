@@ -52,3 +52,19 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "eip_instance_id" {
+  description = <<-EOT
+    Instance the Elastic IP points at, or "" for this module's own instance.
+
+    The address is the service's public identity -- DNS resolves insighta.one
+    to it -- and it is deliberately separable from the instance that answers.
+    Moving it is how the edge moved to the cluster on 2026-08-14 without a DNS
+    change: two seconds of reassociation, no TTL, no client caches.
+
+    Terraform has to describe that, or the next apply moves it back.
+  EOT
+  type        = string
+  default     = ""
+}
+
