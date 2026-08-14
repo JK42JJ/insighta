@@ -25,11 +25,22 @@ limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
 # retries the other backend rather than returning the error to the client, so
 # a cluster that falls over during the shift costs latency, not availability.
 #
-# nginx omits a server with weight=0 from selection but still parses it, which
-# is what makes 0 a real state rather than a commented-out line.
+# nginx rejects weight=0 outright -- "invalid parameter \"weight=0\"" and the
+# server refuses to start. Measured on the host at k3s_weight=100, where the
+# compose side becomes 0. So each side is emitted only when its weight is
+# above zero, and both endpoints of the ramp are expressible:
+#
+#   k3s_weight = 0    only the compose backend
+#   k3s_weight = 100  only the cluster backend
+#
+# An earlier version of this comment claimed nginx parses weight=0 and omits it
+# from selection. It does not. The claim was never exercised because the
+# template already skipped the cluster line at 0.
 # ---------------------------------------------------------------------------
 upstream insighta_api {
+{% if k3s_weight | int < 100 %}
     server {{ api_upstream }} weight={{ 100 - k3s_weight }} max_fails=3 fail_timeout=10s;
+{% endif %}
 {% if k3s_weight | int > 0 %}
     server {{ k3s_node }}:{{ k3s_api_port }} weight={{ k3s_weight }} max_fails=3 fail_timeout=10s;
 {% endif %}
@@ -37,7 +48,9 @@ upstream insighta_api {
 }
 
 upstream insighta_frontend {
+{% if k3s_weight | int < 100 %}
     server {{ frontend_upstream }} weight={{ 100 - k3s_weight }} max_fails=3 fail_timeout=10s;
+{% endif %}
 {% if k3s_weight | int > 0 %}
     server {{ k3s_node }}:{{ k3s_frontend_port }} weight={{ k3s_weight }} max_fails=3 fail_timeout=10s;
 {% endif %}
