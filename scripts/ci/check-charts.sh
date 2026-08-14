@@ -126,6 +126,20 @@ done
 # feat/p2-helm-chart-t0, which had been merged and deleted, so every
 # Application would have failed to sync with nothing in the chart to explain
 # why.
+# Kubernetes canonicalises resource quantities: 1000m becomes 1, 1024Mi becomes
+# 1Gi. A chart that writes the non-canonical form renders a value the API server
+# stores differently, and every server-side-apply diff afterwards reports a
+# change that is not one. Measured 2026-08-14: StatefulSet/insighta-postgres sat
+# OutOfSync with a single difference, cpu "1000m" against a live "1".
+echo "quantities:"
+noncanon=$(grep -rnE '(cpu|memory): *"?[0-9]+(000m|024Mi)"?' "$CHART" || true)
+if [ -n "$noncanon" ]; then
+  bad "non-canonical resource quantities (Kubernetes will rewrite these):"
+  printf '%s\n' "$noncanon" | sed 's/^/        /'
+else
+  ok "all resource quantities are in canonical form"
+fi
+
 echo "bootstrap:"
 for f in charts/bootstrap/*.yaml; do
   [ -f "$f" ] || continue
