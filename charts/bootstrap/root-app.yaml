@@ -13,7 +13,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/JK42JJ/insighta
-    targetRevision: feat/p2-helm-chart-t0
+    targetRevision: main
     path: charts/bootstrap
   destination:
     server: https://kubernetes.default.svc
