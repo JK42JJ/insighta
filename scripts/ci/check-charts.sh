@@ -33,12 +33,17 @@ command -v helm >/dev/null || { echo "helm not found"; exit 127; }
 # Expectations, one line per environment:
 #   <env>|<kind/name that must exist, comma separated>|<must NOT exist>
 #
+# prod must NOT render the schema-sync Job. deploy.yml's migrate job runs
+# `prisma db push` against Supabase on every deployable change, independently of
+# where the application runs; a second pusher inside the chart would race it
+# against the database production reads.
+#
 # These are not a restatement of the templates. Each entry is a decision that
 # was made for a reason and would be a defect to lose silently.
 read -r -d '' EXPECT <<'EOF' || true
 dev|Service/insighta-redis,StatefulSet/insighta-redis,Deployment/insighta-api,Deployment/insighta-worker|Job/insighta-schema-sync
 staging|Service/insighta-redis,StatefulSet/insighta-redis,Deployment/insighta-api,Job/insighta-schema-sync|
-prod|Service/insighta-redis,StatefulSet/insighta-redis,Deployment/insighta-api,Deployment/insighta-worker,Job/insighta-schema-sync|StatefulSet/insighta-postgres
+prod|Service/insighta-redis,StatefulSet/insighta-redis,Deployment/insighta-api,Deployment/insighta-worker,Ingress/insighta|StatefulSet/insighta-postgres,Job/insighta-schema-sync
 validation|Deployment/insighta-api,Deployment/insighta-worker,StatefulSet/insighta-postgres|StatefulSet/insighta-redis,Ingress/insighta,Job/insighta-schema-sync
 EOF
 

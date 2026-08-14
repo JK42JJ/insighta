@@ -65,9 +65,19 @@ variable "enable_k3s_node" {
 }
 
 variable "k3s_instance_type" {
-  description = "Validation node size. See modules/k3s-node for the memory arithmetic behind t3.small."
+  description = <<-EOT
+    Instance type for the k3s node.
+
+    t3.small carried the validation cluster at 73% of 1910 MB with k3s, ArgoCD
+    core, four application pods and a development database. That leaves no room
+    for traffic, a second replica, or a spike.
+
+    Production runs t3.medium and uses 585 MB of 3836 MB, with the three
+    containers totalling 182 MiB. Matching it removes node size as a variable
+    when comparing the two during the parallel run.
+  EOT
   type        = string
-  default     = "t3.small"
+  default     = "t3.medium"
 }
 
 variable "k3s_instance_profile" {
