@@ -69,6 +69,29 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: insighta
+  # ServerSideApply and a StatefulSet with volumeClaimTemplates leave this
+  # application permanently OutOfSync. `argocd app diff` reports nothing and
+  # the rendered manifest is a subset of the live object, so there is no
+  # content difference; the API server's own defaulting of the claim templates
+  # is what the controller keeps seeing. Established by A/B on 2026-08-14:
+  #
+  #   ServerSideApply removed   -> Synced
+  #   ServerSideApply restored  -> OutOfSync
+  #   ...reproduced both ways.
+  #
+  # Dropping ServerSideApply would fix it and give up the field-pruning this
+  # deployment needs. Ignoring the claim templates keeps both: they are
+  # immutable after creation, so nothing is being masked that could later be
+  # changed through this path.
+  #
+  # A permanently OutOfSync application is worse than either problem it would
+  # report -- it teaches everyone to stop reading the status.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates
+
   syncPolicy:
     # Automated here and nowhere else. This cluster serves no traffic and
     # exists to answer "does main deploy", which a manual sync postpones.
@@ -87,3 +110,6 @@ spec:
       # take fields owned by another manager, so an adopted release needs those
       # removed once, by hand, at adoption time.
       - ServerSideApply=true
+      # Without this, ignoreDifferences affects the displayed diff but not what
+      # a sync applies, and the application returns to OutOfSync immediately.
+      - RespectIgnoreDifferences=true
