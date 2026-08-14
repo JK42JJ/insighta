@@ -34,3 +34,12 @@ enable_cloudwatch = true
 # stays in code. With the flag, the instance would exist while the repository
 # said it did not, and the nightly drift job would be right to complain.
 enable_k3s_node = true
+
+# Two nodes while the architecture is verified and operated by hand, so that
+# scheduling, draining and rescheduling are observed rather than read about.
+#
+# Planned reduction to one on 2026-09-14.
+#
+# Not high availability: the control plane, the ingress and the Elastic IP all
+# stay on the first node.
+k3s_node_count = 2

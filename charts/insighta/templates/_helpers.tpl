@@ -66,3 +66,16 @@ indication that a parameter was forgotten.
 {{- fail "this environment sets requireImageRegistry=true but imageRegistry is empty: pass --set imageRegistry=<host>, or set it in the Argo Application's helm.parameters. It is not committed because it contains the AWS account id and this repository is public." }}
 {{- end }}
 {{- end }}
+
+{{- define "insighta.spread" -}}
+{{- if .root.Values.spreadAcrossNodes }}
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        {{- include "insighta.selectorLabels" .root | nindent 8 }}
+        app.kubernetes.io/component: {{ .component }}
+{{- end }}
+{{- end }}

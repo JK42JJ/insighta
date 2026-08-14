@@ -34,6 +34,17 @@ imagePullSecrets: []
 # that resolves nowhere.
 imageRegistry: ""
 
+# Spread replicas across nodes rather than letting them pile onto one.
+#
+# maxSkew 1 with a hostname topology means the difference between the busiest
+# and quietest node is at most one pod -- three replicas across two nodes lands
+# 2 and 1 without naming either node, so removing a node needs no chart change.
+#
+# ScheduleAnyway rather than DoNotSchedule: on a single node the constraint is
+# unsatisfiable, and refusing to schedule would turn a placement preference
+# into an outage.
+spreadAcrossNodes: true
+
 # Set true in an environment whose images only exist in a registry that
 # imageRegistry has to name. Rendering without it is then an error, not a pull
 # failure discovered later in ImagePullBackOff.

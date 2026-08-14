@@ -21,8 +21,21 @@ api:
   #                       -------
   #                         67  against a limit of 60
   #
-  # Raise this to 2 in the same change that removes the host, not before.
-  replicaCount: 1
+  # Three, spread across the nodes by topologySpreadConstraints. The split is
+  # not written down: three replicas over two nodes lands 2 and 1 on its own,
+  # and lands 3 on one node when the second is removed -- no chart change
+  # either way.
+  #
+  # Connection arithmetic, measured 2026-08-14 at 24 of 60 in use:
+  #   3 replicas x PRISMA_POOL_LIMIT 8 = 24
+  #   + worker                         ~ 8
+  #   + compose host, until removed    ~15
+  #                                    ----
+  #                                      47 against 60
+  #
+  # It fits, and it stops fitting if a fourth replica is added before the
+  # compose host goes.
+  replicaCount: 3
 
   # emptyDir, not a claim. Two consequences, both deliberate:
   #
@@ -40,7 +53,7 @@ api:
 frontend:
   # Static files, no shared state, ~4 MiB resident. Nothing here consumes a
   # database connection.
-  replicaCount: 2
+  replicaCount: 3
 
 redis:
   replicaCount: 1

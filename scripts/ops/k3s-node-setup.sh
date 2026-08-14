@@ -38,7 +38,21 @@
 set -euo pipefail
 
 CHECK=false
-[ "${1:-}" = "--check" ] && CHECK=true
+AGENT=false
+for a in "$@"; do
+  case "$a" in
+    --check) CHECK=true ;;
+    --agent) AGENT=true ;;
+  esac
+done
+
+# An agent needs the server's address and token. Both are read from the server
+# rather than passed on a command line, so neither ends up in shell history.
+#   K3S_URL, K3S_TOKEN in the environment when --agent is given.
+if $AGENT && ! $CHECK; then
+  : "${K3S_URL:?--agent requires K3S_URL}"
+  : "${K3S_TOKEN:?--agent requires K3S_TOKEN}"
+fi
 
 CP_VERSION="v1.31.0"   # verified present at artifacts.k8s.io on 2026-08-14
 CP_DIR="/var/lib/rancher/credentialprovider"
@@ -88,6 +102,18 @@ fi
 # ── k3s config ──────────────────────────────────────────────────────────────
 # Declared in config.yaml rather than in the unit file: the install script
 # rewrites the unit, and flags that live only there are lost on upgrade.
+if $AGENT; then
+  # An agent takes no disable/write-kubeconfig flags -- those configure a
+  # server. It does run a kubelet, and the kubelet is what needs the credential
+  # provider, so that part is identical on both.
+  read -r -d '' WANT_K3S <<EOF || true
+kubelet-arg:
+  - "image-credential-provider-config=$CP_CFG"
+  - "image-credential-provider-bin-dir=$CP_DIR/bin"
+EOF
+  UNIT=k3s-agent
+else
+  UNIT=k3s
 read -r -d '' WANT_K3S <<EOF || true
 disable:
   - traefik
@@ -104,6 +130,7 @@ kubelet-arg:
   - "image-credential-provider-config=$CP_CFG"
   - "image-credential-provider-bin-dir=$CP_DIR/bin"
 EOF
+fi
 
 if [ -f "$K3S_CFG" ] && [ "$(cat "$K3S_CFG")" = "$WANT_K3S" ]; then
   note "k3s config current"
@@ -117,13 +144,38 @@ if $CHECK; then
   exit 0
 fi
 
-if [ "$changed" -eq 1 ] && systemctl is-active --quiet k3s; then
-  note "restarting k3s"
-  systemctl restart k3s
+# Install if absent. An agent is the same binary with K3S_URL and K3S_TOKEN
+# in the environment, which is what makes it join rather than start a control
+# plane of its own.
+if ! command -v k3s >/dev/null; then
+  would "installing k3s ($AGENT && echo agent || echo server)"
+  if ! $CHECK; then
+    if $AGENT; then
+      curl -sfL https://get.k3s.io | K3S_URL="$K3S_URL" K3S_TOKEN="$K3S_TOKEN" \
+        INSTALL_K3S_VERSION="${K3S_VERSION:-v1.36.3+k3s1}" sh -
+    else
+      curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${K3S_VERSION:-v1.36.3+k3s1}" sh -
+    fi
+  fi
+  changed=1
+fi
+
+if [ "$changed" -eq 1 ] && systemctl is-active --quiet "$UNIT"; then
+  note "restarting $UNIT"
+  systemctl restart "$UNIT"
   for _ in $(seq 1 30); do
-    k3s kubectl get nodes >/dev/null 2>&1 && break
+    if $AGENT; then systemctl is-active --quiet "$UNIT" && break
+    else k3s kubectl get nodes >/dev/null 2>&1 && break; fi
     sleep 2
   done
+fi
+
+# An agent has no cluster-wide state to report and no secrets-encrypt surface.
+if $AGENT; then
+  note "agent: $(systemctl is-active "$UNIT" 2>/dev/null)"
+  note "k3s: $(k3s --version 2>/dev/null | head -1)"
+  note "provider: $("$CP_BIN" --version 2>/dev/null | head -1 || echo installed)"
+  exit 0
 fi
 
 # ── report, from the node's own view ────────────────────────────────────────

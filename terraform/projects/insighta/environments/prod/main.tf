@@ -59,9 +59,11 @@ module "k3s_node" {
   source = "../../../../modules/k3s-node"
   count  = var.enable_k3s_node ? 1 : 0
 
-  name                 = "insighta-k3s-1"
+  name                 = "insighta-k3s"
   iam_instance_profile = var.k3s_instance_profile
   ami_id               = var.ami_id
+  node_count           = var.k3s_node_count
+  extra_instance_type  = var.k3s_extra_instance_type
   instance_type        = var.k3s_instance_type
   key_name             = var.key_name
   subnet_id            = local.subnet_id
