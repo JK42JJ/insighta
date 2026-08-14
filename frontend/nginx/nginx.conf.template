@@ -55,6 +55,26 @@ server {
         access_log off;
     }
 
+    # Digital Asset Links — proves the Play app and this domain are the same
+    # publisher, which is what removes the URL bar from the TWA. Chrome fetches
+    # it over HTTPS at install time and re-checks periodically.
+    #
+    # This needs an exact-match block because the deny rule at the bottom of
+    # this file matches any URI containing "/." and would 403 it. Regex
+    # locations outrank prefix ones, so a `location /.well-known/` would lose;
+    # `location =` outranks both. The host nginx has the identical deny rule
+    # and needs the same exception -- see docs/deployment/twa/nginx-host.conf.
+    # The ACME challenge never hit this because it is served from the :80 block.
+    #
+    # The file itself ships in the frontend build (frontend/public/.well-known/),
+    # so rotating the signing key is a normal code change rather than an edit
+    # on the server.
+    location = /.well-known/assetlinks.json {
+        default_type application/json;
+        add_header Cache-Control "public, max-age=300" always;
+        access_log off;
+    }
+
     # Static file caching - Vite uses content hashes in filenames
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 1y;

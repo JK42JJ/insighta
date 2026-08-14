@@ -1,0 +1,13 @@
+# Provider binaries and module caches are machine-specific build artefacts.
+# They were tracked, which put a darwin_arm64 binary in a repo whose CI is Linux.
+.terraform/
+.terraform.tfstate.lock.info
+
+# State can hold plaintext secrets and belongs in the S3 backend, never here.
+# state-backend/terraform.tfstate was tracked before this file existed.
+*.tfstate
+*.tfstate.*
+
+# Plans can contain resolved variable values.
+*.tfplan
+crash.log

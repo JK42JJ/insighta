@@ -1,0 +1,62 @@
+# dev -- also the values used for the local k3d cluster (T0).
+#
+# One replica each. Availability is not a dev concern, and a second replica
+# only makes failures harder to read.
+# Images are built locally and imported into the cluster, so nothing is
+# pulled from a registry. pullPolicy Never makes a missing local image fail
+# immediately and visibly instead of retrying against GHCR.
+#
+# The GHCR images cannot be used here at all: they are linux/amd64 only and
+# this cluster runs on arm64, which the kubelet reports as
+# "no match for platform in manifest". That is the multi-arch gap recorded
+# in the design as 8.4, and it blocks T0 outright.
+api:
+  replicaCount: 1
+  # Single replica, so a ReadWriteOnce claim is valid and the YouTube
+  # response cache survives a restart instead of spending quota to rebuild.
+  persistence:
+    enabled: true
+  image:
+    repository: insighta-api
+    tag: local
+    pullPolicy: Never
+frontend:
+  replicaCount: 1
+  image:
+    repository: insighta-frontend
+    tag: local
+    pullPolicy: Never
+redis:
+  replicaCount: 1
+  image:
+    repository: insighta-redis
+    tag: local
+    pullPolicy: Never
+  persistence:
+    enabled: true
+    size: 1Gi
+
+ingress:
+  enabled: true
+  className: traefik      # k3s ships traefik
+  host: insighta.localtest.me
+  tls:
+    enabled: false
+
+# dev points at the self-hosted Supabase already running on this machine.
+#
+# An in-cluster plain postgres was tried first and cannot work: schema.prisma
+# carries Supabase's own auth tables, and two of their columns default to
+# expressions over other columns --
+#   auth.identities.email  = lower(identity_data->>'email')
+#   auth.users.confirmed_at = LEAST(email_confirmed_at, phone_confirmed_at)
+# Supabase creates those as generated columns; Prisma introspected them as
+# DEFAULTs, and postgres rejects a column reference in DEFAULT. So
+# `prisma db push` cannot build this schema on stock postgres at all.
+postgresDev:
+  enabled: false
+
+# Never run schema sync against the local Supabase: it already holds the
+# schema, and pushing would rewrite a database this cluster does not own.
+schemaSync:
+  enabled: false

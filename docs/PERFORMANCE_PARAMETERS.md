@@ -37,12 +37,29 @@
 | 파라미터 | 위치 | Default | Prod | 범위 | 영향 |
 |---|---|---|---|---|---|
 | **search.list units/콜** | youtube-client.ts:317 | 100 (고정) | 100 | — | YouTube 과금. 1콜=100 units. 일 한도 10,000 = 100콜/일. |
-| **search.list 키** | youtube-client.ts:169 `resolveSearchApiKeys` | 단일키(CP512) | YOUTUBE_API_KEY_SEARCH 1개 | — | ★ToS: 다중키 로테이션 금지(CP512 제거). 쿼터 우회 위반. |
+| **search.list 키** | youtube-client.ts:169 `resolveSearchApiKeys` | 단일키(CP512) | **8개 전부 활용 (단기안, James 2026-08-04)** | — | 일 80,000. ★ToS 리스크는 표 아래 기록 유지. |
 | V5_SEARCH_MAX_RESULTS | v5/config.ts:25 | 25 | **40** | 10-50 | 콜당 후보 수. ↑=같은 100units에 더 많은 후보(add-cards 재검색 지연). 상한 50(YouTube). |
 | V5_MAX_QUERIES | v5/config.ts:23 | 8 | 8 | 1-20 | 만다라당 search.list 콜 수(셀당 1). ×100 = units/만다라. |
 | V5_SEARCH_TIMEOUT_MS | v5/config.ts:24 | 2000 | 2000 | 500-8000 | fanout 콜 타임아웃. |
 | V3_YOUTUBE_SEARCH_TIMEOUT_MS | v3 env | 3000 | 3000 | — | v3 search.list 타임아웃. |
 | BATCH_COLLECTOR_SEARCH_MAX_RESULTS | batch/manifest.ts:39 | 30 | 30 | — | 트렌드 수집 search.list 후보 수. |
+
+> ### search.list 키 개수 — 결정됨 (James 2026-08-04)
+>
+> **8개 전부 활용. 단기안(短期案)으로 채택.** 일 한도 80,000 을 전제로 설계한다.
+>
+> 결정 시점의 3자 상태는 이랬다.
+>
+> | 소스 | 값 |
+> |---|---|
+> | 이 문서 (2026-07-09 작성) | 1개. *"다중키 로테이션 금지(CP512 제거). 쿼터 우회 위반"* |
+> | 코드 `resolveSearchApiKeys` | slot 1~10 을 전부 수집해 반환 |
+> | prod `printenv` | `YOUTUBE_API_KEY_SEARCH` ~ `_8` = 8개 |
+>
+> **★ToS 리스크는 해소된 것이 아니라 감수하기로 한 것이다.** 다중 프로젝트로 쿼터를
+> 넘기는 것은 YouTube Data API 약관 위반 소지가 있다. "단기안" 이라는 단서가 그 뜻이며,
+> 중장기에는 (a) 쿼터 증설 신청 (b) 수집량 축소 (c) 비-search 소스 확대 중 하나로 이행해야
+> 한다. CP512 의 단일키 결정 기록과 이 결정이 충돌하므로, 이행 시점에 둘 중 하나를 폐기한다.
 
 ## 2. 풀 우선 조회 (pool-first, quota-free) — **베타 후 검토**
 
@@ -135,6 +152,31 @@
 | REFRESH_AFTER_DAYS | refresh-metadata.ts | 20 (고정) | 20 | 30일 전 갱신(10일 마진). |
 | REFRESH_BATCH_LIMIT | refresh-metadata.ts | 500 (고정) | 500 | 갱신 배치/run. |
 | SUPPLY_YT_BRIDGE_ENABLED | config/index.ts | (n/a) | **true** | youtube_videos→video_pool 승격. |
+
+## 7-b. 큐레이션 (C-원장 축, 2026-08-04 신설)
+
+> 원장: `docs/handoffs/curation-ledger.md`. 큐레이션은 PC 에 없는 개념이라 T 축과 분리.
+
+| 파라미터 | 위치 | Default | Prod | 범위 | 영향 | 비용 |
+|---|---|---|---|---|---|---|
+| CURATION_TOPIC_SHAPING_ENABLED | config/index.ts · compose | false | **true ★** | bool | 주제를 하위주제 8개로 빚어 v5 에 전달. off = 접미사 라벨 4개(기존). | 빌드당 OpenRouter 1콜 (실측 5.4s) |
+| CURATION_RELEVANCE_FLOOR | curation/config.ts:62 | 40 | 40 | 0-100 | 신선 레그 적합도 하한. **풀 사다리엔 미적용**(C3 대상). | — |
+| CURATION_FRESH_WINDOW_DAYS | weekly-fresh.ts:54 | 7 | 7 | 1-30 | 라이브 검색 1차 창. | 8쿼리×100 = 800 units/주제 |
+| CURATION_FRESH_RETRY_DAYS | weekly-fresh.ts:55 | 30 | 30 | 7-90 | 확대 창. **`cards.length===0` 일 때만 발동 = 버그**(C2 관측). | 재시도 시 +800 units |
+| CURATION_PICK_RUNGS | curation/config.ts:85 | 0.5/0.5/0.35/0.35 | 동일 | 0-1 | 풀 코사인 사다리. 마지막 단 exclusionWeeks=4(재유입 허용). | 쿼타 0 (풀 조회) |
+| CURATION_SCHED_KST_ENABLED | compose | false | **true ★** | bool | KST 달력 주간 스케줄. | — |
+| CURATION_CHANNEL_SOURCE_ENABLED | compose | false | **true ★** | bool | 구독 채널 업로드 레그. | 채널당 playlistItems 1 unit |
+
+## 7-c. 풀 유입 (P-원장 축, 2026-08-04 신설)
+
+> 원장: `docs/handoffs/pool-inflow-ledger.md`. 전역 영향 — 위저드·add-cards·큐레이션이 같은 풀을 읽는다.
+
+| 항목 | 위치 | 값 | 영향 | 비용 |
+|---|---|---|---|---|
+| daily_trend 수집 | batch-video-collector | **2026-06-04 이후 정지** | 풀 신규 유입 0 | 정지 전 20,113 units/회 ×2/일 |
+| video_pool 신선도 | 실측 2026-08-04 | 40,600행 중 최근 30일 **106편** | 사다리가 고를 수 있는 게 구영상뿐 | — |
+| video_pool_domain_tags.relevance_score | schema default | **전 29,942행 0.50** | 인덱스 `(domain, score DESC)` 가 상수 정렬 = 무의미 | 채점기 부재 |
+| video_pool.expires_at | schema default | now()+30d (큐레이션 행만 +1y) | 수집분이 서빙 전 만료 가능 | 만료분 = 버린 쿼타 |
 
 ## 8. 변경 시 테스트 범위 매트릭스 (성능 개선 시 참조)
 

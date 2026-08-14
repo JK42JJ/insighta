@@ -269,6 +269,22 @@ const envSchema = z.object({
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
 
+  // Topic shaping for the weekly fresh leg (2026-08-04). Off (default) keeps the
+  // shipped behaviour exactly: the topic is expanded by appending three suffixes
+  // ("최신"/"강의"/"사례") and those four near-identical labels are handed to v5.
+  // Measured on prod 2026-08-03 for topic "파이썬": the 7-day window returned
+  // raw=1/title=0 and the 30-day retry recruited 4 candidates — from self-help
+  // channels, because a label as vague as "<topic> 사례" refines into success
+  // stories. The fresh leg yielded 1 pick and the pool ladder filled 16 slots.
+  // On: the topic is shaped by generateMandalaWithQueries (the wizard's proven
+  // merged structure+queries call) into real sub-goals plus per-cell queries,
+  // which v5 already accepts via `precomputedQueries`. Generation failure or a
+  // degraded (partial-coverage) result falls back to the suffix labels, so the
+  // worst case is today's behaviour. Rollback is a config flip, not a revert.
+  CURATION_TOPIC_SHAPING_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+
   // CP512 — metadata REFRESH for active rows (videos.list re-fetch, keeps served
   // rows ToS-compliant AND titled). Default true; set 'false' to pause refresh
   // (scrub still only touches inactive rows, so active rows just stop aging-out).
@@ -484,6 +500,12 @@ export const config = {
   // Channel-mode curation — build from followed channels' uploads (2026-07-27).
   curationChannelSource: {
     enabled: env.CURATION_CHANNEL_SOURCE_ENABLED,
+  },
+
+  // Weekly fresh leg — shape the topic into real sub-goals before searching,
+  // instead of appending suffixes to it (2026-08-04).
+  curationTopicShaping: {
+    enabled: env.CURATION_TOPIC_SHAPING_ENABLED,
   },
 
   // video_pool ToS hygiene cron (CP494).

@@ -8,6 +8,8 @@
  * modules — import from here.
  */
 
+import { MS_PER_DAY } from '@/utils/time-constants';
+
 /** Interest-signal weights (§4). Saved playlist videos = explicit intent → outrank subs. */
 export const INTEREST_WEIGHTS = Object.freeze({
   /** subscribed channel = passive interest */
@@ -61,6 +63,61 @@ export const CURATION_RELEVANCE_FLOOR = 40;
 
 /** recency window (days) for the discovery leg's publishedAfter — the rising bias (§4-B5). */
 export const CURATION_PUBLISHED_AFTER_DAYS = 365;
+
+/**
+ * Weekly pick ladder (2026-08-03, revised same day after the empty-week
+ * incident): the topic-mode pick walks these rungs ACCUMULATING candidates,
+ * freshest-first, until the week is full. Principle order is codified —
+ * this week's uploads > fresh > never-served > less-aligned never-served >
+ * long-ago-served re-entry.
+ *
+ * RETIRED 2026-08-04: "NO rung combination may end at an empty week
+ * (덜 정렬된 카드 > 카드 0장)". Read as "any card beats none", it walked the
+ * ladder down to cosine 0.35 and put Spanish lessons under "파이썬". The owner's
+ * rule now: garbage does not enter, even at the cost of a thin or empty week.
+ * The rungs still widen WHERE we look; they no longer lower HOW GOOD it must
+ * be — curation-build.ts judges the assembled week at one chokepoint.
+ *
+ * exclusionWeeks: how far back the served-history exclusion reaches.
+ * null = everything ever served stays out; 4 = only the last four weeks
+ * stay out (a month-old good video returning beats an empty week).
+ */
+export interface CurationPickRung {
+  freshDays: number | null;
+  threshold: number;
+  exclusionWeeks: number | null;
+}
+
+export const CURATION_PICK_RUNGS: readonly CurationPickRung[] = Object.freeze([
+  // Trimmed 2026-08-03 (same-day v3 redesign): freshness is now the weekly
+  // fresh leg's job (live v5, weekly-fresh.ts) — the pool rungs FILL. One
+  // fresh-pool rung stays first so embedded fresh supply (from prior fresh
+  // legs) is still preferred over the back catalog.
+  { freshDays: 7, threshold: 0.5, exclusionWeeks: null },
+  { freshDays: null, threshold: 0.5, exclusionWeeks: null },
+  { freshDays: null, threshold: 0.35, exclusionWeeks: null },
+  { freshDays: null, threshold: 0.35, exclusionWeeks: 4 },
+]);
+
+/** Concrete per-week plan: rungs resolved to dates against the week's Monday. */
+export interface CurationPickStep {
+  publishedAfter?: Date;
+  threshold: number;
+  /** Exclude only items served at/after this week_of; undefined = exclude all. */
+  exclusionAfter?: Date;
+}
+
+export function curationPickPlan(weekStart: Date): CurationPickStep[] {
+  return CURATION_PICK_RUNGS.map((r) => ({
+    ...(r.freshDays != null
+      ? { publishedAfter: new Date(weekStart.getTime() - r.freshDays * MS_PER_DAY) }
+      : {}),
+    threshold: r.threshold,
+    ...(r.exclusionWeeks != null
+      ? { exclusionAfter: new Date(weekStart.getTime() - r.exclusionWeeks * 7 * MS_PER_DAY) }
+      : {}),
+  }));
+}
 
 /** cooldown before re-attempting a failed interest-profile build — avoids the
  * suggest poll re-firing a doomed build every few seconds (P1). */

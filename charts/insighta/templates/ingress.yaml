@@ -1,0 +1,51 @@
+{{- if .Values.ingress.enabled }}
+# Replaces the host nginx site config. The path list mirrors what
+# sites-available/insighta.conf routes to :3000, with everything else
+# falling through to the frontend -- the same order nginx applies.
+#
+# Not reproduced here, and why:
+#   limit_req      -> belongs to the ingress controller, not the manifest
+#   gzip           -> controller default
+#   HSTS + headers -> controller-level policy
+#   /v2/ redirect  -> a 2026-04 bookmark redirect, expired
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "insighta.fullname" . }}
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          {{- range $p := list "/api" "/health" "/oauth/callback" "/documentation" "/api-reference" }}
+          - path: {{ $p }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "insighta.fullname" $ }}-api
+                port:
+                  number: {{ $.Values.api.port }}
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "insighta.fullname" . }}-frontend
+                port:
+                  number: {{ .Values.frontend.port }}
+{{- end }}

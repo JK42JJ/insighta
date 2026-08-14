@@ -3045,6 +3045,25 @@ class ApiClient {
     });
   }
 
+  /** Whether each user-facing feature actually works, measured — not whether
+   *  the process is up. See src/api/routes/admin/feature-status.ts. */
+  async getAdminFeatureStatus(): Promise<{
+    status: string;
+    data: {
+      overall: 'ok' | 'warn' | 'fail';
+      checked_at: string;
+      checks: Array<{
+        key: string;
+        label: string;
+        status: 'ok' | 'warn' | 'fail';
+        detail: string;
+        action?: string;
+      }>;
+    };
+  }> {
+    return this.request('/admin/feature-status');
+  }
+
   async getAdminHealth(): Promise<{
     success: boolean;
     data: {

@@ -17,6 +17,7 @@ import { adminAnalyticsRoutes } from './analytics';
 import { adminContentRoutes } from './content';
 import { adminReportRoutes } from './reports';
 import { adminHealthRoutes } from './health';
+import { adminFeatureStatusRoutes } from './feature-status';
 import { adminLlmRoutes } from './llm';
 import { adminEnrichmentRoutes } from './enrichment';
 import { adminClawbotRoutes } from './clawbot';
@@ -62,6 +63,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Stripe scaffold de-registered 2026-05-13 (see payments.legacy.ts).
   // await fastify.register(adminPaymentRoutes, { prefix: '/payments' });
   await fastify.register(adminHealthRoutes, { prefix: '/health' });
+  await fastify.register(adminFeatureStatusRoutes);
   await fastify.register(adminLlmRoutes, { prefix: '/llm' });
   await fastify.register(adminEnrichmentRoutes, { prefix: '/enrichment' });
   await fastify.register(adminClawbotRoutes, { prefix: '/clawbot' });

@@ -2,13 +2,19 @@
  * batch-video-collector — Source A: trend keywords
  *
  * Pulls live keywords from the `trend_signals` table (populated by the
- * trend-collector skill). Each row carries `metadata.seed_domain` when
- * it came from the Suggest pipeline — we use that as the domain tag.
- * LLM-extracted rows (source='youtube_trending_extracted') don't have a
- * seed_domain and get tagged 'general'.
+ * trend-collector skill).
  *
- * The `limit` is split proportionally across domains so one domain can't
- * dominate the daily quota spend.
+ * The domain tag comes from the `domain` COLUMN, which the P3 backfill filled
+ * with the nine-edition taxonomy. It used to come from `metadata.seed_domain`,
+ * a separate vocabulary of Korean buckets ('기술/개발', '학습/교육') that never
+ * met CurationDomain — so pool tags and weekly editions were named in two
+ * languages that could not be joined. seed_domain remains the fallback for
+ * rows the backfill has not reached.
+ *
+ * Rows are restricted to judge_state='ok'. The judge already rejected personal
+ * names, product models and vlog formats at collection time; spending search
+ * quota on keywords it rejected buys candidates that cannot become a weekly
+ * subject. 27% unfit and 3.8% unsafe were being collected on.
  */
 
 import type { PrismaClient } from '@prisma/client';
@@ -32,6 +38,7 @@ interface TrendRow {
   norm_score: number;
   source: string;
   metadata: unknown;
+  domain: string | null;
 }
 
 const DEFAULT_DOMAIN = 'general';
@@ -41,6 +48,9 @@ export interface LoadTrendKeywordsOpts {
    *  3-day rotation so day 0 takes rows 0..59, day 1 60..119, day 2 120..179.
    *  Over-fetch is sized so slicing after dedup still has enough rows. */
   offset?: number;
+  /** Restrict to one edition's keywords ('policy', 'ai_ml', …). Undefined =
+   *  every domain, which is the shipped behaviour. */
+  domain?: string;
 }
 
 /**
@@ -56,7 +66,11 @@ export async function loadTrendKeywords(
   // Fetch enough to cover offset + limit with dedup headroom.
   const fetchCount = Math.max((offset + limit) * 3, 50);
   const rows = await db.trend_signals.findMany({
-    where: { expires_at: { gt: new Date() } },
+    where: {
+      expires_at: { gt: new Date() },
+      judge_state: 'ok',
+      ...(opts.domain ? { domain: opts.domain } : {}),
+    },
     orderBy: [{ norm_score: 'desc' }],
     take: fetchCount,
     select: {
@@ -65,6 +79,7 @@ export async function loadTrendKeywords(
       norm_score: true,
       source: true,
       metadata: true,
+      domain: true,
     },
   });
 
@@ -77,16 +92,21 @@ export async function loadTrendKeywords(
     deduped.push({
       keyword: r.keyword,
       language: r.language,
-      domain: extractDomain(r.metadata),
+      domain: r.domain ?? extractDomain(r.metadata),
       trendSource: r.source,
       score: r.norm_score,
     });
   }
 
   const out = deduped.slice(offset, offset + limit);
-  log.info(
-    `loaded ${out.length} unique trend keywords (from ${rows.length} raw rows, dedup'd ${deduped.length}, offset ${offset}, limit ${limit})`
-  );
+  log.info('loaded trend keywords', {
+    loaded: out.length,
+    raw: rows.length,
+    deduped: deduped.length,
+    offset,
+    limit,
+    domain: opts.domain ?? '(all)',
+  });
   return out;
 }
 

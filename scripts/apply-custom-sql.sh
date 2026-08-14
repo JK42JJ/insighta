@@ -58,6 +58,8 @@ APPLY_FILES=(
   "prisma/migrations/ontology/014_fix_trigger_seq_scans.sql"
   "prisma/migrations/ontology/016_mentions_similar_to_relation_types.sql"
   "prisma/migrations/ontology/017_fix_sync_mandala_seqscan.sql"
+  "prisma/migrations/ontology/020_ontology_conversations.sql"
+  "prisma/migrations/youtube/001_youtube_cache_epochs.sql"
   "prisma/migrations/mandala-timings/001_create_table.sql"
   "prisma/migrations/video_chunk_embeddings/001_create_table.sql"
   "prisma/migrations/video_rich_summaries/001_add_user_id.sql"
@@ -197,6 +199,10 @@ APPLY_FILES=(
   # IF NOT EXISTS + NOTIFY pgrst — fully idempotent.
   "prisma/migrations/curation/001_create_curation_tables.sql"
   "prisma/migrations/curation/002_curation_personalization.sql"
+  # 2026-08-03 weekly-novelty follow-up: deactivate legacy same-user same-topic
+  # duplicate subscriptions + partial unique backstop. UPDATE no-ops once clean;
+  # index guarded by IF NOT EXISTS — idempotent.
+  "prisma/migrations/curation/003_dedupe_subscriptions_unique.sql"
   # curation-watched (2026-07-21): watched_at derived-only column for lineup row
   # meta (M/N listened / weekly complete). ADD COLUMN IF NOT EXISTS = idempotent.
   "prisma/migrations/curation-watched/001_watched_at.sql"
