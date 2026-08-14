@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+#
+# Brings a k3s node to the configuration this project expects. Idempotent:
+# safe to run against a fresh instance or one that is already serving.
+#
+#   scripts/ops/k3s-node-setup.sh          configure the node
+#   scripts/ops/k3s-node-setup.sh --check  report what differs, change nothing
+#
+# Runs on the node. Reach it with scripts/ops/ssh.sh:
+#
+#   scripts/ops/ssh.sh k3s "sudo bash -s" < scripts/ops/k3s-node-setup.sh
+#
+# Two things it sets up.
+#
+# --disable traefik --disable servicelb
+#   k3s otherwise claims 80 and 443. Nothing else holds them on this host, but
+#   the production host's nginx does, and a node whose defaults differ from the
+#   host it will replace is a difference discovered at the worst moment.
+#
+# ecr-credential-provider
+#   The node has an instance profile with ECR read, and containerd cannot use
+#   it. Measured 2026-08-14: the role is visible at the instance metadata
+#   endpoint and the pull still fails with
+#
+#     pull access denied ... authorization failed: no basic auth credentials
+#
+#   containerd resolves registry credentials from static configuration; it does
+#   not call AWS. The kubelet credential provider is the supported bridge: the
+#   kubelet runs this binary for images matching the ECR host pattern, the
+#   binary exchanges the instance profile for a registry token, and no secret
+#   is stored anywhere. Tokens last 12 hours and are refreshed by the same
+#   path, so nothing expires into an outage.
+
+set -euo pipefail
+
+CHECK=false
+[ "${1:-}" = "--check" ] && CHECK=true
+
+CP_VERSION="v1.31.0"   # verified present at artifacts.k8s.io on 2026-08-14
+CP_DIR="/var/lib/rancher/credentialprovider"
+CP_BIN="$CP_DIR/bin/ecr-credential-provider"
+CP_CFG="$CP_DIR/config.yaml"
+K3S_CFG="/etc/rancher/k3s/config.yaml"
+
+changed=0
+note() { printf '  %s\n' "$*"; }
+would() { if $CHECK; then note "WOULD: $*"; else note "$*"; fi; changed=1; }
+
+[ "$(id -u)" -eq 0 ] || { echo "must run as root (sudo)"; exit 1; }
+
+# ── credential provider binary ──────────────────────────────────────────────
+if [ -x "$CP_BIN" ]; then
+  note "credential provider present"
+else
+  would "installing ecr-credential-provider $CP_VERSION"
+  if ! $CHECK; then
+    mkdir -p "$CP_DIR/bin"
+    curl -fsSL -o "$CP_BIN" \
+      "https://artifacts.k8s.io/binaries/cloud-provider-aws/${CP_VERSION}/linux/amd64/ecr-credential-provider-linux-amd64"
+    chmod 0755 "$CP_BIN"
+  fi
+fi
+
+# ── credential provider config ──────────────────────────────────────────────
+read -r -d '' WANT_CFG <<'EOF' || true
+apiVersion: kubelet.config.k8s.io/v1
+kind: CredentialProviderConfig
+providers:
+  - name: ecr-credential-provider
+    matchImages:
+      - "*.dkr.ecr.*.amazonaws.com"
+      - "*.dkr.ecr-fips.*.amazonaws.com"
+    defaultCacheDuration: "12h"
+    apiVersion: credentialprovider.kubelet.k8s.io/v1
+EOF
+
+if [ -f "$CP_CFG" ] && [ "$(cat "$CP_CFG")" = "$WANT_CFG" ]; then
+  note "credential provider config current"
+else
+  would "writing $CP_CFG"
+  $CHECK || { mkdir -p "$CP_DIR"; printf '%s\n' "$WANT_CFG" > "$CP_CFG"; }
+fi
+
+# ── k3s config ──────────────────────────────────────────────────────────────
+# Declared in config.yaml rather than in the unit file: the install script
+# rewrites the unit, and flags that live only there are lost on upgrade.
+read -r -d '' WANT_K3S <<EOF || true
+disable:
+  - traefik
+  - servicelb
+write-kubeconfig-mode: "644"
+kubelet-arg:
+  - "image-credential-provider-config=$CP_CFG"
+  - "image-credential-provider-bin-dir=$CP_DIR/bin"
+EOF
+
+if [ -f "$K3S_CFG" ] && [ "$(cat "$K3S_CFG")" = "$WANT_K3S" ]; then
+  note "k3s config current"
+else
+  would "writing $K3S_CFG"
+  $CHECK || { mkdir -p /etc/rancher/k3s; printf '%s\n' "$WANT_K3S" > "$K3S_CFG"; }
+fi
+
+if $CHECK; then
+  [ "$changed" -eq 0 ] && note "node matches the expected configuration" || note "node differs (see WOULD lines)"
+  exit 0
+fi
+
+if [ "$changed" -eq 1 ] && systemctl is-active --quiet k3s; then
+  note "restarting k3s"
+  systemctl restart k3s
+  for _ in $(seq 1 30); do
+    k3s kubectl get nodes >/dev/null 2>&1 && break
+    sleep 2
+  done
+fi
+
+# ── report, from the node's own view ────────────────────────────────────────
+note "k3s: $(k3s --version 2>/dev/null | head -1)"
+note "provider: $("$CP_BIN" --version 2>/dev/null | head -1 || echo 'installed')"
+note "node: $(k3s kubectl get nodes --no-headers 2>/dev/null | awk '{print $1, $2}')"

@@ -69,4 +69,21 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: insighta
-  syncPolicy: {}
+  syncPolicy:
+    # Automated here and nowhere else. This cluster serves no traffic and
+    # exists to answer "does main deploy", which a manual sync postpones.
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # A release created by the helm CLI and then handed to Argo keeps fields
+      # the chart no longer renders: the last-applied-configuration belongs to
+      # helm, so a client-side apply has nothing to prune against. Measured
+      # 2026-08-14 -- imagePullSecrets: [ghcr] survived a Synced report after
+      # the chart stopped rendering it, and the pods referenced a secret that
+      # did not exist.
+      #
+      # Server-side apply fixes this going forward. It does not retroactively
+      # take fields owned by another manager, so an adopted release needs those
+      # removed once, by hand, at adoption time.
+      - ServerSideApply=true
