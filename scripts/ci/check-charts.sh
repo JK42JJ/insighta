@@ -154,10 +154,11 @@ for d in yaml.safe_load_all(sys.stdin):
             for p in r.get('http', {}).get('paths', []):
                 own[(r.get('host'), p.get('path'))].append(d['metadata']['name'])
 dups = {k: v for k, v in own.items() if len(v) > 1}
-if dups:
-    for (h, path), names in sorted(dups.items()):
-        print('DUP %s%s %s' % (h, path, ','.join(names)))
-    raise SystemExit(1)
+# Print only. Exiting non-zero here would abort the whole script under
+# set -euo pipefail before the emptiness test below ever runs -- which is
+# exactly how this check silently skipped prod on its first attempt.
+for (h, path), names in sorted(dups.items()):
+    print('DUP %s%s %s' % (h, path, ','.join(names)))
 " > /tmp/ingdup.$$ 2>/dev/null
   if [ -s /tmp/ingdup.$$ ]; then
     bad "$env: the same host and path in more than one Ingress"
