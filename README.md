@@ -33,7 +33,7 @@ When a WHY changes, update the handoff doc first, then sync this comment.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3%2B-blue.svg)](https://www.typescriptlang.org/)
 
 A learning platform where **user goals curate YouTube**, not the algorithm.
 Consumable streams (videos) accrete into a persistent knowledge graph
@@ -97,7 +97,7 @@ to production.
 
 ## Stack
 
-React 18 / Fastify / TypeScript · Supabase Cloud (PostgreSQL + pgvector + Auth) · Redis · LLM via OpenRouter (Claude Haiku/Sonnet, Gemini, Qwen) · AWS EC2 + Docker + Nginx
+React 18 / Fastify / TypeScript · Supabase Cloud (PostgreSQL + pgvector + Auth) · Redis · LLM via OpenRouter (Claude Haiku/Sonnet, Gemini, Qwen) · AWS EC2 + Kubernetes + Nginx
 
 ## Quick Start
 
@@ -114,7 +114,13 @@ API reference: `http://localhost:3000/api-reference`
 
 ## Deployment
 
-`git push origin main` → GitHub Actions → CI (lint / typecheck / test / build) → Docker build → Prisma migrate → deploy.
+`git push origin main` → GitHub Actions → CI (lint / typecheck / test / build) →
+image build → Prisma migrate → the cluster reconciles itself against the merged
+commit.
+
+The last step is a pull, not a push: the deployment state lives in this
+repository, and an agent in the cluster brings the running state to match it.
+Drift is corrected without anyone running a command.
 
 ## Docs
 

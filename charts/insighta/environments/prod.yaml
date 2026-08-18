@@ -74,7 +74,30 @@ postgresDev:
 
 ingress:
   enabled: true
-  host: insighta.one
+
+  # Both names, because DNS sends both here: www is a CNAME to the apex, which
+  # resolves to this cluster. The host nginx served both (server_name on the
+  # :80 and :443 blocks) and its certificate covered both.
+  #
+  # The first Ingress declared only the apex. www then matched the controller's
+  # catch-all server, which answers 404 and presents a self-signed certificate,
+  # so a browser refused the connection outright. Measured 2026-08-18:
+  #
+  #   curl  https://www.insighta.one/   ssl_verify=20, http=000
+  #   curl -k                           http=404
+  #
+  # Requests to an unmatched host are also invisible: the catch-all's location
+  # carries access_log off, so there is no record of who tried.
+  hosts:
+    - insighta.one
+    - www.insighta.one
+
+  # Declared here, not patched onto the live object. It was applied by hand on
+  # 2026-08-14 and survived only because server-side apply tolerates a field
+  # another manager owns -- which is not a property to depend on for the thing
+  # that renews the certificate.
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
   tls:
     enabled: true
     secretName: insighta-tls

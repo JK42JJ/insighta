@@ -1,0 +1,35 @@
+# Configuration for the ingress controller.
+#
+# The controller was installed by applying its upstream manifest, which leaves
+# this ConfigMap with no data section at all -- every setting at its default.
+# Anything tuned with `kubectl edit` would disappear the next time that manifest
+# is applied, so the settings live here instead.
+#
+# Nothing syncs this automatically yet: charts/bootstrap is what root-app would
+# watch, and root-app has not been applied. Until it is, this file is applied by
+# hand and its value is that the applied state is reconstructible from git.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+    app.kubernetes.io/component: controller
+data:
+  # ── D-2 ───────────────────────────────────────────────────────────────────
+  # The default format carries no $host, so a request to www.insighta.one and
+  # one to insighta.one are indistinguishable in the log. That gap made a
+  # question unanswerable on 2026-08-18: after finding www unreachable, there
+  # was no way to tell whether anyone had tried to reach it. The old host's log
+  # was `combined` and had the same gap, so neither side could answer it.
+  #
+  # host= is appended rather than inserted, so anything parsing the existing
+  # fields by position keeps working.
+  log-format-upstream: >-
+    $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent
+    "$http_referer" "$http_user_agent" $request_length $request_time
+    [$proxy_upstream_name] [$proxy_alternative_upstream_name] $upstream_addr
+    $upstream_response_length $upstream_response_time $upstream_status $req_id
+    host=$host

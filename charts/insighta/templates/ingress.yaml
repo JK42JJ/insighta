@@ -4,10 +4,14 @@
 # falling through to the frontend -- the same order nginx applies.
 #
 # Not reproduced here, and why:
-#   limit_req      -> belongs to the ingress controller, not the manifest
-#   gzip           -> controller default
-#   HSTS + headers -> controller-level policy
-#   /v2/ redirect  -> a 2026-04 bookmark redirect, expired
+#   gzip           -> controller default, verified present after cutover
+#   /v2/ redirect  -> a 2026-04 bookmark redirect, expired. Its only traffic in
+#                     two weeks of logs was 16 scanner requests out of 18
+#
+# limit_req and the response headers were listed here as "controller-level
+# policy" and then never configured on the controller. Naming a gap is not
+# closing it: four headers and the rate limit were absent for four days.
+# They now live in charts/bootstrap/ingress-nginx-config.yaml.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -22,14 +26,18 @@ spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . }}
   {{- end }}
+  {{- $hosts := include "insighta.ingressHosts" . | fromYamlArray }}
   {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
-        - {{ .Values.ingress.host }}
+        {{- range $hosts }}
+        - {{ . }}
+        {{- end }}
       secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.host }}
+    {{- range $host := $hosts }}
+    - host: {{ $host }}
       http:
         paths:
           {{- range $p := list "/api" "/health" "/oauth/callback" "/documentation" "/api-reference" }}
@@ -45,7 +53,8 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "insighta.fullname" . }}-frontend
+                name: {{ include "insighta.fullname" $ }}-frontend
                 port:
-                  number: {{ .Values.frontend.port }}
+                  number: {{ $.Values.frontend.port }}
+    {{- end }}
 {{- end }}
