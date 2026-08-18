@@ -230,3 +230,15 @@ ingress:
     enabled: false
     secretName: ""
   annotations: {}
+
+  # Rate limiting for /api only, matching what the host nginx did. Unset means
+  # no second Ingress is rendered, so nothing changes for environments that
+  # never had it.
+  #
+  #   host nginx:  rate=30r/s  burst=50  nodelay
+  #   here:        rps 30, burst multiplier 2 -> burst 60, nearest available
+  #
+  # Measured before enabling: over four days the busiest single address made
+  # 1,364 requests and the uptime monitor 106 from its busiest of 27 addresses.
+  # Both are orders of magnitude below 30 per second.
+  apiRateLimit: {}

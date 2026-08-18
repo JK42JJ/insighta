@@ -98,6 +98,12 @@ ingress:
   # that renews the certificate.
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt
+
+  # Scoped to /api, as the host nginx scoped it. Absent since the cutover on
+  # 2026-08-14; the controller generates no limit_req rule of its own.
+  apiRateLimit:
+    rps: 30
+    burstMultiplier: 2
   tls:
     enabled: true
     secretName: insighta-tls
