@@ -140,6 +140,34 @@ done
 # keeps the older object's rule and ignores the newer one. An annotation on the
 # ignored object is configured and inert -- it renders, it validates, and it
 # does nothing. Caught 2026-08-18 on a rate-limit Ingress that duplicated /api.
+# An Ingress with no ingressClassName is refused by the controller, not
+# defaulted. It renders, it validates, and it is ignored:
+#
+#   W ignoring ingress <name> ... does not contain a valid IngressClass
+#
+# Caught 2026-08-18 when a second Ingress inherited no class and took /api with
+# it, leaving the path with no rule at all.
+echo "ingress class:"
+for env in $ENVS; do
+  reg=""
+  grep -q '^requireImageRegistry: true' "$CHART/environments/$env.yaml" && reg="--set imageRegistry=registry.invalid"
+  # shellcheck disable=SC2086
+  noclass=$(helm template insighta "$CHART" -f "$CHART/environments/$env.yaml" --namespace insighta $reg 2>/dev/null \
+    | python3 -c "
+import sys, yaml
+out = []
+for d in yaml.safe_load_all(sys.stdin):
+    if d and d.get('kind') == 'Ingress' and not d['spec'].get('ingressClassName'):
+        out.append(d['metadata']['name'])
+print(' '.join(out))
+")
+  if [ -n "$noclass" ]; then
+    bad "$env: Ingress without ingressClassName: $noclass"
+  else
+    ok "$env: every Ingress declares a class"
+  fi
+done
+
 echo "ingress paths:"
 for env in $ENVS; do
   helm template insighta "$CHART" -f "$CHART/environments/$env.yaml" --namespace insighta \

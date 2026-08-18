@@ -75,6 +75,18 @@ postgresDev:
 ingress:
   enabled: true
 
+  # Required, and it was missing. The main Ingress carries this class only
+  # because it was patched onto the live object by hand on 2026-08-14; the
+  # chart never declared it. A second Ingress rendered from the same chart
+  # therefore came out with no class at all and the controller refused it:
+  #
+  #   W ignoring ingress insighta-api-ratelimit ... does not contain a
+  #     valid IngressClass
+  #
+  # Which mattered more than a missing rate limit: /api had just been moved to
+  # that Ingress, so the path lost its rule and fell through to the frontend.
+  className: nginx
+
   # Both names, because DNS sends both here: www is a CNAME to the apex, which
   # resolves to this cluster. The host nginx served both (server_name on the
   # :80 and :443 blocks) and its certificate covered both.
