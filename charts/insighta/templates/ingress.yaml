@@ -40,7 +40,19 @@ spec:
     - host: {{ $host }}
       http:
         paths:
-          {{- range $p := list "/api" "/health" "/oauth/callback" "/documentation" "/api-reference" }}
+          {{- /*
+               /api moves to the rate-limited Ingress when one exists. Declaring
+               the same host and path in two Ingresses is not a merge -- the
+               controller keeps the older object's rule and ignores the newer
+               one, so the annotation would have been configured and inert.
+               Owning the path in exactly one place removes the dependency on
+               that rule entirely.
+             */}}
+          {{- $apiPaths := list "/api" "/health" "/oauth/callback" "/documentation" "/api-reference" }}
+          {{- if $.Values.ingress.apiRateLimit }}
+          {{- $apiPaths = without $apiPaths "/api" }}
+          {{- end }}
+          {{- range $p := $apiPaths }}
           - path: {{ $p }}
             pathType: Prefix
             backend:
@@ -68,9 +80,10 @@ spec:
 # the frontend's static assets, which a single cold page load fetches in a
 # burst -- stricter than what it replaced, and a regression dressed as a fix.
 #
-# A second Ingress on the same host carries the annotation; the controller
-# merges them and the longer path wins, so /api reaches this one and everything
-# else the main rule.
+# A second Ingress carries the annotation and is the sole owner of /api -- the
+# main rule drops that path while this exists. Two Ingresses declaring the same
+# host and path is not a merge: the controller keeps the older object and
+# ignores the newer, which would leave this annotation configured and inert.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

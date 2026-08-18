@@ -136,6 +136,38 @@ done
 # stores differently, and every server-side-apply diff afterwards reports a
 # change that is not one. Measured 2026-08-14: StatefulSet/insighta-postgres sat
 # OutOfSync with a single difference, cpu "1000m" against a live "1".
+# Two Ingresses declaring the same host and path is not a merge: the controller
+# keeps the older object's rule and ignores the newer one. An annotation on the
+# ignored object is configured and inert -- it renders, it validates, and it
+# does nothing. Caught 2026-08-18 on a rate-limit Ingress that duplicated /api.
+echo "ingress paths:"
+for env in $ENVS; do
+  helm template insighta "$CHART" -f "$CHART/environments/$env.yaml" --namespace insighta \
+    $(grep -q '^requireImageRegistry: true' "$CHART/environments/$env.yaml" && echo "--set imageRegistry=registry.invalid") 2>/dev/null \
+  | python3 -c "
+import sys, yaml
+from collections import defaultdict
+own = defaultdict(list)
+for d in yaml.safe_load_all(sys.stdin):
+    if d and d.get('kind') == 'Ingress':
+        for r in d['spec'].get('rules', []):
+            for p in r.get('http', {}).get('paths', []):
+                own[(r.get('host'), p.get('path'))].append(d['metadata']['name'])
+dups = {k: v for k, v in own.items() if len(v) > 1}
+if dups:
+    for (h, path), names in sorted(dups.items()):
+        print('DUP %s%s %s' % (h, path, ','.join(names)))
+    raise SystemExit(1)
+" > /tmp/ingdup.$$ 2>/dev/null
+  if [ -s /tmp/ingdup.$$ ]; then
+    bad "$env: the same host and path in more than one Ingress"
+    sed 's/^/        /' /tmp/ingdup.$$
+  else
+    ok "$env: no duplicate host+path across Ingresses"
+  fi
+  rm -f /tmp/ingdup.$$
+done
+
 echo "quantities:"
 noncanon=$(grep -rnE '(cpu|memory): *"?[0-9]+(000m|024Mi)"?' "$CHART" || true)
 if [ -n "$noncanon" ]; then
