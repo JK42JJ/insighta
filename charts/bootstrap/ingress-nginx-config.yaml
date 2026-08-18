@@ -33,3 +33,38 @@ data:
     [$proxy_upstream_name] [$proxy_alternative_upstream_name] $upstream_addr
     $upstream_response_length $upstream_response_time $upstream_status $req_id
     host=$host
+
+  # ── D-3 · HSTS ────────────────────────────────────────────────────────────
+  # The controller sends HSTS by default, but weaker than the host nginx did:
+  #
+  #   host nginx   max-age=63072000; includeSubDomains; preload
+  #   controller   max-age=31536000; includeSubDomains
+  #
+  # preload is restored deliberately. The domain carried that header for a long
+  # time and may already be on the browser preload list; dropping it there and
+  # leaving it dropped is the change that would matter, not restoring it.
+  hsts: "true"
+  hsts-max-age: "63072000"
+  hsts-include-subdomains: "true"
+  hsts-preload: "true"
+
+  # The other four headers come from a separate ConfigMap. add-headers is the
+  # supported mechanism; configuration-snippet is disabled by default in recent
+  # controllers and would fail silently.
+  add-headers: ingress-nginx/custom-response-headers
+---
+# The four headers the host nginx set at server level -- so on every response,
+# which is why they are global here rather than per-Ingress.
+#
+# Measured absent on 2026-08-18, four days after the cutover: the old box
+# returned five security headers to the same request, the cluster returned one.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-response-headers
+  namespace: ingress-nginx
+data:
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  X-XSS-Protection: "1; mode=block"
+  Referrer-Policy: strict-origin-when-cross-origin

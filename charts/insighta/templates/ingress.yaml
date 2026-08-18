@@ -40,7 +40,19 @@ spec:
     - host: {{ $host }}
       http:
         paths:
-          {{- range $p := list "/api" "/health" "/oauth/callback" "/documentation" "/api-reference" }}
+          {{- /*
+               /api moves to the rate-limited Ingress when one exists. Declaring
+               the same host and path in two Ingresses is not a merge -- the
+               controller keeps the older object's rule and ignores the newer
+               one, so the annotation would have been configured and inert.
+               Owning the path in exactly one place removes the dependency on
+               that rule entirely.
+             */}}
+          {{- $apiPaths := list "/api" "/health" "/oauth/callback" "/documentation" "/api-reference" }}
+          {{- if $.Values.ingress.apiRateLimit }}
+          {{- $apiPaths = without $apiPaths "/api" }}
+          {{- end }}
+          {{- range $p := $apiPaths }}
           - path: {{ $p }}
             pathType: Prefix
             backend:
@@ -56,5 +68,61 @@ spec:
                 name: {{ include "insighta.fullname" $ }}-frontend
                 port:
                   number: {{ $.Values.frontend.port }}
+    {{- end }}
+{{- end }}
+{{- if and .Values.ingress.enabled .Values.ingress.apiRateLimit }}
+---
+# Rate limiting, scoped the way the host nginx scoped it.
+#
+#   location /api/ { limit_req zone=api burst=50 nodelay; }
+#
+# It was never global. Putting limit-rps on the main Ingress would also throttle
+# the frontend's static assets, which a single cold page load fetches in a
+# burst -- stricter than what it replaced, and a regression dressed as a fix.
+#
+# A second Ingress carries the annotation and is the sole owner of /api -- the
+# main rule drops that path while this exists. Two Ingresses declaring the same
+# host and path is not a merge: the controller keeps the older object and
+# ignores the newer, which would leave this annotation configured and inert.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "insighta.fullname" . }}-api-ratelimit
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/limit-rps: {{ .Values.ingress.apiRateLimit.rps | quote }}
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: {{ .Values.ingress.apiRateLimit.burstMultiplier | quote }}
+    {{- with .Values.ingress.apiRateLimit.whitelist }}
+    nginx.ingress.kubernetes.io/limit-whitelist: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- $hosts := include "insighta.ingressHosts" . | fromYamlArray }}
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        {{- range $hosts }}
+        - {{ . }}
+        {{- end }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    {{- range $host := $hosts }}
+    - host: {{ $host }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "insighta.fullname" $ }}-api
+                port:
+                  number: {{ $.Values.api.port }}
     {{- end }}
 {{- end }}
