@@ -79,3 +79,21 @@ topologySpreadConstraints:
         app.kubernetes.io/component: {{ .component }}
 {{- end }}
 {{- end }}
+
+{{/*
+Every hostname this release answers for.
+
+A list, because the host nginx served two names and the first Ingress declared
+one. www.insighta.one then fell to the controller's catch-all server, which
+returns 404 and presents its self-signed default certificate -- measured
+2026-08-18, four days after the cutover.
+
+Environments that set the older scalar `ingress.host` keep working unchanged.
+*/}}
+{{- define "insighta.ingressHosts" -}}
+{{- if .Values.ingress.hosts -}}
+{{ toYaml .Values.ingress.hosts }}
+{{- else -}}
+{{ toYaml (list .Values.ingress.host) }}
+{{- end -}}
+{{- end }}
