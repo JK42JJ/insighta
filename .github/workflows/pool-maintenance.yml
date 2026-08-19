@@ -48,7 +48,7 @@ jobs:
         run: |
           echo "POST → https://${DOMAIN}/api/v1/internal/pool-maintenance/run"
           RESPONSE=$(curl -sS --fail --show-error \
-            --max-time 60 \
+            --max-time 300 \
             -X POST "https://${DOMAIN}/api/v1/internal/pool-maintenance/run" \
             -H "content-type: application/json" \
             -H "x-internal-token: $TOKEN" \

@@ -106,6 +106,21 @@ export async function buildServer() {
     requestIdLogLabel: 'requestId',
     disableRequestLogging: false,
     trustProxy: true,
+
+    // Server-side request ceiling, and the innermost rung of the timeout ladder
+    // documented in docs/ops/timeout-ladder.md.
+    //
+    // Every layer outside this one must be longer, so that whichever layer cut a
+    // request can be read off the elapsed time. Before 2026-08-19 the ingress
+    // expired at 60s while the workflows calling it allowed 300s, so the ingress
+    // cut every long request and the workflow logs showed only a 504 with no
+    // indication of where it came from.
+    //
+    // 240s is above the longest job measured (181s, trend-collector) and below
+    // the ingress at 270s. scripts/ci/check-timeouts.sh fails the build if that
+    // ordering is broken.
+    requestTimeout: 240_000,
+    keepAliveTimeout: 275_000,
   });
 
   // ============================================================================
