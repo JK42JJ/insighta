@@ -44,12 +44,7 @@ resource "aws_instance" "this" {
 
 # A stable address so DNS and the SSH allowlist do not move when the instance
 # is stopped or replaced.
-resource "aws_eip" "this" {
-  domain = "vpc"
-  tags   = merge(var.tags, { Name = "${var.name}-eip" })
-}
-
-resource "aws_eip_association" "this" {
-  instance_id   = var.eip_instance_id != "" ? var.eip_instance_id : aws_instance.this.id
-  allocation_id = aws_eip.this.id
-}
+# The Elastic IP used to live here. It was moved to the root module on
+# 2026-08-19: the address outlived this instance at the cutover, and a resource
+# whose lifecycle is tied to a host it no longer belongs to plans to delete
+# something nobody meant to delete. See aws_eip.service in the prod environment.
