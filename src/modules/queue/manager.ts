@@ -54,16 +54,29 @@ export class JobQueueManager {
   /**
    * Initialize and start pg-boss.
    * Creates pgboss schema + tables on first run.
+   *
+   * `producerOnly` is for a process that enqueues but runs no handlers. It
+   * still needs pg-boss started -- `send()` throws without it, which is how
+   * the api pods came to return 500 on every internal trigger endpoint after
+   * the web/worker split -- but it does not need the supervisor, the
+   * scheduler, or a pool sized for concurrent work. Those belong to whichever
+   * process owns the queue, and running them in several places is duplicated
+   * maintenance against one database.
    */
-  async start(): Promise<void> {
+  async start(opts: { producerOnly?: boolean } = {}): Promise<void> {
     if (this.started) return;
 
     const connectionString = this.getConnectionString();
+    const producerOnly = opts.producerOnly === true;
 
     this.boss = new PgBoss({
       connectionString,
       schema: 'pgboss',
-      monitorStateIntervalSeconds: 30,
+      max: producerOnly ? QUEUE_CONFIG.PRODUCER_POOL_MAX : QUEUE_CONFIG.WORKER_POOL_MAX,
+      // Option names verified against pg-boss 9.0.3 types.d.ts rather than
+      // recalled: `max`, `noSupervisor`, `noScheduling`.
+      ...(producerOnly ? { noSupervisor: true, noScheduling: true } : {}),
+      ...(producerOnly ? {} : { monitorStateIntervalSeconds: 30 }),
       archiveCompletedAfterSeconds: QUEUE_CONFIG.ARCHIVE_COMPLETED_AFTER_DAYS * 86400,
       archiveFailedAfterSeconds: QUEUE_CONFIG.ARCHIVE_FAILED_AFTER_DAYS * 86400,
       deleteAfterDays: 30,
@@ -81,7 +94,11 @@ export class JobQueueManager {
     try {
       await this.boss.start();
       this.started = true;
-      logger.info('JobQueue started (pg-boss)', { schema: 'pgboss' });
+      logger.info('JobQueue started (pg-boss)', {
+        schema: 'pgboss',
+        role: producerOnly ? 'producer' : 'worker',
+        max: producerOnly ? QUEUE_CONFIG.PRODUCER_POOL_MAX : QUEUE_CONFIG.WORKER_POOL_MAX,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error('JobQueue start failed', { error: msg });

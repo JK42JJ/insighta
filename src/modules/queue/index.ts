@@ -56,11 +56,21 @@ import { logger } from '../../utils/logger';
  * Starts pg-boss, registers workers, sets up schedules.
  * Call during server startup, after database connection is established.
  */
-export async function initJobQueue(): Promise<void> {
+export async function initJobQueue(opts: { registerWorkers?: boolean } = {}): Promise<void> {
   const queue = getJobQueue();
+  const registerWorkers = opts.registerWorkers !== false;
 
-  // Start pg-boss (creates schema on first run)
-  await queue.start();
+  // Start pg-boss (creates schema on first run). This happens in every
+  // process, including ones that register no handlers: `send()` throws
+  // without it. Skipping it on the api pods is what made every internal
+  // trigger endpoint return 500 after the web/worker split -- measured
+  // 2026-08-19, "JobQueue not started. Call start() first."
+  await queue.start({ producerOnly: !registerWorkers });
+
+  if (!registerWorkers) {
+    logger.info('Job queue started as producer (enqueue only, no handlers)');
+    return;
+  }
 
   // Register workers
   await registerEnrichVideoWorker();

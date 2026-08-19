@@ -485,6 +485,20 @@ export const NOTE_CV_ENRICH_OPTIONS = {
 // ============================================================================
 
 export const QUEUE_CONFIG = {
+  /**
+   * pg-boss connection ceilings, stated rather than defaulted.
+   *
+   * pg-boss opens its own pg.Pool, separate from Prisma's, and its default is
+   * 10. Three api replicas starting it unbounded would be 30 session-mode
+   * connections against a Supabase limit of 60, on top of Prisma's.
+   *
+   * A process that only enqueues needs almost nothing: a send is one short
+   * statement. A process that runs the workers needs room for concurrent
+   * handlers.
+   */
+  PRODUCER_POOL_MAX: 2,
+  WORKER_POOL_MAX: 8,
+
   /** Batch scan schedule: every 30 minutes (cron) */
   BATCH_SCAN_CRON: '*/30 * * * *',
   /** Observability Phase 2-A key-count alarm: daily at 08:07 (off-hour). */
