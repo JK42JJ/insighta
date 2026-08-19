@@ -35,11 +35,17 @@ enable_cloudwatch = true
 # said it did not, and the nightly drift job would be right to complain.
 enable_k3s_node = true
 
-# Two nodes while the architecture is verified and operated by hand, so that
-# scheduling, draining and rescheduling are observed rather than read about.
+# One node.
 #
-# Planned reduction to one on 2026-09-14.
+# It ran as two from the cutover until 2026-08-19, which was long enough to
+# observe scheduling, draining and rescheduling rather than read about them.
+# The reduction was planned for 2026-09-14 and happened early: the second node
+# was needed as a throwaway for the datastore rehearsal recorded in
+# docs/ops/datastore-sqlite-to-etcd.md, and production had already been drained
+# onto the first node without interruption.
 #
-# Not high availability: the control plane, the ingress and the Elastic IP all
-# stay on the first node.
-k3s_node_count = 2
+# Not high availability, and it was not high availability at two either: the
+# control plane, the ingress and the Elastic IP all sit on the first node, and
+# the datastore is SQLite, which admits only one server. Redundancy needs three
+# servers on etcd, which is a cost decision rather than a configuration change.
+k3s_node_count = 1
