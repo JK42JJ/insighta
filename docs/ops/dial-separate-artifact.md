@@ -1,6 +1,7 @@
 # 다이얼 별도 아티팩트 분리 설계
 
-작성 2026-08-19 · 상태 **설계(방향 승인됨, 구현 대기)** · 선행 PR #1520
+작성 2026-08-19 · 개정 2026-08-19 (점검표 반영) · 상태 **설계 승인, 단계별 구현 중**
+선행 PR #1520 **머지됨** · 관련 점검표 `docs/ops/k8s-migration-issue-checklist.md` (#1522)
 
 다이얼을 별도 파드로 분리할지에 대한 질의의 답과, 채택한 설계.
 결론은 **파드 분리가 목적이 아니라 태그 분리가 목적**이고, 파드는 그 태그를 실어나르는 수단이라는 것이다.
@@ -124,6 +125,18 @@ main 은 2026-08-13 부터 build 99 를, 프로드는 97 을 서빙하고 있었
 
 ## 4. 설계
 
+### 4-0. 점검표가 이 설계에 부과하는 제약
+
+`k8s-migration-issue-checklist.md` 실측에서 이 설계의 전제를 바꾸는 항목이 넷 나왔다.
+설계를 쓸 때 알지 못했던 것이므로 여기에 명시하고, 해당 절에 반영한다.
+
+| 점검표 | 사실 | 이 설계에 대한 영향 |
+|---|---|---|
+| C-1 | **클러스터 노드가 1대**(`k3s_node_count = 1`). 인계 기록의 2노드·09-14 축소는 현재와 다르다 | `insighta.spread` 를 dial 에 붙여도 **무동작**. §4-3 · §7-3 수정 |
+| C-3 | PodDisruptionBudget 이 하나도 없다 | dial 도 같은 상태로 태어난다. §4-7 신설 |
+| A-3 | `publish-tags` 가 아직 한 번도 실행되지 않아 `prod.yaml` 이 `latest` | **단계 1 의 검증이 `dialTag` 이전에 `publish-tags` 자체의 첫 실행에 의존**. §5 · §6 수정 |
+| A-4 | `rollback.yml` 은 재작성됐으나 실행된 적이 없다 | §6 의 롤백 리허설이 그 워크플로의 **최초 실행**이 된다. 리허설을 다이얼로 하는 것은 오히려 적절 — 되돌려도 정적 파일 한 벌이다 |
+
 ### 4-1. 이미지 — `insighta-dial`
 
 ```dockerfile
@@ -167,7 +180,9 @@ COPY frontend/public/dial   /usr/share/nginx/html/dial
   프로브 경로를 `/` 가 아니라 `version.json` 으로 두면 파일이 실제로 있는지까지 확인한다.
 - `environments/prod.yaml` 의 `images:` 블록에 `dialTag` 추가. `publish-tags` 가 함께 쓴다.
 - `_helpers.tpl` 의 `insighta.image` 는 그대로 쓴다(태그 오버라이드 이미 지원).
-- `insighta.spread` 를 dial 에도 적용.
+- `insighta.spread` 는 **붙이지 않는다.** 노드가 1대라 무동작이고(점검표 C-1),
+  분산할 대상이 생기는 시점에 frontend·api 와 함께 일괄로 붙이는 편이 낫다.
+  지금 붙이면 "분산되고 있다" 는 잘못된 인상만 남는다.
 
 ### 4-4. ingress
 
@@ -193,9 +208,18 @@ ingress-nginx 는 `pathType: Prefix` 를 길이 내림차순으로 정렬하므�
 - `publish-tags`: `dialTag` 도 기록.
 - `mobile-gate`: 그대로. 이미 `dial` 신호를 읽는다(PR #1520).
 
+### 4-7. PodDisruptionBudget — 함께 만들지, 함께 미룰지
+
+점검표 C-3 기준 클러스터에 PDB 가 하나도 없다. dial 을 추가하면 같은 상태의 Deployment 가 하나 더 는다.
+
+노드가 1대인 동안 PDB 는 실효가 없다(drain 이 곧 전면 중단이다). 따라서 **이 설계에서는 만들지 않는다.**
+다만 두 번째 노드가 돌아오는 시점에 dial 을 포함한 4개 Deployment 에 `minAvailable: 1` 을 한 번에
+붙이는 것이 선행 조건이라는 사실을 여기에 남긴다. dial 만 따로 챙기면 나머지 셋을 빠뜨린다.
+
 ### 4-6. 롤백
 
 `rollback.yml` 이 `apiTag`/`frontendTag` 를 쓰는 자리에 `dialTag` 를 더한다.
+그 워크플로는 재작성 후 실행된 적이 없다(점검표 A-4). §6 의 리허설이 최초 실행이 된다.
 **단, 다이얼만 되돌리는 입력이 필요하다** — 그것이 이 설계의 존재 이유다.
 
 `inputs.scope` 추가: `all` | `dial` | `app`. 기본 `all`.
@@ -209,7 +233,7 @@ ingress-nginx 는 `pathType: Prefix` 를 길이 내림차순으로 정렬하므�
 
 | 단계 | 내용 | 되돌리는 법 |
 |---|---|---|
-| 0 | PR #1520 머지 + 라이브 확인 (`version.json` = 99) | revert |
+| 0 | PR #1520 머지 **(완료 `d8d1eaa9`)**. 라이브 확인은 아직 — §5-1 참조 | revert |
 | 1 | `docker/dial/Dockerfile` + `build-and-push` 스텝 + `publish-tags` 의 `dialTag`. **차트 미변경** — 이미지만 굽고 아무도 안 쓴다 | revert (배포 영향 0) |
 | 2 | `dial.yaml` + `values.yaml` + `prod.yaml` `dialTag`. **ingress 미변경** — 파드는 뜨지만 트래픽 0 | 차트 revert |
 | 3 | ingress 에 `/mobile` `/dial` 추가 → 다이얼 파드가 서빙 시작. 이 시점에 frontend 이미지에도 아직 사본이 있으므로 되돌리면 즉시 원복 | ingress revert |
@@ -218,14 +242,43 @@ ingress-nginx 는 `pathType: Prefix` 를 길이 내림차순으로 정렬하므�
 단계 3 까지는 frontend 이미지에 사본이 남아 있어 **ingress 한 줄로 왕복**한다.
 사본 제거(단계 4)는 라이브 확인 뒤에만 한다.
 
+### 5-1. 단계 0 이 아직 안 끝난 이유
+
+PR #1520 은 머지됐으나 **그 머지 자신이 `deployable=false`** 다(`.github/` · `tests/` 는 둘 다
+`IRRELEVANT` 목록). 실측:
+
+```
+$ gh run view 32217275136 --json jobs
+success  Detect scope
+skipped  Build & Push Docker Images
+skipped  Point the chart at this commit
+...
+```
+
+따라서 프로드는 여전히 build 97 을 서빙한다. 수리된 것은 **다음 다이얼 커밋의 경로**이지
+지금 밀려 있는 build 99 가 아니다.
+
+99 를 올리는 방법은 둘이고, 둘 다 James 판단이다.
+
+1. **`workflow_dispatch` 1회.** `scope` 가 수동 실행을 "전부" 로 취급하므로 frontend 이미지를
+   main 기준으로 다시 굽고 `publish-tags` 가 첫 SHA 를 기록한다. 부수효과로 `migrate`
+   (프로드 `prisma db push`)가 함께 돈다 — 스키마 변경은 없으나 프로드 쓰기다.
+2. **다음 deployable 커밋을 기다린다.** 부수효과 0. 대신 그때까지 다이얼은 97 로 남는다.
+
+**단계 1 은 1번에 의존한다.** `publish-tags` 는 아직 한 번도 실행된 적이 없어(점검표 A-3),
+`dialTag` 를 추가하기 전에 그 job 이 실제로 동작하는지가 미확인 상태다.
+검증되지 않은 메커니즘 위에 두 번째 태그를 얹지 않는다.
+
 ---
 
 ## 6. 검증 항목
 
 각 단계에서 확인하고, 확인 전에 다음 단계로 가지 않는다.
 
+- [ ] **선행**: `publish-tags` 가 1회 성공하고 `prod.yaml` 의 `apiTag` 가 SHA 로 바뀐다 (점검표 A-3)
 - [ ] 단계 1: ECR 에 `insighta-dial` 태그가 커밋 SHA 로 올라온다
 - [ ] 단계 2: `kubectl get pods -l component=dial` Running, 프로브 통과. 트래픽은 아직 0
+- [ ] 단계 2: dial 파드가 어느 노드에 뜨든 무방 — 노드 1대(점검표 C-1). 분산 확인 항목 없음
 - [ ] 단계 3: `curl https://insighta.one/mobile/version.json` 이 리포 값과 일치
 - [ ] 단계 3: `curl https://insighta.one/dial/` 200
 - [ ] 단계 3: `curl https://insighta.one/` (SPA) 200 — `/` 라우팅 무영향
@@ -242,11 +295,13 @@ ingress-nginx 는 `pathType: Prefix` 를 길이 내림차순으로 정렬하므�
 
 ## 7. 미결정 — James 판단 필요
 
-1. **빌드 99 를 언제 올릴 것인가.** PR #1520 은 자기 자신이 `deployable=false` 라 머지만으로는
-   다이얼이 안 나간다. `workflow_dispatch` 1회가 필요하고, 그 실행은 `migrate`(프로드 DB
-   `prisma db push`)를 함께 돌린다. 스키마 변경은 없으나 프로드 쓰기다.
+1. **빌드 99 를 언제 올릴 것인가.** §5-1 의 두 선택지. 단계 1 착수의 선행 조건이기도 하다.
 2. **19MB 데모 영상 처리.** 이번 설계 범위 밖이지만 frontend 이미지 무게의 실질이다.
    §3-2 의 불변식과 충돌하지 않는 유일한 후보라 별도 트랙으로 둘 수 있다.
-3. **`dial` replicaCount.** 1 로 시작할지 frontend 와 같이 3 으로 갈지.
-   정적 서빙이라 1 로 충분하나, 노드 1대 축소(2026-09-14 예정) 시 재기동 중 `/mobile` 이
-   잠시 끊긴다. 3 이면 32Mi × 3 = 96Mi.
+3. **`dial` replicaCount.** 실측 정정: 노드는 **이미 1대**다(점검표 C-1 — 인계 기록의
+   "09-14 축소 예정" 은 현재와 다르다). 따라서 replica 를 늘려도 가용성은 사지 못하고
+   같은 노드 위 프로세스만 늘어난다.
+
+   재기동 중 `/mobile` 단절을 줄이는 값은 **2** 다(rolling update 시 최소 1개 생존).
+   32Mi × 2 = 64Mi, 노드 메모리 61% 사용 중이므로 여유는 있다.
+   1 로 시작해 단절을 관측한 뒤 올리는 쪽도 가능하다. 판단 필요.
