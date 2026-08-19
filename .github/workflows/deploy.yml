@@ -40,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       mobile_only: ${{ steps.d.outputs.mobile_only }}
+      dial: ${{ steps.d.outputs.dial }}
       api: ${{ steps.d.outputs.api }}
       frontend: ${{ steps.d.outputs.frontend }}
       redis: ${{ steps.d.outputs.redis }}
@@ -53,6 +54,7 @@ jobs:
           # workflow_dispatch has no diff to inspect -- treat it as "everything".
           if [ "${{ github.event_name }}" != "push" ]; then
             echo "mobile_only=false" >> "$GITHUB_OUTPUT"
+            echo "dial=true"         >> "$GITHUB_OUTPUT"
             echo "api=true"          >> "$GITHUB_OUTPUT"
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
             echo "redis=true"        >> "$GITHUB_OUTPUT"
@@ -67,6 +69,7 @@ jobs:
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
              || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
             echo "mobile_only=false" >> "$GITHUB_OUTPUT"
+            echo "dial=true"         >> "$GITHUB_OUTPUT"
             echo "api=true"          >> "$GITHUB_OUTPUT"
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
             echo "redis=true"        >> "$GITHUB_OUTPUT"
@@ -81,6 +84,7 @@ jobs:
           # skip -- fall through to the full pipeline.
           if [ -z "$FILES" ]; then
             echo "mobile_only=false" >> "$GITHUB_OUTPUT"
+            echo "dial=true"         >> "$GITHUB_OUTPUT"
             echo "api=true"          >> "$GITHUB_OUTPUT"
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
             echo "redis=true"        >> "$GITHUB_OUTPUT"
@@ -93,6 +97,12 @@ jobs:
           else
             MOBILE_ONLY=true
           fi
+
+          # Whether the dial changed at all, which is not the same question as
+          # whether it changed alone. The syntax gate hung off mobile_only, so a
+          # commit touching the dial and anything else skipped the only check
+          # the dial has.
+          if echo "$FILES" | grep -q '^frontend/public/mobile/'; then DIAL=true; else DIAL=false; fi
 
           # Which image actually needs rebuilding. The API image is built from
           # the repo root, so anything outside frontend/ can affect it.
@@ -133,19 +143,23 @@ jobs:
 
           echo "redis=$RD"                >> "$GITHUB_OUTPUT"
           echo "mobile_only=$MOBILE_ONLY" >> "$GITHUB_OUTPUT"
+          echo "dial=$DIAL"               >> "$GITHUB_OUTPUT"
           echo "api=$API"                 >> "$GITHUB_OUTPUT"
           echo "frontend=$FE"             >> "$GITHUB_OUTPUT"
           echo "deployable=$DEPLOYABLE"   >> "$GITHUB_OUTPUT"
-          echo "mobile_only=$MOBILE_ONLY api=$API frontend=$FE deployable=$DEPLOYABLE"
+          echo "mobile_only=$MOBILE_ONLY dial=$DIAL api=$API frontend=$FE deployable=$DEPLOYABLE"
 
   # The dial's only gate. Nothing in ci.yml reads frontend/public/mobile:
   # tsc looks at src, vitest looks at src, and vite copies public/ verbatim.
   # So a syntax error in this file has always been shippable. It is not now.
+  #
+  # Gated on `dial`, not `mobile_only`: this ran only when the dial changed by
+  # itself, so a commit carrying a dial edit alongside anything else skipped it.
   mobile-gate:
     name: Dial syntax gate
     runs-on: ubuntu-latest
     needs: [scope]
-    if: needs.scope.outputs.mobile_only == 'true'
+    if: needs.scope.outputs.dial == 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Parse every inline script and check the build stamp
@@ -167,6 +181,11 @@ jobs:
     needs: [scope]
     # The ref guard matters for workflow_dispatch, which can be started from any
     # branch; the push trigger is already main-only.
+    #
+    # mobile_only stays here. It was removed from build-and-push because the dial
+    # is inside the frontend image and that job is the only thing that ships it.
+    # Edge functions are a different artifact that a dial edit cannot affect, so
+    # skipping them is narrowing, not a missed deploy.
     if: github.ref == 'refs/heads/main' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -189,11 +208,21 @@ jobs:
               --no-verify-jwt
           done
 
+  # No mobile_only guard here, and that is the whole repair. It skipped this job
+  # because `fast-mobile` shipped the dial by rsync instead; that job addressed
+  # the host released on 2026-08-19 and was removed with it. The guard outlived
+  # its destination, so a dial-only commit ran the syntax gate, skipped every
+  # build and deploy job, and reported green having shipped nothing. Measured
+  # 2026-08-19: main carried build 99 since 2026-08-13 and production served 97.
+  #
+  # The per-image conditions below already do the narrowing this guard was
+  # standing in for: a dial-only commit sets frontend=true, api=false,
+  # redis=false, so it builds one image and not three.
   build-and-push:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
     needs: [scope]
-    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
+    if: needs.scope.outputs.deployable == 'true'
     permissions:
       contents: read
       packages: write
@@ -294,6 +323,9 @@ jobs:
     name: Database Schema Sync
     runs-on: ubuntu-latest
     needs: [scope]
+    # mobile_only stays here, and deliberately. This runs `prisma db push`
+    # against the production database. A dial edit cannot change the schema, so
+    # running it would be a write to production with no reason to be there.
     if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     steps:
       - uses: actions/checkout@v4
