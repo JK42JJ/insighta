@@ -93,6 +93,14 @@ jobs:
       - name: Render and check every environment
         run: bash scripts/ci/check-charts.sh
 
+      # A request crosses several layers and each has its own timeout. When they
+      # do not know about each other the shortest one decides everything: the
+      # ingress sat at its 60s default from 2026-08-14 while the workflows
+      # calling it allowed 300s, so long jobs were cut by a number declared
+      # nowhere and the logs showed a bare 504.
+      - name: Check the timeout ladder
+        run: bash scripts/ci/check-timeouts.sh
+
   hardcode-audit:
     name: Hardcode Audit
     runs-on: ubuntu-latest

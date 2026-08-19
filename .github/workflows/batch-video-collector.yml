@@ -54,7 +54,7 @@ jobs:
   trigger:
     name: Trigger collector
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - name: Check secrets
         run: |
@@ -99,7 +99,7 @@ jobs:
           echo "POST → https://${DOMAIN}/api/v1/internal/skills/batch-video-collector/run"
           echo "Body: $BODY"
           RESPONSE=$(curl -sS --fail --show-error \
-            --max-time 900 \
+            --max-time 300 \
             -X POST "https://${DOMAIN}/api/v1/internal/skills/batch-video-collector/run" \
             -H "content-type: application/json" \
             -H "x-internal-token: $TOKEN" \

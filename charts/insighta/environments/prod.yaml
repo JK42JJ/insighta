@@ -111,6 +111,26 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt
 
+    # Request timeouts. The default is 60s, which is below what the scheduled
+    # jobs take: trend-collector was measured at 140-181s and returns 504 while
+    # the pod carries on and writes its rows. The caller records a failure for
+    # work that succeeded, and the watchdog then runs it again.
+    #
+    # 270 sits inside a ladder that widens outward, so whichever layer cuts a
+    # request is identifiable from the timeout alone:
+    #
+    #   external call   30s   LLM and YouTube, per call
+    #   server         240s   fastify requestTimeout
+    #   ingress        270s   here
+    #   curl           300s   the workflow client
+    #   job            600s   github actions, the last net
+    #
+    # Any layer expiring before the one inside it hides the real cause, which is
+    # what 60s here did to four workflows configured for 300s and 900s.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "270"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "270"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "15"
+
   # Scoped to /api, as the host nginx scoped it. Absent since the cutover on
   # 2026-08-14; the controller generates no limit_req rule of its own.
   apiRateLimit:
