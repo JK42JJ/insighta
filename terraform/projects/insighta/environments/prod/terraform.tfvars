@@ -49,3 +49,17 @@ enable_k3s_node = true
 # the datastore is SQLite, which admits only one server. Redundancy needs three
 # servers on etcd, which is a cost decision rather than a configuration change.
 k3s_node_count = 1
+
+# The original production host, kept as a rollback target after the cluster
+# cutover on 2026-08-14 and released on 2026-08-19.
+#
+# Five days of the cluster serving every request, a backup verified in three
+# places, and the only traffic still reaching this host was vulnerability
+# scanning: 155 requests in the last day, all of them for paths like
+# /wp-links-opml.php.
+#
+# What goes with it is the two-second rollback that reassociated an address.
+# What remains is reverting in git and letting the pipeline rebuild, which is
+# minutes rather than seconds. That trade is the reason this is a variable and
+# not a deletion.
+enable_prod_instance = false

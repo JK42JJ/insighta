@@ -3,7 +3,7 @@
 # "No changes" an unambiguous statement rather than one with a footnote.
 output "instance_id" {
   description = "Production EC2 instance."
-  value       = module.compute.instance_id
+  value       = one(module.compute[*].instance_id)
 }
 
 output "instance_profile" {
@@ -13,7 +13,7 @@ output "instance_profile" {
 
 output "public_ip" {
   description = "Elastic IP. This is the address in DNS and in the SSH allowlists."
-  value       = module.compute.public_ip
+  value       = aws_eip.service.public_ip
 }
 
 output "security_group_id" {

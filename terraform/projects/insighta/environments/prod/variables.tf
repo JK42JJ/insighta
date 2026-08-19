@@ -54,6 +54,21 @@ variable "backup_bucket_name" {
   default     = "insighta-backups"
 }
 
+variable "enable_prod_instance" {
+  description = <<-EOT
+    Create the original production EC2 instance. Default true so adding the
+    variable does not change anyone else's plan; production sets it to false,
+    having moved to the cluster on 2026-08-14 and kept this host as a rollback
+    target until 2026-08-19.
+
+    The service Elastic IP is not affected. It was moved out of module.compute
+    on the same day precisely so that this flag could be flipped without the
+    address going with the instance.
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "enable_k3s_node" {
   description = <<-EOT
     Create the k3s validation node. Default false: this is the only variable in

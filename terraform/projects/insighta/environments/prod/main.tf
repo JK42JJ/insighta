@@ -27,6 +27,7 @@ module "iam" {
 }
 
 module "compute" {
+  count  = var.enable_prod_instance ? 1 : 0
   source = "../../../../modules/compute"
 
   name          = "insighta-prod"
@@ -162,14 +163,48 @@ output "ecr_registry" {
 # trust.
 #
 # Roughly $3.60/month, and it is released when the host is decommissioned.
+# The service address, and the reason the original host can be removed without
+# taking the site with it.
+#
+# It was declared inside module.compute, which was accurate while that instance
+# answered for the domain. It stopped being accurate at the cutover on
+# 2026-08-14: the association moved to the cluster node while the resource stayed
+# where it was. Removing the module in that state plans to release the address,
+# and a released Elastic IP is not returned on request -- DNS would resolve to an
+# address belonging to someone else.
+#
+# Moved here so ownership matches reality. The moved blocks below make this a
+# state operation: nothing is created, nothing is destroyed, and a plan run
+# immediately afterwards reports no changes. If it reports anything else, the
+# move is wrong and applying it would change the address.
+resource "aws_eip" "service" {
+  domain = "vpc"
+  tags   = merge(local.common_tags, { Name = "insighta-prod-eip" })
+}
+
+resource "aws_eip_association" "service" {
+  instance_id   = var.enable_k3s_node ? module.k3s_node[0].instance_id : one(module.compute[*].instance_id)
+  allocation_id = aws_eip.service.id
+}
+
+moved {
+  from = module.compute.aws_eip.this
+  to   = aws_eip.service
+}
+
+moved {
+  from = module.compute.aws_eip_association.this
+  to   = aws_eip_association.service
+}
+
 resource "aws_eip" "prod_standby" {
-  count  = var.enable_k3s_node ? 1 : 0
+  count  = var.enable_k3s_node && var.enable_prod_instance ? 1 : 0
   domain = "vpc"
   tags   = merge(local.common_tags, { Name = "insighta-prod-standby-eip" })
 }
 
 resource "aws_eip_association" "prod_standby" {
-  count         = var.enable_k3s_node ? 1 : 0
-  instance_id   = module.compute.instance_id
+  count         = var.enable_k3s_node && var.enable_prod_instance ? 1 : 0
+  instance_id   = module.compute[0].instance_id
   allocation_id = aws_eip.prod_standby[0].id
 }
