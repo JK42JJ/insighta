@@ -1,9 +1,20 @@
 # k3s 데이터스토어 전환: SQLite → 내장 etcd
 
-작성 2026-08-19 · 상태 **계획(미실행)** · 대상 `insighta-k3s-1`, `insighta-k3s-2`
+작성 2026-08-19 · 상태 **리허설 완료, 본 전환 미실행** · 대상 `insighta-k3s-1`
 
 이 문서는 왜 바꾸는지, 어떻게 바꾸는지, 바꾼 뒤 형상이 어떻게 되는지를 기록한다.
-절차는 아직 실행하지 않았다. 실행 시 각 단계의 실제 출력을 §6 에 append 한다.
+2026-08-19 에 리허설을 완주했고 결함 2건을 찾아 §4 절차에 반영했다. 실행 기록은
+§6-1 에 있다. 본 전환은 아직 하지 않았다.
+
+**현재 상태 (2026-08-19 리허설 후)**
+
+| 대상 | 상태 |
+|---|---|
+| `insighta-k3s-1` (프로드) | SQLite 단일 서버. 파드 전량 이 노드에서 Running |
+| `insighta-k3s-2` | 프로드에서 분리됨. 독립 1노드 etcd 클러스터로 남아 있음 |
+| 임시 인스턴스 2대 | terminated. 리허설 전용 보안그룹도 삭제 |
+
+프로드는 리허설 전후로 무중단이었다. drain 중 `curl` 90회 전부 200.
 
 ---
 
@@ -133,7 +144,24 @@ GitOps 를 도입해 둔 것이 여기서 값을 한다 — 워크로드 정의�
 
 각 단계는 **판정 기준**을 통과해야 다음으로 넘어간다.
 
-### 4-1. 리허설 (폐기용 노드)
+### 4-0. 선행 — 보안그룹에 etcd 포트 추가
+
+`terraform/modules/k3s-node/main.tf` 의 보안그룹에 자기참조 인그레스를 추가한다.
+없으면 조인이 timeout 으로 실패한다 (§6-1 결함 2).
+
+```hcl
+ingress {
+  description = "etcd client and peer, between servers"
+  from_port   = 2379
+  to_port     = 2380
+  protocol    = "tcp"
+  self        = true
+}
+```
+
+**판정**: `aws ec2 describe-security-groups` 출력에 2379-2380 이 보일 것.
+
+### 4-1. 리허설 (폐기용 노드) — 2026-08-19 완료
 
 prod 에 적용하기 전에 폐기 가능한 인스턴스에서 1회 완주한다. 리허설 없이 prod 에
 적용하지 않는다.
@@ -166,12 +194,15 @@ sudo ls /var/lib/rancher/k3s/server/db/etcd/    # 디렉터리 존재
 sudo test -f /var/lib/rancher/k3s/server/db/state.db && echo "SQLite 잔존 — 중단"
 
 # 서버 2, 3 — 조인
+# --secrets-encryption 을 빠뜨리면 조인이 fatal 로 죽는다 (§6-1 결함 1).
+# 전 서버가 동일한 값을 가져야 하는 critical 설정이다.
 TOKEN=$(ssh server1 sudo cat /var/lib/rancher/k3s/server/node-token)
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.36.3+k3s1 \
   K3S_TOKEN="$TOKEN" sh -s - server \
   --server https://<서버1 사설주소>:6443 \
   --disable traefik --disable servicelb \
-  --write-kubeconfig-mode 644
+  --write-kubeconfig-mode 644 \
+  --secrets-encryption
 
 # 판정: 3대가 모두 control-plane,etcd 역할로 Ready
 sudo k3s kubectl get nodes -o wide
@@ -281,11 +312,109 @@ BOOK 4 · DISCOVER 4 · MANDALA 4 · SUPABASE 4 · BATCH 3 · CURATION 3
 
 ## 6. 실행 기록
 
-절차를 실행할 때 각 단계의 실제 명령과 출력을 아래에 append 한다.
-계획과 실제가 달랐던 지점을 반드시 남긴다.
+### 6-1. 리허설 (2026-08-19, 실행 완료)
+
+노드2(`insighta-k3s-2`)를 프로드에서 분리해 etcd 서버로 전환하고, 임시 t3a.small
+2대를 붙여 3노드 쿼럼까지 확인했다. 소요 약 40분, 비용 약 $0.02.
+
+#### 단계별 결과
+
+| 단계 | 결과 | 측정값 |
+|---|---|---|
+| 사전 용량 검증 | PASS | 노드1 실사용 1,770Mi/3,837Mi, 노드2 파드 521Mi → 이전 후 2,291Mi(60%) |
+| cordon + drain | PASS | **7.5초**, 파드 6개 이전, `curl` 90회 **전부 200** |
+| 노드2 분리 | PASS | `kubectl delete node` 후 프로드 1노드, 파드 전량 Running |
+| etcd 모드 설치 | PASS | `db/etcd` 존재, `state.db` 없음, role=`control-plane,etcd` |
+| 시크릿 암호화 | PASS | `Encryption Status: Enabled` + 음성 대조 통과 |
+| 서버 2·3 조인 | **1차 FAIL → 수정 후 PASS** | 아래 결함 1 |
+| etcd 피어 통신 | **FAIL → 수정 후 PASS** | 아래 결함 2 |
+| 쿼럼 유지 (1대 정지) | PASS | 읽기·쓰기 모두 정상 |
+| 쿼럼 상실 (2대 정지) | PASS | 쓰기 거부, 읽기 무응답 |
+| 복구 | PASS | 3노드 Ready, 정지 전 데이터 보존 확인 |
+| etcd 스냅샷 | PASS | 수동 저장 3.8MB |
+| 정리 | PASS | 임시 2대 terminated, 리허설 SG 삭제 |
+
+#### 결함 1 — `--secrets-encryption` 은 전 서버가 동일해야 한다
+
+첫 서버에만 주고 2·3번을 조인시키면 기동이 죽는다.
 
 ```
-(미실행)
+level=warning msg="critical configuration mismatched: secrets-encryption"
+level=fatal   msg="Error: preparing server: failed to bootstrap cluster data:
+              failed to validate server configuration:
+              critical configuration value mismatch between servers"
+```
+
+**조치**: 조인하는 모든 서버의 설치 인자에 `--secrets-encryption` 을 동일하게 넣는다.
+§4-2 의 서버 2·3 명령에 반영해야 한다(현재 문서에는 빠져 있었다).
+
+**prod 에서 바로 했다면**: 1번 서버는 정상 기동하고 2·3번만 조인 실패한다. 겉으로는
+"HA 구성 중 노드가 안 붙음" 으로 보이고, 원인이 암호화 플래그라는 것은 journal 을
+읽기 전에는 드러나지 않는다.
+
+#### 결함 2 — 보안그룹에 etcd 포트가 없다
+
+플래그를 맞춘 뒤에도 조인이 안 됐다.
+
+```
+level=error msg="Failed to check local etcd status for learner management:
+                 context deadline exceeded"
+```
+
+`sg-071c0c18e5bb98e1b` 의 인바운드를 확인한 결과:
+
+```
+6443  apiserver   자기참조   있음
+8472  flannel     자기참조   있음
+10250 kubelet     자기참조   있음
+2379  etcd client            없음   ←
+2380  etcd peer              없음   ←
+```
+
+단일 서버 전제로 작성된 규칙이라 etcd 포트가 빠져 있었다.
+
+**조치**: `terraform/modules/k3s-node/main.tf` 의 보안그룹에 자기참조
+2379-2380/tcp 인그레스를 추가한다. 리허설에서는 프로드 SG 를 건드리지 않기 위해
+임시 SG 를 따로 만들어 우회했고, 종료 시 삭제했다.
+
+**prod 에서 바로 했다면**: 결함 1을 고친 뒤에도 조인이 안 되고, 로그는 timeout 만
+보여 준다. 방화벽이 원인이라는 단서가 에러 메시지에 없다.
+
+#### 확인된 사실 — 쿼럼
+
+| 생존 서버 | 쓰기 | 읽기 |
+|---:|---|---|
+| 3 / 3 | 성공 | 정상 |
+| 2 / 3 | **성공** | 정상 |
+| 1 / 3 | **거부** | 무응답 |
+
+§2-1 의 "2대는 1대보다 나쁘다" 를 실물로 확인했다. 3대 중 2대가 죽으면 남은 1대가
+살아 있어도 클러스터는 멈춘다. 서버 2대 구성이면 1대만 죽어도 같은 상태가 된다.
+
+#### 확인된 사실 — 시크릿 암호화
+
+현재 프로드는 `config.yaml` 에 `secrets-encryption: true` 가 있는데도 상태가
+`Disabled` 다. 리허설에서 설치 인자로 주었을 때는 `Enabled` 이고, 음성 대조도
+통과했다.
+
+```
+$ k3s kubectl create secret generic rehearsal-probe --from-literal=canary=<문자열>
+$ grep -a '<문자열>' .../db/etcd/member/snap/db     → 없음   PASS
+$ grep -ac 'k8s:enc:' .../db/etcd/member/snap/db    → 4      PASS
+```
+
+설정 파일에 값이 있는 것과 기능이 켜진 것은 다르다. `k3s secrets-encrypt status`
+로 확인하고, 원본에서 평문을 검색하는 음성 대조까지 해야 확정된다.
+
+#### 리허설이 잡아낸 것의 요약
+
+프로드에 바로 적용했다면 결함 1과 2를 운영 중에 순차로 만났을 것이다. 각각 로그를
+읽어야만 원인이 드러나고, 그동안 제어평면은 단일 서버 상태로 남는다.
+
+### 6-2. 본 전환 (미실행)
+
+```
+(대기)
 ```
 
 ---
@@ -294,12 +423,12 @@ BOOK 4 · DISCOVER 4 · MANDALA 4 · SUPABASE 4 · BATCH 3 · CURATION 3
 
 전환이 끝나면 아래를 실측값으로 채운다.
 
-| 항목 | 전환 전 | 전환 후 |
-|---|---|---|
-| 데이터스토어 | SQLite (`state.db` 11MB) | |
-| 서버 노드 | 1 | |
-| 견딜 수 있는 서버 정지 | 0대 | |
-| 시크릿 암호화 | Disabled | |
-| 진입점 | 노드1 단독 | |
-| etcd 스냅샷 | 없음 | |
-| 재구축 수동 단계 | 시크릿 144키 | |
+| 항목 | 전환 전 (현 프로드) | 리허설에서 확인한 전환 후 | 본 전환 후 (실행 시 기입) |
+|---|---|---|---|
+| 데이터스토어 | SQLite (`state.db` 11MB) | etcd (`db/etcd`, `state.db` 없음) | |
+| 서버 노드 | 1 | 3 | |
+| 견딜 수 있는 서버 정지 | 0대 | **1대** (2/3 생존 시 읽기·쓰기 정상) | |
+| 시크릿 암호화 | Disabled (설정만 존재) | **Enabled** (음성 대조 통과) | |
+| 진입점 | 노드1 단독 | 미변경 — §5-1 DaemonSet 별도 | |
+| etcd 스냅샷 | 없음 | 생성 확인 (3.8MB) | |
+| 재구축 수동 단계 | 시크릿 144키 | 동일 — §5-2 미해소 | |
