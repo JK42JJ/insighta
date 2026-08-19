@@ -380,6 +380,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -404,21 +405,84 @@ jobs:
           done
           grep -E '^  (api|frontend|redis)Tag:' "$F"
 
-      # Nothing to do when the tags already match, which happens on a re-run.
-      - name: Commit
+      # This pushed straight to main until 2026-08-19 and was refused on its
+      # first execution (run 32218303510):
+      #
+      #   remote: error: GH006: Protected branch update failed for refs/heads/main.
+      #   remote: - 8 of 8 required status checks are expected.
+      #
+      # main requires 8 checks with strict on, and a commit pushed by CI carries
+      # none, so it can never satisfy them. That is a property of the mechanism,
+      # not of the configuration -- there is no setting on this job that makes a
+      # direct push work.
+      #
+      # What it does instead: push a branch, which protection does not cover, and
+      # open a pull request from it. Merging that PR is one click, and it is the
+      # same change this job used to attempt.
+      #
+      # Why the merge is not automatic. GitHub does not trigger workflows from
+      # events created with GITHUB_TOKEN, so ci.yml would never run on a PR this
+      # job opens, the 8 required checks would never report, and auto-merge would
+      # wait forever. Closing that gap needs a token that is not GITHUB_TOKEN --
+      # a credential decision, recorded in docs/ops/k8s-migration-issue-checklist.md
+      # under A-5 rather than made here.
+      #
+      # enforce_admins is false on this branch, so an admin can merge the PR even
+      # with the checks unreported. That is the intended path until A-5 is settled.
+      - name: Open a pull request with the tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- charts/insighta/environments/prod.yaml; then
-            echo "tags already at ${{ github.sha }}"
+          F=charts/insighta/environments/prod.yaml
+          SHA=${{ github.sha }}
+
+          # A re-run, or a deploy whose images were already pinned, has nothing
+          # to propose. Not an error.
+          if git diff --quiet -- "$F"; then
+            echo "tags already at $SHA"
+            echo "### Image tags already at \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          git add charts/insighta/environments/prod.yaml
-          git commit -m "chore(images): point prod at ${{ github.sha }}" \
-                     -m "Written by deploy.yml after pushing to ECR. The scope job
-          treats a values-only change as non-deployable, so this does not loop."
-          git push origin main
+
+          BRANCH="images/${SHA:0:12}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add "$F"
+          git commit -m "chore(images): point prod at $SHA"
+
+          # Branch names outside main are not protected, so this succeeds where
+          # the push to main did not.
+          git push --force-with-lease origin "$BRANCH"
+
+          # An existing PR for this sha means a re-run; reuse it rather than
+          # failing on the duplicate.
+          URL=$(gh pr list --head "$BRANCH" --json url --jq '.[0].url // empty')
+          if [ -z "$URL" ]; then
+            URL=$(gh pr create --base main --head "$BRANCH" \
+              --title "chore(images): point prod at ${SHA:0:12}" \
+              --body "Opened by deploy.yml after pushing these images to ECR.
+
+          Merging this is what tells the cluster which images to run: ArgoCD reads
+          \`charts/insighta/environments/prod.yaml\` from this repository, and until this
+          lands it still names the previous ones.
+
+          Production syncs manually, so merging does not deploy on its own.
+
+          Not merged automatically: GitHub does not run workflows on events created
+          with GITHUB_TOKEN, so the required checks will not report here. See A-5 in
+          \`docs/ops/k8s-migration-issue-checklist.md\`.")
+          fi
+
+          echo "::notice title=Image tags need one merge::$URL"
+          {
+            echo "### Image tags are waiting on a merge"
+            echo
+            echo "\`$SHA\`"
+            echo
+            echo "$URL"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # `fast-mobile` and `deploy` lived here until 2026-08-19. Both ended in an SSH
   # session to secrets.EC2_HOST, copying files onto the host that served the site

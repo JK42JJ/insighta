@@ -37,6 +37,7 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   rollback:
@@ -92,7 +93,22 @@ jobs:
             echo "  $repo:$T present"
           done
 
-      - name: Write the tag and push
+      # Pushed straight to main until 2026-08-19. It never ran that way: the
+      # same push in deploy.yml's publish-tags was refused by branch protection
+      # on its first execution, and this workflow writes by identical means, so
+      # the proof arrived without an incident to arrive during.
+      #
+      #   remote: error: GH006: Protected branch update failed for refs/heads/main.
+      #   remote: - 8 of 8 required status checks are expected.
+      #
+      # A rollback that opens a pull request is slower than one that pushes, and
+      # a rollback is wanted when something is already wrong. That cost is stated
+      # rather than hidden: enforce_admins is false on this branch, so an admin
+      # merges without waiting for checks. What is not acceptable is the previous
+      # state, in which this workflow would have failed at the push mid-incident.
+      - name: Write the tag and open a pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           F=charts/insighta/environments/prod.yaml
@@ -105,17 +121,38 @@ jobs:
 
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="rollback/$T"
+          git checkout -b "$BRANCH"
           git add "$F"
           git commit -m "revert(images): roll prod back to $T" \
                      -m "From ${{ steps.target.outputs.current }}. Reason: ${{ inputs.reason }}
           Triggered by ${{ github.actor }}. redisTag is left alone: the redis image
           is a cache built from three files and is not part of an application
           rollback."
-          git push origin main
+          git push --force-with-lease origin "$BRANCH"
+
+          URL=$(gh pr list --head "$BRANCH" --json url --jq '.[0].url // empty')
+          if [ -z "$URL" ]; then
+            URL=$(gh pr create --base main --head "$BRANCH" \
+              --title "revert(images): roll prod back to $T" \
+              --body "Rollback requested by ${{ github.actor }}. Reason: ${{ inputs.reason }}
+
+          From ${{ steps.target.outputs.current }} to $T. Both images were confirmed present
+          in ECR before this was opened.
+
+          Merge, then sync. Merging alone changes nothing, because production syncs manually.
+          Required checks will not report here: GitHub does not run workflows on events
+          created with GITHUB_TOKEN. enforce_admins is false, so an admin can merge without
+          them, and during an incident that is the intended path.")
+          fi
+          echo "::notice title=Rollback is waiting on a merge::$URL"
+          echo "ROLLBACK_PR=$URL" >> "$GITHUB_ENV"
 
       - name: What happens next
         run: |
-          echo "The chart now names ${{ steps.target.outputs.target }}."
+          echo "A pull request naming ${{ steps.target.outputs.target }} is open:"
+          echo "  $ROLLBACK_PR"
+          echo "Merge it. Nothing below takes effect until it is on main."
           echo
           echo "prod syncs manually, so this does not take effect until someone syncs:"
           echo "  bash scripts/ops/argocd-ui.sh"
