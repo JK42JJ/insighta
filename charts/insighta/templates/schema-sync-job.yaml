@@ -65,7 +65,7 @@ spec:
 {{- end }}
       containers:
         - name: schema-sync
-          image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image) | quote }}
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image "tag" (get ($.Values.images | default dict) "apiTag")) | quote }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           command: ["npx", "prisma@{{ .Values.schemaSync.cliVersion }}", "db", "push", "--skip-generate", "--accept-data-loss"]
           envFrom:

@@ -27,7 +27,7 @@ spec:
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: redis
-          image: {{ include "insighta.image" (dict "root" $ "img" .Values.redis.image) | quote }}
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.redis.image "tag" (get ($.Values.images | default dict) "redisTag")) | quote }}
           imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
           # Overrides maxmemory from redis.conf so it stays below the
           # container limit; the image's entrypoint forwards these.

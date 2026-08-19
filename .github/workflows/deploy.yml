@@ -105,12 +105,13 @@ jobs:
 
           # Does anything here reach production at all?
           #
-          # Every path below is excluded from the API image by .dockerignore,
-          # is not copied to the box by the deploy job (which ships only
-          # docker-compose.prod.yml and docker/redis/), and cannot arrive
-          # through a bind mount — compose declares named volumes only
-          # (cache_data, logs_data, redis_data). So a change confined to them
-          # provably cannot alter what runs.
+          # Every path below is excluded from the API image by .dockerignore, so
+          # a change confined to them cannot alter what the image contains.
+          #
+          # charts/ is in this list and has to stay there. publish-tags writes the
+          # commit sha into charts/insighta/environments/prod.yaml and pushes to
+          # main, and that push has to come back here as deployable=false or it
+          # starts a loop. Checked against that exact path on 2026-08-19.
           #
           # Written as an exclusion rather than an allowlist on purpose. A new
           # top-level directory nobody thought about falls through to
@@ -289,122 +290,6 @@ jobs:
   # nginx root: no npm install, no vite build, no image, no container restart.
   # There is no drift risk because it only ever copies what is in git -- the next
   # full deploy rebuilds the image from those same files.
-  fast-mobile:
-    name: Fast dial deploy
-    runs-on: ubuntu-latest
-    needs: [scope, mobile-gate]
-    if: needs.scope.outputs.mobile_only == 'true'
-    environment: production
-    env:
-      SG_ID: sg-079aa1ca6855e587b
-    steps:
-      # Skipping the image build is only safe if the image on the box is already
-      # current. If the previous deploy failed -- Docker Hub timed out on
-      # 718bd88f -- the backend change it carried is still unshipped, and this
-      # job would sail past it and report green, leaving the failure to be found
-      # by hand. Refuse instead, and say what to do about it.
-      - name: Refuse to skip the build over a failed deploy
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # -R explicitly: this step runs before checkout, so there is no git
-          # repo for gh to infer the remote from and it exits 1 -- which the
-          # guard then reported as "the previous deploy failed". The guard was
-          # blocking every fast dial deploy on its own lookup error.
-          PREV=$(gh run list -R "${{ github.repository }}" \
-                   --workflow deploy.yml --branch main --limit 20 \
-                   --json databaseId,conclusion,headSha \
-                   --jq "[.[] | select(.databaseId != ${{ github.run_id }}) | select(.conclusion != null and .conclusion != \"cancelled\" and .conclusion != \"skipped\")][0]") \
-            || { echo "::warning::could not read deploy history; proceeding without the staleness check"; PREV=""; }
-          CONC=$(echo "$PREV" | jq -r '.conclusion // "none"')
-          SHA=$(echo "$PREV"  | jq -r '.headSha  // "none"')
-          echo "previous completed deploy: $CONC ($SHA)"
-          if [ "$CONC" != "success" ] && [ "$CONC" != "none" ]; then
-            echo "::error::the last deploy ($SHA) ended in '$CONC', so the image on the box may be stale. Re-run that deploy first, then re-run this one."
-            exit 1
-          fi
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
-      - uses: actions/checkout@v4
-
-      - name: Open SSH for runner IP
-        run: |
-          RUNNER_IP=$(curl -s ifconfig.me)
-          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
-          aws ec2 authorize-security-group-ingress \
-            --group-id "$SG_ID" \
-            --protocol tcp --port 22 \
-            --cidr "$RUNNER_IP/32" \
-            --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=Purpose,Value=github-actions-deploy}]"
-
-      # A new ingress rule is not usable the instant the API returns. The full
-      # deploy job never noticed because several steps run between opening the
-      # rule and its first scp; this job goes straight there and timed out on
-      # its first live run. Wait for the port to actually answer rather than
-      # sleeping a guessed number of seconds.
-      - name: Wait for SSH to become reachable
-        run: |
-          for i in $(seq 1 30); do
-            if timeout 3 bash -c "cat < /dev/null > /dev/tcp/${{ secrets.EC2_HOST }}/22" 2>/dev/null; then
-              echo "port 22 reachable after ${i} attempt(s)"; exit 0
-            fi
-            sleep 2
-          done
-          echo "::error::port 22 never became reachable from $RUNNER_IP after 60s"
-          exit 1
-
-      - name: Copy dial files to EC2
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "frontend/public/mobile/*"
-          target: "/tmp/dial/"
-          strip_components: 3
-          overwrite: true
-
-      - name: Install into the running nginx and verify
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-            docker cp /tmp/dial/. insighta-frontend:/usr/share/nginx/html/mobile/
-            rm -rf /tmp/dial
-            # nginx serves from disk per request, so no reload is needed. Prove
-            # the file the browser will receive is the one we just shipped.
-            docker exec insighta-frontend cat /usr/share/nginx/html/mobile/version.json
-
-      - name: Verify over HTTPS
-        run: |
-          WANT=$(node -p "require('./frontend/public/mobile/version.json').build")
-          for i in $(seq 1 10); do
-            GOT=$(curl -sf "https://${{ secrets.DOMAIN }}/mobile/version.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).build" 2>/dev/null || true)
-            [ "$GOT" = "$WANT" ] && { echo "live build = $GOT"; exit 0; }
-            sleep 3
-          done
-          echo "::error::dial still serving '$GOT', expected '$WANT'"
-          exit 1
-
-      - name: Close SSH for runner IP
-        if: always()
-        run: |
-          if [ -n "$RUNNER_IP" ]; then
-            aws ec2 revoke-security-group-ingress \
-              --group-id "$SG_ID" \
-              --protocol tcp --port 22 \
-              --cidr "$RUNNER_IP/32" 2>/dev/null || true
-          fi
-
   migrate:
     name: Database Schema Sync
     runs-on: ubuntu-latest
@@ -456,471 +341,62 @@ jobs:
           DATABASE_URL: ${{ secrets.DIRECT_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
-  deploy:
-    name: Deploy to EC2
+  publish-tags:
+    name: Point the chart at this commit
+    needs: [scope, build-and-push]
+    if: github.ref == 'refs/heads/main' && needs.scope.outputs.deployable == 'true'
     runs-on: ubuntu-latest
-    needs: [scope, migrate, build-and-push]
-    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
-    environment: production
-    env:
-      SG_ID: sg-079aa1ca6855e587b
+    permissions:
+      contents: write
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Open SSH for runner IP
+      # The cluster learns which image to run by reading this repository, so the
+      # tag has to arrive here rather than being pushed at the cluster. ArgoCD is
+      # not reachable from a runner on purpose -- it holds cluster-admin and has
+      # no public address -- so a write-back to git is the path that exists.
+      - name: Write the commit sha into the prod values
         run: |
-          RUNNER_IP=$(curl -s ifconfig.me)
-          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
-          aws ec2 authorize-security-group-ingress \
-            --group-id "$SG_ID" \
-            --protocol tcp --port 22 \
-            --cidr "$RUNNER_IP/32" \
-            --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=Purpose,Value=github-actions-deploy}]"
-          echo "Opened SSH for $RUNNER_IP"
+          set -euo pipefail
+          F=charts/insighta/environments/prod.yaml
+          SHA=${{ github.sha }}
 
-      - name: Copy docker-compose.prod.yml to EC2
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.prod.yml"
-          target: "/opt/tubearchive/"
-          overwrite: true
+          for key in apiTag frontendTag redisTag; do
+            before=$(grep -E "^  $key:" "$F")
+            sed -i -E "s|^  $key:.*|  $key: $SHA|" "$F"
+            after=$(grep -E "^  $key:" "$F")
+            [ "$before" != "$after" ] || { echo "$key unchanged -- refusing"; exit 1; }
+          done
+          grep -E '^  (api|frontend|redis)Tag:' "$F"
 
-      # CP395 — Redis container is built locally on EC2 from source files in
-      # docker/redis/. Ship the directory alongside the compose file so the
-      # `build:` directive in docker-compose.prod.yml can resolve.
-      - name: Copy docker/redis/ to EC2
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker/redis/*"
-          target: "/opt/tubearchive/docker/redis/"
-          overwrite: true
-          strip_components: 2
-
-      - name: Ensure LLM keys in .env
-        uses: appleboy/ssh-action@v1
-        env:
-          OR_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OR_MODEL: ${{ secrets.OPENROUTER_MODEL }}
-          COHERE_KEY: ${{ secrets.COHERE_API_KEY }}
-          # Naver Open API — book research/factcheck Korean evidence leg
-          # (2026-07-14 provider swap; Google CSE closed to new customers).
-          NAVER_ID: ${{ secrets.NAVER_CLIENT_ID }}
-          NAVER_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
-          ELEVEN_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          NARRATION_PREPRODUCE_ENABLED: ${{ vars.NARRATION_PREPRODUCE_ENABLED }}
-          YT_SEARCH_KEY: ${{ secrets.YOUTUBE_API_KEY_SEARCH }}
-          YT_SEARCH_KEY_2: ${{ secrets.YOUTUBE_API_KEY_SEARCH_2 }}
-          YT_SEARCH_KEY_3: ${{ secrets.YOUTUBE_API_KEY_SEARCH_3 }}
-          YT_SEARCH_KEY_4: ${{ secrets.YOUTUBE_API_KEY_SEARCH_4 }}
-          YT_SEARCH_KEY_5: ${{ secrets.YOUTUBE_API_KEY_SEARCH_5 }}
-          YT_SEARCH_KEY_6: ${{ secrets.YOUTUBE_API_KEY_SEARCH_6 }}
-          YT_SEARCH_KEY_7: ${{ secrets.YOUTUBE_API_KEY_SEARCH_7 }}
-          YT_SEARCH_KEY_8: ${{ secrets.YOUTUBE_API_KEY_SEARCH_8 }}
-          YT_VIDEOS_KEY: ${{ secrets.YOUTUBE_API_KEY_VIDEOS }}
-          YT_VIDEOS_KEY_2: ${{ secrets.YOUTUBE_API_KEY_VIDEOS_2 }}
-          DB_URL: ${{ secrets.DATABASE_URL }}
-          DB_DIRECT: ${{ secrets.DIRECT_URL }}
-          REDIS_ADMIN_PW: ${{ secrets.REDIS_ADMIN_PASSWORD }}
-          REDIS_COLLECTOR_PW: ${{ secrets.REDIS_COLLECTOR_PASSWORD }}
-          REDIS_INSIGHTA_PW: ${{ secrets.REDIS_INSIGHTA_PASSWORD }}
-          REDIS_INSIGHTA_UPSERT_PW: ${{ secrets.REDIS_INSIGHTA_UPSERT_PASSWORD }}
-          TAILSCALE_IP: ${{ vars.INSIGHTA_TAILSCALE_IP }}
-          # CP475+1 — migrated from secrets.QWEN_LORA_API_URL because the URL is
-          # not a credential (CP392 Hard Rule "non-secret config is not a Secret").
-          # Post-merge cleanup: `gh secret delete QWEN_LORA_API_URL`.
-          QWEN_LORA_API_URL: ${{ vars.QWEN_LORA_API_URL }}
-          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
-          # CP474 — selects which provider the CopilotKit chatbot route uses.
-          # Values: 'gemini' | 'openrouter' | 'local' | 'qwen-runpod'.
-          # Default 'openrouter' per src/config/index.ts when unset; set the
-          # GitHub Variable CHATBOT_PROVIDER=qwen-runpod to activate the
-          # RunPod/vLLM path (also activates the Bug 1 chat.completions fix
-          # via QwenRunpodAdapter + the persona/SFT prompt middleware).
-          CHATBOT_PROVIDER: ${{ vars.CHATBOT_PROVIDER }}
-          # CP477+14 — background-poller failover (qwen-runpod → openrouter)
-          # toggle. Non-secret per CP392 (boolean flag, not a credential).
-          # Default empty ⇒ src/config/index.ts coerces to `false` ⇒ poller
-          # is a no-op and main HEAD behaviour is preserved exactly. Set
-          # GitHub Variable CHATBOT_FAILOVER_ENABLED=true to activate. To
-          # roll back, set back to false (or unset) + redeploy — no code
-          # revert required.
-          CHATBOT_FAILOVER_ENABLED: ${{ vars.CHATBOT_FAILOVER_ENABLED }}
-          LS_API_KEY: ${{ secrets.LEMONSQUEEZY_LIVE_API_KEY }}
-          LS_WEBHOOK_SECRET: ${{ secrets.LEMONSQUEEZY_LIVE_WEBHOOK_SECRET }}
-          LS_STORE_ID: ${{ vars.LEMONSQUEEZY_LIVE_STORE_ID }}
-          LS_VARIANT_MONTHLY: ${{ vars.LEMONSQUEEZY_LIVE_VARIANT_ID_PRO_MONTHLY }}
-          LS_VARIANT_YEARLY: ${{ vars.LEMONSQUEEZY_LIVE_VARIANT_ID_PRO_YEARLY }}
-          LS_VARIANT_LIFETIME: ${{ vars.LEMONSQUEEZY_LIVE_VARIANT_ID_PRO_LIFETIME }}
-          # CP500++ CONFIG-SSOT (2026-06-16) — runtime toggle env vars removed
-          # from this env: block (their .env-write blocks in the script were also
-          # deleted). Toggle activation SSOT now lives in docker-compose.prod.yml
-          # `environment:`. Only secrets remain here + in the script's .env writes.
-          # Guard: scripts/ci/check-config-ssot.sh. Design: docs/handoffs/
-          # crosscutting-audit-phase2-design.md (PR-1).
-          # Mac Mini transcript proxy. EC2 outbound to YouTube is blocked
-          # for caption fetch; the Mac Mini (KR ISP IP, Tailscale 4242)
-          # successfully fetches and forwards via x-transcript-token auth.
-          # When unset, caption-extractor falls back to direct
-          # youtube-transcript on EC2 (known to fail) — set both to enable.
-          MAC_MINI_TRANSCRIPT_URL: ${{ secrets.MAC_MINI_TRANSCRIPT_URL }}
-          MAC_MINI_TRANSCRIPT_TOKEN: ${{ secrets.MAC_MINI_TRANSCRIPT_TOKEN }}
-          # Azure App Service transcript proxy (2026-07-09) — always-on cloud
-          # host running the same Webshare-backed service, off EC2 (ToS). Tried
-          # BEFORE Mac Mini (fixes the Mac Mini SPOF). Non-secret URL = literal
-          # (reuses MAC_MINI_TRANSCRIPT_TOKEN for x-transcript-token auth).
-          AZURE_TRANSCRIPT_URL: https://insighta-transcript-proxy-dqaxe5f7hqgddmdz.eastus2-01.azurewebsites.net
-          # ⑤ snapshot get-or-extract — pod slidegen-service. URL = Variable
-          # (CP392, not a credential), TOKEN = Secret. Both unset ⇒ extract
-          # disabled (numerize-client returns []); serve-from-cache still works.
-          SNAPSHOT_SERVICE_URL: ${{ vars.SNAPSHOT_SERVICE_URL }}
-          SNAPSHOT_SERVICE_TOKEN: ${{ secrets.SNAPSHOT_SERVICE_TOKEN }}
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          # CP500++ CONFIG-SSOT — toggle keys removed from this forward list
-          # (now compose-SSOT); only secrets + non-conflicting config remain.
-          envs: OR_KEY,OR_MODEL,COHERE_KEY,YT_SEARCH_KEY,YT_SEARCH_KEY_2,YT_SEARCH_KEY_3,YT_SEARCH_KEY_4,YT_SEARCH_KEY_5,YT_SEARCH_KEY_6,YT_SEARCH_KEY_7,YT_SEARCH_KEY_8,YT_VIDEOS_KEY,YT_VIDEOS_KEY_2,DB_URL,DB_DIRECT,REDIS_ADMIN_PW,REDIS_COLLECTOR_PW,REDIS_INSIGHTA_PW,REDIS_INSIGHTA_UPSERT_PW,TAILSCALE_IP,QWEN_LORA_API_URL,RUNPOD_API_KEY,CHATBOT_PROVIDER,CHATBOT_FAILOVER_ENABLED,LS_API_KEY,LS_WEBHOOK_SECRET,LS_STORE_ID,LS_VARIANT_MONTHLY,LS_VARIANT_YEARLY,LS_VARIANT_LIFETIME,MAC_MINI_TRANSCRIPT_URL,MAC_MINI_TRANSCRIPT_TOKEN,AZURE_TRANSCRIPT_URL,SNAPSHOT_SERVICE_URL,SNAPSHOT_SERVICE_TOKEN,ELEVEN_KEY,NARRATION_PREPRODUCE_ENABLED,NAVER_ID,NAVER_SECRET
-          script: |
-            set -e
-            cd /opt/tubearchive
-            # Add OPENROUTER keys if missing, update if present
-            grep -q '^OPENROUTER_API_KEY=' .env 2>/dev/null && sed -i "s|^OPENROUTER_API_KEY=.*|OPENROUTER_API_KEY=${OR_KEY}|" .env || echo "OPENROUTER_API_KEY=${OR_KEY}" >> .env
-            grep -q '^OPENROUTER_MODEL=' .env 2>/dev/null && sed -i "s|^OPENROUTER_MODEL=.*|OPENROUTER_MODEL=${OR_MODEL}|" .env || echo "OPENROUTER_MODEL=${OR_MODEL}" >> .env
-            # 2026-07-13 — ElevenLabs narration pre-produce key (flag-gated by
-            # NARRATION_PREPRODUCE_ENABLED; see src/modules/narration/). Guarded
-            # like CHATBOT_FAILOVER_ENABLED so an unset secret never blanks .env.
-            if [ -n "${ELEVEN_KEY}" ]; then
-              grep -q '^ELEVENLABS_API_KEY=' .env 2>/dev/null && sed -i "s|^ELEVENLABS_API_KEY=.*|ELEVENLABS_API_KEY=${ELEVEN_KEY}|" .env || echo "ELEVENLABS_API_KEY=${ELEVEN_KEY}" >> .env
-            fi
-            # Narration flag — GitHub Variable NARRATION_PREPRODUCE_ENABLED=true
-            # to activate; unset leaves .env untouched (config default false).
-            if [ -n "${NARRATION_PREPRODUCE_ENABLED}" ]; then
-              grep -q '^NARRATION_PREPRODUCE_ENABLED=' .env 2>/dev/null && sed -i "s|^NARRATION_PREPRODUCE_ENABLED=.*|NARRATION_PREPRODUCE_ENABLED=${NARRATION_PREPRODUCE_ENABLED}|" .env || echo "NARRATION_PREPRODUCE_ENABLED=${NARRATION_PREPRODUCE_ENABLED}" >> .env
-            fi
-            # 2026-05-12 — Cohere Rerank API key (hybrid-retrieval spec, Issue #610).
-            # Used by src/modules/rerank/cohere-client.ts. Same idempotent pattern.
-            # Flag V3_ENABLE_HYBRID_RERANK stays in docker-compose.prod.yml as
-            # tuning knob (CP392 non-secret rule).
-            if [ -n "${COHERE_KEY}" ]; then
-              grep -q '^COHERE_API_KEY=' .env 2>/dev/null && sed -i "s|^COHERE_API_KEY=.*|COHERE_API_KEY=${COHERE_KEY}|" .env || echo "COHERE_API_KEY=${COHERE_KEY}" >> .env
-            fi
-            # Naver Open API (book research/factcheck Korean evidence).
-            # Absent = skip — graceful naverEnabled=false, fill-book logs the
-            # degradation loudly (silent-0 class, 2026-07-14). The global leg
-            # rides OPENROUTER_API_KEY (already synced above).
-            if [ -n "${NAVER_ID}" ]; then
-              grep -q '^NAVER_CLIENT_ID=' .env 2>/dev/null && sed -i "s|^NAVER_CLIENT_ID=.*|NAVER_CLIENT_ID=${NAVER_ID}|" .env || echo "NAVER_CLIENT_ID=${NAVER_ID}" >> .env
-            fi
-            if [ -n "${NAVER_SECRET}" ]; then
-              grep -q '^NAVER_CLIENT_SECRET=' .env 2>/dev/null && sed -i "s|^NAVER_CLIENT_SECRET=.*|NAVER_CLIENT_SECRET=${NAVER_SECRET}|" .env || echo "NAVER_CLIENT_SECRET=${NAVER_SECRET}" >> .env
-            fi
-            # CP500++ CONFIG-SSOT (2026-06-16) — runtime TOGGLES removed from the
-            # .env-write path. Toggle activation SSOT = docker-compose.prod.yml
-            # `environment:` (compose literal wins over env_file per Docker
-            # precedence; the old dual-write let compose silently override .env =
-            # the §10-C silent-DEAD bug, e.g. YOUTUBE_METADATA_BACKFILL_ENABLED
-            # was compose=false while .env=... → process=false). deploy.yml now
-            # writes ONLY secrets to .env. To flip a toggle: edit the compose
-            # `environment:` literal + redeploy; verify with
-            # `docker exec insighta-api printenv | grep KEY`. CI guard prevents
-            # re-introducing a dual definition: scripts/ci/check-config-ssot.sh.
-            # Design: docs/handoffs/crosscutting-audit-phase2-design.md (PR-1).
-            # 2026-04-18 — sync DB URLs from GitHub Secrets so password
-            # rotations propagate to prod .env without manual SSH. Was
-            # blocking deploy after Supabase password rotation (container
-            # healthcheck failed because .env had stale password).
-            if [ -n "${DB_URL}" ]; then
-              grep -q '^DATABASE_URL=' .env 2>/dev/null && sed -i "s|^DATABASE_URL=.*|DATABASE_URL=${DB_URL}|" .env || echo "DATABASE_URL=${DB_URL}" >> .env
-            fi
-            if [ -n "${DB_DIRECT}" ]; then
-              grep -q '^DIRECT_URL=' .env 2>/dev/null && sed -i "s|^DIRECT_URL=.*|DIRECT_URL=${DB_DIRECT}|" .env || echo "DIRECT_URL=${DB_DIRECT}" >> .env
-            fi
-            # CP475+ — Mac Mini transcript proxy (Tailscale). When unset,
-            # caption-extractor falls back to direct youtube-transcript on
-            # EC2 (known to fail with false "disabled" errors due to
-            # YouTube IP blocking us-west-2 outbound). Idempotent set.
-            if [ -n "${MAC_MINI_TRANSCRIPT_URL}" ]; then
-              grep -q '^MAC_MINI_TRANSCRIPT_URL=' .env 2>/dev/null && sed -i "s|^MAC_MINI_TRANSCRIPT_URL=.*|MAC_MINI_TRANSCRIPT_URL=${MAC_MINI_TRANSCRIPT_URL}|" .env || echo "MAC_MINI_TRANSCRIPT_URL=${MAC_MINI_TRANSCRIPT_URL}" >> .env
-            fi
-            if [ -n "${MAC_MINI_TRANSCRIPT_TOKEN}" ]; then
-              grep -q '^MAC_MINI_TRANSCRIPT_TOKEN=' .env 2>/dev/null && sed -i "s|^MAC_MINI_TRANSCRIPT_TOKEN=.*|MAC_MINI_TRANSCRIPT_TOKEN=${MAC_MINI_TRANSCRIPT_TOKEN}|" .env || echo "MAC_MINI_TRANSCRIPT_TOKEN=${MAC_MINI_TRANSCRIPT_TOKEN}" >> .env
-            fi
-            if [ -n "${AZURE_TRANSCRIPT_URL}" ]; then
-              grep -q '^AZURE_TRANSCRIPT_URL=' .env 2>/dev/null && sed -i "s|^AZURE_TRANSCRIPT_URL=.*|AZURE_TRANSCRIPT_URL=${AZURE_TRANSCRIPT_URL}|" .env || echo "AZURE_TRANSCRIPT_URL=${AZURE_TRANSCRIPT_URL}" >> .env
-            fi
-            # ⑤ snapshot get-or-extract — pod slidegen-service URL + token. New
-            # keys (not in docker-compose.prod.yml `environment:` literals) so the
-            # .env (env_file) value flows through — no compose-override (CP500++).
-            # Idempotent set; unset ⇒ skipped (extract stays disabled, safe).
-            if [ -n "${SNAPSHOT_SERVICE_URL}" ]; then
-              grep -q '^SNAPSHOT_SERVICE_URL=' .env 2>/dev/null && sed -i "s|^SNAPSHOT_SERVICE_URL=.*|SNAPSHOT_SERVICE_URL=${SNAPSHOT_SERVICE_URL}|" .env || echo "SNAPSHOT_SERVICE_URL=${SNAPSHOT_SERVICE_URL}" >> .env
-            fi
-            if [ -n "${SNAPSHOT_SERVICE_TOKEN}" ]; then
-              grep -q '^SNAPSHOT_SERVICE_TOKEN=' .env 2>/dev/null && sed -i "s|^SNAPSHOT_SERVICE_TOKEN=.*|SNAPSHOT_SERVICE_TOKEN=${SNAPSHOT_SERVICE_TOKEN}|" .env || echo "SNAPSHOT_SERVICE_TOKEN=${SNAPSHOT_SERVICE_TOKEN}" >> .env
-            fi
-            # CP360 — primary YouTube API key for video-discover search.list.
-            # Mirrors the OPENROUTER pattern: idempotent add-or-update.
-            if [ -n "${YT_SEARCH_KEY}" ]; then
-              grep -q '^YOUTUBE_API_KEY_SEARCH=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH=.*|YOUTUBE_API_KEY_SEARCH=${YT_SEARCH_KEY}|" .env || echo "YOUTUBE_API_KEY_SEARCH=${YT_SEARCH_KEY}" >> .env
-            fi
-            # 2026-04-17 — quota failover keys (resolveSearchApiKeys in
-            # src/skills/plugins/video-discover/v2/youtube-client.ts rotates on 403).
-            if [ -n "${YT_SEARCH_KEY_2}" ]; then
-              grep -q '^YOUTUBE_API_KEY_SEARCH_2=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_2=.*|YOUTUBE_API_KEY_SEARCH_2=${YT_SEARCH_KEY_2}|" .env || echo "YOUTUBE_API_KEY_SEARCH_2=${YT_SEARCH_KEY_2}" >> .env
-            fi
-            if [ -n "${YT_SEARCH_KEY_3}" ]; then
-              grep -q '^YOUTUBE_API_KEY_SEARCH_3=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_3=.*|YOUTUBE_API_KEY_SEARCH_3=${YT_SEARCH_KEY_3}|" .env || echo "YOUTUBE_API_KEY_SEARCH_3=${YT_SEARCH_KEY_3}" >> .env
-            fi
-            if [ -n "${YT_SEARCH_KEY_4}" ]; then
-              grep -q '^YOUTUBE_API_KEY_SEARCH_4=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_4=.*|YOUTUBE_API_KEY_SEARCH_4=${YT_SEARCH_KEY_4}|" .env || echo "YOUTUBE_API_KEY_SEARCH_4=${YT_SEARCH_KEY_4}" >> .env
-            fi
-            if [ -n "${YT_SEARCH_KEY_5}" ]; then
-              grep -q '^YOUTUBE_API_KEY_SEARCH_5=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_5=.*|YOUTUBE_API_KEY_SEARCH_5=${YT_SEARCH_KEY_5}|" .env || echo "YOUTUBE_API_KEY_SEARCH_5=${YT_SEARCH_KEY_5}" >> .env
-            fi
-            if [ -n "${YT_SEARCH_KEY_6}" ]; then
-              grep -q '^YOUTUBE_API_KEY_SEARCH_6=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_6=.*|YOUTUBE_API_KEY_SEARCH_6=${YT_SEARCH_KEY_6}|" .env || echo "YOUTUBE_API_KEY_SEARCH_6=${YT_SEARCH_KEY_6}" >> .env
-            fi
-            if [ -n "${YT_SEARCH_KEY_7}" ]; then
-              grep -q '^YOUTUBE_API_KEY_SEARCH_7=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_7=.*|YOUTUBE_API_KEY_SEARCH_7=${YT_SEARCH_KEY_7}|" .env || echo "YOUTUBE_API_KEY_SEARCH_7=${YT_SEARCH_KEY_7}" >> .env
-            fi
-            if [ -n "${YT_SEARCH_KEY_8}" ]; then
-              grep -q '^YOUTUBE_API_KEY_SEARCH_8=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_SEARCH_8=.*|YOUTUBE_API_KEY_SEARCH_8=${YT_SEARCH_KEY_8}|" .env || echo "YOUTUBE_API_KEY_SEARCH_8=${YT_SEARCH_KEY_8}" >> .env
-            fi
-            # CP492 — dedicated VIDEOS pool (videos.list / batch-video-collector via
-            # resolveVideosApiKeys). Separate Google projects so bulk videos.list does
-            # not burn the user-facing search.list projects' daily Queries quota.
-            if [ -n "${YT_VIDEOS_KEY}" ]; then
-              grep -q '^YOUTUBE_API_KEY_VIDEOS=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_VIDEOS=.*|YOUTUBE_API_KEY_VIDEOS=${YT_VIDEOS_KEY}|" .env || echo "YOUTUBE_API_KEY_VIDEOS=${YT_VIDEOS_KEY}" >> .env
-            fi
-            if [ -n "${YT_VIDEOS_KEY_2}" ]; then
-              grep -q '^YOUTUBE_API_KEY_VIDEOS_2=' .env 2>/dev/null && sed -i "s|^YOUTUBE_API_KEY_VIDEOS_2=.*|YOUTUBE_API_KEY_VIDEOS_2=${YT_VIDEOS_KEY_2}|" .env || echo "YOUTUBE_API_KEY_VIDEOS_2=${YT_VIDEOS_KEY_2}" >> .env
-            fi
-            # CP395 — Redis (video dictionary) ACL passwords + Tailscale IP.
-            # Passwords consumed by docker/redis/entrypoint.sh via envsubst
-            # into redis.acl at container start. TAILSCALE_IP used by
-            # docker-compose.prod.yml to bind 6379 on Tailscale interface
-            # only (no public SG change).
-            if [ -n "${REDIS_ADMIN_PW}" ]; then
-              grep -q '^REDIS_ADMIN_PASSWORD=' .env 2>/dev/null && sed -i "s|^REDIS_ADMIN_PASSWORD=.*|REDIS_ADMIN_PASSWORD=${REDIS_ADMIN_PW}|" .env || echo "REDIS_ADMIN_PASSWORD=${REDIS_ADMIN_PW}" >> .env
-            fi
-            if [ -n "${REDIS_COLLECTOR_PW}" ]; then
-              grep -q '^REDIS_COLLECTOR_PASSWORD=' .env 2>/dev/null && sed -i "s|^REDIS_COLLECTOR_PASSWORD=.*|REDIS_COLLECTOR_PASSWORD=${REDIS_COLLECTOR_PW}|" .env || echo "REDIS_COLLECTOR_PASSWORD=${REDIS_COLLECTOR_PW}" >> .env
-            fi
-            if [ -n "${REDIS_INSIGHTA_PW}" ]; then
-              grep -q '^REDIS_INSIGHTA_PASSWORD=' .env 2>/dev/null && sed -i "s|^REDIS_INSIGHTA_PASSWORD=.*|REDIS_INSIGHTA_PASSWORD=${REDIS_INSIGHTA_PW}|" .env || echo "REDIS_INSIGHTA_PASSWORD=${REDIS_INSIGHTA_PW}" >> .env
-            fi
-            if [ -n "${REDIS_INSIGHTA_UPSERT_PW}" ]; then
-              grep -q '^REDIS_INSIGHTA_UPSERT_PASSWORD=' .env 2>/dev/null && sed -i "s|^REDIS_INSIGHTA_UPSERT_PASSWORD=.*|REDIS_INSIGHTA_UPSERT_PASSWORD=${REDIS_INSIGHTA_UPSERT_PW}|" .env || echo "REDIS_INSIGHTA_UPSERT_PASSWORD=${REDIS_INSIGHTA_UPSERT_PW}" >> .env
-            fi
-            if [ -n "${TAILSCALE_IP}" ]; then
-              grep -q '^INSIGHTA_TAILSCALE_IP=' .env 2>/dev/null && sed -i "s|^INSIGHTA_TAILSCALE_IP=.*|INSIGHTA_TAILSCALE_IP=${TAILSCALE_IP}|" .env || echo "INSIGHTA_TAILSCALE_IP=${TAILSCALE_IP}" >> .env
-            fi
-            # CP449 — qwen-lora chatbot serving (chat-qwen.ts route).
-            # QWEN_LORA_API_URL points at Ollama OR RunPod runsync;
-            # chat-qwen.ts auto-detects via 'runpod.ai' substring.
-            # RUNPOD_API_KEY only used when URL is RunPod.
-            if [ -n "${QWEN_LORA_API_URL}" ]; then
-              grep -q '^QWEN_LORA_API_URL=' .env 2>/dev/null && sed -i "s|^QWEN_LORA_API_URL=.*|QWEN_LORA_API_URL=${QWEN_LORA_API_URL}|" .env || echo "QWEN_LORA_API_URL=${QWEN_LORA_API_URL}" >> .env
-            fi
-            if [ -n "${RUNPOD_API_KEY}" ]; then
-              grep -q '^RUNPOD_API_KEY=' .env 2>/dev/null && sed -i "s|^RUNPOD_API_KEY=.*|RUNPOD_API_KEY=${RUNPOD_API_KEY}|" .env || echo "RUNPOD_API_KEY=${RUNPOD_API_KEY}" >> .env
-            fi
-            # CP474 — chatbot provider selector. Empty/unset ⇒ BE default
-            # 'openrouter' (src/config/index.ts:109). Set 'qwen-runpod' to
-            # activate the RunPod/vLLM path + Bug 1 chat.completions fix.
-            if [ -n "${CHATBOT_PROVIDER}" ]; then
-              grep -q '^CHATBOT_PROVIDER=' .env 2>/dev/null && sed -i "s|^CHATBOT_PROVIDER=.*|CHATBOT_PROVIDER=${CHATBOT_PROVIDER}|" .env || echo "CHATBOT_PROVIDER=${CHATBOT_PROVIDER}" >> .env
-            fi
-            # CP477+14 — chatbot failover toggle. Same idempotent pattern as
-            # RICH_SUMMARY_ENABLED / YOUTUBE_METADATA_BACKFILL_ENABLED. When
-            # the GitHub Variable is unset/empty the conditional skips, so
-            # the src/config/index.ts default ('false' → no failover) stays
-            # in effect. Activate via
-            # `gh variable set CHATBOT_FAILOVER_ENABLED --body true` then
-            # redeploy. Rollback by setting back to false (or unset) +
-            # redeploy — no code revert needed.
-            if [ -n "${CHATBOT_FAILOVER_ENABLED}" ]; then
-              grep -q '^CHATBOT_FAILOVER_ENABLED=' .env 2>/dev/null && sed -i "s|^CHATBOT_FAILOVER_ENABLED=.*|CHATBOT_FAILOVER_ENABLED=${CHATBOT_FAILOVER_ENABLED}|" .env || echo "CHATBOT_FAILOVER_ENABLED=${CHATBOT_FAILOVER_ENABLED}" >> .env
-            fi
-            # CP456 — Lemon Squeezy billing. billingConfig.enabled requires
-            # API_KEY + WEBHOOK_SECRET + STORE_ID + VARIANT_MONTHLY +
-            # VARIANT_YEARLY all set (src/modules/billing/config.ts). Unset
-            # before this step => /api/v1/billing/* returns 503. API_KEY +
-            # WEBHOOK_SECRET are GH Secrets; STORE_ID + VARIANT_* are GH
-            # Variables (CP392 — visible in LS dashboard URL, non-secret).
-            if [ -n "${LS_API_KEY}" ]; then
-              grep -q '^LEMONSQUEEZY_API_KEY=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_API_KEY=.*|LEMONSQUEEZY_API_KEY=${LS_API_KEY}|" .env || echo "LEMONSQUEEZY_API_KEY=${LS_API_KEY}" >> .env
-            fi
-            if [ -n "${LS_WEBHOOK_SECRET}" ]; then
-              grep -q '^LEMONSQUEEZY_WEBHOOK_SECRET=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_WEBHOOK_SECRET=.*|LEMONSQUEEZY_WEBHOOK_SECRET=${LS_WEBHOOK_SECRET}|" .env || echo "LEMONSQUEEZY_WEBHOOK_SECRET=${LS_WEBHOOK_SECRET}" >> .env
-            fi
-            if [ -n "${LS_STORE_ID}" ]; then
-              grep -q '^LEMONSQUEEZY_STORE_ID=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_STORE_ID=.*|LEMONSQUEEZY_STORE_ID=${LS_STORE_ID}|" .env || echo "LEMONSQUEEZY_STORE_ID=${LS_STORE_ID}" >> .env
-            fi
-            if [ -n "${LS_VARIANT_MONTHLY}" ]; then
-              grep -q '^LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY=.*|LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY=${LS_VARIANT_MONTHLY}|" .env || echo "LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY=${LS_VARIANT_MONTHLY}" >> .env
-            fi
-            if [ -n "${LS_VARIANT_YEARLY}" ]; then
-              grep -q '^LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY=.*|LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY=${LS_VARIANT_YEARLY}|" .env || echo "LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY=${LS_VARIANT_YEARLY}" >> .env
-            fi
-            if [ -n "${LS_VARIANT_LIFETIME}" ]; then
-              grep -q '^LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME=' .env 2>/dev/null && sed -i "s|^LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME=.*|LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME=${LS_VARIANT_LIFETIME}|" .env || echo "LEMONSQUEEZY_VARIANT_ID_PRO_LIFETIME=${LS_VARIANT_LIFETIME}" >> .env
-            fi
-            chmod 600 .env
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-
-            cd /opt/tubearchive
-
-            # Pull latest images (prebuilt services only — api, frontend ship
-            # from GHCR). redis is built locally on EC2 from ./docker/redis/
-            # per CP395; attempting to pull it fails because the tag does not
-            # exist in any registry.
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker compose -f docker-compose.prod.yml pull api frontend
-            docker compose -f docker-compose.prod.yml build redis
-
-            # Save current image digests for rollback
-            docker compose -f docker-compose.prod.yml images -q > /tmp/previous-images.txt 2>/dev/null || true
-
-            # Deploy with zero-downtime
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-
-            # Wait for health check
-            echo "Waiting for services to be healthy..."
-            sleep 5
-
-            RETRIES=6
-            for i in $(seq 1 $RETRIES); do
-              if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
-                echo "Health check passed on attempt $i!"
-                break
-              fi
-              if [ $i -eq $RETRIES ]; then
-                echo "Health check failed after $RETRIES attempts. Rolling back..."
-                docker compose -f docker-compose.prod.yml down
-                docker compose -f docker-compose.prod.yml up -d
-                exit 1
-              fi
-              echo "Attempt $i/$RETRIES - waiting..."
-              sleep 5
-            done
-
-            # CP395 — post-deploy Redis smoke test. Catches silent auth
-            # failures (e.g. CRLF-contaminated passwords, ACL render errors)
-            # that leave the container healthy but unusable.
-            echo "Redis ACL smoke test..."
-            REDIS_SMOKE_ADMIN_PW=$(grep '^REDIS_ADMIN_PASSWORD=' .env | cut -d= -f2- | tr -d '\r\n')
-            REDIS_SMOKE_COLL_PW=$(grep '^REDIS_COLLECTOR_PASSWORD=' .env | cut -d= -f2- | tr -d '\r\n')
-            REDIS_SMOKE_READ_PW=$(grep '^REDIS_INSIGHTA_PASSWORD=' .env | cut -d= -f2- | tr -d '\r\n')
-            REDIS_SMOKE_UPS_PW=$(grep '^REDIS_INSIGHTA_UPSERT_PASSWORD=' .env | cut -d= -f2- | tr -d '\r\n')
-            for attempt in 1 2 3 4 5; do
-              if docker exec insighta-redis redis-cli --user admin -a "$REDIS_SMOKE_ADMIN_PW" --no-auth-warning ping 2>/dev/null | grep -q PONG; then
-                break
-              fi
-              if [ "$attempt" = "5" ]; then
-                echo "Redis admin auth failed after 5 attempts"
-                docker logs --tail 30 insighta-redis
-                exit 1
-              fi
-              sleep 2
-            done
-            ACL_COUNT=$(docker exec insighta-redis redis-cli --user admin -a "$REDIS_SMOKE_ADMIN_PW" --no-auth-warning ACL LIST | wc -l)
-            if [ "$ACL_COUNT" != "5" ]; then
-              echo "Redis ACL LIST returned $ACL_COUNT rows, expected 5 (default off + 4 on)"
-              exit 1
-            fi
-            for U_PW in "collector:$REDIS_SMOKE_COLL_PW" "insighta:$REDIS_SMOKE_READ_PW" "insighta-upsert:$REDIS_SMOKE_UPS_PW"; do
-              USR="${U_PW%%:*}"; PW="${U_PW#*:}"
-              if ! docker exec insighta-redis redis-cli --user "$USR" -a "$PW" --no-auth-warning ping 2>/dev/null | grep -q PONG; then
-                echo "Redis user '$USR' auth failed"
-                exit 1
-              fi
-            done
-            # Tailscale bind check — 6379 must listen on Tailscale IP only.
-            REDIS_SMOKE_TSIP=$(grep '^INSIGHTA_TAILSCALE_IP=' .env | cut -d= -f2- | tr -d '\r\n')
-            BIND_OK=$(ss -tlnp 2>/dev/null | grep ":6379 " | grep -c "$REDIS_SMOKE_TSIP" || true)
-            if [ "$BIND_OK" = "0" ]; then
-              echo "Redis port 6379 not bound to Tailscale IP ($REDIS_SMOKE_TSIP) — check compose port mapping"
-              ss -tlnp | grep ":6379 " || echo "(no 6379 listener)"
-              exit 1
-            fi
-            # CP411 follow-up (20d) — verify end-to-end consumer path: the
-            # insighta ACL user must be able to SMEMBERS the whitelist key.
-            # Catches regressions in `docker/redis/redis.acl.template` keys
-            # pattern or command grant list. Empty set is a valid PASS.
-            if ! docker exec insighta-redis redis-cli --user insighta -a "$REDIS_SMOKE_READ_PW" --no-auth-warning SMEMBERS whitelist:channels > /dev/null 2>&1; then
-              echo "Redis insighta user cannot SMEMBERS whitelist:channels — check ACL keys pattern"
-              exit 1
-            fi
-            echo "Redis smoke test OK — 4 users authenticate, bound to Tailscale iface, insighta→whitelist SMEMBERS OK."
-
-            # Cleanup old images
-            docker image prune -f
-
-      - name: Verify deployment
+      # Nothing to do when the tags already match, which happens on a re-run.
+      - name: Commit
         run: |
-          sleep 5
-          curl -sf https://${{ secrets.DOMAIN }}/health || echo "External health check pending (DNS may not be configured yet)"
-
-      # Every deploy leaves its SHA-tagged image on the box and nothing removed
-      # them: measured 2026-08-13, images held 4.92 GB with 1.767 GB reclaimable
-      # after five weeks, on a 20 GB disk already at 66%. No systemd timer, no
-      # crontab. A one-off cleanup would put us back here in a month, so the
-      # collection happens where the images are created.
-      #
-      # Deliberately not `prune -a`. That keeps only what is running and would
-      # delete every local rollback target. rollback.yml pulls from GHCR, which
-      # would make that safe — except GHCR's own retention has not been
-      # confirmed (the token lacks read:packages), and rollback is not something
-      # to stake on an unverified assumption. 30 days keeps a month of targets
-      # locally; revisit once GHCR retention is known.
-      #
-      # Runs only after Verify, so a deploy that failed leaves everything alone.
-      - name: Reclaim old images
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            BEFORE=$(df --output=used -BM / | tail -1 | tr -dc '0-9')
-            # Images in use by a running container are never touched by prune.
-            docker image prune -af --filter 'until=720h' || true
-            docker builder prune -f --filter 'until=720h' || true
-            AFTER=$(df --output=used -BM / | tail -1 | tr -dc '0-9')
-            echo "disk used: ${BEFORE}M -> ${AFTER}M (freed $((BEFORE - AFTER))M)"
-            df -h / | tail -1
-            docker system df
-
-      - name: Close SSH for runner IP
-        if: always()
-        run: |
-          if [ -n "$RUNNER_IP" ]; then
-            aws ec2 revoke-security-group-ingress \
-              --group-id "$SG_ID" \
-              --protocol tcp --port 22 \
-              --cidr "$RUNNER_IP/32" 2>/dev/null || true
-            echo "Closed SSH for $RUNNER_IP"
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- charts/insighta/environments/prod.yaml; then
+            echo "tags already at ${{ github.sha }}"
+            exit 0
           fi
+          git add charts/insighta/environments/prod.yaml
+          git commit -m "chore(images): point prod at ${{ github.sha }}" \
+                     -m "Written by deploy.yml after pushing to ECR. The scope job
+          treats a values-only change as non-deployable, so this does not loop."
+          git push origin main
+
+  # `fast-mobile` and `deploy` lived here until 2026-08-19. Both ended in an SSH
+  # session to secrets.EC2_HOST, copying files onto the host that served the site
+  # before the cluster cutover on 2026-08-14. That instance was released on
+  # 2026-08-19, so both jobs addressed a machine that no longer exists.
+  #
+  # They were not failing yet only because every merge since had touched docs or
+  # terraform, which `scope` marks non-deployable. The first real code change
+  # would have been the first failure.
+  #
+  # Nothing replaces them here. Images still reach ECR from `build-and-push`, and
+  # what carries them into the cluster is ArgoCD reading this repository. The
+  # image tag it reads is set in charts/insighta/environments/prod.yaml.

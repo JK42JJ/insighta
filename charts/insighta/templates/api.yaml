@@ -37,7 +37,7 @@ spec:
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: api
-          image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image) | quote }}
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image "tag" (get ($.Values.images | default dict) "apiTag")) | quote }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           args: {{ toYaml .Values.api.command | nindent 12 }}
           ports:

@@ -11,6 +11,21 @@
 # with a message that says so.
 requireImageRegistry: true
 
+# Image tags, written by .github/workflows/deploy.yml after it pushes to ECR.
+#
+# These were `latest` in values.yaml until 2026-08-19, and `latest` cost two
+# things. Rollback: both deployment revisions pointed at the same string, so
+# `kubectl rollout undo` replaced pods with the same image and reported success
+# while changing nothing. Consistency: with pullPolicy IfNotPresent, two nodes
+# that pulled `latest` on different days run different code under one tag.
+#
+# A commit sha makes each deploy a distinct image string, which restores both.
+# The values are managed by CI -- edit them by merging, not by hand.
+images:
+  apiTag: latest
+  frontendTag: latest
+  redisTag: latest
+
 api:
   # One, not two, until the compose host is decommissioned.
   #
