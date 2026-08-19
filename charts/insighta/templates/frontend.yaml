@@ -26,7 +26,7 @@ spec:
       {{- include "insighta.spread" (dict "root" $ "component" "frontend") | nindent 6 }}
       containers:
         - name: frontend
-          image: {{ include "insighta.image" (dict "root" $ "img" .Values.frontend.image) | quote }}
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.frontend.image "tag" (get ($.Values.images | default dict) "frontendTag")) | quote }}
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
           ports:
             - name: http

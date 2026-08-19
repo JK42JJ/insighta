@@ -41,7 +41,7 @@ spec:
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: worker
-          image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image) | quote }}
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image "tag" (get ($.Values.images | default dict) "apiTag")) | quote }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           args: ["worker"]
           ports:

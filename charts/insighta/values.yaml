@@ -54,6 +54,7 @@ api:
   replicaCount: 1
   image:
     repository: ghcr.io/jk42jj/insighta-api
+    # environments/*.yaml override this via images.apiTag; see prod.yaml
     tag: latest
     pullPolicy: IfNotPresent
   command: ["api"]
@@ -137,6 +138,7 @@ frontend:
   replicaCount: 1
   image:
     repository: ghcr.io/jk42jj/insighta-frontend
+    # environments/*.yaml override this via images.frontendTag; see prod.yaml
     tag: latest
     pullPolicy: IfNotPresent
   port: 8081
@@ -173,6 +175,7 @@ redis:
     # Pushed by deploy.yml since 2026-08-14. Before that it existed in no
     # registry and the default here named an image only the compose host had.
     repository: ghcr.io/jk42jj/insighta-redis
+    # environments/*.yaml override this via images.redisTag; see prod.yaml
     tag: latest
     pullPolicy: IfNotPresent
   port: 6379

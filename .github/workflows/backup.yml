@@ -111,166 +111,24 @@ jobs:
   # 04-29. That is the dataset the documented re-enable path would want back, so
   # the thing worth capturing is the volume, not the current keys — snapshotting
   # DBSIZE would faithfully archive nothing.
-  redis:
-    name: Redis Volume Backup
-    runs-on: ubuntu-latest
-    env:
-      SG_ID: sg-079aa1ca6855e587b
-      VOLUME: tubearchive_redis_data
-
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Open SSH for runner IP
-        run: |
-          RUNNER_IP=$(curl -s ifconfig.me)
-          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
-          aws ec2 authorize-security-group-ingress \
-            --group-id "$SG_ID" \
-            --protocol tcp --port 22 \
-            --cidr "$RUNNER_IP/32" \
-            --tag-specifications "ResourceType=security-group-rule,Tags=[{Key=Purpose,Value=github-actions-backup}]"
-
-      # Same reason as deploy.yml: the rule is not usable the moment the API
-      # returns, and this job goes straight to SSH with nothing in between.
-      - name: Wait for SSH to become reachable
-        run: |
-          for i in $(seq 1 30); do
-            if timeout 3 bash -c "cat < /dev/null > /dev/tcp/${{ secrets.EC2_HOST }}/22" 2>/dev/null; then
-              echo "port 22 reachable after ${i} attempt(s)"; exit 0
-            fi
-            sleep 2
-          done
-          echo "::error::port 22 never became reachable from $RUNNER_IP after 60s"
-          exit 1
-
-      - name: Snapshot the volume on the host
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -euo pipefail
-
-            # Fold the incr file into a fresh base so the archive is one
-            # consistent point rather than a base plus whatever arrived while
-            # tar was reading. BGREWRITEAOF is async; wait for it to finish.
-            docker exec insighta-redis redis-cli BGREWRITEAOF
-            for i in $(seq 1 60); do
-              INPROG=$(docker exec insighta-redis redis-cli INFO persistence \
-                | tr -d '\r' | awk -F: '/^aof_rewrite_in_progress:/{print $2}')
-              [ "$INPROG" = "0" ] && break
-              sleep 1
-            done
-            if [ "$INPROG" != "0" ]; then
-              echo "::error::AOF rewrite still running after 60s — archive would be torn"
-              exit 1
-            fi
-
-            # Record what is being captured, so a restore can be checked
-            # against it rather than against an assumption.
-            docker exec insighta-redis redis-cli DBSIZE | tr -d '\r' > /tmp/redis-dbsize.txt
-            docker exec insighta-redis tar czf - -C /data . > /tmp/redis-backup.tgz
-            ls -l /tmp/redis-backup.tgz
-
-      - name: Fetch the archive
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "/tmp/redis-backup.tgz,/tmp/redis-dbsize.txt"
-          target: "./incoming"
-          strip_components: 1
-
-      # A backup nobody has restored is a file, not a backup. Load the archive
-      # into a throwaway Redis and make it answer before anything is uploaded.
-      - name: Restore test
-        run: |
-          set -euo pipefail
-          ARCHIVE=./incoming/redis-backup.tgz
-          EXPECTED=$(tr -dc '0-9' < ./incoming/redis-dbsize.txt)
-          echo "source DBSIZE: ${EXPECTED}"
-
-          mkdir -p restore && tar xzf "$ARCHIVE" -C restore
-          ls -l restore restore/appendonlydir || true
-
-          docker run -d --name redis-restore \
-            -v "$PWD/restore:/data" \
-            redis:7-alpine redis-server --appendonly yes --dir /data
-          for i in $(seq 1 30); do
-            docker exec redis-restore redis-cli PING 2>/dev/null | grep -q PONG && break
-            sleep 1
-          done
-
-          GOT=$(docker exec redis-restore redis-cli DBSIZE | tr -dc '0-9')
-          echo "restored DBSIZE: ${GOT}"
-          docker logs redis-restore 2>&1 | tail -20
-
-          if [ "$GOT" != "$EXPECTED" ]; then
-            echo "::error::restore mismatch — source ${EXPECTED} keys, restored ${GOT}"
-            exit 1
-          fi
-          echo "restore verified: ${GOT} keys"
-          echo "restored_keys=${GOT}" >> "$GITHUB_ENV"
-
-      - name: Upload to S3
-        run: |
-          set -euo pipefail
-          YEAR=$(date +%Y); MONTH=$(date +%m)
-          FILENAME="redis-$(date +%Y%m%d-%H%M%S).tgz"
-          S3_PATH="s3://${BACKUP_BUCKET}/redis/${YEAR}/${MONTH}/${FILENAME}"
-          aws s3 cp ./incoming/redis-backup.tgz "$S3_PATH"
-          SIZE=$(stat -c%s ./incoming/redis-backup.tgz)
-          echo "backup_path=${S3_PATH}" >> "$GITHUB_ENV"
-          echo "backup_size=${SIZE}" >> "$GITHUB_ENV"
-
-      - name: Cleanup old backups (30+ days)
-        run: |
-          CUTOFF=$(date -d '30 days ago' +%Y-%m-%d)
-          aws s3 ls "s3://${BACKUP_BUCKET}/redis/" --recursive \
-            | while read -r d _ _ key; do
-                if [[ "$d" < "$CUTOFF" ]]; then
-                  aws s3 rm "s3://${BACKUP_BUCKET}/$key"
-                fi
-              done
-
-      - name: Remove the archive from the host
-        if: always()
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: rm -f /tmp/redis-backup.tgz /tmp/redis-dbsize.txt
-
-      - name: Close SSH
-        if: always()
-        run: |
-          if [ -n "${RUNNER_IP:-}" ]; then
-            aws ec2 revoke-security-group-ingress \
-              --group-id "$SG_ID" \
-              --protocol tcp --port 22 \
-              --cidr "$RUNNER_IP/32" 2>/dev/null || true
-          fi
-
-      - name: Summary
-        run: |
-          echo "### Redis Backup Complete" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Path**: \`${{ env.backup_path }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Size**: ${{ env.backup_size }} bytes" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Restore verified**: ${{ env.restored_keys }} keys loaded into a scratch Redis" >> "$GITHUB_STEP_SUMMARY"
+  # A `redis` job backed up the redis volume until 2026-08-19. It ran `docker exec`
+  # against a container on secrets.EC2_HOST, which was released that day, and it
+  # had been failing since the cutover on 2026-08-14 -- which is why this workflow
+  # reported failure daily while the database backup above kept succeeding.
+  #
+  # It is not being rewritten against the cluster pod, because there is nothing in
+  # it to back up. Measured 2026-08-19: DBSIZE 0, used_memory 1.06M, /data 16K.
+  # Redis here is a cache, declared as such in charts/insighta/environments/
+  # prod.yaml, and it is backed by an 8Gi PVC that survives pod restarts.
+  #
+  # If redis is ever given data that cannot be recomputed, this decision needs
+  # revisiting, and the backup belongs in the chart as a CronJob rather than in a
+  # workflow reaching in from outside.
 
   notify-failure:
     name: Notify on Failure
     runs-on: ubuntu-latest
-    needs: [backup, redis]
+    needs: [backup]
     if: failure()
     steps:
       - name: Create failure issue

@@ -36,8 +36,16 @@ compose_keys="$(printf '%s\n' "$compose_api_block" \
   | sed -E 's/^[[:space:]]+-[[:space:]]+//; s/=.*$//')"
 
 # --- deploy.yml keys written to .env (lines touching .env, anchored `^KEY=`) ---
-deploy_env_keys="$(grep -E '\.env' "$DEPLOY" \
-  | grep -oE '\^[A-Za-z_][A-Za-z0-9_]*=' \
+# `|| true` on both greps: zero matches is now the expected state, not an error.
+# The .env-writing step lived in the `deploy` job, which addressed the host that
+# served the site before the cutover and was removed on 2026-08-19 along with
+# that host. With nothing writing .env from CI there is no second definition
+# left to conflict with, which is the condition this guard exists to reach.
+#
+# Without these, `set -e` turns an empty grep into a failed build and the guard
+# reports a violation precisely when the violation has been eliminated.
+deploy_env_keys="$( { grep -E '\.env' "$DEPLOY" || true; } \
+  | { grep -oE '\^[A-Za-z_][A-Za-z0-9_]*=' || true; } \
   | sed -E 's/^\^//; s/=$//' \
   | sort -u)"
 

@@ -1,66 +1,128 @@
+# Roll production back to a previous image, by writing that image's tag into the
+# chart and letting the cluster reconcile.
+#
+# The previous version of this workflow opened an SSH session to the host that
+# served the site before the cutover on 2026-08-14 and ran `docker compose` on
+# it. That host was released on 2026-08-19. It had last run in April, and failed.
+#
+# There is no SSH here, and nothing is pushed at the cluster. ArgoCD holds
+# cluster-admin and has no public address, so a runner cannot reach it by design.
+# What the cluster reads is this repository, so a rollback is a commit: the tag
+# in charts/insighta/environments/prod.yaml changes, and the next sync moves the
+# pods. The same path deploy.yml uses going forward, run backwards.
+#
+# This became possible on 2026-08-19. Before that the chart pinned `latest`, so
+# every revision named the same image and there was no earlier tag to return to.
+
 name: Rollback
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Image tag to rollback to (commit SHA or "previous")'
+      sha:
+        description: 'Commit sha to roll back to, or "previous" for the tag before the current one'
         required: true
         default: previous
         type: string
+      reason:
+        description: 'Why (shown in the commit and the run name)'
+        required: true
+        type: string
 
-env:
-  API_IMAGE: ghcr.io/jk42jj/insighta-api
-  FRONTEND_IMAGE: ghcr.io/jk42jj/insighta-frontend
+run-name: 'Rollback to ${{ inputs.sha }} — ${{ inputs.reason }}'
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   rollback:
-    name: Rollback Deployment
+    name: Point the chart at an earlier commit
     runs-on: ubuntu-latest
-    environment: production
     steps:
-      - name: Rollback via SSH
-        uses: appleboy/ssh-action@v1
+      - uses: actions/checkout@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            set -e
-            cd /opt/tubearchive
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-            VERSION="${{ github.event.inputs.version }}"
+      # "previous" means the tag before the one in the file now, which is read
+      # from the history of the file itself rather than from the commit log of
+      # the repository: those differ whenever a deploy was skipped.
+      - name: Resolve the target tag
+        id: target
+        run: |
+          set -euo pipefail
+          F=charts/insighta/environments/prod.yaml
+          CURRENT=$(grep -E '^  apiTag:' "$F" | awk '{print $2}')
+          echo "current: $CURRENT"
 
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          if [ "${{ inputs.sha }}" = "previous" ]; then
+            TARGET=$(git log -p --follow -- "$F" \
+              | grep -E '^\+  apiTag:' \
+              | awk '{print $3}' \
+              | grep -v "^$CURRENT$" \
+              | head -1)
+            [ -n "$TARGET" ] || { echo "no earlier tag recorded in $F"; exit 1; }
+          else
+            TARGET="${{ inputs.sha }}"
+          fi
 
-            if [ "$VERSION" = "previous" ]; then
-              echo "Rolling back to previous deployment..."
-              docker compose -f docker-compose.prod.yml down
-              docker compose -f docker-compose.prod.yml up -d
-            else
-              echo "Rolling back to version: $VERSION"
-              export API_IMAGE_TAG="${{ env.API_IMAGE }}:${VERSION}"
-              export FRONTEND_IMAGE_TAG="${{ env.FRONTEND_IMAGE }}:${VERSION}"
+          [ "$TARGET" != "$CURRENT" ] || { echo "target equals current; nothing to do"; exit 1; }
+          echo "target: $TARGET"
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET"   >> "$GITHUB_OUTPUT"
 
-              # Update image tags in env
-              sed -i "s|API_IMAGE=.*|API_IMAGE=${API_IMAGE_TAG}|" .env.production
-              sed -i "s|FRONTEND_IMAGE=.*|FRONTEND_IMAGE=${FRONTEND_IMAGE_TAG}|" .env.production
+      # A tag that was never pushed produces pods stuck on ImagePullBackOff, and
+      # the rollback is then a second outage on top of the first.
+      - name: Confirm the images exist in ECR
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-west-2
+        run: |
+          set -euo pipefail
+          T=${{ steps.target.outputs.target }}
+          for repo in insighta-api insighta-frontend; do
+            aws ecr describe-images --repository-name "$repo" --image-ids "imageTag=$T" >/dev/null \
+              || { echo "$repo:$T is not in ECR — refusing"; exit 1; }
+            echo "  $repo:$T present"
+          done
 
-              docker compose -f docker-compose.prod.yml pull
-              docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            fi
+      - name: Write the tag and push
+        run: |
+          set -euo pipefail
+          F=charts/insighta/environments/prod.yaml
+          T=${{ steps.target.outputs.target }}
 
-            # Verify rollback
-            sleep 10
-            RETRIES=6
-            for i in $(seq 1 $RETRIES); do
-              if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
-                echo "Rollback successful! Health check passed."
-                exit 0
-              fi
-              echo "Waiting for health check... ($i/$RETRIES)"
-              sleep 10
-            done
+          for key in apiTag frontendTag; do
+            sed -i -E "s|^  $key:.*|  $key: $T|" "$F"
+          done
+          grep -E '^  (api|frontend)Tag:' "$F"
 
-            echo "WARNING: Health check failed after rollback"
-            exit 1
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$F"
+          git commit -m "revert(images): roll prod back to $T" \
+                     -m "From ${{ steps.target.outputs.current }}. Reason: ${{ inputs.reason }}
+          Triggered by ${{ github.actor }}. redisTag is left alone: the redis image
+          is a cache built from three files and is not part of an application
+          rollback."
+          git push origin main
+
+      - name: What happens next
+        run: |
+          echo "The chart now names ${{ steps.target.outputs.target }}."
+          echo
+          echo "prod syncs manually, so this does not take effect until someone syncs:"
+          echo "  bash scripts/ops/argocd-ui.sh"
+          echo
+          echo "Or from a shell on the node:"
+          echo "  kubectl -n argocd patch app insighta-prod --type merge \\"
+          echo "    -p '{\"operation\":{\"sync\":{\"revision\":\"HEAD\"}}}'"
+          echo
+          echo "Then confirm the pods actually changed image, not just restarted:"
+          echo "  kubectl -n insighta-prod get pods -o jsonpath='{.items[*].status.containerStatuses[*].imageID}'"

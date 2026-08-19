@@ -50,9 +50,9 @@ committed and one pulling from the repository as written.
 {{- define "insighta.image" -}}
 {{- $reg := .root.Values.imageRegistry | default "" -}}
 {{- if $reg -}}
-{{ $reg }}/{{ base .img.repository }}:{{ .img.tag }}
+{{ $reg }}/{{ base .img.repository }}:{{ .tag | default .img.tag }}
 {{- else -}}
-{{ .img.repository }}:{{ .img.tag }}
+{{ .img.repository }}:{{ .tag | default .img.tag }}
 {{- end -}}
 {{- end }}
 
