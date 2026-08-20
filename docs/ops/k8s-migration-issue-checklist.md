@@ -13,9 +13,11 @@ compose 단일 호스트에서 k3s 로 옮기면 **구조적으로 예상 가능
 | A-2 | 다이얼 배포 경로 소실 | **결함 — PR #1520 대기** |
 | A-3 | 이미지 태그 `latest` | **미완 — 첫 SHA 미기록** |
 | A-4 | 롤백 워크플로 | **미검증** |
-| A-5 | CI 가 보호 브랜치에 쓸 수 없다 | **결함 — 부분 수리** |
+| A-5 | CI 가 보호 브랜치에 쓸 수 없다 | **해결** (2026-08-20) |
+| A-6 | 차트가 굽지 않은 이미지를 가리켰다 | **해결** (2026-08-20) |
+| A-7 | CI 필수 체크가 timeout 없이 매달림 | **해결** (2026-08-20) |
 | B-1 | 3 replica × in-process 스케줄러 중복 | **해결** |
-| B-2 | 데이터 파이프라인 4종 | **결함 — 수리 미검증** |
+| B-2 | 데이터 파이프라인 4종 | **원인 2건 규명, 수리 배포됨 — 다음 발화가 판정** |
 | B-3 | DB 백업 | **정상** |
 | B-4 | DB 무결성 검사 | **정상** |
 | C-1 | 노드 수 — 문서와 실제 불일치 | **결함(문서)** |
@@ -26,6 +28,8 @@ compose 단일 호스트에서 k3s 로 옮기면 **구조적으로 예상 가능
 | C-6 | TLS 갱신 | **정상** |
 | C-7 | 프로드 Argo Application 이 git 에 없다 | **결함** |
 | D-1 | 시크릿 etcd 평문 | **미해결(기지)** |
+| D-5 | DDL 대기가 읽기를 막는다 | **해결** (2026-08-20) |
+| E-1 | t3 패밀리 고정 — RI 제약 | **제약 조건** |
 | D-2 | api 볼륨 emptyDir | **허용 — 근거 불일치** |
 | D-3 | SSE × 3 replica | **정상** |
 | D-4 | in-process 캐시 × 3 replica | **성능 저하** |
@@ -309,11 +313,56 @@ redis 가 이미 클러스터에 있으므로 옮길 자리는 있다. 우선순
 
 ---
 
+### A-6. 차트가 굽지 않은 이미지를 가리켰다 — 해결
+
+`build-and-push` 는 바뀐 이미지만 굽는데(`api`/`frontend`/`redis` 각자 조건), `publish-tags` 는 태그 3개를 무조건 같은 SHA 로 썼다. `src/` 만 바뀐 커밋(#1525)에서 실측:
+
+```
+insighta-api:ee911588        PRESENT
+insighta-frontend:ee911588   ABSENT
+insighta-redis:ee911588      ABSENT
+```
+
+동기화했으면 frontend 3파드 + redis 가 `ImagePullBackOff`. **배포가 성공을 보고한 뒤 누군가 동기화를 눌러야 드러나는 장애.** 동기화 직전 ECR 확인으로 잡았다.
+
+수리 = #1529 (이번 실행이 실제로 구운 태그만 기록) + 회귀 `tests/smoke/publish-tags-matches-builds.test.ts`.
+
+**남은 함정**: #1529 이전에 `publish-tags` 가 밀어둔 `images/*` 브랜치는 옛 동작으로 만들어져 있다. 발견 시 머지하지 말고 삭제할 것. 2건 삭제함(2026-08-20).
+
+### A-7. CI 필수 체크가 timeout 없이 매달림 — 해결
+
+`npx playwright install --with-deps chromium` 이 반환하지 않았다. 05:06Z 이전 전부 2~5분 성공, 이후 전부 매달림. `--with-deps` 가 부르는 apt 가 원인.
+
+`ci.yml` 의 9개 job 중 timeout 이 하나도 없어 GitHub 기본 6시간까지 갔고, **PR 3건이 5시간 묶였다.** 보고하지 않는 체크는 실패한 체크보다 나쁘다 — 재실행할 근거조차 안 준다.
+
+수리 = #1526 (`--with-deps` 제거 + 실측 기반 timeout 9개 + 스텝 6분) + 회귀 `tests/smoke/ci-jobs-have-timeouts.test.ts`.
+
+### D-5. DDL 대기가 읽기를 막는다 — 해결
+
+`DROP TRIGGER IF EXISTS` 는 지울 게 없어도 ACCESS EXCLUSIVE 를 요청하고, **대기 중인 그 요청이 뒤따르는 읽기를 전부 막는다.** 러너는 `lock_timeout` 없이 53개 SQL 을 매 배포 재적용했다. 2026-08-20 배포가 여기서 실패했고, 성공했던 배포들도 같은 시간 테이블을 세우고 있었다.
+
+수리 = #1528 (`lock_timeout=5s` + 경합 한정 재시도 + 011 을 카탈로그 조회로 가드). **프로드 실증**: 다음 배포의 `Database Schema Sync` 성공.
+
+### E-1. t3 패밀리 고정 — 2027-04-16까지 (제약)
+
+```
+Reserved Instance  t3.medium ×1  standard  scope=Region  Linux/UNIX
+                   2026-04-16 → 2027-04-16   전액선불 $213   활용률 100%
+```
+
+Standard RI 는 **패밀리 변경 불가**(Convertible 만 가능). Regional 스코프라 **t3 안에서는 사이즈 유연성 적용**(medium=2 단위, large=4 단위).
+
+- **t3.large 로 증설** → RI 가 절반 흡수, 추가 현금 **$30.37/mo**
+- **t3.medium 1대 추가** → 동일하게 **$30.37/mo** (분산은 얻고 단일 풀 크기는 손해)
+- **t3a / t4g 로 이전** → RI 전량 사장, 잔여 약 **$140 낭비**. **금지.**
+- EKS 로 가도 워커가 t3 이면 RI 는 계속 유효.
+
+**다음 세션이 모르고 t3a/t4g 를 제안하면 같은 실수를 반복한다.**
+
 ## 미확인으로 남긴 것
 
-- B-2 의 수리 여부. 07:30Z 발화 결과가 판정한다. 지금 수동 실행하면 실제 수집이 돌아 프로드 데이터에 쓴다.
-- `pool-maintenance` 가 03:13Z 에 발화하지 않은 이유가 스케줄 지연인지 별건인지.
-- `exploreCache` 적중률의 실제 값.
+- **B-2 최종 판정.** 원인은 둘이었다: ①ingress timeout 60s(#1518, `trend-collector` 07:59Z 성공으로 확인) ②api 가 pg-boss 를 start 하지 않아 enqueue 가 500(#1525, 08-20 배포로 라이브). 나머지 2종은 다음 발화(`pool-maintenance` 03:13Z, `batch-video-collector` 07:30Z)가 판정한다. 지금 수동 실행하면 실제 수집이 돌아 프로드 데이터에 쓴다.
+- `exploreCache` 적중률의 실제 값 (D-4).
 
 ## 재점검
 
