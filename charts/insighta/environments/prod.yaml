@@ -34,8 +34,8 @@ requireImageRegistry: true
 # and would fail the same way -- it has not been run since it was rewritten.
 images:
   apiTag: ee9115880fe2386664344af9b45dbc3975df6bcf
-  frontendTag: ee9115880fe2386664344af9b45dbc3975df6bcf
-  redisTag: ee9115880fe2386664344af9b45dbc3975df6bcf
+  frontendTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
+  redisTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
 
 api:
   # One, not two, until the compose host is decommissioned.
