@@ -397,12 +397,38 @@ jobs:
           F=charts/insighta/environments/prod.yaml
           SHA=${{ github.sha }}
 
-          for key in apiTag frontendTag redisTag; do
-            before=$(grep -E "^  $key:" "$F")
+          # Only the images this run actually built. build-and-push is
+          # selective -- each image has its own `if` on scope.outputs -- while
+          # this loop used to write all three tags unconditionally. So a commit
+          # touching src/ produced one api image and a chart claiming all three
+          # were at that sha.
+          #
+          # Measured 2026-08-20 after #1525, which touched src/ and tests/:
+          #
+          #   insighta-api:ee911588        present
+          #   insighta-frontend:ee911588   ABSENT
+          #   insighta-redis:ee911588      ABSENT
+          #
+          # A sync against that chart gives ImagePullBackOff on three frontend
+          # pods and redis. Nothing reports it until someone syncs, and then it
+          # is an outage caused by a deploy that reported success.
+          #
+          # A tag left alone keeps naming the last image that was actually
+          # built for it, which is exactly what should still be running.
+          wrote=0
+          for pair in "apiTag:${{ needs.scope.outputs.api }}" \
+                      "frontendTag:${{ needs.scope.outputs.frontend }}" \
+                      "redisTag:${{ needs.scope.outputs.redis }}"; do
+            key=${pair%%:*}
+            built=${pair#*:}
+            if [ "$built" != "true" ]; then
+              echo "$key left at $(grep -E "^  $key:" "$F" | awk '{print $2}') -- no image was built for it this run"
+              continue
+            fi
             sed -i -E "s|^  $key:.*|  $key: $SHA|" "$F"
-            after=$(grep -E "^  $key:" "$F")
-            [ "$before" != "$after" ] || { echo "$key unchanged -- refusing"; exit 1; }
+            wrote=$((wrote + 1))
           done
+          [ "$wrote" -gt 0 ] || { echo "no image was built this run; nothing to pin"; }
           grep -E '^  (api|frontend|redis)Tag:' "$F"
 
       # This pushed straight to main until 2026-08-19 and was refused on its
