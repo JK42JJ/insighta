@@ -23,8 +23,31 @@
 -- §4.1 for the full rationale and rollback plan.
 -- ============================================================================
 
-DROP TRIGGER IF EXISTS trg_goal_edge ON public.user_mandala_levels;
-DROP TRIGGER IF EXISTS trg_topic_edges ON public.user_mandala_levels;
+-- `DROP TRIGGER IF EXISTS` still takes ACCESS EXCLUSIVE on the table even when
+-- there is no trigger to drop, and this file re-runs on every deploy long after
+-- the drop happened. On 2026-08-20 that no-op waited three minutes on
+-- user_mandala_levels and failed the deploy; on the deploys where it succeeded
+-- it was holding new readers behind it for however long it waited.
+--
+-- Asking pg_trigger first costs one catalog read and takes no lock at all, so
+-- the steady state -- both triggers already gone, which is every run since
+-- CP416 -- stops touching the table.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'trg_goal_edge' AND NOT tgisinternal
+  ) THEN
+    EXECUTE 'DROP TRIGGER trg_goal_edge ON public.user_mandala_levels';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'trg_topic_edges' AND NOT tgisinternal
+  ) THEN
+    EXECUTE 'DROP TRIGGER trg_topic_edges ON public.user_mandala_levels';
+  END IF;
+END $$;
 
 -- Sanity: confirm drop
 DO $$

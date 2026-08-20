@@ -210,7 +210,49 @@ APPLY_FILES=(
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
-export PGOPTIONS="-c statement_timeout=180000"
+
+# Every file here re-runs on every deploy, and most of them contain ALTER TABLE
+# or DROP TRIGGER, which take ACCESS EXCLUSIVE. That lock is not just slow to
+# get on a busy table -- while it is *queued*, PostgreSQL holds every new reader
+# behind it. So a statement that waits also stops the table being read.
+#
+# With statement_timeout alone that wait could last three minutes. On
+# 2026-08-20 it did: 011_drop_edge_triggers.sql, whose triggers were dropped at
+# CP416 and which is now a pure no-op, sat three minutes on
+# user_mandala_levels (20,483 rows) and failed the deploy. The deploys where it
+# succeeded are the ones worth worrying about -- the table was stalled and
+# nothing recorded it.
+#
+# lock_timeout bounds the waiting rather than the statement. A DDL that cannot
+# have the table promptly gives it up instead of forming a queue behind itself.
+LOCK_TIMEOUT_MS="${SQL_LOCK_TIMEOUT_MS:-5000}"
+LOCK_RETRIES="${SQL_LOCK_RETRIES:-3}"
+LOCK_RETRY_SLEEP="${SQL_LOCK_RETRY_SLEEP:-10}"
+export PGOPTIONS="-c statement_timeout=180000 -c lock_timeout=${LOCK_TIMEOUT_MS}"
+
+# Retry is for contention only. A file that fails for any other reason fails the
+# deploy on the first try, because re-running a statement that raised a real
+# error just raises it again more slowly.
+apply_one() {
+  local f="$1" attempt=1 out rc
+  while :; do
+    out=$(psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f "$f" 2>&1)
+    rc=$?
+    printf '%s\n' "$out"
+    [ $rc -eq 0 ] && return 0
+    if ! printf '%s' "$out" | grep -q "canceling statement due to lock timeout"; then
+      return $rc
+    fi
+    if [ "$attempt" -ge "$LOCK_RETRIES" ]; then
+      echo "::error::$f could not take its lock in $LOCK_RETRIES attempts."
+      echo "::error::Something is holding the table. This is contention, not a broken migration."
+      return $rc
+    fi
+    echo "::warning::$f lost a lock race (attempt $attempt/$LOCK_RETRIES); retrying in ${LOCK_RETRY_SLEEP}s"
+    attempt=$((attempt + 1))
+    sleep "$LOCK_RETRY_SLEEP"
+  done
+}
 
 for f in "${APPLY_FILES[@]}"; do
   if [[ "$SKIP_FILES" == *" $f "* ]]; then
@@ -222,8 +264,10 @@ for f in "${APPLY_FILES[@]}"; do
     exit 1
   fi
   echo "::group::Applying $f"
-  psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f "$f"
+  apply_one "$f"
+  rc=$?
   echo "::endgroup::"
+  [ $rc -eq 0 ] || exit $rc
 done
 
 echo "Custom SQL migrations applied (${#APPLY_FILES[@]} files in allowlist)."
