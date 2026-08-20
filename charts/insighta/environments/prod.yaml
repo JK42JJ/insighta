@@ -52,16 +52,26 @@ api:
   # and lands 3 on one node when the second is removed -- no chart change
   # either way.
   #
-  # Connection arithmetic, measured 2026-08-14 at 24 of 60 in use:
-  #   3 replicas x PRISMA_POOL_LIMIT 8 = 24
-  #   + worker                         ~ 8
-  #   + compose host, until removed    ~15
-  #                                    ----
-  #                                      47 against 60
+  # Two, not three. The paragraph above describes two nodes; there is one, and
+  # every replica lands on it (measured 2026-08-20, k3s_node_count = 1). A third
+  # copy of the process on the same machine buys concurrency, not availability,
+  # and the three were measured at 2-4m CPU and 170 MiB each -- idle.
   #
-  # It fits, and it stops fitting if a fourth replica is added before the
-  # compose host goes.
-  replicaCount: 3
+  # What the third one costs is memory on a node at 62% with 1.4 GiB free, and
+  # eight database connections out of sixty.
+  #
+  # Connection arithmetic, measured 2026-08-14 at 24 of 60 in use, updated
+  # 2026-08-20 now that the compose host is released and pg-boss runs as a
+  # producer on the api:
+  #   2 replicas x PRISMA_POOL_LIMIT 8 = 16
+  #   + worker prisma                  ~ 8
+  #   2 replicas x pg-boss producer 2  =  4
+  #   + worker pg-boss                 =  8
+  #                                    ----
+  #                                      36 against 60
+  #
+  # Put it back to three when there is a second node to put the third on.
+  replicaCount: 2
 
   # emptyDir, not a claim. Two consequences, both deliberate:
   #
@@ -77,8 +87,12 @@ api:
     enabled: false
 
 frontend:
-  # Static files, no shared state, ~4 MiB resident. Nothing here consumes a
-  # database connection.
+  # Static files, no shared state, ~4 MiB resident -- measured 3 to 5 MiB per
+  # pod on 2026-08-20. Nothing here consumes a database connection.
+  #
+  # Three stays. Unlike the api these are almost free, and three of them is what
+  # makes a rolling update of the surface users actually load overlap rather
+  # than gap.
   replicaCount: 3
 
 redis:
