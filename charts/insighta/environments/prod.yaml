@@ -21,10 +21,21 @@ requireImageRegistry: true
 #
 # A commit sha makes each deploy a distinct image string, which restores both.
 # The values are managed by CI -- edit them by merging, not by hand.
+#
+# This first set was written by hand, because publish-tags could not write it.
+# Its first execution (run 32218303510) pushed straight to main and was refused:
+#
+#   remote: error: GH006: Protected branch update failed for refs/heads/main.
+#   remote: - 8 of 8 required status checks are expected.
+#
+# A direct push from CI cannot satisfy required status checks, so that job has
+# to open a pull request instead. Until it does, this file is edited the way
+# this commit edits it. Same for rollback.yml, which pushes by the same means
+# and would fail the same way -- it has not been run since it was rewritten.
 images:
-  apiTag: latest
-  frontendTag: latest
-  redisTag: latest
+  apiTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
+  frontendTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
+  redisTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
 
 api:
   # One, not two, until the compose host is decommissioned.
