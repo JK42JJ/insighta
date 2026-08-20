@@ -54,18 +54,29 @@ const CRONS: Array<{ name: string; start: () => void; stop: () => void }> = [
 export async function startBackgroundWork(log: BackgroundLogger): Promise<void> {
   log.info(`Process role: ${describeProcessRole()}`);
 
-  if (runsQueueWorkers()) {
-    try {
-      await initJobQueue();
-      log.info('JobQueue initialized (pg-boss + enrich-video + batch-scan)');
-    } catch (err) {
-      log.warn({ err }, 'JobQueue init failed (non-fatal)');
-    }
-  } else {
-    // pg-boss needs session-mode connections, the scarce kind on Supabase.
-    // Leaving them to the worker deployment keeps the web tier's connection
-    // cost to the Prisma pool alone.
-    log.info('JobQueue skipped (RUN_QUEUE_WORKERS=false)');
+  // Started in every process, with or without handlers.
+  //
+  // This used to be skipped entirely when RUN_QUEUE_WORKERS was false, to keep
+  // session-mode connections on the worker deployment. That reasoning was
+  // sound and the conclusion was wrong: the api serves the endpoints that
+  // *enqueue*, and pg-boss `send()` throws unless the client is started. From
+  // the web/worker split until 2026-08-19 every internal trigger endpoint
+  // returned 500 with "JobQueue not started", which took out
+  // batch-video-collector and pool-maintenance nightly and had no symptom
+  // beyond two red workflows among several red for other reasons.
+  //
+  // The connection cost is answered by sizing rather than by absence: a
+  // producer opens QUEUE_CONFIG.PRODUCER_POOL_MAX, not pg-boss's default of
+  // 10, and runs neither the supervisor nor the scheduler.
+  try {
+    await initJobQueue({ registerWorkers: runsQueueWorkers() });
+    log.info(
+      runsQueueWorkers()
+        ? 'JobQueue initialized (pg-boss + handlers)'
+        : 'JobQueue initialized (producer only -- enqueue works, handlers run on the worker)'
+    );
+  } catch (err) {
+    log.warn({ err }, 'JobQueue init failed (non-fatal)');
   }
 
   if (!runsSchedulers()) {
@@ -90,12 +101,13 @@ export async function startBackgroundWork(log: BackgroundLogger): Promise<void> 
 }
 
 export async function stopBackgroundWork(log: BackgroundLogger): Promise<void> {
-  if (runsQueueWorkers()) {
-    try {
-      await getJobQueue().stop();
-    } catch {
-      /* ignore */
-    }
+  // Unconditional, to match startBackgroundWork: a producer holds a pool too,
+  // and leaving it open on shutdown holds session-mode connections until the
+  // server times them out.
+  try {
+    await getJobQueue().stop();
+  } catch {
+    /* ignore */
   }
 
   if (!runsSchedulers()) return;
