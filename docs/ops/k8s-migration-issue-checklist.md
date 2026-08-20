@@ -13,6 +13,7 @@ compose 단일 호스트에서 k3s 로 옮기면 **구조적으로 예상 가능
 | A-2 | 다이얼 배포 경로 소실 | **결함 — PR #1520 대기** |
 | A-3 | 이미지 태그 `latest` | **미완 — 첫 SHA 미기록** |
 | A-4 | 롤백 워크플로 | **미검증** |
+| A-5 | CI 가 보호 브랜치에 쓸 수 없다 | **결함 — 부분 수리** |
 | B-1 | 3 replica × in-process 스케줄러 중복 | **해결** |
 | B-2 | 데이터 파이프라인 4종 | **결함 — 수리 미검증** |
 | B-3 | DB 백업 | **정상** |
@@ -23,6 +24,7 @@ compose 단일 호스트에서 k3s 로 옮기면 **구조적으로 예상 가능
 | C-4 | graceful shutdown | **정상**(frontend 경미) |
 | C-5 | 리소스 한계 · OOM | **정상** |
 | C-6 | TLS 갱신 | **정상** |
+| C-7 | 프로드 Argo Application 이 git 에 없다 | **결함** |
 | D-1 | 시크릿 etcd 평문 | **미해결(기지)** |
 | D-2 | api 볼륨 emptyDir | **허용 — 근거 불일치** |
 | D-3 | SSE × 3 replica | **정상** |
@@ -75,6 +77,43 @@ prod (curl)     {"build": "2026-08-04-97"}
 
 `rollback.yml` 은 차트 태그를 커밋하는 방식으로 재작성됐으나 `workflow_dispatch` 라 실행된 적이 없다.
 파싱과 참조 키 존재만 확인했다. A-3 가 해소되기 전에는 실행해도 "되돌아갈 태그 없음" 으로 종료한다.
+
+### A-5. CI 가 보호 브랜치에 쓸 수 없다 — 결함, 부분 수리
+
+`publish-tags` 최초 실행(run `32218303510`)이 거부됐다.
+
+```
+remote: error: GH006: Protected branch update failed for refs/heads/main.
+remote: - 8 of 8 required status checks are expected.
+remote: ! [remote rejected] main -> main (protected branch hook declined)
+```
+
+보호 설정 실측:
+
+```
+required_checks  8개   strict: true
+enforce_admins   false
+restrictions     없음   required_pull_request_reviews  없음
+```
+
+CI 가 push 한 커밋은 체크를 하나도 달고 있지 않으므로 **구조적으로** 필수 체크를 만족할 수 없다.
+job 설정으로 해결되지 않는다. `rollback.yml` 이 동일한 방식이라 같은 결함을 공유했고,
+재작성 후 실행된 적이 없어 **장애 중에 발견될 예정이었다.**
+
+**막힌 지점.** 완전 자동화의 선택지가 셋인데 전부 이 세션 밖의 결정을 요구한다.
+
+| 안 | 필요한 것 | 비용 |
+|---|---|---|
+| CI 가 main 에 직접 push | 관리자 권한 PAT (`enforce_admins: false` 이므로 우회 가능) | 공개 리포 main 에 push 가능한 상시 크레덴셜 |
+| 봇 PR + auto-merge | PAT (GITHUB_TOKEN 이 만든 이벤트는 워크플로를 **트리거하지 않아** 필수 체크가 영원히 미보고) + `allow_auto_merge` 활성화 | 크레덴셜 + 배포 완료가 CI 속도에 종속 |
+| Argo 가 별도 브랜치를 추적 | 프로드 Application 의 `targetRevision` 변경 | 그 Application 이 git 에 없다 — C-7 |
+
+**지금 한 것.** 브랜치 push 는 보호 대상이 아니므로, 두 워크플로가 브랜치를 밀고 PR 을 연다.
+`enforce_admins: false` 라 관리자는 체크 미보고 상태로도 머지할 수 있다 — 클릭 한 번.
+배포가 마지막 단계에서 실패하지 않고, 무엇을 해야 하는지가 run summary 와 `::notice` 에 남는다.
+
+**푸는 조건**: 위 표에서 하나를 고르는 것. 크레덴셜 생성은 James 권한이라 여기서 정하지 않는다.
+회귀 = `tests/smoke/workflow-git-writes.test.ts` (워크플로가 main 에 push 하지 않음을 고정).
 
 ---
 
@@ -201,6 +240,29 @@ insighta-tls  notAfter 2026-11-16T07:57:13Z  renewalTime 2026-10-17T07:57:13Z
 ```
 
 cert-manager 가 10-17 에 갱신한다. compose 시절 호스트 nginx + certbot 경로는 호스트와 함께 사라졌다.
+
+### C-7. 프로드 Argo Application 이 git 에 없다 — 결함
+
+```
+$ grep -n "name: insighta-" charts/bootstrap/applications.yaml
+14:  name: insighta-dev
+34:  name: insighta-staging
+57:  name: insighta-validation
+```
+
+프로드가 없다. 클러스터의 `insighta-prod` 는 `kubectl.kubernetes.io/last-applied-configuration` 를
+갖고 `ownerReferences` 가 비어 있다 — **손으로 apply 됐고 root-app 이 관리하지 않는다.**
+
+파일 상단 주석은 아직 *"There is no prod Application yet... It is added at P4, with the cutover"* 라고
+적혀 있다. P4 는 2026-08-14 에 끝났고 Application 은 만들어졌으나 리포에 돌아오지 않았다.
+
+결과 셋:
+- **클러스터 재구축 시 이 Application 을 기억으로 복원해야 한다.** 무엇을 배포할지 결정하는 객체가
+  재구축 절차의 대상 밖에 있다.
+- Argo 설정 변경(예: A-5 의 세 번째 안)이 GitOps 가 아니라 클러스터 수작업이 된다.
+- 그 spec 이 `imageRegistry` 로 AWS 계정 id 를 담고 있다. 공개 리포라 그대로는 커밋할 수 없다 —
+  이것이 애초에 커밋되지 않은 이유로 보이며, `requireImageRegistry` 와 같은 방식
+  (값은 Argo 의 helm parameter 로, 파일에는 부재)으로 풀 수 있다.
 
 ---
 
