@@ -208,6 +208,36 @@ async function verifyClaims(claims: FactSentence[], cseClient: CseClient): Promi
     })
   );
 
+  // A claim with no evidence is not checked, it is guessed. Measured 2026-08-25:
+  // GOOGLE_CSE_API_KEY, GOOGLE_CSE_ID and GOOGLE_CSE_CX are all absent from the
+  // production secret, so every search here has been returning an empty list and
+  // Haiku has been assigning verdicts from its own memory. The function still
+  // answered ok:true, which is why nothing surfaced for months.
+  //
+  // Split the batch: only claims that actually have snippets reach the model.
+  // The rest come back UNVERIFIABLE, which is what "we could not check this"
+  // means. Returning TRUE without a source is the failure this module exists to
+  // prevent.
+  const withEvidence = enriched.filter((e) => e.evidenceSnippets.length > 0);
+  const withoutEvidence = enriched.filter((e) => e.evidenceSnippets.length === 0);
+
+  if (withoutEvidence.length > 0) {
+    log.warn('book-factcheck claims had no evidence — forced UNVERIFIABLE', {
+      unverifiable: withoutEvidence.length,
+      checked: withEvidence.length,
+      // Read this in the daily digest. A run where every claim lands here means
+      // the search credentials are missing, not that the claims were exotic.
+      allMissing: withEvidence.length === 0,
+    });
+  }
+
+  const unverifiable: CheckResult[] = withoutEvidence.map((e) => ({
+    sentence: e.sentence,
+    verdict: 'UNVERIFIABLE' as const,
+  }));
+
+  if (withEvidence.length === 0) return unverifiable;
+
   const prompt = buildFactcheckPrompt(enriched);
   const sentenceTexts = claims.map((c) => c.text);
 
