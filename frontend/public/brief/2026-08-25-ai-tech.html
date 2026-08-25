@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>인사이타 주간 브리프 · AI & Technology · 창간호</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+:root{
+  --paper:#FBFAF7; --paper2:#F3F2EC; --rule:#E0DED5; --rule2:#CDCABE;
+  --ink:#14161A; --ink2:#454A53; --muted:#7B818B;
+  --pine:#1F5C4A; --slate:#46618C; --rust:#A2452F; --amber:#B8871F;
+  --w-form:#E5E3DA; --w-rule:#C2BEAF; --w-solo:#95A0B1; --w-cross:#1F5C4A;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"Pretendard Variable",Pretendard,-apple-system,system-ui,sans-serif;
+  font-size:17px; line-height:1.85; letter-spacing:-.011em;
+  word-break:keep-all; overflow-wrap:break-word;
+}
+.wrap{max-width:760px;margin:0 auto;padding:0 26px 96px}
+a{color:inherit}
+/* ---------- masthead ---------- */
+.mast{padding:52px 0 0}
+.brandline{
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);
+  border-bottom:1px solid var(--ink);padding-bottom:12px
+}
+.brandline b{color:var(--ink);font-weight:600;letter-spacing:.18em}
+.brandline span{margin-left:auto;letter-spacing:.08em}
+h1{
+  font-family:"Gowun Batang",serif;font-weight:700;
+  font-size:clamp(31px,5.6vw,45px);line-height:1.33;letter-spacing:-.026em;
+  margin:34px 0 0;
+}
+.dek{margin:20px 0 0;font-size:18.5px;line-height:1.85;color:var(--ink2)}
+.dek b{color:var(--ink);font-weight:600}
+.byline{
+  margin:26px 0 0;padding-top:14px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.05em;color:var(--muted)
+}
+/* ---------- stage headers ---------- */
+.stage{margin:60px 0 0;padding-top:18px;border-top:2px solid var(--ink)}
+.stage-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.mark{font-size:17px;line-height:1;color:var(--pine)}
+.stage-name{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.2em;text-transform:uppercase;font-weight:600}
+.stage-sub{font-size:13.5px;color:var(--muted);letter-spacing:0}
+/* ---------- selection panel ---------- */
+.panel{background:var(--paper2);border:1px solid var(--rule);padding:24px 24px 20px;margin:20px 0 0}
+.waffle{display:grid;grid-template-columns:repeat(17,1fr);gap:3px;margin:0 0 18px}
+@media(max-width:520px){.waffle{grid-template-columns:repeat(12,1fr)}}
+.c{display:block;width:100%;aspect-ratio:1/1;border-radius:1px}
+.c.form{background:var(--w-form)}
+.c.rule{background:var(--w-rule)}
+.c.solo{background:var(--w-solo)}
+.c.cross{background:var(--w-cross)}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:8px 22px}
+@media(max-width:520px){.legend{grid-template-columns:1fr}}
+.lg{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;line-height:1.55;color:var(--ink2)}
+.sw{width:11px;height:11px;flex:0 0 11px;margin-top:5px;border-radius:1px}
+.lg em{font-style:normal;font-family:"IBM Plex Mono",monospace;font-weight:600;color:var(--ink);margin-right:7px}
+.cap{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--rule2);font-size:12.5px;line-height:1.7;color:var(--muted)}
+/* ---------- story ---------- */
+.story{margin:44px 0 0}
+.kicker{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 9px}
+h2{font-family:"Gowun Batang",serif;font-weight:700;font-size:clamp(22px,3.7vw,28px);line-height:1.42;letter-spacing:-.02em;margin:0 0 4px}
+h3{font-size:15px;font-weight:600;letter-spacing:-.01em;margin:26px 0 0;color:var(--pine)}
+p{margin:14px 0 0}
+.lede-p{font-size:18px}
+strong{font-weight:600}
+/* grade chips */
+.g{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600;
+   letter-spacing:.1em;padding:2px 6px;border:1px solid currentColor;border-radius:2px;
+   vertical-align:.14em;margin-left:5px;white-space:nowrap}
+.g.ok{color:var(--pine)} .g.obs{color:var(--slate)} .g.un{color:var(--rust)} .g.op{color:var(--muted)}
+/* pull */
+.pull{margin:24px 0 0;padding:16px 20px;border-left:3px solid var(--amber);background:#FAF6EC;font-size:15.5px;line-height:1.75;color:var(--ink2)}
+.pull b{color:var(--ink)}
+.warn{border-left-color:var(--rust);background:#FBF0ED}
+/* actions */
+.todo{margin:22px 0 0;border-top:1px solid var(--rule)}
+.todo div{display:flex;gap:16px;padding:15px 0;border-bottom:1px solid var(--rule);align-items:baseline}
+.todo span{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;color:var(--muted);flex:0 0 96px;text-transform:uppercase}
+.todo p{margin:0;font-size:15.5px;line-height:1.7}
+/* picks */
+.pick{padding:22px 0;border-bottom:1px solid var(--rule)}
+.pick:first-of-type{border-top:1px solid var(--rule)}
+.pick h4{margin:0;font-size:16.5px;font-weight:600;line-height:1.55;letter-spacing:-.012em}
+.meta{margin:6px 0 0;font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.03em;color:var(--muted)}
+.why{margin:9px 0 0;font-size:15.5px;line-height:1.72;color:var(--ink2)}
+/* foot */
+.grades{margin:44px 0 0;padding:20px 0 0;border-top:1px solid var(--rule);font-size:13px;line-height:1.8;color:var(--muted)}
+.grades b{color:var(--ink2);font-weight:600}
+.sign{margin:40px 0 0;padding-top:22px;border-top:2px solid var(--ink);
+  font-family:"Gowun Batang",serif;font-size:20px;letter-spacing:-.02em;color:var(--ink)}
+@media(prefers-reduced-motion:no-preference){
+  .c{animation:pop .5s ease both}
+}
+@keyframes pop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+/* dashboard */
+.dash{margin:20px 0 0;border-top:1px solid var(--ink)}
+.row{display:grid;grid-template-columns:1fr auto;gap:10px 18px;align-items:baseline;padding:13px 0;border-bottom:1px solid var(--rule)}
+.row .l{font-size:14.5px;line-height:1.55;color:var(--ink2)}
+.row .l b{color:var(--ink);font-weight:600}
+.row .v{font-family:"IBM Plex Mono",monospace;font-size:15px;font-weight:600;letter-spacing:-.02em;text-align:right;white-space:nowrap}
+.row .v small{display:block;font-size:10.5px;font-weight:400;letter-spacing:.06em;color:var(--muted);margin-top:2px}
+.up{color:var(--rust)} .flat{color:var(--ink)} .hot{color:var(--amber)}
+/* glossary */
+.term{padding:20px 0;border-bottom:1px solid var(--rule)}
+.term:first-of-type{border-top:1px solid var(--rule)}
+.term h5{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em}
+.term h5 span{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:400;color:var(--muted);margin-left:8px;letter-spacing:.02em}
+.term p{margin:8px 0 0;font-size:15px;line-height:1.72;color:var(--ink2)}
+.term .use{margin:9px 0 0;padding-left:13px;border-left:2px solid var(--rule2);font-size:14.5px;color:var(--ink)}
+/* checkpoints */
+.cp{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--rule);align-items:baseline}
+.cp:first-of-type{border-top:1px solid var(--rule)}
+.cp span{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;color:var(--amber);flex:0 0 74px;font-weight:600}
+.cp p{margin:0;font-size:15px;line-height:1.7}
+/* sources */
+.src{margin:14px 0 0;font-size:13px;line-height:2;color:var(--muted)}
+.src a{color:var(--slate);text-decoration:none;border-bottom:1px solid var(--rule2)}
+.src b{color:var(--ink2);font-weight:600}
+.tbl{width:100%;border-collapse:collapse;margin:20px 0 0;font-family:"IBM Plex Mono",monospace;font-size:13.5px}
+.tbl th{text-align:left;font-weight:600;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--ink);padding:0 10px 8px 0}
+.tbl td{padding:11px 10px 11px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+.tbl td:first-child{font-family:"Pretendard Variable",Pretendard,sans-serif;color:var(--ink2)}
+.tbl .n{text-align:right;white-space:nowrap}
+
+
+.toc{margin:30px 0 0;padding:20px 22px;background:var(--paper2);border:1px solid var(--rule)}
+.toc h6{margin:0 0 12px;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.toc ol{margin:0;padding:0;list-style:none;counter-reset:t}
+.toc li{counter-increment:t;display:flex;gap:12px;padding:6px 0;font-size:14.5px;line-height:1.6;color:var(--ink2);border-bottom:1px dotted var(--rule2)}
+.toc li:last-child{border:0}
+.toc li::before{content:counter(t,decimal-leading-zero);font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--pine);flex:0 0 24px;padding-top:3px;font-weight:600}
+.toc li b{color:var(--ink);font-weight:600}
+.fignum{margin:24px 0 0;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+sup.ref{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--slate);font-weight:600;vertical-align:super;line-height:0;margin-left:1px}
+.srclist{counter-reset:s;list-style:none;margin:14px 0 0;padding:0}
+.srclist li{counter-increment:s;display:flex;gap:11px;padding:7px 0;font-size:12.5px;line-height:1.7;color:var(--muted);border-bottom:1px solid var(--rule)}
+.srclist li::before{content:counter(s);font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600;color:var(--slate);flex:0 0 16px;padding-top:3px}
+.srclist a{color:var(--slate);text-decoration:none;border-bottom:1px solid var(--rule2)}
+.srclist b{color:var(--ink2);font-weight:600}
+.editnote{margin:34px 0 0;padding:18px 20px;border:1px solid var(--rule);font-size:13px;line-height:1.8;color:var(--muted)}
+.editnote b{color:var(--ink2)}
+
+
+.dash2{margin:14px 0 0;border-top:2px solid var(--ink)}
+.dhead{display:grid;grid-template-columns:1fr 150px;gap:18px;padding:9px 0;border-bottom:1px solid var(--ink);
+  font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.dhead span:last-child{text-align:right}
+.drow{display:grid;grid-template-columns:1fr 150px;gap:18px;padding:17px 0;border-bottom:1px solid var(--rule)}
+@media(max-width:560px){.dhead,.drow{grid-template-columns:1fr}.drow .dv{text-align:left;margin-top:8px}}
+.drow .dn{font-size:15.5px;font-weight:600;letter-spacing:-.012em;margin:0}
+.drow .dd{margin:6px 0 0;font-size:14px;line-height:1.68;color:var(--ink2)}
+.drow .dv{text-align:right}
+.drow .dv b{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:600;letter-spacing:-.02em;display:block}
+.drow .dv i{font-style:normal;display:block;margin-top:4px;font-size:11.5px;line-height:1.6;color:var(--muted)}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="mast">
+  <div class="brandline"><b>Insighta</b> 주간 브리프 · AI &amp; Technology <span>창간호 · 2026.08.25</span></div>
+  <h1>딥시크 API 요금이<br>4.5배 올랐습니다</h1>
+  <p class="dek">8월 16일부터 딥시크 V4-Pro의 출력 토큰 단가가 100만 토큰당 0.87달러에서 <b>3.96달러</b>로 올랐습니다. 피크 시간대가 한국 기준 오전 10시부터 오후 1시, 오후 3시부터 오후 7시에 해당하므로, 국내에서 운영하는 조직이라면 근무시간 대부분이 비싼 구간에 그대로 들어갑니다. 같은 회사가 사흘 앞선 8월 13일에는 코딩 에이전트를 움직이는 소프트웨어 전체를 오픈소스로 공개했습니다. 동일한 주에 OpenRouter에는 출처를 밝히지 않은 모델이 100만 토큰 컨텍스트를 무료로 오픈했고, 스트라이프가 그 OpenRouter를 70억 달러 이상에 인수하기로 했다는 보도가 나왔습니다. 따로 벌어진 일처럼 보이지만, 네 가지를 같이 놓고 보면 하나의 설명으로 이어집니다.</p>
+  <p class="byline">읽는 데 11분 · 유튜브 영상 964편과 1차 출처 8건을 확인했습니다 · 모든 주장에 등급을 달았습니다</p>
+  <div class="toc">
+    <h6>이번 호 차례</h6>
+    <ol>
+      <li><b>이번 주에 확인한 주요 수치 일곱 개</b> — 같은 항목을 매주 측정하고 기록합니다</li>
+      <li><b>딥시크가 코딩 에이전트의 내부를 통째로 공개했습니다</b> — 무료로 받아 쓸 수 있지만 아직 초기 버전입니다</li>
+      <li><b>딥시크 요금이 올랐는데 한국은 근무시간이라서 가장 비싼 시점입니다</b> — 얼마를 더 내게 되는지 계산했습니다</li>
+      <li><b>구체적인 출처를 밝히지 않은 모델이 100만 토큰을 오픈했습니다</b> — 다만 사내 자료를 넣어서는 안 됩니다</li>
+      <li><b>앤트로픽이 클로드 코드에 미리 넣어 둔 규칙을 5분의 1로 줄였습니다</b> — 그러나 그대로 따라 하면 안 되는 이유가 있습니다</li>
+      <li><b>네 가지를 종합하면</b> · <b>용어 다섯 개</b> · <b>추천 영상 다섯 편</b> · <b>다음 호에서 이어서 읽어볼 것</b></li>
+    </ol>
+  </div>
+</header>
+
+<section class="stage">
+  <div class="stage-h"><span class="mark">◎</span><span class="stage-name">Interest</span><span class="stage-sub">이번 주에 확인한 주요 수치와 그 근거</span></div>
+  <p>이번 호에서 다루는 네 가지 소식은 서로 다른 회사에서 벌어진 별개의 일처럼 보이지만, 실제로는 한 흐름에서 나왔습니다. 토큰값이 오르는 일과 에이전트를 움직이는 소프트웨어가 무료로 풀리는 일은 언뜻 반대 방향을 향하는 듯하지만, 아래 표 첫 줄에 있는 수치를 함께 놓으면 두 사건이 같은 계산에서 나왔다는 것을 알 수 있습니다. 에이전트가 사람보다 다섯 배 많은 토큰을 태우기 시작했다는 수치입니다.</p>
+  <p>표는 이렇게 보시면 됩니다. 왼쪽에는 그 수치가 무엇을 가리키는지, 값이 움직이면 어떤 판단이 달라지는지를 적었고, 오른쪽에는 이번 주 값과 비교할 기준을 함께 놓았습니다. 같은 항목을 매주 같은 기준으로 측정해 이 자리에 기록합니다. 한 호만 보면 수치 일곱 개에 그치지만, 열 번 남짓 쌓이면 어느 값이 계속되는 흐름이었고 어느 값이 그 주에만 튄 것이었는지가 표에서 갈라집니다.</p>
+  <p class="fignum">표 1 — 이번 주에 확인한 주요 수치 일곱 개 (2026년 8월 25일 기준)</p>
+  <div class="dash2">
+    <div class="dhead"><span>수치와 그 의미</span><span>이번 주 · 비교 기준</span></div>
+
+    <div class="drow"><div>
+      <p class="dn">에이전트가 소비한 토큰<span class="g ok">확인</span><sup class="ref">5</sup></p>
+      <p class="dd">OpenRouter가 집계하고 벤처캐피털 a16z가 공개한 주간 소비량입니다. 사람이 직접 입력한 요청을 제외하고 자동으로 실행되는 에이전트가 태운 몫만 따로 센 값이며, 이 값이 계속 오르면 사람 수를 기준으로 세운 트래픽 계획이 전부 어긋납니다.</p>
+    </div><div class="dv"><b class="up">7.3조</b><i>2026년 2월 0.51조에서<br>약 14배 증가</i></div></div>
+
+    <div class="drow"><div>
+      <p class="dn">사람이 소비한 토큰<span class="g ok">확인</span><sup class="ref">5</sup></p>
+      <p class="dd">위 항목과 같은 기간에 사람이 직접 발생시킨 소비의 증가폭입니다. 두 값을 나란히 놓아야 에이전트 쪽 증가가 시장 전체가 커진 결과인지, 아니면 쓰는 주체가 바뀐 결과인지 가려낼 수 있습니다.</p>
+    </div><div class="dv"><b>2.8배</b><i>현재 에이전트 소비가<br>사람의 약 5배 규모</i></div></div>
+
+    <div class="drow"><div>
+      <p class="dn">딥시크 V4-Pro 출력 단가<span class="g ok">확인</span><sup class="ref">2</sup></p>
+      <p class="dd">출력 토큰 100만 개를 만들 때 내는 돈입니다. 8월 16일부터 시간대에 따라 두 가지 값이 붙는데, 앞이 평일 낮에 적용되는 비싼 단가이고 뒤가 나머지 시간대의 단가입니다.</p>
+    </div><div class="dv"><b class="up">3.96달러 / 1.98달러</b><i>8월 16일 이전에는<br>0.87달러 단일 요금</i></div></div>
+
+    <div class="drow"><div>
+      <p class="dn">Claude Fable 5 출력 단가<span class="g ok">확인</span><sup class="ref">2</sup></p>
+      <p class="dd">서방 상용 모델과 값이 얼마나 벌어져 있는지 보려고 함께 싣는 값입니다. 딥시크가 올린 뒤에도 여전히 싼 편인지를 이 줄과 대보면 알 수 있습니다.</p>
+    </div><div class="dv"><b>50달러</b><i>인상된 V4-Pro 피크 단가의<br>12.6배</i></div></div>
+
+    <div class="drow"><div>
+      <p class="dn">DeepSeek Harness 깃허브 스타<span class="g ok">확인</span><sup class="ref">1</sup></p>
+      <p class="dd">개발자들이 저장소에 눌러 둔 관심 표시가 쌓인 수입니다. 다음 주에도 늘어나는 속도가 그대로면 생태계가 붙는 중이고, 느려지면 한 번 설치해 보고 끝난 관심이었다고 봅니다.</p>
+    </div><div class="dv"><b class="hot">165,000</b><i>공개 8일 차 · 버전은 아직<br>v0.1.0-rc.5 (파괴적 변경 예고)</i></div></div>
+
+    <div class="drow"><div>
+      <p class="dn">Ox Alpha를 무료로 쓸 수 있는 기간<span class="g ok">확인</span><sup class="ref">3</sup></p>
+      <p class="dd">출처를 밝히지 않은 모델이 100만 토큰 컨텍스트를 무료로 오픈해 둔 기간입니다. 기간이 끝난 뒤에 돈을 받기 시작할지, 서비스를 내릴지, 출처를 밝힐지는 아직 알려진 바가 없습니다.</p>
+    </div><div class="dv"><b class="hot">8월 27일 종료 예정</b><i>8월 20일 개시 · 이틀 남음</i></div></div>
+
+    <div class="drow"><div>
+      <p class="dn">이번 호가 검토한 유튜브 영상<span class="g obs">관측</span><sup class="ref">8</sup></p>
+      <p class="dd">최근 7일간 모은 2,714편 가운데 길이 조건과 자동 걸러내기를 통과해 실제로 읽은 편수입니다. 이 가운데 독립된 세 곳 이상에서 확인된 336편만 본문의 근거로 삼았습니다.</p>
+    </div><div class="dv"><b>964편</b><i>수확 2,714편 중<br>본문 근거는 336편</i></div></div>
+  </div>
+
+  <p class="fignum">그림 1 — 2,714편이 964편으로 줄어든 과정</p>
+  <div class="panel" style="margin-top:12px">
+    <div class="waffle"><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c form"></i><i class="c rule"></i><i class="c rule"></i><i class="c rule"></i><i class="c rule"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c solo"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i><i class="c cross"></i></div>
+    <div class="legend">
+      <div class="lg"><i class="sw" style="background:var(--w-form)"></i><span><em>1,672</em>4분 미만 및 쇼츠</span></div>
+      <div class="lg"><i class="sw" style="background:var(--w-rule)"></i><span><em>78</em>제목만 바꿔 다시 올린 것, 확인할 수 없는 수익 금액을 내건 것, 주식이나 부동산 이야기로 빠진 것</span></div>
+      <div class="lg"><i class="sw" style="background:var(--w-solo)"></i><span><em>628</em>한 채널에서만 나온 이야기</span></div>
+      <div class="lg"><i class="sw" style="background:var(--w-cross)"></i><span><em>336</em>서로 무관한 세 곳 이상에서 나온 이야기</span></div>
+    </div>
+    <p class="cap">칸 하나가 영상 20편입니다. 조회수는 거르는 기준으로 쓰지 않았습니다. 이번 호 추천 다섯 편 가운데 두 편은 조회수가 세 자리 이하입니다.</p>
+  </div>
+</section>
+
+<section class="stage">
+  <div class="stage-h"><span class="mark">≡</span><span class="stage-name">Brief</span><span class="stage-sub">이번 주에 있었던 일 네 가지</span></div>
+
+  <article class="story">
+    <p class="kicker">01 — 코딩 에이전트</p>
+    <h2>딥시크가 코딩 에이전트의 내부를 통째로 공개했습니다</h2>
+    <p class="lede-p">8월 13일에 공개된 <strong>DeepSeek Harness v0.1</strong>은 코드명 Black Whale, MIT 라이선스로 배포되며 코르디스(Cordis) 메타프레임워크를 기반으로 합니다.<span class="g ok">확인</span><sup class="ref">1</sup></p>
+    <p>하네스란 모델과 실제 작업 환경 사이에 놓이는 소프트웨어 계층을 말합니다. 언어 모델 자체는 텍스트를 생성할 뿐 파일을 열거나 테스트를 실행하지 못하므로, 도구를 호출하고 추론과 실행을 반복하는 루프를 관리하며 세션 기억을 유지하고 위험한 명령에 사용자 승인을 강제하는 소프트웨어가 그 바깥에 따로 필요합니다. 이 바깥층이 하네스입니다.</p>
+    <p>이 바깥층이 얼마나 큰지 짐작할 수치가 하나 있습니다. 2026년 초 공개된 클로드 코드 소스 분석에서 <strong>전체의 약 98%가 주변 인프라였고, 모델을 실제로 호출하는 코드는 1.6%</strong>로 집계됐습니다.<span class="g ok">확인</span><sup class="ref">1</sup> 코딩 에이전트라는 제품은 모델보다 그 주변 소프트웨어가 대부분이라는 뜻입니다. 딥시크가 오픈소스로 내놓은 것이 바로 이 98%에 해당하는 부분입니다.</p>
+    <p>설계 원칙은 한 문장입니다. <strong>모든 구성 요소를 플러그인으로 만든다</strong>는 것입니다. 모델, 도구, 스킬, 세션, 샌드박스, 저장소, 루프, 스케줄러, 화면이 각각 독립된 부품이라 원하는 것만 빼서 다른 것으로 갈아 끼울 수 있습니다. 저장소 탐색, 파일 편집, 셸 명령 실행, 파일 및 웹 검색, 계획 유지, 서브에이전트 위임, 승인 정책 적용은 이미 구현돼 있습니다.<span class="g ok">확인</span><sup class="ref">1</sup> 자체 서버에 올려 쓸 수 있어 코드를 미국 클라우드로 보내지 않아도 됩니다. 데이터를 국내에 둬야 하는 조직이라면 이 점이 벤치마크 점수보다 먼저입니다.</p>
+    <h3>지금 옮기면 안 되는 이유</h3>
+    <p>현재 버전은 <strong>v0.1.0-rc.5</strong>이고, 저장소에는 "호환성을 깨는 변경이 발생할 것"이라는 경고가 대문자로 명시돼 있습니다.<span class="g ok">확인</span><sup class="ref">1</sup> 지금은 살펴보는 정도가 맞고, 쓰던 것을 옮길 결정을 내리기에는 이릅니다.</p>
+    <p>유튜브에 유통되는 초기 벤치마크 역시 그대로 인용하기 어렵습니다. 명칭만 유사한 커뮤니티 도구를 측정한 결과가 하네스의 성적으로 게시된 사례가 있다는 지적이 제기됐기 때문입니다.<span class="g un">미확인</span> 실제로 "Qwen 3.8 27B로 Opus 4.6을 상회했다"는 제목의 영상이 이번 주 3만 회를 넘겼지만, 같은 조건을 재현한 독립 측정은 어디에서도 확인되지 않았습니다.<span class="g obs">관측</span><sup class="ref">8</sup></p>
+    <p>무엇과 비교하는지도 정확히 해야 합니다. 하네스는 클로드 코드와 코덱스가 안에서 쓰는 <em>에이전트 소프트웨어</em>의 오픈소스 대안이지, 두 제품을 그대로 갈아 끼울 수 있는 완성품은 아닙니다. 같은 계열인 OpenCode가 터미널 작업 흐름과 LSP 연동까지 다듬은 완성품에 가깝다면, 하네스는 내부를 분해해 틀만 내준 쪽입니다. 나머지는 쓰는 쪽에서 직접 만들어야 합니다.<span class="g ok">확인</span><sup class="ref">1</sup></p>
+    <div class="pull"><b>회의에서 이렇게 말할 수 있습니다.</b> 코딩 에이전트에서 모델을 부르는 코드는 전체의 2%가 되지 않고 나머지는 전부 하네스입니다. 그 하네스가 이번 달 MIT 라이선스로 풀렸으니, 지금 우리가 한 회사에 묶여 있는 이유가 모델 때문인지 주변 도구 때문인지부터 나눠서 봐야 합니다.</div>
+  </article>
+
+  <article class="story">
+    <p class="kicker">02 — 요금</p>
+    <h2>딥시크 요금이 올랐는데 한국은 근무시간이라서 가장 비싼 시점입니다</h2>
+    <p class="lede-p">딥시크는 8월 16일 16:00 UTC를 기해 V4 계열의 요금을 하나의 단가에서 시간대에 따른 두 가지 단가로 나눴습니다. 이에 따라 V4-Pro의 출력 100만 토큰 단가가 <strong>0.87달러에서 피크 기준 3.96달러</strong>로, 4.55배 인상됐습니다. 값이 절반인 오프피크 단가 1.98달러조차 종전 단일가의 2.3배에 해당하므로, 시간대를 어떻게 조정하더라도 인상 자체를 피할 수는 없습니다. 같은 조치로 V4-Flash 출력은 0.28달러에서 피크 1.32달러가 됐고, 캐시 적중 입력은 구간에 따라 최대 1,100%까지 올랐습니다.<span class="g ok">확인</span><sup class="ref">2</sup> 회사는 이를 "자원을 보다 합리적으로 배분하기 위한 조치"라고 설명했습니다.</p>
+    <h3>한국 시간으로 옮겨 보면</h3>
+    <p>다만 인상률보다 먼저 확인해야 할 것은 적용 시간대입니다. 피크 구간은 평일 <strong>01:00–04:00 및 06:00–10:00 UTC</strong>로 한정되는데,<span class="g ok">확인</span><sup class="ref">2</sup> 이를 한국 표준시로 환산하면 <strong>오전 10시부터 오후 1시, 그리고 오후 3시부터 오후 7시</strong>가 되어 국내 근무시간 아홉 시간 가운데 일곱 시간이 그대로 인상 구간에 들어갑니다. 반면 미국 서부 지역 개발자에게 같은 시간대는 심야이므로 실무 시간 전체가 오프피크로 분류됩니다. 동일한 요금표가 시차 때문에 지역마다 전혀 다른 실효 단가를 만들어 내는 셈입니다.</p>
+    <p class="fignum">표 2 — 일 출력 500만 토큰 기준 실효 비용</p>
+    <table class="tbl">
+      <tr><th>적용 조건</th><th class="n">1일</th><th class="n">월 22영업일</th></tr>
+      <tr><td>8월 15일까지 (단일가 $0.87)</td><td class="n">$4.35</td><td class="n">$95.70</td></tr>
+      <tr><td>한국 근무시간 유지 (피크 $3.96)</td><td class="n">$19.80</td><td class="n">$435.60</td></tr>
+      <tr><td>야간·주말 배치 이전 (오프피크 $1.98)</td><td class="n">$9.90</td><td class="n">$217.80</td></tr>
+    </table>
+    <p>여기에 하나 더 붙는 조건이 있습니다. 주말은 시간에 관계없이 전부 싼 시간대입니다. 주 단위로 도는 리포트 생성이나 대량 임베딩처럼 요일을 고를 수 있는 작업이라면 평일 야간보다 토요일 오전이 낫습니다. 국내 팀은 그 시간에 사람이 붙어 있지 않으므로 실패했을 때 복구가 늦어진다는 점만 함께 계산하면 됩니다.</p>
+    <p>배치로 돌리는 작업을 오후 7시 이후나 주말로 옮기면 월 218달러가 남습니다. 사람이 앞에서 응답을 기다리는 대화형 작업은 시간대를 옮길 수 없으니 그쪽은 비싼 단가로 예산을 잡아야 합니다. 캐시 적중 단가가 오른 것도 같이 봐야 합니다. 프롬프트 앞부분을 고정해 캐시를 태우던 최적화가 예전만큼 돈을 아껴 주지 못하기 때문입니다.</p>
+    <h3>가격표 뒤에 붙는 조건</h3>
+    <p>올린 뒤에도 서방 모델보다는 여전히 쌉니다. 같은 100만 출력 토큰 기준으로 Claude Fable 5가 50달러이니,<span class="g ok">확인</span><sup class="ref">2</sup> 피크 V4-Pro의 12.6배에 해당합니다. 다만 사내 도입 심사에서는 값 말고 따로 보는 항목이 있습니다. 미국 표준기술연구소 산하 CAISI가 2026년 4월 발표한 평가에서 딥시크의 가장 제한적인 설정조차 적대적 탈옥 시도의 <strong>94%에 응답했다</strong>는 결과가 보고됐습니다. 동일 평가에서 미국 프런티어 기준 모델은 8%였습니다.<span class="g un">미확인</span> 한 기관이 한 번 잰 결과라 수치를 확정된 사실로 옮기기는 어렵습니다. 다만 값 조건은 통과하고도 이 항목에서 반려되는 경우가 적지 않습니다.</p>
+    <div class="pull warn"><b>이번 주에 할 일.</b> 딥시크 API를 쓰고 있다면 요금 화면에서 8월 16일 앞뒤 청구액을 비교해 보시기 바랍니다. 서너 배로 뛰었다면 배치 작업을 돌리는 시각부터 옮기는 것이 가장 빠릅니다. 오후 1시부터 3시, 오후 7시 이후, 그리고 주말 전체가 싼 시간대입니다.</div>
+  </article>
+
+  <article class="story">
+    <p class="kicker">03 — 모델 중개</p>
+    <h2>구체적인 출처를 밝히지 않은 모델이 100만 토큰을 오픈했습니다</h2>
+    <p class="lede-p">8월 20일 OpenRouter에 <strong>stealth/ox-alpha</strong>라는 이름으로 모델 하나가 올라왔습니다. 컨텍스트는 1,048,576토큰, 한 번에 내놓을 수 있는 출력은 최대 131,072토큰이며 텍스트와 이미지, 영상을 모두 입력으로 받습니다. 프롬프트와 출력 단가가 둘 다 0으로 등록돼 있고, 무료로 쓸 수 있는 기간은 공개일로부터 일주일입니다.<span class="g ok">확인</span><sup class="ref">3</sup></p>
+    <p>이처럼 출처를 밝히지 않고 가명으로 공개 시험을 도는 모델을 스텔스 모델이라고 부르는데, 시험 기간이 끝난 뒤에도 정체를 밝히지 않는 사례가 상당수입니다.</p>
+    <p>모델보다 성능 수치가 먼저 퍼졌습니다. 한 곳의 초기 독립 테스트에서 DeepSWE 코딩 벤치마크 80%를 기록했고 같은 측정에서 Claude Fable 5가 65%, GPT-5.6 Sol이 52%였다는 표가 유통됐는데,<span class="g un">미확인</span> 정작 8월 21일 기준 공개 DeepSWE 리더보드에 옥스 알파는 등재돼 있지 않습니다. 해당 리더보드의 상위권은 여전히 명칭이 공개된 모델들이 차지하고 있으며 최고 pass@1도 70대 초반에 머무릅니다.<span class="g ok">확인</span><sup class="ref">3</sup> 토크나이저와 영상 인코더의 특성이 Zhipu의 GLM 계열과 일치한다는 관측이 제기됐으나 확인된 바는 없습니다.<span class="g un">미확인</span></p>
+    <div class="pull warn"><b>사내 코드와 고객 데이터는 넣지 않는 것이 원칙입니다.</b> OpenRouter는 자기들이 요청을 넘겨줄 뿐 개발한 곳도 소유한 곳도 운영하는 곳도 아니라고 명시했고, 프롬프트와 응답은 제공자 쪽에 보관된다고 안내하고 있습니다. 학습에는 쓰지 않는다고 적혀 있으나 그 제공자가 익명입니다. 결국 계약서에 이름을 적을 수 없는 상대에게 사내 자산을 보내는 셈이 됩니다.<span class="g ok">확인</span><sup class="ref">3</sup></div>
+    <h3>같은 주에 OpenRouter가 팔렸습니다</h3>
+    <p>8월 16일 블룸버그가 <strong>스트라이프의 OpenRouter 인수</strong>를 보도했습니다. 금액은 70억 달러 이상으로 알려졌습니다.<span class="g ok">확인</span><sup class="ref">4</sup> OpenRouter는 400개가 넘는 모델로 개발자 요청을 나눠 보내 주는 중개 서비스입니다. 결제 회사가 이 자리를 가져간다는 것은 어떤 모델을 쓸지 고르는 지점과 요금을 매기는 지점이 한곳에서 합쳐진다는 뜻입니다.</p>
+    <p>왜 이 자리에 돈이 몰리는지는 같은 회사가 공개한 데이터로 설명이 됩니다. 2026년 2월 이후 OpenRouter에서 <strong>에이전트가 소비한 토큰이 0.51조에서 7.3조로 약 14배</strong> 증가했습니다. 같은 기간 사람이 태운 토큰은 2.8배 느는 데 그쳤습니다. 두 선은 2월 6일에 교차했고 지금은 에이전트 쪽이 약 다섯 배입니다.<span class="g ok">확인</span><sup class="ref">5</sup> 추론이 전체 AI 연산의 3분의 2를 차지하게 된 해에, 그 추론을 가장 많이 사 가는 쪽이 사람에서 에이전트로 바뀐 것입니다.<sup class="ref">6</sup></p>
+  </article>
+
+  <article class="story">
+    <p class="kicker">04 — 시스템 프롬프트</p>
+    <h2>앤트로픽이 클로드 코드에 미리 넣어 둔 규칙을 5분의 1로 줄였습니다</h2>
+    <p class="lede-p">AI 도구에는 사용자가 무엇을 입력하기 전부터 모델이 읽고 있는 지시 문서가 있습니다. 클로드 코드라면 회사가 제품에 넣어 둔 <strong>시스템 프롬프트</strong>가 그것이고, 사용자 쪽에도 저장소마다 두는 <strong>CLAUDE.md</strong>와 스킬 파일이 같은 역할을 합니다. "이런 상황에서는 이렇게 해라"를 미리 적어 두는 문서라고 보면 됩니다. 앤트로픽이 7월 2일 이 문서를 어떻게 써야 하는지에 관한 원칙을 공개했습니다. 핵심은 한 문장입니다. <strong>클로드 코드 시스템 프롬프트의 80% 이상을 지웠는데 코딩 평가에서 잴 수 있는 손실이 나타나지 않았다</strong>는 것입니다. 시스템 프롬프트가 800토큰에서 164토큰으로 줄었습니다.<span class="g ok">확인</span><sup class="ref">7</sup> 글을 쓴 사람은 앤트로픽 기술직 Thariq Shihipar이고, 발표와 재게시가 일주일 만에 430만 조회를 모았습니다.<span class="g ok">확인</span><sup class="ref">7</sup></p>
+    <p>바뀐 원칙은 여섯 가지입니다. 딱딱한 규칙을 걸어 두는 대신 모델의 판단에 맡깁니다. 사용 예시를 늘어놓는 대신 도구 이름과 인자 자체에 뜻을 담습니다. 전부 앞에 실어 두지 않고 필요한 때에 불러옵니다. 여러 번 반복하지 않고 도구 설명 안에서 한 번만 적습니다. CLAUDE.md에 기억을 쌓는 대신 모델이 알아서 저장하게 둡니다. 얇은 마크다운 명세 대신 테스트 스위트나 실제 코드처럼 밀도 있는 참조를 줍니다.<span class="g ok">확인</span><sup class="ref">7</sup></p>
+    <p>이러한 전환의 근거는 토큰 소비 구조에 있습니다. <strong>상충하는 지시가 존재하면 모델은 작업을 시작하기 전에 어느 지시가 우선하는지부터 판정하기 때문입니다.</strong> 예컨대 "문서는 적절히 남겨라"와 "주석을 달지 마라"가 한 파일에 병존하면, 실제 작업이 시작되기도 전에 그 판정 과정에서 추론 토큰이 소모됩니다. 예전 프롬프트에는 "기본적으로 주석을 쓰지 마라", "여러 문단 분량의 독스트링을 작성하지 마라" 같은 절대 금지가 들어 있었는데, 꽤 많은 작업에서 그 지시 자체가 맞지 않았습니다. 지금은 주변 코드의 주석 밀도와 이름 짓는 방식, 관용 표현에 맞추라는 문장으로 바뀌었습니다.<span class="g ok">확인</span><sup class="ref">7</sup> 함께 나온 <strong>/doctor</strong> 명령은 스킬과 CLAUDE.md를 훑어 지금 모델에 맞는 분량으로 줄여 줍니다.</p>
+    <h3>국내 해설이 대체로 빠뜨린 부분</h3>
+    <p>이번 주 한국어권에서 이 발표는 "스킬을 전부 지워라", "CLAUDE.md를 비워라"로 옮겨졌습니다.<span class="g obs">관측</span><sup class="ref">8</sup> 그러나 앤트로픽이 삭제한 대상은 <strong>제품 수준의 시스템 프롬프트</strong>입니다. 모든 사용자와 모든 코드베이스에 똑같이 적용되는 공용 문서라 애초에 특정 조직의 관행을 담을 수 없었고, 그래서 지워도 안전했습니다.</p>
+    <p>반면 개별 조직의 CLAUDE.md는 구성이 다릅니다. 해당 저장소의 제약이나 팀의 배포 규칙, 수정이 금지된 레거시 모듈처럼 모델이 스스로 파악할 방법이 없는 정보의 비율이 훨씬 높기 때문에, 80%라는 비율만 그대로 적용하면 앤트로픽이 얻은 것과 전혀 다른 결과가 나옵니다.</p>
+    <div class="pull"><b>지울 것과 남길 것.</b> 모델이 이미 아는 내용은 지웁니다. "명백히 위험한 명령을 실행하지 마라"가 여기 해당합니다. 모델이 알 도리가 없는 사실은 남깁니다. "결제 모듈은 한국 시각 자정에 배치가 돌기 때문에 그 시간에 스키마를 바꾸지 않는다"가 여기 해당합니다. 몇 퍼센트를 지울지 목표로 잡지 마시고 한 줄씩 이 기준으로 판정하시기 바랍니다.</div>
+    <p>효과가 어느 정도인지 짐작할 실측 사례도 하나 있습니다. 한 개발자가 같은 저장소, 같은 커밋, 같은 프롬프트로 두 번 실행해 11줄 분량의 CLAUDE.md만으로 클로드 코드 청구액을 35% 줄였다고 보고했습니다.<span class="g un">미확인</span> 한 사람이 한 번 잰 값이라 그대로 인용하기는 어렵습니다. 다만 이런 문서를 줄이면 품질보다 비용에서 먼저 표가 난다는 방향은 앤트로픽의 설명과 어긋나지 않습니다.</p>
+  </article>
+</section>
+
+<section class="stage">
+  <div class="stage-h"><span class="mark">✦</span><span class="stage-name">Insight</span><span class="stage-sub">네 가지를 종합하면</span></div>
+  <p class="lede-p" style="margin-top:22px">에이전트를 움직이는 소프트웨어가 MIT 라이선스로 풀리고, 출처를 밝히지 않은 모델이 100만 토큰을 무료로 오픈하고, 모델을 중개하던 회사가 결제 회사에 팔리고, 토큰 단가가 4.5배 오르는 일이 열흘 안에 함께 일어났습니다. 편집부는 이를 이렇게 봅니다. <strong>소프트웨어 도구를 팔아서 남기던 몫은 줄고 있고, 돈은 추론 연산과 그 연산을 중개하는 자리로 옮겨 가고 있습니다.</strong> 에이전트가 사람보다 다섯 배 많은 토큰을 태우기 시작한 해라면 이런 전개가 특별히 이상한 일은 아닙니다.</p>
+  <p>실무로 옮기면 이렇게 됩니다. 올해 남은 기간에 비용을 좌우하는 것은 어떤 모델을 고르느냐가 아니라 <strong>토큰을 몇 개나 태우느냐</strong>입니다. 시스템 프롬프트와 CLAUDE.md의 길이, 캐시 설계, 배치를 돌리는 시각, 루프가 도는 횟수가 전부 청구서 항목으로 환산됩니다. 지금은 모델 비교표를 들여다보는 시간보다 이쪽을 손보는 시간이 더 많이 돌아옵니다.</p>
+  <div class="todo">
+    <div><span>이번 주 내</span><p>옥스 알파를 무료로 쓸 수 있는 기간이 끝나기 전에 긴 문서 한 건을 통째로 넣어 100만 토큰 컨텍스트가 실제로 어떻게 동작하는지 확인합니다. 공개 자료로만 시험합니다.</p></div>
+    <div><span>이번 주 내</span><p>딥시크 API 청구액을 8월 16일 앞뒤로 비교하고, 배치 작업을 돌리는 시각을 오후 7시 이후나 주말로 옮깁니다.</p></div>
+    <div><span>이번 달 내</span><p>CLAUDE.md를 열어 모델이 이미 아는 항목을 지우고 그 저장소에만 해당하는 사실을 남깁니다. 클로드 코드를 쓰고 있다면 /doctor를 먼저 돌려 봅니다.</p></div>
+    <div><span>v0.2 이후</span><p>하네스로 옮길지 정하는 일. 지금 버전은 v0.1.0-rc.5이고 호환성을 깨는 변경이 예고돼 있어, 그 경고가 빠지는 버전이 나오기 전에는 판단할 근거가 없습니다. 그때까지는 읽어 두는 단계로 충분합니다.</p></div>
+  </div>
+</section>
+
+<section class="stage">
+  <div class="stage-h"><span class="mark">✦</span><span class="stage-name">Vocabulary</span><span class="stage-sub">회의나 면접에서 그대로 쓸 수 있는 설명</span></div>
+  <div class="term"><h5>하네스 <span>harness</span></h5>
+    <p>모델을 뺀 실행 환경 전체를 말합니다. 도구를 부르는 부분, 추론과 실행을 반복하는 루프, 세션 기억, 승인 규칙, 샌드박스가 여기 들어갑니다. 코딩 에이전트 코드의 대부분이 이 부분입니다.</p>
+    <p class="use">"성능 차이는 모델이 아닌 하네스 구성에서 났습니다. 같은 모델을 두 하네스에 올려 비교했습니다."</p></div>
+  <div class="term"><h5>컨텍스트 엔지니어링 <span>context engineering</span></h5>
+    <p>요청 하나하나마다 모델이 보게 될 정보 전체를 설계하는 일입니다. 프롬프트가 요청 한 번에만 붙는 것과 달리, 컨텍스트는 시스템 프롬프트와 스킬, 메모리, CLAUDE.md에서 조립돼 여러 요청에 다시 쓰입니다. 프롬프트 엔지니어링보다 한 단계 위의 개념으로 자리 잡았습니다.</p>
+    <p class="use">"프롬프트가 아니라 컨텍스트의 문제입니다. 상충하는 지시가 세 곳에 존재해 모델이 판정에 토큰을 소모하고 있습니다."</p></div>
+  <div class="term"><h5>스텔스 모델 <span>stealth model</span></h5>
+    <p>출처를 밝히지 않고 가명으로 공개 시험을 도는 모델입니다. 중개 서비스에 무료로 올려 실사용 데이터를 모은 뒤, 기간이 끝나면 정체를 밝히거나 서비스를 내리거나 돈을 받기 시작합니다. 성능을 재보는 데는 써도 되지만 운영하는 곳이 익명이므로 기밀 데이터는 넣지 않습니다.</p>
+    <p class="use">"옥스 알파 결과는 참고만 하겠습니다. 공개 리더보드에 올라온 수치가 아니고 제공자도 익명입니다."</p></div>
+  <div class="term"><h5>피크·오프피크 과금 <span>peak / off-peak billing</span></h5>
+    <p>시간대에 따라 토큰 단가를 다르게 받는 방식입니다. 딥시크가 8월 16일 도입했습니다. 시차 때문에 같은 요금표가 지역마다 다른 실제 단가를 만들어 냅니다. 배치 작업을 싼 시간대로 옮기는 것이 가장 먼저 볼 대책입니다.</p>
+    <p class="use">"국내 근무시간이 전부 비싼 구간과 겹쳐서 실제로 내는 단가가 미국 팀의 두 배입니다. 배치는 야간으로 옮기겠습니다."</p></div>
+  <div class="term"><h5>에이전트 토큰 비중 <span>agentic token share</span></h5>
+    <p>전체 추론 소비에서 에이전트가 차지하는 몫입니다. OpenRouter 기준으로 2026년 2월 6일에 사람의 소비량을 넘어섰고 지금은 약 다섯 배입니다. 용량 계획과 단가 협상의 전제가 이 수치에서 바뀝니다.</p>
+    <p class="use">"트래픽 예측을 사람 수 기준으로 잡으면 안 됩니다. 에이전트 호출이 사람의 다섯 배 속도로 늘고 있습니다."</p></div>
+</section>
+
+<section class="stage">
+  <div class="stage-h"><span class="mark">✦</span><span class="stage-name">Picks</span><span class="stage-sub">964편 가운데 고른 다섯 편</span></div>
+  <div class="pick"><h4>Did DeepSeek Harness Just Change AI Forever?</h4>
+    <p class="meta">The Stack · 8월 23일 · 17분 · 13,812회</p>
+    <p class="why">도입을 검토하기 전에 한계부터 확인하려는 경우에 맞습니다. 모델을 자유롭게 갈아 끼울 수 있다는 설명이 실제로 어디에서 어긋나는지를 짚습니다.</p></div>
+  <div class="pick"><h4>모델 탓이 아닙니다, AI 성능 차이는 하네스에서 벌어집니다</h4>
+    <p class="meta">실무자 · 8월 24일 · 8분 · 10회</p>
+    <p class="why">하네스라는 말을 이번 주에 처음 들은 경우에 맞습니다. 한국어로 개념을 잡는 데 8분이면 충분합니다. 이번 주 한국어로 이 주제를 다룬 영상이 이것 하나뿐이었습니다.</p></div>
+  <div class="pick"><h4>Why AI Agents Fail Even When the Model Is Right</h4>
+    <p class="meta">Vanishing Gradients · 8월 21일 · 38분 · 127회</p>
+    <p class="why">에이전트가 오래 돌수록 품질이 떨어지는 일을 겪어 본 경우에 맞습니다. 모델을 바꾸기 전에 검색과 컨텍스트 설계부터 살펴보게 만듭니다.</p></div>
+  <div class="pick"><h4>[한영자막] Claude Code와 1000시간 넘게 함께하며 배운 것들</h4>
+    <p class="meta">Tech Bridge · 8월 23일 · 21분 · 5,036회</p>
+    <p class="why">CLAUDE.md에 무엇을 담을지 기준을 정하지 못한 경우에 맞습니다. 위 04번 이야기를 실제 작업 흐름으로 옮긴 사례에 가깝습니다. 한영 자막이 붙어 있습니다.</p></div>
+  <div class="pick"><h4>바이브코딩으로 만든 서비스, 이렇게 뚫립니다 (클로드코드 실화)</h4>
+    <p class="meta">실용주의 개발 · 8월 22일 · 19분 · 3,339회</p>
+    <p class="why">만든 것을 외부에 공개해 본 경우에 맞습니다. 예약을 조회만 시켰는데 남의 예약이 취소된 실제 사고에서 이야기를 시작합니다.</p></div>
+  <p class="cap" style="border:0;padding:0;margin-top:16px">조회수는 8월 25일에 모을 때의 값입니다. 제목에 확인할 수 없는 수익 금액을 내건 영상은 추천에서 뺐습니다.</p>
+</section>
+
+<section class="stage">
+  <div class="stage-h"><span class="mark">✦</span><span class="stage-name">Next</span><span class="stage-sub">다음 호에서 답을 적습니다</span></div>
+  <p style="margin-top:18px">이번 호에서 내린 판단 가운데 몇 가지는 다음 주면 사실 여부가 드러납니다. 무엇을 근거로 무엇을 예상했는지 아래에 적었습니다. 다음 호는 이 다섯 항목에 답을 채우는 데서 시작합니다.</p>
+  <div class="cp"><span>8/27</span><p><strong>옥스 알파가 어떻게 되는지.</strong> 무료 기간이 끝난 뒤에 출처를 밝히는지, 돈을 받기 시작하는지, 그대로 내리는지 확인합니다. Zhipu가 만들었다는 추정이 맞았는지도 이때 갈립니다.</p></div>
+  <div class="cp"><span>주간</span><p><strong>하네스 스타 증가 속도.</strong> 8일 기준 16만 5천이었습니다. 다음 주에도 늘어나는 속도가 그대로면 생태계가 붙는 중이라고 보고, 느려지면 한 번 설치해 보고 끝난 것으로 봅니다. v0.2에서 호환성 경고가 빠지는지도 확인합니다.</p></div>
+  <div class="cp"><span>주간</span><p><strong>딥시크가 얼마나 쓰이는지.</strong> 4.5배 올린 뒤에 OpenRouter에서 딥시크 비중이 실제로 줄어드는지 봅니다. 값을 올렸는데도 그대로라면 마땅히 갈아탈 데가 없다는 뜻으로 읽습니다.</p></div>
+  <div class="cp"><span>미정</span><p><strong>스트라이프와 OpenRouter.</strong> 공식 발표가 나오는지, 반독점 심사가 어떻게 진행되는지 확인합니다. 모델을 중개하는 자리가 결제 회사에 넘어가면 모델별 수수료를 어떻게 매기게 되는지도 함께 봅니다.</p></div>
+  <div class="cp"><span>주간</span><p><strong>에이전트 토큰 7.3조.</strong> 2월 이후 14배로 올라온 곡선이 처음으로 평평해지는 지점을 측정합니다. 이 수치가 꺾이는 주에는 추론 수요 전망 전체를 다시 계산해야 합니다.</p></div>
+</section>
+
+<div class="grades">
+  <b>등급 표기</b> — <b style="color:var(--pine)">확인</b>은 공급사 발표, 공개 카탈로그, 1차 보도로 검증 가능한 사실입니다. <b style="color:var(--slate)">관측</b>은 독립된 채널 세 곳 이상에서 동일한 내용이 확인된 경우입니다. <b style="color:var(--rust)">미확인</b>은 그 미만이며, 사실로 적지 않고 어디까지 확인됐는지를 함께 밝혔습니다. 등급이 붙지 않은 문장은 싣지 않습니다.
+  <p class="fignum" style="margin-top:24px">이번 호 1차 출처</p>
+  <ol class="srclist">
+    <li><b>DeepSeek Harness v0.1</b> 공개 발표 및 GitHub 저장소 (2026-08-13) — <a href="https://venturebeat.com/technology/deepseek-harness-launches-as-open-source-rival-to-claude-code-alongside-v4-pro-on-api-with-higher-prices">VentureBeat</a></li>
+    <li><b>DeepSeek V4 피크·오프피크 요금표</b> (2026-08-16 16:00 UTC 발효) — <a href="https://qz.com/deepseek-api-price-increase-v4-peak-off-peak-081326">Quartz</a>, <a href="https://www.engadget.com/2236912/deepseek-ai-models-get-four-times-pricier/">Engadget</a></li>
+    <li><b>Ox Alpha 모델 카탈로그</b> (2026-08-20) — <a href="https://openrouter.ai/stealth/ox-alpha">OpenRouter</a>, <a href="https://qz.com/mystery-ai-model-ox-alpha-openrouter-free-082426">Quartz</a></li>
+    <li><b>스트라이프의 OpenRouter 인수 보도</b> (2026-08-16) — Bloomberg</li>
+    <li><b>에이전트 토큰 소비 14배 증가</b>, OpenRouter 데이터 · a16z 공개 — <a href="https://the-decoder.com/ai-is-becoming-ais-biggest-customer-as-agentic-token-usage-jumps-14x-on-openrouter/">THE DECODER</a></li>
+    <li><b>추론이 전체 AI 연산의 3분의 2</b>, Deloitte 2026 TMT Predictions</li>
+    <li><b>클로드 5 세대 컨텍스트 설계 원칙</b> (2026-07-02, AI Engineer World&#39;s Fair, Thariq Shihipar) — Anthropic</li>
+    <li><b>유튜브 영상 2,714편</b> (2026-08-18 ~ 08-25 수확분) — Insighta 자체 집계</li>
+  </ol>
+  <p class="editnote"><b>편집 원칙.</b> 이 브리프는 최근 7일 사이 올라온 유튜브 AI·기술 영상을 전부 훑은 뒤, 서로 무관한 세 곳 이상에서 같은 내용이 나온 것만 본문에 씁니다. 수치는 1차 출처로 되짚을 수 있는 것만 싣고, 발행 뒤에 오류가 확인되면 다음 호에 정정을 적습니다.</p>
+</div>
+
+<p class="sign">유튜브를 나만의 지식노트로.</p>
+</div>
+</body>
+</html>
