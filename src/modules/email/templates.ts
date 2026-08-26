@@ -494,7 +494,16 @@ export interface BriefEmailParams {
   preview: string;
 }
 
-/** Running order in the issue, so the number carries sequence rather than decoration. */
+/**
+ * Running order in the issue, so the number carries sequence rather than decoration.
+ *
+ * The title is the whole surface for most readers: the body is one click away
+ * and the majority never take it. A line that names a topic ("X was released")
+ * tells someone they already know what happened, which is a reason to close
+ * the mail. Each title has to state what stopped being true, so the caller
+ * writes consequences here, not descriptions -- the builder reproduces them
+ * verbatim and never reformats.
+ */
 function briefItemRow(n: number, item: BriefItem): string {
   const num = String(n).padStart(2, '0');
   return `<tr><td style="padding:15px 0;border-top:1px solid ${RULE};background:${PAPER}">
@@ -567,7 +576,7 @@ export function buildBriefEmail(params: BriefEmailParams): { subject: string; ht
       </td></tr>
 
       <tr><td style="background:${PAPER};padding:28px 34px 0">
-        <div style="font-size:10.5px;font-weight:800;letter-spacing:.16em;color:${MUTED};padding-bottom:4px">이번 호에 실린 것</div>
+        <div style="font-size:10.5px;font-weight:800;letter-spacing:.16em;color:${MUTED};padding-bottom:4px">이번 주에 달라진 것</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           ${items.map((it, i) => briefItemRow(i + 1, it)).join('')}
           <tr><td style="border-top:1px solid ${RULE};font-size:0;line-height:0">&nbsp;</td></tr>
