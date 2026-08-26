@@ -445,3 +445,164 @@ export function buildMobileGuideEmail(params: MobileGuideEmailParams): {
     ),
   };
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Weekly brief. Deliberately does NOT use shell().
+ *
+ * shell() is the announcement dress: cream card, bold outline, pill, mascot.
+ * It says "Insighta has news for you". A newsletter has to say "this is a
+ * publication" before a word is read, so the brief gets its own silhouette --
+ * a full-bleed ink masthead over paper, a wider measure, no mascot, no pill.
+ * Putting the launch issue in the announcement dress is what this replaces.
+ *
+ * Constraints inherited from the templates above: table layout, inline CSS,
+ * no webfonts (clients strip them), no emoji, and a single committed light
+ * theme with every background stated -- client dark-mode inversion is not
+ * reliable enough to hand it a transparent cell.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+const PAPER = '#FBF8EF';
+/** Warm hairline biased toward the paper; a mid grey reads as unconsidered here. */
+const RULE = '#E3DED0';
+/** Letterspaced Latin, not a serif: Korean has no serif that survives mail clients. */
+const NAMEPLATE = `font-family:${FONT};font-weight:800;letter-spacing:.34em;`;
+
+export interface BriefStat {
+  value: string;
+  label: string;
+}
+
+export interface BriefItem {
+  title: string;
+  deck: string;
+}
+
+export interface BriefEmailParams {
+  issueLabel: string;
+  dateLabel: string;
+  category: string;
+  headline: string;
+  /** Fragment inside `headline` to accent. Matched after escaping, so pass it raw. */
+  headlineMark?: string;
+  deck: string;
+  items: BriefItem[];
+  stats: BriefStat[];
+  method: string;
+  readUrl: string;
+  readMeta: string;
+  unsubscribeUrl: string;
+  preview: string;
+}
+
+/** Running order in the issue, so the number carries sequence rather than decoration. */
+function briefItemRow(n: number, item: BriefItem): string {
+  const num = String(n).padStart(2, '0');
+  return `<tr><td style="padding:15px 0;border-top:1px solid ${RULE};background:${PAPER}">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
+        <td width="34" style="width:34px;vertical-align:top;padding-top:3px">
+          <span style="font-size:12px;font-weight:800;color:${INDIGO};letter-spacing:.06em">${num}</span>
+        </td>
+        <td style="vertical-align:top">
+          <div style="font-size:15px;font-weight:800;color:${INK};line-height:1.45;letter-spacing:-.01em">${esc(item.title)}</div>
+          <div style="font-size:13px;color:${MUTED};margin-top:5px;line-height:1.68">${esc(item.deck)}</div>
+        </td>
+      </tr></table>
+    </td></tr>`;
+}
+
+export function buildBriefEmail(params: BriefEmailParams): { subject: string; html: string } {
+  const {
+    issueLabel,
+    dateLabel,
+    category,
+    headline,
+    headlineMark,
+    deck,
+    items,
+    stats,
+    method,
+    readUrl,
+    readMeta,
+    unsubscribeUrl,
+    preview,
+  } = params;
+
+  const markedHeadline = headlineMark
+    ? esc(headline).replace(
+        esc(headlineMark),
+        `<span style="color:${INDIGO};border-bottom:4px solid ${PERI}">${esc(headlineMark)}</span>`
+      )
+    : esc(headline);
+
+  // Equal-width cells rather than a flex row: Outlook ignores flex entirely.
+  const width = Math.floor(100 / Math.max(stats.length, 1));
+  const statCells = stats
+    .map(
+      (s) => `<td width="${width}%" style="vertical-align:top;padding:0 4px">
+          <div style="font-size:21px;font-weight:800;color:${INK};letter-spacing:-.02em">${esc(s.value)}</div>
+          <div style="font-size:11px;color:${MUTED};margin-top:3px;line-height:1.5">${esc(s.label)}</div>
+        </td>`
+    )
+    .join('');
+
+  const html = `<meta charset="utf-8">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(preview)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EFEBE0;margin:0;padding:0">
+  <tr><td align="center" style="padding:0">
+    <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:100%;background:${PAPER};font-family:${FONT}">
+
+      <tr><td style="background:${INK};padding:26px 34px 22px">
+        <div style="${NAMEPLATE}font-size:15px;color:${PAPER};line-height:1">INSIGHTA&nbsp;WEEKLY</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px"><tr>
+          <td style="font-size:11px;color:#9C9890;letter-spacing:.13em;font-weight:700">${esc(category)}</td>
+          <td align="right" style="font-size:11px;color:#9C9890;letter-spacing:.09em;font-weight:700">${esc(issueLabel)} &middot; ${esc(dateLabel)}</td>
+        </tr></table>
+      </td></tr>
+
+      <tr><td style="background:${INDIGO};height:3px;line-height:3px;font-size:0">&nbsp;</td></tr>
+
+      <tr><td style="background:${PAPER};padding:34px 34px 0">
+        <h1 style="margin:0;font-size:29px;line-height:1.34;font-weight:800;color:${INK};letter-spacing:-.025em">${markedHeadline}</h1>
+        <p style="margin:16px 0 0;font-size:14.5px;line-height:1.78;color:#55534C">${esc(deck)}</p>
+      </td></tr>
+
+      <tr><td style="background:${PAPER};padding:28px 34px 0">
+        <div style="font-size:10.5px;font-weight:800;letter-spacing:.16em;color:${MUTED};padding-bottom:4px">이번 호에 실린 것</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          ${items.map((it, i) => briefItemRow(i + 1, it)).join('')}
+          <tr><td style="border-top:1px solid ${RULE};font-size:0;line-height:0">&nbsp;</td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="background:${PAPER};padding:26px 34px 0" align="center">
+        ${cta('전체 브리프 읽기', readUrl, INDIGO)}
+        <p style="margin:12px 0 0;font-size:11.5px;color:${MUTED}">${esc(readMeta)}</p>
+      </td></tr>
+
+      <tr><td style="background:${PAPER};padding:30px 34px 0">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F0E4;border-left:3px solid ${GREEN}">
+          <tr><td style="padding:17px 18px">
+            <div style="font-size:10.5px;font-weight:800;letter-spacing:.16em;color:${MUTED}">이번 호를 만든 방법</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:13px"><tr>${statCells}</tr></table>
+            <p style="margin:14px 0 0;font-size:12.5px;line-height:1.7;color:#55534C">${esc(method)}</p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <tr><td style="background:${PAPER};padding:30px 34px 34px">
+        <div style="border-top:1px solid ${RULE};padding-top:18px">
+          <div style="${NAMEPLATE}font-size:10px;color:${INK}">INSIGHTA</div>
+          <p style="margin:9px 0 0;font-size:11.5px;line-height:1.75;color:${MUTED}">
+            유튜브를 나만의 지식노트로. <a href="${SITE_ORIGIN}" style="color:${INDIGO};text-decoration:none;font-weight:700">insighta.one</a><br>
+            주간 브리프는 매주 한 통 발행됩니다.
+            <a href="${esc(unsubscribeUrl)}" style="color:${MUTED};text-decoration:underline">수신거부</a>
+          </p>
+        </div>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>`;
+
+  return { subject: `${category} · ${issueLabel} — ${headline}`, html };
+}
