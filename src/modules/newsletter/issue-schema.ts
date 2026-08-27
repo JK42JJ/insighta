@@ -102,6 +102,19 @@ export const RefSchema = z.object({
   sources: z.array(z.object({ name: z.string().min(1), url: z.string().url().optional() })).min(1),
 });
 
+/**
+ * The mail digest is its own editorial object, not a summary of `stories`.
+ * Its lines state what stopped being true ("무료 기간이 끝나면 다시 못 잽니다"),
+ * which is a different job from a story headline and cannot be derived from
+ * one. Optional so an issue can exist before its digest is written.
+ */
+export const MailDigestSchema = z.object({
+  items: z.array(z.object({ title: z.string().min(1), deck: z.string().min(1) })).min(1),
+  stats: z.array(z.object({ value: z.string().min(1), label: z.string().min(1) })).min(1),
+  method: z.string().min(1),
+  readMeta: z.string().min(1),
+});
+
 export const IssueDocumentSchema = z.object({
   schemaVersion: z.literal(1),
   templateVersion: z.string().min(1).default('web-v1'),
@@ -150,6 +163,7 @@ export const IssueDocumentSchema = z.object({
     checkpoints: z.array(WhenItemSchema).min(1),
   }),
 
+  mail: MailDigestSchema.optional(),
   refs: z.array(RefSchema).default([]),
   gradeNote: z.string().min(1),
   editNote: z.string().min(1),
@@ -163,6 +177,7 @@ export type Term = z.infer<typeof TermSchema>;
 export type Pick = z.infer<typeof PickSchema>;
 export type WhenItem = z.infer<typeof WhenItemSchema>;
 export type Ref = z.infer<typeof RefSchema>;
+export type MailDigest = z.infer<typeof MailDigestSchema>;
 
 /**
  * Every claim carrying a grade must also carry a source, except where the
