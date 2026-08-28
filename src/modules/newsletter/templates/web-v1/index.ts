@@ -186,8 +186,21 @@ function funnel(f: NonNullable<IssueDocument['interest']['funnel']>): string {
     solo: '#8894A6',
     cross: 'var(--verified)',
   };
+  /**
+   * Explicit, not the bucket's first letter. cross maps to `x`, not `c`, and
+   * deriving it from the name produced `class="c c"` -- a class the stylesheet
+   * has no rule for, so the cross-verified cells rendered with no background.
+   * They were invisible on the published page, which is the one group the
+   * figure exists to show.
+   */
+  const CELL_CLASS: Record<string, string> = {
+    form: 'f',
+    rule: 'r',
+    solo: 's',
+    cross: 'x',
+  };
   const cells = f.buckets
-    .map((b) => `<i class="c ${b.key[0]}"></i>`.repeat(Math.round(b.count / f.perCell)))
+    .map((b) => `<i class="c ${CELL_CLASS[b.key]}"></i>`.repeat(Math.round(b.count / f.perCell)))
     .join('');
   const legend = f.buckets
     .map(

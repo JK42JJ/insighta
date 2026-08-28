@@ -158,7 +158,10 @@ describe('renderWeb', () => {
   it('draws the funnel from counts rather than a fixed grid', () => {
     // 1672/20 + 336/20 = 84 + 17
     expect((html.match(/class="c f"/g) ?? []).length).toBe(84);
-    expect((html.match(/class="c c"/g) ?? []).length).toBe(17);
+    // `x`, not `c`: the stylesheet names the cross-verified cell .c.x, and a
+    // class it has no rule for renders with no background at all.
+    expect((html.match(/class="c x"/g) ?? []).length).toBe(17);
+    expect(html).not.toContain('class="c c"');
     expect(html).toContain('<em>1,672</em>');
   });
 

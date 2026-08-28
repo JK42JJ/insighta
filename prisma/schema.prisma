@@ -641,29 +641,29 @@ model mandala_subscriptions {
 /// book-fill-gate (no barrier risk). user_id kept as a plain column; the FK
 /// lives in the raw DDL (prisma/migrations/curation/001_*.sql).
 model curation_subscriptions {
-  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id     String           @db.Uuid
-  topic       String
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String              @db.Uuid
+  topic         String
   /// What the user renamed it to. `topic` doubles as the discover query, so
   /// writing a new name into it would quietly change which videos arrive next
   /// week -- a rename has to be able to mean only "call it this".
   /// Null = show `topic`. Raw SQL DDL: prisma/migrations/curation-rename/001_display_title.sql
   display_title String?
-  cadence     String           @default("weekly") @db.VarChar(12)
+  cadence       String              @default("weekly") @db.VarChar(12)
   /// discover | youtube_subs | hybrid — D5, default discover (flag-expandable)
-  source      String           @default("discover") @db.VarChar(16)
+  source        String              @default("discover") @db.VarChar(16)
   /// optional container mandala (kind='curation') if D1(a) is later chosen; null = standalone
-  mandala_id  String?          @db.Uuid
-  is_active   Boolean          @default(true)
+  mandala_id    String?             @db.Uuid
+  is_active     Boolean             @default(true)
   /// KST delivery weekday, 0=Sun..6=Sat. Default 1 (Monday) = the shipped promise.
   /// Raw SQL DDL: prisma/migrations/curation-weekday/001_weekday.sql (applied to prod 2026-07-27).
-  weekday     Int              @default(1) @db.SmallInt
-  next_run_at DateTime?        @db.Timestamptz(6)
-  last_run_at DateTime?        @db.Timestamptz(6)
-  created_at  DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
-  items       curation_items[]
-  channels    curation_channels[]
+  weekday       Int                 @default(1) @db.SmallInt
+  next_run_at   DateTime?           @db.Timestamptz(6)
+  last_run_at   DateTime?           @db.Timestamptz(6)
+  created_at    DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+  items         curation_items[]
+  channels      curation_channels[]
 
   @@index([user_id], map: "idx_curation_subscriptions_user_id")
   @@index([next_run_at], map: "idx_curation_subscriptions_next_run_at")
@@ -732,14 +732,14 @@ model curation_items {
 /// Async-built YouTube interest profile (one per user). Read by GET /curations/suggest.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model curation_interest_profile {
-  user_id    String   @id @db.Uuid
+  user_id    String    @id @db.Uuid
   /// [{ kw, domain, weight }] — normalized interest vector from subs + playlists + saved videos
-  profile    Json     @default("[]")
+  profile    Json      @default("[]")
   /// building | ready | stale | error
-  status     String   @default("building") @db.VarChar(12)
+  status     String    @default("building") @db.VarChar(12)
   built_at   DateTime? @db.Timestamptz(6)
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@schema("public")
 }
@@ -815,14 +815,14 @@ model mandala_books {
 /// the same person. Failures are recorded too, with the reason, so a retry can
 /// target only them.
 model email_broadcast_sends {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// campaign key, e.g. 'mobile-guide-2026-07'
-  campaign  String   @db.VarChar(64)
-  email     String   @db.VarChar(255)
+  campaign String   @db.VarChar(64)
+  email    String   @db.VarChar(255)
   /// sent | failed
-  status    String   @default("sent") @db.VarChar(8)
-  error     String?
-  sent_at   DateTime @default(now()) @db.Timestamptz(6)
+  status   String   @default("sent") @db.VarChar(8)
+  error    String?
+  sent_at  DateTime @default(now()) @db.Timestamptz(6)
 
   @@unique([campaign, email], map: "uq_email_broadcast_campaign_email")
   @@index([campaign], map: "idx_email_broadcast_campaign")
@@ -2092,17 +2092,17 @@ model user_skill_config {
 /// Layer 1: External trend signals (YouTube, Naver, Google Trends, HN)
 /// Aggregated nightly via trend-collector skill.
 model trend_signals {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  source     String   @db.VarChar(50)
-  domain     String?  @db.VarChar(100)
-  keyword    String   @db.VarChar(255)
-  raw_score  Float
-  norm_score Float
-  velocity   Float    @default(0)
-  metadata   Json     @default("{}")
-  language   String   @default("ko") @db.VarChar(10)
-  fetched_at DateTime @default(now()) @db.Timestamptz(6)
-  expires_at DateTime @db.Timestamptz(6)
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source       String    @db.VarChar(50)
+  domain       String?   @db.VarChar(100)
+  keyword      String    @db.VarChar(255)
+  raw_score    Float
+  norm_score   Float
+  velocity     Float     @default(0)
+  metadata     Json      @default("{}")
+  language     String    @default("ko") @db.VarChar(10)
+  fetched_at   DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at   DateTime  @db.Timestamptz(6)
   /// Topic verdict: ok | unsafe | unfit | unknown. Judged once at collection so
   /// serving reads a column instead of calling an LLM per request. NULL = the row
   /// predates judging and is excluded from proposals until backfilled.
@@ -2799,15 +2799,15 @@ model channel_blocklist {
 /// applicant emails; invitations are sent manually by the operator (James).
 /// Raw SQL DDL: prisma/migrations/beta/001_beta_applications.sql
 model beta_applications {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email      String    @unique @db.VarChar(255)
-  goal       String?   @db.VarChar(500)
-  status     String    @default("pending") @db.VarChar(16)
-  created_at DateTime  @default(now()) @db.Timestamptz(6)
-  invited_at DateTime? @db.Timestamptz(6)
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email               String    @unique @db.VarChar(255)
+  goal                String?   @db.VarChar(500)
+  status              String    @default("pending") @db.VarChar(16)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  invited_at          DateTime? @db.Timestamptz(6)
   /// Invite tickets (2026-07-15): member who spent a ticket. NULL = admin invite.
   /// Raw SQL DDL: prisma/migrations/beta/002_invited_by.sql
-  invited_by String?   @db.Uuid
+  invited_by          String?   @db.Uuid
   /// Outcome of the invite send: sent | failed | skipped. `status` is written
   /// BEFORE the send and the send is non-fatal, so status alone never proved
   /// delivery. NULL = invited before this column existed — genuinely unknown,
@@ -2847,6 +2847,58 @@ model share_links {
 /// 새소식 feed — public read, admin publish. Unread state lives client-side
 /// (localStorage latest-seen timestamp).
 /// Raw SQL DDL: prisma/migrations/app-notices/001_create_app_notices.sql
+/// Weekly brief issues. content_json is an IssueDocument
+/// (src/modules/newsletter/issue-schema.ts) -- the SSOT for one issue, from
+/// which the web page, the mail digest and the note chapter are all rendered.
+///
+/// schema_version and template_version are deliberately separate: the first
+/// says what content exists, the second how it looks. HTML is rendered on read
+/// rather than stored, so raising the default template re-skins the archive.
+/// An issue pins template_version only when a new template breaks that issue.
+model newsletter_issues {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// URL segment. Also the render cache key together with template_version.
+  slug             String    @unique
+  /// One of the ten brief categories. Not a mandala domain.
+  category_key     String    @db.VarChar(40)
+  issue_no         Int
+  schema_version   Int       @default(1)
+  template_version String    @default("web-v1") @db.VarChar(20)
+  content_json     Json      @db.JsonB
+  /// NULL = draft. Only rows with a timestamp are publicly readable.
+  published_at     DateTime? @db.Timestamptz(6)
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([category_key, issue_no], map: "uq_newsletter_issues_category_no")
+  @@index([published_at(sort: Desc)], map: "idx_newsletter_issues_published_at")
+  @@schema("public")
+}
+
+/// Suppression list for brief delivery.
+///
+/// A suppression list, not a subscription table: unsubscribing has to work for
+/// someone who is not logged in and may not have an account, and it has to keep
+/// working after whatever subscription model lands. Delivery filters against
+/// this; nothing here grants a subscription.
+///
+/// category_key NULL = every category.
+model newsletter_unsubscribes {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email           String
+  category_key    String?   @db.VarChar(40)
+  /// Minted per (email, category) when a send goes out. The only credential
+  /// GET /u/:token carries, so it is unguessable and single-purpose.
+  token           String    @unique
+  /// NULL = token issued but not used. Set when the reader opts out.
+  unsubscribed_at DateTime? @db.Timestamptz(6)
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([email, category_key], map: "uq_newsletter_unsub_email_category")
+  @@index([email], map: "idx_newsletter_unsub_email")
+  @@schema("public")
+}
+
 model app_notices {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   title        String    @db.VarChar(120)

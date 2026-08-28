@@ -3,6 +3,10 @@ import type { Config } from 'jest';
 const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  // A smoke suite boots a full Fastify app in beforeAll. Measured cold boot is
+  // 1.7-2.1 s idle, and several suites booting at once push past Jest's 5 s
+  // default long before anything is actually wrong.
+  testTimeout: 30000,
   roots: ['<rootDir>/tests', '<rootDir>/src/skills'],
   testMatch: [
     '**/tests/**/*.test.ts',
