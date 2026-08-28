@@ -73,9 +73,13 @@ describe('Per-session QueryClient (Issue #369 Option A)', () => {
     const root = createRoot(container);
     root.render(createElement(QueryProvider, null, null));
 
-    // Let React effects flush so subscribeAuth runs and the listener
-    // is registered.
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Wait for the listener itself, not for a fixed delay: under load the
+    // effect does not always flush inside 20 ms, and the suite then fails for
+    // a reason unrelated to the contract it pins.
+    const deadline = Date.now() + 5000;
+    while (capturedHandler === null && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
   });
 
   it('creates an initial QueryClient on mount', () => {
