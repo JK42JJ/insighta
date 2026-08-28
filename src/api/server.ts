@@ -20,6 +20,7 @@ import { mandalaEpisodeAudioRoutes } from './routes/mandala-episode-audio';
 import { guestNoteRoutes } from './routes/guest-share';
 import { shareLinkMintRoutes, shareLinkResolverRoutes } from './routes/share-links';
 import { appNoticeRoutes } from './routes/app-notices';
+import { briefRoutes, unsubscribeRoutes } from './routes/brief';
 import { inviteRoutes } from './routes/invites';
 import { imageRoutes } from './routes/images';
 import { ontologyRoutes } from './routes/ontology';
@@ -319,6 +320,12 @@ export async function buildServer() {
 
       // In-app notices (새소식) — public read feed for the mobile player
       await instance.register(appNoticeRoutes, { prefix: '/app-notices' });
+
+      // Weekly brief pages, server-rendered so a shared link carries a preview
+      // card and opens without JavaScript. Unsubscribe sits beside it and takes
+      // no login -- someone who wants out must not have to sign in first.
+      await instance.register(briefRoutes, { prefix: '/brief' });
+      await instance.register(unsubscribeRoutes, { prefix: '/u' });
 
       // Invite tickets (초대권) — member-delegated beta invitations
       await instance.register(inviteRoutes, { prefix: '/invites' });

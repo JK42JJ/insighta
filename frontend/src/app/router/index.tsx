@@ -25,6 +25,7 @@ import { AdminV2QualityAudit } from '@/pages/admin/ui/AdminV2QualityAudit';
 import { AdminPoolHealth } from '@/pages/admin/ui/AdminPoolHealth';
 import { AdminSearchTraceExplorer } from '@/pages/admin/ui/AdminSearchTraceExplorer';
 import { AdminBetaCampaign } from '@/pages/admin/ui/AdminBetaCampaign';
+import { AdminNewsletter } from '@/pages/admin/ui/AdminNewsletter';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -185,6 +186,8 @@ export function AppRouter() {
           <Route path="search-trace" element={<AdminSearchTraceExplorer />} />
           {/* Closed-beta campaign — signup gate + application inbox. */}
           <Route path="beta-campaign" element={<AdminBetaCampaign />} />
+          {/* Weekly brief — register an IssueDocument; the product renders it. */}
+          <Route path="newsletter" element={<AdminNewsletter />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

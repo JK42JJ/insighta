@@ -197,3 +197,17 @@ export function findUngroundedClaims(doc: IssueDocument): string[] {
   }
   return bad;
 }
+
+/**
+ * Issue number from its label. Stored as an integer so ordering is arithmetic
+ * rather than lexical -- "제10호" sorts before "제9호" as text. A label with no
+ * digits (창간호) is issue 1, which is what 창간호 means.
+ *
+ * Lives here rather than beside the admin route because it reads the document,
+ * and importing it from a route drags the whole application config into any
+ * script that only wanted to number an issue.
+ */
+export function issueNumber(doc: IssueDocument): number {
+  const digits = /(\d+)/.exec(doc.issueLabel);
+  return digits ? Number(digits[1]) : 1;
+}

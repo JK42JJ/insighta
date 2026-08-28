@@ -14,6 +14,7 @@ import {
   Gauge,
   Footprints,
   Rocket,
+  Newspaper,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { to: '/admin/promotions', icon: Gift, label: 'Promotions' },
   // Closed-beta campaign — signup gate + application inbox.
   { to: '/admin/beta-campaign', icon: Rocket, label: 'Beta Campaign' },
+  { to: '/admin/newsletter', icon: Newspaper, label: 'Newsletter' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/billing', icon: ToggleRight, label: 'Billing Flag' },
   { to: '/admin/health', icon: HeartPulse, label: 'Health' },

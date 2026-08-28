@@ -2961,6 +2961,69 @@ class ApiClient {
     );
   }
 
+  // ========================================
+  // Admin Newsletter — kept in sync with src/api/routes/admin/newsletter.ts
+  // ========================================
+
+  async listNewsletterIssues(category?: string): Promise<{
+    status: string;
+    data: {
+      issues: Array<{
+        id: string;
+        slug: string;
+        category_key: string;
+        issue_no: number;
+        template_version: string;
+        published_at: string | null;
+        updated_at: string;
+      }>;
+    };
+  }> {
+    return this.request(
+      category
+        ? `/admin/newsletter/issues?category=${encodeURIComponent(category)}`
+        : '/admin/newsletter/issues'
+    );
+  }
+
+  async getNewsletterIssue(
+    id: string
+  ): Promise<{ status: string; data: { issue: { id: string; content_json: unknown } } }> {
+    return this.request(`/admin/newsletter/issues/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * `document` is an IssueDocument (src/modules/newsletter/issue-schema.ts).
+   * The server validates it and refuses a graded claim with no source, so a
+   * 400 here is usually a real editorial problem rather than a typo.
+   */
+  async createNewsletterIssue(
+    document: unknown,
+    publish = false
+  ): Promise<{ status: string; data: { issue: { id: string; slug: string } } }> {
+    return this.request('/admin/newsletter/issues', {
+      method: 'POST',
+      body: JSON.stringify({ document, publish }),
+    });
+  }
+
+  async updateNewsletterIssue(
+    id: string,
+    document: unknown,
+    publish = false
+  ): Promise<{ status: string; data: { issue: { id: string; slug: string } } }> {
+    return this.request(`/admin/newsletter/issues/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ document, publish }),
+    });
+  }
+
+  async deleteNewsletterIssue(id: string): Promise<{ status: string }> {
+    return this.request(`/admin/newsletter/issues/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  }
+
   async bulkUpdateUsers(
     userIds: string[],
     changes: { tier?: string; localCardsLimit?: number; mandalaLimit?: number }
