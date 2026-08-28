@@ -2886,7 +2886,11 @@ model newsletter_issues {
 model newsletter_unsubscribes {
   id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email           String
-  category_key    String?   @db.VarChar(40)
+  /// "all" means every category. A sentinel rather than NULL: NULLs are
+  /// distinct in Postgres, so a NULL here would let one address hold several
+  /// all-category rows, and expressing that needs a partial unique index --
+  /// which Prisma cannot describe, so `db push` fought the database instead.
+  category_key    String    @default("all") @db.VarChar(40)
   /// Minted per (email, category) when a send goes out. The only credential
   /// GET /u/:token carries, so it is unguessable and single-purpose.
   token           String    @unique

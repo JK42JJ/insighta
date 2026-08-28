@@ -34,24 +34,19 @@ CREATE INDEX IF NOT EXISTS idx_newsletter_issues_published_at
 CREATE TABLE IF NOT EXISTS public.newsletter_unsubscribes (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email           text NOT NULL,
-  -- NULL = every category.
-  category_key    varchar(40),
+  -- "all" = every category. A sentinel, not NULL: see 002 for why.
+  category_key    varchar(40) NOT NULL DEFAULT 'all',
   token           text NOT NULL UNIQUE,
   -- NULL = token issued, reader has not opted out.
   unsubscribed_at timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now()
 );
 
--- A partial unique index rather than a plain one: NULL category_key means
--- "all categories", and in Postgres NULLs are distinct, so a plain unique
--- constraint would let the same address hold several all-category rows.
+-- One address holds at most one row per category, and "all" is a category
+-- like any other. Plain rather than partial because Prisma has to be able to
+-- describe it; see 002.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_newsletter_unsub_email_category
-  ON public.newsletter_unsubscribes (email, category_key)
-  WHERE category_key IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_newsletter_unsub_email_all
-  ON public.newsletter_unsubscribes (email)
-  WHERE category_key IS NULL;
+  ON public.newsletter_unsubscribes (email, category_key);
 
 CREATE INDEX IF NOT EXISTS idx_newsletter_unsub_email
   ON public.newsletter_unsubscribes (email);
