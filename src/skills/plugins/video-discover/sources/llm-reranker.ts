@@ -103,6 +103,41 @@ export async function rerankBatch(opts: RerankBatchOpts): Promise<RerankResult> 
   const batchSize = opts.batchSize ?? DEFAULT_BATCH_SIZE;
   const fetchFn = opts.fetchImpl ?? fetch;
 
+  /**
+   * Record the call in `llm_call_logs`. This module reaches OpenRouter with
+   * its own fetch rather than through `modules/llm/openrouter`, so without
+   * this the traffic is absent from the ledger — which is how prod ran for
+   * weeks showing $0.18 while the provider billed for the reranker's share.
+   *
+   * Fire-and-forget by contract: `logLLMCall` swallows its own errors, and
+   * rerank is a soft signal that must never fail on bookkeeping.
+   *
+   * Imported dynamically on purpose. `call-logger` reaches the Prisma client,
+   * and `database/client` constructs one at module load — a static import
+   * would drag a database into a module that only speaks HTTP, and the
+   * existing unit test (which mocks the logger, not the DB) fails at import
+   * time before a single case runs.
+   */
+  const record = (
+    status: 'success' | 'error',
+    usage?: { prompt_tokens?: number; completion_tokens?: number },
+    errorMessage?: string
+  ): void => {
+    void import('@/modules/llm/call-logger')
+      .then(({ logLLMCall }) =>
+        logLLMCall({
+          module: 'llm-reranker',
+          model: `openrouter/${opts.model}`,
+          inputTokens: usage?.prompt_tokens,
+          outputTokens: usage?.completion_tokens,
+          latencyMs: Date.now() - t0,
+          status,
+          errorMessage,
+        })
+      )
+      .catch(() => undefined);
+  };
+
   const empty = (error: string | null, parseMode: RerankResult['parseMode']): RerankResult => ({
     verdicts: new Map(),
     parsedCount: 0,
@@ -160,26 +195,33 @@ export async function rerankBatch(opts: RerankBatchOpts): Promise<RerankResult> 
     clearTimeout(timer);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      return empty(`OpenRouter HTTP ${res.status}: ${body.slice(0, 200)}`, 'failed');
+      const detail = `OpenRouter HTTP ${res.status}: ${body.slice(0, 200)}`;
+      record('error', undefined, detail);
+      return empty(detail, 'failed');
     }
     const data = (await res.json()) as {
       choices?: { message?: { content?: string; reasoning?: string } }[];
       error?: { message?: string };
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
     if (data.error?.message) {
+      record('error', data.usage, data.error.message);
       return empty(`OpenRouter error: ${data.error.message}`, 'failed');
     }
     const message = data.choices?.[0]?.message;
     raw = message?.content || message?.reasoning || '';
     if (!raw) {
+      record('error', data.usage, 'empty content');
       return empty('OpenRouter returned empty content', 'failed');
     }
+    // A body arrived and was billable regardless of how the parser fares
+    // below, so the ledger entry belongs here rather than after parsing.
+    record('success', data.usage);
   } catch (err) {
     clearTimeout(timer);
-    return empty(
-      `OpenRouter request failed: ${err instanceof Error ? err.message : String(err)}`,
-      'failed'
-    );
+    const detail = `OpenRouter request failed: ${err instanceof Error ? err.message : String(err)}`;
+    record('error', undefined, detail);
+    return empty(detail, 'failed');
   }
 
   const { verdicts, parseMode } = parseRerankResponse(raw, batch.length);

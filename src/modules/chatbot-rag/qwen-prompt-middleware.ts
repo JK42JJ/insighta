@@ -132,6 +132,57 @@ export function _resetMiddlewareCacheForTesting(): void {
 export function createQwenPromptMiddleware(): LanguageModelV3Middleware {
   return {
     specificationVersion: 'v3' as const,
+
+    /**
+     * Record the chat turn in `llm_call_logs`.
+     *
+     * The chatbot reaches its provider through the AI SDK rather than through
+     * `modules/llm/openrouter`, so none of this traffic appeared in the ledger
+     * — prod showed $0.18 over a fortnight while the provider billed for every
+     * conversation. This middleware already sits on the request path for all
+     * three providers the adapter serves, which makes it the one place that
+     * sees every turn exactly once.
+     *
+     * The stream is passed through untouched: each chunk is forwarded in the
+     * order it arrives and nothing is buffered, dropped or rewritten. The only
+     * thing taken from it is the usage on the terminating `finish` part. A
+     * failure to read that must never cost the user their answer, so every
+     * step here is guarded and the ledger write is fire-and-forget.
+     */
+    wrapStream: async ({ doStream, model }) => {
+      const t0 = Date.now();
+      const result = await doStream();
+
+      let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+      const observer = new TransformStream({
+        transform(chunk, controller) {
+          try {
+            const part = chunk as { type?: string; usage?: typeof usage };
+            if (part?.type === 'finish' && part.usage) usage = part.usage;
+          } catch {
+            // Observation must never interfere with delivery.
+          }
+          controller.enqueue(chunk);
+        },
+        flush() {
+          void import('@/modules/llm/call-logger')
+            .then(({ logLLMCall }) =>
+              logLLMCall({
+                module: 'copilotkit',
+                model: `openrouter/${model.modelId}`,
+                inputTokens: usage?.inputTokens,
+                outputTokens: usage?.outputTokens,
+                latencyMs: Date.now() - t0,
+                status: 'success',
+              })
+            )
+            .catch(() => undefined);
+        },
+      });
+
+      return { ...result, stream: result.stream.pipeThrough(observer) };
+    },
+
     transformParams: async ({ params }) => {
       try {
         const rewritten = await rewriteSystemPrompt(params.prompt);

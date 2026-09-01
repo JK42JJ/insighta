@@ -22,6 +22,25 @@ const BASELINE_PATH = resolve(REPORT_DIR, 'baseline.json');
 
 const RULES: RuleDef[] = [
   {
+    // Every file that declares this endpoint reaches the provider with its own
+    // fetch, and each one is a place the ledger can be forgotten. Six such call
+    // paths existed while only one wrote to `llm_call_logs`, which is how prod
+    // reported $0.18 over a fortnight against a bill of $23. The existing ones
+    // are now instrumented and held at baseline; a new declaration is a new
+    // chance to bypass the ledger, so it fails here rather than in the invoice.
+    id: 'openrouter-endpoint-redeclared',
+    description:
+      'OpenRouter chat endpoint declared outside modules/llm (route calls through the logged provider)',
+    pattern: String.raw`openrouter\.ai/api/v1/chat/completions`,
+    allowedFileGlobs: [
+      'src/modules/llm/**',
+      'src/config/llm-pricing.ts',
+      'src/**/__tests__/**',
+      'src/**/*.test.ts',
+      'tests/**',
+    ],
+  },
+  {
     id: 'ms-per-day-redeclared',
     description: 'MS_PER_DAY / MS_PER_HOUR / MS_PER_MINUTE redeclared outside time-constants',
     pattern: String.raw`^\s*(?:export\s+)?const\s+MS_PER_(?:DAY|HOUR|MINUTE|SECOND)\s*=`,
