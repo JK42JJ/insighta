@@ -129,7 +129,19 @@ export function _resetMiddlewareCacheForTesting(): void {
  * the underlying cache (module-level) can be shared across instances but
  * the middleware object itself stays disposable.
  */
-export function createQwenPromptMiddleware(): LanguageModelV3Middleware {
+export interface QwenPromptMiddlewareOpts {
+  /**
+   * Service label for the ledger row. Omitted only by callers that do not
+   * reach a provider (tests of the prompt rewrite), which is why it falls back
+   * to a neutral value rather than guessing a vendor.
+   */
+  providerLabel?: string;
+}
+
+export function createQwenPromptMiddleware(
+  opts: QwenPromptMiddlewareOpts = {}
+): LanguageModelV3Middleware {
+  const providerLabel = opts.providerLabel ?? 'chatbot';
   return {
     specificationVersion: 'v3' as const,
 
@@ -169,7 +181,7 @@ export function createQwenPromptMiddleware(): LanguageModelV3Middleware {
             .then(({ logLLMCall }) =>
               logLLMCall({
                 module: 'copilotkit',
-                model: `openrouter/${model.modelId}`,
+                model: `${providerLabel}/${model.modelId}`,
                 inputTokens: usage?.inputTokens,
                 outputTokens: usage?.outputTokens,
                 latencyMs: Date.now() - t0,
