@@ -168,6 +168,42 @@ export function createWebSearchClient(config: WebSearchConfig) {
   }
 
   async function searchGlobal(query: string, num: number): Promise<WebSearchResult> {
+    const t0 = Date.now();
+
+    /**
+     * Record the call in `llm_call_logs`. This leg reaches OpenRouter with its
+     * own fetch rather than through `modules/llm/openrouter`, so its spend is
+     * otherwise absent from the ledger the cost gate and admin panel read.
+     * The web plugin bills per search on top of tokens, which makes an
+     * unmetered leg the most expensive kind to leave uncounted.
+     *
+     * One HTTP call, one row. Imported dynamically because `call-logger`
+     * constructs a Prisma client at module load and this module is unit-tested
+     * without a database.
+     */
+    let recorded = false;
+    const record = (
+      status: 'success' | 'error',
+      usage?: { prompt_tokens?: number; completion_tokens?: number },
+      errorMessage?: string
+    ): void => {
+      if (recorded) return;
+      recorded = true;
+      void import('@/modules/llm/call-logger')
+        .then(({ logLLMCall }) =>
+          logLLMCall({
+            module: 'web-search',
+            model: `openrouter/${config.openrouterWebModel}`,
+            inputTokens: usage?.prompt_tokens,
+            outputTokens: usage?.completion_tokens,
+            latencyMs: Date.now() - t0,
+            status,
+            errorMessage,
+          })
+        )
+        .catch(() => undefined);
+    };
+
     try {
       const body = await fetchJsonWithTimeout(
         OPENROUTER_URL,
@@ -190,11 +226,17 @@ export function createWebSearchClient(config: WebSearchConfig) {
         },
         OPENROUTER_TIMEOUT_MS
       );
+      // Billed once a body arrives, whether or not any annotation parses out.
+      record(
+        'success',
+        (body as { usage?: { prompt_tokens?: number; completion_tokens?: number } })?.usage
+      );
       const items = parseOpenRouterAnnotations(body, num);
       log.debug(`openrouter-web OK: query="${query}" count=${items.length}`);
       return { items, totalResults: items.length };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      record('error', undefined, message);
       log.warn(`openrouter web search failed: ${message}`, { query });
       return { items: [], totalResults: 0, error: `openrouter-web: ${message}` };
     }

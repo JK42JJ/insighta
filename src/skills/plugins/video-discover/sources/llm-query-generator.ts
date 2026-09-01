@@ -132,6 +132,7 @@ interface OllamaChatResponse {
 interface OpenRouterChatResponse {
   choices?: Array<{ message?: { content?: string; reasoning?: string } }>;
   error?: { message?: string };
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
 /**
@@ -227,6 +228,39 @@ export async function generateSearchQueriesViaOpenRouter(
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), OPENROUTER_REQUEST_TIMEOUT_MS);
+  const t0 = Date.now();
+
+  /**
+   * Record the call in `llm_call_logs`. This function fetches OpenRouter
+   * directly rather than through `modules/llm/openrouter`, so its spend is
+   * otherwise absent from the ledger the cost gate and admin panel read.
+   *
+   * One HTTP call, one row. Imported dynamically because `call-logger`
+   * constructs a Prisma client at module load and this module is unit-tested
+   * with an injected fetch and no database.
+   */
+  let recorded = false;
+  const record = (
+    status: 'success' | 'error',
+    usage?: { prompt_tokens?: number; completion_tokens?: number },
+    errorMessage?: string
+  ): void => {
+    if (recorded) return;
+    recorded = true;
+    void import('@/modules/llm/call-logger')
+      .then(({ logLLMCall }) =>
+        logLLMCall({
+          module: 'llm-query-generator',
+          model: `openrouter/${opts.openRouterModel}`,
+          inputTokens: usage?.prompt_tokens,
+          outputTokens: usage?.completion_tokens,
+          latencyMs: Date.now() - t0,
+          status,
+          errorMessage,
+        })
+      )
+      .catch(() => undefined);
+  };
 
   let res: Response;
   try {
@@ -265,9 +299,9 @@ export async function generateSearchQueriesViaOpenRouter(
     });
   } catch (err) {
     clearTimeout(timer);
-    throw new LlmQueryGenError(
-      `OpenRouter request failed: ${err instanceof Error ? err.message : String(err)}`
-    );
+    const detail = `OpenRouter request failed: ${err instanceof Error ? err.message : String(err)}`;
+    record('error', undefined, detail);
+    throw new LlmQueryGenError(detail);
   }
   clearTimeout(timer);
 
@@ -278,10 +312,14 @@ export async function generateSearchQueriesViaOpenRouter(
     } catch {
       // ignore
     }
+    record('error', undefined, `HTTP ${res.status}: ${body}`);
     throw new LlmQueryGenError(`OpenRouter HTTP ${res.status}: ${body}`, res.status);
   }
 
   const data = (await res.json()) as OpenRouterChatResponse;
+  // Billed once a body arrives; the throws below are parse outcomes, not
+  // separate calls, so they are already covered by this row.
+  record('success', data.usage);
   if (data.error?.message) {
     throw new LlmQueryGenError(`OpenRouter error: ${data.error.message}`);
   }

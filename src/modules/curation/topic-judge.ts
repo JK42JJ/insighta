@@ -113,6 +113,41 @@ async function judgeBatch(
   const fetchFn = fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const t0 = Date.now();
+
+  /**
+   * Record the call in `llm_call_logs`. This module holds its own
+   * `OPENROUTER_API_URL` and fetches directly, so without this its spend is
+   * invisible to the ledger and to the cost gate that reads it.
+   *
+   * Imported dynamically: `call-logger` pulls in the Prisma client, and this
+   * module is exercised by tests that inject a fetch and never touch a DB.
+   */
+  let recorded = false;
+  const record = (
+    status: 'success' | 'error',
+    usage?: { prompt_tokens?: number; completion_tokens?: number },
+    errorMessage?: string
+  ): void => {
+    // One HTTP call, one row. Without this guard a body that arrives and then
+    // fails to parse writes twice, and the per-module call count — the number
+    // the cost gate and the admin panel read — is no longer a call count.
+    if (recorded) return;
+    recorded = true;
+    void import('@/modules/llm/call-logger')
+      .then(({ logLLMCall }) =>
+        logLLMCall({
+          module: 'topic-judge',
+          model: `openrouter/${model}`,
+          inputTokens: usage?.prompt_tokens,
+          outputTokens: usage?.completion_tokens,
+          latencyMs: Date.now() - t0,
+          status,
+          errorMessage,
+        })
+      )
+      .catch(() => undefined);
+  };
 
   try {
     const res = await fetchFn(OPENROUTER_API_URL, {
@@ -134,7 +169,13 @@ async function judgeBatch(
     });
     if (!res.ok) throw new Error(`OpenRouter HTTP ${res.status}`);
 
-    const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const json = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    // Billable the moment a body arrives, whether or not the parse below
+    // succeeds, so the ledger entry is written here.
+    record('success', json.usage);
     const content = json.choices?.[0]?.message?.content ?? '';
     const parsed = JSON.parse(stripFence(content)) as {
       r?: Array<{ i?: number; s?: boolean; l?: boolean; w?: string }>;
@@ -155,6 +196,11 @@ async function judgeBatch(
         why: (r.w ?? '').slice(0, 120),
       };
     });
+  } catch (err) {
+    // No-op when the body already produced a row: this catch also sees parse
+    // failures, and those calls were billed and are already accounted for.
+    record('error', undefined, err instanceof Error ? err.message : String(err));
+    throw err;
   } finally {
     clearTimeout(timer);
   }
