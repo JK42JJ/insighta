@@ -5,6 +5,7 @@ import { isOllamaAvailable } from '@/modules/llm/ollama';
 import { config } from '@/config/index';
 import { createSuccessResponse } from '../../schemas/common.schema';
 import { db } from '@/modules/database/client';
+import { getCreditStatus } from '@/modules/llm/cost-gate';
 
 interface OpenRouterHealthResult {
   available: boolean;
@@ -201,6 +202,10 @@ export async function adminLlmRoutes(fastify: FastifyInstance) {
           daily_used: dailyUsed,
           blocked_calls_today: blockedRows[0]?.count ?? 0,
         },
+        // Empty is the healthy answer. A non-empty list means the provider is
+        // answering 402 and every feature behind it is failing right now — the
+        // condition that previously surfaced only in the next day's digest.
+        credit_status: getCreditStatus(),
       })
     );
   });

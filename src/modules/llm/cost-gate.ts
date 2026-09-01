@@ -273,3 +273,118 @@ export async function checkUserRateLimit(userId: string | null): Promise<UserRat
 
   return { allowed: true, callCount, limit: USER_RATE_LIMIT_PER_HOUR };
 }
+
+// ---------------------------------------------------------------------------
+// L6: Provider credit exhaustion
+// ---------------------------------------------------------------------------
+//
+// L1-L5 defend against spending too much. This one defends against the state
+// after the money is gone, which behaves differently: the provider answers 402
+// to everything, instantly and for days, and every call site treats that as one
+// more transient failure. On 2026-08-30 that produced forty-odd identical
+// failures inside a single minute, none of which could have succeeded.
+//
+// Nothing here blocks a call on its own. It records the state, so the callers
+// that should stop can ask, and so an operator learns from a dashboard rather
+// than from an invoice.
+
+/** Credit exhaustion is a standing state, not a blip. Re-probe after this. */
+const CREDIT_COOLDOWN_MS = 15 * 60 * 1000;
+
+interface CreditState {
+  /** When the provider last answered 402. */
+  since: Date;
+  /** Consecutive 402s observed since the state was entered. */
+  hits: number;
+  /** Module that saw the most recent one — the first place a user notices. */
+  lastModule: string;
+}
+
+const creditState = new Map<string, CreditState>();
+
+/** Provider key from a logged model id (`openrouter/anthropic/...`). */
+function providerOf(model: string): string {
+  const slash = model.indexOf('/');
+  return slash > 0 ? model.slice(0, slash) : model;
+}
+
+/**
+ * Does an error from a provider mean "no credits" rather than "try again"?
+ *
+ * Matched on the message because the call sites record a string, not a status:
+ * they each shape their own error text, and rewriting six of them to carry a
+ * structured code would be a larger change than this needs to be.
+ */
+export function isCreditExhaustionError(message: string | undefined): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes('402') ||
+    m.includes('insufficient credit') ||
+    m.includes('insufficient_quota') ||
+    m.includes('quota exceeded') ||
+    m.includes('exceeded your current quota')
+  );
+}
+
+/**
+ * Record that a provider answered with credit exhaustion. Called from the
+ * ledger writer, which every call path now reaches, so this sees all of them
+ * without any call site knowing it exists.
+ */
+export function noteCreditExhaustion(model: string, module: string): void {
+  const provider = providerOf(model);
+  const prev = creditState.get(provider);
+  const first = !prev || Date.now() - prev.since.getTime() > CREDIT_COOLDOWN_MS;
+
+  creditState.set(provider, {
+    since: first ? new Date() : prev.since,
+    hits: first ? 1 : prev.hits + 1,
+    lastModule: module,
+  });
+
+  // Loud once, quiet after. A thousand identical alerts is the same as none.
+  if (first) {
+    log.error('LLM provider is out of credits — calls will fail until topped up', {
+      provider,
+      module,
+    });
+  }
+}
+
+export interface CreditStatus {
+  provider: string;
+  outOfCredits: boolean;
+  since: string;
+  hits: number;
+  lastModule: string;
+}
+
+/**
+ * Providers currently believed to be out of credits. Empty is the healthy
+ * answer. Entries older than the cooldown are dropped on read rather than on a
+ * timer, so nothing has to be scheduled to keep this honest.
+ */
+export function getCreditStatus(): CreditStatus[] {
+  const now = Date.now();
+  const out: CreditStatus[] = [];
+  for (const [provider, s] of creditState) {
+    if (now - s.since.getTime() > CREDIT_COOLDOWN_MS) {
+      creditState.delete(provider);
+      continue;
+    }
+    out.push({
+      provider,
+      outOfCredits: true,
+      since: s.since.toISOString(),
+      hits: s.hits,
+      lastModule: s.lastModule,
+    });
+  }
+  return out;
+}
+
+/** Test seam — the state is module-level and would otherwise leak between cases. */
+export function resetCreditStateForTest(): void {
+  creditState.clear();
+}

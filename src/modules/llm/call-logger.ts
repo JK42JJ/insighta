@@ -8,6 +8,7 @@
 
 import { getPrismaClient } from '@/modules/database/client';
 import { calculateCost } from '@/config/llm-pricing';
+import { isCreditExhaustionError, noteCreditExhaustion } from './cost-gate';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'LLMCallLogger' });
@@ -59,6 +60,14 @@ export async function logLLMCall(entry: LLMCallLogEntry): Promise<void> {
         video_id: entry.videoId ?? null,
       },
     });
+
+    // Every call path reaches this function, which makes it the one place that
+    // can notice the provider has stopped accepting work at all. Detecting it
+    // here rather than at six call sites means none of them has to know the
+    // difference between "try again" and "the account is empty".
+    if (entry.status === 'error' && isCreditExhaustionError(entry.errorMessage)) {
+      noteCreditExhaustion(entry.model, entry.module);
+    }
   } catch (err) {
     // CRITICAL: logging failure must NOT propagate to the LLM call
     log.error('Failed to log LLM call', {

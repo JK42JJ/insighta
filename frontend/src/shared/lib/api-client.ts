@@ -3189,6 +3189,50 @@ class ApiClient {
     return this.request('/admin/llm', { method: 'PUT', body: JSON.stringify(body) });
   }
 
+  /**
+   * LLM spend, broken down by model and by module.
+   *
+   * The endpoint has existed since the cost gate was written and had no caller,
+   * which is why a fortnight of spend outside the ledger went unnoticed. The
+   * `credit_status` list is the one to read first: empty is healthy, anything
+   * in it means the provider is answering 402 right now.
+   */
+  async getAdminLlmUsage(params?: {
+    period?: 'daily' | 'weekly' | 'monthly';
+    days?: number;
+  }): Promise<{
+    success: boolean;
+    data: {
+      period: string;
+      data: Array<{
+        date: string;
+        total_cost: number;
+        total_calls: number;
+        avg_latency_ms: number;
+      }>;
+      by_model: Array<{ model: string; total_cost: number; total_calls: number }>;
+      by_module: Array<{ module: string; total_cost: number; total_calls: number }>;
+      warnings: {
+        daily_limit: number | null;
+        daily_used: number;
+        blocked_calls_today: number;
+      };
+      credit_status: Array<{
+        provider: string;
+        outOfCredits: boolean;
+        since: string;
+        hits: number;
+        lastModule: string;
+      }>;
+    };
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.period) qs.set('period', params.period);
+    if (params?.days) qs.set('days', String(params.days));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request(`/admin/llm/usage${suffix}`);
+  }
+
   // ========================================
   // Admin Enrichment
   // ========================================

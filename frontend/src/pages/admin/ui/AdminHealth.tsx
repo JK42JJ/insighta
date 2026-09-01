@@ -33,6 +33,92 @@ const PROVIDER_OPTIONS = [
   { value: 'gemini', label: 'Gemini', desc: 'Google Gemini API' },
 ] as const;
 
+/**
+ * What the LLM account is actually spending, and whether it can still spend.
+ *
+ * The `/admin/llm/usage` endpoint has existed since the cost gate was written
+ * and nothing displayed it, so the ledger could disagree with the provider's
+ * invoice by two orders of magnitude and no screen would say so.
+ *
+ * Credit exhaustion is placed above the numbers on purpose: when the provider
+ * answers 402, every feature behind it is failing at that moment, and the
+ * spend chart is the second thing an operator needs to know.
+ */
+function LlmUsagePanel() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'llm', 'usage'],
+    queryFn: () => apiClient.getAdminLlmUsage({ period: 'daily', days: 14 }),
+    staleTime: 30_000,
+  });
+
+  const usage = data?.data;
+  if (isLoading || !usage) return null;
+
+  const outOfCredits = usage.credit_status ?? [];
+  const modules = (usage.by_module ?? []).slice(0, 6);
+  const spend14d = (usage.data ?? []).reduce((sum, d) => sum + (d.total_cost ?? 0), 0);
+  const calls14d = (usage.data ?? []).reduce((sum, d) => sum + (d.total_calls ?? 0), 0);
+  const usd = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
+
+  return (
+    <div className="mb-4 pt-4 border-t border-border">
+      {outOfCredits.map((c) => (
+        <div
+          key={c.provider}
+          className="flex items-center gap-2 mb-3 px-3 py-2 rounded-md border border-red-500/40 bg-red-500/10"
+        >
+          <div className="w-2 h-2 rounded-full bg-red-500" />
+          <span className="text-xs font-medium text-foreground">
+            {c.provider} is out of credits
+          </span>
+          <span className="text-[10px] text-muted-foreground font-mono">
+            {c.hits} rejected since {new Date(c.since).toLocaleTimeString()} · last hit{' '}
+            {c.lastModule}
+          </span>
+        </div>
+      ))}
+
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs font-medium">Spend</span>
+        <span className="text-[10px] text-muted-foreground">last 14 days</span>
+        <span className="ml-auto text-xs font-mono">
+          {usd(spend14d)} · {calls14d.toLocaleString()} calls
+        </span>
+      </div>
+
+      {usage.warnings.daily_limit != null && (
+        <div className="flex justify-between text-xs text-muted-foreground mb-3">
+          <span>Today</span>
+          <span className="font-mono">
+            {usd(usage.warnings.daily_used)} / {usd(usage.warnings.daily_limit)}
+            {usage.warnings.blocked_calls_today > 0 && (
+              <span className="text-red-500 ml-2">
+                {usage.warnings.blocked_calls_today} blocked
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+
+      {modules.length > 0 && (
+        <div className="space-y-1">
+          {modules.map((m) => (
+            <div key={m.module} className="flex justify-between text-xs text-muted-foreground">
+              <span className="font-mono">{m.module}</span>
+              <span className="font-mono">
+                {usd(m.total_cost)}
+                <span className="text-muted-foreground/60 ml-2">
+                  {m.total_calls.toLocaleString()}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LlmSettingsCard() {
   const queryClient = useQueryClient();
   const { data: llmData, isLoading } = useQuery({
@@ -161,6 +247,8 @@ function LlmSettingsCard() {
           </p>
         </div>
       )}
+
+      <LlmUsagePanel />
 
       {/* Current Config Summary */}
       <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs text-muted-foreground mb-4">
