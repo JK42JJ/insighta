@@ -48,6 +48,26 @@ import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'chatbot-rag/qwen-runpod-adapter' });
 
+/**
+ * Which service this adapter actually talks to, derived from its base URL.
+ *
+ * Nothing else on the object says. This class is constructed for OpenRouter,
+ * Gemini and RunPod alike, its `provider` field is the constant
+ * `'qwen-runpod'` in every one of those cases, and the AI SDK's own
+ * `LanguageModelV3.provider` reads the same for all of them because every
+ * branch builds on `createOpenAI`. The URL is the only thing that differs.
+ *
+ * Getting it wrong is not cosmetic: the label is the key the ledger groups by
+ * and the key the credit breaker uses, so mislabelling would report a RunPod
+ * outage as OpenRouter running out of credits.
+ */
+export function providerLabelFromBaseUrl(baseURL: string): string {
+  if (baseURL.includes('openrouter.ai')) return 'openrouter';
+  if (baseURL.includes('runpod')) return 'qwen-runpod';
+  if (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) return 'local';
+  return 'chatbot';
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -142,7 +162,12 @@ export class QwenRunpodAdapter implements CopilotServiceAdapter {
     const baseModel = aiProvider.chat(this.model);
     return wrapLanguageModel({
       model: baseModel,
-      middleware: createQwenPromptMiddleware(),
+      // The label has to come from here: this class is reused for OpenRouter,
+      // Gemini and RunPod alike, and only the base URL it was constructed with
+      // says which one this instance is.
+      middleware: createQwenPromptMiddleware({
+        providerLabel: providerLabelFromBaseUrl(this.baseURL),
+      }),
     });
   }
 

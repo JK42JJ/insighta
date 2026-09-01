@@ -39,6 +39,7 @@ import { cardsRoutes } from './routes/cards';
 import { addCardsRoutes } from './routes/add-cards';
 import { skillRoutes } from './routes/skills';
 import { copilotKitRoutes } from './routes/copilotkit';
+import { stopProviderHealthPoller } from './routes/copilotkit-provider-poller';
 import { billingRoutes } from './routes/billing';
 import ogRoutes from './routes/og';
 import { internalBatchVideoCollectorRoutes } from './routes/internal/batch-video-collector';
@@ -633,6 +634,10 @@ export async function startServer() {
       } catch {
         /* ignore */
       }
+      // The poller holds a 5-second interval. It is unref'd so it cannot keep
+      // the process alive on its own, but leaving it running through shutdown
+      // means health probes fire against a server that is closing.
+      stopProviderHealthPoller();
       await fastify.close();
       await disconnectDatabase();
       process.exit(0);
