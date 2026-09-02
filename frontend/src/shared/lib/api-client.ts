@@ -9,6 +9,10 @@
 import { supabase } from '@/shared/integrations/supabase/client';
 import { subscribeAuth } from './auth-event-bus';
 import type { ExploreListResponse } from '@/shared/types/explore';
+// The published-issue shape lives beside the note converter that consumes it;
+// re-exported here so callers name it once.
+import type { IssueDocument as NewsletterIssueDocument } from '@/features/newsletter-note/lib/issue-types';
+export type { IssueDocument as NewsletterIssueDocument } from '@/features/newsletter-note/lib/issue-types';
 
 // In production VITE_API_URL="/api", in dev "http://localhost:3000"
 const VITE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -2984,6 +2988,34 @@ class ApiClient {
   }
 
   // ========================================
+  /**
+   * Record that this account reads this brief.
+   *
+   * Called when a reader arrives on an issue. The arrival is the opt-in — they
+   * followed a link out of an inbox and signed in to get here, and asking for
+   * a second confirmation would be asking twice. Idempotent.
+   */
+  async subscribeToBrief(
+    categoryKey: string,
+    fromSlug?: string
+  ): Promise<ApiResponse<{ subscribed: boolean; categoryKey: string }>> {
+    return this.request('/brief/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ categoryKey, fromSlug }),
+    });
+  }
+
+  /**
+   * A published issue, as data.
+   *
+   * The note surface renders the issue itself rather than embedding the brief
+   * page, so it needs the document. Public: a published issue is public, and
+   * the endpoint cannot reach a draft.
+   */
+  async getBriefDocument(slug: string): Promise<ApiResponse<{ issue: NewsletterIssueDocument }>> {
+    return this.request(`/brief/${encodeURIComponent(slug)}/document`);
+  }
+
   // Admin Newsletter — kept in sync with src/api/routes/admin/newsletter.ts
   // ========================================
 

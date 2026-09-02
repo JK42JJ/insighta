@@ -17,7 +17,7 @@ import {
   issueNumber,
   type IssueDocument,
 } from '../../../modules/newsletter/issue-schema';
-import { isTemplateId } from '../../../modules/newsletter/render-web';
+import { isTemplateId, renderWeb } from '../../../modules/newsletter/render-web';
 import { clearBriefCache } from '../brief';
 
 /** The ten brief categories (master spec §23). Not mandala domains. */
@@ -104,6 +104,72 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
       });
       if (!row) return reply.code(404).send({ status: 'error', error: 'not found' });
       return reply.send({ status: 'ok', data: { issue: row } });
+    }
+  );
+
+  /**
+   * GET /api/v1/admin/newsletter/issues/:id/preview
+   *
+   * The rendered page for an issue that has not been published.
+   *
+   * The public route filters on `published_at` — that filter is the access
+   * control, not an ordering hint — so a draft cannot be read by guessing its
+   * slug. Which left an editor with no way to look at what they were about to
+   * publish: the admin list only offers a link once the issue is already live,
+   * which is one step too late to be a review.
+   *
+   * Same renderer and same template as the public page, so what is approved
+   * here is what ships. Admin-gated like every other route in this file, and
+   * `noindex` besides — an unpublished issue must not be indexed if the URL
+   * ever escapes.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/newsletter/issues/:id/preview',
+    adminAuth,
+    async (request, reply) => {
+      if (!UUID.test(request.params.id)) {
+        return reply.code(400).type('text/plain; charset=utf-8').send('invalid id');
+      }
+      const row = await getPrismaClient().newsletter_issues.findUnique({
+        where: { id: request.params.id },
+        select: { content_json: true, template_version: true, locale: true, published_at: true },
+      });
+      if (!row) return reply.code(404).type('text/plain; charset=utf-8').send('not found');
+
+      const parsed = IssueDocumentSchema.safeParse(row.content_json);
+      if (!parsed.success) {
+        // A preview that half-renders a broken document is worse than an error:
+        // the reviewer approves what they saw, and what ships is the rest.
+        return reply
+          .code(422)
+          .type('text/plain; charset=utf-8')
+          .send(
+            'this issue does not match the document contract:\n' +
+              parsed.error.issues
+                .slice(0, 10)
+                .map((i) => `  ${i.path.join('.')}: ${i.message}`)
+                .join('\n')
+          );
+      }
+
+      const doc = {
+        ...parsed.data,
+        templateVersion: row.template_version,
+        locale: row.locale === 'en' ? ('en' as const) : ('ko' as const),
+      };
+
+      // A banner, so a screenshot of a preview is never mistaken for the page.
+      const banner = row.published_at
+        ? ''
+        : '<div style="position:sticky;top:0;z-index:99;background:#1c1b18;color:#f2efe6;' +
+          'font:600 12px/1.6 -apple-system,system-ui,sans-serif;padding:8px 16px">' +
+          'DRAFT — not published</div>';
+
+      return reply
+        .header('X-Robots-Tag', 'noindex, nofollow')
+        .header('Cache-Control', 'no-store')
+        .type('text/html; charset=utf-8')
+        .send(renderWeb(doc).replace('<body>', `<body>${banner}`));
     }
   );
 

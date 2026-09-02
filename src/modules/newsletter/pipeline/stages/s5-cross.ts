@@ -1,317 +1,254 @@
 /**
  * S5 — one channel is a claim; independent channels are an event.
  *
- * The rule issue 1 discovered by hand and applied correctly to the Furiosa
- * story, written down so the next editor does not have to rediscover it:
+ * The rule issue 1 discovered by hand, written down so the next editor does
+ * not rediscover it:
  *
- *   A claim carried by fewer than three independent channels is not written
+ *   A subject carried by fewer than three independent channels is not written
  *   as fact. It is written as "this is circulating", or it is dropped.
  *
  * "Independent" means a different channel id, not a different video. Four
  * uploads from one channel are one source, and treating them as four is how a
  * brief turns a press release into a trend.
  *
- * This stage does not drop anything. Corroboration is a property of a claim,
- * not a reason a video is unfit — a single-source video can be the best pick
- * of the week as long as the page says what it is. It writes the count and the
- * peers onto each row so S7 has to look at them.
+ * The counting happens on the graph.
  *
- * Grouping is by the topic terms a title contains. Crude on purpose: a shared
- * subject is what makes two channels corroborating, and inferring subjects
- * with a model here would put an unaudited judgement between the corpus and
- * the page.
+ *   Two earlier versions counted text. The first keyed on literal terms and
+ *   made the English and Korean words for one subject into two, so a story
+ *   covered by two English channels and one Korean cleared nothing. The second
+ *   fixed the aliases and hit the real problem: `agent` matched 144 of 274
+ *   channels, every video reported the same number, and the signal that was
+ *   supposed to rank the week ranked nothing.
+ *
+ *   The fault was the level, not the threshold. `agent` and `prompt-injection`
+ *   are not peers, and a flat list cannot know that. The vocabulary now lives
+ *   in the graph with `BROADER` edges, so this stage counts at the leaf and
+ *   summarises at the branch: `prompt-injection` on eleven channels is an
+ *   event, and `agent` on a hundred and forty-four is the subject of the brief.
+ *
+ * This stage drops nothing. Corroboration is a property of a subject, not a
+ * reason a video is unfit — a single-source video can be the pick of the week
+ * as long as the page says what it is.
  */
 
+import { getPrismaClient } from '@/modules/database/client';
+import { logger } from '@/utils/logger';
 import type { CorpusRow } from '../corpus';
-import type { Stage, StageResult } from '../stage';
+import type { Stage, StageContext, StageResult } from '../stage';
+import {
+  loadTaxonomy,
+  syncConcepts,
+  bridgeCorpus,
+  EDITORIAL_OWNER,
+  type Taxonomy,
+} from '../ontology-bridge';
 
-/**
- * The subjects this brief's stories are about, each with the words that mean it.
- *
- * Aliases, not a word list, and the reason is the whole point of harvesting in
- * two languages. `ai-tech` searches Korean and English because issue 1
- * measured that either alone misses a story — the DeepSeek harness ran 11
- * English videos to 4 Korean, Furiosa ran 5 Korean to 0 English. If "agent"
- * and "에이전트" count as two subjects then a story covered by two English and
- * one Korean channel clears no bar, and the second language bought nothing.
- *
- * A matching aid, not a boundary: adding an alias changes which videos are
- * seen as talking about the same thing, never which videos are in the brief.
- */
-const SUBJECTS: ReadonlyArray<{ key: string; aliases: readonly string[] }> = [
-  { key: 'agent', aliases: ['agent', 'agentic', '에이전트'] },
-  { key: 'mcp', aliases: ['mcp', 'model context protocol'] },
-  { key: 'rag', aliases: ['rag', 'retrieval-augmented', '검색 증강'] },
-  { key: 'embedding', aliases: ['embedding', 'vector', '임베딩', '벡터'] },
-  { key: 'context', aliases: ['context window', 'context engineering', '컨텍스트'] },
-  { key: 'benchmark', aliases: ['benchmark', 'eval', 'leaderboard', '벤치마크', '평가'] },
-  { key: 'fine-tuning', aliases: ['fine-tun', 'finetun', 'lora', 'sft', '파인튜닝', '미세조정'] },
-  { key: 'quantization', aliases: ['quantiz', 'gguf', 'awq', '양자화'] },
-  {
-    key: 'inference',
-    aliases: ['inference', 'vllm', 'serving', 'throughput', 'latency', '추론', '서빙'],
-  },
-  {
-    key: 'pricing',
-    aliases: ['pricing', 'price', 'cost per', 'token cost', '요금', '비용', '가격'],
-  },
-  {
-    key: 'prompt-injection',
-    aliases: ['prompt injection', 'jailbreak', '프롬프트 인젝션', '탈옥'],
-  },
-  { key: 'safety', aliases: ['guardrail', 'alignment', 'safety', '안전', '가드레일'] },
-  {
-    key: 'coding-agent',
-    aliases: ['coding agent', 'cursor', 'copilot', 'codex', 'claude code', '코딩 에이전트'],
-  },
-  {
-    key: 'open-weights',
-    aliases: [
-      'open weights',
-      'open-source model',
-      'open source model',
-      '오픈소스 모델',
-      '오픈 웨이트',
-    ],
-  },
-  { key: 'gpt', aliases: ['gpt-', 'gpt 5', 'openai o'] },
-  { key: 'claude', aliases: ['claude'] },
-  { key: 'gemini', aliases: ['gemini'] },
-  { key: 'llama', aliases: ['llama'] },
-  { key: 'qwen', aliases: ['qwen'] },
-  { key: 'deepseek', aliases: ['deepseek'] },
-  { key: 'mistral', aliases: ['mistral'] },
-  { key: 'grok', aliases: ['grok'] },
-  { key: 'kimi', aliases: ['kimi'] },
-  { key: 'nvidia', aliases: ['nvidia', 'blackwell', 'h100', 'b200', 'gpu cluster'] },
-] as const;
-
-/** Which subjects this text is about. Canonical keys, so the two languages meet. */
-function subjectsIn(text: string): string[] {
-  const t = text.toLowerCase();
-  return SUBJECTS.filter((s) => s.aliases.some((a) => t.includes(a))).map((s) => s.key);
-}
+const log = logger.child({ module: 'newsletter/s5' });
 
 /** Three independent channels is the bar. Below it, a claim is circulating. */
 const INDEPENDENT_CHANNELS_REQUIRED = 3;
 
 /**
- * Above this share of the corpus a subject is background, not an event.
+ * A leaf on more than this share of the corpus's channels is the brief's
+ * subject rather than the week's event, and is reported as background.
  *
- * Measured on the 2026-08-31 run: 274 videos, and "agent" appeared on 144
- * channels. Three independent channels is a meaningful bar for a claim and a
- * meaningless one for a word half the corpus uses — every video cleared it,
- * every video reported the same number, and the signal that was supposed to
- * rank the week ranked nothing. A subject this common is what the brief is
- * about; it is not what happened this week.
+ * Measured on the 2026-08-31 run: `agent` sat on 144 of 274 channels. A bar
+ * that everything clears is not a bar.
  */
 const BACKGROUND_SHARE = 0.25;
 
 /**
- * Words that carry no subject on their own.
+ * How much of the corpus the vocabulary has to reach.
  *
- * Used to find the rare tokens two titles share, which is how a re-upload is
- * recognised. Kept short: the test is rarity in this corpus, not membership of
- * a list, so only words that would otherwise dominate need to be here.
+ * Below this the graph is not describing the week — it is describing the part
+ * of the week the file happens to know words for, and a page built on it would
+ * report the vocabulary's gaps as the field's shape. The run stops and names
+ * the concepts to add rather than shipping a quieter issue.
  */
-const TITLE_STOPWORDS = new Set([
-  'with',
-  'from',
-  'that',
-  'this',
-  'your',
-  'what',
-  'when',
-  'why',
-  'how',
-  'the',
-  'and',
-  'for',
-  'ai',
-  'llm',
-  'llms',
-  'model',
-  'models',
-  'agent',
-  'agents',
-  'agentic',
-  'build',
-  'building',
-  'using',
-  'guide',
-  'tutorial',
-  'explained',
-  'into',
-  'more',
-  'just',
-  'now',
-  'you',
-  'are',
-  'part',
-  'full',
-  'live',
-  'new',
-  'best',
-  'code',
-  'coding',
-  'data',
-  'open',
-  'local',
-]);
+const MIN_CONCEPT_COVERAGE = 0.6;
 
-/** Tokens a title contributes to the re-upload test. */
-function titleTokens(title: string): string[] {
-  return (title.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []).filter((t) => !TITLE_STOPWORDS.has(t));
+export class CoverageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CoverageError';
+  }
+}
+
+interface LeafRow {
+  leaf: string;
+  leaf_label: string;
+  branch: string | null;
+  branch_label: string | null;
+  channels: number;
+  videos: number;
 }
 
 /**
- * How the re-upload test is tuned, and on what.
+ * Ask the graph which subjects this run's channels covered.
  *
- * Measured on the 2026-08-31 run (274 videos), counting how many of the pairs
- * each setting returns are genuinely the same talk:
- *
- *   rare<=3, shared>=2   8 pairs, 4 of them wrong
- *   rare<=3, shared>=3   4 pairs, 4 correct   <- this
- *   rare<=3, shared>=4   1 pair,  3 missed
- *   rare<=2, shared>=3   3 pairs, correct but misses a near-identical title
- *
- * The four it finds are three Korean-subtitled AI Engineer talks and one
- * channel that reposted another's title almost verbatim. Two shared rare
- * tokens is not enough: "Sandbox Escapes and RCE" and "Breaking Claude Code
- * Auto Mode - RCE" are different videos that share two.
+ * One query, walking MENTIONS to the concept and BROADER to its parent, so the
+ * level a count belongs to comes from the graph rather than from this file.
  */
-const REPUBLISH_TOKEN_MAX_FREQ = 3;
-const REPUBLISH_SHARED_TOKENS_REQUIRED = 3;
+async function leafCoverage(runId: string): Promise<LeafRow[]> {
+  const rows = await getPrismaClient().$queryRaw<
+    Array<{
+      leaf: string;
+      leaf_label: string;
+      branch: string | null;
+      branch_label: string | null;
+      channels: bigint;
+      videos: bigint;
+    }>
+  >`
+    SELECT c.title                                        AS leaf,
+           c.properties->>'label'                         AS leaf_label,
+           p.title                                        AS branch,
+           p.properties->>'label'                         AS branch_label,
+           count(DISTINCT v.properties->>'channelId')     AS channels,
+           count(DISTINCT v.title)                        AS videos
+      FROM ontology.edges m
+      JOIN ontology.nodes v ON v.id = m.source_id AND v.type = 'editorial_video'
+      JOIN ontology.nodes c ON c.id = m.target_id AND c.type = 'editorial_concept'
+      LEFT JOIN ontology.edges b
+             ON b.source_id = c.id AND b.relation = 'BROADER'
+                AND b.user_id = ${EDITORIAL_OWNER}::uuid
+      LEFT JOIN ontology.nodes p ON p.id = b.target_id
+     WHERE m.user_id = ${EDITORIAL_OWNER}::uuid
+       AND m.relation = 'MENTIONS'
+       AND v.properties->>'runId' = ${runId}
+     GROUP BY 1, 2, 3, 4
+     ORDER BY channels DESC
+  `;
+  return rows.map((r) => ({
+    leaf: r.leaf,
+    leaf_label: r.leaf_label,
+    branch: r.branch,
+    branch_label: r.branch_label,
+    channels: Number(r.channels),
+    videos: Number(r.videos),
+  }));
+}
 
 export const s5Cross: Stage = {
   id: 'S5_cross',
-  what: 'count the independent channels behind each subject',
+  what: 'count independent channels per concept, on the graph',
   kind: 'machine',
 
-  async run(input: CorpusRow[]): Promise<StageResult> {
-    // subject -> the distinct channels that covered it
-    const channelsBySubject = new Map<string, Set<string>>();
-    const subjectsByVideo = new Map<string, string[]>();
-
-    for (const v of input) {
-      const enrichment = (v.enrichment ?? {}) as { description?: string; tags?: string[] };
-      // Title, description and tags: the description is where a channel says
-      // which model it actually tested, and titles alone miss most of it.
-      const haystack = [
-        v.title,
-        enrichment.description ?? '',
-        (enrichment.tags ?? []).join(' '),
-      ].join(' ');
-      const subjects = subjectsIn(haystack);
-      subjectsByVideo.set(v.videoId, subjects);
-      for (const subject of subjects) {
-        const set = channelsBySubject.get(subject) ?? new Set<string>();
-        set.add(v.channelId);
-        channelsBySubject.set(subject, set);
-      }
+  async run(input: CorpusRow[], ctx: StageContext): Promise<StageResult> {
+    if (input.length === 0) {
+      return { survivors: [], drops: [], detail: { concepts: 0 } };
     }
 
-    // How common is each subject in this corpus? A subject on more than a
-    // quarter of the channels is the brief's vocabulary, not the week's event.
+    // 1. The vocabulary, checked and projected into the graph.
+    const tax: Taxonomy = loadTaxonomy(ctx.topic.categoryKey);
+    const conceptIds = await syncConcepts(tax);
+
+    // 2. This run's corpus, attached to it.
+    const bridge = await bridgeCorpus(ctx.runId, input, tax, conceptIds);
+
+    // 3. The gate. A vocabulary that reaches too little of the corpus is not
+    //    describing the week, and the run says which concepts are missing
+    //    rather than producing a quieter issue.
+    const coverage = (input.length - bridge.unmatched) / input.length;
+    if (coverage < MIN_CONCEPT_COVERAGE) {
+      const examples = input
+        .filter((v) => {
+          const e = (v.enrichment ?? {}) as { description?: string };
+          return !Object.keys(bridge.byConcept).some((k) =>
+            (tax.concepts.find((c) => c.key === k)?.aliases ?? []).some((a) =>
+              `${v.title} ${e.description ?? ''}`.toLowerCase().includes(a.toLowerCase())
+            )
+          );
+        })
+        .slice(0, 5)
+        .map((v) => v.title.slice(0, 60));
+      throw new CoverageError(
+        `the vocabulary names only ${Math.round(coverage * 100)}% of ${input.length} videos ` +
+          `(floor ${Math.round(MIN_CONCEPT_COVERAGE * 100)}%). ` +
+          `Add concepts to docs/newsletter/ontology/${ctx.topic.categoryKey}.yml before publishing. ` +
+          `Unmatched, for example: ${examples.join(' | ')}`
+      );
+    }
+
+    // 4. Read the week back out of the graph.
+    const leaves = await leafCoverage(ctx.runId);
     const distinctChannels = new Set(input.map((v) => v.channelId)).size;
     const backgroundCutoff = Math.max(
       INDEPENDENT_CHANNELS_REQUIRED,
       Math.ceil(distinctChannels * BACKGROUND_SHARE)
     );
-    const background = new Set(
-      [...channelsBySubject.entries()]
-        .filter(([, ch]) => ch.size > backgroundCutoff)
-        .map(([term]) => term)
+
+    const events = leaves.filter(
+      (l) => l.channels >= INDEPENDENT_CHANNELS_REQUIRED && l.channels <= backgroundCutoff
     );
+    const background = leaves.filter((l) => l.channels > backgroundCutoff);
+    const eventKeys = new Set(events.map((e) => e.leaf));
 
-    // ---- re-uploads ------------------------------------------------------
-    //
-    // The same talk appears twice when a channel republishes another's with
-    // subtitles. The titles share no words — one is a translation — but they
-    // share the speaker and the company, and those are rare tokens. Two rare
-    // tokens in common, from different channels, is a re-upload; the earlier
-    // publication is the original and the later one is marked.
-    //
-    // Not a drop. A Korean-subtitled version is the more useful of the pair
-    // for half this brief's readers. It is recorded so S7 can decline to
-    // print both, which is what it would otherwise have done: the first run
-    // put a 152-view re-upload at the top of the picks while the original sat
-    // in the corpus unused.
-    const tokenFreq = new Map<string, number>();
-    for (const v of input) {
-      for (const t of new Set(titleTokens(v.title))) {
-        tokenFreq.set(t, (tokenFreq.get(t) ?? 0) + 1);
-      }
+    // Which leaves did each video name? One pass over the graph rather than a
+    // query per video.
+    const mentions = await getPrismaClient().$queryRaw<Array<{ vid: string; leaf: string }>>`
+      SELECT v.title AS vid, c.title AS leaf
+        FROM ontology.edges m
+        JOIN ontology.nodes v ON v.id = m.source_id AND v.type = 'editorial_video'
+        JOIN ontology.nodes c ON c.id = m.target_id AND c.type = 'editorial_concept'
+       WHERE m.user_id = ${EDITORIAL_OWNER}::uuid
+         AND m.relation = 'MENTIONS'
+         AND v.properties->>'runId' = ${ctx.runId}
+    `;
+    const byVideo = new Map<string, string[]>();
+    for (const m of mentions) {
+      byVideo.set(m.vid, [...(byVideo.get(m.vid) ?? []), m.leaf]);
     }
-    const rareTokensByVideo = new Map<string, Set<string>>();
-    for (const v of input) {
-      rareTokensByVideo.set(
-        v.videoId,
-        new Set(
-          titleTokens(v.title).filter((t) => (tokenFreq.get(t) ?? 0) <= REPUBLISH_TOKEN_MAX_FREQ)
-        )
-      );
-    }
-
-    const byDate = [...input].sort((a, b) => a.publishedAt.getTime() - b.publishedAt.getTime());
-    const republishOf = new Map<string, string>();
-    for (let i = 0; i < byDate.length; i++) {
-      const later = byDate[i] as CorpusRow;
-      const lt = rareTokensByVideo.get(later.videoId) ?? new Set<string>();
-      if (lt.size < REPUBLISH_SHARED_TOKENS_REQUIRED) continue;
-      for (let j = 0; j < i; j++) {
-        const earlier = byDate[j] as CorpusRow;
-        if (earlier.channelId === later.channelId) continue;
-        const et = rareTokensByVideo.get(earlier.videoId) ?? new Set<string>();
-        let shared = 0;
-        for (const t of lt) if (et.has(t)) shared += 1;
-        if (shared >= REPUBLISH_SHARED_TOKENS_REQUIRED) {
-          republishOf.set(later.videoId, earlier.videoId);
-          break;
-        }
-      }
-    }
+    const leafByKey = new Map(leaves.map((l) => [l.leaf, l]));
 
     const survivors = input.map((v) => {
-      const subjects = subjectsByVideo.get(v.videoId) ?? [];
-      const corroborated = subjects
-        .map((term) => ({ term, channels: channelsBySubject.get(term)?.size ?? 0 }))
-        .filter((t) => t.channels >= INDEPENDENT_CHANNELS_REQUIRED && !background.has(t.term))
-        // Most specific first. The broadest subject a video touches says the
-        // least about it; the narrowest one several channels also covered is
-        // the reason it belongs in this week's issue.
-        .sort((a, b) => a.channels - b.channels);
+      const named = byVideo.get(v.videoId) ?? [];
+      const corroborated = named
+        .filter((k) => eventKeys.has(k))
+        .map((k) => {
+          const l = leafByKey.get(k);
+          return { term: k, label: l?.leaf_label ?? k, channels: l?.channels ?? 0 };
+        })
+        .sort((a, b) => b.channels - a.channels);
 
       return {
         videoId: v.videoId,
         corroboration: {
-          terms: subjects,
+          concepts: named,
           corroborated,
-          background: subjects.filter((t) => background.has(t)),
+          background: named.filter((k) => !eventKeys.has(k)),
           strongest: corroborated[0]?.term ?? null,
           independentChannels: corroborated[0]?.channels ?? 0,
-          republishOf: republishOf.get(v.videoId) ?? null,
+          source: 'ontology',
         },
       };
     });
 
-    // The week's shape: subjects several independent channels covered, with
-    // the background this brief always talks about removed.
-    const events = [...channelsBySubject.entries()]
-      .map(([term, channels]) => ({ term, channels: channels.size }))
-      .filter((e) => e.channels >= INDEPENDENT_CHANNELS_REQUIRED && !background.has(e.term))
-      .sort((a, b) => b.channels - a.channels);
+    log.info('S5 complete', {
+      coverage: Math.round(coverage * 100),
+      events: events.length,
+      background: background.length,
+    });
 
     return {
       survivors,
       drops: [],
       detail: {
-        rule: `a subject needs ${INDEPENDENT_CHANNELS_REQUIRED} independent channels to be written as fact`,
+        rule: `a concept needs ${INDEPENDENT_CHANNELS_REQUIRED} independent channels to be written as fact`,
+        vocabulary: `docs/newsletter/ontology/${ctx.topic.categoryKey}.yml v${tax.version}`,
+        concepts: conceptIds.size,
+        mentionEdges: bridge.mentionEdges,
+        coveragePct: Math.round(coverage * 100),
+        unmatchedVideos: bridge.unmatched,
         backgroundCutoff,
-        background: [...background],
-        subjectsClearingBar: events.length,
-        republishesFound: republishOf.size,
-        top: events.slice(0, 15),
+        background: background.map((b) => ({ key: b.leaf, channels: b.channels })),
+        events: events.map((e) => ({
+          key: e.leaf,
+          label: e.leaf_label,
+          branch: e.branch_label,
+          channels: e.channels,
+          videos: e.videos,
+        })),
       },
     };
   },

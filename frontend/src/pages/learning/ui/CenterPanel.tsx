@@ -886,7 +886,14 @@ export function ViewModeToggle({
 // CP445 Phase 5 — TipTap-based note editor view (replaces static NoteView).
 // ---------------------------------------------------------------------------
 
-const NOTE_PROSE_STYLE = `
+/**
+ * Exported so the brief reader renders in the same typography.
+ *
+ * A newsletter read in the note surface has to look like a note, and the only
+ * way to guarantee that is one stylesheet. A copy would agree on the day it
+ * was made and drift afterwards.
+ */
+export const NOTE_PROSE_STYLE = `
 /* §-redesign — editorial note prose (시안 spec). Color/font tokens come from
    .note-mode (index.css); this block styles the TipTap document + inline players. */
 .note-prose-root .ProseMirror {

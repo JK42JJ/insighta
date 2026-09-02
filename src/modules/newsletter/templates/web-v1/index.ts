@@ -241,16 +241,35 @@ function termRows(terms: Term[]): string {
     .join('')}</div>`;
 }
 
+/**
+ * The picks, each one openable.
+ *
+ * The title is the link. An earlier version of this printed the title, the
+ * channel and the write-up and dropped `videoId` on the floor -- the id was in
+ * the document, the publish gate confirmed it resolved against the API, and
+ * the page still gave a reader no way to watch the video. A recommendation
+ * nobody can open is not a recommendation, and it is the same failure the
+ * launch issue shipped, wearing a different shape.
+ *
+ * `videoId` stays optional in the schema because a pick can exist in a draft
+ * before its id is filled in. On the page, a pick without one is plain text
+ * rather than a dead link.
+ */
 function pickRows(picks: Pick[]): string {
   if (picks.length === 0) return '';
   return `<div class="rows">${picks
-    .map(
-      (p) =>
-        `<div class="item"><div class="item-title">` +
-        (p.latin ? `<span class="en">${esc(p.title)}</span>` : esc(p.title)) +
-        `</div><div class="item-meta">${esc(p.meta)}</div>` +
+    .map((p) => {
+      const label = p.latin ? `<span class="en">${esc(p.title)}</span>` : esc(p.title);
+      const title = p.videoId
+        ? `<a class="pick-link" href="https://www.youtube.com/watch?v=${esc(p.videoId)}"` +
+          ` target="_blank" rel="noopener noreferrer">${label}</a>`
+        : label;
+      return (
+        `<div class="item"><div class="item-title">${title}</div>` +
+        `<div class="item-meta">${esc(p.meta)}</div>` +
         `<div class="item-body">${esc(p.body)}</div></div>`
-    )
+      );
+    })
     .join('')}</div>`;
 }
 
