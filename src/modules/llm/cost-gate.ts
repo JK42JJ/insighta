@@ -275,32 +275,51 @@ export async function checkUserRateLimit(userId: string | null): Promise<UserRat
 }
 
 // ---------------------------------------------------------------------------
-// L6: Provider credit exhaustion
+// L6: Provider credit exhaustion — the breaker
 // ---------------------------------------------------------------------------
 //
 // L1-L5 defend against spending too much. This one defends against the state
 // after the money is gone, which behaves differently: the provider answers 402
-// to everything, instantly and for days, and every call site treats that as one
-// more transient failure. On 2026-08-30 that produced forty-odd identical
-// failures inside a single minute, none of which could have succeeded.
+// to everything, instantly and for days, and every call site reads that as one
+// more transient failure. On 2026-08-30 that produced 163 identical failures
+// inside one minute, and on 09-01 three scheduler windows each fired the same
+// 18 doomed calls — 54 in a day, none of which could have succeeded.
 //
-// Nothing here blocks a call on its own. It records the state, so the callers
-// that should stop can ask, and so an operator learns from a dashboard rather
-// than from an invoice.
+// The first version of this recorded the state and blocked nothing, which left
+// that behaviour exactly as it was. It also held the state in a module-level
+// Map, so with two API pods a 402 seen by one was invisible to the other and a
+// restart erased it. Both are fixed here: the state lives in Postgres, and
+// `checkProviderCredit` is a gate the call sites pass through.
+//
+// Shape: closed → open on a 402 → one probe allowed every ten minutes → closed
+// again when a probe succeeds. A breaker with no probe never closes, and one
+// that lets everything probe is not a breaker.
 
-/** Credit exhaustion is a standing state, not a blip. Re-probe after this. */
-const CREDIT_COOLDOWN_MS = 15 * 60 * 1000;
+import type { CreditGateDecision } from './credit-types';
 
-interface CreditState {
-  /** When the provider last answered 402. */
-  since: Date;
-  /** Consecutive 402s observed since the state was entered. */
+/** How long the breaker stays shut before letting one call through to test. */
+const CREDIT_PROBE_INTERVAL_MS = 10 * 60 * 1000;
+
+/**
+ * How long a provider's state is trusted without re-reading it.
+ *
+ * A batch fires its calls within a minute or two, so one read covers the whole
+ * burst. Long enough to stop a query per call, short enough that a top-up made
+ * in the admin screen is picked up promptly.
+ */
+const CREDIT_CACHE_TTL_MS = 30 * 1000;
+
+interface CachedCredit {
+  exhausted: boolean;
+  /** Epoch ms. Only meaningful when `exhausted`. */
+  nextProbeAt: number;
+  since: Date | null;
   hits: number;
-  /** Module that saw the most recent one — the first place a user notices. */
-  lastModule: string;
+  lastModule: string | null;
+  readAt: number;
 }
 
-const creditState = new Map<string, CreditState>();
+const creditCache = new Map<string, CachedCredit>();
 
 /** Provider key from a logged model id (`openrouter/anthropic/...`). */
 function providerOf(model: string): string {
@@ -328,26 +347,235 @@ export function isCreditExhaustionError(message: string | undefined): boolean {
 }
 
 /**
- * Record that a provider answered with credit exhaustion. Called from the
- * ledger writer, which every call path now reaches, so this sees all of them
- * without any call site knowing it exists.
+ * Should this call be made at all?
+ *
+ * Call sites ask before spending a round trip. `allowed: false` means the
+ * provider is known to be refusing for want of credits and this call would
+ * certainly fail; what to do about that is the call site's decision, because
+ * skipping a reranker and skipping a chat reply are not the same thing.
+ *
+ * Fails open. A breaker that cannot read its own state must not be the reason
+ * a working provider goes unused, so any error here allows the call and says
+ * so in the log.
  */
-export function noteCreditExhaustion(model: string, module: string): void {
+export async function checkProviderCredit(model: string): Promise<CreditGateDecision> {
   const provider = providerOf(model);
-  const prev = creditState.get(provider);
-  const first = !prev || Date.now() - prev.since.getTime() > CREDIT_COOLDOWN_MS;
+  if (!config.creditBreaker.enabled) return { allowed: true, provider };
+  const now = Date.now();
 
-  creditState.set(provider, {
-    since: first ? new Date() : prev.since,
-    hits: first ? 1 : prev.hits + 1,
+  const cached = creditCache.get(provider);
+  if (cached && now - cached.readAt < CREDIT_CACHE_TTL_MS) {
+    if (!cached.exhausted) return { allowed: true, provider };
+    // Still shut, and the probe is not due — refuse without touching the DB.
+    if (now < cached.nextProbeAt) {
+      return {
+        allowed: false,
+        provider,
+        reason: 'credit_exhausted',
+        since: cached.since,
+        hits: cached.hits,
+      };
+    }
+    // Probe due. Fall through: claiming it has to be atomic across pods.
+  }
+
+  try {
+    const prisma = getPrismaClient();
+    const rows = await prisma.$queryRaw<
+      { exhausted_at: Date; hits: number; last_module: string | null; next_probe_at: Date }[]
+    >`
+      SELECT exhausted_at, hits, last_module, next_probe_at
+        FROM llm_provider_credit_state
+       WHERE provider = ${provider} AND cleared_at IS NULL
+    `;
+
+    if (rows.length === 0) {
+      creditCache.set(provider, {
+        exhausted: false,
+        nextProbeAt: 0,
+        since: null,
+        hits: 0,
+        lastModule: null,
+        readAt: now,
+      });
+      return { allowed: true, provider };
+    }
+
+    const row = rows[0];
+    if (!row) return { allowed: true, provider };
+    creditCache.set(provider, {
+      exhausted: true,
+      nextProbeAt: row.next_probe_at.getTime(),
+      since: row.exhausted_at,
+      hits: row.hits,
+      lastModule: row.last_module,
+      readAt: now,
+    });
+
+    if (row.next_probe_at.getTime() > now) {
+      return {
+        allowed: false,
+        provider,
+        reason: 'credit_exhausted',
+        since: row.exhausted_at,
+        hits: row.hits,
+      };
+    }
+
+    // Probe is due. Exactly one caller may take it: the WHERE clause is the
+    // lock, so of N concurrent callers the other N-1 update zero rows.
+    const claimed = await prisma.$executeRaw`
+      UPDATE llm_provider_credit_state
+         SET next_probe_at = now() + make_interval(secs => ${CREDIT_PROBE_INTERVAL_MS / 1000}),
+             updated_at = now()
+       WHERE provider = ${provider}
+         AND cleared_at IS NULL
+         AND next_probe_at <= now()
+    `;
+
+    if (claimed === 1) {
+      log.info('LLM credit breaker: probing whether the provider is back', {
+        provider,
+        outFor: `${Math.round((now - row.exhausted_at.getTime()) / 60000)}m`,
+      });
+      creditCache.set(provider, {
+        exhausted: true,
+        nextProbeAt: now + CREDIT_PROBE_INTERVAL_MS,
+        since: row.exhausted_at,
+        hits: row.hits,
+        lastModule: row.last_module,
+        readAt: now,
+      });
+      return { allowed: true, provider, isProbe: true };
+    }
+
+    return {
+      allowed: false,
+      provider,
+      reason: 'credit_exhausted',
+      since: row.exhausted_at,
+      hits: row.hits,
+    };
+  } catch (err) {
+    log.warn('LLM credit breaker could not read its state — allowing the call', {
+      provider,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { allowed: true, provider };
+  }
+}
+
+/**
+ * Record that a provider answered with credit exhaustion.
+ *
+ * Called from the ledger writer, which every call path reaches, so this sees
+ * all of them without any call site knowing it exists. Writing here rather
+ * than at the call sites is also what makes the count honest: `hits` is every
+ * refusal, including the ones from paths added later.
+ */
+const CREDIT_NOTE_DEDUPE_MS = 5 * 1000;
+const lastNoted = new Map<string, number>();
+
+export async function noteCreditExhaustion(model: string, module: string): Promise<void> {
+  const provider = providerOf(model);
+  const wasOpen = creditCache.get(provider)?.exhausted === true;
+
+  if (!config.creditBreaker.enabled) return;
+
+  // One HTTP refusal, one increment. Two detectors reach this — the call site
+  // and the ledger writer — and without this `hits` would count detectors.
+  const last = lastNoted.get(provider) ?? 0;
+  if (Date.now() - last < CREDIT_NOTE_DEDUPE_MS) return;
+  lastNoted.set(provider, Date.now());
+
+  try {
+    await getPrismaClient().$executeRaw`
+      INSERT INTO llm_provider_credit_state
+             (provider, exhausted_at, hits, last_module, next_probe_at, cleared_at, updated_at)
+      VALUES (${provider}, now(), 1, ${module},
+              now() + make_interval(secs => ${CREDIT_PROBE_INTERVAL_MS / 1000}), NULL, now())
+      ON CONFLICT (provider) DO UPDATE SET
+        -- A refusal during an open spell continues it; one after a recovery
+        -- starts a new spell, so the timestamp answers "since when" correctly.
+        exhausted_at = CASE WHEN llm_provider_credit_state.cleared_at IS NULL
+                            THEN llm_provider_credit_state.exhausted_at ELSE now() END,
+        hits         = CASE WHEN llm_provider_credit_state.cleared_at IS NULL
+                            THEN llm_provider_credit_state.hits + 1 ELSE 1 END,
+        last_module  = ${module},
+        next_probe_at = now() + make_interval(secs => ${CREDIT_PROBE_INTERVAL_MS / 1000}),
+        cleared_at   = NULL,
+        updated_at   = now()
+    `;
+  } catch (err) {
+    log.error('LLM credit breaker could not record exhaustion', {
+      provider,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+
+  creditCache.set(provider, {
+    exhausted: true,
+    nextProbeAt: Date.now() + CREDIT_PROBE_INTERVAL_MS,
+    since: new Date(),
+    hits: (creditCache.get(provider)?.hits ?? 0) + 1,
     lastModule: module,
+    readAt: Date.now(),
   });
 
-  // Loud once, quiet after. A thousand identical alerts is the same as none.
-  if (first) {
-    log.error('LLM provider is out of credits — calls will fail until topped up', {
+  // Loud on the way in, quiet after. A thousand identical alerts is the same
+  // as none, and the breaker now means there will not be a thousand.
+  if (!wasOpen) {
+    log.error('LLM provider is out of credits — calls are now blocked until it recovers', {
       provider,
       module,
+      probeEvery: `${CREDIT_PROBE_INTERVAL_MS / 60000}m`,
+    });
+  }
+}
+
+/**
+ * A call succeeded, so the provider is taking work again.
+ *
+ * A successful call is the only evidence allowed to close the breaker. Nothing
+ * expires on a timer: an account that is empty on Friday is still empty on
+ * Monday, and a breaker that reopens itself on the clock is how the 54-calls-a-
+ * day pattern survived a cooldown in the first place.
+ *
+ * Guarded by the local cache so the ordinary path — provider healthy, nothing
+ * to clear — costs nothing.
+ */
+export async function noteCreditRecovered(
+  model: string,
+  opts: { force?: boolean } = {}
+): Promise<void> {
+  const provider = providerOf(model);
+  // The guard is an optimisation for the hot path, and it reads this pod's
+  // cache. An operator action — the admin balance check — has to clear the
+  // row whichever pod it lands on, including one whose cache is cold, so it
+  // passes `force`. Other pods pick the change up when their own 30-second
+  // cache next expires.
+  if (!opts.force && creditCache.get(provider)?.exhausted !== true) return;
+
+  try {
+    await getPrismaClient().$executeRaw`
+      UPDATE llm_provider_credit_state
+         SET cleared_at = now(), updated_at = now()
+       WHERE provider = ${provider} AND cleared_at IS NULL
+    `;
+    creditCache.set(provider, {
+      exhausted: false,
+      nextProbeAt: 0,
+      since: null,
+      hits: 0,
+      lastModule: null,
+      readAt: Date.now(),
+    });
+    log.info('LLM provider is answering again — breaker closed', { provider });
+  } catch (err) {
+    log.error('LLM credit breaker could not record recovery', {
+      provider,
+      error: err instanceof Error ? err.message : String(err),
     });
   }
 }
@@ -357,34 +585,75 @@ export interface CreditStatus {
   outOfCredits: boolean;
   since: string;
   hits: number;
-  lastModule: string;
+  lastModule: string | null;
+  nextProbeAt: string;
 }
 
 /**
- * Providers currently believed to be out of credits. Empty is the healthy
- * answer. Entries older than the cooldown are dropped on read rather than on a
- * timer, so nothing has to be scheduled to keep this honest.
+ * Providers currently refusing for want of credits. Empty is the healthy
+ * answer; a non-empty list means every feature behind that provider is
+ * degraded right now.
  */
-export function getCreditStatus(): CreditStatus[] {
-  const now = Date.now();
-  const out: CreditStatus[] = [];
-  for (const [provider, s] of creditState) {
-    if (now - s.since.getTime() > CREDIT_COOLDOWN_MS) {
-      creditState.delete(provider);
-      continue;
-    }
-    out.push({
-      provider,
+export async function getCreditStatus(): Promise<CreditStatus[]> {
+  try {
+    const rows = await getPrismaClient().$queryRaw<
+      {
+        provider: string;
+        exhausted_at: Date;
+        hits: number;
+        last_module: string | null;
+        next_probe_at: Date;
+      }[]
+    >`
+      SELECT provider, exhausted_at, hits, last_module, next_probe_at
+        FROM llm_provider_credit_state
+       WHERE cleared_at IS NULL
+       ORDER BY exhausted_at
+    `;
+    return rows.map((r) => ({
+      provider: r.provider,
       outOfCredits: true,
-      since: s.since.toISOString(),
-      hits: s.hits,
-      lastModule: s.lastModule,
+      since: r.exhausted_at.toISOString(),
+      hits: r.hits,
+      lastModule: r.last_module,
+      nextProbeAt: r.next_probe_at.toISOString(),
+    }));
+  } catch (err) {
+    log.error('LLM credit status unavailable', {
+      error: err instanceof Error ? err.message : String(err),
     });
+    return [];
   }
-  return out;
 }
 
-/** Test seam — the state is module-level and would otherwise leak between cases. */
+/**
+ * The breaker's answer without awaiting anything.
+ *
+ * The chat route pauses the request stream and can afford exactly one async
+ * hop before the body is lost — PR #737 and the first CP477+15 ship both
+ * returned 400 "Invalid JSON payload" by adding a second. So that route reads
+ * the cache instead of the table.
+ *
+ * `null` means "no cached opinion, let the call through". A cold cache
+ * therefore costs one real 402, after which the ledger writer fills the cache
+ * and every later request is refused without a round trip.
+ */
+export function creditBlockedFromCache(provider: string): CreditGateDecision | null {
+  if (!config.creditBreaker.enabled) return null;
+  const c = creditCache.get(provider);
+  if (!c || !c.exhausted) return null;
+  if (Date.now() >= c.nextProbeAt) return null; // a probe is due — let it try
+  return {
+    allowed: false,
+    provider,
+    reason: 'credit_exhausted',
+    since: c.since,
+    hits: c.hits,
+  };
+}
+
+/** Test seam — the cache is module-level and would otherwise leak between cases. */
 export function resetCreditStateForTest(): void {
-  creditState.clear();
+  creditCache.clear();
+  lastNoted.clear();
 }

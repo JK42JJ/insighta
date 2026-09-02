@@ -23,6 +23,7 @@
 
 import { config } from '@/config/index';
 import { getSetting, SETTING_KEYS } from '@/modules/system-settings';
+import { creditGate, creditBlockMessage, noteCreditRefusal } from '@/modules/llm/credit-guard';
 
 const DEFAULT_OLLAMA_URL = 'http://100.91.173.17:11434';
 // Mac Mini installed models (verified 2026-04-07): llama3.1:latest (8B),
@@ -389,6 +390,14 @@ async function extractOneChunkViaOpenRouter(
       body['reasoning'] = { enabled: false };
     }
 
+    // The provider refuses everything while the account is empty, so asking
+    // the breaker first is the difference between one refusal and a scheduler
+    // window's worth of doomed round trips. No ledger row: nothing was called.
+    const credit = await creditGate(`openrouter/${model}`);
+    if (!credit.allowed) {
+      throw new LlmExtractError(creditBlockMessage(credit));
+    }
+
     res = await fetchFn(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
@@ -414,6 +423,7 @@ async function extractOneChunkViaOpenRouter(
       // ignore
     }
     record('error', undefined, `HTTP ${res.status}: ${body}`);
+    await noteCreditRefusal(`openrouter/${model}`, 'trend-extract', `HTTP ${res.status}: ${body}`);
     throw new LlmExtractError(`OpenRouter chat HTTP ${res.status}: ${body}`, res.status);
   }
 

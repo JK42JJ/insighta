@@ -28,6 +28,7 @@ import { config } from '@/config/index';
 import { getEmbedIgnoreProviders, getEmbedProviderOrder } from '@/config/embed-provider-prefs';
 import { logLLMCall } from '@/modules/llm/call-logger';
 import { recordTrace } from '@/modules/discover-tracing';
+import { creditGate, creditBlockMessage, noteCreditRefusal } from '@/modules/llm/credit-guard';
 
 const log = logger.child({ module: 'iks-scorer/embedding' });
 
@@ -506,6 +507,7 @@ async function embedOneChunkViaOpenRouter(
       // standard-transient. Both are retryable. 4xx-other (auth/bad request)
       // is deterministic — not retryable.
       const retryable = res.status === 404 || res.status >= 500;
+      await noteCreditRefusal(`openrouter/${model}`, OPENROUTER_FALLBACK_MODULE, errMsg);
       throw new EmbeddingError(errMsg, res.status, retryable);
     }
 
@@ -574,6 +576,15 @@ async function embedOneChunkViaOpenRouterRetrying(
   texts: string[],
   opts: EmbeddingClientOptions
 ): Promise<number[][]> {
+  // Gated here rather than one level down: while credits are gone every
+  // attempt fails identically, so the retry budget buys nothing and costs
+  // three round trips per chunk. Not retryable, which sends bulk callers to
+  // the Ollama fallback — the local one, which still works.
+  const credit = await creditGate(`openrouter/${config.mandalaEmbed.openRouterModel}`);
+  if (!credit.allowed) {
+    throw new EmbeddingError(creditBlockMessage(credit), undefined, false);
+  }
+
   // Serving/precompute callers pass maxRetries: 0 so a slow / 404 chunk is a
   // hard timeout cap, not timeout x (retries + 1). Bulk defaults to 2 (CP458).
   const maxRetries = opts.maxRetries ?? OPENROUTER_EMBED_MAX_RETRIES;

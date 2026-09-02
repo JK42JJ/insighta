@@ -8,7 +8,8 @@
 
 import { getPrismaClient } from '@/modules/database/client';
 import { calculateCost } from '@/config/llm-pricing';
-import { isCreditExhaustionError, noteCreditExhaustion } from './cost-gate';
+import { isCreditExhaustionError, noteCreditExhaustion, noteCreditRecovered } from './cost-gate';
+import { isCreditSkipMessage } from './credit-guard';
 import { logger } from '@/utils/logger';
 
 const log = logger.child({ module: 'LLMCallLogger' });
@@ -38,6 +39,13 @@ export interface LLMCallLogEntry {
  * @param entry - Call metadata to persist
  */
 export async function logLLMCall(entry: LLMCallLogEntry): Promise<void> {
+  // A call the breaker refused never reached a provider, so it is not a call.
+  // Four sites raise that refusal from inside the try block that writes this
+  // row; dropping it here rather than restructuring four call paths keeps
+  // `llm_call_logs` a record of calls, which is what every count read off it
+  // — the cost gate, the admin panel, the waste audit — assumes it is.
+  if (isCreditSkipMessage(entry.errorMessage)) return;
+
   try {
     const prisma = getPrismaClient();
 
@@ -66,7 +74,12 @@ export async function logLLMCall(entry: LLMCallLogEntry): Promise<void> {
     // here rather than at six call sites means none of them has to know the
     // difference between "try again" and "the account is empty".
     if (entry.status === 'error' && isCreditExhaustionError(entry.errorMessage)) {
-      noteCreditExhaustion(entry.model, entry.module);
+      await noteCreditExhaustion(entry.model, entry.module);
+    } else if (entry.status === 'success') {
+      // A call that went through is the only evidence that credits are back.
+      // Cheap when nothing is open: this returns immediately unless the
+      // breaker for this provider is currently shut.
+      await noteCreditRecovered(entry.model);
     }
   } catch (err) {
     // CRITICAL: logging failure must NOT propagate to the LLM call
