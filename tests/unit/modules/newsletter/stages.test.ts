@@ -12,7 +12,7 @@ jest.mock('@/utils/logger', () => ({
 jest.mock('@/modules/database/client', () => ({ getPrismaClient: () => ({}) }));
 
 import { s2Domain } from '@/modules/newsletter/pipeline/stages/s2-domain';
-import { s5Cross } from '@/modules/newsletter/pipeline/stages/s5-cross';
+import { loadTaxonomy, conceptsIn } from '@/modules/newsletter/pipeline/ontology-bridge';
 import { AI_TECH } from '@/modules/newsletter/topics/ai-tech';
 import type { CorpusRow } from '@/modules/newsletter/pipeline/corpus';
 import type { StageContext } from '@/modules/newsletter/pipeline/stage';
@@ -74,49 +74,58 @@ describe('S2 — the topic boundary', () => {
   });
 });
 
-describe('S5 — corroboration', () => {
-  const three = [
-    row({ videoId: 'a', channelId: 'UC_1', title: 'Building a coding agent with MCP' }),
-    row({ videoId: 'b', channelId: 'UC_2', title: 'Agent tool use in production' }),
-    row({ videoId: 'c', channelId: 'UC_3', title: '에이전트 툴 호출 실전' }),
-  ];
+describe('S5 — the vocabulary it counts with', () => {
+  // S5 now counts on the graph rather than on a list of aliases, so what is
+  // testable without a database is the vocabulary it counts with: the file is
+  // the source of truth, it is validated on load, and a broken one stops a run
+  // at the start instead of producing a quieter issue at the end.
+  //
+  // The counting itself is exercised against the real tables by
+  // scripts/verify/newsletter-pipeline-probe.ts, because a graph query cannot
+  // be tested honestly without a graph.
 
-  it('counts a Korean and an English video about one subject as the same subject', async () => {
-    // The reason both languages are harvested. Treating them as two subjects
-    // means a story covered by two English and one Korean channel clears
-    // nothing, and the second language bought nothing.
-    const r = await s5Cross.run(three, ctx);
-    const first = r.survivors[0]?.corroboration as {
-      strongest: string;
-      independentChannels: number;
-    };
-    expect(first.strongest).toBe('agent');
-    expect(first.independentChannels).toBe(3);
+  it('loads the shipped vocabulary and every concept is usable', () => {
+    const tax = loadTaxonomy('ai-tech');
+    expect(tax.concepts.length).toBeGreaterThan(20);
+    for (const c of tax.concepts) {
+      expect(c.key).toMatch(/^[a-z0-9-]+$/);
+      expect(c.label.length).toBeGreaterThan(0);
+      // A concept with no aliases can never match anything, so it is a silent
+      // hole in the vocabulary rather than an entry.
+      expect(c.aliases.length).toBeGreaterThan(0);
+    }
   });
 
-  it('does not clear a subject two channels covered', async () => {
-    const r = await s5Cross.run(three.slice(0, 2), ctx);
-    const c = r.survivors[0]?.corroboration as { corroborated: unknown[] };
-    expect(c.corroborated).toHaveLength(0);
+  it('keeps both languages on one concept', () => {
+    // The reason the brief harvests Korean and English at all. An earlier
+    // version keyed on literal terms, so the English and Korean words for one
+    // subject were two subjects and a story covered by two English channels
+    // and one Korean cleared nothing.
+    const tax = loadTaxonomy('ai-tech');
+    const agent = tax.concepts.find((c) => c.key === 'agent');
+    expect(agent?.aliases).toEqual(expect.arrayContaining(['agent', '에이전트']));
   });
 
-  it('counts channels, not videos — four uploads from one channel is one source', async () => {
-    const r = await s5Cross.run(
-      [
-        row({ videoId: '1', channelId: 'UC_1', title: 'agent part 1' }),
-        row({ videoId: '2', channelId: 'UC_1', title: 'agent part 2' }),
-        row({ videoId: '3', channelId: 'UC_1', title: 'agent part 3' }),
-        row({ videoId: '4', channelId: 'UC_1', title: 'agent part 4' }),
-      ],
-      ctx
+  it('gives the vocabulary a level, which is what makes counting mean anything', () => {
+    const tax = loadTaxonomy('ai-tech');
+    const leaf = tax.concepts.find((c) => c.key === 'prompt-injection');
+    expect(leaf?.broader).toBe('ai-security');
+    // `agent` sat on 144 of 274 channels in the first real run and gave every
+    // video the same score. A leaf under it is what carries the week's signal.
+    expect(tax.concepts.find((c) => c.key === 'agent')?.broader).toBeUndefined();
+  });
+
+  it('finds the concepts a title names, and only those', () => {
+    const tax = loadTaxonomy('ai-tech');
+    const found = conceptsIn('Breaking Claude Code Auto Mode — prompt injection to RCE', tax);
+    expect(found).toEqual(expect.arrayContaining(['prompt-injection', 'coding-agent']));
+    expect(found).not.toContain('quantization');
+  });
+
+  it('matches a Korean title onto the same concepts', () => {
+    const tax = loadTaxonomy('ai-tech');
+    expect(conceptsIn('에이전트 툴 호출 실전', tax)).toEqual(
+      expect.arrayContaining(['agent', 'tool-calling'])
     );
-    const c = r.survivors[0]?.corroboration as { corroborated: unknown[] };
-    expect(c.corroborated).toHaveLength(0);
-  });
-
-  it('drops nothing — a single-source video can still be the pick of the week', async () => {
-    const r = await s5Cross.run(three.slice(0, 1), ctx);
-    expect(r.drops).toEqual([]);
-    expect(r.survivors).toHaveLength(1);
   });
 });

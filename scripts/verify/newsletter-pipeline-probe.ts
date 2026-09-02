@@ -200,17 +200,31 @@ async function main(): Promise<void> {
     rejected.map((r) => `${r.videoId}:${((r.verdict ?? {}) as { why?: string }).why?.slice(0, 28)}`).join(' | ')
   );
 
-  // ---- 4. S5 found the subjects, and only the real ones ------------------
+  // ---- 4. S5 counted on the graph, at the right level --------------------
+  //
+  // The fixture has three channels on agent-shaped titles and three on
+  // benchmark-shaped ones, and two on fine-tuning. What is checked is not
+  // which words matched — that is the vocabulary's business — but that the
+  // count came from the graph and that a two-channel subject did not clear
+  // the three-channel bar.
   const survivors = await corpus.readStage(runId, 'S7_draft');
   const corroboratedTerms = new Set<string>();
   for (const s of survivors) {
     const c = (s.corroboration ?? {}) as { corroborated?: Array<{ term: string }> };
     for (const t of c.corroborated ?? []) corroboratedTerms.add(t.term);
   }
+  const fromGraph = survivors.every(
+    (s) => ((s.corroboration ?? {}) as { source?: string }).source === 'ontology'
+  );
   check(
-    'S5 cleared subjects with three independent channels and not the two-channel one',
-    corroboratedTerms.has('agent') && corroboratedTerms.has('benchmark') && !corroboratedTerms.has('lora'),
-    `cleared: ${[...corroboratedTerms].join(', ') || '(none)'}`
+    'corroboration came from the graph, not from a list of aliases',
+    fromGraph && corroboratedTerms.size > 0,
+    `source=ontology on ${survivors.length} rows, cleared: ${[...corroboratedTerms].join(', ') || '(none)'}`
+  );
+  check(
+    'a subject only two channels covered did not clear the bar',
+    !corroboratedTerms.has('fine-tuning'),
+    `fine-tuning cleared: ${corroboratedTerms.has('fine-tuning')}`
   );
 
   // ---- 5. the draft is derived, and says what it still needs -------------

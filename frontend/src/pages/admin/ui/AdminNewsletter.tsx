@@ -213,16 +213,22 @@ export function AdminNewsletter() {
                   </td>
                   <td className="py-2 text-right">
                     <div className="flex justify-end gap-1">
-                      {it.published_at ? (
-                        <a
-                          href={`/api/v1/brief/${it.slug}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          보기
-                        </a>
-                      ) : null}
+                      {/* A draft has no public page — the serving route filters
+                          on published_at — so it gets the admin preview, which
+                          runs the same renderer and the same template. Without
+                          it an issue could only be looked at after it shipped. */}
+                      <a
+                        href={
+                          it.published_at
+                            ? `/api/v1/brief/${it.slug}`
+                            : `/api/v1/admin/newsletter/issues/${it.id}/preview`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {it.published_at ? '보기' : '미리보기'}
+                      </a>
                       <button
                         onClick={() => load.mutate(it.id)}
                         className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"

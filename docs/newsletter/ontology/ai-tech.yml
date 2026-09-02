@@ -1,0 +1,139 @@
+# ai-tech — 이 브리프가 이름 붙이는 개념들
+#
+# 왜 파일인가
+#
+#   S5 의 첫 버전은 별칭 배열 24줄이었다. `agent` 가 274편 중 144개 채널에
+#   걸렸고, 그래서 모든 영상이 같은 점수를 받아 순위 신호가 죽었다. 원인은
+#   임계값이 아니라 층위였다 — `agent` 와 `prompt-injection` 을 같은 평면에서
+#   센 것이다. 위계가 있으면 잎에서 세고 가지에서 요약할 수 있다.
+#
+#   온톨로지를 빌려 쓰려 했으나 불가능했다. 그래프의 concept 25,337개는 한
+#   독자의 것이고 내용은 캠핑·인테리어·자동차다. 브리프는 자기 어휘를 가져야
+#   하고, 그 어휘는 사람이 검토하는 파일이어야 한다. 신뢰 채널 목록과 같은
+#   위상이다.
+#
+# 규율
+#
+#   - 개념은 사람이 추가한다. 기계가 만들지 않는다.
+#   - broader 는 한 단계만. 깊은 나무는 유지되지 않는다.
+#   - aliases 는 매칭 보조일 뿐 정의가 아니다. 한국어 표기를 반드시 포함한다.
+#   - 개념을 지우지 않는다. 쓰지 않게 되면 active: false. 지난 호가 인용한
+#     개념이 사라지면 그 호의 근거가 사라진다.
+#
+# 스키마
+#   key       그래프 노드의 title. 안정적이어야 하며 바꾸지 않는다.
+#   label     지면에 쓰는 한국어 이름.
+#   broader   상위 개념의 key. 최상위는 생략.
+#   aliases   제목·설명문에서 이 개념을 가리키는 표기들.
+#   active    기본 true.
+
+version: 1
+category: ai-tech
+
+concepts:
+  # ── 에이전트 ────────────────────────────────────────────────
+  - key: agent
+    label: 에이전트
+    aliases: [agent, agentic, 에이전트]
+  - key: agent-harness
+    label: 에이전트 하네스
+    broader: agent
+    aliases: [harness, agent harness, agent loop, 하네스, 에이전트 루프]
+  - key: tool-calling
+    label: 툴 호출
+    broader: agent
+    aliases: [tool call, function calling, tool use, react, 툴 호출, 함수 호출]
+  - key: mcp
+    label: MCP
+    broader: agent
+    aliases: [mcp, model context protocol, mcp server]
+  - key: multi-agent
+    label: 멀티 에이전트
+    broader: agent
+    aliases: [multi-agent, subagent, orchestrat, 멀티 에이전트, 서브에이전트]
+  - key: coding-agent
+    label: 코딩 에이전트
+    broader: agent
+    aliases: [coding agent, claude code, cursor, copilot, codex, 코딩 에이전트]
+  - key: agent-payments
+    label: 에이전트 결제
+    broader: agent
+    aliases: [agentic commerce, x402, ap2, intent mandate, agent wallet, 에이전트 결제]
+  - key: human-in-the-loop
+    label: 사람 승인
+    broader: agent
+    aliases: [human-in-the-loop, hitl, approval, 사람 승인, 승인 토큰]
+
+  # ── 보안 ────────────────────────────────────────────────────
+  - key: ai-security
+    label: AI 보안
+    aliases: [ai security, llm security, 보안 취약점]
+  - key: prompt-injection
+    label: 프롬프트 인젝션
+    broader: ai-security
+    aliases: [prompt injection, jailbreak, 프롬프트 인젝션, 탈옥]
+  - key: indirect-injection
+    label: 간접 인젝션
+    broader: ai-security
+    aliases: [indirect injection, indirect prompt, 간접 인젝션, 간접 프롬프트]
+  - key: supply-chain
+    label: 공급망 취약점
+    broader: ai-security
+    aliases: [supply chain, settings.json, cve, rce, remote code execution, 공급망]
+  - key: guardrails
+    label: 가드레일
+    broader: ai-security
+    aliases: [guardrail, alignment, red team, 가드레일, 레드팀]
+
+  # ── 추론 ────────────────────────────────────────────────────
+  - key: inference
+    label: 추론
+    aliases: [inference, serving, 추론, 서빙]
+  - key: quantization
+    label: 양자화
+    broader: inference
+    aliases: [quantiz, gguf, awq, gptq, exl3, nvfp4, mlx, 양자화]
+  - key: local-inference
+    label: 로컬 추론
+    broader: inference
+    aliases: [run locally, local llm, on-device, vram, 로컬 llm, 로컬 추론]
+  - key: kv-cache
+    label: KV 캐시
+    broader: inference
+    aliases: [kv cache, kv-cache, prompt caching, prefill, 캐시]
+  - key: serving-stack
+    label: 서빙 스택
+    broader: inference
+    aliases: [vllm, sglang, tensorrt, dynamo, llama.cpp, ollama, throughput, ttft]
+
+  # ── 컨텍스트 ────────────────────────────────────────────────
+  - key: context
+    label: 컨텍스트
+    aliases: [context window, context engineering, 컨텍스트]
+  - key: rag
+    label: RAG
+    broader: context
+    aliases: [rag, retrieval-augmented, retriever, 검색 증강]
+  - key: embedding
+    label: 임베딩
+    broader: context
+    aliases: [embedding, vector search, reranking, 임베딩, 벡터]
+  - key: context-compaction
+    label: 컨텍스트 압축
+    broader: context
+    aliases: [compaction, context compression, 압축]
+
+  # ── 모델 ────────────────────────────────────────────────────
+  - key: model-release
+    label: 모델 공개
+    aliases: [open weights, open-source model, released, 공개, 오픈 웨이트]
+  - key: fine-tuning
+    label: 파인튜닝
+    broader: model-release
+    aliases: [fine-tun, finetun, lora, qlora, sft, 파인튜닝, 미세조정]
+  - key: evaluation
+    label: 평가
+    aliases: [benchmark, eval, leaderboard, 벤치마크, 평가]
+  - key: pricing
+    label: 비용
+    aliases: [pricing, token cost, cost per, 요금, 비용, 가격]

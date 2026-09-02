@@ -36,6 +36,102 @@ export function clearBriefCache(): void {
 }
 
 export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
+  /**
+   * POST /api/v1/brief/subscribe
+   *
+   * The CTA in an issue is the subscribe action.
+   *
+   * A reader gets a digest by mail, follows "전체 브리프 읽기", signs in if they
+   * are not already, and lands on the issue in the note surface. That arrival
+   * is the opt-in — asking them to press a second button after they have
+   * already crossed from an inbox into an account would be asking twice.
+   *
+   * Keyed on the account rather than the delivered address: the two are not
+   * always the same person's, and the account is who reads.
+   *
+   * Idempotent. A reader who opens three issues subscribes once, and the row
+   * keeps the slug that first brought them.
+   */
+  fastify.post<{ Body: { categoryKey?: string; fromSlug?: string } }>(
+    '/subscribe',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request.user as { id?: string } | undefined)?.id;
+      if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
+
+      const categoryKey = request.body?.categoryKey;
+      if (!categoryKey || !/^[a-z0-9-]{2,40}$/.test(categoryKey)) {
+        return reply.code(400).send({ status: 'error', error: 'invalid categoryKey' });
+      }
+      const fromSlug = request.body?.fromSlug;
+
+      await getPrismaClient().$executeRaw`
+        INSERT INTO newsletter_subscriptions (user_id, category_key, source, from_slug)
+        VALUES (${userId}::uuid, ${categoryKey}, 'cta', ${fromSlug ?? null})
+        ON CONFLICT (user_id, category_key) DO NOTHING
+      `;
+
+      return reply.send({ status: 'ok', data: { subscribed: true, categoryKey } });
+    }
+  );
+
+  /**
+   * GET /api/v1/brief/:slug/document
+   *
+   * The issue as data, for the surface that renders it itself.
+   *
+   * The HTML route beside this one is a review page and a shareable link. The
+   * place a subscriber reads an issue is the note screen, which renders a
+   * TipTap document — so it needs the issue, not a page. Handing it the HTML
+   * would mean parsing a rendered page back into a document, which is how two
+   * surfaces drift apart.
+   *
+   * Same access rule as the page: `published_at IS NULL` is unreachable, so a
+   * draft cannot be read by guessing a slug here either.
+   */
+  fastify.get<{ Params: { slug: string } }>('/:slug/document', async (request, reply) => {
+    const { slug } = request.params;
+    if (!SLUG.test(slug)) {
+      return reply.code(400).send({ status: 'error', error: 'invalid slug' });
+    }
+
+    const row = await getPrismaClient().newsletter_issues.findFirst({
+      where: { slug, published_at: { not: null } },
+      select: {
+        content_json: true,
+        template_version: true,
+        locale: true,
+        published_at: true,
+        updated_at: true,
+      },
+    });
+    if (!row) return reply.code(404).send({ status: 'error', error: 'not found' });
+
+    const parsed = IssueDocumentSchema.safeParse(row.content_json);
+    if (!parsed.success) {
+      request.log.error(
+        { slug, issues: parsed.error.issues.slice(0, 3) },
+        'brief content_json failed schema validation'
+      );
+      return reply.code(500).send({ status: 'error', error: 'brief is unreadable' });
+    }
+
+    return reply
+      .header('Cache-Control', `public, max-age=${CACHE_SECONDS}`)
+      .header('Last-Modified', row.updated_at.toUTCString())
+      .send({
+        status: 'ok',
+        data: {
+          issue: {
+            ...parsed.data,
+            templateVersion: row.template_version,
+            locale: row.locale === 'en' ? 'en' : 'ko',
+            publishedAt: row.published_at?.toISOString() ?? parsed.data.publishedAt,
+          },
+        },
+      });
+  });
+
   fastify.get<{ Params: { slug: string } }>('/:slug', async (request, reply) => {
     const { slug } = request.params;
     if (!SLUG.test(slug)) {
