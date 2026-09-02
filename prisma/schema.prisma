@@ -2883,6 +2883,34 @@ model newsletter_issues {
 /// this; nothing here grants a subscription.
 ///
 /// category_key NULL = every category.
+/// Channels an editor decided are worth reading every week for one brief.
+/// Read by the newsletter harvest and nothing else — video-discover, curation
+/// and the Redis `whitelist:channels` set are untouched by this table.
+model newsletter_trusted_channels {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// YouTube channel id (UC...). Resolved from the API, never typed by hand.
+  channel_id          String    @db.VarChar(30)
+  channel_title       String?
+  /// contentDetails.relatedPlaylists.uploads, stored rather than derived from
+  /// the UC->UU convention, which is a habit and not a contract.
+  uploads_playlist_id String?   @db.VarChar(34)
+  category_key        String    @db.VarChar(40)
+  /// 'core' = collected weekly · 'watch' = collected, ranked below core.
+  tier                String    @default("core") @db.VarChar(10)
+  /// Why an editor trusts it. A list nobody can audit becomes one nobody maintains.
+  reason              String
+  is_active           Boolean   @default(true)
+  /// Incremental cursor: uploads newer than this are "new this week".
+  last_seen_at        DateTime? @db.Timestamptz(6)
+  created_by          String?   @db.VarChar(100)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([category_key, channel_id], map: "uq_newsletter_trusted_channel")
+  @@index([category_key, is_active], map: "idx_newsletter_trusted_active")
+  @@schema("public")
+}
+
 model newsletter_unsubscribes {
   id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email           String

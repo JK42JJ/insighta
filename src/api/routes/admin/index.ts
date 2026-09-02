@@ -6,6 +6,7 @@ import { adminStatsRoutes } from './stats';
 import { adminPromotionRoutes } from './promotions';
 import { adminAuditRoutes } from './audit';
 import { adminChannelBlocklistRoutes } from './channel-blocklist';
+import { adminTrustedChannelsRoutes } from './trusted-channels';
 import { adminBetaApplicationRoutes } from './beta-applications';
 import { adminNoticeRoutes } from './notices';
 import { adminNewsletterRoutes } from './newsletter';
@@ -56,6 +57,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminBulkRoutes, { prefix: '/users/bulk' });
   await fastify.register(adminAuditRoutes, { prefix: '/audit-log' });
   await fastify.register(adminChannelBlocklistRoutes, { prefix: '/channel-blocklist' });
+  await fastify.register(adminTrustedChannelsRoutes, { prefix: '/trusted-channels' });
   await fastify.register(adminBetaApplicationRoutes);
   await fastify.register(adminNoticeRoutes);
   await fastify.register(adminNewsletterRoutes);
