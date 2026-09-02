@@ -19,6 +19,7 @@
 
 import { logger } from '@/utils/logger';
 import type { WebSearchConfig } from './config';
+import { creditGate, creditBlockMessage, noteCreditRefusal } from '@/modules/llm/credit-guard';
 
 const log = logger.child({ module: 'web-search' });
 
@@ -204,6 +205,16 @@ export function createWebSearchClient(config: WebSearchConfig) {
         .catch(() => undefined);
     };
 
+    // Outside the try on purpose: the catch below writes a ledger row, and a
+    // call that was never made must not appear in the ledger as one. Callers
+    // already treat a result carrying `.error` as no evidence.
+    const credit = await creditGate(`openrouter/${config.openrouterWebModel}`);
+    if (!credit.allowed) {
+      const message = creditBlockMessage(credit);
+      log.warn(`openrouter web search skipped: ${message}`, { query });
+      return { items: [], totalResults: 0, error: `openrouter-web: ${message}` };
+    }
+
     try {
       const body = await fetchJsonWithTimeout(
         OPENROUTER_URL,
@@ -237,6 +248,7 @@ export function createWebSearchClient(config: WebSearchConfig) {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       record('error', undefined, message);
+      await noteCreditRefusal(`openrouter/${config.openrouterWebModel}`, 'web-search', message);
       log.warn(`openrouter web search failed: ${message}`, { query });
       return { items: [], totalResults: 0, error: `openrouter-web: ${message}` };
     }

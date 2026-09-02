@@ -35,6 +35,7 @@
  */
 
 import { logger } from '@/utils/logger';
+import { creditGate, creditBlockMessage, noteCreditRefusal } from '@/modules/llm/credit-guard';
 
 const DEFAULT_OLLAMA_URL = 'http://100.91.173.17:11434';
 const DEFAULT_OLLAMA_MODEL = 'llama3.1:latest'; // verified installed on Mac Mini 2026-04-07
@@ -264,6 +265,14 @@ export async function generateSearchQueriesViaOpenRouter(
 
   let res: Response;
   try {
+    // The provider refuses everything while the account is empty, so asking
+    // the breaker first is the difference between one refusal and a scheduler
+    // window's worth of doomed round trips. No ledger row: nothing was called.
+    const credit = await creditGate(`openrouter/${opts.openRouterModel}`);
+    if (!credit.allowed) {
+      throw new LlmQueryGenError(creditBlockMessage(credit));
+    }
+
     res = await fetchFn(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
@@ -313,6 +322,11 @@ export async function generateSearchQueriesViaOpenRouter(
       // ignore
     }
     record('error', undefined, `HTTP ${res.status}: ${body}`);
+    await noteCreditRefusal(
+      `openrouter/${opts.openRouterModel}`,
+      'llm-query-generator',
+      `HTTP ${res.status}: ${body}`
+    );
     throw new LlmQueryGenError(`OpenRouter HTTP ${res.status}: ${body}`, res.status);
   }
 

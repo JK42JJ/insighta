@@ -28,6 +28,7 @@
  */
 
 import { logger } from '@/utils/logger';
+import { creditGate, creditBlockMessage, noteCreditRefusal } from '@/modules/llm/credit-guard';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -171,6 +172,14 @@ export async function rerankBatch(opts: RerankBatchOpts): Promise<RerankResult> 
 
   let raw: string;
   try {
+    // The provider refuses everything while the account is empty, so asking
+    // the breaker first is the difference between one refusal and a scheduler
+    // window's worth of doomed round trips. No ledger row: nothing was called.
+    const credit = await creditGate(`openrouter/${opts.model}`);
+    if (!credit.allowed) {
+      return empty(creditBlockMessage(credit), 'failed');
+    }
+
     const res = await fetchFn(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
@@ -197,6 +206,7 @@ export async function rerankBatch(opts: RerankBatchOpts): Promise<RerankResult> 
       const body = await res.text().catch(() => '');
       const detail = `OpenRouter HTTP ${res.status}: ${body.slice(0, 200)}`;
       record('error', undefined, detail);
+      await noteCreditRefusal(`openrouter/${opts.model}`, 'llm-reranker', detail);
       return empty(detail, 'failed');
     }
     const data = (await res.json()) as {

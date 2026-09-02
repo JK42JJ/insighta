@@ -243,6 +243,14 @@ const envSchema = z.object({
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
 
+  // The credit breaker (cost-gate L6). Default true: without it a provider that
+  // answers 402 to everything is called again on every scheduler window — 54
+  // futile calls on 2026-09-01, 163 in one minute on 08-30. Kill-switch only —
+  // set 'false' to go back to calling regardless, without reverting code.
+  LLM_CREDIT_BREAKER_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() !== 'false', z.boolean())
+    .default(true),
+
   // CP494 — video_pool ToS hygiene cron (soft-expire + scrub of stale metadata).
   // Default true: this is a compliance job. Kill-switch only — set 'false' to
   // pause the maintenance worker (the GHA cron will then no-op at the handler).
@@ -509,6 +517,14 @@ export const config = {
   },
 
   // video_pool ToS hygiene cron (CP494).
+  creditBreaker: {
+    // Off under Jest. Suites legitimately simulate a 402 (see
+    // tests/unit/modules/mandala-embed-race.test.ts, which exercises the
+    // Ollama fallback), they share one database, and a breaker opened by one
+    // suite would refuse calls in another — a cross-suite failure that says
+    // nothing about the code. The breaker's own tests inject their state.
+    enabled: env.LLM_CREDIT_BREAKER_ENABLED && process.env['NODE_ENV'] !== 'test',
+  },
   poolMaintenance: {
     enabled: env.POOL_MAINTENANCE_ENABLED,
     refreshEnabled: env.POOL_METADATA_REFRESH_ENABLED,

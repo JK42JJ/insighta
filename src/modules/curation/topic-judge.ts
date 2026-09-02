@@ -24,6 +24,7 @@ import { logger } from '@/utils/logger';
 import { config } from '@/config/index';
 import { getSetting, SETTING_KEYS } from '@/modules/system-settings';
 import { checkTopicSafety } from '@/modules/moderation/topic-safety';
+import { creditGate, creditBlockMessage, noteCreditRefusal } from '@/modules/llm/credit-guard';
 
 const log = logger.child({ module: 'curation/topic-judge' });
 
@@ -150,6 +151,14 @@ async function judgeBatch(
   };
 
   try {
+    // The provider refuses everything while the account is empty, so asking
+    // the breaker first is the difference between one refusal and a scheduler
+    // window's worth of doomed round trips. No ledger row: nothing was called.
+    const credit = await creditGate(`openrouter/${model}`);
+    if (!credit.allowed) {
+      throw new Error(creditBlockMessage(credit));
+    }
+
     const res = await fetchFn(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
@@ -167,7 +176,13 @@ async function judgeBatch(
       }),
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(`OpenRouter HTTP ${res.status}`);
+    if (!res.ok) {
+      const detail = `OpenRouter HTTP ${res.status}`;
+      // Awaited: the next batch in this loop asks the gate, and it has to get
+      // the answer this response just produced.
+      await noteCreditRefusal(`openrouter/${model}`, 'topic-judge', detail);
+      throw new Error(detail);
+    }
 
     const json = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;

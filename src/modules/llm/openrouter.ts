@@ -9,6 +9,7 @@
 import type { GenerationProvider, GenerateOptions } from './provider';
 import { config } from '../../config';
 import { logLLMCall } from './call-logger';
+import { creditGate, creditBlockMessage, noteCreditRefusal } from './credit-guard';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MAX_TOKENS = 1024;
@@ -100,6 +101,15 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     // Forward external abort (e.g. race-fallback discarding the LLM loser)
     // into the per-attempt controller so the underlying fetch is cancelled too.
     const externalSignal = options?.signal;
+
+    // Asked once, before the retry loop rather than inside it: while the
+    // account is empty every attempt returns 402 instantly, so the loop's job
+    // — waiting out a transient fault — has nothing to wait for. No ledger
+    // row is written here because no call was made.
+    const credit = await creditGate(this.model);
+    if (!credit.allowed) {
+      throw new Error(creditBlockMessage(credit));
+    }
 
     // CP498 — retry loop for transient 429 / 5xx. A fresh AbortController +
     // timeout is created per attempt (abort is terminal). The loop always
@@ -202,6 +212,11 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
         status: 'error',
         errorMessage: `API error ${response.status}: ${errorBody.slice(0, 200)}`,
       }).catch(() => {});
+      await noteCreditRefusal(
+        this.model,
+        options?.purpose ?? 'openrouter',
+        `API error ${response.status}: ${errorBody.slice(0, 200)}`
+      );
       throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
     }
 

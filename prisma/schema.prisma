@@ -3040,3 +3040,20 @@ model youtube_cache_epochs {
 
   @@schema("public")
 }
+
+/// Credit-exhaustion breaker state, shared across pods.
+/// Written by the ledger writer on a 402 and cleared by the first call that
+/// succeeds. Held here rather than in process memory because two API pods run:
+/// a refusal seen by one was invisible to the other, and a restart erased it.
+model llm_provider_credit_state {
+  provider      String    @id @db.VarChar(40)
+  exhausted_at  DateTime  @default(now()) @db.Timestamptz(6)
+  hits          Int       @default(1)
+  last_module   String?   @db.VarChar(50)
+  /// When one call is allowed through to test whether credits are back.
+  next_probe_at DateTime  @default(now()) @db.Timestamptz(6)
+  cleared_at    DateTime? @db.Timestamptz(6)
+  updated_at    DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}

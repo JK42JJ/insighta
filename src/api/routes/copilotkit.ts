@@ -21,6 +21,8 @@ import {
 } from './copilotkit-model-resolver';
 import { getEffectiveProvider, startProviderHealthPoller } from './copilotkit-provider-poller';
 import { runWithChatbotContext, type ChatbotRequestContext } from './chatbot-context-storage';
+import { creditBlockedFromCache } from '@/modules/llm/cost-gate';
+import { creditBlockMessage } from '@/modules/llm/credit-guard';
 
 const OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.5-flash';
 
@@ -217,6 +219,26 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
       // PR #732's race-fix only tolerates a SINGLE async hop
       // (`await getYoga()`); we keep it that way.
       const chatbotCtx = extractChatbotContext(fastify, req);
+
+      // Synchronous on purpose. The comment above is the reason: this runs
+      // before `req.pause()` and adds no await, so the single-async-hop rule
+      // the body handling depends on is untouched. Reads the in-process cache
+      // only — a provider known to be refusing gets a 503 here instead of a
+      // round trip that would certainly fail. Cold cache lets the call through.
+      const chatProvider = getEffectiveProvider();
+      const chatCreditKey = chatProvider === 'qwen-runpod' ? 'qwen-runpod' : 'openrouter';
+      const chatCredit = creditBlockedFromCache(chatCreditKey);
+      if (chatCredit) {
+        res.statusCode = 503;
+        res.setHeader('content-type', 'application/json');
+        res.end(
+          JSON.stringify({
+            error: 'chat_provider_out_of_credits',
+            message: creditBlockMessage(chatCredit),
+          })
+        );
+        return;
+      }
 
       // CP477+7 — Pause the request stream BEFORE the async getYoga() wait
       // so raw HTTP 'data'/'end' events don't fire and get lost while yoga
