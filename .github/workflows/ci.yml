@@ -139,6 +139,44 @@ jobs:
         # environment: (silent-override class, §10-C). See the script header.
         run: bash scripts/ci/check-config-ssot.sh
 
+  pr-body-english:
+    name: PR Body English
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Squash-merge writes the PR title and body into the commit on main. The
+    # commit-msg hook cannot see that: it runs on the machine that made the
+    # local commit, and the squash message is composed on GitHub afterwards.
+    #
+    # Two commits reached main through that gap before this job existed
+    # (3533fc7f, 482c7012), both with Korean in the body, both from PR text that
+    # had passed every other check. The hook stays for local commits; this
+    # covers the path it cannot reach.
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Title and body must be English
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          fail=0
+          for part in TITLE BODY; do
+            value=$(printenv "PR_$part" || true)
+            [ -n "$value" ] || continue
+            if printf '%s\n' "$value" | LC_ALL=en_US.UTF-8 grep -q '[가-힣]'; then
+              echo "::error::PR $part contains Korean. Squash-merge copies it into the commit on main."
+              printf '%s\n' "$value" | LC_ALL=en_US.UTF-8 grep -n '[가-힣]' | head -5 | sed 's/^/    /'
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "Rewrite those lines in English. UI strings stay Korean in the FILES;"
+            echo "it is the artifact text that has to be English."
+            exit 1
+          fi
+          echo "PR title and body are English."
+
   card-chokepoint:
     name: Card Chokepoint
     runs-on: ubuntu-latest
