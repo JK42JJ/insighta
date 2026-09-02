@@ -33,8 +33,8 @@ requireImageRegistry: true
 # this commit edits it. Same for rollback.yml, which pushes by the same means
 # and would fail the same way -- it has not been run since it was rewritten.
 images:
-  apiTag: 0286effaf004162e2d78691c1013c3d003c9e908
-  frontendTag: 99d7d324eed1460db128a2a5a495d6535787a4f1
+  apiTag: 482c7012494679bab1611fed4b61aae4a8112eee
+  frontendTag: 482c7012494679bab1611fed4b61aae4a8112eee
   redisTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
 
 api:
