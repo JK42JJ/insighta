@@ -14,6 +14,9 @@ if (fs.existsSync(envPath)) {
 }
 
 const isCI = !!process.env.CI;
+// Each local Chromium worker also records video ('video: on'); cap local runs so
+// E2E does not stack on top of Jest and the dev servers. CI keeps the default.
+const LOCAL_WORKERS = 2;
 
 export default defineConfig({
   testDir: './tests',
@@ -22,6 +25,7 @@ export default defineConfig({
     timeout: 10_000,
   },
   fullyParallel: true,
+  ...(isCI ? {} : { workers: LOCAL_WORKERS }),
   retries: 0,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'test-results/report' }]],
   outputDir: 'test-results/artifacts',

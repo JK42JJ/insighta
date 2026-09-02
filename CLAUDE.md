@@ -253,6 +253,13 @@
 - **③ 자율루프 자가정지 (보이게)**: 자율루프가 동일 human-gate 블록에서 2회+ 반복 발화 시 cron 자가정지. 단 조용히 멈추면 그것도 불투명 → 정지 시 **"자가정지: 사유 + 대기 대상" 1줄 반드시 발화 + 감독 에스컬레이션** (서킷브레이커는 보이게 내려간다).
 - **④ 재진입 램프업**: 크래시복구·세션유실 등 재진입 직후는 **자율모드 축소 상태로 시작**. 첫 보고(재검증 + plan)에 대한 **명시 ack(감독 또는 James) 받기 전엔 실행 활동 금지 — 보고·질의만**. 자율은 재개(resume)가 아니라 점증(ramp) — 재진입 시점이 소유자 신뢰가 가장 얇은 때.
 
+### 로컬 자원 상한 (절대 규칙, LEVEL-1, 2026-09-02 맥북 30GB 천장 정지 사고)
+- 개발 맥북(24GB) 의 실제 천장 = RAM 24 + 스왑 상한(디스크 여유에 비례, 약 6GB) ≈ **30GB**. 상시 점유 17~19GB(OrbStack VM 최대 12GB 포함). 천장 도달 = 수 분 정지(재부팅 아님, `last` 로 판별).
+- **ts-jest 워커 1개 = 2.0GB 실측** → 기본 워커 13개 = 26GB = 정지 트리거. `jest.config.ts` 로컬 `maxWorkers=3` · vitest 4 · playwright 2 (CI 무관, `isCI` 가드). 로컬 상향 금지, `--maxWorkers` 로 우회 금지.
+- 무거운 로컬 명령(jest · vitest · tsc · build · playwright · docker build)은 **세션·에이전트 통틀어 동시 1개**. `nohup` 백그라운드로 띄운 뒤 다른 무거운 명령 금지. **팀 에이전트 병렬 규칙은 로컬 무거운 명령에 적용되지 않는다.**
+- 검증 끝난 dev 서버(`tsx watch` / vite)는 즉시 종료. 같은 워크트리 2중 기동 금지.
+- 상세·실측·롤백: memory `project_mac_memory_ceiling_docker_cleanup.md`.
+
 ### Coding Conventions -> [상세: docs/CODING_CONVENTIONS.md]
 - 기존 코드 수정 시 해당 파일 Phase 1 위반도 함께 수정 (점진적 개선)
 
