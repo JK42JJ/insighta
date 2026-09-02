@@ -11,7 +11,14 @@ import { config } from '../../config';
 import { logLLMCall } from './call-logger';
 import { creditGate, creditBlockMessage, noteCreditRefusal } from './credit-guard';
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+/**
+ * The chat endpoint, declared once.
+ *
+ * Exported so a caller that needs its own request shape imports it rather than
+ * retyping the URL. Five modules retyped it before the audit rule existed; a
+ * sixth would have made the rule a formality.
+ */
+export const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MAX_TOKENS = 1024;
 const REQUEST_TIMEOUT_MS = 120_000;
 

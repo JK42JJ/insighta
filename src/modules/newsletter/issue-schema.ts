@@ -119,6 +119,18 @@ export const IssueDocumentSchema = z.object({
   schemaVersion: z.literal(1),
   templateVersion: z.string().min(1).default('web-v1'),
 
+  /**
+   * The language this edition is written in.
+   *
+   * Not a rendering preference: it decides `<html lang>`, which is what tells
+   * a screen reader whether to pronounce the page as Korean or English, and
+   * what a search engine indexes it as. Defaults to `ko` because every issue
+   * so far is Korean and the launch is Korean only -- the corpus is 94%
+   * English by source, so this brief's value is the conversion rather than
+   * the selection, and a second edition doubles the weekly editing cost.
+   */
+  locale: z.enum(['ko', 'en']).default('ko'),
+
   slug: z.string().regex(/^[a-z0-9-]+$/),
   category: z.string().min(1),
   categoryKey: z.string().min(1),

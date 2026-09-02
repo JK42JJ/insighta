@@ -268,10 +268,17 @@ function refList(refs: Ref[]): string {
   <ol class="srclist">${items}</ol>`;
 }
 
+/** Chrome that is not the issue's prose, per locale. */
+const CHROME = {
+  ko: { titleSuffix: '주간 브리프' },
+  en: { titleSuffix: 'Weekly Brief' },
+} as const;
+
 export function render(doc: IssueDocument): string {
-  const title = `${doc.category} 주간 브리프 · ${doc.issueLabel}`;
+  const chrome = CHROME[doc.locale];
+  const title = `${doc.category} ${chrome.titleSuffix} · ${doc.issueLabel}`;
   return `<!DOCTYPE html>
-<html lang="ko">
+<html lang="${doc.locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

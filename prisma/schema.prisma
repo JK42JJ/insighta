@@ -2864,13 +2864,18 @@ model newsletter_issues {
   issue_no         Int
   schema_version   Int       @default(1)
   template_version String    @default("web-v1") @db.VarChar(20)
+  /// Which language this edition is written in. The launch is Korean only:
+  /// the corpus is 94% English by source, so the brief's value is the
+  /// conversion, and an English edition would add selection alone while
+  /// doubling the weekly editing cost. Adding one later is a row.
+  locale           String    @default("ko") @db.VarChar(5)
   content_json     Json      @db.JsonB
   /// NULL = draft. Only rows with a timestamp are publicly readable.
   published_at     DateTime? @db.Timestamptz(6)
   created_at       DateTime  @default(now()) @db.Timestamptz(6)
   updated_at       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
-  @@unique([category_key, issue_no], map: "uq_newsletter_issues_category_no")
+  @@unique([category_key, issue_no, locale], map: "uq_newsletter_issues_category_no_locale")
   @@index([published_at(sort: Desc)], map: "idx_newsletter_issues_published_at")
   @@schema("public")
 }
@@ -2905,7 +2910,8 @@ model newsletter_pipeline_runs {
   error          String?
   created_by     String?   @db.VarChar(100)
 
-  steps newsletter_pipeline_steps[]
+  steps  newsletter_pipeline_steps[]
+  corpus newsletter_corpus[]
 
   @@index([category_key, week_of(sort: Desc)], map: "idx_newsletter_runs_week")
   @@schema("public")
@@ -3055,5 +3061,42 @@ model llm_provider_credit_state {
   cleared_at    DateTime? @db.Timestamptz(6)
   updated_at    DateTime  @default(now()) @db.Timestamptz(6)
 
+  @@schema("public")
+}
+
+/// The corpus a newsletter run is working on: one row per video per run,
+/// carried through every stage. Its absence is why issue 1's funnel could not
+/// be checked — the harvest that produced "2,714 harvested" stored nothing.
+/// Raw SQL DDL: prisma/migrations/newsletter/006_corpus.sql
+model newsletter_corpus {
+  run_id           String   @db.Uuid
+  video_id         String   @db.VarChar(20)
+  title            String
+  channel_id       String   @db.VarChar(40)
+  channel_title    String
+  published_at     DateTime @db.Timestamptz(6)
+  duration_seconds Int?
+  view_count       BigInt?
+  /// 'trusted' (an editor decided this channel matters) or 'search'.
+  source           String   @db.VarChar(10)
+  query            String?
+  /// The last stage this row passed. Resume reads this.
+  stage            String   @default("S0_harvest") @db.VarChar(12)
+  dropped_at_stage String?  @db.VarChar(12)
+  /// Must match a key in that stage's ledger drop_reasons.
+  drop_reason      String?  @db.VarChar(60)
+  /// S3: who judged, what they decided, why.
+  verdict          Json?
+  /// S4: the first-party record read back from videos.list.
+  enrichment       Json?
+  /// S5: the subjects other independent channels also covered.
+  corroboration    Json?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  newsletter_pipeline_runs newsletter_pipeline_runs @relation(fields: [run_id], references: [id], onDelete: Cascade)
+
+  @@id([run_id, video_id])
+  @@index([run_id, stage], map: "idx_newsletter_corpus_stage")
   @@schema("public")
 }

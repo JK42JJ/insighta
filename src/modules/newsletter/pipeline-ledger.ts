@@ -211,7 +211,7 @@ export async function readFunnel(runId: string): Promise<{
   const [run, steps] = await Promise.all([
     prisma.newsletter_pipeline_runs.findUnique({
       where: { id: runId },
-      select: { quota_units: true },
+      select: { id: true },
     }),
     prisma.newsletter_pipeline_steps.findMany({ where: { run_id: runId } }),
   ]);
@@ -227,5 +227,9 @@ export async function readFunnel(runId: string): Promise<{
       dropReasons: (s.drop_reasons ?? {}) as Record<string, number>,
     }));
 
-  return { quotaUnits: run.quota_units, stages };
+  // Summed from the steps, not read from the run row. `finishRun` writes that
+  // total when a run ends, and S6 reads the funnel while the run is still
+  // going — so the first version of this reported 0 quota units for a run that
+  // had spent 4,039, and the page would have printed the zero.
+  return { quotaUnits: steps.reduce((sum, s) => sum + s.quota_units, 0), stages };
 }
