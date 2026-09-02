@@ -80,6 +80,7 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
         select: {
           id: true,
           slug: true,
+          locale: true,
           category_key: true,
           issue_no: true,
           template_version: true,
@@ -133,6 +134,11 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
           issue_no: issueNumber(doc),
           schema_version: doc.schemaVersion,
           template_version: doc.templateVersion,
+          // Projected out of the document so the identity — one issue number,
+          // one edition per language — is a database constraint rather than a
+          // convention, and so a list of issues can be filtered without
+          // parsing every content_json.
+          locale: doc.locale,
           content_json: doc as unknown as object,
           // Publishing is an explicit act, not a side effect of saving.
           published_at: request.body?.publish ? new Date() : null,
@@ -170,6 +176,7 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
           issue_no: issueNumber(doc),
           schema_version: doc.schemaVersion,
           template_version: doc.templateVersion,
+          locale: doc.locale,
           content_json: doc as unknown as object,
           // Re-publishing must not move the original date: readers cite it,
           // and a correction is not a new issue.

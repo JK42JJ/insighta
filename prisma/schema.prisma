@@ -2864,13 +2864,18 @@ model newsletter_issues {
   issue_no         Int
   schema_version   Int       @default(1)
   template_version String    @default("web-v1") @db.VarChar(20)
+  /// Which language this edition is written in. The launch is Korean only:
+  /// the corpus is 94% English by source, so the brief's value is the
+  /// conversion, and an English edition would add selection alone while
+  /// doubling the weekly editing cost. Adding one later is a row.
+  locale           String    @default("ko") @db.VarChar(5)
   content_json     Json      @db.JsonB
   /// NULL = draft. Only rows with a timestamp are publicly readable.
   published_at     DateTime? @db.Timestamptz(6)
   created_at       DateTime  @default(now()) @db.Timestamptz(6)
   updated_at       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
-  @@unique([category_key, issue_no], map: "uq_newsletter_issues_category_no")
+  @@unique([category_key, issue_no, locale], map: "uq_newsletter_issues_category_no_locale")
   @@index([published_at(sort: Desc)], map: "idx_newsletter_issues_published_at")
   @@schema("public")
 }

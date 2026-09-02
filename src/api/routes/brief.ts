@@ -46,7 +46,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
       // A draft has no published_at, so it cannot be reached by guessing a
       // slug -- the filter is the access control, not an ordering hint.
       where: { slug, published_at: { not: null } },
-      select: { content_json: true, template_version: true, updated_at: true },
+      select: { content_json: true, template_version: true, locale: true, updated_at: true },
     });
     if (!row) {
       return reply.code(404).type('text/plain; charset=utf-8').send('brief not found');
@@ -63,9 +63,14 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.code(500).type('text/plain; charset=utf-8').send('brief is unreadable');
     }
 
-    // The stored template_version wins over the one inside the document: it is
-    // the column an operator edits to pin or unpin a single issue.
-    const doc = { ...parsed.data, templateVersion: row.template_version };
+    // The stored columns win over the copies inside the document: they are
+    // what an operator edits to pin a template or correct an edition's
+    // language without rewriting the JSON.
+    const doc = {
+      ...parsed.data,
+      templateVersion: row.template_version,
+      locale: row.locale === 'en' ? ('en' as const) : ('ko' as const),
+    };
     const key = renderCacheKey(doc);
     let html = cache.get(key);
     if (html === undefined) {

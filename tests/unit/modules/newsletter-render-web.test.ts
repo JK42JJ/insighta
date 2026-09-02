@@ -178,10 +178,30 @@ describe('renderWeb', () => {
   it('falls back rather than throwing when a template version is unknown', () => {
     const pinned = IssueDocumentSchema.parse({ ...base, templateVersion: 'web-v99' });
     expect(() => renderWeb(pinned)).not.toThrow();
-    expect(renderCacheKey(pinned)).toBe(`brief:${doc.slug}:${DEFAULT_TEMPLATE}`);
+    expect(renderCacheKey(pinned)).toBe(`brief:${doc.slug}:${DEFAULT_TEMPLATE}:ko`);
   });
 
   it('keys the cache on the template version so a redesign cannot serve stale html', () => {
-    expect(renderCacheKey(doc)).toBe('brief:2026-08-25-ai-tech:web-v1');
+    expect(renderCacheKey(doc)).toBe('brief:2026-08-25-ai-tech:web-v1:ko');
+  });
+
+  it('keys the cache on the locale, so two editions of one issue are two pages', () => {
+    // Without the locale in the key the first edition rendered would be served
+    // to readers of the other one — the same issue number, the same template,
+    // a different language.
+    const en = IssueDocumentSchema.parse({ ...base, locale: 'en' });
+    expect(renderCacheKey(en)).not.toBe(renderCacheKey(doc));
+  });
+
+  it('declares the language of the page it rendered', () => {
+    // <html lang> is what tells a screen reader how to pronounce the page.
+    expect(renderWeb(doc)).toContain('<html lang="ko">');
+    expect(renderWeb(IssueDocumentSchema.parse({ ...base, locale: 'en' }))).toContain(
+      '<html lang="en">'
+    );
+  });
+
+  it('defaults to Korean, which is what every stored issue is', () => {
+    expect(IssueDocumentSchema.parse(base).locale).toBe('ko');
   });
 });

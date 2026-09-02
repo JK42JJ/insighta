@@ -44,5 +44,7 @@ export function renderWeb(doc: IssueDocument, override?: TemplateId): string {
 export function renderCacheKey(doc: IssueDocument, override?: TemplateId): string {
   const requested = override ?? doc.templateVersion;
   const id = isTemplateId(requested) ? requested : DEFAULT_TEMPLATE;
-  return `brief:${doc.slug}:${id}`;
+  // Locale is in the key because two editions of one issue are two pages, and
+  // a key without it would serve whichever was rendered first to both.
+  return `brief:${doc.slug}:${id}:${doc.locale}`;
 }
