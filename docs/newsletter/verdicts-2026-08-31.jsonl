@@ -1,0 +1,440 @@
+{"videoId":"jebp4V0vh30","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — agentic sites, from a shipping team"}
+{"videoId":"32nrHU6zHU8","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — agent architecture compared to the microservices era"}
+{"videoId":"ZyGMqdIpPoE","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — spend controls for autonomous agents"}
+{"videoId":"hD9-V56FNRI","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — agents as distributed systems, from TikTok"}
+{"videoId":"bMjlRrWjdT0","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — evaluation practice across teams at DoorDash"}
+{"videoId":"L4I7WgiEquo","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering"}
+{"videoId":"M05vON8i0aI","safe":true,"learnable":true,"inScope":false,"why":"organisational structure, not AI engineering"}
+{"videoId":"tE2z8-hqoLY","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — prompt injection beyond the lethal trifecta"}
+{"videoId":"DrTdD-ttjCY","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — deployment account, 6,000 users"}
+{"videoId":"ZIYYsAzaLlA","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — shipping the Figma MCP server"}
+{"videoId":"EL123UNokkI","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — Uber's multi-agent code review engine"}
+{"videoId":"pOvWgX7IJsc","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — measured LLM-written GPU kernels"}
+{"videoId":"pqlWNihgdjI","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — team practice moving to AI-native development"}
+{"videoId":"dSg0pu8d6qg","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — throughput over token count"}
+{"videoId":"UhCY231d0FQ","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering"}
+{"videoId":"Qw_tC68KKes","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering"}
+{"videoId":"qqrk7CtkuIw","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — how Anthropic builds, from the person who runs it"}
+{"videoId":"B0fjR3yaZFU","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"mJqwmmOx4WA","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — what went wrong vibe-coding a billing engine at Stripe"}
+{"videoId":"qdAkxLoYNI8","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — context engine for mergeable code"}
+{"videoId":"5Bn0xro2ol8","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — adopting coding agents without quality loss"}
+{"videoId":"V_5bn4q-vAI","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering — LLM visibility for a library is marketing"}
+{"videoId":"6pbQgnJ9Voc","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering"}
+{"videoId":"YXowceUKYJI","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — KV-cache-aware routing and prefill/decode disaggregation"}
+{"videoId":"AhQpRalYlyg","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — multimodal collaborative agents"}
+{"videoId":"zrZ1amZBSPw","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — LLM gateway architecture and tradeoffs"}
+{"videoId":"wdTRsfw0KG0","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering"}
+{"videoId":"KLDdXOw6jIc","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — state of generative media from the people building it"}
+{"videoId":"A-zeQiYkmXk","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — agent payment flows"}
+{"videoId":"S6aSoQ6_u5A","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — specifying intent to an agent"}
+{"videoId":"G7cgLjZtmMU","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — agentic commerce stack"}
+{"videoId":"VjEP0xqTUI0","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering"}
+{"videoId":"Lrw0jqBNaw0","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"QrMcNe2jjt8","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — intent-driven UX architecture"}
+{"videoId":"sM1iYgz93HI","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — how fast agent infrastructure goes stale"}
+{"videoId":"XsvUhpnHepE","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"1KOdiGgMtpY","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"dQ-_i1tZiws","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — agents at Maersk's scale"}
+{"videoId":"qTZirYu9pr0","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — x402 agent payments on AWS"}
+{"videoId":"7A65O-0lvKE","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering"}
+{"videoId":"xKzU_3riL6s","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — wallets and nanopayments for agents"}
+{"videoId":"h6mi88VrPtQ","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a critique of x402 from someone who tried it"}
+{"videoId":"vGn6N4-bxBY","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — agent authorization failures"}
+{"videoId":"lRa9sPaMyy4","safe":true,"learnable":true,"inScope":false,"why":"general software engineering; belongs to the dev brief — formal verification belongs to the dev brief"}
+{"videoId":"RSEOYH_OpRc","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — workflow automation walkthrough with Claude"}
+{"videoId":"I_qJ4BiLuww","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — design improvement in vibe coding, from a working developer"}
+{"videoId":"P1zBiAQU1IA","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — models running physical experiments, from Anthropic"}
+{"videoId":"MVo3P-D7eSc","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — twelve inference concepts, explained"}
+{"videoId":"5--QWPk8jN0","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"yZddAiz4HP8","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a week of first-hand testing"}
+{"videoId":"IfL_OY-wRBM","safe":true,"learnable":false,"inScope":true,"why":"profile or interview; no applicable technique"}
+{"videoId":"c57vAe-mMLo","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — how AI changes code review"}
+{"videoId":"QxVS86cDpho","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"nVImVgKpoOY","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — where agent benchmarks and reality part"}
+{"videoId":"Gj13NR35WU4","safe":true,"learnable":true,"inScope":false,"why":"policy and governance, not AI engineering"}
+{"videoId":"nWgvobB4hcw","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — open-weight models, context bombing, post-Black Hat attacks"}
+{"videoId":"IRtSdLX_Obw","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — why models need web access"}
+{"videoId":"rPWCYB62wvI","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — where to point agents, from daily practice"}
+{"videoId":"Uny6LpmjraI","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — Clay's eval stack over 300M agent runs"}
+{"videoId":"Lbax7_pW2Nw","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — results from the persona-vector work"}
+{"videoId":"4hKJ9X6rGFo","safe":true,"learnable":false,"inScope":true,"why":"income claim rather than technique"}
+{"videoId":"NyfYxpXiw_0","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"FFWtxjvW2ts","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — first-hand test of a new model on web output"}
+{"videoId":"8IyORt-7rOQ","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"PYjbeY8sGLs","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — cloning a scheduling product end to end"}
+{"videoId":"bg0C-2iUUqM","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — Claude Code against Codex on design, measured"}
+{"videoId":"gQef3d3erOs","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — local model setup without a server"}
+{"videoId":"tSPAckZON0A","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — model routing for agents"}
+{"videoId":"ZQ3EeU-hYSA","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — open model routing, getting started"}
+{"videoId":"mXYFcz27eDw","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — what Dynamo is and why now"}
+{"videoId":"lCEjKZiSmKk","safe":true,"learnable":true,"inScope":false,"why":"not about AI — multi-GPU dataframes, not AI"}
+{"videoId":"TvsvwfTV4bo","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"P9Y-A9Pcjes","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"gROKrW59Mn4","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"YAPKoRLrigY","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"nM86DBOqgPM","safe":true,"learnable":true,"inScope":false,"why":"not about AI"}
+{"videoId":"3tDoLkFcEKg","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"PXHUHNX7nbI","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — agentic sites, with Korean subtitles"}
+{"videoId":"j1bhs3_VZDU","safe":true,"learnable":false,"inScope":true,"why":"profile or interview; no applicable technique"}
+{"videoId":"5bELrUqxX4U","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — Andrew Ng on where the opportunity actually is"}
+{"videoId":"u1iQob0v-5k","safe":true,"learnable":false,"inScope":true,"why":"profile or interview; no applicable technique"}
+{"videoId":"0qySk1fcf6k","safe":true,"learnable":true,"inScope":false,"why":"organisational structure, not AI engineering"}
+{"videoId":"sXCppYzX-0g","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"Ry0WHNxDbYA","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — moving a team from AI-assisted to AI-native"}
+{"videoId":"cVFc9f6M0U0","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"GBg-fY82y84","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering"}
+{"videoId":"fOsLTMhjyMM","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — throughput over token count, with Korean subtitles"}
+{"videoId":"YRqpmwIDOX0","safe":true,"learnable":false,"inScope":true,"why":"profile or interview; no applicable technique"}
+{"videoId":"XV6WcGliCGM","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — agents as distributed systems, with Korean subtitles"}
+{"videoId":"TQqa0B_pNGE","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — Anthropic's Claude Platform team on the agent era"}
+{"videoId":"EAVtSxbzmuM","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a hands-on verdict on Claude's memory"}
+{"videoId":"qLT5cGk01mQ","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — what changed in Claude memory 2.0"}
+{"videoId":"OSd69LTMi3w","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — adopting coding agents without quality loss, with Korean subtitles"}
+{"videoId":"F_smvU3oqbU","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — writing specifications instead of prompts"}
+{"videoId":"6SBCO0vg1UM","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — how Warp built a cloud agent platform"}
+{"videoId":"lD9WvLqrkrk","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an agent server on a cheap VPS, start to finish"}
+{"videoId":"6KOIr7g_8Cg","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — agentic RAG on LangChain, walked through"}
+{"videoId":"TPLWlF72j0c","safe":true,"learnable":true,"inScope":false,"why":"organisational structure, not AI engineering"}
+{"videoId":"1yo__i_7Qrw","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — opening Xcode to an external coding agent"}
+{"videoId":"JbIGopESlRU","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — fitting large models onto small hardware"}
+{"videoId":"1K-X1pcIl9o","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — embeddings, cross-encoders and reranking, explained properly"}
+{"videoId":"T2xjM242JUA","safe":true,"learnable":false,"inScope":true,"why":"profile or interview; no applicable technique"}
+{"videoId":"XC7MWh-NcJo","safe":true,"learnable":true,"inScope":false,"why":"not about AI — stock summaries; the AI is incidental"}
+{"videoId":"bBTrJ5NXYvE","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"q4Dq-7CmGpQ","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"mXImjISyVuI","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"Z_n78j2NC6E","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a multi-agent system on Vertex AI Agent Builder"}
+{"videoId":"YoEc4cbWCc0","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — operating manuals and roles built with Claude Code"}
+{"videoId":"fZyw5PSku2M","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a VM setup replacing a local box"}
+{"videoId":"uxgj4ogVl3Q","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"asuhshHM-Qs","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"AH_Q_RZGRZY","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"FctwGfWE7gU","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"7JhBkNFK8z4","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — why prompt injection is not solved by prompting"}
+{"videoId":"wq2QN_MvetY","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"l-E9NRSm8nE","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"LKvHoTCmIcI","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"WJgxX0Eib6k","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"jyLKRN36-Dc","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"cbIDV1oR-Os","safe":true,"learnable":true,"inScope":false,"why":"policy and governance, not AI engineering"}
+{"videoId":"tcjrO3L_wrM","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — an attack that landed on three coding agents, with numbers"}
+{"videoId":"OQepxZSD8Tw","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — prompt exfiltration through a malicious tool"}
+{"videoId":"S6NHMSvr6u4","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"zMCq8PTbCKM","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"LAxDLplCBzE","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"hMT4L05h-sA","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — assistant behaviour nobody asked for"}
+{"videoId":"7T4puuDBIvs","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — running two open models on an $800 machine"}
+{"videoId":"xiWn-WUVfoc","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — deciding what the model gets to see"}
+{"videoId":"eRoe82YZ9JY","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — returning tool failures an agent can use"}
+{"videoId":"m8ZHM4FJdVA","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — the numbers on a 770B MoE and day-zero vLLM support"}
+{"videoId":"9zSugg8PhG4","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — testing tool calling, with cases and a judge"}
+{"videoId":"qAlpHh4ipko","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"tYFwIeaX3vY","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — running models locally to cut spend"}
+{"videoId":"lFcvuOxa_Co","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — an eleven-word injection that hijacks an assistant"}
+{"videoId":"Z9RMS61gU_k","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"2E5xF7jcYj0","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"0R7KmATLhX0","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"fygy4NmFpYY","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — multi-tool agent with LangChain tool calling"}
+{"videoId":"4CWFjOIEP-0","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"JLnM4gbSuAQ","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — why token cost is not the number on the price page"}
+{"videoId":"OCV47qmchwE","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"Pg5PaM7xa8o","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — tracking and cutting coding-agent spend"}
+{"videoId":"e_RS2mQu6r4","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — training and evaluating neural graphics models"}
+{"videoId":"44EgETofAhE","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"FJ7Ua_HQlMk","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — an auto-mode filter and the bypass rate claimed against it"}
+{"videoId":"5vYuNVGOLlI","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"nx-BJ2pAmVQ","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"f71cDhR8I9E","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"wLPAK-1Jw40","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — evals and test pipelines"}
+{"videoId":"fJJy8XrkdsY","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — evasion, injection and abuse of model inputs"}
+{"videoId":"COjAO77Ui78","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — injection and jailbreaks, first part"}
+{"videoId":"HHYGofCip0M","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — indirect and cross-domain injection"}
+{"videoId":"5-96Nbef3tw","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — how a working developer actually uses Copilot now"}
+{"videoId":"duH63ZaqVBw","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — quantisation, INT8 and model sizes for local runs"}
+{"videoId":"vxrZWbZ2fZA","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"zf8jpD77sKY","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — matching a model to the hardware you have"}
+{"videoId":"DjAbUcGO2MY","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"WMB_6WwJayc","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — a hidden injection found in a real CV"}
+{"videoId":"4WgtN5NcUmw","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — AI secure-coding diagnosis against static tools"}
+{"videoId":"kZ2bdrOEgYQ","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"rHbWBc34-SI","safe":true,"learnable":false,"inScope":true,"why":"income claim rather than technique"}
+{"videoId":"PjBgS57Hwtc","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"iDobAb_wEzc","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — context engineering past prompt engineering"}
+{"videoId":"OdgW9omRfXA","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — long context against RAG, argued with cases"}
+{"videoId":"XmGvvicUN78","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"IO464uc3QKs","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"0I7Hw_kBF-I","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — why unified memory beats a bigger GPU here"}
+{"videoId":"yOvP74WyB6k","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — why RAM is not the bottleneck it looks like"}
+{"videoId":"YNQTcEAaJ4M","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — which local models fit which GPU"}
+{"videoId":"nIBJy3sNu9A","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — a JSON mistake every agent harness copied"}
+{"videoId":"0LPJg890OdY","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an MCP server and SDKs for a live product"}
+{"videoId":"womDAp23k4U","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"LAA_qyWX5vA","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an autonomous code-fixing agent, part three"}
+{"videoId":"MwUCk3AenLE","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an autonomous code-fixing agent, part four"}
+{"videoId":"vlB4e_jJy_Q","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an n8n agent with memory and tools"}
+{"videoId":"mAa-_0Qxzms","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — a speed mode most users never switch on"}
+{"videoId":"evkv0_HrhFM","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"ERhdrcty9Gk","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"TzyejeFYHvI","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"DwFZqmVTXB0","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — what actually runs on 8GB of VRAM"}
+{"videoId":"Wqk-sfM9jEI","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — a sceptic's account of what he actually uses"}
+{"videoId":"l5oQ30Co-48","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"UbylWXukvR8","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — eleven small coding-agent fixes, from practice"}
+{"videoId":"WDrduaa8ToU","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — six context-engineering mistakes seen in the field"}
+{"videoId":"XU1gI6S2ye4","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — what matters in a 770B MoE, beyond the headline"}
+{"videoId":"Ul3TYLze0Ak","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"5G4ymk-JuF4","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — how DDP and FSDP actually work"}
+{"videoId":"M1j_uRqKMKI","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"-EFSjuTR0d0","safe":true,"learnable":false,"inScope":true,"why":"profile or interview; no applicable technique"}
+{"videoId":"VtUrQcEQLns","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — when context becomes root access"}
+{"videoId":"kdSnNjNnw0E","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — sandbox escapes and RCE against agents"}
+{"videoId":"h_vmhzhJI8Y","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — MCP SSRF and related agent vulnerabilities"}
+{"videoId":"5gYu3c3BL8A","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — MCP SSRF, key exposure, file exposure"}
+{"videoId":"bZpTILZZs1k","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — prompt security, from the attacking side"}
+{"videoId":"2CsShdeq0Pc","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — closing the context gap in agent design"}
+{"videoId":"hgufekUfk0M","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — inference under production load"}
+{"videoId":"hWxn6qXRazk","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"CRGD7ZqZOaw","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"x-bspoyrDDE","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — red-teaming a model with tools already in the stack"}
+{"videoId":"qsGOKdJURT4","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — the physics of inference"}
+{"videoId":"YaxylASsgdU","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — what a guardrail model actually does"}
+{"videoId":"1tyZWhxnsTA","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — analytics agents in a new IDE"}
+{"videoId":"e-Vh6jTMlQs","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"3DvYZepU4zU","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"FqHTJ2nxVgI","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"q36xGg99r6k","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"AuaQwfdpCHI","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"x0PZktutT9s","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"fon-29V8twI","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — agent identity, blueprints and MCP tooling"}
+{"videoId":"m74HoOZtpao","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"-H-WDu4fyjY","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — QLoRA and VRAM budgets without a cluster"}
+{"videoId":"3fxFf606JxY","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — context, harness and graph engineering distinguished"}
+{"videoId":"ZWS2JVN2iBI","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a local test of a flash model"}
+{"videoId":"5ctTkkJQpug","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a local agent stack, assembled and run"}
+{"videoId":"gR20MGAhll8","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — running the model locally and reporting it"}
+{"videoId":"ZeURGFgbvCY","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a local vision test"}
+{"videoId":"Dpq96QRS4lc","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"qM8m-eh0Ims","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"Z6pYB6vmsqc","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — whether the open weights actually run on your machine"}
+{"videoId":"lNlMXsUQggc","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — the harness as the thing that changed"}
+{"videoId":"6X3fRjU7SbI","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"odOd-IQgdh4","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — an agent built out of folders and nothing else"}
+{"videoId":"CN5CO3KCy7E","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"lC88Xo24x8c","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — quantisation for models that should not fit"}
+{"videoId":"tRJCATB0gTA","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — a measured cut in token cost"}
+{"videoId":"ee-x35Bgr2A","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"ukKdXLYHt2k","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — context engineering set against prompt engineering"}
+{"videoId":"Dsx4_kCBkbQ","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — a remote code execution walkthrough against a coding agent"}
+{"videoId":"WOrUhaowbOo","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"41WDxMVb3HM","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — loop engineering, token cost and context drift"}
+{"videoId":"8UzqGMLa7yg","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — what a harness is and why it decides the outcome"}
+{"videoId":"5vTdpYVPUyI","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — agent skills, SKILL.md and progressive disclosure"}
+{"videoId":"KA4e5Y1GikY","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — subagent and multi-agent architecture patterns"}
+{"videoId":"zfNQ0m7iMOA","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — KV cache and prompt caching, with the cost arithmetic"}
+{"videoId":"gisxENEM-og","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — human-in-the-loop design patterns"}
+{"videoId":"r2x0Nb0sBzc","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — tokenisation, context, cost and the security angle"}
+{"videoId":"qNEo6avvU7k","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — tool calling from ReAct to MCP"}
+{"videoId":"19lR_I_VVu8","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"opOyUMrbI5Q","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a local harness with tools, plugins and Ollama"}
+{"videoId":"cBJlaEEAqU0","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"BKt3WKwAk8U","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"CCcMM9jFSrE","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"vXrEGVYHPyM","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"z432z38xiQ4","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — MCP as the interface layer, explained"}
+{"videoId":"eJmF3U0XpyI","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — a new attack surface in an ordinary control"}
+{"videoId":"kKh6PLU_hXg","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an MCP server for database queries, in one sitting"}
+{"videoId":"LK1gwVKY0w8","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — why context compaction became a production trap"}
+{"videoId":"gN0VxNo763c","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — external agents resolving code review in GitLab"}
+{"videoId":"sWHMIjgcxEU","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a production RAG agent on ADK"}
+{"videoId":"pFc-HcUgFgY","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a real-time voice agent on the Live API"}
+{"videoId":"RgNqmo7dGg8","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — the thing to fix before letting an agent write code"}
+{"videoId":"Rrr2gdbvNFU","safe":true,"learnable":false,"inScope":true,"why":"profile or interview; no applicable technique"}
+{"videoId":"z52qutfmw_4","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a first MCP server, step by step"}
+{"videoId":"peoTvZd-uTc","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a working environment shared by people and agents"}
+{"videoId":"8ZC1G1ezN5o","safe":true,"learnable":false,"inScope":true,"why":"income claim rather than technique"}
+{"videoId":"1WcS1PX9FFw","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — the weights are open and almost nobody has the hardware"}
+{"videoId":"zFk_8j3I_kM","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — how a smaller model beat a larger one"}
+{"videoId":"clRVVNIPcuo","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — agents for public-sector constraints"}
+{"videoId":"e_j32zgGd68","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — progress on an agent platform being built in public"}
+{"videoId":"Hjmq5M89ebk","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — mapping the attack surface of an AI system"}
+{"videoId":"HdUQ3xEiIKk","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an agent in a hundred lines, no framework"}
+{"videoId":"62reiOvQPRQ","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — operating standards for production agents"}
+{"videoId":"CZ1EbMIPxDA","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"RXrnj69XBo8","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — what changes when engineering becomes context engineering"}
+{"videoId":"0ctyyendjXU","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — guardrails around AI-written code, in a workshop"}
+{"videoId":"IrAwy4jFxLc","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"Xw7MCxP3O-k","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — 1-bit to 4-bit on 128GB, measured"}
+{"videoId":"_ZIBOa87qPw","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — the nine NIST documents that cover model risk"}
+{"videoId":"CIuxLaFHzMA","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"1DH_nuot24I","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — why more context makes an agent worse"}
+{"videoId":"M2O3oeBN3mk","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — teaching an agent from its own mistakes without fine-tuning"}
+{"videoId":"Rd5DLzQbOfE","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — checking a lab's strategy against what shipped"}
+{"videoId":"qLJyt2S3HVg","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — context engineering, explained in Korean"}
+{"videoId":"8Hcbr95dkGY","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — what a budget server actually manages"}
+{"videoId":"ca4VG-_spKk","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"RzAjoirbddE","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"wWtf_cMthgg","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"sxLF-czLtwc","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — embeddings with Hugging Face and LangChain"}
+{"videoId":"sJmNQQOXBY4","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a complete RAG pipeline with a retriever chain"}
+{"videoId":"IXqKaOeQg60","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — what changed in the leading local inference engine"}
+{"videoId":"N7Hkqznvc7I","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a free local stack standing in for a paid agent"}
+{"videoId":"QSCIYtTSe6A","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — five injections against a live chatbot"}
+{"videoId":"LgJREY0bcUU","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a local setup tested and reported"}
+{"videoId":"4NVT6iTvsfs","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — the same model on 16GB, measured"}
+{"videoId":"6R41fGEuSa4","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"sRGnsUAGsjc","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"nLgeyJ4uQs4","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an agent driving Blender, as a proof of concept"}
+{"videoId":"Kx58e4g5IkI","safe":true,"learnable":true,"inScope":false,"why":"not about AI"}
+{"videoId":"goEJypwd7XQ","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"TInwQglNkzo","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"UjeK-bDf1i8","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — auditing connected assistants against one-click injection"}
+{"videoId":"lDglqMhhpjM","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"4GAJB94TE6Q","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — fine-tuning for summarisation, end to end"}
+{"videoId":"mCD7MoqoyZo","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an open coding agent set up in an editor"}
+{"videoId":"70ghWn8DABs","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"GbtJzJLXlfo","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — approval workflow and identity forwarding to MCP servers"}
+{"videoId":"xbWak9BfuM8","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — the agentic loop with tool use, as a lab"}
+{"videoId":"9MHejuiYP6E","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — the trust boundary in an LLM application"}
+{"videoId":"Uv7ih1A9O38","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"YxHbP7sNnOA","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — skills, subagents, MCP and WebMCP told apart"}
+{"videoId":"FVlyxblMINw","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — building flows with an agent and MCP"}
+{"videoId":"ii001KWkV54","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — production MCP servers on serverless functions"}
+{"videoId":"ZB5m0BfcxAM","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"e4bhjB8YNGU","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a first agent on a managed platform"}
+{"videoId":"57DB3GyJ1as","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — three agents coding one UI at once"}
+{"videoId":"MUtolq0HRhM","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — connecting a model to a CMS through a secured MCP server"}
+{"videoId":"vvJTyd-egsY","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — tracing and debugging coding agents"}
+{"videoId":"6Da5YxRKOrA","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — what three tools actually do with nested AGENTS.md"}
+{"videoId":"L_00G_H7dz0","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a hybrid agent over CSV with RAG and a judge"}
+{"videoId":"22wFznCPvfQ","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — context engineering and in-context learning"}
+{"videoId":"UDPBOn1UwVM","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — how instruction tuning makes a model follow instructions"}
+{"videoId":"Elj9dSd5OGg","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — parallelism, FlashAttention and precision in training"}
+{"videoId":"k3tQd0e5xbY","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — LoRA, QLoRA and parameter-efficient finetuning"}
+{"videoId":"mlL5vWXEMIU","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — indirect injection against mobile agents"}
+{"videoId":"yCYCUHSuAD0","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — a builder's end-to-end map of an agent's tools"}
+{"videoId":"jMj27AQnaQs","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"zwOM947je1g","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"peHxKX72H7U","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — DPU-offloaded TLS termination for stateful MCP traffic"}
+{"videoId":"0_ZREgPkJbY","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — transport mechanisms compared for inference KV cache"}
+{"videoId":"_IXstwNONuA","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"QRGDuhdPTnU","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — agents verifying their own output"}
+{"videoId":"h1194Kzpp-I","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"X6tbv5m4r_0","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — running models locally, from terabytes to tokens"}
+{"videoId":"3HvIfZzyEzk","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an agent from scratch on LangGraph"}
+{"videoId":"moh5D4NA8wQ","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"JilkYHS-wjM","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"DM6dVm9UjUk","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — moving a production agent from a loop to orchestration"}
+{"videoId":"7jDFTkNr1vE","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"UMR41b49PI4","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — securing agents and MCP servers"}
+{"videoId":"ROt0jWZ5B9A","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — identity and auth for MCP"}
+{"videoId":"T5hgRR0g8RQ","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"bOe__8h7OIQ","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — token economics from a team paying the bill"}
+{"videoId":"OwSfCBiN_cE","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"3aYW_NwGLDM","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"-Q29_vh6LZM","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — replaying what an agent actually did"}
+{"videoId":"x9Y6dx1G3cs","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a financial news agent, built in the session"}
+{"videoId":"Pokj7Ku2AN4","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — build, attack and secure an agent in one sitting"}
+{"videoId":"A3wz_ii7KvA","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"HBYABA_HWDU","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"YuvxpwOUH4U","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"TmaSBVbLPJs","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"k_KWK1H2ajM","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"PdLdyBzoAlc","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — the architecture and the attack surface together"}
+{"videoId":"HOhw1ywkMUU","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"OKHfi4ivGE8","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a benchmark number after post-training only"}
+{"videoId":"_hykItAxb5s","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — how the MoE is put together, and against what"}
+{"videoId":"sFRGM-iqsIM","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — running a model locally at no cost"}
+{"videoId":"7PwH_HXr1lU","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an agent that produces video, built live"}
+{"videoId":"yPD6Mf95ecM","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — a poisoned tool name that exfiltrates"}
+{"videoId":"eTaHLcMZEIs","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a real-time voice agent on the Live API, in Korean"}
+{"videoId":"MOhHR96z0Y8","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — hands-on LLM hacking against a target"}
+{"videoId":"WtUu-zytDWQ","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"buFGztQAZoE","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"7sQyReuwZOo","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — injections in the wild and a messaging blind spot"}
+{"videoId":"vW0KY_8z4q0","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — every quant of one model, tested and compared"}
+{"videoId":"psNfWOOtBGM","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a machine against a subscription, costed"}
+{"videoId":"0xUxO_9zqTU","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — the same model across 8GB to 32GB"}
+{"videoId":"F9hUx35io5Q","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"0G6LfuctSYM","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"e4pA3GArjRs","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a 27B model without a GPU, with the tokens-per-second"}
+{"videoId":"NeGnT4L3Gl8","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — what the repo actually contains against what was announced"}
+{"videoId":"ipi0sIj0qNE","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — zero trust, dual-LLM and risk scoring for agents"}
+{"videoId":"fuzaMT05fYQ","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"AJ5e5stD71E","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — what training a model from scratch costs now"}
+{"videoId":"7YQJsll4vqw","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — when the cheaper model is the right call"}
+{"videoId":"uRtlIzePS90","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"hAYPvExWmCw","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"GB2lQcK4Uvs","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — one instruction plus an MCP server becomes an agent"}
+{"videoId":"uXw2TVHKQRo","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"LA2tuPk2Y-I","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a 64M model trained from scratch in two hours"}
+{"videoId":"cU9jCqWWcH4","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"hmnMwSJ4_sE","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a local design system on Ollama and LangChain"}
+{"videoId":"C-V-9RHN62o","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"1UZbjqfdyxw","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — three Intel GPUs running a model through Vulkan"}
+{"videoId":"ZixYvVQ7afg","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a mixed-GPU box running two models and two agents"}
+{"videoId":"x_YPgm2m1xc","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a live dashboard driven by an agent"}
+{"videoId":"gvPMjz08DDA","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an agent looping on a game until it is done"}
+{"videoId":"iHVU_eFcnJg","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a vision model running locally in fifteen minutes"}
+{"videoId":"Cv4ILojvqt8","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"wS8JIUBTS88","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"97S-hztfA-8","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"oSekFKuV8jc","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a Claude Code assistant that briefs four times a day"}
+{"videoId":"XzEX7lxuoDs","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — building the loop instead of writing prompts"}
+{"videoId":"7Mgwj4UsnGw","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a reversed verdict after using the agent"}
+{"videoId":"Z_WxP4Bh9GY","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"xpOljNd9e4o","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — what inference actually costs at scale"}
+{"videoId":"DAW9eo-dzMU","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"UELzL7_kBvo","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — one email that breaks an agent"}
+{"videoId":"8omF5St3P-I","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — time-to-first-token against per-token latency"}
+{"videoId":"9ngQJYUvBzM","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — why 40% GPU utilisation still feels slow"}
+{"videoId":"GDY4G7JauqI","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"xv-KZZo0q8M","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an agent with memory, wired to a CRM"}
+{"videoId":"lUZfGgFwW4s","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a shipment agent that messages customers"}
+{"videoId":"rEeBqCJyvEE","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — what makes an agent reliable rather than clever"}
+{"videoId":"_H_vhxOUeQs","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — deterministic infrastructure under a non-deterministic agent"}
+{"videoId":"AmPTX_DgpvI","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — building agents around evals"}
+{"videoId":"VB_Ygos5_vg","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — where context goes wrong"}
+{"videoId":"hqShYKGbm2k","safe":true,"learnable":true,"inScope":false,"why":"organisational structure, not AI engineering"}
+{"videoId":"AhQML5BDgis","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — system prompt design for voice agents"}
+{"videoId":"CgAcMP7LbbM","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — relevancy evaluated with a named tool"}
+{"videoId":"I1SMD6I5pr8","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — matching model to job to cut cost without cutting quality"}
+{"videoId":"kJ5636rJaw4","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a machine against a subscription, costed"}
+{"videoId":"vUyl_Gl1WrA","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"ncu3ak6T8uA","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"EJYDS1sXkS4","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"Wwoy2u_UBNg","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"f7Da8XDcsSs","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — an agent that can be hijacked and reports success anyway"}
+{"videoId":"8zRFHlMU29U","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — graph engineering for reliable agents"}
+{"videoId":"J5Sdxs0fnpU","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a fully local agent driving an image pipeline"}
+{"videoId":"dfX8H5HCn2A","safe":true,"learnable":true,"inScope":true,"why":"inference, serving or model infrastructure — local models for predictable development"}
+{"videoId":"KlFoz7Q75Fc","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"4CNC8l_rbnk","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"-q1V53LJp98","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — why agents fail, and where the context went"}
+{"videoId":"V0oiJ6KZa1s","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — a free replacement for a paid coding agent"}
+{"videoId":"70XDoi41kOc","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — what happens on each turn of an agent loop"}
+{"videoId":"EB8U16uL9l8","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — the 770B claim weighed against what it does"}
+{"videoId":"kkAeVAAzMJ0","safe":true,"learnable":true,"inScope":true,"why":"agent design or tooling, from practice — a four-layer structure for scaling agents"}
+{"videoId":"tqTUIA0Mw6U","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"R0Gm5LXZ0w8","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — who audits the auditor, on a science benchmark"}
+{"videoId":"msiaLXPdlLE","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"ddeJPnHWybY","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — OpenAPI turned into an MCP server"}
+{"videoId":"sgBRkFvRSvo","safe":true,"learnable":true,"inScope":true,"why":"hands-on build or deployment account — an MCP server written by a coding agent"}
+{"videoId":"msZSLygOdHE","safe":true,"learnable":false,"inScope":true,"why":"news roundup with no first-hand material"}
+{"videoId":"1IbrFrdll4U","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — the CVE that weaponised a coding workflow"}
+{"videoId":"e6sUm16xtc0","safe":true,"learnable":false,"inScope":true,"why":"beginner course or bootcamp promotion"}
+{"videoId":"P3VeRL6iVsE","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"09OGSRptb0M","safe":true,"learnable":true,"inScope":false,"why":"not in a language this brief serves"}
+{"videoId":"p13LK7pd04I","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — stealing reasoning traces from a hosted API"}
+{"videoId":"HmszCO15NDg","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — how a model reads a large codebase"}
+{"videoId":"LoPCOlwSLJo","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — how one agent product actually works"}
+{"videoId":"MYHV15Y0bF4","safe":true,"learnable":true,"inScope":true,"why":"security or safety of AI systems, with specifics — agent security, from what people miss"}
+{"videoId":"kLUQX1n7_tY","safe":true,"learnable":false,"inScope":true,"why":"vision talk; no technique a practitioner can apply"}
+{"videoId":"KLvT1HJW-HI","safe":true,"learnable":true,"inScope":false,"why":"go-to-market and sales, not AI engineering"}
+{"videoId":"uqi5n3xqjqo","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"uZ4VZRPvyX4","safe":true,"learnable":false,"inScope":true,"why":"reaction or announcement with nothing to act on"}
+{"videoId":"tz6b8Xee2B8","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a model run locally for a full day"}
+{"videoId":"MAsCGWXq6IQ","safe":true,"learnable":true,"inScope":true,"why":"measurement or evaluation with results — a second model run locally for a full day"}
+{"videoId":"J-NHi5LblK8","safe":true,"learnable":false,"inScope":true,"why":"vendor positioning rather than technique"}
+{"videoId":"VhG9uoFlbpg","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — why fine-tuning encourages hallucination, and what to do"}
+{"videoId":"0qkSKT6S-9o","safe":true,"learnable":true,"inScope":true,"why":"first-hand technical material on AI engineering — why an agent forgets, and what memory would fix it"}

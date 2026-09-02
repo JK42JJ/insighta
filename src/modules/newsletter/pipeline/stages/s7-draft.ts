@@ -54,20 +54,38 @@ function fmtViews(n: number | null): string {
   return `${n.toLocaleString('ko-KR')}회`;
 }
 
+/** Did S5 decide this is somebody else's talk, republished? */
+function republishOf(v: CorpusRow): string | null {
+  return ((v.corroboration ?? {}) as { republishOf?: string | null }).republishOf ?? null;
+}
+
 /**
  * Rank the shortlist.
  *
- * Corroboration first, because a subject several independent channels covered
- * is the week's event rather than one channel's opinion. Trusted layer next,
- * because an editor already decided that channel matters. Recency last. Views
- * are printed but never rank: popularity is what a weekly brief is supposed to
- * see past.
+ * Trust first. An editor decided that channel matters, and that is the only
+ * quality signal in this pipeline that a person actually stands behind.
+ *
+ * Corroboration is a threshold here, not an ordering. Two earlier versions of
+ * this ranked by it and both produced a bad issue: sorting by the most-covered
+ * subject gave every video the same number, because "agent" is on 144 of 274
+ * channels; sorting by the least-covered subject put an 8-view "Update -
+ * Building My Own AI Agent Platform" at the top. Corroboration says a subject
+ * is real. It does not say a video is good.
+ *
+ * Recency last. Views are printed and never rank: popularity is the thing a
+ * weekly brief exists to see past.
  */
 function rank(a: CorpusRow, b: CorpusRow): number {
-  const ac = ((a.corroboration ?? {}) as { independentChannels?: number }).independentChannels ?? 0;
-  const bc = ((b.corroboration ?? {}) as { independentChannels?: number }).independentChannels ?? 0;
-  if (ac !== bc) return bc - ac;
   if (a.source !== b.source) return a.source === 'trusted' ? -1 : 1;
+
+  const corroborated = (v: CorpusRow): number =>
+    (((v.corroboration ?? {}) as { corroborated?: unknown[] }).corroborated ?? []).length > 0
+      ? 0
+      : 1;
+  const ac = corroborated(a);
+  const bc = corroborated(b);
+  if (ac !== bc) return ac - bc;
+
   return b.publishedAt.getTime() - a.publishedAt.getTime();
 }
 
@@ -80,14 +98,50 @@ export const s7Draft: Stage = {
     const PICK_COUNT = 5;
     const ranked = [...input].sort(rank);
 
-    // One pick per channel. Five videos from one channel is a channel profile,
-    // not a week in review.
+    // One pick per channel — five videos from one channel is a channel
+    // profile, not a week in review — and one pick per *talk*. The second rule
+    // is the one that is easy to miss: a channel that republishes another's
+    // talk with subtitles is a different channel id carrying the same
+    // material, and the first run of this put a 152-view re-upload at the top
+    // of the picks while the original sat unused in the corpus.
     const picks: PickDraft[] = [];
     const usedChannels = new Set<string>();
-    for (const v of ranked) {
+    const usedTalks = new Set<string>();
+    const skippedAsRepublish: string[] = [];
+    const byId = new Map(input.map((v) => [v.videoId, v]));
+
+    for (const candidate of ranked) {
       if (picks.length >= PICK_COUNT) break;
+
+      // A republication resolves to the talk it republishes, when that talk is
+      // also in the shortlist. Whoever gave the talk gets the credit and the
+      // link: a Korean-subtitled repost is the more useful of the pair for
+      // half this brief's readers, but printing the reposter's channel under
+      // someone else's talk misattributes it. Recency puts the repost first in
+      // the ranking, so without this the issue credits the wrong channel —
+      // which it did, with 152 views against the original's 3,262.
+      const originalId = republishOf(candidate);
+      const v = (originalId && byId.get(originalId)) || candidate;
+      if (v !== candidate) skippedAsRepublish.push(candidate.videoId);
+
+      // The pair is one talk, so it gets the pair's corroboration. The two
+      // differ only because subjects are read off the title and description,
+      // and a translated title tokenises differently — the English original
+      // scored 0 where its Korean repost scored 27, for the same talk.
+      const pairCorroboration = Math.max(
+        ((v.corroboration ?? {}) as { independentChannels?: number }).independentChannels ?? 0,
+        ((candidate.corroboration ?? {}) as { independentChannels?: number }).independentChannels ??
+          0
+      );
+
       if (usedChannels.has(v.channelId)) continue;
+      const talk = republishOf(v) ?? v.videoId;
+      if (usedTalks.has(talk)) {
+        skippedAsRepublish.push(v.videoId);
+        continue;
+      }
       usedChannels.add(v.channelId);
+      usedTalks.add(talk);
 
       const e = (v.enrichment ?? {}) as {
         title?: string;
@@ -118,7 +172,7 @@ export const s7Draft: Stage = {
         source: v.source,
         judgedBy: verdict.judge ?? 'unknown',
         why: verdict.why ?? '',
-        independentChannels: corr.independentChannels ?? 0,
+        independentChannels: Math.max(corr.independentChannels ?? 0, pairCorroboration),
       });
     }
 
@@ -191,6 +245,7 @@ export const s7Draft: Stage = {
         picks: picks.length,
         pickChannels: [...usedChannels],
         candidateStories: candidateStories.length,
+        skippedAsRepublish,
       },
     };
   },

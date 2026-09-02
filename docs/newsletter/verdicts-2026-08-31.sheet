@@ -1,0 +1,459 @@
+# ai-tech, week of 2026-08-31, run b36b3157-089f-4164-8b8b-4ce332e7aba2
+# Judged in the console. Codes are defined in scripts/newsletter/expand-verdicts.ts.
+#
+# The boundary that decided most of it: this brief is the change in AI itself.
+# A talk about selling with agents is go-to-market; a talk about building the
+# agent is this brief. Both appear at the same conference under similar titles.
+
+# ---- trusted layer: AI Engineer -----------------------------------------
+jebp4V0vh30 agent      agentic sites, from a shipping team
+32nrHU6zHU8 agent      agent architecture compared to the microservices era
+ZyGMqdIpPoE agent      spend controls for autonomous agents
+hD9-V56FNRI agent      agents as distributed systems, from TikTok
+bMjlRrWjdT0 eval       evaluation practice across teams at DoorDash
+L4I7WgiEquo gtm
+M05vON8i0aI org
+tE2z8-hqoLY sec        prompt injection beyond the lethal trifecta
+DrTdD-ttjCY build      deployment account, 6,000 users
+ZIYYsAzaLlA build      shipping the Figma MCP server
+EL123UNokkI build      Uber's multi-agent code review engine
+pOvWgX7IJsc eval       measured LLM-written GPU kernels
+pqlWNihgdjI ok         team practice moving to AI-native development
+dSg0pu8d6qg infra      throughput over token count
+UhCY231d0FQ gtm
+Qw_tC68KKes gtm
+qqrk7CtkuIw ok         how Anthropic builds, from the person who runs it
+B0fjR3yaZFU vision
+mJqwmmOx4WA build      what went wrong vibe-coding a billing engine at Stripe
+qdAkxLoYNI8 build      context engine for mergeable code
+5Bn0xro2ol8 ok         adopting coding agents without quality loss
+V_5bn4q-vAI gtm        LLM visibility for a library is marketing
+6pbQgnJ9Voc gtm
+YXowceUKYJI infra      KV-cache-aware routing and prefill/decode disaggregation
+AhQpRalYlyg agent      multimodal collaborative agents
+zrZ1amZBSPw infra      LLM gateway architecture and tradeoffs
+wdTRsfw0KG0 gtm
+KLDdXOw6jIc ok         state of generative media from the people building it
+A-zeQiYkmXk agent      agent payment flows
+S6aSoQ6_u5A ok         specifying intent to an agent
+G7cgLjZtmMU agent      agentic commerce stack
+VjEP0xqTUI0 gtm
+Lrw0jqBNaw0 vision
+QrMcNe2jjt8 ok         intent-driven UX architecture
+sM1iYgz93HI ok         how fast agent infrastructure goes stale
+XsvUhpnHepE promo
+1KOdiGgMtpY vision
+dQ-_i1tZiws build      agents at Maersk's scale
+qTZirYu9pr0 build      x402 agent payments on AWS
+7A65O-0lvKE gtm
+xKzU_3riL6s agent      wallets and nanopayments for agents
+h6mi88VrPtQ eval       a critique of x402 from someone who tried it
+vGn6N4-bxBY sec        agent authorization failures
+lRa9sPaMyy4 general    formal verification belongs to the dev brief
+
+# ---- trusted layer: other channels --------------------------------------
+RSEOYH_OpRc build      workflow automation walkthrough with Claude
+I_qJ4BiLuww build      design improvement in vibe coding, from a working developer
+P1zBiAQU1IA ok         models running physical experiments, from Anthropic
+MVo3P-D7eSc infra      twelve inference concepts, explained
+5--QWPk8jN0 hype
+yZddAiz4HP8 eval       a week of first-hand testing
+IfL_OY-wRBM profile
+c57vAe-mMLo ok         how AI changes code review
+QxVS86cDpho news
+nVImVgKpoOY eval       where agent benchmarks and reality part
+Gj13NR35WU4 policy
+nWgvobB4hcw sec        open-weight models, context bombing, post-Black Hat attacks
+IRtSdLX_Obw ok         why models need web access
+rPWCYB62wvI agent      where to point agents, from daily practice
+Uny6LpmjraI eval       Clay's eval stack over 300M agent runs
+Lbax7_pW2Nw eval       results from the persona-vector work
+4hKJ9X6rGFo income
+NyfYxpXiw_0 beginner
+FFWtxjvW2ts eval       first-hand test of a new model on web output
+8IyORt-7rOQ hype
+PYjbeY8sGLs build      cloning a scheduling product end to end
+bg0C-2iUUqM eval       Claude Code against Codex on design, measured
+gQef3d3erOs build      local model setup without a server
+tSPAckZON0A infra      model routing for agents
+ZQ3EeU-hYSA infra      open model routing, getting started
+mXYFcz27eDw infra      what Dynamo is and why now
+lCEjKZiSmKk offtopic   multi-GPU dataframes, not AI
+TvsvwfTV4bo promo
+P9Y-A9Pcjes promo
+gROKrW59Mn4 hype
+YAPKoRLrigY promo
+nM86DBOqgPM offtopic
+
+# ---- trusted layer: Tech Bridge (Korean-subtitled re-uploads) ------------
+# Judged on their own merit. Where the English original is also in this corpus
+# the pick rule (one per channel) keeps only one of the pair in the issue.
+3tDoLkFcEKg vision
+PXHUHNX7nbI agent      agentic sites, with Korean subtitles
+j1bhs3_VZDU profile
+5bELrUqxX4U ok         Andrew Ng on where the opportunity actually is
+u1iQob0v-5k profile
+0qySk1fcf6k org
+sXCppYzX-0g hype
+Ry0WHNxDbYA ok         moving a team from AI-assisted to AI-native
+cVFc9f6M0U0 vision
+GBg-fY82y84 gtm
+fOsLTMhjyMM infra      throughput over token count, with Korean subtitles
+YRqpmwIDOX0 profile
+XV6WcGliCGM agent      agents as distributed systems, with Korean subtitles
+TQqa0B_pNGE agent      Anthropic's Claude Platform team on the agent era
+EAVtSxbzmuM eval       a hands-on verdict on Claude's memory
+qLT5cGk01mQ ok         what changed in Claude memory 2.0
+OSd69LTMi3w ok         adopting coding agents without quality loss, with Korean subtitles
+F_smvU3oqbU ok         writing specifications instead of prompts
+6SBCO0vg1UM build      how Warp built a cloud agent platform
+
+# ---- search layer -------------------------------------------------------
+# Long tail. Most of it is the same three things: news read aloud, a listicle
+# promising 10x, or an explainer for someone who has not started. What passes
+# is what someone did and then reported.
+lD9WvLqrkrk build      an agent server on a cheap VPS, start to finish
+6KOIr7g_8Cg ok         agentic RAG on LangChain, walked through
+TPLWlF72j0c org
+1yo__i_7Qrw build      opening Xcode to an external coding agent
+JbIGopESlRU infra      fitting large models onto small hardware
+1K-X1pcIl9o ok         embeddings, cross-encoders and reranking, explained properly
+T2xjM242JUA profile
+XC7MWh-NcJo offtopic   stock summaries; the AI is incidental
+bBTrJ5NXYvE hype
+q4Dq-7CmGpQ hype
+mXImjISyVuI beginner
+Z_n78j2NC6E build      a multi-agent system on Vertex AI Agent Builder
+YoEc4cbWCc0 build      operating manuals and roles built with Claude Code
+fZyw5PSku2M build      a VM setup replacing a local box
+uxgj4ogVl3Q beginner
+asuhshHM-Qs news
+AH_Q_RZGRZY beginner
+FctwGfWE7gU lang
+7JhBkNFK8z4 sec        why prompt injection is not solved by prompting
+wq2QN_MvetY news
+l-E9NRSm8nE lang
+LKvHoTCmIcI news
+WJgxX0Eib6k hype
+jyLKRN36-Dc hype
+cbIDV1oR-Os policy
+tcjrO3L_wrM sec        an attack that landed on three coding agents, with numbers
+OQepxZSD8Tw sec        prompt exfiltration through a malicious tool
+S6NHMSvr6u4 hype
+zMCq8PTbCKM hype
+LAxDLplCBzE news
+hMT4L05h-sA sec        assistant behaviour nobody asked for
+7T4puuDBIvs infra      running two open models on an $800 machine
+xiWn-WUVfoc ok         deciding what the model gets to see
+eRoe82YZ9JY agent      returning tool failures an agent can use
+m8ZHM4FJdVA infra      the numbers on a 770B MoE and day-zero vLLM support
+9zSugg8PhG4 eval       testing tool calling, with cases and a judge
+qAlpHh4ipko news
+tYFwIeaX3vY infra      running models locally to cut spend
+lFcvuOxa_Co sec        an eleven-word injection that hijacks an assistant
+Z9RMS61gU_k lang
+2E5xF7jcYj0 promo
+0R7KmATLhX0 promo
+fygy4NmFpYY build      multi-tool agent with LangChain tool calling
+4CWFjOIEP-0 beginner
+JLnM4gbSuAQ ok         why token cost is not the number on the price page
+OCV47qmchwE promo
+Pg5PaM7xa8o ok         tracking and cutting coding-agent spend
+e_RS2mQu6r4 ok         training and evaluating neural graphics models
+44EgETofAhE promo
+FJ7Ua_HQlMk sec        an auto-mode filter and the bypass rate claimed against it
+5vYuNVGOLlI hype
+nx-BJ2pAmVQ news
+f71cDhR8I9E news
+wLPAK-1Jw40 eval       evals and test pipelines
+fJJy8XrkdsY sec        evasion, injection and abuse of model inputs
+COjAO77Ui78 sec        injection and jailbreaks, first part
+HHYGofCip0M sec        indirect and cross-domain injection
+5-96Nbef3tw ok         how a working developer actually uses Copilot now
+duH63ZaqVBw infra      quantisation, INT8 and model sizes for local runs
+vxrZWbZ2fZA hype
+zf8jpD77sKY infra      matching a model to the hardware you have
+DjAbUcGO2MY news
+WMB_6WwJayc sec        a hidden injection found in a real CV
+4WgtN5NcUmw sec        AI secure-coding diagnosis against static tools
+kZ2bdrOEgYQ hype
+rHbWBc34-SI income
+PjBgS57Hwtc hype
+iDobAb_wEzc ok         context engineering past prompt engineering
+OdgW9omRfXA eval       long context against RAG, argued with cases
+XmGvvicUN78 news
+IO464uc3QKs promo
+0I7Hw_kBF-I infra      why unified memory beats a bigger GPU here
+yOvP74WyB6k infra      why RAM is not the bottleneck it looks like
+YNQTcEAaJ4M infra      which local models fit which GPU
+nIBJy3sNu9A agent      a JSON mistake every agent harness copied
+0LPJg890OdY build      an MCP server and SDKs for a live product
+womDAp23k4U vision
+LAA_qyWX5vA build      an autonomous code-fixing agent, part three
+MwUCk3AenLE build      an autonomous code-fixing agent, part four
+vlB4e_jJy_Q build      an n8n agent with memory and tools
+mAa-_0Qxzms infra      a speed mode most users never switch on
+evkv0_HrhFM hype
+ERhdrcty9Gk hype
+TzyejeFYHvI hype
+DwFZqmVTXB0 infra      what actually runs on 8GB of VRAM
+Wqk-sfM9jEI ok         a sceptic's account of what he actually uses
+l5oQ30Co-48 news
+UbylWXukvR8 agent      eleven small coding-agent fixes, from practice
+WDrduaa8ToU ok         six context-engineering mistakes seen in the field
+XU1gI6S2ye4 infra      what matters in a 770B MoE, beyond the headline
+Ul3TYLze0Ak promo
+5G4ymk-JuF4 infra      how DDP and FSDP actually work
+M1j_uRqKMKI lang
+-EFSjuTR0d0 profile
+VtUrQcEQLns sec        when context becomes root access
+kdSnNjNnw0E sec        sandbox escapes and RCE against agents
+h_vmhzhJI8Y sec        MCP SSRF and related agent vulnerabilities
+5gYu3c3BL8A sec        MCP SSRF, key exposure, file exposure
+bZpTILZZs1k sec        prompt security, from the attacking side
+2CsShdeq0Pc agent      closing the context gap in agent design
+hgufekUfk0M infra      inference under production load
+hWxn6qXRazk promo
+CRGD7ZqZOaw promo
+x-bspoyrDDE sec        red-teaming a model with tools already in the stack
+qsGOKdJURT4 infra      the physics of inference
+YaxylASsgdU ok         what a guardrail model actually does
+1tyZWhxnsTA build      analytics agents in a new IDE
+e-Vh6jTMlQs lang
+3DvYZepU4zU lang
+FqHTJ2nxVgI promo
+q36xGg99r6k lang
+AuaQwfdpCHI beginner
+x0PZktutT9s lang
+fon-29V8twI build      agent identity, blueprints and MCP tooling
+m74HoOZtpao beginner
+-H-WDu4fyjY infra      QLoRA and VRAM budgets without a cluster
+3fxFf606JxY ok         context, harness and graph engineering distinguished
+ZWS2JVN2iBI eval       a local test of a flash model
+5ctTkkJQpug build      a local agent stack, assembled and run
+gR20MGAhll8 eval       running the model locally and reporting it
+ZeURGFgbvCY eval       a local vision test
+Dpq96QRS4lc news
+qM8m-eh0Ims news
+Z6pYB6vmsqc infra      whether the open weights actually run on your machine
+lNlMXsUQggc ok         the harness as the thing that changed
+6X3fRjU7SbI promo
+odOd-IQgdh4 agent      an agent built out of folders and nothing else
+CN5CO3KCy7E hype
+lC88Xo24x8c infra      quantisation for models that should not fit
+tRJCATB0gTA ok         a measured cut in token cost
+ee-x35Bgr2A beginner
+ukKdXLYHt2k ok         context engineering set against prompt engineering
+Dsx4_kCBkbQ sec        a remote code execution walkthrough against a coding agent
+WOrUhaowbOo vision
+41WDxMVb3HM ok         loop engineering, token cost and context drift
+8UzqGMLa7yg ok         what a harness is and why it decides the outcome
+5vTdpYVPUyI build      agent skills, SKILL.md and progressive disclosure
+KA4e5Y1GikY agent      subagent and multi-agent architecture patterns
+zfNQ0m7iMOA infra      KV cache and prompt caching, with the cost arithmetic
+gisxENEM-og agent      human-in-the-loop design patterns
+r2x0Nb0sBzc ok         tokenisation, context, cost and the security angle
+qNEo6avvU7k agent      tool calling from ReAct to MCP
+19lR_I_VVu8 hype
+opOyUMrbI5Q build      a local harness with tools, plugins and Ollama
+cBJlaEEAqU0 lang
+BKt3WKwAk8U lang
+CCcMM9jFSrE beginner
+vXrEGVYHPyM lang
+z432z38xiQ4 ok         MCP as the interface layer, explained
+eJmF3U0XpyI sec        a new attack surface in an ordinary control
+kKh6PLU_hXg build      an MCP server for database queries, in one sitting
+LK1gwVKY0w8 ok         why context compaction became a production trap
+gN0VxNo763c build      external agents resolving code review in GitLab
+sWHMIjgcxEU build      a production RAG agent on ADK
+pFc-HcUgFgY build      a real-time voice agent on the Live API
+RgNqmo7dGg8 ok         the thing to fix before letting an agent write code
+Rrr2gdbvNFU profile
+z52qutfmw_4 build      a first MCP server, step by step
+peoTvZd-uTc build      a working environment shared by people and agents
+8ZC1G1ezN5o income
+1WcS1PX9FFw infra      the weights are open and almost nobody has the hardware
+zFk_8j3I_kM eval       how a smaller model beat a larger one
+clRVVNIPcuo build      agents for public-sector constraints
+e_j32zgGd68 build      progress on an agent platform being built in public
+Hjmq5M89ebk sec        mapping the attack surface of an AI system
+HdUQ3xEiIKk build      an agent in a hundred lines, no framework
+62reiOvQPRQ agent      operating standards for production agents
+CZ1EbMIPxDA hype
+RXrnj69XBo8 ok         what changes when engineering becomes context engineering
+0ctyyendjXU build      guardrails around AI-written code, in a workshop
+IrAwy4jFxLc hype
+Xw7MCxP3O-k eval       1-bit to 4-bit on 128GB, measured
+_ZIBOa87qPw sec        the nine NIST documents that cover model risk
+CIuxLaFHzMA hype
+1DH_nuot24I ok         why more context makes an agent worse
+M2O3oeBN3mk agent      teaching an agent from its own mistakes without fine-tuning
+Rd5DLzQbOfE eval       checking a lab's strategy against what shipped
+qLJyt2S3HVg ok         context engineering, explained in Korean
+8Hcbr95dkGY eval       what a budget server actually manages
+ca4VG-_spKk promo
+RzAjoirbddE beginner
+wWtf_cMthgg promo
+sxLF-czLtwc build      embeddings with Hugging Face and LangChain
+sJmNQQOXBY4 build      a complete RAG pipeline with a retriever chain
+IXqKaOeQg60 infra      what changed in the leading local inference engine
+N7Hkqznvc7I build      a free local stack standing in for a paid agent
+QSCIYtTSe6A sec        five injections against a live chatbot
+LgJREY0bcUU eval       a local setup tested and reported
+4NVT6iTvsfs eval       the same model on 16GB, measured
+6R41fGEuSa4 hype
+sRGnsUAGsjc vision
+nLgeyJ4uQs4 build      an agent driving Blender, as a proof of concept
+Kx58e4g5IkI offtopic
+goEJypwd7XQ lang
+TInwQglNkzo news
+UjeK-bDf1i8 sec        auditing connected assistants against one-click injection
+lDglqMhhpjM hype
+4GAJB94TE6Q build      fine-tuning for summarisation, end to end
+mCD7MoqoyZo build      an open coding agent set up in an editor
+70ghWn8DABs beginner
+GbtJzJLXlfo build      approval workflow and identity forwarding to MCP servers
+xbWak9BfuM8 build      the agentic loop with tool use, as a lab
+9MHejuiYP6E sec        the trust boundary in an LLM application
+Uv7ih1A9O38 lang
+YxHbP7sNnOA ok         skills, subagents, MCP and WebMCP told apart
+FVlyxblMINw build      building flows with an agent and MCP
+ii001KWkV54 build      production MCP servers on serverless functions
+ZB5m0BfcxAM beginner
+e4bhjB8YNGU build      a first agent on a managed platform
+57DB3GyJ1as build      three agents coding one UI at once
+MUtolq0HRhM build      connecting a model to a CMS through a secured MCP server
+vvJTyd-egsY ok         tracing and debugging coding agents
+6Da5YxRKOrA ok         what three tools actually do with nested AGENTS.md
+L_00G_H7dz0 build      a hybrid agent over CSV with RAG and a judge
+22wFznCPvfQ ok         context engineering and in-context learning
+UDPBOn1UwVM ok         how instruction tuning makes a model follow instructions
+Elj9dSd5OGg infra      parallelism, FlashAttention and precision in training
+k3tQd0e5xbY infra      LoRA, QLoRA and parameter-efficient finetuning
+mlL5vWXEMIU sec        indirect injection against mobile agents
+yCYCUHSuAD0 ok         a builder's end-to-end map of an agent's tools
+jMj27AQnaQs news
+zwOM947je1g news
+peHxKX72H7U infra      DPU-offloaded TLS termination for stateful MCP traffic
+0_ZREgPkJbY infra      transport mechanisms compared for inference KV cache
+_IXstwNONuA lang
+QRGDuhdPTnU agent      agents verifying their own output
+h1194Kzpp-I news
+X6tbv5m4r_0 infra      running models locally, from terabytes to tokens
+3HvIfZzyEzk build      an agent from scratch on LangGraph
+moh5D4NA8wQ promo
+JilkYHS-wjM promo
+DM6dVm9UjUk agent      moving a production agent from a loop to orchestration
+7jDFTkNr1vE lang
+UMR41b49PI4 sec        securing agents and MCP servers
+ROt0jWZ5B9A sec        identity and auth for MCP
+T5hgRR0g8RQ lang
+bOe__8h7OIQ ok         token economics from a team paying the bill
+OwSfCBiN_cE lang
+3aYW_NwGLDM beginner
+-Q29_vh6LZM ok         replaying what an agent actually did
+x9Y6dx1G3cs build      a financial news agent, built in the session
+Pokj7Ku2AN4 sec        build, attack and secure an agent in one sitting
+A3wz_ii7KvA news
+HBYABA_HWDU lang
+YuvxpwOUH4U lang
+TmaSBVbLPJs lang
+k_KWK1H2ajM lang
+PdLdyBzoAlc sec        the architecture and the attack surface together
+HOhw1ywkMUU lang
+OKHfi4ivGE8 eval       a benchmark number after post-training only
+_hykItAxb5s infra      how the MoE is put together, and against what
+sFRGM-iqsIM build      running a model locally at no cost
+7PwH_HXr1lU build      an agent that produces video, built live
+yPD6Mf95ecM sec        a poisoned tool name that exfiltrates
+eTaHLcMZEIs build      a real-time voice agent on the Live API, in Korean
+MOhHR96z0Y8 sec        hands-on LLM hacking against a target
+WtUu-zytDWQ lang
+buFGztQAZoE hype
+7sQyReuwZOo sec        injections in the wild and a messaging blind spot
+vW0KY_8z4q0 eval       every quant of one model, tested and compared
+psNfWOOtBGM eval       a machine against a subscription, costed
+0xUxO_9zqTU infra      the same model across 8GB to 32GB
+F9hUx35io5Q lang
+0G6LfuctSYM lang
+e4pA3GArjRs eval       a 27B model without a GPU, with the tokens-per-second
+NeGnT4L3Gl8 eval       what the repo actually contains against what was announced
+ipi0sIj0qNE sec        zero trust, dual-LLM and risk scoring for agents
+fuzaMT05fYQ promo
+AJ5e5stD71E ok         what training a model from scratch costs now
+7YQJsll4vqw eval       when the cheaper model is the right call
+uRtlIzePS90 news
+hAYPvExWmCw lang
+GB2lQcK4Uvs build      one instruction plus an MCP server becomes an agent
+uXw2TVHKQRo news
+LA2tuPk2Y-I build      a 64M model trained from scratch in two hours
+cU9jCqWWcH4 hype
+hmnMwSJ4_sE build      a local design system on Ollama and LangChain
+C-V-9RHN62o promo
+1UZbjqfdyxw build      three Intel GPUs running a model through Vulkan
+ZixYvVQ7afg build      a mixed-GPU box running two models and two agents
+x_YPgm2m1xc build      a live dashboard driven by an agent
+gvPMjz08DDA build      an agent looping on a game until it is done
+iHVU_eFcnJg build      a vision model running locally in fifteen minutes
+Cv4ILojvqt8 news
+wS8JIUBTS88 vision
+97S-hztfA-8 vision
+oSekFKuV8jc build      a Claude Code assistant that briefs four times a day
+XzEX7lxuoDs agent      building the loop instead of writing prompts
+7Mgwj4UsnGw eval       a reversed verdict after using the agent
+Z_WxP4Bh9GY news
+xpOljNd9e4o ok         what inference actually costs at scale
+DAW9eo-dzMU lang
+UELzL7_kBvo sec        one email that breaks an agent
+8omF5St3P-I infra      time-to-first-token against per-token latency
+9ngQJYUvBzM infra      why 40% GPU utilisation still feels slow
+GDY4G7JauqI lang
+xv-KZZo0q8M build      an agent with memory, wired to a CRM
+lUZfGgFwW4s build      a shipment agent that messages customers
+rEeBqCJyvEE ok         what makes an agent reliable rather than clever
+_H_vhxOUeQs ok         deterministic infrastructure under a non-deterministic agent
+AmPTX_DgpvI eval       building agents around evals
+VB_Ygos5_vg ok         where context goes wrong
+hqShYKGbm2k org
+AhQML5BDgis ok         system prompt design for voice agents
+CgAcMP7LbbM eval       relevancy evaluated with a named tool
+I1SMD6I5pr8 ok         matching model to job to cut cost without cutting quality
+kJ5636rJaw4 eval       a machine against a subscription, costed
+vUyl_Gl1WrA news
+ncu3ak6T8uA news
+EJYDS1sXkS4 news
+Wwoy2u_UBNg vision
+f7Da8XDcsSs sec        an agent that can be hijacked and reports success anyway
+8zRFHlMU29U agent      graph engineering for reliable agents
+J5Sdxs0fnpU build      a fully local agent driving an image pipeline
+dfX8H5HCn2A infra      local models for predictable development
+KlFoz7Q75Fc news
+4CNC8l_rbnk news
+-q1V53LJp98 ok         why agents fail, and where the context went
+V0oiJ6KZa1s build      a free replacement for a paid coding agent
+70XDoi41kOc agent      what happens on each turn of an agent loop
+EB8U16uL9l8 eval       the 770B claim weighed against what it does
+kkAeVAAzMJ0 agent      a four-layer structure for scaling agents
+tqTUIA0Mw6U hype
+R0Gm5LXZ0w8 eval       who audits the auditor, on a science benchmark
+msiaLXPdlLE promo
+ddeJPnHWybY build      OpenAPI turned into an MCP server
+sgBRkFvRSvo build      an MCP server written by a coding agent
+msZSLygOdHE news
+1IbrFrdll4U sec        the CVE that weaponised a coding workflow
+e6sUm16xtc0 beginner
+P3VeRL6iVsE vision
+09OGSRptb0M lang
+p13LK7pd04I sec        stealing reasoning traces from a hosted API
+HmszCO15NDg ok         how a model reads a large codebase
+LoPCOlwSLJo ok         how one agent product actually works
+MYHV15Y0bF4 sec        agent security, from what people miss
+kLUQX1n7_tY vision
+KLvT1HJW-HI gtm
+uqi5n3xqjqo hype
+uZ4VZRPvyX4 hype
+tz6b8Xee2B8 eval       a model run locally for a full day
+MAsCGWXq6IQ eval       a second model run locally for a full day
+J-NHi5LblK8 promo
+VhG9uoFlbpg ok         why fine-tuning encourages hallucination, and what to do
+0qkSKT6S-9o ok         why an agent forgets, and what memory would fix it

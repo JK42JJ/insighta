@@ -1,0 +1,317 @@
+{
+  "generatedAt": "2026-09-02T05:29:00.375Z",
+  "runId": "b36b3157-089f-4164-8b8b-4ce332e7aba2",
+  "categoryKey": "ai-tech",
+  "judge": "console",
+  "judgeProvenance": "docs/newsletter/verdicts-2026-08-31.jsonl",
+  "shortlist": 274,
+  "picks": [
+    {
+      "title": "AI Agents Are Just Distributed Systems Now — Salman Munaf, TikTok",
+      "latin": true,
+      "meta": "AI Engineer · 5,885회",
+      "body": "[[EDITOR]]",
+      "videoId": "hD9-V56FNRI",
+      "url": "https://www.youtube.com/watch?v=hD9-V56FNRI",
+      "channelTitle": "AI Engineer",
+      "viewCount": 5885,
+      "publishedAt": "2026-08-29T16:00:06Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "agent design or tooling, from practice — agents as distributed systems, from TikTok",
+      "independentChannels": 27
+    },
+    {
+      "title": "Ask the Experts: How NeMo Switchyard Helps Agents Select Models  | Nemotron Labs",
+      "latin": true,
+      "meta": "NVIDIA Developer · 1,653회",
+      "body": "[[EDITOR]]",
+      "videoId": "tSPAckZON0A",
+      "url": "https://www.youtube.com/watch?v=tSPAckZON0A",
+      "channelTitle": "NVIDIA Developer",
+      "viewCount": 1653,
+      "publishedAt": "2026-08-27T05:32:00Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "inference, serving or model infrastructure — model routing for agents",
+      "independentChannels": 11
+    },
+    {
+      "title": "Anthropic is Teaching Claude to be Evil (real results)",
+      "latin": true,
+      "meta": "Nate Herk | AI Automation · 1.6만회",
+      "body": "[[EDITOR]]",
+      "videoId": "Lbax7_pW2Nw",
+      "url": "https://www.youtube.com/watch?v=Lbax7_pW2Nw",
+      "channelTitle": "Nate Herk | AI Automation",
+      "viewCount": 15939,
+      "publishedAt": "2026-09-01T14:16:59Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "measurement or evaluation with results — results from the persona-vector work",
+      "independentChannels": 31
+    },
+    {
+      "title": "[한영자막] Anthropic의 Claude Platform 팀이 말하는 에이전트의 시대",
+      "latin": false,
+      "meta": "Tech Bridge · 3,337회",
+      "body": "[[EDITOR]]",
+      "videoId": "TQqa0B_pNGE",
+      "url": "https://www.youtube.com/watch?v=TQqa0B_pNGE",
+      "channelTitle": "Tech Bridge",
+      "viewCount": 3337,
+      "publishedAt": "2026-09-01T04:43:51Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "agent design or tooling, from practice — Anthropic's Claude Platform team on the agent era",
+      "independentChannels": 27
+    },
+    {
+      "title": "LLM Inference Explained: 12 Concepts You Actually Need to Know",
+      "latin": true,
+      "meta": "DevOps & AI Toolkit · 7,175회",
+      "body": "[[EDITOR]]",
+      "videoId": "MVo3P-D7eSc",
+      "url": "https://www.youtube.com/watch?v=MVo3P-D7eSc",
+      "channelTitle": "DevOps & AI Toolkit",
+      "viewCount": 7175,
+      "publishedAt": "2026-08-31T16:00:21Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "inference, serving or model infrastructure — twelve inference concepts, explained",
+      "independentChannels": 26
+    }
+  ],
+  "candidateStories": [
+    {
+      "term": "inference",
+      "independentChannels": 46,
+      "videos": [
+        "5ctTkkJQpug",
+        "x-bspoyrDDE",
+        "1WcS1PX9FFw",
+        "I1SMD6I5pr8",
+        "ZyGMqdIpPoE",
+        "tSPAckZON0A",
+        "xKzU_3riL6s",
+        "HmszCO15NDg"
+      ]
+    },
+    {
+      "term": "rag",
+      "independentChannels": 44,
+      "videos": [
+        "sWHMIjgcxEU",
+        "CgAcMP7LbbM",
+        "VB_Ygos5_vg",
+        "xKzU_3riL6s",
+        "iHVU_eFcnJg",
+        "-q1V53LJp98",
+        "ii001KWkV54",
+        "tYFwIeaX3vY"
+      ]
+    },
+    {
+      "term": "mcp",
+      "independentChannels": 39,
+      "videos": [
+        "ZyGMqdIpPoE",
+        "8UzqGMLa7yg",
+        "h6mi88VrPtQ",
+        "ROt0jWZ5B9A",
+        "iHVU_eFcnJg",
+        "-q1V53LJp98",
+        "qNEo6avvU7k",
+        "70XDoi41kOc"
+      ]
+    },
+    {
+      "term": "context",
+      "independentChannels": 38,
+      "videos": [
+        "Rd5DLzQbOfE",
+        "fOsLTMhjyMM",
+        "odOd-IQgdh4",
+        "VB_Ygos5_vg",
+        "8UzqGMLa7yg",
+        "-q1V53LJp98",
+        "70XDoi41kOc",
+        "xiWn-WUVfoc"
+      ]
+    },
+    {
+      "term": "prompt-injection",
+      "independentChannels": 33,
+      "videos": [
+        "MwUCk3AenLE",
+        "tE2z8-hqoLY",
+        "x-bspoyrDDE",
+        "qNEo6avvU7k",
+        "yPD6Mf95ecM",
+        "LAA_qyWX5vA",
+        "OQepxZSD8Tw",
+        "MYHV15Y0bF4"
+      ]
+    },
+    {
+      "term": "safety",
+      "independentChannels": 31,
+      "videos": [
+        "XV6WcGliCGM",
+        "e4bhjB8YNGU",
+        "Rd5DLzQbOfE",
+        "fOsLTMhjyMM",
+        "x-bspoyrDDE",
+        "CgAcMP7LbbM",
+        "AmPTX_DgpvI",
+        "VB_Ygos5_vg"
+      ]
+    },
+    {
+      "term": "llama",
+      "independentChannels": 29,
+      "videos": [
+        "1WcS1PX9FFw",
+        "hmnMwSJ4_sE",
+        "iHVU_eFcnJg",
+        "tYFwIeaX3vY",
+        "L_00G_H7dz0",
+        "mCD7MoqoyZo",
+        "xpOljNd9e4o",
+        "ZixYvVQ7afg"
+      ]
+    },
+    {
+      "term": "pricing",
+      "independentChannels": 27,
+      "videos": [
+        "XV6WcGliCGM",
+        "Rd5DLzQbOfE",
+        "fOsLTMhjyMM",
+        "1WcS1PX9FFw",
+        "I1SMD6I5pr8",
+        "8UzqGMLa7yg",
+        "h6mi88VrPtQ",
+        "qTZirYu9pr0"
+      ]
+    },
+    {
+      "term": "quantization",
+      "independentChannels": 26,
+      "videos": [
+        "1WcS1PX9FFw",
+        "xpOljNd9e4o",
+        "yOvP74WyB6k",
+        "8Hcbr95dkGY",
+        "JbIGopESlRU",
+        "dfX8H5HCn2A",
+        "MVo3P-D7eSc",
+        "DwFZqmVTXB0"
+      ]
+    },
+    {
+      "term": "qwen",
+      "independentChannels": 24,
+      "videos": [
+        "5ctTkkJQpug",
+        "LA2tuPk2Y-I",
+        "iHVU_eFcnJg",
+        "ZixYvVQ7afg",
+        "8Hcbr95dkGY",
+        "J5Sdxs0fnpU",
+        "dfX8H5HCn2A",
+        "DwFZqmVTXB0"
+      ]
+    }
+  ],
+  "funnel": {
+    "quotaUnits": 4045,
+    "stages": [
+      {
+        "stage": "S0_harvest",
+        "itemsIn": 870,
+        "itemsOut": 814,
+        "dropReasons": {
+          "duplicate_video_id": 56
+        }
+      },
+      {
+        "stage": "S1_format",
+        "itemsIn": 814,
+        "itemsOut": 442,
+        "dropReasons": {
+          "short_or_under_4min": 372
+        }
+      },
+      {
+        "stage": "S2_domain",
+        "itemsIn": 442,
+        "itemsOut": 440,
+        "dropReasons": {
+          "title_not_ko_or_en": 2
+        }
+      },
+      {
+        "stage": "S3_judge",
+        "itemsIn": 440,
+        "itemsOut": 274,
+        "dropReasons": {
+          "out_of_scope": 50,
+          "not_learnable": 116
+        }
+      },
+      {
+        "stage": "S4_deep",
+        "itemsIn": 274,
+        "itemsOut": 274,
+        "dropReasons": {}
+      },
+      {
+        "stage": "S5_cross",
+        "itemsIn": 274,
+        "itemsOut": 274,
+        "dropReasons": {}
+      }
+    ],
+    "buckets": [
+      {
+        "key": "form",
+        "count": 372,
+        "label": "형식 미달"
+      },
+      {
+        "key": "rule",
+        "count": 168,
+        "label": "주제·판정 탈락"
+      },
+      {
+        "key": "solo",
+        "count": 46,
+        "label": "단일 출처"
+      },
+      {
+        "key": "cross",
+        "count": 228,
+        "label": "교차 확인"
+      }
+    ],
+    "harvested": 814,
+    "reviewed": 440,
+    "shortlist": 274
+  },
+  "awaitingEditor": [
+    "headline",
+    "dek",
+    "runline",
+    "preview",
+    "interest.intro",
+    "interest.ledger",
+    "stories",
+    "insight",
+    "vocabulary",
+    "picks[].body",
+    "next",
+    "mail",
+    "refs"
+  ]
+}
