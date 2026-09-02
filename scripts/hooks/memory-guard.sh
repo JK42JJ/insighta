@@ -50,7 +50,9 @@ echo "$CMD" | grep -qE "$INSPECT_PATTERN" && exit 0
 
 CMD_SHORT=$(echo "$CMD" | tr '\n' ' ' | cut -c1-140)
 
-if echo "$CMD" | grep -q 'MEMORY_GUARD_BYPASS=1'; then
+# The token counts only as a command prefix; mentioning it in a commit message
+# or a heredoc is not a bypass.
+if echo "$CMD" | grep -qE '^[[:space:]]*MEMORY_GUARD_BYPASS=1[[:space:]]'; then
   log "BYPASS | $CMD_SHORT"
   exit 0
 fi

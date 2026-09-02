@@ -104,6 +104,11 @@ describe('memory-guard.sh', () => {
     );
   });
 
+  it('does not treat the bypass token as a bypass unless it is the command prefix', () => {
+    const command = "git commit -m 'docs: MEMORY_GUARD_BYPASS=1 is human-only' && npx jest";
+    expect(runGuard(command, { pressure: PRESSURE_WARNING }).status).toBe(EXIT_BLOCK);
+  });
+
   it('honours the bypass prefix and logs it', () => {
     expect(runGuard('MEMORY_GUARD_BYPASS=1 npx jest', { pressure: PRESSURE_CRITICAL }).status).toBe(
       EXIT_ALLOW
