@@ -26,6 +26,7 @@ import { AdminPoolHealth } from '@/pages/admin/ui/AdminPoolHealth';
 import { AdminSearchTraceExplorer } from '@/pages/admin/ui/AdminSearchTraceExplorer';
 import { AdminBetaCampaign } from '@/pages/admin/ui/AdminBetaCampaign';
 import { AdminNewsletter } from '@/pages/admin/ui/AdminNewsletter';
+import { AdminChannels } from '@/pages/admin/ui/AdminChannels';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -188,6 +189,8 @@ export function AppRouter() {
           <Route path="beta-campaign" element={<AdminBetaCampaign />} />
           {/* Weekly brief — register an IssueDocument; the product renders it. */}
           <Route path="newsletter" element={<AdminNewsletter />} />
+          {/* Channels a brief reads every week, and the blocklist. */}
+          <Route path="channels" element={<AdminChannels />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

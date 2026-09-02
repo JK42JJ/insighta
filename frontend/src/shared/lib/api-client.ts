@@ -775,6 +775,28 @@ export interface SearchTraceCandidateDTO {
   final_cell_index: number | null;
 }
 
+export interface BlocklistEntry {
+  id: string;
+  channel_id: string | null;
+  channel_name: string | null;
+  reason: string;
+  created_at: string;
+}
+
+export interface TrustedChannel {
+  id: string;
+  channel_id: string;
+  channel_title: string | null;
+  uploads_playlist_id: string | null;
+  category_key: string;
+  tier: string;
+  reason: string;
+  is_active: boolean;
+  last_seen_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -3016,6 +3038,60 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify({ document, publish }),
     });
+  }
+
+  // ========================================
+  // Admin — newsletter trusted channels
+  // ========================================
+
+  /**
+   * Channels an editor has decided a brief should read every week.
+   *
+   * Scoped to the newsletter: nothing here reaches video-discover, curation, or
+   * the Redis whitelist. A channel is added by pasting a URL, an @handle or a
+   * UC id; the server resolves it and refuses anything it cannot find, so an id
+   * that points nowhere never reaches the list.
+   */
+  /**
+   * The blocklist. Its API has existed since 2026-07 with no page to drive it,
+   * so every entry so far arrived by curl; this is the read side of fixing that.
+   */
+  async listChannelBlocklist(): Promise<{ entries: BlocklistEntry[] }> {
+    return this.request('/admin/channel-blocklist');
+  }
+
+  async listTrustedChannels(category?: string): Promise<{
+    status: string;
+    data: { entries: TrustedChannel[] };
+  }> {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+    return this.request(`/admin/trusted-channels${qs}`);
+  }
+
+  async addTrustedChannel(body: {
+    ref: string;
+    categoryKey: string;
+    tier?: 'core' | 'watch';
+    reason: string;
+  }): Promise<{ status: string; data: { entry: TrustedChannel } }> {
+    return this.request('/admin/trusted-channels', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async updateTrustedChannel(
+    id: string,
+    body: { tier?: 'core' | 'watch'; reason?: string; isActive?: boolean }
+  ): Promise<{ status: string; data: { entry: TrustedChannel } }> {
+    return this.request(`/admin/trusted-channels/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async deleteTrustedChannel(id: string): Promise<{ status: string }> {
+    return this.request(`/admin/trusted-channels/${id}`, { method: 'DELETE' });
   }
 
   async deleteNewsletterIssue(id: string): Promise<{ status: string }> {

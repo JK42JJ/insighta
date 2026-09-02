@@ -2883,6 +2883,85 @@ model newsletter_issues {
 /// this; nothing here grants a subscription.
 ///
 /// category_key NULL = every category.
+/// Channels an editor decided are worth reading every week for one brief.
+/// Read by the newsletter harvest and nothing else — video-discover, curation
+/// and the Redis `whitelist:channels` set are untouched by this table.
+/// One weekly build of one brief. A run that produced an issue is the only
+/// place its funnel figures come from — the page may not print a number this
+/// table cannot produce.
+model newsletter_pipeline_runs {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_key   String    @db.VarChar(40)
+  week_of        DateTime  @db.Date
+  /// 'running' | 'complete' | 'failed' | 'abandoned'
+  status         String    @default("running") @db.VarChar(12)
+  /// The topic definition as it was when this run used it. Copied, not
+  /// referenced: the definition changes and a finished run must keep saying
+  /// what it actually did.
+  topic_snapshot Json      @db.JsonB
+  started_at     DateTime  @default(now()) @db.Timestamptz(6)
+  ended_at       DateTime? @db.Timestamptz(6)
+  quota_units    Int       @default(0)
+  error          String?
+  created_by     String?   @db.VarChar(100)
+
+  steps newsletter_pipeline_steps[]
+
+  @@index([category_key, week_of(sort: Desc)], map: "idx_newsletter_runs_week")
+  @@schema("public")
+}
+
+/// What one stage received, passed on, and dropped — with the reasons. A bare
+/// count is a claim without evidence; `drop_reasons` is the evidence.
+model newsletter_pipeline_steps {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_id       String   @db.Uuid
+  /// S0_harvest · S1_format · S2_domain · S3_judge · S4_deep · S5_cross · S6_stats · S7_draft
+  stage        String   @db.VarChar(16)
+  items_in     Int
+  items_out    Int
+  /// { "shorts": 1672, ... } — sums to items_in - items_out.
+  drop_reasons Json     @default("{}") @db.JsonB
+  quota_units  Int      @default(0)
+  cost_usd     Float?
+  duration_ms  Int?
+  /// Queries used, channels read, judge model, surviving ids — whatever a later
+  /// reader needs that is not a count.
+  detail       Json?    @db.JsonB
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  run newsletter_pipeline_runs @relation(fields: [run_id], references: [id], onDelete: Cascade)
+
+  @@unique([run_id, stage], map: "uq_newsletter_step_run_stage")
+  @@index([run_id], map: "idx_newsletter_steps_run")
+  @@schema("public")
+}
+
+model newsletter_trusted_channels {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// YouTube channel id (UC...). Resolved from the API, never typed by hand.
+  channel_id          String    @db.VarChar(30)
+  channel_title       String?
+  /// contentDetails.relatedPlaylists.uploads, stored rather than derived from
+  /// the UC->UU convention, which is a habit and not a contract.
+  uploads_playlist_id String?   @db.VarChar(34)
+  category_key        String    @db.VarChar(40)
+  /// 'core' = collected weekly · 'watch' = collected, ranked below core.
+  tier                String    @default("core") @db.VarChar(10)
+  /// Why an editor trusts it. A list nobody can audit becomes one nobody maintains.
+  reason              String
+  is_active           Boolean   @default(true)
+  /// Incremental cursor: uploads newer than this are "new this week".
+  last_seen_at        DateTime? @db.Timestamptz(6)
+  created_by          String?   @db.VarChar(100)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([category_key, channel_id], map: "uq_newsletter_trusted_channel")
+  @@index([category_key, is_active], map: "idx_newsletter_trusted_active")
+  @@schema("public")
+}
+
 model newsletter_unsubscribes {
   id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email           String
