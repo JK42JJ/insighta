@@ -15,11 +15,11 @@
 import { config } from '@/config/index';
 import { logger } from '@/utils/logger';
 import { creditGate, creditBlockMessage, noteCreditRefusal } from '@/modules/llm/credit-guard';
+import { OPENROUTER_API_URL } from '@/modules/llm/openrouter';
 import { JudgeError, type JudgeCandidate, type JudgeVerdict, type TopicJudge } from './types';
 
 const log = logger.child({ module: 'newsletter/judge/openrouter' });
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const BATCH_SIZE = 40;
 const REQUEST_TIMEOUT_MS = 60_000;
 

@@ -22,10 +22,11 @@ import { startRun, readFunnel } from '@/modules/newsletter/pipeline-ledger';
 import { pipeline, corpus } from '@/modules/newsletter/pipeline';
 import { AI_TECH } from '@/modules/newsletter/topics/ai-tech';
 import { createConsoleJudge } from '@/modules/newsletter/pipeline/judge/console-judge';
+import { MS_PER_DAY as DAY } from '@/utils/time-constants';
 import type { StageContext } from '@/modules/newsletter/pipeline';
 
 const TMP = '/tmp/newsletter-probe';
-const DAY = 24 * 60 * 60 * 1000;
+
 
 let failures = 0;
 function check(name: string, ok: boolean, detail: string): void {

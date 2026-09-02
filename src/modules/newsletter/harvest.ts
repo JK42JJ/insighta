@@ -23,6 +23,7 @@ import { getPrismaClient } from '@/modules/database/client';
 import { resolveSearchApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 import type { TopicDefinition } from './topics/ai-tech';
 import { logger } from '@/utils/logger';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 const log = logger.child({ module: 'newsletter/harvest' });
 
@@ -283,8 +284,7 @@ export interface HarvestOptions {
 export async function harvest(opts: HarvestOptions): Promise<HarvestResult> {
   const { runId, topic } = opts;
   const fetchImpl = (opts.fetchImpl ?? fetch) as FetchLike;
-  const since =
-    opts.since ?? new Date(Date.now() - topic.publishedWithinDays * 24 * 60 * 60 * 1000);
+  const since = opts.since ?? new Date(Date.now() - topic.publishedWithinDays * MS_PER_DAY);
 
   const apiKeys = resolveSearchApiKeys(process.env);
   if (apiKeys.length === 0) throw new Error('no YouTube API key configured');

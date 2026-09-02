@@ -22,8 +22,7 @@
 
 import type { CorpusRow } from '../corpus';
 import type { Stage, StageContext, StageResult } from '../stage';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 /** Hangul, or Latin. Anything else is a third script. */
 function titleScript(title: string): 'ko' | 'en' | 'other' {
@@ -40,7 +39,7 @@ export const s2Domain: Stage = {
   kind: 'machine',
 
   async run(input: CorpusRow[], ctx: StageContext): Promise<StageResult> {
-    const cutoff = new Date(Date.now() - ctx.topic.publishedWithinDays * DAY_MS);
+    const cutoff = new Date(Date.now() - ctx.topic.publishedWithinDays * MS_PER_DAY);
     const survivors: Array<{ videoId: string }> = [];
     const drops: Array<{ videoId: string; reason: string }> = [];
     const scripts: Record<string, number> = { ko: 0, en: 0, other: 0 };
