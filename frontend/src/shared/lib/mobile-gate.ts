@@ -20,6 +20,11 @@ const ALLOWED_MOBILE_PATH_PREFIXES = [
   '/privacy',
   '/terms',
   '/help',
+  // A brief issue, opened from the link in the email. The digest goes to
+  // phones, so gating this path meant the CTA in every issue bounced a mobile
+  // reader to /landing. Only the reading surface: the sidebar and the card
+  // grid still need the desktop shell, and `/brief` itself now redirects home.
+  '/brief',
 ] as const;
 
 export function isPathAllowedOnMobile(pathname: string): boolean {

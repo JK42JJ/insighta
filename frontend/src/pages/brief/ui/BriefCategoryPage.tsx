@@ -18,9 +18,9 @@
  */
 
 import { useEffect, useMemo } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Newspaper } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, Newspaper } from 'lucide-react';
 
 import { apiClient } from '@/shared/lib/api-client';
 import { InsightCardItemV2 } from '@/widgets/card-list/ui/InsightCardItemV2';
@@ -35,6 +35,7 @@ const BRIEF_GRID_CLASS =
 export function BriefCategoryPage(): JSX.Element {
   const { categoryKey } = useParams<{ categoryKey: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const subscribed = useQuery({
     queryKey: ['brief-subscribed'],
@@ -75,6 +76,23 @@ export function BriefCategoryPage(): JSX.Element {
   const category = categories.data?.find((c) => c.key === categoryKey);
   const label = category?.label ?? issues[0]?.categoryLabel ?? '브리프';
 
+  // Turning a brief off lives here rather than in the sidebar. The sidebar row
+  // has one action — open it — and a second, smaller target inside it would be
+  // a control you can hit by accident on the way to reading. This is the page
+  // of the thing being switched off, which is where that decision is made.
+  const unsubscribe = useMutation({
+    mutationFn: async () => {
+      if (!categoryKey) return;
+      const res = await apiClient.unsubscribeFromBrief(categoryKey);
+      if (res.status !== 'ok') throw new Error(res.error ?? 'failed');
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['brief-categories'] });
+      void queryClient.invalidateQueries({ queryKey: ['brief-subscribed'] });
+      navigate('/');
+    },
+  });
+
   useEffect(() => {
     document.title = `${label} · 브리프 · Insighta`;
   }, [label]);
@@ -84,13 +102,30 @@ export function BriefCategoryPage(): JSX.Element {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto w-full max-w-[1400px] px-5 py-7">
-        <header className="mb-6 flex items-baseline gap-2.5">
+        <header className="mb-6 flex items-center gap-2.5">
           <h1 className="flex items-center gap-2 text-[19px] font-bold tracking-tight">
             <Newspaper className="h-[18px] w-[18px]" aria-hidden="true" />
             {label}
           </h1>
           {!loading && issues.length > 0 && (
             <span className="text-[12.5px] text-muted-foreground">{issues.length}호</span>
+          )}
+          {category?.subscribed && (
+            <button
+              type="button"
+              disabled={unsubscribe.isPending}
+              onClick={() => unsubscribe.mutate()}
+              className={cn(
+                'group ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1',
+                'border-border/60 text-[12px] text-muted-foreground transition-colors',
+                'hover:border-border hover:text-foreground',
+                unsubscribe.isPending && 'opacity-50'
+              )}
+            >
+              <Check className="h-3 w-3" aria-hidden="true" />
+              <span className="group-hover:hidden">구독 중</span>
+              <span className="hidden group-hover:inline">구독 해제</span>
+            </button>
           )}
         </header>
 
@@ -101,14 +136,8 @@ export function BriefCategoryPage(): JSX.Element {
             <p className="text-[13.5px] leading-relaxed text-muted-foreground">
               {category?.subscribed
                 ? '구독 중입니다. 첫 호가 발행되면 여기에 카드로 쌓입니다.'
-                : '아직 이 브리프를 구독하지 않았습니다.'}
+                : '아직 이 브리프를 구독하지 않았습니다. 좌측 목록에서 켜면 여기에 쌓입니다.'}
             </p>
-            <Link
-              to="/brief"
-              className="mt-3 inline-block text-[13px] underline underline-offset-4"
-            >
-              브리프 목록
-            </Link>
           </div>
         )}
 
