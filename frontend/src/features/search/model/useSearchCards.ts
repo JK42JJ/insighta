@@ -37,7 +37,8 @@ export function useSearchCards() {
     queryKey: searchKeys.query(debouncedQuery),
     queryFn: async (): Promise<SearchResponse> => {
       const headers = await getAuthHeaders();
-      const url = getEdgeFunctionUrl('local-cards', 'search') +
+      const url =
+        getEdgeFunctionUrl('local-cards', 'search') +
         `&q=${encodeURIComponent(debouncedQuery)}&limit=${SEARCH_LIMIT}`;
       const response = await fetch(url, { headers });
 
@@ -61,12 +62,16 @@ export function useSearchCards() {
   const results = useMemo(() => {
     if (sourceFilter === 'all') return allResults;
     return allResults.filter((card) => {
-      const lt = card.linkType ?? 'other';
+      const lt = card.linkType;
       switch (sourceFilter) {
-        case 'youtube': return YOUTUBE_TYPES.has(lt);
-        case 'file': return FILE_TYPES.has(lt);
-        case 'link': return !YOUTUBE_TYPES.has(lt) && !FILE_TYPES.has(lt);
-        default: return true;
+        case 'youtube':
+          return YOUTUBE_TYPES.has(lt);
+        case 'file':
+          return FILE_TYPES.has(lt);
+        case 'link':
+          return !YOUTUBE_TYPES.has(lt) && !FILE_TYPES.has(lt);
+        default:
+          return true;
       }
     });
   }, [allResults, sourceFilter]);
@@ -84,15 +89,18 @@ export function useSearchCards() {
   }, []);
 
   // Keyboard navigation helpers
-  const moveHighlight = useCallback((direction: 'up' | 'down') => {
-    setHighlightIndex((prev) => {
-      if (results.length === 0) return -1;
-      if (direction === 'down') {
-        return prev < results.length - 1 ? prev + 1 : 0;
-      }
-      return prev > 0 ? prev - 1 : results.length - 1;
-    });
-  }, [results.length]);
+  const moveHighlight = useCallback(
+    (direction: 'up' | 'down') => {
+      setHighlightIndex((prev) => {
+        if (results.length === 0) return -1;
+        if (direction === 'down') {
+          return prev < results.length - 1 ? prev + 1 : 0;
+        }
+        return prev > 0 ? prev - 1 : results.length - 1;
+      });
+    },
+    [results.length]
+  );
 
   const getHighlightedCard = useCallback((): InsightCard | null => {
     if (highlightIndex >= 0 && highlightIndex < results.length) {

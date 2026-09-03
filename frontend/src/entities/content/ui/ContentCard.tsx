@@ -27,7 +27,7 @@ function toRendererCard(card: InsightCard): CardRendererProps['card'] {
     sourceUrl: card.videoUrl,
     userNote: card.userNote,
     createdAt: card.createdAt,
-    sourceType: linkTypeToSourceType(card.linkType ?? 'other'),
+    sourceType: linkTypeToSourceType(card.linkType),
     metadata: card.metadata as unknown as Record<string, unknown> | null,
   };
 }

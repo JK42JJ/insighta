@@ -203,7 +203,7 @@ export function insightCardToAddPayload(card: InsightCard): AddLocalCardPayload 
     url: card.videoUrl,
     title: card.title,
     thumbnail: card.thumbnail,
-    link_type: card.linkType || 'other',
+    link_type: card.linkType,
     user_note: card.userNote,
     metadata_title: card.metadata?.title,
     metadata_description: card.metadata?.description,

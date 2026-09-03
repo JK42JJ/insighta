@@ -18,7 +18,7 @@ interface SourceMetaInfoProps {
  * without fully migrating to ContentCard.
  */
 export function SourceMetaInfo({ card, view = 'grid' }: SourceMetaInfoProps) {
-  const sourceType = linkTypeToSourceType(card.linkType ?? 'other');
+  const sourceType = linkTypeToSourceType(card.linkType);
   const Renderer = cardRendererRegistry.get(sourceType);
   if (!Renderer) return null;
 

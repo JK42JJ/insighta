@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDroppable } from '@dnd-kit/core';
 import type { InsightCard } from '@/entities/card/model/types';
+import { keepKind, acceptsUserCards } from '@/entities/card/lib/card-kind';
 import { cn } from '@/shared/lib/utils';
 import { extractUrlFromDragData, extractUrlFromHtml } from '@/shared/data/mockData';
 import type { ViewMode } from '@/entities/user/model/types';
@@ -361,7 +362,19 @@ export function CardListView({
   // Issue #389: when the Newly Synced pill is active, swap the card source
   // to the unplaced mapping-synced cards. Otherwise keep the parent-filtered
   // `cards` flow (All / sector pills / search) intact.
-  const effectiveCards = isNewlySyncedActive && newlySyncedCards ? newlySyncedCards : cards;
+  // The mandala side of the kind guard. A brief issue reaching this grid means
+  // something upstream mixed two card kinds, and the log says so before the
+  // cell does — the issue would otherwise render as a plausible card that
+  // silently fails every action taken on it.
+  const effectiveCards = useMemo(
+    () =>
+      keepKind(
+        isNewlySyncedActive && newlySyncedCards ? newlySyncedCards : cards,
+        acceptsUserCards,
+        '만다라 그리드'
+      ),
+    [isNewlySyncedActive, newlySyncedCards, cards]
+  );
 
   // CP499 freeze-then-settle — relevance order is snapshotted (id→rank) so
   // background scoring (~17s of relevance_pct arriving via the ~2s pending-

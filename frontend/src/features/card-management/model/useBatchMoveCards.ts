@@ -87,7 +87,7 @@ export function useBatchMoveCards() {
                 url: item.card.videoUrl,
                 title: item.card.title,
                 thumbnail: item.card.thumbnail,
-                link_type: item.card.linkType || 'other',
+                link_type: item.card.linkType,
                 user_note: item.card.userNote,
                 cell_index: item.cellIndex,
                 level_id: item.levelId,

@@ -97,7 +97,7 @@ export function contentEntityToInsightCard(entity: ContentEntity): InsightCard {
 }
 
 export function insightCardToContentEntityRow(card: InsightCard, userId: string): ContentEntityRow {
-  const sourceType = linkTypeToSourceType(card.linkType || 'other');
+  const sourceType = linkTypeToSourceType(card.linkType);
 
   let metadata: Record<string, unknown> | null = null;
   if (sourceType === 'youtube' && card.metadata) {

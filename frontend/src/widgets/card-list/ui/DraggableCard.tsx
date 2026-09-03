@@ -114,7 +114,7 @@ export function DraggableCard({ card, onClick, compact = false }: DraggableCardP
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className="bg-background/80 backdrop-blur-sm rounded p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-primary hover:text-primary/80"
-          title={t(`draggableCard.viewSource.${linkTypeToSourceType(card.linkType ?? 'youtube')}`)}
+          title={t(`draggableCard.viewSource.${linkTypeToSourceType(card.linkType)}`)}
         >
           <ExternalLink className="w-3 h-3" />
         </a>

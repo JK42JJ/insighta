@@ -58,6 +58,8 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
         issue_no: number;
         published_at: Date;
         headline: string | null;
+        dek: string | null;
+        cover_video_id: string | null;
         issue_label: string | null;
         date_label: string | null;
         read_at: Date | null;
@@ -68,6 +70,11 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
              i.issue_no,
              i.published_at,
              i.content_json->'headline'->>0  AS headline,
+             i.content_json->>'dek'          AS dek,
+             -- The card's cover is the issue's lead pick. A brief has no
+             -- artwork of its own, and inventing one would put a picture on
+             -- the shelf that is in no way about what is inside it.
+             i.content_json->'picks'->0->>'videoId' AS cover_video_id,
              i.content_json->>'issueLabel'   AS issue_label,
              i.content_json->>'dateLabel'    AS date_label,
              r.read_at
@@ -91,6 +98,8 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
           issueNo: r.issue_no,
           publishedAt: r.published_at.toISOString(),
           headline: r.headline ?? '',
+          dek: r.dek ?? '',
+          coverVideoId: r.cover_video_id,
           issueLabel: r.issue_label ?? `제${r.issue_no}호`,
           dateLabel: r.date_label ?? '',
           read: r.read_at !== null,

@@ -21,6 +21,10 @@ export interface SubscribedBriefIssue {
   issueNo: number;
   publishedAt: string;
   headline: string;
+  /** The standfirst. The card body shows this rather than a truncated headline. */
+  dek: string;
+  /** The lead pick's video id — the card's cover. Null when the issue has no picks. */
+  coverVideoId: string | null;
   issueLabel: string;
   dateLabel: string;
   read: boolean;

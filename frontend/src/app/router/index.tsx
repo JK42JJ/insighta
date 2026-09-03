@@ -29,6 +29,7 @@ import { AdminNewsletter } from '@/pages/admin/ui/AdminNewsletter';
 import { AdminChannels } from '@/pages/admin/ui/AdminChannels';
 import BriefNotePage from '@/pages/brief/ui/BriefNotePage';
 import BriefIndexPage from '@/pages/brief/ui/BriefIndexPage';
+import BriefCategoryPage from '@/pages/brief/ui/BriefCategoryPage';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -167,6 +168,17 @@ export function AppRouter() {
           element={
             <ProtectedRoute>
               <BriefIndexPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* One brief's issues, as cards. Declared before `/brief/:slug` — the
+            two patterns are the same shape and the router takes the first
+            match, so a later declaration would make `c` a slug. */}
+        <Route
+          path="/brief/c/:categoryKey"
+          element={
+            <ProtectedRoute>
+              <BriefCategoryPage />
             </ProtectedRoute>
           }
         />

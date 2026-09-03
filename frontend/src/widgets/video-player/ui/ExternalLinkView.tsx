@@ -38,7 +38,7 @@ interface ExternalLinkViewProps {
 
 export function ExternalLinkView({ card, onSave }: ExternalLinkViewProps) {
   const { t } = useTranslation();
-  const linkType = card.linkType ?? 'other';
+  const linkType = card.linkType;
   const platform = getPlatformInfo(linkType);
   const PlatformIcon = platform.icon;
   const nullPlayerRef = useRef<YTPlayer | null>(null);
@@ -83,7 +83,10 @@ export function ExternalLinkView({ card, onSave }: ExternalLinkViewProps) {
         {/* OG Image */}
         {card.metadata?.image && !card.metadata.image.includes('favicon') && (
           <div className="px-4 pt-3">
-            <div className="relative w-full aspect-video rounded-lg overflow-hidden" style={{ background: 'hsl(var(--bg-mid))' }}>
+            <div
+              className="relative w-full aspect-video rounded-lg overflow-hidden"
+              style={{ background: 'hsl(var(--bg-mid))' }}
+            >
               <img
                 src={card.metadata.image}
                 alt={card.title}
