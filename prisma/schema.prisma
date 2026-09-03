@@ -410,6 +410,8 @@ model users {
   youtube_watch_history         youtube_watch_history[]
   youtube_watch_history_imports youtube_watch_history_imports[]
   card_snapshots                card_snapshots[]
+  newsletter_subscriptions      newsletter_subscriptions[]
+  newsletter_reads              newsletter_reads[]
   bot_usage_log                 bot_usage_log[]
   bot_approval_tokens           bot_approval_tokens[]
   newsletter_settings           newsletter_settings?
@@ -2875,6 +2877,8 @@ model newsletter_issues {
   created_at       DateTime  @default(now()) @db.Timestamptz(6)
   updated_at       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
+  reads            newsletter_reads[]
+
   @@unique([category_key, issue_no, locale], map: "uq_newsletter_issues_category_no_locale")
   @@index([published_at(sort: Desc)], map: "idx_newsletter_issues_published_at")
   @@schema("public")
@@ -2985,6 +2989,67 @@ model newsletter_unsubscribes {
 
   @@unique([email, category_key], map: "uq_newsletter_unsub_email_category")
   @@index([email], map: "idx_newsletter_unsub_email")
+  @@schema("public")
+}
+
+/// Who reads which brief.
+///
+/// `newsletter_unsubscribes` is a suppression list — it records who opted
+/// *out*, so someone could stop receiving mail without an account. Nothing
+/// recorded who opted in, which left the reading surface with no way to know
+/// whose list an issue belonged on.
+///
+/// Keyed on the account, not the address. The address is where a copy was
+/// delivered; the account is who reads it, and a subscriber who signs in with
+/// a different address than the mail reached is still that reader.
+///
+/// The relation to `auth.users` is declared rather than left to the raw DDL.
+/// `curation_subscriptions` keeps its FK only in SQL, and `prisma migrate diff`
+/// shows what that costs: `db push` reads the undeclared constraint as drift
+/// and emits `DROP CONSTRAINT`. A foreign key the deploy removes is not a
+/// foreign key.
+model newsletter_subscriptions {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String   @db.Uuid
+  category_key String   @db.VarChar(40)
+  /// How the reader arrived: 'cta' (the link in an issue), 'app', 'admin'.
+  source       String   @default("cta") @db.VarChar(20)
+  /// The issue whose link brought them, when one did. Answers "which issue
+  /// converts", which is the only question worth asking of a first issue.
+  from_slug    String?  @db.VarChar(80)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  users        users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "newsletter_subscriptions_user_fkey")
+
+  @@unique([user_id, category_key], map: "uq_newsletter_sub_user_category")
+  @@index([category_key], map: "idx_newsletter_sub_category")
+  @@schema("public")
+}
+
+/// Which issues a reader has opened.
+///
+/// Separate from `newsletter_subscriptions` because the two are keyed
+/// differently: a subscription is per category and lasts, a read is per issue
+/// and happens once. One table could not express "subscribed, and has not
+/// opened this week's" — the only state the sidebar badge cares about.
+///
+/// Recorded on arrival, not on scroll depth. A row means the reader opened the
+/// issue and claims nothing more.
+///
+/// Both FKs are declared, for the reason above. The one on `slug` is why an
+/// issue cannot be deleted out from under a read record.
+model newsletter_reads {
+  user_id String            @db.Uuid
+  /// The issue's slug rather than its id: slugs are what links carry, so a
+  /// read can be recorded from a URL without a lookup, and a slug is stable.
+  slug    String            @db.VarChar(80)
+  read_at DateTime          @default(now()) @db.Timestamptz(6)
+
+  users   users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "newsletter_reads_user_fkey")
+  issue   newsletter_issues @relation(fields: [slug], references: [slug], onDelete: Cascade, onUpdate: NoAction, map: "newsletter_reads_slug_fkey")
+
+  @@id([user_id, slug])
+  @@index([user_id], map: "idx_newsletter_reads_user")
   @@schema("public")
 }
 
