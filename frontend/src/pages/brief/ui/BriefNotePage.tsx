@@ -26,10 +26,12 @@ import { Callout } from '@/pages/learning/lib/callout-block';
 import { NOTE_PROSE_STYLE } from '@/pages/learning/ui/CenterPanel';
 import { useBriefNote } from '@/features/newsletter-note/model/useBriefNote';
 import { apiClient } from '@/shared/lib/api-client';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function BriefNotePage(): JSX.Element {
   const { slug } = useParams<{ slug: string }>();
   const { issue, doc, loading, notFound, error } = useBriefNote(slug);
+  const queryClient = useQueryClient();
 
   // The same extensions the note screen registers, minus the ones only an
   // editor needs. VideoBlock is the reason a pick is watchable here rather
@@ -56,14 +58,26 @@ export function BriefNotePage(): JSX.Element {
     if (issue) document.title = `${issue.headline.join(' ')} · ${issue.issueLabel}`;
   }, [issue]);
 
-  // Arriving is subscribing. The reader followed a link out of a digest and
-  // signed in to get here; a second button would be asking twice. Idempotent
-  // server-side, and a failure is silent — a subscription that did not record
-  // is not a reason to stop someone reading.
+  // Arriving is subscribing, and arriving is reading. The reader followed a
+  // link out of a digest and signed in to get here; a second button would be
+  // asking twice. Both are idempotent server-side and both fail silently — a
+  // record that did not write is not a reason to stop someone reading.
+  //
+  // Read is marked on arrival rather than on scroll depth. Depth is
+  // measurable and it answers a question this product is not asking yet; the
+  // row means the issue was opened, and claims nothing more.
   useEffect(() => {
     if (!issue) return;
     void apiClient.subscribeToBrief(issue.categoryKey, issue.slug).catch(() => undefined);
-  }, [issue]);
+    void apiClient
+      .markBriefRead(issue.slug)
+      .then(() => {
+        // The sidebar badge and the index both read this. Without the
+        // invalidation the dot survives the reading of the thing it points at.
+        void queryClient.invalidateQueries({ queryKey: ['brief-subscribed'] });
+      })
+      .catch(() => undefined);
+  }, [issue, queryClient]);
 
   if (loading) {
     return (

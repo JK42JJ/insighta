@@ -12,6 +12,28 @@ import type { ExploreListResponse } from '@/shared/types/explore';
 // The published-issue shape lives beside the note converter that consumes it;
 // re-exported here so callers name it once.
 import type { IssueDocument as NewsletterIssueDocument } from '@/features/newsletter-note/lib/issue-types';
+
+/** One issue in the reader's list. Mirrors GET /brief/subscribed. */
+export interface SubscribedBriefIssue {
+  slug: string;
+  categoryKey: string;
+  categoryLabel: string;
+  issueNo: number;
+  publishedAt: string;
+  headline: string;
+  issueLabel: string;
+  dateLabel: string;
+  read: boolean;
+}
+
+/** One of the ten briefs. Mirrors GET /brief/categories. */
+export interface BriefCategoryRow {
+  key: string;
+  label: string;
+  blurb: string;
+  subscribed: boolean;
+  issues: number;
+}
 export type { IssueDocument as NewsletterIssueDocument } from '@/features/newsletter-note/lib/issue-types';
 
 // In production VITE_API_URL="/api", in dev "http://localhost:3000"
@@ -2988,6 +3010,31 @@ class ApiClient {
   }
 
   // ========================================
+  /** Issues this reader can open, newest first, with read state. */
+  async getSubscribedBriefs(): Promise<
+    ApiResponse<{ issues: SubscribedBriefIssue[]; unread: number }>
+  > {
+    return this.request('/brief/subscribed');
+  }
+
+  /** The ten briefs and whether this reader takes each one. */
+  async getBriefCategories(): Promise<ApiResponse<{ categories: BriefCategoryRow[] }>> {
+    return this.request('/brief/categories');
+  }
+
+  /** Stop taking a brief, from inside the app. */
+  async unsubscribeFromBrief(categoryKey: string): Promise<ApiResponse<{ subscribed: boolean }>> {
+    return this.request('/brief/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ categoryKey }),
+    });
+  }
+
+  /** Mark an issue read. Arrival, not scroll depth. */
+  async markBriefRead(slug: string): Promise<ApiResponse<{ read: boolean }>> {
+    return this.request(`/brief/${encodeURIComponent(slug)}/read`, { method: 'POST' });
+  }
+
   /**
    * Record that this account reads this brief.
    *

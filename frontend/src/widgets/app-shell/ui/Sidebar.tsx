@@ -16,6 +16,7 @@ import { cn } from '@/shared/lib/utils';
 import { SidebarMandalaSection, type MinimapData } from './SidebarMandalaSection';
 import { SidebarLearningSection } from './SidebarLearningSection';
 import { SidebarTopSection } from './SidebarTopSection';
+import { SidebarBriefEntry } from './SidebarBriefEntry';
 import { SidebarProfileFooter } from './SidebarProfileFooter';
 import { SidebarHeatMinimap } from '@/widgets/sidebar-heat-minimap';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
@@ -200,6 +201,10 @@ export function Sidebar({
               />
             </div>
           )}
+
+          {/* Weekly brief — above the mandala list, level with it. The top
+              block is for making things; this is for reading one. */}
+          <SidebarBriefEntry collapsed={collapsed} />
 
           {/* Mandala fold list — scrollable */}
           <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-none px-1 pb-2">

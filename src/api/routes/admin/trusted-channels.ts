@@ -18,22 +18,9 @@ import { getPrismaClient } from '@/modules/database/client';
 import { resolveChannel } from '@/modules/curation/channel-resolve';
 import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
 import { logger } from '@/utils/logger';
+import { CATEGORY_KEYS } from '@/modules/newsletter/categories';
 
 const log = logger.child({ module: 'admin-trusted-channels' });
-
-/** The ten brief categories (master spec §23). Mirrors admin/newsletter.ts. */
-const CATEGORY_KEYS = new Set([
-  'ai-tech',
-  'career',
-  'english',
-  'investing',
-  'shopping',
-  'productivity',
-  'dev',
-  'health',
-  'startup',
-  'news-trend',
-]);
 
 const UUID = /^[0-9a-f-]{36}$/i;
 

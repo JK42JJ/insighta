@@ -19,20 +19,7 @@ import {
 } from '../../../modules/newsletter/issue-schema';
 import { isTemplateId, renderWeb } from '../../../modules/newsletter/render-web';
 import { clearBriefCache } from '../brief';
-
-/** The ten brief categories (master spec §23). Not mandala domains. */
-const CATEGORY_KEYS = new Set([
-  'ai-tech',
-  'career',
-  'english',
-  'investing',
-  'shopping',
-  'productivity',
-  'dev',
-  'health',
-  'startup',
-  'news-trend',
-]);
+import { CATEGORY_KEYS } from '@/modules/newsletter/categories';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
