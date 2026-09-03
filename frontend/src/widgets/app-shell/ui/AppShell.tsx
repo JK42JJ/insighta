@@ -27,7 +27,12 @@ function getInitialCollapsed(): boolean {
 }
 
 /** Routes that render the full sidebar layout */
-const SIDEBAR_ROUTES = ['/', '/mandalas', '/learning'];
+// The sidebar is an allowlist, so a route that is not named here loses the
+// menus without anything reporting it. `/brief` is a reading surface inside
+// the product — a subscriber follows a link out of a digest and lands here —
+// and it shipped without the shell because adding the route was not the same
+// as adding it to this list.
+const SIDEBAR_ROUTES = ['/', '/mandalas', '/learning', '/brief'];
 
 /** Routes where sidebar is explicitly hidden (full-width content) */
 const NO_SIDEBAR_ROUTES = ['/mandalas/new'];
@@ -142,10 +147,14 @@ export function AppShell({ children }: AppShellProps) {
       <div
         className={cn(
           'h-screen flex flex-col bg-surface-base overflow-hidden',
-          // §-redesign — scope the learning note-mode editorial theme to the
-          // /learning route only (A: no global sidebar regression). All bg/divider/
-          // scrollbar tokens live under `.note-mode` in index.css.
-          location.pathname.startsWith('/learning') && 'note-mode'
+          // §-redesign — the note-mode editorial theme, scoped to the routes
+          // that read long-form rather than applied globally (A: no sidebar
+          // regression). All bg/divider/scrollbar tokens live under
+          // `.note-mode` in index.css. `/brief` is here because a brief read in
+          // the note surface has to look like a note, and the theme is half of
+          // what makes it one.
+          (location.pathname.startsWith('/learning') || location.pathname.startsWith('/brief')) &&
+            'note-mode'
         )}
       >
         <div className="flex-1 flex overflow-hidden">
