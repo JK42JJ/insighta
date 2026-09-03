@@ -19,7 +19,8 @@ import {
   handleThumbnailError,
   handleThumbnailLoad,
 } from '@/shared/lib/image-utils';
-import { formatCardDateLabel } from '@/shared/lib/format-date';
+import { formatCardDateLabel, formatRelativeDate } from '@/shared/lib/format-date';
+import { isBriefCard } from '@/entities/card/lib/card-kind';
 import { formatDuration, formatViewCount } from '@/shared/lib/format-number';
 import { decodeHtmlEntities } from '@/shared/lib/decode-html-entities';
 import { ScrollableChipRow } from '@/shared/ui/scrollable-chip-row';
@@ -227,6 +228,11 @@ export function InsightCardItemV2({
   // still set server-side as the auto-eviction guard, but the UI no
   // longer exposes a separate Pin button per handoff decision #3).
   const videoId = useMemo(() => safeExtractVideoId(card.videoUrl), [card.videoUrl]);
+  // A brief issue is drawn with this component but is not one of the user's
+  // cards: it has no video, no channel, no mandala, and nothing to enrich.
+  // The affordances that assume those are gated on `videoId` and `mandalaId`
+  // and so fall away on their own; the three below need saying.
+  const isBrief = isBriefCard(card);
   // Optimistic local override — server pinned_at is the truth of record,
   // but TanStack invalidation has a refetch latency. Without an optimistic
   // flip the user can re-click before pinned_at has propagated and the
@@ -393,8 +399,17 @@ export function InsightCardItemV2({
   // simply stays empty until the next refetch lands the real value.
   // Honest label: a missing publish date must not masquerade as one —
   // the createdAt fallback is rendered as "added N days ago" instead.
-  const relDate = metadataComplete ? formatCardDateLabel(ytMeta.publishedAt, card.createdAt) : null;
-  const hasNote = !!card.userNote?.trim();
+  // An issue is dated by when it came out. `formatCardDateLabel` falls back to
+  // "added N days ago", which for a weekly would describe the row rather than
+  // the publication.
+  const relDate = isBrief
+    ? formatRelativeDate(card.publishedAt)
+    : metadataComplete
+      ? formatCardDateLabel(ytMeta.publishedAt, card.createdAt)
+      : null;
+  // The memo glyph means the reader wrote something on this card. An issue's
+  // standfirst is the publication's own text, so it is a summary, not a note.
+  const hasNote = !isBrief && !!card.userNote?.trim();
   // CP475+ blockquote source priority (user-confirmed 2026-05-20):
   // The v2 quick path's `core_argument` is a heavily-simplified Korean
   // headline; it is intentionally short and often less rich than the
@@ -420,6 +435,10 @@ export function InsightCardItemV2({
   // bookmarks made every card's footer go transiently blank → height
   // shrink → grid jump). Removed.
   const cardSummary = (() => {
+    // An issue arrives with its own standfirst. None of the sources below
+    // exist for one, and the dek is better than all of them: it is the line
+    // the issue was written to be summarised by.
+    if (isBrief) return card.userNote?.trim() || undefined;
     if (v2FullLanded) {
       const essence = coreArgument?.trim();
       if (essence) return essence;
@@ -555,8 +574,15 @@ export function InsightCardItemV2({
             stays alive (user feedback: "전체가 시커멓게 되면 원본이 죽는 느낌"). */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
-        {/* Glass-morphism Play badge */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+        {/* Glass-morphism Play badge. Not on an issue — the click opens a page
+            to read, and a play button would promise a video that the cover
+            image (its lead pick) makes look plausible. */}
+        <div
+          className={cn(
+            'absolute inset-0 flex items-center justify-center transition-opacity duration-200 pointer-events-none',
+            isBrief ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+          )}
+        >
           <div className="w-12 h-12 rounded-full bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center shadow-md">
             <Play className="w-6 h-6 text-white fill-white translate-x-[1px]" aria-hidden="true" />
           </div>

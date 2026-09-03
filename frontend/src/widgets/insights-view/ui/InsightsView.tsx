@@ -125,7 +125,7 @@ export function InsightsView({
   const contentTypes = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const card of all) {
-      const type = card.linkType || 'unknown';
+      const type = card.linkType;
       counts[type] = (counts[type] || 0) + 1;
     }
     return Object.entries(counts)

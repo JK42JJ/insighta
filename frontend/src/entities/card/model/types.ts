@@ -1,3 +1,12 @@
+/**
+ * What a card is.
+ *
+ * Every card declares its kind, and the kind is what keeps two collections
+ * from mixing: a mandala grid renders videos and files, a brief grid renders
+ * issues, and one component draws both. Without a declared kind the two flow
+ * into each other silently — a brief issue in a mandala cell, an issue id
+ * reaching the card API, a click handler opening YouTube for an internal path.
+ */
 export type LinkType =
   | 'youtube'
   | 'youtube-shorts'
@@ -8,6 +17,8 @@ export type LinkType =
   | 'txt'
   | 'md'
   | 'pdf'
+  /** One issue of a weekly brief. Not a user's card — editorial, read-only. */
+  | 'brief'
   | 'other';
 
 export interface UrlMetadata {
@@ -43,7 +54,16 @@ export interface InsightCard {
   levelId: string; // Which mandala level this card belongs to
   mandalaId?: string | null; // Which mandala this card belongs to
   sortOrder?: number;
-  linkType?: LinkType;
+  /**
+   * Required. It was optional, and thirteen consumers filled the gap with
+   * `?? 'other'` — so a card with no kind became `other` and travelled. That
+   * is the path a brief issue would take into a mandala grid, so the type
+   * closes it rather than the callers each remembering to check.
+   *
+   * Nothing had to change to make it required: every converter already sets
+   * it, and all 194 rows in `user_local_cards.link_type` carry a value.
+   */
+  linkType: LinkType;
   metadata?: UrlMetadata; // OG metadata for external links
   lastWatchPosition?: number; // Last playback position in seconds (for YouTube videos)
   isInIdeation?: boolean; // Whether the card is in ideation (scratchpad) or mandala grid

@@ -28,6 +28,8 @@ import { AdminBetaCampaign } from '@/pages/admin/ui/AdminBetaCampaign';
 import { AdminNewsletter } from '@/pages/admin/ui/AdminNewsletter';
 import { AdminChannels } from '@/pages/admin/ui/AdminChannels';
 import BriefNotePage from '@/pages/brief/ui/BriefNotePage';
+import BriefIndexPage from '@/pages/brief/ui/BriefIndexPage';
+import BriefCategoryPage from '@/pages/brief/ui/BriefCategoryPage';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
@@ -160,6 +162,26 @@ export function AppRouter() {
         {/* A published brief, read in the note surface. The API renders a
             standalone page at /api/v1/brief/:slug for editorial review; this
             is the surface a subscriber reads. */}
+        {/* The reader's briefs, and the ones they could take. */}
+        <Route
+          path="/brief"
+          element={
+            <ProtectedRoute>
+              <BriefIndexPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* One brief's issues, as cards. Declared before `/brief/:slug` — the
+            two patterns are the same shape and the router takes the first
+            match, so a later declaration would make `c` a slug. */}
+        <Route
+          path="/brief/c/:categoryKey"
+          element={
+            <ProtectedRoute>
+              <BriefCategoryPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/brief/:slug"
           element={

@@ -18,6 +18,7 @@ import { FastifyInstance } from 'fastify';
 import { getPrismaClient } from '@/modules/database/client';
 import { IssueDocumentSchema } from '@/modules/newsletter/issue-schema';
 import { renderWeb, renderCacheKey } from '@/modules/newsletter/render-web';
+import { BRIEF_CATEGORIES, CATEGORY_KEYS, categoryLabel } from '@/modules/newsletter/categories';
 
 const SLUG = /^[a-z0-9-]{3,80}$/;
 
@@ -36,6 +37,178 @@ export function clearBriefCache(): void {
 }
 
 export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
+  /**
+   * GET /api/v1/brief/subscribed
+   *
+   * The issues this reader can open, newest first, with whether each is read.
+   *
+   * The sidebar needs this to have anything to show. Without it the reading
+   * surface was reachable only by typing a URL or following a link out of an
+   * inbox: a subscriber who signed in and looked around found no way to the
+   * brief they had just subscribed to.
+   */
+  fastify.get('/subscribed', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request.user as { id?: string } | undefined)?.id;
+    if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
+
+    const rows = await getPrismaClient().$queryRaw<
+      Array<{
+        slug: string;
+        category_key: string;
+        issue_no: number;
+        published_at: Date;
+        headline: string | null;
+        dek: string | null;
+        cover_video_id: string | null;
+        issue_label: string | null;
+        date_label: string | null;
+        read_at: Date | null;
+      }>
+    >`
+      SELECT i.slug,
+             i.category_key,
+             i.issue_no,
+             i.published_at,
+             i.content_json->'headline'->>0  AS headline,
+             i.content_json->>'dek'          AS dek,
+             -- The card's cover is the issue's lead pick. A brief has no
+             -- artwork of its own, and inventing one would put a picture on
+             -- the shelf that is in no way about what is inside it.
+             i.content_json->'picks'->0->>'videoId' AS cover_video_id,
+             i.content_json->>'issueLabel'   AS issue_label,
+             i.content_json->>'dateLabel'    AS date_label,
+             r.read_at
+        FROM newsletter_issues i
+        JOIN newsletter_subscriptions s
+          ON s.category_key = i.category_key AND s.user_id = ${userId}::uuid
+        LEFT JOIN newsletter_reads r
+          ON r.slug = i.slug AND r.user_id = ${userId}::uuid
+       WHERE i.published_at IS NOT NULL
+       ORDER BY i.published_at DESC
+       LIMIT 50
+    `;
+
+    return reply.send({
+      status: 'ok',
+      data: {
+        issues: rows.map((r) => ({
+          slug: r.slug,
+          categoryKey: r.category_key,
+          categoryLabel: categoryLabel(r.category_key),
+          issueNo: r.issue_no,
+          publishedAt: r.published_at.toISOString(),
+          headline: r.headline ?? '',
+          dek: r.dek ?? '',
+          coverVideoId: r.cover_video_id,
+          issueLabel: r.issue_label ?? `제${r.issue_no}호`,
+          dateLabel: r.date_label ?? '',
+          read: r.read_at !== null,
+        })),
+        unread: rows.filter((r) => r.read_at === null).length,
+      },
+    });
+  });
+
+  /**
+   * GET /api/v1/brief/categories
+   *
+   * The ten briefs and whether this reader takes each one.
+   *
+   * Every category is listed, subscribed or not — a reader deciding what to
+   * add needs to see what exists, and a list that shows only what they already
+   * have cannot be that.
+   */
+  fastify.get('/categories', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request.user as { id?: string } | undefined)?.id;
+    if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
+
+    const rows = await getPrismaClient().$queryRaw<Array<{ category_key: string }>>`
+      SELECT category_key FROM newsletter_subscriptions WHERE user_id = ${userId}::uuid
+    `;
+    const mine = new Set(rows.map((r) => r.category_key));
+
+    // Which categories have ever published. A reader should not subscribe to a
+    // brief that does not exist yet, and saying so is more honest than hiding
+    // it — the list is the roadmap.
+    const live = await getPrismaClient().$queryRaw<Array<{ category_key: string; n: bigint }>>`
+      SELECT category_key, count(*) AS n
+        FROM newsletter_issues WHERE published_at IS NOT NULL GROUP BY category_key
+    `;
+    const issueCount = new Map(live.map((l) => [l.category_key, Number(l.n)]));
+
+    return reply.send({
+      status: 'ok',
+      data: {
+        categories: BRIEF_CATEGORIES.map((c) => ({
+          key: c.key,
+          label: c.label,
+          blurb: c.blurb,
+          subscribed: mine.has(c.key),
+          issues: issueCount.get(c.key) ?? 0,
+        })),
+      },
+    });
+  });
+
+  /**
+   * POST /api/v1/brief/unsubscribe
+   *
+   * Stop taking a brief, from inside the app.
+   *
+   * Distinct from `GET /u/:token`, which is the link in an email and takes no
+   * login — someone who wants out of their inbox must not have to sign in
+   * first. The two solve different problems and either has to work without the
+   * other: this one ends a subscription, that one suppresses delivery.
+   */
+  fastify.post<{ Body: { categoryKey?: string } }>(
+    '/unsubscribe',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request.user as { id?: string } | undefined)?.id;
+      if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
+
+      const categoryKey = request.body?.categoryKey;
+      if (!categoryKey || !CATEGORY_KEYS.has(categoryKey)) {
+        return reply.code(400).send({ status: 'error', error: 'invalid categoryKey' });
+      }
+
+      await getPrismaClient().$executeRaw`
+        DELETE FROM newsletter_subscriptions
+         WHERE user_id = ${userId}::uuid AND category_key = ${categoryKey}
+      `;
+      return reply.send({ status: 'ok', data: { subscribed: false, categoryKey } });
+    }
+  );
+
+  /**
+   * POST /api/v1/brief/:slug/read
+   *
+   * Mark an issue read. Recorded on arrival, not on scroll depth: a row here
+   * means the reader opened it, and nothing more is claimed.
+   */
+  fastify.post<{ Params: { slug: string } }>(
+    '/:slug/read',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request.user as { id?: string } | undefined)?.id;
+      if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
+
+      const { slug } = request.params;
+      if (!SLUG.test(slug)) {
+        return reply.code(400).send({ status: 'error', error: 'invalid slug' });
+      }
+
+      // The foreign key refuses a slug that is not an issue, so a typo cannot
+      // create a read of nothing.
+      await getPrismaClient().$executeRaw`
+        INSERT INTO newsletter_reads (user_id, slug)
+        VALUES (${userId}::uuid, ${slug})
+        ON CONFLICT (user_id, slug) DO NOTHING
+      `;
+      return reply.send({ status: 'ok', data: { read: true, slug } });
+    }
+  );
+
   /**
    * POST /api/v1/brief/subscribe
    *
