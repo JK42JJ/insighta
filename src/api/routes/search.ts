@@ -8,6 +8,7 @@
  * Design: docs/design/global-search-cmdk-2026-07-02.md
  */
 import { FastifyPluginCallback, FastifyReply, FastifyRequest } from 'fastify';
+import { userIdOf } from '@/api/utils/request-user';
 import {
   globalSearch,
   SEARCH_GROUP_LIMIT_DEFAULT,
@@ -16,11 +17,12 @@ import {
 import { logger } from '../../utils/logger';
 
 function getUserId(request: FastifyRequest, reply: FastifyReply): string | null {
-  if (!request.user || !('userId' in request.user)) {
+  const userId = userIdOf(request);
+  if (!userId) {
     void reply.status(401).send({ error: 'Unauthorized' });
     return null;
   }
-  return (request.user as { userId: string }).userId;
+  return userId;
 }
 
 export const searchRoutes: FastifyPluginCallback = (fastify, _opts, done) => {

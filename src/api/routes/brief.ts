@@ -19,6 +19,7 @@ import { getPrismaClient } from '@/modules/database/client';
 import { IssueDocumentSchema } from '@/modules/newsletter/issue-schema';
 import { renderWeb, renderCacheKey } from '@/modules/newsletter/render-web';
 import { BRIEF_CATEGORIES, CATEGORY_KEYS, categoryLabel } from '@/modules/newsletter/categories';
+import { userIdOf } from '@/api/utils/request-user';
 
 const SLUG = /^[a-z0-9-]{3,80}$/;
 
@@ -48,7 +49,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
    * brief they had just subscribed to.
    */
   fastify.get('/subscribed', { onRequest: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request.user as { id?: string } | undefined)?.id;
+    const userId = userIdOf(request);
     if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
 
     const rows = await getPrismaClient().$queryRaw<
@@ -119,7 +120,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
    * have cannot be that.
    */
   fastify.get('/categories', { onRequest: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request.user as { id?: string } | undefined)?.id;
+    const userId = userIdOf(request);
     if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
 
     const rows = await getPrismaClient().$queryRaw<Array<{ category_key: string }>>`
@@ -164,7 +165,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
     '/unsubscribe',
     { onRequest: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request.user as { id?: string } | undefined)?.id;
+      const userId = userIdOf(request);
       if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
 
       const categoryKey = request.body?.categoryKey;
@@ -190,7 +191,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
     '/:slug/read',
     { onRequest: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request.user as { id?: string } | undefined)?.id;
+      const userId = userIdOf(request);
       if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
 
       const { slug } = request.params;
@@ -229,7 +230,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
     '/subscribe',
     { onRequest: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request.user as { id?: string } | undefined)?.id;
+      const userId = userIdOf(request);
       if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
 
       const categoryKey = request.body?.categoryKey;

@@ -1,4 +1,5 @@
-import { FastifyPluginCallback } from 'fastify';
+import { FastifyPluginCallback, FastifyRequest, FastifyReply } from 'fastify';
+import { userIdOf } from '@/api/utils/request-user';
 import { getMandalaManager } from '../../modules/mandala';
 import { enqueueMandalaBookFill } from '../../modules/queue/handlers/mandala-book-fill';
 import { enqueueTranslateMandalaBulk } from '../../modules/queue/handlers/translate-mandala-bulk';
@@ -94,12 +95,13 @@ interface EditorBlock {
   items: string[]; // length 8
 }
 
-function getUserId(request: any, reply: any): string | null {
-  if (!request.user || !('userId' in request.user)) {
-    reply.code(401).send({ error: 'Unauthorized' });
+function getUserId(request: FastifyRequest, reply: FastifyReply): string | null {
+  const userId = userIdOf(request);
+  if (!userId) {
+    void reply.code(401).send({ error: 'Unauthorized' });
     return null;
   }
-  return request.user.userId;
+  return userId;
 }
 
 // deck-stream SSE caps (mirror cards enrich-stream). Poll slide_decks every 2s;

@@ -1,13 +1,15 @@
-import { FastifyPluginCallback } from 'fastify';
+import { FastifyPluginCallback, FastifyRequest, FastifyReply } from 'fastify';
+import { userIdOf } from '@/api/utils/request-user';
 import { saveKey, listKeys, deleteKey, updatePriorities } from '../../modules/settings/llm-keys';
 import { getPrismaClient } from '../../modules/database/client';
 
-function getUserId(request: any, reply: any): string | null {
-  if (!request.user || !('userId' in request.user)) {
-    reply.code(401).send({ status: 401, code: 'UNAUTHORIZED', message: 'Unauthorized' });
+function getUserId(request: FastifyRequest, reply: FastifyReply): string | null {
+  const userId = userIdOf(request);
+  if (!userId) {
+    void reply.code(401).send({ status: 401, code: 'UNAUTHORIZED', message: 'Unauthorized' });
     return null;
   }
-  return request.user.userId;
+  return userId;
 }
 
 export const settingsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
