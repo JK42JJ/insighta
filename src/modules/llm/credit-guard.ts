@@ -37,19 +37,20 @@ export async function creditGate(model: string): Promise<CreditGateDecision> {
   const slash = model.indexOf('/');
   const provider = slash > 0 ? model.slice(0, slash) : model;
   try {
-    const { checkProviderCredit, checkDailyBudget } = await import('./cost-gate');
+    const { checkProviderCredit, checkSpendCaps } = await import('./cost-gate');
 
     const credit = await checkProviderCredit(model);
     if (!credit.allowed) return credit;
 
-    const budget = await checkDailyBudget();
-    if (!budget.allowed) {
+    const caps = await checkSpendCaps();
+    if (!caps.allowed) {
+      const monthly = caps.scope === 'monthly';
       return {
         allowed: false,
         provider,
-        reason: 'daily_budget',
-        dailySpendUsd: budget.dailyTotal,
-        dailyLimitUsd: budget.limit,
+        reason: monthly ? 'monthly_cap' : 'daily_budget',
+        spendUsd: monthly ? caps.monthlyTotal : caps.dailyTotal,
+        limitUsd: monthly ? caps.monthlyLimit : caps.dailyLimit,
       };
     }
     return credit;
@@ -67,14 +68,16 @@ export async function creditGate(model: string): Promise<CreditGateDecision> {
  * breaker would never get to test for recovery — it would latch shut.
  */
 const SKIP_MARKER = 'is refusing new work (breaker open since';
-const BUDGET_MARKER = 'has spent its daily allowance';
+const BUDGET_MARKER = 'has spent its';
 
 export function creditBlockMessage(d: CreditGateDecision): string {
-  if (d.reason === 'daily_budget') {
-    const spent = (d.dailySpendUsd ?? 0).toFixed(2);
-    const limit = (d.dailyLimitUsd ?? 0).toFixed(2);
+  if (d.reason === 'daily_budget' || d.reason === 'monthly_cap') {
+    const window = d.reason === 'monthly_cap' ? 'monthly allowance' : 'daily allowance';
+    const spent = (d.spendUsd ?? 0).toFixed(2);
+    const limit = (d.limitUsd ?? 0).toFixed(2);
     return (
-      `provider ${d.provider} ${BUDGET_MARKER} ` + `($${spent} of $${limit}) — call not attempted`
+      `provider ${d.provider} ${BUDGET_MARKER} ${window} ` +
+      `($${spent} of $${limit}) — call not attempted`
     );
   }
   const since = d.since ? d.since.toISOString() : 'recently';
