@@ -2613,9 +2613,17 @@ model search_algorithm_versions {
 /// Raw SQL DDL: prisma/migrations/llm_call_logs/001_create_table.sql
 model llm_call_logs {
   call_id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// The calling stage, not the provider. Required at the type level in
+  /// `GenerateOptions.purpose` since 2026-09-04, when an audit found five of
+  /// thirty-four call sites setting it and 45,476 calls collapsed to the one
+  /// label `openrouter`.
   module        String   @db.VarChar(50)
   model         String   @db.VarChar(100)
   input_tokens  Int?
+  /// Of `input_tokens`, how many the provider served from its cache. NULL
+  /// means the provider reported nothing, which is not zero: no cache support
+  /// and a cache miss are different facts.
+  cached_input_tokens Int?
   output_tokens Int?
   cost_usd      Float?
   latency_ms    Int?

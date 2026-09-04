@@ -178,6 +178,7 @@ export async function judgeDiagram(
   let raw: string;
   try {
     raw = await new OpenRouterGenerationProvider(HAIKU_MODEL).generate(prompt, {
+      purpose: 'book_figure_gate',
       format: 'json',
       temperature: DIAGRAM_JUDGE_TEMPERATURE,
       maxTokens: DIAGRAM_JUDGE_MAX_TOKENS,

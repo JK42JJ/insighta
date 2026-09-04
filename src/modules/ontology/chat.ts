@@ -258,7 +258,7 @@ export async function chat(userId: string, request: ChatRequest): Promise<ChatRe
     const provider = await getProvider();
     const history = await getConversation(conversationId);
     const prompt = buildChatPrompt(query, '', history);
-    const answer = await provider.generate(prompt);
+    const answer = await provider.generate(prompt, { purpose: 'ontology_chat' });
     await addTurn(conversationId, 'user', query, userId);
     await addTurn(conversationId, 'assistant', answer, userId);
     return { answer, sources: [], conversationId };
@@ -325,7 +325,7 @@ export async function chat(userId: string, request: ChatRequest): Promise<ChatRe
   const history = await getConversation(conversationId);
   const prompt = buildChatPrompt(query, contextText, history);
 
-  const answer = await provider.generate(prompt, { temperature: 0.7 });
+  const answer = await provider.generate(prompt, { temperature: 0.7, purpose: 'ontology_chat' });
 
   // 6. Store conversation turn
   await addTurn(conversationId, 'user', query, userId);

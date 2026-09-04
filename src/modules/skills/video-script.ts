@@ -83,6 +83,7 @@ export class VideoScriptSkill implements InsightaSkill {
 
       const context = this.buildContext(cards, sectorNames, mandala.title);
       const scriptContent = await llm.generate(this.buildPrompt(mandala.title, context), {
+        purpose: 'skill_video_script',
         maxTokens: 3072,
       });
 

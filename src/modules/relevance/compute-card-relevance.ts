@@ -121,6 +121,7 @@ export async function computeCardRelevance(
   let raw: string;
   try {
     raw = await new OpenRouterGenerationProvider(HAIKU_MODEL).generate(prompt, {
+      purpose: 'card_relevance',
       format: 'json',
       temperature: TEMPERATURE,
       maxTokens: MAX_TOKENS,

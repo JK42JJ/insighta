@@ -90,7 +90,10 @@ export async function translateQueriesToEn(
   const generate =
     opts.generateImpl ??
     ((p: string, o?: { temperature?: number; maxTokens?: number; format?: 'json' }) =>
-      new OpenRouterGenerationProvider(SEARCH_QUERY_MODEL).generate(p, o));
+      new OpenRouterGenerationProvider(SEARCH_QUERY_MODEL).generate(p, {
+        ...o,
+        purpose: 'discover_query_en',
+      }));
 
   try {
     const raw = await generate(buildEnTranslatePrompt(targets), {

@@ -550,6 +550,7 @@ export async function generateMandalaStructure(
 
   const provider = new OpenRouterGenerationProvider(STRUCTURE_MODEL);
   const raw = await provider.generate(prompt, {
+    purpose: 'mandala_structure',
     temperature: STRUCTURE_TEMPERATURE,
     maxTokens: PROMPT_STRUCTURE_MAX_TOKENS,
     format: 'json',
@@ -743,7 +744,10 @@ export async function generateMandalaWithQueries(
   const generate =
     opts.generateImpl ??
     ((p: string, o?: { temperature?: number; maxTokens?: number; format?: 'json' }) =>
-      new OpenRouterGenerationProvider(MERGED_GEN_MODEL).generate(p, o));
+      new OpenRouterGenerationProvider(MERGED_GEN_MODEL).generate(p, {
+        ...o,
+        purpose: 'mandala_with_queries',
+      }));
 
   const tGen = Date.now();
   const raw = await generate(prompt, {
@@ -886,6 +890,7 @@ export async function generateMandalaActions(
 
   const provider = new OpenRouterGenerationProvider(ACTIONS_MODEL);
   const raw = await provider.generate(prompt, {
+    purpose: 'mandala_actions',
     temperature: ACTIONS_TEMPERATURE,
     maxTokens: PROMPT_ACTIONS_MAX_TOKENS,
     format: 'json',
@@ -971,6 +976,7 @@ ${langLabel}: ${lang}
 
   const provider = new OpenRouterGenerationProvider(HAIKU_MODEL);
   const raw = await provider.generate(prompt, {
+    purpose: 'mandala_haiku',
     temperature: 0.7,
     maxTokens: NUM_PREDICT,
     format: 'json',
@@ -1084,6 +1090,7 @@ export async function generateLabels(input: LabelGenerateInput): Promise<Generat
   const LABEL_MODEL = 'anthropic/claude-haiku-4.5';
   const provider = new OpenRouterGenerationProvider(LABEL_MODEL);
   const raw = await provider.generate(prompt, {
+    purpose: 'mandala_labels',
     temperature: 0.3,
     maxTokens: LABEL_MAX_TOKENS,
     format: 'json',

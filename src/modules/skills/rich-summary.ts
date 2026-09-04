@@ -189,7 +189,12 @@ export async function enrichRichSummary(
     opts?: { format?: 'json' | 'text'; temperature?: number; maxTokens?: number }
   ) =>
     // #963 — every v1/v2 enrich call carries its video/user for cost attribution
-    generationProvider.generate(prompt, { ...opts, videoId, userId: options.userId });
+    generationProvider.generate(prompt, {
+      ...opts,
+      purpose: 'summary_v1',
+      videoId,
+      userId: options.userId,
+    });
 
   const transcriptChunk = options.transcript
     ? options.transcript.slice(0, TRANSCRIPT_CHUNK_SIZE)

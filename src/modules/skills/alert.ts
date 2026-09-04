@@ -99,6 +99,7 @@ export class AlertSkill implements InsightaSkill {
 
       // Generate alert via LLM
       const alertContent = await llm.generate(this.buildPrompt(mandala.title, context), {
+        purpose: 'skill_alert',
         maxTokens: 1024,
       });
 

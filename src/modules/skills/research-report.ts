@@ -91,6 +91,7 @@ export class ResearchReportSkill implements InsightaSkill {
 
       // 4. Generate report via LLM
       const reportContent = await llm.generate(this.buildPrompt(mandala.title, context), {
+        purpose: 'skill_research',
         maxTokens: 4096,
       });
 

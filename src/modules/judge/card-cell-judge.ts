@@ -122,7 +122,7 @@ export async function judgeCellCards(params: {
       o?: { temperature?: number; maxTokens?: number; format?: 'json' }
     ) => {
       const provider = new OpenRouterGenerationProvider(model);
-      return provider.generate(p, o);
+      return provider.generate(p, { ...o, purpose: 'card_cell_judge' });
     });
 
   // One vote per model; any leg failure = that leg votes all-fit.
@@ -198,7 +198,7 @@ export async function judgeCellCardsDetailed(params: {
       o?: { temperature?: number; maxTokens?: number; format?: 'json' }
     ) => {
       const provider = new OpenRouterGenerationProvider(model);
-      return provider.generate(p, o);
+      return provider.generate(p, { ...o, purpose: 'card_cell_judge' });
     });
   const legs = await Promise.all(
     models.map(async (model): Promise<JudgeLegDetail> => {

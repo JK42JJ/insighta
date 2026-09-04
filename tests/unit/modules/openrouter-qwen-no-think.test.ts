@@ -56,7 +56,9 @@ describe('OpenRouterGenerationProvider — qwen /no_think suppression (W2)', () 
   it('flag ON + qwen model → prompt gets the /no_think suffix', async () => {
     mockConfig.openrouter.qwenNoThink = true;
     const cap = fetchCapturingPrompt();
-    await new OpenRouterGenerationProvider('qwen/qwen3-30b-a3b').generate('summarize this');
+    await new OpenRouterGenerationProvider('qwen/qwen3-30b-a3b').generate('summarize this', {
+      purpose: 'test',
+    });
     expect(cap.sentPrompt()).toBe('summarize this\n/no_think');
     // the param-level suppression stays alongside
     expect(cap.sentBody().reasoning).toEqual({ enabled: false });
@@ -65,7 +67,10 @@ describe('OpenRouterGenerationProvider — qwen /no_think suppression (W2)', () 
   it('flag ON + non-qwen model → prompt untouched (and no reasoning param)', async () => {
     mockConfig.openrouter.qwenNoThink = true;
     const cap = fetchCapturingPrompt();
-    await new OpenRouterGenerationProvider('anthropic/claude-haiku-4.5').generate('summarize this');
+    await new OpenRouterGenerationProvider('anthropic/claude-haiku-4.5').generate(
+      'summarize this',
+      { purpose: 'test' }
+    );
     expect(cap.sentPrompt()).toBe('summarize this');
     expect(cap.sentBody().reasoning).toBeUndefined();
   });
@@ -73,14 +78,18 @@ describe('OpenRouterGenerationProvider — qwen /no_think suppression (W2)', () 
   it('flag ON + prompt already carrying /no_think (chatbot middleware) → no duplicate', async () => {
     mockConfig.openrouter.qwenNoThink = true;
     const cap = fetchCapturingPrompt();
-    await new OpenRouterGenerationProvider('qwen/qwen3-30b-a3b').generate('chat turn\n/no_think');
+    await new OpenRouterGenerationProvider('qwen/qwen3-30b-a3b').generate('chat turn\n/no_think', {
+      purpose: 'test',
+    });
     expect(cap.sentPrompt()).toBe('chat turn\n/no_think');
   });
 
   it('flag OFF (default/unset) → request body is exactly pre-W2', async () => {
     mockConfig.openrouter.qwenNoThink = undefined;
     const cap = fetchCapturingPrompt();
-    await new OpenRouterGenerationProvider('qwen/qwen3-30b-a3b').generate('summarize this');
+    await new OpenRouterGenerationProvider('qwen/qwen3-30b-a3b').generate('summarize this', {
+      purpose: 'test',
+    });
     expect(cap.sentPrompt()).toBe('summarize this');
     expect(cap.sentBody().reasoning).toEqual({ enabled: false });
   });
