@@ -817,6 +817,7 @@ export const executor: SkillExecutor = {
             const prompt = buildSearchQueryPrompt(promptInput);
             const provider = new OpenRouterGenerationProvider(SEARCH_QUERY_MODEL);
             const raw = await provider.generate(prompt, {
+              purpose: 'discover_v2_query',
               temperature: SEARCH_QUERY_TEMPERATURE,
               maxTokens: SEARCH_QUERY_MAX_TOKENS,
               format: 'json',

@@ -85,7 +85,7 @@ export class RecommendSkill implements InsightaSkill {
       const maxItems = dailyItems ?? 10;
       const recommendations = await llm.generate(
         this.buildPrompt(mandala.title, context, maxItems),
-        { maxTokens: 2048 }
+        { maxTokens: 2048, purpose: 'skill_recommend' }
       );
 
       const outputTitle = `Recommendations: ${mandala.title}`;

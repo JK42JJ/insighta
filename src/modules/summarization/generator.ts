@@ -136,6 +136,7 @@ export class SummaryGenerator {
     const prompt = `${systemPrompt}\n\n${userPrompt}`;
 
     const content = await provider.generate(prompt, {
+      purpose: 'summarize',
       temperature: 0.3,
       maxTokens: this.getMaxTokens(level),
       format: 'json',

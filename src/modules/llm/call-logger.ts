@@ -20,6 +20,14 @@ export interface LLMCallLogEntry {
   /** Full model identifier including provider prefix (e.g., 'openrouter/qwen/qwen3-30b-a3b') */
   model: string;
   inputTokens?: number;
+  /**
+   * Of `inputTokens`, how many the provider served from its cache.
+   *
+   * Undefined means the provider said nothing, which is not zero: a model
+   * without cache support and a cache that missed are different facts, and
+   * "caching is not working" needs to be able to tell them apart.
+   */
+  cachedInputTokens?: number;
   outputTokens?: number;
   latencyMs?: number;
   status: 'success' | 'error' | 'blocked';
@@ -59,6 +67,7 @@ export async function logLLMCall(entry: LLMCallLogEntry): Promise<void> {
         module: entry.module,
         model: entry.model,
         input_tokens: entry.inputTokens ?? null,
+        cached_input_tokens: entry.cachedInputTokens ?? null,
         output_tokens: entry.outputTokens ?? null,
         cost_usd: costUsd,
         latency_ms: entry.latencyMs ?? null,

@@ -165,7 +165,10 @@ export async function buildLLMQueriesPerCell(
     const generate =
       opts.generateImpl ??
       ((p: string, o?: { temperature?: number; maxTokens?: number; format?: 'json' }) =>
-        new OpenRouterGenerationProvider(SEARCH_QUERY_MODEL).generate(p, o));
+        new OpenRouterGenerationProvider(SEARCH_QUERY_MODEL).generate(p, {
+          ...o,
+          purpose: 'discover_query_gen',
+        }));
 
     const raw = await generate(prompt, {
       temperature: SEARCH_QUERY_TEMPERATURE,

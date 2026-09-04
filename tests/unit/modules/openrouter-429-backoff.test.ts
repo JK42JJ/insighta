@@ -48,7 +48,7 @@ describe('OpenRouterGenerationProvider — 429/5xx backoff', () => {
       .mockResolvedValueOnce(ok('{"mandala_relevance_pct":80}')) as unknown as typeof fetch;
 
     const provider = new OpenRouterGenerationProvider('anthropic/claude-haiku-4.5');
-    const out = await provider.generate('hi', { format: 'json' });
+    const out = await provider.generate('hi', { format: 'json', purpose: 'test' });
 
     expect(out).toBe('{"mandala_relevance_pct":80}');
     expect(global.fetch).toHaveBeenCalledTimes(2); // 1 × 429 + 1 × success
@@ -61,7 +61,7 @@ describe('OpenRouterGenerationProvider — 429/5xx backoff', () => {
       .mockResolvedValueOnce(ok('{"ok":1}')) as unknown as typeof fetch;
 
     const provider = new OpenRouterGenerationProvider('m');
-    expect(await provider.generate('hi')).toBe('{"ok":1}');
+    expect(await provider.generate('hi', { purpose: 'test' })).toBe('{"ok":1}');
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -69,7 +69,7 @@ describe('OpenRouterGenerationProvider — 429/5xx backoff', () => {
     global.fetch = jest.fn().mockResolvedValue(httpErr(400)) as unknown as typeof fetch;
 
     const provider = new OpenRouterGenerationProvider('m');
-    await expect(provider.generate('hi')).rejects.toThrow(/error 400/);
+    await expect(provider.generate('hi', { purpose: 'test' })).rejects.toThrow(/error 400/);
     expect(global.fetch).toHaveBeenCalledTimes(1); // 400 is non-retryable
   });
 
@@ -77,7 +77,7 @@ describe('OpenRouterGenerationProvider — 429/5xx backoff', () => {
     global.fetch = jest.fn().mockResolvedValue(httpErr(429)) as unknown as typeof fetch;
 
     const provider = new OpenRouterGenerationProvider('m');
-    await expect(provider.generate('hi')).rejects.toThrow(/error 429/);
+    await expect(provider.generate('hi', { purpose: 'test' })).rejects.toThrow(/error 429/);
     expect(global.fetch).toHaveBeenCalledTimes(4); // initial + OPENROUTER_MAX_RETRIES(3)
   });
 });

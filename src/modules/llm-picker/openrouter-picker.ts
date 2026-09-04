@@ -47,6 +47,7 @@ export class OpenRouterVideoPicker implements VideoPicker {
     const prompt = buildPrompt(input);
 
     const raw = await this.provider.generate(prompt, {
+      purpose: 'video_pick',
       temperature: cfg.temperature,
       maxTokens: 1024,
       format: 'json',

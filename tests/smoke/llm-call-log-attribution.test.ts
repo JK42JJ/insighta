@@ -81,7 +81,7 @@ describe('#963 llm_call_logs attribution', () => {
     }) as unknown as typeof fetch;
     try {
       const provider = new OpenRouterGenerationProvider('openrouter/test-model');
-      await provider.generate('hello', { videoId: VIDEO, userId: USER });
+      await provider.generate('hello', { videoId: VIDEO, userId: USER, purpose: 'test' });
       // fire-and-forget log write — flush microtasks
       await new Promise((r) => setTimeout(r, 10));
       expect(mockLlmLogCreate).toHaveBeenCalled();

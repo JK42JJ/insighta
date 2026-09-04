@@ -461,7 +461,7 @@ export async function enrichVideo(
   const title = options?.title || videoId;
   const generationProvider = await createGenerationProvider();
   const generate = (prompt: string, opts?: { format?: 'json' | 'text'; temperature?: number }) =>
-    generationProvider.generate(prompt, opts);
+    generationProvider.generate(prompt, { ...opts, purpose: 'ontology_enrich' });
 
   let primarySummary: SummaryResponse;
   if (transcript.length > CHUNK_THRESHOLD) {

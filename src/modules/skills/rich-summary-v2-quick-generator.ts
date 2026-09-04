@@ -106,6 +106,7 @@ export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V
   let parsed: V2QuickResult;
   try {
     const raw = await provider.generate(prompt, {
+      purpose: 'summary_v2_quick',
       format: 'json',
       temperature: TEMPERATURE,
       maxTokens: MAX_TOKENS,

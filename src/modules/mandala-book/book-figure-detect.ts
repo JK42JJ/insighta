@@ -187,6 +187,7 @@ export async function detectFigureTargets(
   let raw: string;
   try {
     raw = await new OpenRouterGenerationProvider(HAIKU_MODEL).generate(prompt, {
+      purpose: 'book_figure_detect',
       format: 'json',
       temperature: TEMPERATURE,
       maxTokens: MAX_TOKENS,

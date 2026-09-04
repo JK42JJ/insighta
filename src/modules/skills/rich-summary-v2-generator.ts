@@ -193,6 +193,7 @@ export async function generateRichSummaryV2(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const raw = await provider.generate(prompt, {
+        purpose: 'summary_v2_full',
         format: 'json',
         temperature: TEMPERATURE,
         maxTokens: richConfig.maxOutputTokens,

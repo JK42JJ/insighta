@@ -307,7 +307,7 @@ export async function generateKnowledgeSummary(
         graphContext,
         period
       );
-      const raw = await provider.generate(prompt, { temperature: 0.7 });
+      const raw = await provider.generate(prompt, { temperature: 0.7, purpose: 'ontology_report' });
       const parsed = extractSuggestions(raw);
       summary = parsed.summary;
       suggestions = parsed.suggestions;

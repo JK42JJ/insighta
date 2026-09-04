@@ -125,7 +125,10 @@ export async function translateRichSummaryPayload(
   const generate =
     opts.generateImpl ??
     ((p: string, o?: { temperature?: number; maxTokens?: number; format?: 'json' }) =>
-      new OpenRouterGenerationProvider(RICH_SUMMARY_TRANSLATE_MODEL).generate(p, o));
+      new OpenRouterGenerationProvider(RICH_SUMMARY_TRANSLATE_MODEL).generate(p, {
+        ...o,
+        purpose: 'summary_translate',
+      }));
 
   try {
     const raw = await generate(buildRichSummaryTranslatePrompt(payload, targetLang), {

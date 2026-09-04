@@ -83,6 +83,7 @@ export class BlogPostSkill implements InsightaSkill {
 
       const context = this.buildContext(cards, sectorNames, mandala.title);
       const blogContent = await llm.generate(this.buildPrompt(mandala.title, context), {
+        purpose: 'skill_blog',
         maxTokens: 4096,
       });
 

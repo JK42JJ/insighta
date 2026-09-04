@@ -33,14 +33,22 @@ export interface GenerateOptions {
    * generation (e.g. 'cell_synthesis', 'book_skeleton', 'chapter_weave',
    * 'book_research', 'book_factcheck', 'mandala_gen'). Written to the existing
    * llm_call_logs.module column so per-stage cost is a plain GROUP BY module —
-   * no schema change. Absent = 'openrouter' (prior behavior; audit revealed
-   * every call collapsed to that single label, hiding which stage spends).
+   * no schema change.
+   *
+   * Required. It was optional, and the 2026-09-04 audit found the cost of
+   * that: five of thirty-four call sites passed it, so 45,476 calls — $131.69,
+   * 89% of everything ever spent here — carried the single label `openrouter`
+   * and the ledger could not say which feature spent the money. The type is
+   * the only thing that makes a new call site answer the question, because
+   * nothing else asks it.
+   *
+   * Keep it short and stable: it is a GROUP BY key, not a sentence.
    */
-  purpose?: string;
+  purpose: string;
 }
 
 export interface GenerationProvider {
-  generate(prompt: string, options?: GenerateOptions): Promise<string>;
+  generate(prompt: string, options: GenerateOptions): Promise<string>;
   readonly name: string;
   /** Full model identifier for provenance tracking (e.g., "ollama/qwen3.5:9b") */
   readonly model: string;

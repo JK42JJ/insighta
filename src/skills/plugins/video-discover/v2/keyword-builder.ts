@@ -176,7 +176,7 @@ export async function runLLMQueries(
       opts.generateImpl ??
       (async (p: string, o?: { temperature?: number; maxTokens?: number; format?: 'json' }) => {
         const provider = new OpenRouterGenerationProvider(SEARCH_QUERY_MODEL);
-        return provider.generate(p, o);
+        return provider.generate(p, { ...o, purpose: 'discover_keywords' });
       });
     const raw = await generate(prompt, {
       temperature: SEARCH_QUERY_TEMPERATURE,

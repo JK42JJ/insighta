@@ -61,7 +61,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     return `openrouter/${this.modelOverride ?? config.openrouter.model}`;
   }
 
-  async generate(prompt: string, options?: GenerateOptions): Promise<string> {
+  async generate(prompt: string, options: GenerateOptions): Promise<string> {
     const startTime = Date.now();
     const apiKey = config.openrouter.apiKey;
     if (!apiKey) {
@@ -154,7 +154,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
             logLLMCall({
               videoId: options?.videoId,
               userId: options?.userId,
-              module: options?.purpose ?? 'openrouter',
+              module: options.purpose,
               model: this.model,
               latencyMs,
               status: 'error',
@@ -165,7 +165,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
           logLLMCall({
             videoId: options?.videoId,
             userId: options?.userId,
-            module: options?.purpose ?? 'openrouter',
+            module: options.purpose,
             model: this.model,
             latencyMs,
             status: 'error',
@@ -176,7 +176,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
         logLLMCall({
           videoId: options?.videoId,
           userId: options?.userId,
-          module: options?.purpose ?? 'openrouter',
+          module: options.purpose,
           model: this.model,
           latencyMs,
           status: 'error',
@@ -196,7 +196,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
         logLLMCall({
           videoId: options?.videoId,
           userId: options?.userId,
-          module: options?.purpose ?? 'openrouter',
+          module: options.purpose,
           model: this.model,
           latencyMs: Date.now() - startTime,
           status: 'error',
@@ -213,7 +213,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       logLLMCall({
         videoId: options?.videoId,
         userId: options?.userId,
-        module: options?.purpose ?? 'openrouter',
+        module: options.purpose,
         model: this.model,
         latencyMs: Date.now() - startTime,
         status: 'error',
@@ -229,7 +229,17 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
 
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content: string; reasoning?: string } }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+        /**
+         * Present when the provider served part of the prompt from cache.
+         * OpenRouter has returned this the whole time and nothing read it, so
+         * "is caching working" had no answer and neither did "would it".
+         */
+        prompt_tokens_details?: { cached_tokens?: number };
+      };
     };
 
     // Log token usage for performance analysis (existing behaviour preserved)
@@ -246,9 +256,10 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       logLLMCall({
         videoId: options?.videoId,
         userId: options?.userId,
-        module: options?.purpose ?? 'openrouter',
+        module: options.purpose,
         model: this.model,
         inputTokens: data.usage?.prompt_tokens,
+        cachedInputTokens: data.usage?.prompt_tokens_details?.cached_tokens,
         outputTokens: data.usage?.completion_tokens,
         latencyMs: Date.now() - startTime,
         status: 'error',
@@ -265,7 +276,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
     logLLMCall({
       videoId: options?.videoId,
       userId: options?.userId,
-      module: options?.purpose ?? 'openrouter',
+      module: options.purpose,
       model: this.model,
       inputTokens: data.usage?.prompt_tokens,
       outputTokens: data.usage?.completion_tokens,
