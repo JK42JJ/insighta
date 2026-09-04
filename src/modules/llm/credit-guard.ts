@@ -19,14 +19,42 @@ import type { CreditGateDecision } from './credit-types';
  *
  * `model` is the same string the site logs — `openrouter/anthropic/claude-...`
  * — so the provider the breaker keys on is the provider the ledger records.
+ *
+ * Two layers answer, in this order:
+ *
+ *   L6, the credit breaker — the provider is out of money and would refuse.
+ *   L2, the daily budget   — the provider would answer, and that is the point.
+ *
+ * Credit is asked first because it is the more specific fact: if the account
+ * is empty, saying "over budget" would describe a spend that cannot happen.
+ *
+ * Nine call sites read this one decision, so wiring L2 here is what put it in
+ * front of every one of them without editing any. That mattered: L2 has been
+ * written and unwired since the 4/14 incident, and 2026-06-25 spent $36.18 in
+ * a day through calls that all succeeded — nothing L6 can see.
  */
 export async function creditGate(model: string): Promise<CreditGateDecision> {
+  const slash = model.indexOf('/');
+  const provider = slash > 0 ? model.slice(0, slash) : model;
   try {
-    const { checkProviderCredit } = await import('./cost-gate');
-    return await checkProviderCredit(model);
+    const { checkProviderCredit, checkDailyBudget } = await import('./cost-gate');
+
+    const credit = await checkProviderCredit(model);
+    if (!credit.allowed) return credit;
+
+    const budget = await checkDailyBudget();
+    if (!budget.allowed) {
+      return {
+        allowed: false,
+        provider,
+        reason: 'daily_budget',
+        dailySpendUsd: budget.dailyTotal,
+        dailyLimitUsd: budget.limit,
+      };
+    }
+    return credit;
   } catch {
-    const slash = model.indexOf('/');
-    return { allowed: true, provider: slash > 0 ? model.slice(0, slash) : model };
+    return { allowed: true, provider };
   }
 }
 
@@ -39,8 +67,16 @@ export async function creditGate(model: string): Promise<CreditGateDecision> {
  * breaker would never get to test for recovery — it would latch shut.
  */
 const SKIP_MARKER = 'is refusing new work (breaker open since';
+const BUDGET_MARKER = 'has spent its daily allowance';
 
 export function creditBlockMessage(d: CreditGateDecision): string {
+  if (d.reason === 'daily_budget') {
+    const spent = (d.dailySpendUsd ?? 0).toFixed(2);
+    const limit = (d.dailyLimitUsd ?? 0).toFixed(2);
+    return (
+      `provider ${d.provider} ${BUDGET_MARKER} ` + `($${spent} of $${limit}) — call not attempted`
+    );
+  }
   const since = d.since ? d.since.toISOString() : 'recently';
   return (
     `provider ${d.provider} ${SKIP_MARKER} ${since}, ${d.hits ?? 0} refusals) ` +
@@ -49,7 +85,7 @@ export function creditBlockMessage(d: CreditGateDecision): string {
 }
 
 /**
- * Was this error the breaker refusing, rather than a provider?
+ * Was this error a gate refusing, rather than a provider?
  *
  * Four call sites raise the refusal from inside the try block that writes
  * their ledger row, so the row would say a call failed when no call was made.
@@ -57,7 +93,8 @@ export function creditBlockMessage(d: CreditGateDecision): string {
  * outage. The ledger writer drops these on the way in.
  */
 export function isCreditSkipMessage(message: string | undefined): boolean {
-  return !!message && message.includes(SKIP_MARKER);
+  if (!message) return false;
+  return message.includes(SKIP_MARKER) || message.includes(BUDGET_MARKER);
 }
 
 /**

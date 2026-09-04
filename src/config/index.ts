@@ -110,6 +110,14 @@ const envSchema = z.object({
   OLLAMA_GENERATE_MODEL: z.string().default('qwen3.5:9b'),
   LLM_PROVIDER: z.enum(['gemini', 'ollama', 'openrouter', 'auto']).default('auto'),
   LLM_DAILY_COST_LIMIT_USD: z.coerce.number().optional(),
+  /**
+   * L2 on/off. Defaults ON, which departs from this project's usual "a new
+   * env unset must be a no-op" rule -- deliberately, because a no-op is the
+   * defect: L2 has been implemented and unwired since the 4/14 incident, and
+   * the day it would have caught cost $36.18. The flag exists so it can be
+   * turned off without reverting code, not so it starts off.
+   */
+  LLM_BUDGET_GATE_ENABLED: z.coerce.boolean().default(true),
   LLM_MONTHLY_COST_LIMIT_USD: z.coerce.number().optional(),
 
   // OpenRouter
@@ -461,6 +469,10 @@ export const config = {
   llm: {
     provider: env.LLM_PROVIDER,
     dailyCostLimitUsd: env.LLM_DAILY_COST_LIMIT_USD,
+    // Off under Jest for the reason the credit breaker is: suites share one
+    // database, and a budget opened by one suite's fixture rows would refuse
+    // calls in another.
+    budgetGateEnabled: env.LLM_BUDGET_GATE_ENABLED && process.env['NODE_ENV'] !== 'test',
     monthlyCostLimitUsd: env.LLM_MONTHLY_COST_LIMIT_USD,
   },
 
