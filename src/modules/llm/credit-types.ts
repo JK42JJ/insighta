@@ -19,14 +19,18 @@ export interface CreditGateDecision {
   allowed: boolean;
   /** `openrouter`, `anthropic` — the prefix of the model id. */
   provider: string;
-  reason?: 'credit_exhausted' | 'daily_budget';
+  reason?: 'credit_exhausted' | 'daily_budget' | 'monthly_cap';
   /** When the provider first refused in the current spell. */
   since?: Date | null;
   /** Refusals seen during the current spell. */
   hits?: number;
   /** True when this call is the ten-minute probe testing for recovery. */
   isProbe?: boolean;
-  /** `daily_budget` only — what has been spent today, and the ceiling. */
-  dailySpendUsd?: number;
-  dailyLimitUsd?: number;
+  /**
+   * Budget layers only — what has been spent in the window that stopped it,
+   * and that window's ceiling. Named for neither day nor month because both
+   * use them and a `dailySpendUsd` holding a month's total reads as a bug.
+   */
+  spendUsd?: number;
+  limitUsd?: number;
 }

@@ -659,14 +659,27 @@ export function creditBlockedFromCache(provider: string): CreditGateDecision | n
   // the first, which is the right order: a person waiting on an answer should
   // not be the one who discovers the day's spend is used up, and by the time
   // they are refused the background work has already stopped.
-  if (config.llm.budgetGateEnabled && budgetCache && budgetCache.total >= budgetCache.limit) {
-    return {
-      allowed: false,
-      provider,
-      reason: 'daily_budget',
-      dailySpendUsd: budgetCache.total,
-      dailyLimitUsd: budgetCache.limit,
-    };
+  if (config.llm.budgetGateEnabled && budgetCache) {
+    const dailyLimit = config.llm.dailyCostLimitUsd ?? DAILY_BLOCK_USD_DEFAULT;
+    const monthlyLimit = config.llm.monthlyCostLimitUsd ?? MONTHLY_THROTTLE_USD_DEFAULT;
+    if (budgetCache.monthly >= monthlyLimit) {
+      return {
+        allowed: false,
+        provider,
+        reason: 'monthly_cap',
+        spendUsd: budgetCache.monthly,
+        limitUsd: monthlyLimit,
+      };
+    }
+    if (budgetCache.daily >= dailyLimit) {
+      return {
+        allowed: false,
+        provider,
+        reason: 'daily_budget',
+        spendUsd: budgetCache.daily,
+        limitUsd: dailyLimit,
+      };
+    }
   }
 
   return null;
@@ -702,58 +715,88 @@ export function creditBlockedFromCache(provider: string): CreditGateDecision | n
 const BUDGET_CACHE_RELAXED_MS = 60 * 1000;
 const BUDGET_CACHE_TIGHT_MS = 5 * 1000;
 
-let budgetCache: { total: number; limit: number; readAt: number } | null = null;
+export interface SpendCapDecision {
+  allowed: boolean;
+  /** Which ceiling stopped it. Absent when allowed. */
+  scope?: 'daily' | 'monthly';
+  dailyTotal: number;
+  dailyLimit: number;
+  monthlyTotal: number;
+  monthlyLimit: number;
+}
+
+let budgetCache: { daily: number; monthly: number; readAt: number } | null = null;
 
 /** Test seam — module-level cache would otherwise leak between cases. */
 export function resetBudgetStateForTest(): void {
   budgetCache = null;
 }
 
-export async function checkDailyBudget(): Promise<{
-  allowed: boolean;
-  dailyTotal: number;
-  limit: number;
-}> {
-  const limit = config.llm.dailyCostLimitUsd ?? DAILY_BLOCK_USD_DEFAULT;
-  if (!config.llm.budgetGateEnabled) return { allowed: true, dailyTotal: 0, limit };
+/**
+ * L2 and L3 together, from one scan.
+ *
+ * The month is the outer window and the day sits inside it, so a single
+ * filtered aggregate answers both. Two functions each running their own SUM
+ * would double the query load for a number that is a subset of the other.
+ *
+ * The monthly ceiling matters more than its default suggests. The account was
+ * topped up with $50 and `MONTHLY_THROTTLE_USD_DEFAULT` is $50, so left unset
+ * this layer stops at the balance rather than after it — which is the whole
+ * difference between a cap and a post-mortem.
+ *
+ * Monthly is checked before daily. Both being over is possible, and the month
+ * is the one that cannot be waited out.
+ */
+export async function checkSpendCaps(): Promise<SpendCapDecision> {
+  const dailyLimit = config.llm.dailyCostLimitUsd ?? DAILY_BLOCK_USD_DEFAULT;
+  const monthlyLimit = config.llm.monthlyCostLimitUsd ?? MONTHLY_THROTTLE_USD_DEFAULT;
+  const idle = { dailyTotal: 0, dailyLimit, monthlyTotal: 0, monthlyLimit };
+  if (!config.llm.budgetGateEnabled) return { allowed: true, ...idle };
 
   const now = Date.now();
+  const decide = (daily: number, monthly: number): SpendCapDecision => {
+    const totals = { dailyTotal: daily, dailyLimit, monthlyTotal: monthly, monthlyLimit };
+    if (monthly >= monthlyLimit) return { allowed: false, scope: 'monthly', ...totals };
+    if (daily >= dailyLimit) return { allowed: false, scope: 'daily', ...totals };
+    return { allowed: true, ...totals };
+  };
+
   if (budgetCache) {
-    // Tighten the cache as the total approaches the ceiling. Far from it, a
-    // stale reading costs nothing; near it, staleness is exactly the overshoot.
-    const ttl =
-      budgetCache.total >= DAILY_WARN_USD ? BUDGET_CACHE_TIGHT_MS : BUDGET_CACHE_RELAXED_MS;
-    if (now - budgetCache.readAt < ttl) {
-      return {
-        allowed: budgetCache.total < budgetCache.limit,
-        dailyTotal: budgetCache.total,
-        limit: budgetCache.limit,
-      };
-    }
+    // Tighten the cache as either total approaches its ceiling. Far from them a
+    // stale reading costs nothing; near them, staleness is exactly the overshoot.
+    const near = budgetCache.daily >= DAILY_WARN_USD || budgetCache.monthly >= MONTHLY_ALERT_USD;
+    const ttl = near ? BUDGET_CACHE_TIGHT_MS : BUDGET_CACHE_RELAXED_MS;
+    if (now - budgetCache.readAt < ttl) return decide(budgetCache.daily, budgetCache.monthly);
   }
 
   try {
     const prisma = getPrismaClient();
-    const rows = await prisma.$queryRaw<{ total: number }[]>`
-      SELECT COALESCE(SUM(cost_usd), 0)::float AS total
+    const rows = await prisma.$queryRaw<{ daily: number; monthly: number }[]>`
+      SELECT COALESCE(SUM(cost_usd) FILTER (WHERE created_at >= CURRENT_DATE), 0)::float AS daily,
+             COALESCE(SUM(cost_usd), 0)::float AS monthly
         FROM llm_call_logs
-       WHERE created_at >= CURRENT_DATE
+       WHERE created_at >= date_trunc('month', CURRENT_DATE)
          AND status = 'success'
     `;
-    const total = rows[0]?.total ?? 0;
-    budgetCache = { total, limit, readAt: now };
+    const daily = rows[0]?.daily ?? 0;
+    const monthly = rows[0]?.monthly ?? 0;
+    budgetCache = { daily, monthly, readAt: now };
 
-    if (total >= limit) {
-      log.error('L2 daily budget reached — refusing further calls', { total, limit });
-    } else if (total >= DAILY_WARN_USD) {
-      log.warn('L2 daily budget warning', { total, warnAt: DAILY_WARN_USD, limit });
+    if (monthly >= monthlyLimit) {
+      log.error('L3 monthly cap reached — refusing further calls', { monthly, monthlyLimit });
+    } else if (daily >= dailyLimit) {
+      log.error('L2 daily budget reached — refusing further calls', { daily, dailyLimit });
+    } else if (monthly >= MONTHLY_ALERT_USD) {
+      log.warn('L3 monthly alert', { monthly, alertAt: MONTHLY_ALERT_USD, monthlyLimit });
+    } else if (daily >= DAILY_WARN_USD) {
+      log.warn('L2 daily warning', { daily, warnAt: DAILY_WARN_USD, dailyLimit });
     }
-    return { allowed: total < limit, dailyTotal: total, limit };
+    return decide(daily, monthly);
   } catch (err) {
-    log.warn('L2 could not read the ledger — allowing the call', {
+    log.warn('L2/L3 could not read the ledger — allowing the call', {
       error: err instanceof Error ? err.message : String(err),
     });
-    return { allowed: true, dailyTotal: 0, limit };
+    return { allowed: true, ...idle };
   }
 }
 
