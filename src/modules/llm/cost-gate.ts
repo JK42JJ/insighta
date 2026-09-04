@@ -639,17 +639,122 @@ export async function getCreditStatus(): Promise<CreditStatus[]> {
  * and every later request is refused without a round trip.
  */
 export function creditBlockedFromCache(provider: string): CreditGateDecision | null {
-  if (!config.creditBreaker.enabled) return null;
-  const c = creditCache.get(provider);
-  if (!c || !c.exhausted) return null;
-  if (Date.now() >= c.nextProbeAt) return null; // a probe is due — let it try
-  return {
-    allowed: false,
-    provider,
-    reason: 'credit_exhausted',
-    since: c.since,
-    hits: c.hits,
-  };
+  if (config.creditBreaker.enabled) {
+    const c = creditCache.get(provider);
+    if (c && c.exhausted && Date.now() < c.nextProbeAt) {
+      return {
+        allowed: false,
+        provider,
+        reason: 'credit_exhausted',
+        since: c.since,
+        hits: c.hits,
+      };
+    }
+  }
+
+  // L2, from the same cache-only stance. The chat route cannot await here —
+  // a second async hop past `req.pause()` loses the body (PR #737) — so the
+  // budget is read from whatever the background calls have already put in the
+  // cache. That makes chat the last surface to notice the ceiling rather than
+  // the first, which is the right order: a person waiting on an answer should
+  // not be the one who discovers the day's spend is used up, and by the time
+  // they are refused the background work has already stopped.
+  if (config.llm.budgetGateEnabled && budgetCache && budgetCache.total >= budgetCache.limit) {
+    return {
+      allowed: false,
+      provider,
+      reason: 'daily_budget',
+      dailySpendUsd: budgetCache.total,
+      dailyLimitUsd: budgetCache.limit,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * L2, wired.
+ *
+ * `checkDailyCostLimit` above has existed since the 4/14 incident and had zero
+ * callers. So did L1, L3, L4 and L5. The layer that was wired — L6 — only
+ * fires once the provider answers 402, which is to say once the money is
+ * already gone. On 2026-06-25 this account spent $36.18 in a day; L6 would not
+ * have made a sound, because every one of those calls succeeded.
+ *
+ * This is the same door the breaker uses (`creditGate`), so wiring it here
+ * covers all nine call sites without touching any of them.
+ *
+ * Three properties it has to have, and why:
+ *
+ *   Cheap. A `SUM()` per LLM call would put a query in front of every call in
+ *   the system. The total is cached, and the cache is short when it matters:
+ *   a minute while spending is low, five seconds once past the warning line,
+ *   which bounds how far a burst can overshoot.
+ *
+ *   Fails open. If the ledger cannot be read the call proceeds. A budget gate
+ *   that cannot see the budget must not become the reason a paid provider
+ *   sits unused — the same rule the breaker follows.
+ *
+ *   Self-clearing. The window is `CURRENT_DATE`, so it opens again at
+ *   midnight without anything having to reset it. There is no state to get
+ *   stuck in, which is the failure mode a hand-rolled daily counter has.
+ */
+const BUDGET_CACHE_RELAXED_MS = 60 * 1000;
+const BUDGET_CACHE_TIGHT_MS = 5 * 1000;
+
+let budgetCache: { total: number; limit: number; readAt: number } | null = null;
+
+/** Test seam — module-level cache would otherwise leak between cases. */
+export function resetBudgetStateForTest(): void {
+  budgetCache = null;
+}
+
+export async function checkDailyBudget(): Promise<{
+  allowed: boolean;
+  dailyTotal: number;
+  limit: number;
+}> {
+  const limit = config.llm.dailyCostLimitUsd ?? DAILY_BLOCK_USD_DEFAULT;
+  if (!config.llm.budgetGateEnabled) return { allowed: true, dailyTotal: 0, limit };
+
+  const now = Date.now();
+  if (budgetCache) {
+    // Tighten the cache as the total approaches the ceiling. Far from it, a
+    // stale reading costs nothing; near it, staleness is exactly the overshoot.
+    const ttl =
+      budgetCache.total >= DAILY_WARN_USD ? BUDGET_CACHE_TIGHT_MS : BUDGET_CACHE_RELAXED_MS;
+    if (now - budgetCache.readAt < ttl) {
+      return {
+        allowed: budgetCache.total < budgetCache.limit,
+        dailyTotal: budgetCache.total,
+        limit: budgetCache.limit,
+      };
+    }
+  }
+
+  try {
+    const prisma = getPrismaClient();
+    const rows = await prisma.$queryRaw<{ total: number }[]>`
+      SELECT COALESCE(SUM(cost_usd), 0)::float AS total
+        FROM llm_call_logs
+       WHERE created_at >= CURRENT_DATE
+         AND status = 'success'
+    `;
+    const total = rows[0]?.total ?? 0;
+    budgetCache = { total, limit, readAt: now };
+
+    if (total >= limit) {
+      log.error('L2 daily budget reached — refusing further calls', { total, limit });
+    } else if (total >= DAILY_WARN_USD) {
+      log.warn('L2 daily budget warning', { total, warnAt: DAILY_WARN_USD, limit });
+    }
+    return { allowed: total < limit, dailyTotal: total, limit };
+  } catch (err) {
+    log.warn('L2 could not read the ledger — allowing the call', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { allowed: true, dailyTotal: 0, limit };
+  }
 }
 
 /** Test seam — the cache is module-level and would otherwise leak between cases. */

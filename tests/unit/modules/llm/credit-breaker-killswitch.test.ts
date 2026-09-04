@@ -13,7 +13,9 @@ const mockExecuteRaw = jest.fn();
 jest.mock('@/modules/database/client', () => ({
   getPrismaClient: () => ({ $queryRaw: mockQueryRaw, $executeRaw: mockExecuteRaw }),
 }));
-jest.mock('@/config/index', () => ({ config: { creditBreaker: { enabled: false } } }));
+jest.mock('@/config/index', () => ({
+  config: { creditBreaker: { enabled: false }, llm: { budgetGateEnabled: false } },
+}));
 jest.mock('@/utils/logger', () => ({
   logger: {
     child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),

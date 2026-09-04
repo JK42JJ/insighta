@@ -25,7 +25,9 @@ jest.mock('@/modules/database/client', () => ({
 // refuse calls in another. These tests are about the breaker itself, so they
 // turn it on and supply their own state through the mocked client above.
 jest.mock('@/config/index', () => ({
-  config: { creditBreaker: { enabled: true } },
+  // L2 off here on purpose: these cases are about L6 in isolation, and a
+  // budget gate reading the same mocked client would answer for it.
+  config: { creditBreaker: { enabled: true }, llm: { budgetGateEnabled: false } },
 }));
 
 jest.mock('@/utils/logger', () => ({
