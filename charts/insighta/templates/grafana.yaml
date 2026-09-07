@@ -1,0 +1,223 @@
+{{- if .Values.grafana.enabled }}
+# The dashboard for the invariant checks.
+#
+# It reads `error_events` and `llm_call_logs` from the production database and
+# draws them. It does not run checks and it does not alert: the checks run every
+# thirty minutes from a GitHub runner and alert to Slack, which is why an outage
+# of this pod costs nothing operational. That separation is what makes it safe
+# to put a viewer on the node it watches.
+#
+# Three mechanisms keep it from ever competing with the service, in the order
+# they take effect:
+#
+#   limits          -> cgroup v2 memory.max. Exceeding it kills this container
+#                      and nothing else. The kernel enforces it.
+#   priorityClass   -> negative. Under node pressure the kubelet evicts by
+#                      request overage, then by priority; at -100 against the
+#                      application's 0, this leaves first.
+#   no volumes      -> datasource and dashboards are ConfigMaps, so there is no
+#                      PVC and nothing to grow on a disk already at 81%.
+#
+# Losing the pod loses nothing. It comes back with the same dashboards because
+# they live in git.
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: {{ include "insighta.fullname" . }}-observability
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+# Negative, and deliberately far from zero. Anything serving traffic runs at the
+# default 0; a small negative number would still be a coin flip against a pod
+# that happens to be further over its request.
+value: -100
+globalDefault: false
+description: "Observability tooling. Evicted and preempted before anything serving traffic."
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "insighta.fullname" . }}-grafana-datasources
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Insighta
+        type: postgres
+        uid: insighta-pg
+        # A read-only role, not the application's credential. A dashboard has no
+        # reason to be able to write, and the ledger it reads is the record of
+        # what went wrong -- something that can rewrite that record is worse than
+        # no dashboard.
+        url: ${GRAFANA_DB_HOST}
+        user: ${GRAFANA_DB_USER}
+        database: ${GRAFANA_DB_NAME}
+        isDefault: true
+        jsonData:
+          sslmode: require
+          postgresVersion: 1500
+          # Supabase's pooler drops idle connections; a pool that outlives them
+          # hands out sockets that fail on first use.
+          maxOpenConns: 4
+          maxIdleConns: 1
+          connMaxLifetime: 300
+        secureJsonData:
+          password: ${GRAFANA_DB_PASSWORD}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "insighta.fullname" . }}-grafana-dashboards-cfg
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: insighta
+        type: file
+        # Read-only: edits made in the browser are not saved. The dashboard is a
+        # file in git, and a copy that can drift from it is a copy nobody can
+        # reproduce.
+        allowUiUpdates: false
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "insighta.fullname" . }}-grafana-dashboards
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+data:
+  invariants.json: |
+{{ .Files.Get "dashboards/invariants.json" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insighta.fullname" . }}-grafana
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: two replicas would need a shared database for
+  # sessions, and there is nothing here worth a second replica.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "insighta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: grafana
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: grafana
+      annotations:
+        # Roll the pod when a dashboard changes. Grafana's file provisioner
+        # polls, but a ConfigMap update can take a minute to reach the volume
+        # and this makes "merged" and "visible" the same moment.
+        checksum/dashboards: {{ .Files.Get "dashboards/invariants.json" | sha256sum }}
+    spec:
+      priorityClassName: {{ include "insighta.fullname" . }}-observability
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: "{{ .Values.grafana.image.repository }}:{{ .Values.grafana.image.tag }}"
+          imagePullPolicy: {{ .Values.grafana.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            # No public ingress: this is reached through an SSH tunnel, the same
+            # way ArgoCD is. Anonymous access with the Viewer role means no
+            # password to manage and no login page to get wrong -- the SSH key
+            # is the authentication, and it is already the one that matters.
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Viewer"
+            - name: GF_AUTH_BASIC_ENABLED
+              value: "false"
+            - name: GF_AUTH_DISABLE_LOGIN_FORM
+              value: "true"
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_ANALYTICS_REPORTING_ENABLED
+              value: "false"
+            - name: GF_ANALYTICS_CHECK_FOR_UPDATES
+              value: "false"
+            # Provisioning files reference these; Grafana expands ${VAR} in them.
+            {{- range $key := list "GRAFANA_DB_HOST" "GRAFANA_DB_USER" "GRAFANA_DB_NAME" "GRAFANA_DB_PASSWORD" }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.grafana.secretName }}
+                  key: {{ $key }}
+                  # Absent secret keys leave the datasource unconfigured rather
+                  # than crash-looping the pod, so the dashboard can be deployed
+                  # before the read-only role exists.
+                  optional: true
+            {{- end }}
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboards-cfg
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: datasources
+          configMap:
+            name: {{ include "insighta.fullname" . }}-grafana-datasources
+        - name: dashboards-cfg
+          configMap:
+            name: {{ include "insighta.fullname" . }}-grafana-dashboards-cfg
+        - name: dashboards
+          configMap:
+            name: {{ include "insighta.fullname" . }}-grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insighta.fullname" . }}-grafana
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  # ClusterIP, and no Ingress anywhere in this file. Reached by port-forward
+  # over SSH; putting it on the internet would add a login surface to protect
+  # for the sake of a viewer only one person opens.
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: http
+      name: http
+  selector:
+    {{- include "insighta.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+{{- end }}

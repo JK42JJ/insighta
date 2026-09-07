@@ -1,0 +1,568 @@
+{
+  "uid": "insighta-invariants",
+  "title": "Insighta · 불변식",
+  "description": "무엇이 죽지 않았는데 무엇이 잘못됐는가. 검사는 30분마다 GitHub 러너에서 돌고, 결과가 error_events 에 쌓입니다.",
+  "tags": [
+    "insighta",
+    "monitor"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "editable": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "지금 실패 중인 검사",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 0,
+        "y": 0
+      },
+      "description": "검사별 가장 최근 결과만 셉니다. 0이면 이상 없음.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS \"실패\"\n  FROM (SELECT DISTINCT ON (stage) stage, severity\n          FROM error_events WHERE subsystem = 'monitor'\n         ORDER BY stage, created_at DESC) t\n WHERE severity <> 'info'"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "마지막 실행",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 5,
+        "y": 0
+      },
+      "description": "30분 주기입니다. 90분 넘게 비어 있으면 검사 자체가 멈춘 것 — 조용한 것과 구분해야 합니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT max(created_at) AS \"마지막\"\n  FROM error_events WHERE subsystem = 'monitor'"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "검사별 현재 상태",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 14,
+        "x": 10,
+        "y": 0
+      },
+      "description": "각 검사의 가장 최근 한 줄.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT DISTINCT ON (stage)\n       stage AS \"검사\",\n       CASE WHEN severity = 'info' THEN '정상' ELSE '실패' END AS \"상태\",\n       message AS \"내용\",\n       created_at AS \"마지막 검사\"\n  FROM error_events\n WHERE subsystem = 'monitor'\n ORDER BY stage, created_at DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "상태"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "정상": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "실패": {
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "title": "검사 상태 이력",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "description": "빨간 구간이 사고입니다. 언제 시작해서 언제 끝났는지가 이 한 장에 있습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS time,\n       stage AS metric,\n       CASE WHEN severity = 'info' THEN 1 ELSE 0 END AS value\n  FROM error_events\n WHERE subsystem = 'monitor' AND $__timeFilter(created_at)\n ORDER BY created_at"
+        }
+      ],
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "실패",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "정상",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "상태 전환 (사건 이력)",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "description": "알림이 나간 순간들입니다. 전환에서만 알리므로 이 표가 곧 Slack 이력과 같습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH t AS (\n  SELECT stage, severity, message, created_at,\n         lag(severity) OVER (PARTITION BY stage ORDER BY created_at) AS prev\n    FROM error_events\n   WHERE subsystem = 'monitor' AND $__timeFilter(created_at)\n)\nSELECT created_at AS \"시각\", stage AS \"검사\",\n       CASE WHEN severity = 'info' THEN '해소' ELSE '발생' END AS \"전환\",\n       message AS \"내용\"\n  FROM t\n WHERE prev IS NOT NULL AND prev <> severity\n ORDER BY created_at DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "전환"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "해소": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "발생": {
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "title": "AWS 월 누적",
+      "type": "timeseries",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "description": "Cost Explorer API 를 부르지 않고 S3 의 비용 보고서에서 읽은 값입니다. 매월 1일에 0으로 떨어집니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS time, (context->>'total')::float AS \"월 누적\"\n  FROM error_events\n WHERE subsystem = 'monitor' AND stage = 'aws-cost'\n   AND context ? 'total' AND $__timeFilter(created_at)\n ORDER BY created_at"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "LLM 일별 지출",
+      "type": "timeseries",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "description": "2026-06-25 에 $36.18 을 쓴 날이 있습니다. 모든 호출이 성공이라 아무 알람도 울리지 않았습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('day', created_at) AS time, sum(cost_usd) AS \"지출\"\n  FROM llm_call_logs\n WHERE status = 'success' AND $__timeFilter(created_at)\n GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "title": "모델별 지출 (24시간)",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "description": "캐시% 가 비어 있으면 프로바이더가 캐시를 보고하지 않은 것 — 0% 와 다른 사실입니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT model AS \"모델\",\n       count(*) AS \"호출\",\n       round(sum(cost_usd)::numeric, 4) AS \"비용\",\n       CASE WHEN sum(cached_input_tokens) IS NULL THEN NULL\n            ELSE round(100.0 * sum(cached_input_tokens) / NULLIF(sum(input_tokens), 0), 1)\n       END AS \"캐시%\",\n       round(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)::numeric, 0) AS \"p95ms\"\n  FROM llm_call_logs\n WHERE status = 'success' AND created_at >= now() - interval '24 hours'\n GROUP BY model ORDER BY 3 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "비용"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 9,
+      "title": "단계별 지출 (24시간)",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "description": "module 은 2026-09-04 부터만 믿을 수 있습니다. 그 전에는 34개 호출 지점 중 5개만 설정해 45,476건이 'openrouter' 하나로 뭉쳐 있었습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT module AS \"단계\",\n       count(*) AS \"호출\",\n       round(sum(cost_usd)::numeric, 4) AS \"비용\"\n  FROM llm_call_logs\n WHERE status = 'success' AND created_at >= now() - interval '24 hours'\n GROUP BY module ORDER BY 3 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "비용"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "title": "실패한 호출에 쓴 돈 (24시간)",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "description": "status='success' 로 거르는 모든 집계에서 보이지 않는 값입니다. 재시도 낭비가 여기 있습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT model AS \"모델\", status AS \"상태\",\n       count(*) AS \"호출\",\n       round(sum(cost_usd)::numeric, 4) AS \"낭비\"\n  FROM llm_call_logs\n WHERE status <> 'success' AND created_at >= now() - interval '24 hours'\n GROUP BY model, status ORDER BY 4 DESC NULLS LAST"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "낭비"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

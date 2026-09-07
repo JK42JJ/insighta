@@ -179,3 +179,9 @@ ingress:
   tls:
     enabled: true
     secretName: insighta-tls
+
+# The invariant dashboard runs here and nowhere else: this is the environment
+# whose ledger is worth looking at. Reached over an SSH tunnel
+# (scripts/ops/grafana-ui.sh), never through the ingress.
+grafana:
+  enabled: true

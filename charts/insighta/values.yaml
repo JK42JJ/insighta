@@ -161,6 +161,43 @@ frontend:
     initialDelaySeconds: 5
     periodSeconds: 10
 
+# The dashboard for the invariant checks. Off by default: it belongs where
+# somebody looks at it, and every environment does not need a copy.
+#
+# It reads the production database and draws it. It runs no checks and sends no
+# alerts -- those come from a GitHub runner into Slack -- so losing this pod
+# costs nothing operational. That is what makes it safe to run a viewer on the
+# node it watches.
+grafana:
+  enabled: false
+  image:
+    repository: grafana/grafana-oss
+    # Pinned. `latest` on an observability tool means the dashboard can change
+    # shape on a restart, and a dashboard that changes without a commit is one
+    # nobody can reproduce.
+    tag: "11.3.0"
+    pullPolicy: IfNotPresent
+  # Holds GRAFANA_DB_{HOST,USER,NAME,PASSWORD} for a read-only role. Not the
+  # application's credential: a dashboard has no reason to be able to write, and
+  # what it reads is the record of what went wrong.
+  secretName: insighta-grafana-db
+  resources:
+    requests:
+      # Small on purpose. requests is what the scheduler reserves, and reserving
+      # for a viewer takes room from the service. Real use sits near 200Mi and
+      # is taken as burst, which is exactly the first thing reclaimed.
+      memory: 64Mi
+      cpu: 10m
+      ephemeral-storage: 100Mi
+    limits:
+      # Becomes cgroup v2 memory.max. Crossing it kills this container and
+      # nothing else -- the kernel enforces that, not a policy.
+      memory: 256Mi
+      cpu: 300m
+      # The node sits at 81% disk. Nothing here writes (dashboards are
+      # ConfigMaps) but a bound is cheaper than finding out otherwise.
+      ephemeral-storage: 500Mi
+
 redis:
   # Measured on production 2026-08-14: DBSIZE 0, 368 commands since start,
   # V3_ENABLE_REDIS_PROVIDER=false. It holds nothing today. Kept on by default
