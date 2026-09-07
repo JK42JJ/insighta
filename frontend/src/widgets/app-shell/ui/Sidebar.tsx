@@ -17,6 +17,8 @@ import { SidebarMandalaSection, type MinimapData } from './SidebarMandalaSection
 import { SidebarLearningSection } from './SidebarLearningSection';
 import { SidebarTopSection } from './SidebarTopSection';
 import { SidebarBriefEntry } from './SidebarBriefEntry';
+import { SidebarBriefSection } from './SidebarBriefSection';
+import { useBriefNote } from '@/features/newsletter-note/model/useBriefNote';
 import { SidebarProfileFooter } from './SidebarProfileFooter';
 import { SidebarHeatMinimap } from '@/widgets/sidebar-heat-minimap';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
@@ -123,6 +125,13 @@ export function Sidebar({
   const learningMatch = useMatch('/learning/:mandalaId/:videoId');
   const isLearningRoute = Boolean(learningMatch);
 
+  // Reading one issue, not browsing them. `/brief/c/:key` is the card grid --
+  // a list screen, which keeps the mandala panel.
+  const briefMatch = useMatch('/brief/:slug');
+  const briefSlug = briefMatch?.params.slug;
+  const isBriefRoute = Boolean(briefSlug) && briefSlug !== 'c';
+  const briefNote = useBriefNote(isBriefRoute ? briefSlug : undefined);
+
   const updateSectorNames = useUpdateSectorNames();
 
   const activeSettingsTab = (searchParams.get('tab') as SettingsCategory) || 'general';
@@ -147,7 +156,7 @@ export function Sidebar({
       }}
       aria-label={t('sidebar.navigation')}
     >
-      {((!isLearningRoute && !settingsMode) || collapsed) && (
+      {((!isLearningRoute && !isBriefRoute && !settingsMode) || collapsed) && (
         <SidebarTopSection
           collapsed={collapsed}
           searchBarElement={searchBarElement}
@@ -161,7 +170,7 @@ export function Sidebar({
         <div
           className={cn(
             'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
-            settingsMode || isLearningRoute
+            settingsMode || isLearningRoute || isBriefRoute
               ? '-translate-x-full opacity-0 pointer-events-none'
               : 'translate-x-0 opacity-100'
           )}
@@ -278,6 +287,55 @@ export function Sidebar({
                 collapsed={collapsed}
               />
             )}
+          </nav>
+        </div>
+
+        {/* Brief Panel -- the issue's contents, in the slot the note's
+            contents use. Reading a brief with a list of mandalas beside it
+            was the one place that rule was not applied. */}
+        <div
+          className={cn(
+            'absolute inset-0 flex flex-col transition-all duration-300 ease-in-out',
+            isBriefRoute && !settingsMode
+              ? 'translate-x-0 opacity-100'
+              : 'translate-x-full opacity-0 pointer-events-none'
+          )}
+        >
+          <div className="pt-4 pb-2 px-2">
+            {!collapsed && (
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <button
+                  onClick={handleBackToApp}
+                  className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors duration-150"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  {t('settings.backToApp', 'Back to app')}
+                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={onToggleCollapse}
+                      aria-label={t('sidebar.collapse', 'Collapse sidebar')}
+                      className="shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                    >
+                      <PanelLeft className="w-5 h-5 text-sidebar-foreground/70" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-[12px]">
+                    {t('sidebar.collapse', 'Collapse sidebar')}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+          </div>
+
+          <nav className="flex-1 px-0 pb-4 overflow-y-auto scrollbar-none">
+            <SidebarBriefSection
+              issue={briefNote.issue}
+              loading={briefNote.loading}
+              collapsed={collapsed}
+            />
           </nav>
         </div>
 

@@ -1,17 +1,16 @@
 /**
- * The brief menu — ten rows, on and off.
+ * The brief menu — one row, and a popover.
  *
- * Two regressions are pinned here because both shipped and both were reported
- * as "브리프 안 보여":
+ * Two regressions are pinned here, both reported from screenshots:
  *
- *   The list used to come from the issues, so a brief with nothing published
- *   had no row — which is every brief but one.
+ *   The ten domains were listed inline, pushing the mandala list down by ten
+ *   rows and cutting it off. Nine of those rows were `TBD` and unclickable, so
+ *   what could not be used was hiding what could.
  *
- *   The other nine sat behind a `+ 브리프 추가` link to a separate page, so
- *   the product looked like it had one brief.
- *
- * What is available is data, not a list in the component: `issues === 0` means
- * nothing has published, which is what the TBD badge says.
+ *   The row was 4px wider on each side than the mandala header below it. The
+ *   two button class strings were byte-identical; the difference was the
+ *   wrapper — the mandala section sits inside a `px-1` nav as well as its own
+ *   `px-1`. Comparing class strings alone would let that back in.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -41,7 +40,6 @@ vi.mock('react-router-dom', async () => {
 function cat(key: string, label: string, subscribed: boolean, issues: number) {
   return { key, label, blurb: '', subscribed, issues };
 }
-
 function issue(categoryKey: string, slug: string, read: boolean) {
   return {
     slug,
@@ -58,7 +56,7 @@ function issue(categoryKey: string, slug: string, read: boolean) {
   };
 }
 
-/** What production looks like today: one brief published, nine not. */
+/** Production today: one brief published, nine not. */
 const TEN = [
   cat('ai-tech', 'AI 엔지니어링', true, 2),
   cat('dev', '개발', false, 0),
@@ -93,28 +91,68 @@ beforeEach(() => {
   subscribeMock.mockResolvedValue({ status: 'ok', data: { subscribed: true } });
 });
 
-describe('SidebarBriefEntry', () => {
-  it('lists all ten, subscribed or not', async () => {
+describe('the sidebar row', () => {
+  it('shows one row, not ten', async () => {
     renderEntry();
+    await screen.findByText('브리프');
+    // Nothing else is rendered until the popover opens; that is the whole
+    // point of the change.
+    expect(screen.queryByText('AI 엔지니어링')).toBeNull();
+    expect(screen.queryByText('개발')).toBeNull();
+    expect(screen.queryAllByText('TBD')).toHaveLength(0);
+  });
+
+  it('carries the unread total on the row', async () => {
+    renderEntry();
+    // The count arrives with the query, not with the first paint.
+    expect(await screen.findByText('1')).toBeTruthy();
+    expect(screen.getByText('브리프').closest('button')).toBeTruthy();
+  });
+
+  it('offsets itself to match the mandala header below it', async () => {
+    renderEntry();
+    const btn = (await screen.findByText('브리프')).closest('button')!;
+    // The mandala section gets `px-1` twice (its nav, then its own div). This
+    // one is outside that nav, so it needs the extra inset itself. Without it
+    // the hover box is 4px wider on each side -- visible, and reported.
+    expect(btn.className).toContain('mx-1');
+    expect(btn.className).toContain('w-[calc(100%-0.5rem)]');
+    // The rest of the metrics are the mandala header's, unchanged.
+    for (const c of ['px-1.5', 'py-2', 'rounded-lg', 'text-[13px]', 'font-bold']) {
+      expect(btn.className).toContain(c);
+    }
+  });
+
+  it('renders nothing on the collapsed rail', () => {
+    const { container } = renderEntry(true);
+    expect(container.firstChild).toBeNull();
+  });
+});
+
+describe('the popover', () => {
+  it('lists all ten once opened', async () => {
+    renderEntry();
+    fireEvent.click(await screen.findByText('브리프'));
     await screen.findByText('AI 엔지니어링');
     for (const c of TEN) expect(screen.getByText(c.label)).toBeTruthy();
   });
 
   it('badges the nine with nothing published and makes them unclickable', async () => {
     renderEntry();
+    fireEvent.click(await screen.findByText('브리프'));
     await screen.findByText('AI 엔지니어링');
 
     expect(screen.getAllByText('TBD')).toHaveLength(9);
     const dev = screen.getByText('개발').closest('button')!;
     expect(dev.hasAttribute('disabled')).toBe(true);
-
     fireEvent.click(dev);
     expect(navigateMock).not.toHaveBeenCalled();
     expect(subscribeMock).not.toHaveBeenCalled();
   });
 
-  it('opens a subscribed brief', async () => {
+  it('opens a subscribed brief at its card grid', async () => {
     renderEntry();
+    fireEvent.click(await screen.findByText('브리프'));
     fireEvent.click(await screen.findByText('AI 엔지니어링'));
     expect(navigateMock).toHaveBeenCalledWith('/brief/c/ai-tech');
     expect(subscribeMock).not.toHaveBeenCalled();
@@ -126,37 +164,20 @@ describe('SidebarBriefEntry', () => {
       data: { categories: [cat('ai-tech', 'AI 엔지니어링', false, 2), ...TEN.slice(1)] },
     });
     renderEntry();
-
+    fireEvent.click(await screen.findByText('브리프'));
     fireEvent.click(await screen.findByText('AI 엔지니어링'));
     await waitFor(() => expect(subscribeMock).toHaveBeenCalledWith('ai-tech'));
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/brief/c/ai-tech'));
   });
 
-  it('shows the unread count on the row rather than a bare dot', async () => {
-    renderEntry();
-    await screen.findByText('AI 엔지니어링');
-    expect(screen.getByText('1')).toBeTruthy();
-    expect(screen.queryByLabelText('구독 중')).toBeNull();
-  });
-
-  it('shows the on-dot when a subscribed brief is fully read', async () => {
+  it('marks a fully-read subscription with the on-dot rather than a count', async () => {
     subscribedMock.mockResolvedValue({
       status: 'ok',
       data: { issues: [issue('ai-tech', 'a', true)], unread: 0 },
     });
     renderEntry();
+    fireEvent.click(await screen.findByText('브리프'));
     await screen.findByText('AI 엔지니어링');
     expect(screen.getByLabelText('구독 중')).toBeTruthy();
-  });
-
-  it('offers no way to create a brief — there are exactly ten', async () => {
-    renderEntry();
-    await screen.findByText('AI 엔지니어링');
-    expect(screen.queryByText('브리프 추가')).toBeNull();
-  });
-
-  it('renders nothing on the collapsed rail', () => {
-    const { container } = renderEntry(true);
-    expect(container.firstChild).toBeNull();
   });
 });
