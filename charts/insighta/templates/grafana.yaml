@@ -247,6 +247,16 @@ metadata:
     nginx.ingress.kubernetes.io/auth-type: basic
     nginx.ingress.kubernetes.io/auth-secret: {{ .Values.grafana.ingress.authSecret }}
     nginx.ingress.kubernetes.io/auth-realm: {{ .Values.grafana.ingress.authRealm | quote }}
+    # Inside the ladder, and well inside it. The application's 270s exists
+    # because scheduled jobs legitimately run for minutes; a dashboard query
+    # that takes even 60 is a broken query, and letting it hang for 270 only
+    # delays finding that out. Declared rather than left to the controller's
+    # 60s default so the value is a decision and not an accident -- and because
+    # a CI guard requires every Ingress in this chart to carry it, after
+    # annotating only one left the path the jobs actually use on the default.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "15"
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . }}
