@@ -184,6 +184,17 @@ grafana:
   # this application's ArgoCD project permits no cluster-scoped resources.
   priorityClassName: insighta-observability
   secretName: insighta-grafana-db
+  # Published under a path on the existing domain rather than a subdomain: no
+  # DNS record to create and the certificate already covers the host.
+  ingress:
+    enabled: false
+    path: /keel
+    # Basic auth at the ingress, not a Grafana login. The gate is then a single
+    # door in front of the whole thing, and Grafana's own login page -- a known
+    # target -- is never reachable to be attacked. Create with:
+    #   htpasswd -nbB <user> <password> | kubectl create secret generic ...
+    authSecret: keel-basic-auth
+    authRealm: "Keel"
   resources:
     requests:
       # Small on purpose. requests is what the scheduler reserves, and reserving
