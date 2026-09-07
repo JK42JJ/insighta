@@ -203,10 +203,10 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       # tests/unit is not run here and mostly does not pass locally either,
-      # which is a separate debt. tests/unit/monitor is included deliberately:
+      # which is a separate debt. tests/unit/keel is included deliberately:
       # it covers the checks that watch production, and a test CI never runs is
       # an alibi rather than a check.
-      - run: npx jest --testPathPattern='tests/(smoke|unit/monitor)'
+      - run: npx jest --testPathPattern='tests/(smoke|unit/keel)'
         env:
           # billing smoke tests import webhook-handler / system-settings,
           # which pull in config/index.ts zod validation (ENCRYPTION_SECRET

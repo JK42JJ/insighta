@@ -1,7 +1,7 @@
 /**
  * Daily spend digest — where the money went, by model and by stage.
  *
- *   npx tsx scripts/monitor/spend-digest.ts
+ *   npx tsx scripts/keel/spend-digest.ts
  *
  * Deliberately separate from the spend *alarm* in `checks.ts`. The alarm says
  * "you are approaching a ceiling" and fires on a transition; this is a report

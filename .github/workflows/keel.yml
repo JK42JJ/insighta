@@ -1,4 +1,4 @@
-name: Monitor
+name: Keel
 
 # Invariant checks, on a schedule.
 #
@@ -35,7 +35,7 @@ permissions:
 concurrency:
   # A run that overlaps its predecessor would write two ledger rows for the
   # same state and could alert twice on one transition.
-  group: monitor
+  group: keel
   cancel-in-progress: false
 
 jobs:
@@ -69,7 +69,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-west-2
-        run: npx tsx scripts/monitor/run.ts
+        run: npx tsx scripts/keel/run.ts
 
   digest:
     name: Spend digest
@@ -89,4 +89,4 @@ jobs:
           DATABASE_URL: ${{ secrets.DIRECT_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           SLACK_ALERT_WEBHOOK: ${{ secrets.SLACK_ALERT_WEBHOOK }}
-        run: npx tsx scripts/monitor/spend-digest.ts
+        run: npx tsx scripts/keel/spend-digest.ts

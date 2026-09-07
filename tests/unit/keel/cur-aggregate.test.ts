@@ -6,7 +6,7 @@
  * dependency with no tests is worse than twelve lines with them.
  */
 
-import { parseCsvLine, aggregateCur } from '../../../scripts/monitor/check-aws-cost';
+import { parseCsvLine, aggregateCur } from '../../../scripts/keel/check-aws-cost';
 
 describe('parseCsvLine', () => {
   it('splits a plain row', () => {

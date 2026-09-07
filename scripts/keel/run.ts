@@ -1,7 +1,7 @@
 /**
  * Runs every invariant check, records each, alerts on transitions.
  *
- *   npx tsx scripts/monitor/run.ts
+ *   npx tsx scripts/keel/run.ts
  *
  * Exits non-zero when any check is failing, so the workflow goes red and
  * GitHub's own notification carries the signal even before Slack is wired.

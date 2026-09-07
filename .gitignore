@@ -233,10 +233,10 @@ scripts/*
 # have never been reviewable.
 !scripts/ops/
 !scripts/ops/**
-# Invariant checks, run by the monitor workflow. An ignored monitor is a
-# monitor that exists on one laptop, which is the same as no monitor.
-!scripts/monitor/
-!scripts/monitor/**
+# Keel -- the invariant checks. An ignored check is one that exists on a
+# single laptop, which is the same as no check at all.
+!scripts/keel/
+!scripts/keel/**
 prompt/
 
 # Dev tool configs
