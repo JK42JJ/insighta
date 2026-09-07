@@ -48,6 +48,20 @@ spec:
             - name: probe
               containerPort: {{ .Values.worker.port }}
           env:
+            # The commit this deployment names, taken from the chart rather than
+            # the image. The Dockerfile bakes GIT_SHA too, but with
+            # `cache-from: type=gha` the ENV layer is served from cache and the
+            # value inside the image can be months old: on 2026-09-07 an image
+            # tagged ce3d211c reported 49639586, a commit from August. Measured,
+            # not suspected -- the ECR digests differ, so the image was rebuilt
+            # and only the baked value was stale.
+            #
+            # The tag is the commit, so a value read from the tag cannot
+            # disagree with what is deployed. It also makes the drift check
+            # honest: it compares this field against the same chart value, and
+            # anything else would be comparing a number to itself.
+            - name: GIT_SHA
+              value: {{ get ($.Values.images | default dict) "apiTag" | default "unknown" | quote }}
             - name: WORKER_PORT
               value: {{ .Values.worker.port | quote }}
             - name: REDIS_HOST
