@@ -1,10 +1,10 @@
 {
-  "uid": "insighta-invariants",
-  "title": "Insighta · 불변식",
+  "uid": "insighta-keel",
+  "title": "Insighta · Keel",
   "description": "무엇이 죽지 않았는데 무엇이 잘못됐는가. 검사는 30분마다 GitHub 러너에서 돌고, 결과가 error_events 에 쌓입니다.",
   "tags": [
     "insighta",
-    "monitor"
+    "keel"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
@@ -40,7 +40,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS \"실패\"\n  FROM (SELECT DISTINCT ON (stage) stage, severity\n          FROM error_events WHERE subsystem = 'monitor'\n         ORDER BY stage, created_at DESC) t\n WHERE severity <> 'info'"
+          "rawSql": "SELECT count(*) AS \"실패\"\n  FROM (SELECT DISTINCT ON (stage) stage, severity\n          FROM error_events WHERE subsystem = 'keel'\n         ORDER BY stage, created_at DESC) t\n WHERE severity <> 'info'"
         }
       ],
       "options": {
@@ -98,7 +98,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT max(created_at) AS \"마지막\"\n  FROM error_events WHERE subsystem = 'monitor'"
+          "rawSql": "SELECT max(created_at) AS \"마지막\"\n  FROM error_events WHERE subsystem = 'keel'"
         }
       ],
       "options": {
@@ -144,7 +144,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT DISTINCT ON (stage)\n       stage AS \"검사\",\n       CASE WHEN severity = 'info' THEN '정상' ELSE '실패' END AS \"상태\",\n       message AS \"내용\",\n       created_at AS \"마지막 검사\"\n  FROM error_events\n WHERE subsystem = 'monitor'\n ORDER BY stage, created_at DESC"
+          "rawSql": "SELECT DISTINCT ON (stage)\n       stage AS \"검사\",\n       CASE WHEN severity = 'info' THEN '정상' ELSE '실패' END AS \"상태\",\n       message AS \"내용\",\n       created_at AS \"마지막 검사\"\n  FROM error_events\n WHERE subsystem = 'keel'\n ORDER BY stage, created_at DESC"
         }
       ],
       "fieldConfig": {
@@ -213,7 +213,7 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT created_at AS time,\n       stage AS metric,\n       CASE WHEN severity = 'info' THEN 1 ELSE 0 END AS value\n  FROM error_events\n WHERE subsystem = 'monitor' AND $__timeFilter(created_at)\n ORDER BY created_at"
+          "rawSql": "SELECT created_at AS time,\n       stage AS metric,\n       CASE WHEN severity = 'info' THEN 1 ELSE 0 END AS value\n  FROM error_events\n WHERE subsystem = 'keel' AND $__timeFilter(created_at)\n ORDER BY created_at"
         }
       ],
       "options": {
@@ -276,7 +276,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH t AS (\n  SELECT stage, severity, message, created_at,\n         lag(severity) OVER (PARTITION BY stage ORDER BY created_at) AS prev\n    FROM error_events\n   WHERE subsystem = 'monitor' AND $__timeFilter(created_at)\n)\nSELECT created_at AS \"시각\", stage AS \"검사\",\n       CASE WHEN severity = 'info' THEN '해소' ELSE '발생' END AS \"전환\",\n       message AS \"내용\"\n  FROM t\n WHERE prev IS NOT NULL AND prev <> severity\n ORDER BY created_at DESC"
+          "rawSql": "WITH t AS (\n  SELECT stage, severity, message, created_at,\n         lag(severity) OVER (PARTITION BY stage ORDER BY created_at) AS prev\n    FROM error_events\n   WHERE subsystem = 'keel' AND $__timeFilter(created_at)\n)\nSELECT created_at AS \"시각\", stage AS \"검사\",\n       CASE WHEN severity = 'info' THEN '해소' ELSE '발생' END AS \"전환\",\n       message AS \"내용\"\n  FROM t\n WHERE prev IS NOT NULL AND prev <> severity\n ORDER BY created_at DESC"
         }
       ],
       "fieldConfig": {
@@ -345,7 +345,7 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT created_at AS time, (context->>'total')::float AS \"월 누적\"\n  FROM error_events\n WHERE subsystem = 'monitor' AND stage = 'aws-cost'\n   AND context ? 'total' AND $__timeFilter(created_at)\n ORDER BY created_at"
+          "rawSql": "SELECT created_at AS time, (context->>'total')::float AS \"월 누적\"\n  FROM error_events\n WHERE subsystem = 'keel' AND stage = 'aws-cost'\n   AND context ? 'total' AND $__timeFilter(created_at)\n ORDER BY created_at"
         }
       ],
       "fieldConfig": {

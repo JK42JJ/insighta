@@ -22,7 +22,7 @@
 import { PrismaClient } from '@prisma/client';
 
 /** Rows this module writes and reads are tagged with this subsystem. */
-const SUBSYSTEM = 'monitor';
+const SUBSYSTEM = 'keel';
 
 export interface CheckResult {
   /** Stable identifier, also the `stage` column. Do not rename casually --
