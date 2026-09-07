@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useLocation, useNavigate, useSearchParams, useMatch } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -131,6 +132,9 @@ export function Sidebar({
   const briefSlug = briefMatch?.params.slug;
   const isBriefRoute = Boolean(briefSlug) && briefSlug !== 'c';
   const briefNote = useBriefNote(isBriefRoute ? briefSlug : undefined);
+  // Held here, not in the contents panel: `useBriefNote` refetches and the
+  // issue changes identity, which resets a `useState` inside that component.
+  const [activeBriefEntry, setActiveBriefEntry] = useState<string | null>(null);
 
   const updateSectorNames = useUpdateSectorNames();
 
@@ -335,6 +339,8 @@ export function Sidebar({
               issue={briefNote.issue}
               loading={briefNote.loading}
               collapsed={collapsed}
+              active={activeBriefEntry}
+              onSelect={setActiveBriefEntry}
             />
           </nav>
         </div>

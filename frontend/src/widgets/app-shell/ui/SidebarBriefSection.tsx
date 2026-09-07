@@ -23,12 +23,23 @@
 import { useMemo } from 'react';
 
 import type { IssueDocument } from '@/features/newsletter-note/lib/issue-types';
+import { tocShortLabel } from '@/pages/learning/lib/toc-label';
 import { cn } from '@/shared/lib/utils';
 
 interface SidebarBriefSectionProps {
   issue: IssueDocument | null;
   loading: boolean;
   collapsed: boolean;
+  /**
+   * Which entry the reader jumped to, owned by the sidebar rather than here.
+   *
+   * The note keeps the same thing in `useLearningStore` for the same reason:
+   * `useBriefNote` refetches, the issue object changes identity, and a
+   * `useState` in this component loses the selection on the re-render -- the
+   * gold marker appeared and vanished within a frame.
+   */
+  active: string | null;
+  onSelect: (label: string) => void;
 }
 
 interface Entry {
@@ -100,7 +111,13 @@ function scrollToHeading(label: string): void {
   }
 }
 
-export function SidebarBriefSection({ issue, loading, collapsed }: SidebarBriefSectionProps) {
+export function SidebarBriefSection({
+  issue,
+  loading,
+  collapsed,
+  active,
+  onSelect,
+}: SidebarBriefSectionProps) {
   const entries = useMemo(() => (issue ? toEntries(issue) : []), [issue]);
 
   if (collapsed) return null;
@@ -116,40 +133,51 @@ export function SidebarBriefSection({ issue, loading, collapsed }: SidebarBriefS
 
   return (
     <div className="px-1 flex flex-col">
-      <div className="px-2.5 pb-3 pt-1">
-        <div className="text-[14px] font-bold leading-snug text-sidebar-foreground">
+      <div className="px-2 py-2">
+        <h3 className="truncate text-[14px] font-bold leading-snug text-sidebar-foreground">
           {issue.category} {issue.issueLabel}
-        </div>
+        </h3>
         {subtitle && (
-          <div className="mt-1 text-[11.5px] leading-relaxed text-sidebar-foreground/50">
-            {subtitle}
-          </div>
+          <p className="mt-0.5 truncate text-[13px] text-sidebar-foreground/50">{subtitle}</p>
         )}
       </div>
 
       <div className="border-t border-sidebar-border/50 pt-1.5">
         {entries.map((e, i) => {
           const showKicker = e.kicker && e.kicker !== entries[i - 1]?.kicker;
+          const isActive = active === e.label;
           return (
-            <div key={`${e.label}-${i}`}>
+            <div key={`${e.label}-${i}`} className="mb-0.5">
+              {/* Chapter row: bullet + uppercase kicker, exactly the note's. */}
               {showKicker && (
-                <div className="px-2.5 pb-0.5 pt-2.5 text-[10.5px] font-semibold uppercase tracking-widest text-sidebar-foreground/45">
-                  {e.kicker}
+                <div className="group flex w-full items-center gap-2 px-2 py-1 text-left">
+                  <span className="shrink-0 text-[11px] leading-[1.5] text-sidebar-foreground/35">
+                    •
+                  </span>
+                  <span className="flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.10em] text-sidebar-foreground/55">
+                    {tocShortLabel(e.kicker!)}
+                  </span>
                 </div>
               )}
-              <button
-                type="button"
-                onClick={() => scrollToHeading(e.label)}
-                className={cn(
-                  'w-full rounded-md px-2.5 py-1.5 text-left text-[13px] leading-snug',
-                  'transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                  e.depth === 0
-                    ? 'font-medium text-sidebar-foreground/80'
-                    : 'text-sidebar-foreground/65'
-                )}
-              >
-                {e.label}
-              </button>
+              <ul className={cn(showKicker && 'ml-3.5 pt-0.5')}>
+                <li
+                  onClick={() => {
+                    onSelect(e.label);
+                    scrollToHeading(e.label);
+                  }}
+                  // Size and colour are both `text-*`, so the order within each
+                  // branch is what `twMerge` keeps. Same ordering as the note's
+                  // TOC, which is where this markup comes from.
+                  className={cn(
+                    'cursor-pointer truncate pl-3.5 py-1.5 leading-[1.5] transition-colors',
+                    isActive
+                      ? 'border-l-2 border-sidebar-primary text-[14px] font-medium text-sidebar-primary'
+                      : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/50 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
+                  )}
+                >
+                  {tocShortLabel(e.label)}
+                </li>
+              </ul>
             </div>
           );
         })}
