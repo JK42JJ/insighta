@@ -136,6 +136,18 @@ spec:
             # way ArgoCD is. Anonymous access with the Viewer role means no
             # password to manage and no login page to get wrong -- the SSH key
             # is the authentication, and it is already the one that matters.
+            {{- if .Values.grafana.ingress.enabled }}
+            # Served under a path, so Grafana has to know its own address or it
+            # builds redirects and asset URLs against the wrong root and the
+            # page loads without stylesheets.
+            - name: GF_SERVER_ROOT_URL
+              value: "https://{{ first (include "insighta.ingressHosts" . | fromYamlArray) }}{{ .Values.grafana.ingress.path }}/"
+            - name: GF_SERVER_SERVE_FROM_SUB_PATH
+              value: "true"
+            {{- end }}
+            # Anonymous, with the gate one layer out at the ingress. Grafana's
+            # own login page is a known target and is never reachable here;
+            # whoever passed basic auth is a Viewer and can change nothing.
             - name: GF_AUTH_ANONYMOUS_ENABLED
               value: "true"
             - name: GF_AUTH_ANONYMOUS_ORG_ROLE
@@ -213,4 +225,63 @@ spec:
   selector:
     {{- include "insighta.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: grafana
+{{- if .Values.grafana.ingress.enabled }}
+---
+# A separate Ingress, because this path needs annotations the application's must
+# not have: basic auth in front of everything here, and none of it in front of
+# the app. Two Ingresses on the same host are fine while the paths differ --
+# what does not merge is the same host and the same path, which is why /api
+# already lives in its own object.
+#
+# No cert-manager annotation. The certificate for these hosts already exists and
+# is renewed by the main Ingress; asking for it twice would have two objects
+# racing over one Secret.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "insighta.fullname" . }}-keel
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: {{ .Values.grafana.ingress.authSecret }}
+    nginx.ingress.kubernetes.io/auth-realm: {{ .Values.grafana.ingress.authRealm | quote }}
+    # Inside the ladder, and well inside it. The application's 270s exists
+    # because scheduled jobs legitimately run for minutes; a dashboard query
+    # that takes even 60 is a broken query, and letting it hang for 270 only
+    # delays finding that out. Declared rather than left to the controller's
+    # 60s default so the value is a decision and not an accident -- and because
+    # a CI guard requires every Ingress in this chart to carry it, after
+    # annotating only one left the path the jobs actually use on the default.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "15"
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- $hosts := include "insighta.ingressHosts" . | fromYamlArray }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        {{- range $hosts }}
+        - {{ . }}
+        {{- end }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    {{- range $host := $hosts }}
+    - host: {{ $host }}
+      http:
+        paths:
+          - path: {{ $.Values.grafana.ingress.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "insighta.fullname" $ }}-grafana
+                port:
+                  number: 3000
+    {{- end }}
+{{- end }}
 {{- end }}

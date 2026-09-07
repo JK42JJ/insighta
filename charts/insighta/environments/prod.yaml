@@ -185,3 +185,5 @@ ingress:
 # (scripts/ops/grafana-ui.sh), never through the ingress.
 grafana:
   enabled: true
+  ingress:
+    enabled: true
