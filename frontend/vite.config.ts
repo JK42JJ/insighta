@@ -87,7 +87,20 @@ export default defineConfig(({ mode }) => {
           // (owner-reported, 2026-07-14). Hard navigations to /learning hit
           // the network for fresh index.html; in-app moves are client-side
           // routing and never reach the SW navigation route.
-          navigateFallbackDenylist: [/^\/api\//, /^\/mobile(\/|$)/, /^\/dial(\/|$)/, /^\/learning\//, /\.[^/]+$/],
+          // `/keel` is Grafana, served by a separate Ingress on this same
+          // host. Without it here the service worker answers the navigation
+          // from its cache, the SPA router finds no such route, and the page
+          // is the app's own 404 -- the request never reaches Grafana at all.
+          // Measured 2026-09-07: the browser sat on https://insighta.one/keel/
+          // and issued /api/v1/mandalas/list, which is the app booting.
+          navigateFallbackDenylist: [
+            /^\/api\//,
+            /^\/keel(\/|$)/,
+            /^\/mobile(\/|$)/,
+            /^\/dial(\/|$)/,
+            /^\/learning\//,
+            /\.[^/]+$/,
+          ],
           // 2026-04-22 (Phase 2 re-scoped): removed the `/api/*`
           // StaleWhileRevalidate runtime cache. Serving stale API
           // responses is incorrect for mandala-create / wizard-stream
