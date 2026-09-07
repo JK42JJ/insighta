@@ -1,0 +1,92 @@
+name: Monitor
+
+# Invariant checks, on a schedule.
+#
+# These watch the failure mode this service actually has: something is wrong
+# and nothing died. Drift between the chart and the running image went eight
+# days unnoticed; the Mac Mini transcript service was down for forty-four; a
+# day cost $36.18 across calls that all succeeded. Not one of those moves a
+# CPU graph, which is why the first monitoring here is not a dashboard.
+#
+# Everything runs from a GitHub runner, which cannot reach the cluster -- port
+# 22 is restricted by source address and a runner's address changes every run.
+# So nothing uses kubectl. The public `/health` endpoint reports the commit it
+# was built from, the database answers for spend and freshness, and AWS
+# delivers its own billing data to S3. All three are reachable from anywhere.
+
+on:
+  schedule:
+    # Every thirty minutes. Chosen against the grace window in the drift check:
+    # a deploy is legitimately mid-flight for a few minutes, and a check that
+    # ran more often than the thing it watches would only add noise.
+    - cron: '*/30 * * * *'
+    # Daily spend digest, 09:00 KST.
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: 'Also send the spend digest'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # A run that overlaps its predecessor would write two ledger rows for the
+  # same state and could alert twice on one transition.
+  group: monitor
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Invariant checks
+    # The digest cron does its own thing below; this job is for every other
+    # trigger.
+    if: github.event.schedule != '0 0 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The drift check reads when the chart file last moved, to tell a
+          # deploy in progress from a deploy that stalled. A shallow clone has
+          # no such history and the check degrades to alerting immediately.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npx prisma generate
+
+      - name: Run checks
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          SLACK_ALERT_WEBHOOK: ${{ secrets.SLACK_ALERT_WEBHOOK }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-west-2
+        run: npx tsx scripts/monitor/run.ts
+
+  digest:
+    name: Spend digest
+    if: github.event.schedule == '0 0 * * *' || inputs.digest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+
+      - name: Send the digest
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          SLACK_ALERT_WEBHOOK: ${{ secrets.SLACK_ALERT_WEBHOOK }}
+        run: npx tsx scripts/monitor/spend-digest.ts
