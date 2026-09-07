@@ -44,10 +44,22 @@ function doc(over: Partial<IssueDocument> = {}): IssueDocument {
   } as IssueDocument;
 }
 
-function renderSection(over: Partial<IssueDocument> = {}, loading = false) {
-  return render(
-    <SidebarBriefSection issue={loading ? null : doc(over)} loading={loading} collapsed={false} />
+function renderSection(
+  over: Partial<IssueDocument> = {},
+  loading = false,
+  active: string | null = null
+) {
+  const onSelect = vi.fn();
+  const r = render(
+    <SidebarBriefSection
+      issue={loading ? null : doc(over)}
+      loading={loading}
+      collapsed={false}
+      active={active}
+      onSelect={onSelect}
+    />
   );
+  return { ...r, onSelect };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -70,7 +82,8 @@ describe('SidebarBriefSection', () => {
 
   it('lists the sections in the order the page assembles them', () => {
     renderSection();
-    const labels = [...document.querySelectorAll('button')].map((b) => b.textContent);
+    // Entries are `li` now, matching the note's TOC markup.
+    const labels = [...document.querySelectorAll('li')].map((b) => b.textContent);
     expect(labels).toEqual([
       '설정 파일 이야기',
       '결제 승인 이야기',
@@ -110,7 +123,10 @@ describe('SidebarBriefSection', () => {
     renderSection();
     // Both the stub heading and the sidebar entry carry this text, which is
     // the point -- the entry finds the heading by matching it.
-    fireEvent.click(screen.getByRole('button', { name: '이번 주 추천' }));
+    const entry = [...document.querySelectorAll('li')].find(
+      (li) => li.textContent?.trim() === '이번 주 추천'
+    )!;
+    fireEvent.click(entry);
     // Instant: `smooth` on this container is a no-op in the browser -- asked
     // for 3,000px and `scrollTop` stayed 0, with reduced-motion off.
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
@@ -118,12 +134,72 @@ describe('SidebarBriefSection', () => {
   });
 
   it('renders nothing on the collapsed rail', () => {
-    const { container } = render(<SidebarBriefSection issue={doc()} loading={false} collapsed />);
+    const { container } = render(
+      <SidebarBriefSection
+        issue={doc()}
+        loading={false}
+        collapsed
+        active={null}
+        onSelect={() => undefined}
+      />
+    );
     expect(container.firstChild).toBeNull();
   });
 
   it('says it is loading rather than showing an empty shell', () => {
     renderSection({}, true);
     expect(screen.getByText('불러오는 중…')).toBeTruthy();
+  });
+
+  it('keeps every entry on one line', () => {
+    // Long titles wrapped to two and three lines, turning the contents into a
+    // wall of text. The note truncates; so does this.
+    renderSection();
+    for (const li of document.querySelectorAll('li')) {
+      expect(li.className).toContain('truncate');
+    }
+  });
+
+  it('shortens a title at its lead clause, the way the note does', () => {
+    renderSection({
+      stories: [
+        {
+          kicker: '신뢰 경계',
+          title: '설정 파일 이야기: 저장소를 열기만 해도 실행됩니다',
+          blocks: [{ type: 'p', html: 'a' }],
+        },
+      ],
+    } as Partial<IssueDocument>);
+    expect(screen.getByText('설정 파일 이야기')).toBeTruthy();
+    expect(screen.queryByText(/저장소를 열기만 해도/)).toBeNull();
+  });
+
+  it('marks the selected entry with the gold bar the note uses', () => {
+    renderSection({}, false, '용어');
+    const sel = [...document.querySelectorAll('li')].find(
+      (li) => li.textContent?.trim() === '용어'
+    )!;
+    // `sidebar-primary` is gold inside `.note-mode`. Both the 2px bar and the
+    // text colour come from it, and the size class must not merge it away.
+    expect(sel.className).toContain('border-l-2');
+    expect(sel.className).toContain('border-sidebar-primary');
+    expect(sel.className).toContain('text-sidebar-primary');
+
+    const other = [...document.querySelectorAll('li')].find(
+      (li) => li.textContent?.trim() === '출처'
+    )!;
+    expect(other.className).not.toContain('text-sidebar-primary');
+  });
+
+  it('reports the click upward rather than holding the selection itself', () => {
+    // The issue object changes identity whenever `useBriefNote` refetches, so a
+    // `useState` here loses the selection on that re-render -- the gold marker
+    // appeared and vanished within a frame. The sidebar owns it.
+    const { onSelect } = renderSection();
+    const entry = [...document.querySelectorAll('li')].find(
+      (li) => li.textContent?.trim() === '용어'
+    )!;
+    fireEvent.click(entry);
+    expect(onSelect).toHaveBeenCalledWith('용어');
   });
 });
