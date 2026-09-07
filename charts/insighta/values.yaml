@@ -180,6 +180,9 @@ grafana:
   # Holds GRAFANA_DB_{HOST,USER,NAME,PASSWORD} for a read-only role. Not the
   # application's credential: a dashboard has no reason to be able to write, and
   # what it reads is the record of what went wrong.
+  # Owned by charts/bootstrap/priority-classes.yaml. Referenced by name because
+  # this application's ArgoCD project permits no cluster-scoped resources.
+  priorityClassName: insighta-observability
   secretName: insighta-grafana-db
   resources:
     requests:

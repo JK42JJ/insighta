@@ -12,27 +12,15 @@
 #
 #   limits          -> cgroup v2 memory.max. Exceeding it kills this container
 #                      and nothing else. The kernel enforces it.
-#   priorityClass   -> negative. Under node pressure the kubelet evicts by
-#                      request overage, then by priority; at -100 against the
-#                      application's 0, this leaves first.
+#   priorityClass   -> negative, defined in charts/bootstrap. Under node
+#                      pressure the kubelet evicts by request overage, then by
+#                      priority; at -100 against the application's 0, this
+#                      leaves first.
 #   no volumes      -> datasource and dashboards are ConfigMaps, so there is no
 #                      PVC and nothing to grow on a disk already at 81%.
 #
 # Losing the pod loses nothing. It comes back with the same dashboards because
 # they live in git.
----
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: {{ include "insighta.fullname" . }}-observability
-  labels:
-    {{- include "insighta.labels" . | nindent 4 }}
-# Negative, and deliberately far from zero. Anything serving traffic runs at the
-# default 0; a small negative number would still be a coin flip against a pod
-# that happens to be further over its request.
-value: -100
-globalDefault: false
-description: "Observability tooling. Evicted and preempted before anything serving traffic."
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -126,7 +114,12 @@ spec:
         # and this makes "merged" and "visible" the same moment.
         checksum/dashboards: {{ .Files.Get "dashboards/invariants.json" | sha256sum }}
     spec:
-      priorityClassName: {{ include "insighta.fullname" . }}-observability
+      # Defined in charts/bootstrap/priority-classes.yaml, not here.
+      # PriorityClass is cluster-scoped and this application's ArgoCD project
+      # permits no cluster-scoped resources -- one of them in the manifest
+      # fails the whole sync, which is how a dashboard blocked an api rollout
+      # on 2026-09-07. Cluster-level objects belong to the root application.
+      priorityClassName: {{ .Values.grafana.priorityClassName }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 472
