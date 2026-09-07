@@ -1,0 +1,21 @@
+# Cluster-scoped priorities, owned by the root application.
+#
+# These do not live in charts/insighta because that application's ArgoCD project
+# has an empty clusterResourceWhitelist: a single cluster-scoped object in its
+# manifest fails the entire sync. On 2026-09-07 a PriorityClass shipped inside
+# that chart blocked an api and worker rollout that had nothing to do with it --
+# "one or more synchronization tasks are not valid" stops everything, not just
+# the offending resource.
+#
+# The root application runs in the default project, which permits {group: *,
+# kind: *}. Cluster-level objects belong here.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: insighta-observability
+# Negative, and deliberately far from zero. Anything serving traffic runs at the
+# default 0; a small negative number would still be close to a coin flip against
+# a pod that happens to be further over its request.
+value: -100
+globalDefault: false
+description: "Observability tooling. Evicted and preempted before anything serving traffic."
