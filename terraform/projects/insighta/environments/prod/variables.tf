@@ -54,6 +54,12 @@ variable "backup_bucket_name" {
   default     = "insighta-backups"
 }
 
+variable "cost_report_bucket_name" {
+  description = "Bucket AWS delivers the Cost and Usage Report to. Separate from backups: a billing service writes here, and that grant should not sit on a bucket holding database dumps."
+  type        = string
+  default     = "insighta-cost-reports"
+}
+
 variable "enable_prod_instance" {
   description = <<-EOT
     Create the original production EC2 instance. Default true so adding the
