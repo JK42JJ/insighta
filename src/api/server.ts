@@ -28,6 +28,7 @@ import { searchRoutes } from './routes/search';
 import { llmRoutes } from './routes/llm';
 import { adminRoutes } from './routes/admin';
 import { subscriptionRoutes } from './routes/subscriptions';
+import { getGitSha } from '../config/config-change-events';
 import { curationRoutes } from './routes/curations';
 import { snapshotRoutes } from './routes/snapshots';
 import { botRoutes } from './routes/bot';
@@ -214,6 +215,10 @@ export async function buildServer() {
             timestamp: { type: 'string', format: 'date-time' },
             uptime: { type: 'number' },
             version: { type: 'string' },
+            // The commit this image was built from, so "what is production
+            // running" is answerable without cluster access. Null in local
+            // development, where nothing baked a SHA in.
+            sha: { type: ['string', 'null'] },
           },
         },
       },
@@ -224,6 +229,11 @@ export async function buildServer() {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         version: process.env['npm_package_version'] || '1.0.0',
+        // Deliberately the commit and nothing else. The flag fingerprint that
+        // sits beside this in the admin route stays there: the repository is
+        // public, so a commit SHA reveals nothing a reader could not already
+        // clone, while a configuration fingerprint would.
+        sha: getGitSha(),
       });
     },
   });
