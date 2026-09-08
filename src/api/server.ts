@@ -394,7 +394,15 @@ export async function buildServer() {
               signal: ctl.signal,
               headers: { 'x-transcript-token': proxy.token },
             });
-            const reached = res.status !== 401 && res.status < 500;
+            // 500 is the proxy answering, not the proxy failing. It forwards
+            // YouTube's own refusal -- "no transcripts available in ko,
+            // available: en, ja" -- and the extractor handles that by trying
+            // the next language. Treating it as unreachable reported a
+            // perfectly healthy Azure proxy as down, twice, on 2026-09-08.
+            //
+            // Only two things mean the proxy is not usable: 401, which is the
+            // credential, and a transport error, which never reaches here.
+            const reached = res.status !== 401;
             return {
               name: proxy.name,
               ok: reached,
