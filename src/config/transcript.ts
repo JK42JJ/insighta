@@ -4,7 +4,8 @@
  * EC2 us-west-2 outbound to YouTube is rate-limited / returns false
  * "Transcript is disabled". The Mac Mini proxy (KR residential ISP IP)
  * is the primary transcript fetcher; EC2 falls back to direct
- * youtube-transcript only when the proxy is unreachable.
+ * There is no direct-to-YouTube fallback: an unreachable proxy means the
+ * extraction fails, which is the correct outcome.
  *
  * Both values are optional — if unset the consumer treats the Mac Mini
  * path as disabled and uses the direct fallback unconditionally.
