@@ -113,6 +113,14 @@ spec:
         # polls, but a ConfigMap update can take a minute to reach the volume
         # and this makes "merged" and "visible" the same moment.
         checksum/dashboards: {{ .Files.Get "dashboards/invariants.json" | sha256sum }}
+        # The provisioning script's checksum, on a resource ArgoCD actually
+        # compares. Hooks are not part of the desired-state comparison, so a
+        # commit that changes only the PreSync script leaves the application
+        # Synced, no sync runs, and the hook never executes -- the fix sits in
+        # git looking deployed. Observed twice on 2026-09-08 before it was
+        # understood. This makes a script change a change to something ArgoCD
+        # is watching.
+        checksum/provision: {{ .Files.Get "files/keel-provision.js" | sha256sum }}
     spec:
       # Defined in charts/bootstrap/priority-classes.yaml, not here.
       # PriorityClass is cluster-scoped and this application's ArgoCD project
