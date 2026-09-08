@@ -192,10 +192,12 @@ export async function checkLlmSpend(): Promise<CheckResult> {
 /**
  * Each surface that should be producing, reported separately.
  *
- * 2026-07-23 to 2026-09-05 the Mac Mini transcript service was down for
- * forty-four days. Probing the host is not possible from here -- it sits behind
- * a Tailscale address the cluster cannot resolve -- so this measures the
- * outcome instead: is anything still being written.
+ * pipeline_events stopped on 2026-07-22 and nothing said so for forty-seven
+ * days. The transcript service on the Mac Mini was not the reason -- it had
+ * been running for eighty-one days when this was measured -- so probing that
+ * host would have reported healthy throughout. What stopped was the collector
+ * that calls the internal route, and the only thing that shows it is the
+ * outcome: is anything still being written.
  *
  * Split by surface rather than reduced to one timestamp. A single "newest row
  * anywhere" is green while the transcript path is dead, because chat traffic
@@ -250,11 +252,16 @@ export async function checkPipelineFreshness(): Promise<CheckResult> {
     return { check, ok: true, detail: parts.join(' · '), context: ctx };
   }
 
-  // Naming the dependency turns a red flag into a next step. The transcript
-  // service is reached at a Tailscale address and the cluster has no Tailscale,
-  // which is why this surface in particular goes quiet and stays quiet.
+  // Naming the dependency turns a red flag into a next step, and naming the
+  // wrong one sends the reader the wrong way -- this hint said "the cluster
+  // cannot reach the Mac Mini", which is true and is not the cause. The traffic
+  // runs the other way: the collector on the Mac Mini polls
+  // /api/v1/internal/transcript/candidates and posts back, and the route
+  // handler is the only writer of pipeline_events in the codebase. So this
+  // surface going quiet means the collector stopped calling, not that the
+  // cluster stopped reaching.
   const hint = stale.includes('transcript pipeline')
-    ? ' — transcript ingestion writes this; the cluster cannot reach the Mac Mini at its Tailscale address'
+    ? ' — only the internal transcript route writes this, and the Mac Mini collector is what calls it'
     : '';
   return { check, ok: false, detail: `${parts.join(' · ')}${hint}`, context: ctx };
 }
