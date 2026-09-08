@@ -8,7 +8,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "refresh": "1m",
   "time": {
     "from": "now-7d",
@@ -861,6 +861,335 @@
           "noValue": "이 기간에 상호작용 없음"
         },
         "overrides": []
+      }
+    },
+    {
+      "id": 30,
+      "title": "뉴스레터 구독자",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 46
+      },
+      "description": "발행 전 기준선. 발행 뒤 이 선이 꺾이는지가 첫 신호입니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*)::float8 AS \"구독자\" FROM newsletter_subscriptions"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 31,
+      "title": "발행된 호",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 46
+      },
+      "description": "누적 발행 수",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*)::float8 AS \"호\" FROM newsletter_issues"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 32,
+      "title": "열람",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 46
+      },
+      "description": "고유 (사용자, 호) 조합. 같은 사람이 같은 호를 두 번 열어도 하나입니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*)::float8 AS \"열람\" FROM newsletter_reads"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 33,
+      "title": "해지",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 46
+      },
+      "description": "구독자 수만 보면 늘어난 것처럼 보입니다. 해지는 따로 세야 보입니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*)::float8 AS \"해지\" FROM newsletter_unsubscribes"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 34,
+      "title": "구독 · 해지 (일별)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 50
+      },
+      "description": "발행일에 시간 범위를 맞추면 전후 비교가 됩니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('day', created_at) AS time, '구독' AS metric, count(*) AS value\n  FROM newsletter_subscriptions WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('day', created_at) AS time, '해지' AS metric, count(*) AS value\n  FROM newsletter_unsubscribes WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 12,
+            "lineWidth": 2
+          },
+          "noValue": "이 기간에 구독·해지 없음"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 35,
+      "title": "호별 열람률",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 50
+      },
+      "description": "열람 수만으로는 호끼리 비교가 안 됩니다. 구독자 대비여야 늘었는지 줄었는지 말할 수 있습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT i.slug AS \"호\",\n       i.created_at AS \"발행\",\n       count(r.user_id) AS \"열람\",\n       round(100.0 * count(r.user_id)\n             / NULLIF((SELECT count(*) FROM newsletter_subscriptions), 0), 1) AS \"열람률\"\n  FROM newsletter_issues i\n  LEFT JOIN newsletter_reads r ON r.slug = i.slug\n GROUP BY i.slug, i.created_at\n ORDER BY i.created_at DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          },
+          "noValue": "발행된 호 없음"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "열람률"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          }
+        ]
       }
     }
   ]

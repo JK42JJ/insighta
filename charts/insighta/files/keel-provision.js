@@ -49,6 +49,11 @@ const READ_TABLES = [
   'card_interactions',
   'video_summaries',
   'note_documents',
+  'newsletter_subscriptions',
+  'newsletter_unsubscribes',
+  'newsletter_issues',
+  'newsletter_logs',
+  'newsletter_reads',
 ];
 
 const SA = '/var/run/secrets/kubernetes.io/serviceaccount';
