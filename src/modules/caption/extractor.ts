@@ -1,23 +1,16 @@
 /**
  * Caption Extractor
  *
- * Extracts publicly available captions/subtitles from YouTube videos
- * using the youtube-transcript npm package (Innertube API).
+ * Extracts publicly available captions through the Webshare-backed transcript
+ * proxies, and only through them. This module holds no YouTube client: calling
+ * YouTube from the cluster is what gets the account blocked, and a direct
+ * fallback here is a rule violation waiting for the first person to click.
  *
  * LEGAL: Transcripts are NOT persisted on the server.
  * Only LLM-generated summaries are stored. Raw transcripts
  * may be returned to the client for local caching only.
  */
 
-// Dynamic import of the ESM build subpath.
-// The package `main` (youtube-transcript.common.js) is CJS-bodied yet the
-// package.json declares `"type": "module"`, so importing the bare package
-// name throws "exports is not defined in ES module scope". Importing the
-// `.esm.js` build directly sidesteps the broken main entry.
-async function loadFetchTranscript() {
-  const mod = await import('youtube-transcript/dist/youtube-transcript.esm.js');
-  return mod.fetchTranscript;
-}
 import { logger } from '../../utils/logger';
 import { loadTranscriptConfig } from '@/config/transcript';
 
@@ -25,9 +18,10 @@ import { loadTranscriptConfig } from '@/config/transcript';
 // limited / returns false "Transcript is disabled" — verified by apples-
 // to-apples test (same library, same call, same video; KR ISP IP succeeds
 // from Mac Mini, AWS us-west-2 returns the disabled error). When
-// MAC_MINI_TRANSCRIPT_URL is set, we forward the fetch to Mac Mini over
-// Tailscale; the EC2 caption-extractor falls back to direct youtube-
-// transcript only if the proxy is unreachable (defence in depth).
+// MAC_MINI_TRANSCRIPT_URL is set, we forward the fetch there. There is no
+// fallback: if every proxy is unreachable the extraction fails, which is the
+// correct outcome. Tailscale is management-only and must not carry service
+// traffic -- the proxy address has to be one the cluster reaches directly.
 const TRANSCRIPT_CONFIG = loadTranscriptConfig();
 const PROXY_TIMEOUT_MS = 30_000;
 
@@ -131,7 +125,7 @@ import type {
 export class CaptionExtractor {
   /**
    * Extract captions for a video (in-memory only).
-   * Uses youtube-transcript (public caption API) exclusively.
+   * Fetched through the configured proxies exclusively.
    * Returns transcript data without persisting to server DB.
    */
   public async extractCaptions(
@@ -168,52 +162,44 @@ export class CaptionExtractor {
           break;
         }
 
-        // Path 2 — youtube-transcript direct (fallback). Used when Mac
-        // Mini proxy env is unset OR proxy is unreachable. Known to fail
-        // on EC2 outbound but retained as defence in depth (e.g. for
-        // local dev or if the IP block is later lifted).
-        let lastErr: unknown = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const transcript = await (await loadFetchTranscript())(youtubeId, { lang });
-            if (transcript && transcript.length > 0) {
-              segments = transcript.map((item) => ({
-                text: item.text,
-                start: item.offset / 1000,
-                duration: item.duration / 1000,
-              }));
-              resolvedLang = lang;
-              lastErr = null;
-              break;
-            }
-          } catch (err) {
-            lastErr = err;
-            if (attempt === 0) {
-              await new Promise((r) => setTimeout(r, 300));
-            }
-          }
-        }
-        if (segments.length > 0) break;
-        if (lastErr) {
-          const errMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
-          logger.warn('youtube-transcript failed after retry', { youtubeId, lang, error: errMsg });
-        }
+        // There is no second path, and that is the rule rather than an
+        // omission. Captions are fetched through the Webshare-backed proxies or
+        // not at all: calling YouTube from this pod is what gets the account
+        // blocked, and "it fails on EC2 anyway" is not a reason to keep the
+        // call -- a request that is refused was still a request.
+        //
+        // What used to be here retried youtube-transcript twice per language,
+        // so a video with both proxies down made four direct calls. It fired
+        // only because nobody had clicked, not because it was safe.
+        logger.warn('captions: no proxy reached YouTube', {
+          videoId: youtubeId,
+          language: lang,
+          proxies: TRANSCRIPT_CONFIG.proxies.map((p) => p.name),
+        });
       }
 
       if (segments.length === 0) {
-        logger.warn('No publicly available captions found', { videoId: youtubeId });
+        // Distinguish "nothing is configured" from "nothing answered". Both end
+        // with no captions, and only one of them is fixed by restarting a host.
+        const configured = TRANSCRIPT_CONFIG.proxies.length > 0;
+        logger.warn(
+          configured
+            ? 'captions: proxies configured but none reached YouTube'
+            : 'captions: no transcript proxy configured',
+          { videoId: youtubeId }
+        );
         return {
           success: false,
           videoId: youtubeId,
           language: LANG_PRIORITY[0]!,
-          error: 'No publicly available captions found',
+          error: configured ? 'transcript proxies unreachable' : 'no transcript proxy configured',
         };
       }
 
       logger.info('Captions fetched (in-memory only)', {
         youtubeId,
         segments: segments.length,
-        source: 'youtube-transcript',
+        source: 'proxy',
         language: resolvedLang,
       });
 
@@ -246,28 +232,31 @@ export class CaptionExtractor {
   // Language detection
   // --------------------------------------------------------------------------
 
+  /**
+   * Which of the supported languages this video actually has captions for.
+   *
+   * The previous implementation asked YouTube directly, once per language, for
+   * seven languages -- seven direct calls per request, from an API endpoint,
+   * bypassing the proxies entirely. No caller in the frontend uses it, so it
+   * had never been noticed; it only needed one request to become the reason
+   * the account was blocked.
+   *
+   * It now asks the proxies, and only for the two languages the extractor
+   * actually attempts. Asking about five more it would never use was work done
+   * to fill a field nobody reads.
+   */
   public async getAvailableLanguages(videoId: string): Promise<AvailableLanguages> {
-    try {
-      const commonLanguages = ['en', 'ko', 'ja', 'es', 'fr', 'de', 'zh'];
-      const available: string[] = [];
-
-      for (const lang of commonLanguages) {
-        try {
-          const result = await (await loadFetchTranscript())(videoId, { lang });
-          if (result && result.length > 0) {
-            available.push(lang);
-          }
-        } catch {
-          // Language not available
-        }
+    const available: string[] = [];
+    for (const lang of ['ko', 'en']) {
+      try {
+        const segs = await fetchViaProxies(videoId, lang);
+        if (segs && segs.length > 0) available.push(lang);
+      } catch {
+        // A proxy that cannot answer is not evidence the language is missing.
       }
-
-      logger.info('Available languages detected', { videoId, languages: available });
-      return { videoId, languages: available };
-    } catch (error) {
-      logger.error('Failed to get available languages', { videoId, error });
-      return { videoId, languages: [] };
     }
+    logger.info('Available languages detected', { videoId, languages: available });
+    return { videoId, languages: available };
   }
 }
 

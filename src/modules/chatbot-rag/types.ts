@@ -168,7 +168,10 @@ export interface NoteDraftContext {
 export interface TranscriptContext {
   full_text: string;
   /** Origin of the transcript, used for source attribution in prompt. */
-  source: 'mac-mini' | 'youtube-transcript' | 'cached';
+  /** Where the transcript came from. `youtube-transcript` is gone: the direct
+   *  path was removed on 2026-09-08 and captions now arrive through a proxy or
+   *  not at all. */
+  source: 'proxy' | 'cached' | 'unconfigured';
   /** ISO 639-1 code or 'auto' when the extractor's language probe is ambiguous. */
   language: Lang | 'auto';
   /** True when full_text was clipped to fit TRANSCRIPT_PROMPT_MAX_CHARS. */

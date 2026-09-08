@@ -191,15 +191,15 @@ async function tryFetchTranscript(
         ? (result.caption.language as Lang)
         : 'auto';
 
-    // Source detection: extractor logs `source: 'youtube-transcript'` when
-    // falling back; the Mac Mini path doesn't set a distinct flag on the
-    // return value, but its env-gated success is the dominant prod path.
-    // Heuristic: env present → assume Mac Mini took the first hit.
+    // The direct youtube-transcript path was removed on 2026-09-08, so a
+    // transcript either came through a proxy or did not arrive. Reaching this
+    // line means one answered; the flag only distinguishes a configured setup
+    // from one where nothing could have.
     const { macMiniEnabled } = loadTranscriptConfig();
 
     return {
       full_text: fullText,
-      source: macMiniEnabled ? 'mac-mini' : 'youtube-transcript',
+      source: macMiniEnabled ? 'proxy' : 'unconfigured',
       language: resolved,
       truncated,
       total_chars: total,
