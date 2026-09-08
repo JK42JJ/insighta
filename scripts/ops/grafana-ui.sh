@@ -19,7 +19,10 @@ set -euo pipefail
 LOCAL_PORT="${1:-3001}"
 NAMESPACE="${GRAFANA_NAMESPACE:-insighta-prod}"
 SERVICE="${GRAFANA_SERVICE:-svc/insighta-grafana}"
-REMOTE_PORT=18300
+# Picked per run rather than fixed. An ssh session killed without its remote
+# child leaves a kubectl port-forward holding the port, and every later attempt
+# then fails with "address already in use" on a node that looks idle.
+REMOTE_PORT="${GRAFANA_REMOTE_PORT:-$((18300 + RANDOM % 500))}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
