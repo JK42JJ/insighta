@@ -1,0 +1,295 @@
+{{- if .Values.metrics.enabled }}
+# Metrics, on a node with 1.5 GiB free.
+#
+# VictoriaMetrics rather than Prometheus: one binary that scrapes and stores,
+# in roughly a fifth of the memory, speaking the same query language and the
+# same exposition format. Nothing here is locked to it -- an app that exposes
+# /metrics and a dashboard written in PromQL move to Prometheus or to a hosted
+# backend without changing.
+#
+# Retention is seven days. Metrics are cheap, but the disk under this is the
+# node's own and it has been past 80% before; seven days answers "when did this
+# start" for anything the alerts would have caught, and thirty days would answer
+# it for incidents nobody found in a week, which is a different problem.
+#
+# Everything here carries the observability priority class, so under node
+# pressure the metrics stack is evicted before the service it measures.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "insighta.fullname" . }}-metrics
+  labels: {{- include "insighta.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "insighta.fullname" . }}-metrics
+  labels: {{- include "insighta.labels" . | nindent 4 }}
+rules:
+  # Read-only, and only what service discovery and kube-state-metrics need to
+  # describe the cluster. No secrets: a metrics collector that can read secrets
+  # is a credential store with a scrape endpoint.
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/metrics", "nodes/proxy", "services", "endpoints", "pods", "namespaces", "resourcequotas", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "insighta.fullname" . }}-metrics
+  labels: {{- include "insighta.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "insighta.fullname" . }}-metrics
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "insighta.fullname" . }}-metrics
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "insighta.fullname" . }}-metrics-scrape
+  labels: {{- include "insighta.labels" . | nindent 4 }}
+data:
+  scrape.yml: |
+    global:
+      scrape_interval: 30s
+      external_labels:
+        cluster: insighta-prod
+    scrape_configs:
+      # Per-container CPU and memory, from the kubelet's built-in cAdvisor.
+      # This is the series that answers "what is using the node", and it is the
+      # reason the ClusterRole exists at all.
+      - job_name: cadvisor
+        scheme: https
+        tls_config: {insecure_skip_verify: true}
+        authorization: {credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token}
+        kubernetes_sd_configs: [{role: node}]
+        relabel_configs:
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+        metric_relabel_configs:
+          # cAdvisor emits a series per container per filesystem per interface.
+          # Kept: cpu, memory, restarts. Dropped: the rest, which would be most
+          # of the storage for questions nobody asks on a four-service cluster.
+          - source_labels: [__name__]
+            regex: 'container_(cpu_usage_seconds_total|memory_working_set_bytes|memory_rss)'
+            action: keep
+
+      - job_name: kubelet
+        scheme: https
+        tls_config: {insecure_skip_verify: true}
+        authorization: {credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token}
+        kubernetes_sd_configs: [{role: node}]
+        relabel_configs:
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics
+
+      - job_name: node-exporter
+        kubernetes_sd_configs: [{role: pod, namespaces: {names: [{{ .Release.Namespace }}]}}]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            regex: node-exporter
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+      - job_name: kube-state-metrics
+        kubernetes_sd_configs: [{role: pod, namespaces: {names: [{{ .Release.Namespace }}]}}]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            regex: kube-state-metrics
+            action: keep
+
+      # Request rate, status codes and latency at the edge. The only place that
+      # sees every request, including the ones the application never got.
+      - job_name: ingress-nginx
+        kubernetes_sd_configs: [{role: pod, namespaces: {names: [ingress-nginx]}}]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_container_port_number]
+            regex: "10254"
+            action: keep
+
+      # The application's own metrics, once it exposes them. Declared now so
+      # turning them on is a deploy of the app and not a change here.
+      - job_name: insighta-api
+        kubernetes_sd_configs: [{role: pod, namespaces: {names: [{{ .Release.Namespace }}]}}]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            regex: (api|worker)
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_container_port_number]
+            regex: "3000"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            target_label: role
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insighta.fullname" . }}-metrics
+  labels: {{- include "insighta.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.metrics.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insighta.fullname" . }}-metrics
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  replicas: 1
+  # Recreate: the PVC is ReadWriteOnce and two replicas would deadlock on it.
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      {{- include "insighta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: metrics
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: metrics
+      annotations:
+        checksum/scrape: {{ .Files.Get "templates/metrics.yaml" | sha256sum }}
+    spec:
+      priorityClassName: {{ .Values.grafana.priorityClassName }}
+      serviceAccountName: {{ include "insighta.fullname" . }}-metrics
+      containers:
+        - name: victoria-metrics
+          image: "{{ .Values.metrics.image.repository }}:{{ .Values.metrics.image.tag }}"
+          args:
+            - -storageDataPath=/data
+            - -retentionPeriod={{ .Values.metrics.retention }}
+            - -promscrape.config=/config/scrape.yml
+            - -httpListenAddr=:8428
+            # Bounded so the scraper cannot become the reason the node is short
+            # of memory it is meant to be reporting on.
+            - -memory.allowedPercent=60
+          ports: [{name: http, containerPort: 8428}]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: config, mountPath: /config}
+          resources: {{- toYaml .Values.metrics.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "insighta.fullname" . }}-metrics
+        - name: config
+          configMap:
+            name: {{ include "insighta.fullname" . }}-metrics-scrape
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insighta.fullname" . }}-metrics
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  type: ClusterIP
+  ports: [{port: 8428, targetPort: http, name: http}]
+  selector:
+    {{- include "insighta.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: metrics
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "insighta.fullname" . }}-node-exporter
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: node-exporter
+spec:
+  selector:
+    matchLabels:
+      {{- include "insighta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: node-exporter
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: node-exporter
+    spec:
+      priorityClassName: {{ .Values.grafana.priorityClassName }}
+      # The node's own CPU, memory, disk and network. Reading them means reading
+      # the host's /proc and /sys, which is why this is the one component here
+      # that mounts host paths -- read-only, and nothing else.
+      hostPID: true
+      containers:
+        - name: node-exporter
+          image: "{{ .Values.metrics.nodeExporter.image.repository }}:{{ .Values.metrics.nodeExporter.image.tag }}"
+          args:
+            - --path.procfs=/host/proc
+            - --path.sysfs=/host/sys
+            - --path.rootfs=/host/root
+            - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+          ports: [{name: metrics, containerPort: 9100}]
+          volumeMounts:
+            - {name: proc, mountPath: /host/proc, readOnly: true}
+            - {name: sys, mountPath: /host/sys, readOnly: true}
+            - {name: root, mountPath: /host/root, readOnly: true, mountPropagation: HostToContainer}
+          resources: {{- toYaml .Values.metrics.nodeExporter.resources | nindent 12 }}
+      volumes:
+        - {name: proc, hostPath: {path: /proc}}
+        - {name: sys, hostPath: {path: /sys}}
+        - {name: root, hostPath: {path: /}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insighta.fullname" . }}-kube-state-metrics
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kube-state-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "insighta.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: kube-state-metrics
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kube-state-metrics
+    spec:
+      priorityClassName: {{ .Values.grafana.priorityClassName }}
+      serviceAccountName: {{ include "insighta.fullname" . }}-metrics
+      containers:
+        - name: kube-state-metrics
+          image: "{{ .Values.metrics.kubeStateMetrics.image.repository }}:{{ .Values.metrics.kubeStateMetrics.image.tag }}"
+          # Pod restarts, deployment replica counts, container waiting reasons.
+          # The series that say a pod is crash-looping, which cAdvisor cannot:
+          # a container that keeps dying uses very little CPU.
+          args: ["--resources=pods,deployments,daemonsets,statefulsets,nodes,jobs,cronjobs,persistentvolumeclaims"]
+          ports: [{name: metrics, containerPort: 8080}]
+          resources: {{- toYaml .Values.metrics.kubeStateMetrics.resources | nindent 12 }}
+{{- end }}

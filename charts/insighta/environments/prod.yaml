@@ -187,3 +187,8 @@ grafana:
   enabled: true
   ingress:
     enabled: true
+
+# Metrics run here and nowhere else, for the same reason the dashboard does:
+# this is the environment worth measuring.
+metrics:
+  enabled: true

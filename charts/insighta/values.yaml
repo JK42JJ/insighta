@@ -168,6 +168,45 @@ frontend:
 # alerts -- those come from a GitHub runner into Slack -- so losing this pod
 # costs nothing operational. That is what makes it safe to run a viewer on the
 # node it watches.
+# Metrics. Off by default -- it belongs where something looks at it, and every
+# environment does not need a time series database.
+#
+# VictoriaMetrics rather than Prometheus: one binary that scrapes and stores, in
+# roughly a fifth of the memory, speaking the same query language and the same
+# exposition format. Nothing is locked to it; an app exposing /metrics and a
+# dashboard in PromQL move elsewhere unchanged.
+metrics:
+  enabled: false
+  image:
+    repository: victoriametrics/victoria-metrics
+    tag: "v1.106.1"
+  # Seven days. Metrics are cheap but this disk is the node's own and has been
+  # past 80%. Seven days answers "when did this start" for anything the alerts
+  # would have caught.
+  retention: 7d
+  storage: 3Gi
+  resources:
+    requests:
+      memory: 192Mi
+      cpu: 50m
+    limits:
+      memory: 640Mi
+      cpu: 800m
+  nodeExporter:
+    image:
+      repository: prom/node-exporter
+      tag: "v1.8.2"
+    resources:
+      requests: {memory: 24Mi, cpu: 10m}
+      limits: {memory: 96Mi, cpu: 200m}
+  kubeStateMetrics:
+    image:
+      repository: registry.k8s.io/kube-state-metrics/kube-state-metrics
+      tag: "v2.13.0"
+    resources:
+      requests: {memory: 48Mi, cpu: 10m}
+      limits: {memory: 192Mi, cpu: 200m}
+
 grafana:
   enabled: false
   image:
