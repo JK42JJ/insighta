@@ -340,21 +340,7 @@ export async function buildServer() {
        * did exactly that earlier today.
        */
       const net = await import('net');
-      const DEPENDENCIES: Array<{ env: string; feature: string; alternative: string | null }> = [
-        { env: 'MAC_MINI_TRANSCRIPT_URL', feature: 'transcript ingestion', alternative: null },
-        {
-          env: 'AZURE_TRANSCRIPT_URL',
-          feature: 'transcript ingestion (secondary)',
-          alternative: 'mac-mini',
-        },
-        {
-          env: 'MANDALA_GEN_URL',
-          feature: 'mandala embedding',
-          alternative: 'openrouter (MANDALA_EMBED_RACE)',
-        },
-        { env: 'SNAPSHOT_SERVICE_URL', feature: 'note figure enrichment', alternative: null },
-        { env: 'QWEN_LORA_API_URL', feature: 'chatbot (self-hosted)', alternative: 'openrouter' },
-      ];
+      const { EXTERNAL_DEPENDENCIES, dependencyUrl } = await import('../config/dependencies');
 
       const tcpProbe = (host: string, port: number): Promise<{ ok: boolean; detail: string }> =>
         new Promise((resolve) => {
@@ -375,8 +361,8 @@ export async function buildServer() {
         });
 
       const services = await Promise.all(
-        DEPENDENCIES.map(async (d) => {
-          const raw = process.env[d.env];
+        EXTERNAL_DEPENDENCIES.map(async (d) => {
+          const raw = dependencyUrl(d);
           if (!raw) {
             return { ...d, configured: false, ok: false, detail: 'not configured' };
           }
