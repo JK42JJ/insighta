@@ -231,6 +231,75 @@ export async function checkPipelineFreshness(): Promise<CheckResult> {
 }
 
 /**
+ * What a set of proxy probe results means, separated from fetching them so the
+ * judgement can be tested without a network.
+ *
+ * Partial reachability is a failure, not a warning. The second proxy exists
+ * because the first has gone down before; running on one is running with the
+ * spare already used.
+ */
+export function interpretProxyHealth(
+  deps: Array<{ name: string; ok: boolean; detail: string }>
+): { ok: boolean; detail: string } {
+  if (deps.length === 0) {
+    return { ok: false, detail: 'no transcript proxy is configured — captions cannot be fetched at all' };
+  }
+  const summary = deps.map((d) => `${d.name} ${d.ok ? 'ok' : d.detail}`).join(' · ');
+  const reachable = deps.filter((d) => d.ok).length;
+  if (reachable === 0) {
+    return { ok: false, detail: `no proxy reachable — transcripts, summaries and notes are all blocked · ${summary}` };
+  }
+  if (reachable < deps.length) {
+    return { ok: false, detail: `${reachable}/${deps.length} reachable · ${summary}` };
+  }
+  return { ok: true, detail: summary };
+}
+
+/**
+ * The transcript proxies answer.
+ *
+ * pipeline-freshness notices this too, but only after three days of silence and
+ * only as an inference: it sees that nothing was written and names the likely
+ * cause. This asks the dependency directly, so an outage is caught on the next
+ * run with the reason attached rather than deduced from an absence.
+ *
+ * The proxies are the only way captions can be fetched -- the direct YouTube
+ * path was removed on 2026-09-08 -- so when they are down the whole chain
+ * behind them is down: no transcript, no v2 summary, no note. Forty-seven days
+ * of that went unnoticed because nothing checked the dependency itself.
+ *
+ * Runs from a GitHub runner, which reaches neither proxy: one is behind a
+ * Tailscale address and the other is a private host. So this asks the API pod
+ * to make the call, through an endpoint that reports reachability and nothing
+ * else.
+ */
+export async function checkTranscriptProxies(): Promise<CheckResult> {
+  const check = 'transcript-proxies';
+  try {
+    const { status, body } = await fetchJson(`${PROD}/health/dependencies`);
+    if (status === 404) {
+      // The endpoint ships with this check; a 404 means production predates it.
+      return {
+        check,
+        ok: true,
+        detail: 'production does not report dependencies yet (deploy this change first)',
+      };
+    }
+    if (status !== 200) return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
+
+    const deps = (body as { transcriptProxies?: Array<{ name: string; ok: boolean; detail: string }> })
+      .transcriptProxies;
+    if (!deps || deps.length === 0) {
+      return { check, ok: false, detail: 'no transcript proxy is configured — captions cannot be fetched at all' };
+    }
+    const { ok, detail } = interpretProxyHealth(deps);
+    return { check, ok, detail, context: { deps } };
+  } catch (err) {
+    return { check, ok: false, detail: `GET /health/dependencies failed: ${String(err)}` };
+  }
+}
+
+/**
  * The site answers, and its certificate is not about to expire.
  *
  * cert-manager renews automatically. Nothing reports a renewal that failed,
@@ -326,6 +395,7 @@ export async function checkSchema(): Promise<CheckResult> {
 export const ALL_CHECKS: Array<() => Promise<CheckResult>> = [
   checkDeployDrift,
   checkPublicSurface,
+  checkTranscriptProxies,
   checkLlmSpend,
   checkAwsCost,
   checkPipelineFreshness,
