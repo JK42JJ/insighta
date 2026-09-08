@@ -182,6 +182,13 @@ spec:
               value: "true"
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
+            # Explore would let anyone past basic auth write their own SQL
+            # against the datasource. The dashboards are curated aggregates;
+            # an open query box over the same connection is a different grant
+            # than the one intended, and the role can read tables that carry
+            # user ids.
+            - name: GF_EXPLORE_ENABLED
+              value: "false"
             - name: GF_ANALYTICS_REPORTING_ENABLED
               value: "false"
             - name: GF_ANALYTICS_CHECK_FOR_UPDATES
