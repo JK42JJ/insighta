@@ -285,6 +285,73 @@ export function interpretProxyHealth(
 }
 
 /**
+ * Which features can run, given what the cluster can currently reach.
+ *
+ * A host being down is not the question a person has when something is broken;
+ * "can users still do X" is. Two of the unreachable hosts have a working
+ * alternative and one does not, and that difference is not visible in a list of
+ * timeouts.
+ *
+ * Recorded per feature so the ledger answers, months later, what was actually
+ * unavailable on a given day -- which is the question an incident write-up
+ * starts from and the one nothing here could answer for the forty-seven days
+ * before this existed.
+ */
+export async function checkServiceReachability(): Promise<CheckResult> {
+  const check = 'service-reachability';
+  let services: Array<{
+    env: string;
+    feature: string;
+    alternative: string | null;
+    configured: boolean;
+    ok: boolean;
+    detail: string;
+  }>;
+
+  try {
+    const { status, body } = await fetchJson(`${PROD}/health/dependencies`);
+    if (status === 404) {
+      return { check, ok: true, detail: 'production does not report services yet (deploy this change first)' };
+    }
+    if (status !== 200) return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
+    services = (body as { services?: typeof services }).services ?? [];
+  } catch (err) {
+    return { check, ok: false, detail: `GET /health/dependencies failed: ${String(err)}` };
+  }
+
+  if (services.length === 0) {
+    return { check, ok: true, detail: 'no external services declared' };
+  }
+
+  // Down with no alternative is the only case that stops a feature. Down with
+  // one is worth reporting and is not an outage, and conflating them is how a
+  // dashboard trains people to ignore it.
+  const blocked = services.filter((s) => s.configured && !s.ok && !s.alternative);
+  const degraded = services.filter((s) => s.configured && !s.ok && s.alternative);
+  const ctx = { services };
+
+  if (blocked.length > 0) {
+    return {
+      check,
+      ok: false,
+      detail:
+        `unavailable: ${blocked.map((s) => `${s.feature} (${s.detail})`).join(', ')}` +
+        (degraded.length > 0 ? ` · degraded: ${degraded.map((s) => s.feature).join(', ')}` : ''),
+      context: ctx,
+    };
+  }
+  if (degraded.length > 0) {
+    return {
+      check,
+      ok: false,
+      detail: `running on the alternative: ${degraded.map((s) => `${s.feature} → ${s.alternative}`).join(', ')}`,
+      context: ctx,
+    };
+  }
+  return { check, ok: true, detail: `${services.filter((s) => s.ok).length} services reachable`, context: ctx };
+}
+
+/**
  * The transcript proxies answer.
  *
  * pipeline-freshness notices this too, but only after three days of silence and
@@ -425,6 +492,7 @@ export const ALL_CHECKS: Array<() => Promise<CheckResult>> = [
   checkDeployDrift,
   checkPublicSurface,
   checkTranscriptProxies,
+  checkServiceReachability,
   checkLlmSpend,
   checkAwsCost,
   checkPipelineFreshness,
