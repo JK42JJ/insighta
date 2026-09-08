@@ -193,7 +193,21 @@ async function main() {
   for (const t of READ_TABLES) {
     await admin.$executeRawUnsafe(`GRANT SELECT ON public.${t} TO ${DB_ROLE}`);
   }
-  console.log(`ok    ${DB_ROLE}: SELECT on ${READ_TABLES.join(', ')}`);
+  // A GRANT is not enough. Row level security is on for these tables, so a
+  // role with SELECT and no policy reads zero rows and reports no error --
+  // measured 2026-09-08, when the dashboard connected successfully and drew
+  // nothing. Privilege and policy are separate gates and both have to open.
+  //
+  // A permissive SELECT policy for this role, rather than BYPASSRLS: the role
+  // should be able to read these three tables and nothing else, and BYPASSRLS
+  // would let it read anything it is ever granted.
+  for (const t of READ_TABLES) {
+    await admin.$executeRawUnsafe(`DROP POLICY IF EXISTS keel_read ON public.${t}`);
+    await admin.$executeRawUnsafe(
+      `CREATE POLICY keel_read ON public.${t} FOR SELECT TO ${DB_ROLE} USING (true)`
+    );
+  }
+  console.log(`ok    ${DB_ROLE}: SELECT + RLS policy on ${READ_TABLES.join(', ')}`);
   await admin.$disconnect();
 
   // ── basic auth ───────────────────────────────────────────────────────────
