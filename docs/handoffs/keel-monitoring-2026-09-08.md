@@ -45,16 +45,30 @@ by exactly one place in the codebase — the handler for
 authoring batch on the Mac Mini (`mac-mini/v2-author/`), which polls
 `/candidates` and posts results back. The traffic runs **Mac Mini → cluster**.
 
-**Blocker 1 — the Webshare proxy answers 402 Payment Required.** Run directly:
+**Blocker 1 — the batch is pointed at a Webshare account whose bandwidth is
+spent.** The subscription is annual and current; what runs out is transfer. Two
+credential sources exist on the machine and only one is maintained:
 
-    yt-dlp --proxy <webshare> ... https://www.youtube.com/watch?v=<id>
-    WARNING: Unable to connect to proxy: Tunnel connection failed: 402 Payment Required
-    ERROR:   Unable to download API page ... Giving up after 3 retries
+| used by | source | result |
+|---|---|---|
+| transcript service (`:4242`) | `~/.transcript-svc.env`, username `<base>-rotate` | works — returns real YouTube responses |
+| v2-author batch | `com.insighta.daily-targeted.plist` `EnvironmentVariables` | `402 Payment Required` |
 
-The same host reaches `youtube.com` with HTTP 200 when the proxy is not used, so
-this is the subscription, not the network. Nobody can act on it but the account
-owner. Note the Azure transcript proxy uses a *different* Webshare credential
-and is working — it returned a real YouTube response today.
+Three probes, same video, seconds apart, separate the cases: the plist username
+returns **402** (authenticated, no transfer left), a bare `<base>` returns
+**407** (wrong username form), and `<base>-rotate` returns **rc=0 with a VTT
+written**. 402 and 407 are different answers and only the second is an auth
+problem — reading 402 as "the subscription lapsed" is wrong.
+
+The split dates to 2026-05-06 (CP439): the credentials then in
+`video-dictionary/.env` were out of quota, the `.env` immutability rule barred
+editing that file, so a second account was injected into the plist as the
+override. The plist has not been touched since; `.transcript-svc.env` has.
+
+Fix, per the same record: `PlistBuddy -c "Set :EnvironmentVariables:<KEY> <v>"`
+on the plist, then `launchctl unload` + `load`. It is configuration, not code —
+the canonical override location is the plist, and adding a third source would
+make the next person's search longer, not shorter.
 
 **Blocker 2 — the launchd job is not loaded, and cannot be loaded over ssh.**
 `~/Library/LaunchAgents/com.insighta.daily-targeted.plist` exists and is correct
@@ -118,13 +132,20 @@ would have caught all three: measure the running system before naming a cause.
   own refusal. Only 401 and a transport error mean the proxy is unusable.
 - **RLS, not GRANT.** `GRANT SELECT` alone returns zero rows with no error.
   Every table Grafana reads needs a policy.
+- **yt-dlp through Webshare has a documented bot gate.** Sustained use draws
+  "Sign in to confirm you're not a bot". The remedy is already written down —
+  exclude the slot via `WEBSHARE_EXCLUDED_SLOTS`, keep a session under twenty
+  yt-dlp calls, do not retry a gated slot — so this is a lookup, not a new
+  problem to solve.
 - **The PWA service worker intercepts `/keel`.** It is in
   `navigateFallbackDenylist`; anything else added under the origin needs the
   same treatment.
 
 ## Open
 
-1. Pay the Webshare subscription — nothing else unblocks transcript ingestion.
+1. Point the plist at the credentials `.transcript-svc.env` already uses
+   (PlistBuddy, then `launchctl unload`/`load`). The subscription is fine; the
+   account the plist names has no transfer left.
 2. Log into the Mac Mini's GUI (or run `launchctl bootstrap gui/501` as root) so
    `com.insighta.daily-targeted` loads. Both are needed; either alone leaves the
    pipeline stopped.
