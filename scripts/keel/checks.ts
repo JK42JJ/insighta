@@ -190,44 +190,74 @@ export async function checkLlmSpend(): Promise<CheckResult> {
 }
 
 /**
- * The pipeline is still producing.
+ * Each surface that should be producing, reported separately.
  *
- * 2026-07-23 to 2026-09-05: the Mac Mini transcript service was down for
- * forty-four days. Probing the host itself is not possible from here -- it is
- * not on the public internet -- and probing it from production would only
- * report on a path production cannot currently take either.
+ * 2026-07-23 to 2026-09-05 the Mac Mini transcript service was down for
+ * forty-four days. Probing the host is not possible from here -- it sits behind
+ * a Tailscale address the cluster cannot resolve -- so this measures the
+ * outcome instead: is anything still being written.
  *
- * So this measures the outcome rather than the host: has anything been written
- * recently? A dead dependency shows up as silence, whichever dependency it was,
- * and silence is the symptom that actually mattered.
+ * Split by surface rather than reduced to one timestamp. A single "newest row
+ * anywhere" is green while the transcript path is dead, because chat traffic
+ * keeps llm_call_logs fresh; and once it does go red it says only that
+ * something stopped, which is where the previous version left the reader.
+ * Measured 2026-09-08: llm_call_logs an hour old, video_summaries sixteen days,
+ * pipeline_events forty-seven. Three different states, one number.
  */
 const STALE_HOURS = Number(process.env['MONITOR_STALE_HOURS'] ?? 26);
 
+/** Surfaces, with how long each may reasonably be quiet. Transcript ingestion
+ *  runs on a schedule; summaries follow it; LLM calls happen whenever anyone
+ *  uses the product. */
+const SURFACES: Array<{ table: string; label: string; hours: number }> = [
+  { table: 'llm_call_logs', label: 'LLM calls', hours: 26 },
+  { table: 'video_summaries', label: 'summaries', hours: 24 * 7 },
+  { table: 'pipeline_events', label: 'transcript pipeline', hours: 24 * 3 },
+];
+
 export async function checkPipelineFreshness(): Promise<CheckResult> {
   const check = 'pipeline-freshness';
-  const rows = await getPrisma().$queryRaw<Array<{ last_call: Date | null; last_event: Date | null }>>`
-    SELECT (SELECT MAX(created_at) FROM llm_call_logs)   AS last_call,
-           (SELECT MAX(created_at) FROM pipeline_events) AS last_event
-  `;
-  const lastCall = rows[0]?.last_call ?? null;
-  const lastEvent = rows[0]?.last_event ?? null;
-  const newest = [lastCall, lastEvent].filter(Boolean).sort().pop() as Date | undefined;
+  const rows = await getPrisma().$queryRawUnsafe<Array<{ t: string; newest: Date | null }>>(
+    SURFACES.map((s) => `SELECT '${s.table}' AS t, max(created_at) AS newest FROM ${s.table}`).join(
+      ' UNION ALL '
+    )
+  );
 
-  if (!newest) {
-    return { check, ok: false, detail: 'no pipeline activity has ever been recorded' };
-  }
-  const hours = (Date.now() - newest.getTime()) / 3_600_000;
-  const ctx = { lastCall, lastEvent, hours: Number(hours.toFixed(1)), staleHours: STALE_HOURS };
+  const seen = new Map(rows.map((r) => [r.t, r.newest]));
+  const parts: string[] = [];
+  const stale: string[] = [];
+  const ctx: Record<string, unknown> = {};
 
-  if (hours > STALE_HOURS) {
-    return {
-      check,
-      ok: false,
-      detail: `no pipeline activity for ${hours.toFixed(1)}h (threshold ${STALE_HOURS}h)`,
-      context: ctx,
-    };
+  for (const s of SURFACES) {
+    const newest = seen.get(s.table) ?? null;
+    if (!newest) {
+      parts.push(`${s.label} never`);
+      stale.push(s.label);
+      ctx[s.table] = null;
+      continue;
+    }
+    const hours = (Date.now() - new Date(newest).getTime()) / 3_600_000;
+    ctx[s.table] = { newest, hours: Number(hours.toFixed(1)), allowed: s.hours };
+    const age = hours < 48 ? `${hours.toFixed(0)}h` : `${(hours / 24).toFixed(0)}d`;
+    if (hours > s.hours) {
+      parts.push(`${s.label} ${age} STALE`);
+      stale.push(s.label);
+    } else {
+      parts.push(`${s.label} ${age}`);
+    }
   }
-  return { check, ok: true, detail: `last activity ${hours.toFixed(1)}h ago`, context: ctx };
+
+  if (stale.length === 0) {
+    return { check, ok: true, detail: parts.join(' · '), context: ctx };
+  }
+
+  // Naming the dependency turns a red flag into a next step. The transcript
+  // service is reached at a Tailscale address and the cluster has no Tailscale,
+  // which is why this surface in particular goes quiet and stays quiet.
+  const hint = stale.includes('transcript pipeline')
+    ? ' — transcript ingestion writes this; the cluster cannot reach the Mac Mini at its Tailscale address'
+    : '';
+  return { check, ok: false, detail: `${parts.join(' · ')}${hint}`, context: ctx };
 }
 
 /**
