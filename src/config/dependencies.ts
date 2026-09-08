@@ -19,6 +19,12 @@ export interface ExternalDependency {
   feature: string;
   /** What carries the feature when this is down, or null if nothing does. */
   alternative: string | null;
+  /** Where the host lives when it is a constant in the code rather than an env
+   *  var. Without this the SaaS dependencies -- which nobody configures because
+   *  their address never changes -- would report as "not configured" and the
+   *  list would claim to be complete while omitting the ones that carry the
+   *  most traffic. */
+  url?: string;
 }
 
 export const EXTERNAL_DEPENDENCIES: readonly ExternalDependency[] = [
@@ -35,6 +41,37 @@ export const EXTERNAL_DEPENDENCIES: readonly ExternalDependency[] = [
   },
   { env: 'SNAPSHOT_SERVICE_URL', feature: 'note figure enrichment', alternative: null },
   { env: 'QWEN_LORA_API_URL', feature: 'chatbot (self-hosted)', alternative: 'openrouter' },
+
+  // The hosts that are not ours. They were missing from the first version of
+  // this list, which made it a list of self-hosted boxes wearing the name of a
+  // complete one -- and OpenRouter alone is behind summaries, the chatbot and
+  // every embedding that falls back to it. Addresses are constants in the code
+  // (llm-reranker.ts, youtube-client.ts, config/index.ts) and repeated here
+  // because a probe needs the host, not the full request path.
+  {
+    env: 'OPENROUTER_API_URL',
+    url: 'https://openrouter.ai',
+    feature: 'LLM calls — summaries, chatbot, embeddings',
+    alternative: null,
+  },
+  {
+    env: 'YOUTUBE_API_BASE',
+    url: 'https://www.googleapis.com',
+    feature: 'video discovery and metadata',
+    alternative: null,
+  },
+  { env: 'SUPABASE_URL', feature: 'auth and edge functions', alternative: null },
+  {
+    env: 'GMAIL_SMTP_HOST',
+    url: 'smtp://smtp-relay.gmail.com:587',
+    feature: 'newsletter delivery',
+    alternative: null,
+  },
+
+  // OLLAMA_URL is deliberately absent. Its default is localhost:11434, which
+  // inside a pod is nothing, so it would report a permanent outage for a path
+  // production does not use -- the Mac Mini embedding host is MANDALA_GEN_URL
+  // above and is already measured.
 ] as const;
 
 /**
@@ -48,5 +85,6 @@ export function dependencyUrl(
   env: NodeJS.ProcessEnv = process.env
 ): string | null {
   const raw = env[dep.env];
-  return raw && raw.length > 0 ? raw : null;
+  if (raw && raw.length > 0) return raw;
+  return dep.url ?? null;
 }
