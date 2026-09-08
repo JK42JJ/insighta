@@ -9,7 +9,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": {
     "from": "now-6h",
@@ -585,6 +585,103 @@
             }
           },
           "unit": "none"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "title": "앱 요청 지연 (라우트별 p95)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "insighta-metrics"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "description": "인그레스는 어느 라우트가 느린지 모릅니다. 앱만 알 수 있고, '느리다'는 보고에 답하려면 그게 필요합니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "legendFormat": "{{route}}",
+          "expr": "topk(8, histogram_quantile(0.95, sum by (route, le) (rate(insighta_http_request_duration_seconds_bucket[5m]))))"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 6,
+            "lineWidth": 2
+          },
+          "noValue": "앱이 아직 /metrics 를 내지 않습니다"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "title": "앱 응답 코드",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "insighta-metrics"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "description": "인그레스 집계와 나란히 보면 갈립니다 — 앱에 도달한 오류인지, 도달조차 못 한 것인지.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "legendFormat": "{{status}}",
+          "expr": "sum by (status) (rate(insighta_http_requests_total[5m]))"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 18,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "noValue": "앱이 아직 /metrics 를 내지 않습니다"
         },
         "overrides": []
       }

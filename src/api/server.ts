@@ -29,6 +29,12 @@ import { llmRoutes } from './routes/llm';
 import { adminRoutes } from './routes/admin';
 import { subscriptionRoutes } from './routes/subscriptions';
 import { getGitSha } from '../config/config-change-events';
+import {
+  incCounter,
+  observeHistogram,
+  registerGauge,
+  renderMetrics,
+} from '../modules/observability/metrics';
 import { curationRoutes } from './routes/curations';
 import { snapshotRoutes } from './routes/snapshots';
 import { botRoutes } from './routes/bot';
@@ -203,6 +209,62 @@ export async function buildServer() {
   // Health Check Routes
   // ============================================================================
 
+  // ── request metrics ───────────────────────────────────────────────────────
+  // Timed here rather than in the ingress because the ingress cannot see which
+  // route matched, and "slow" without knowing which endpoint is not actionable.
+  // The route *pattern* is the label, never the raw url: paths carry ids, and a
+  // label with unbounded values makes one metric into a series per id.
+  fastify.addHook('onRequest', async (request) => {
+    (request as { _startedAt?: bigint })._startedAt = process.hrtime.bigint();
+  });
+
+  fastify.addHook('onResponse', async (request, reply) => {
+    const started = (request as { _startedAt?: bigint })._startedAt;
+    if (started === undefined) return;
+    const seconds = Number(process.hrtime.bigint() - started) / 1e9;
+    // routerPath is the pattern ("/api/v1/cards/:videoId/like"); when nothing
+    // matched it is undefined, and every unmatched request shares one series
+    // rather than minting one per probed path.
+    const route = (request as { routerPath?: string }).routerPath ?? 'unmatched';
+    const labels = {
+      method: request.method,
+      route,
+      status: String(reply.statusCode),
+    };
+    incCounter('insighta_http_requests_total', 'HTTP requests handled', labels);
+    observeHistogram('insighta_http_request_duration_seconds', 'HTTP request duration', seconds, {
+      method: request.method,
+      route,
+    });
+  });
+
+  registerGauge('insighta_process_uptime_seconds', 'Process uptime', () => process.uptime());
+  registerGauge(
+    'insighta_process_heap_used_bytes',
+    'V8 heap in use',
+    () => process.memoryUsage().heapUsed
+  );
+  registerGauge('insighta_process_rss_bytes', 'Resident set size', () => process.memoryUsage().rss);
+
+  /**
+   * Scraped in-cluster by the metrics collector, which finds it by pod label
+   * and port. Not exposed through the ingress: the values are operational and
+   * the collector is inside.
+   *
+   * Unauthenticated for the same reason /health is -- an authenticated scrape
+   * needs a credential in the collector, and the endpoint reports counts and
+   * durations, never content.
+   */
+  fastify.get('/metrics', {
+    schema: { description: 'Prometheus metrics', tags: ['health'] },
+    handler: async (_request, reply) => {
+      return reply
+        .code(200)
+        .header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+        .send(renderMetrics());
+    },
+  });
+
   fastify.get('/health', {
     schema: {
       description: 'Health check endpoint',
@@ -234,6 +296,68 @@ export async function buildServer() {
         // public, so a commit SHA reveals nothing a reader could not already
         // clone, while a configuration fingerprint would.
         sha: getGitSha(),
+      });
+    },
+  });
+
+  /**
+   * Whether the things this service depends on are reachable, from inside the
+   * cluster where the answer differs.
+   *
+   * Keel runs on a GitHub runner and cannot reach either transcript proxy --
+   * one sits behind a Tailscale address, the other on a private host -- so it
+   * asks the pod instead. Unauthenticated for the same reason /health is: it
+   * reports reachability and a failure reason, never an address or a token.
+   *
+   * This exists because the transcript path was down for forty-seven days and
+   * nothing checked the dependency itself. pipeline-freshness inferred it from
+   * an absence of rows, three days late.
+   */
+  fastify.get('/health/dependencies', {
+    schema: {
+      description: 'Reachability of external dependencies, seen from the cluster',
+      tags: ['health'],
+    },
+    handler: async (_request, reply) => {
+      const { loadTranscriptConfig } = await import('../config/transcript');
+      const { proxies } = loadTranscriptConfig();
+
+      const PROBE_TIMEOUT_MS = 5000;
+      const transcriptProxies = await Promise.all(
+        proxies.map(async (proxy) => {
+          const ctl = new AbortController();
+          const timer = setTimeout(() => ctl.abort(), PROBE_TIMEOUT_MS);
+          const started = Date.now();
+          try {
+            const res = await fetch(`${proxy.url}/health`, {
+              signal: ctl.signal,
+              headers: { 'x-transcript-token': proxy.token },
+            });
+            return {
+              name: proxy.name,
+              ok: res.ok,
+              // The status, not the body: a proxy's health payload is its own
+              // and may carry anything.
+              detail: res.ok ? `${Date.now() - started}ms` : `HTTP ${res.status}`,
+            };
+          } catch (err) {
+            const code = (err as { cause?: { code?: string } }).cause?.code;
+            return {
+              name: proxy.name,
+              ok: false,
+              detail: code ?? (err instanceof Error ? err.name : 'unreachable'),
+            };
+          } finally {
+            clearTimeout(timer);
+          }
+        })
+      );
+
+      return reply.code(200).send({
+        timestamp: new Date().toISOString(),
+        // Names and outcomes only. No URLs and no tokens: this endpoint is
+        // public for the same reason /health is, and the addresses are not.
+        transcriptProxies,
       });
     },
   });
