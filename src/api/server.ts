@@ -329,16 +329,27 @@ export async function buildServer() {
           const timer = setTimeout(() => ctl.abort(), PROBE_TIMEOUT_MS);
           const started = Date.now();
           try {
-            const res = await fetch(`${proxy.url}/health`, {
+            // The service exposes one route, /transcript/<id>, and no /health.
+            // Probing a path it does not serve reported a healthy proxy as
+            // unreachable on 2026-09-08 -- the probe was wrong, not the host.
+            //
+            // A known-bad id is used deliberately: reaching the proxy is the
+            // question, and a real video id would spend a Webshare fetch on
+            // every check. 401 means the token is wrong, 404 means it answered,
+            // and both prove it is there.
+            const res = await fetch(`${proxy.url}/transcript/keelprobe0`, {
               signal: ctl.signal,
               headers: { 'x-transcript-token': proxy.token },
             });
+            const reached = res.status !== 401 && res.status < 500;
             return {
               name: proxy.name,
-              ok: res.ok,
-              // The status, not the body: a proxy's health payload is its own
-              // and may carry anything.
-              detail: res.ok ? `${Date.now() - started}ms` : `HTTP ${res.status}`,
+              ok: reached,
+              detail: reached
+                ? `${Date.now() - started}ms`
+                : res.status === 401
+                  ? 'HTTP 401 (token rejected)'
+                  : `HTTP ${res.status}`,
             };
           } catch (err) {
             const code = (err as { cause?: { code?: string } }).cause?.code;
