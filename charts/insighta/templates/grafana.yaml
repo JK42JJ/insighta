@@ -54,6 +54,18 @@ data:
           connMaxLifetime: 300
         secureJsonData:
           password: ${GRAFANA_DB_PASSWORD}
+{{- if .Values.metrics.enabled }}
+      # The time series side. Prometheus-typed rather than victoriametrics-typed
+      # on purpose: the queries are PromQL and the dashboards stay portable if
+      # the store is ever swapped.
+      - name: Metrics
+        type: prometheus
+        uid: insighta-metrics
+        url: http://{{ include "insighta.fullname" . }}-metrics:8428
+        jsonData:
+          timeInterval: 30s
+          httpMethod: POST
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -85,6 +97,10 @@ metadata:
 data:
   invariants.json: |
 {{ .Files.Get "dashboards/invariants.json" | indent 4 }}
+{{- if .Values.metrics.enabled }}
+  resources.json: |
+{{ .Files.Get "dashboards/resources.json" | indent 4 }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -112,7 +128,7 @@ spec:
         # Roll the pod when a dashboard changes. Grafana's file provisioner
         # polls, but a ConfigMap update can take a minute to reach the volume
         # and this makes "merged" and "visible" the same moment.
-        checksum/dashboards: {{ .Files.Get "dashboards/invariants.json" | sha256sum }}
+        checksum/dashboards: {{ printf "%s%s" (.Files.Get "dashboards/invariants.json") (.Files.Get "dashboards/resources.json") | sha256sum }}
         # The provisioning script's checksum, on a resource ArgoCD actually
         # compares. Hooks are not part of the desired-state comparison, so a
         # commit that changes only the PreSync script leaves the application
