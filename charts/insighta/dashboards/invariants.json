@@ -8,7 +8,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": {
     "from": "now-7d",
@@ -98,7 +98,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT max(created_at) AS \"마지막\"\n  FROM error_events WHERE subsystem = 'keel'"
+          "rawSql": "SELECT (extract(epoch FROM max(created_at)) * 1000)::float8 AS \"마지막\"\n  FROM error_events WHERE subsystem = 'keel'"
         }
       ],
       "options": {
@@ -283,7 +283,8 @@
         "defaults": {
           "custom": {
             "align": "left"
-          }
+          },
+          "noValue": "이 기간에 상태가 바뀐 적 없음 — 알림도 나가지 않았습니다"
         },
         "overrides": [
           {
@@ -434,7 +435,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT model AS \"모델\",\n       count(*) AS \"호출\",\n       round(sum(cost_usd)::numeric, 4) AS \"비용\",\n       CASE WHEN sum(cached_input_tokens) IS NULL THEN NULL\n            ELSE round(100.0 * sum(cached_input_tokens) / NULLIF(sum(input_tokens), 0), 1)\n       END AS \"캐시%\",\n       round(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)::numeric, 0) AS \"p95ms\"\n  FROM llm_call_logs\n WHERE status = 'success' AND created_at >= now() - interval '24 hours'\n GROUP BY model ORDER BY 3 DESC"
+          "rawSql": "SELECT regexp_replace(model, '^openrouter/', '') AS \"모델\",\n       count(*) AS \"호출\",\n       round(sum(cost_usd)::numeric, 4) AS \"비용\",\n       CASE WHEN sum(cached_input_tokens) IS NULL THEN NULL\n            ELSE round(100.0 * sum(cached_input_tokens) / NULLIF(sum(input_tokens), 0), 1)\n       END AS \"캐시%\",\n       round(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)::numeric, 0) AS \"p95ms\"\n  FROM llm_call_logs\n WHERE status = 'success' AND created_at >= now() - interval '24 hours'\n GROUP BY model ORDER BY 3 DESC"
         }
       ],
       "fieldConfig": {
@@ -453,13 +454,6 @@
               {
                 "id": "unit",
                 "value": "currencyUSD"
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "gauge",
-                  "mode": "gradient"
-                }
               }
             ]
           }
@@ -546,7 +540,8 @@
         "defaults": {
           "custom": {
             "align": "left"
-          }
+          },
+          "noValue": "실패한 호출 없음"
         },
         "overrides": [
           {
