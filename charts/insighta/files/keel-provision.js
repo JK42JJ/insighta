@@ -116,21 +116,37 @@ async function main() {
   const host = u.host;
   const dbName = u.pathname.replace(/^\//, '') || 'postgres';
 
+  // Supabase's connection pooler routes by a tenant carried in the username:
+  // `postgres.<project-ref>`, not `postgres`. A role name without the suffix is
+  // refused before authentication is even attempted --
+  //
+  //   FATAL: (ENOIDENTIFIER) no tenant identifier provided
+  //
+  // so the password could have been perfect and the dashboard would still have
+  // drawn nothing. Measured 2026-09-08. The suffix is taken from the credential
+  // the application already uses rather than written down, because a project
+  // reference in the chart is one more thing that can be wrong and one more
+  // identifier in a public repository.
+  const tenant = u.username.includes('.') ? u.username.slice(u.username.indexOf('.') + 1) : '';
+  const loginUser = tenant ? `${DB_ROLE}.${tenant}` : DB_ROLE;
+
   // ── the database role ────────────────────────────────────────────────────
   const stored = await getSecret(DB_SECRET);
   const storedPw = stored?.data?.GRAFANA_DB_PASSWORD
     ? unb64(stored.data.GRAFANA_DB_PASSWORD)
     : '';
 
+  const storedUser = stored?.data?.GRAFANA_DB_USER ? unb64(stored.data.GRAFANA_DB_USER) : '';
+
   let works = false;
-  if (storedPw) {
+  if (storedPw && storedUser === loginUser) {
     // The only test that means anything: connect as the role, the way Grafana
     // will. A Secret that exists proves nothing -- one existed all along and
     // held an empty string.
     const probe = new PrismaClient({
       datasources: {
         db: {
-          url: `postgresql://${DB_ROLE}:${encodeURIComponent(storedPw)}@${host}/${dbName}?sslmode=require`,
+          url: `postgresql://${encodeURIComponent(loginUser)}:${encodeURIComponent(storedPw)}@${host}/${dbName}?sslmode=require`,
         },
       },
     });
@@ -148,7 +164,7 @@ async function main() {
   let rotated = false;
 
   if (works) {
-    console.log(`ok    ${DB_ROLE}: stored password authenticates`);
+    console.log(`ok    ${loginUser}: stored password authenticates`);
   } else {
     const pw = password();
     const exists = await admin.$queryRawUnsafe(
@@ -163,7 +179,7 @@ async function main() {
     }
     await putSecret(DB_SECRET, {
       GRAFANA_DB_HOST: b64(host),
-      GRAFANA_DB_USER: b64(DB_ROLE),
+      GRAFANA_DB_USER: b64(loginUser),
       GRAFANA_DB_NAME: b64(dbName),
       GRAFANA_DB_PASSWORD: b64(pw),
     });
