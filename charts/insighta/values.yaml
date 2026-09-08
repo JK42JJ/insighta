@@ -195,6 +195,10 @@ grafana:
     #   htpasswd -nbB <user> <password> | kubectl create secret generic ...
     authSecret: keel-basic-auth
     authRealm: "Keel"
+    # The account the PreSync hook generates. Read it back with
+    # scripts/ops/keel-url.sh -- it is generated, not chosen, so it is not
+    # something anyone has to remember or could set to an empty string.
+    authUser: keel
   resources:
     requests:
       # Small on purpose. requests is what the scheduler reserves, and reserving

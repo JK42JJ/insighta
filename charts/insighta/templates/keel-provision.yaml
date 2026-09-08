@@ -1,0 +1,143 @@
+{{- if .Values.grafana.enabled }}
+# Keel sets itself up.
+#
+# Everything the dashboard needs -- a read-only database role, its password, and
+# the credentials that guard the URL -- was created by hand on 2026-09-07, and
+# twice the hand slipped: a pasted `read -rs` took a blank line and stored an
+# empty password, once for basic auth and once for the database role. Both
+# failures were silent. The endpoint served, the pod ran, and the dashboard drew
+# "No data".
+#
+# That is the exact failure Keel exists to catch, so it cannot be how Keel is
+# installed. This hook runs before every sync, creates what is missing, and
+# changes nothing when the secrets already work. Nobody types a password and
+# nobody knows one.
+#
+# It runs as the api image because that image already has node, prisma and
+# bcrypt, and adding a second image to maintain for eighty lines of setup would
+# be its own kind of drift.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "insighta.fullname" . }}-keel-provision
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "insighta.fullname" . }}-keel-provision
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  # Named individually rather than granted over all secrets: this reads the
+  # application's credential to reach the database and writes only its own two.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: ["insighta-env", "insighta-grafana-db", "keel-basic-auth"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["patch"]
+    resourceNames: ["insighta-grafana-db", "keel-basic-auth"]
+  # Restarting grafana after a rotation, because env from a Secret is fixed at
+  # pod start and a correct password in a Secret is still the old one in a
+  # running process.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["patch"]
+    resourceNames: ["{{ include "insighta.fullname" . }}-grafana"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "insighta.fullname" . }}-keel-provision
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "insighta.fullname" . }}-keel-provision
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "insighta.fullname" . }}-keel-provision
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "insighta.fullname" . }}-keel-provision
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+data:
+  provision.js: |
+{{ .Files.Get "files/keel-provision.js" | indent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "insighta.fullname" . }}-keel-provision
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keel-provision
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    # Replaced on the next sync rather than kept: a finished Job holding a pod
+    # spec is one more thing to read wrong when something breaks.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "insighta.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: keel-provision
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "insighta.fullname" . }}-keel-provision
+      {{- include "insighta.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: provision
+          image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image "tag" (get ($.Values.images | default dict) "apiTag")) | quote }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["node", "/app/keel/provision.js"]
+          env:
+            - name: KEEL_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: KEEL_AUTH_USER
+              value: {{ .Values.grafana.ingress.authUser | quote }}
+          volumeMounts:
+            - name: script
+              mountPath: /app/keel
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 50m
+            limits:
+              memory: 384Mi
+              cpu: 500m
+      volumes:
+        - name: script
+          configMap:
+            name: {{ include "insighta.fullname" . }}-keel-provision
+{{- end }}
