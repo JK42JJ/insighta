@@ -35,7 +35,21 @@ const DB_SECRET = 'insighta-grafana-db';
 const AUTH_SECRET = 'keel-basic-auth';
 const DB_ROLE = 'grafana_ro';
 const AUTH_USER = process.env.KEEL_AUTH_USER || 'keel';
-const READ_TABLES = ['error_events', 'llm_call_logs', 'pipeline_events'];
+// Aggregate-only reads for the dashboard. Every one of these is in the public
+// schema; auth.users and auth.sessions are deliberately absent -- they hold
+// email addresses and refresh tokens, and a dashboard has no business with
+// either. Sign-in counts would have been the honest source for DAU, and doing
+// without them is the price of not handing a viewer the user table.
+const READ_TABLES = [
+  'error_events',
+  'llm_call_logs',
+  'pipeline_events',
+  'user_mandalas',
+  'user_subscriptions',
+  'card_interactions',
+  'video_summaries',
+  'note_documents',
+];
 
 const SA = '/var/run/secrets/kubernetes.io/serviceaccount';
 const TOKEN = readFileSync(`${SA}/token`, 'utf8');

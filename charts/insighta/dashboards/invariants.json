@@ -8,7 +8,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "1m",
   "time": {
     "from": "now-7d",
@@ -557,6 +557,310 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "id": 20,
+      "title": "사용자",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
+        "y": 4
+      },
+      "description": "만다라를 하나라도 가진 사람. auth.users 를 읽지 않는 대신 쓰는 대리 지표입니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(DISTINCT user_id)::float8 AS \"사용자\" FROM user_mandalas"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 21,
+      "title": "만다라",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 2,
+        "x": 3,
+        "y": 4
+      },
+      "description": "누적",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*)::float8 AS \"만다라\" FROM user_mandalas"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 22,
+      "title": "구독",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 2,
+        "x": 5,
+        "y": 4
+      },
+      "description": "유료 구독 수",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*)::float8 AS \"구독\" FROM user_subscriptions"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 23,
+      "title": "영상 요약",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 7,
+        "y": 4
+      },
+      "description": "누적 생성된 영상 요약",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*)::float8 AS \"요약\" FROM video_summaries"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 24,
+      "title": "서비스 활동 최신성",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "description": "누적 숫자는 무엇이 만들어졌는지만 말합니다. 이 표는 지금 무슨 일이 일어나고 있는지를 말합니다 — 비어 있으면 비어 있다고.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT '카드 상호작용' AS \"활동\", max(created_at) AS \"마지막\",\n       (now() - max(created_at)) AS \"경과\" FROM card_interactions\nUNION ALL\nSELECT '영상 요약', max(created_at), (now() - max(created_at)) FROM video_summaries\nUNION ALL\nSELECT '노트 문서', max(created_at), (now() - max(created_at)) FROM note_documents\nUNION ALL\nSELECT 'LLM 호출', max(created_at), (now() - max(created_at)) FROM llm_call_logs\nUNION ALL\nSELECT '파이프라인', max(created_at), (now() - max(created_at)) FROM pipeline_events\nORDER BY 2 DESC NULLS LAST"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 25,
+      "title": "카드 상호작용 (일별)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "description": "signal 별로 나눕니다. 합계 하나는 무엇이 늘었는지 말해 주지 않습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('day', created_at) AS time, signal AS metric, count(*) AS value\n  FROM card_interactions\n WHERE $__timeFilter(created_at)\n GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 18,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "noValue": "이 기간에 상호작용 없음"
+        },
+        "overrides": []
       }
     }
   ]
