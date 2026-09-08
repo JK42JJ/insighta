@@ -323,6 +323,73 @@ export async function buildServer() {
       const { proxies } = loadTranscriptConfig();
 
       const PROBE_TIMEOUT_MS = 5000;
+
+      /**
+       * Every external host this service is configured with, probed at the TCP
+       * level from inside the cluster.
+       *
+       * The cutover on 2026-08-14 moved the workload off EC2 and left the
+       * hosts that were reached over Tailscale behind: measured 2026-09-08,
+       * three of them time out from a pod. Which features that breaks is not
+       * obvious from the failure -- one has a working alternative and two do
+       * not -- so `alternative` is recorded here rather than inferred later.
+       *
+       * TCP only. A protocol-level probe would need a path per service, and
+       * getting one wrong reports a healthy host as dead: probing /health
+       * against the transcript service, which serves only /transcript/<id>,
+       * did exactly that earlier today.
+       */
+      const net = await import('net');
+      const DEPENDENCIES: Array<{ env: string; feature: string; alternative: string | null }> = [
+        { env: 'MAC_MINI_TRANSCRIPT_URL', feature: 'transcript ingestion', alternative: null },
+        {
+          env: 'AZURE_TRANSCRIPT_URL',
+          feature: 'transcript ingestion (secondary)',
+          alternative: 'mac-mini',
+        },
+        {
+          env: 'MANDALA_GEN_URL',
+          feature: 'mandala embedding',
+          alternative: 'openrouter (MANDALA_EMBED_RACE)',
+        },
+        { env: 'SNAPSHOT_SERVICE_URL', feature: 'note figure enrichment', alternative: null },
+        { env: 'QWEN_LORA_API_URL', feature: 'chatbot (self-hosted)', alternative: 'openrouter' },
+      ];
+
+      const tcpProbe = (host: string, port: number): Promise<{ ok: boolean; detail: string }> =>
+        new Promise((resolve) => {
+          const started = Date.now();
+          const sock = new net.Socket();
+          let settled = false;
+          const done = (ok: boolean, detail: string) => {
+            if (settled) return;
+            settled = true;
+            sock.destroy();
+            resolve({ ok, detail });
+          };
+          sock.setTimeout(PROBE_TIMEOUT_MS);
+          sock.once('connect', () => done(true, `${Date.now() - started}ms`));
+          sock.once('timeout', () => done(false, 'TIMEOUT'));
+          sock.once('error', (e: NodeJS.ErrnoException) => done(false, e.code ?? 'ERROR'));
+          sock.connect(port, host);
+        });
+
+      const services = await Promise.all(
+        DEPENDENCIES.map(async (d) => {
+          const raw = process.env[d.env];
+          if (!raw) {
+            return { ...d, configured: false, ok: false, detail: 'not configured' };
+          }
+          try {
+            const u = new URL(raw);
+            const port = Number(u.port) || (u.protocol === 'https:' ? 443 : 80);
+            const r = await tcpProbe(u.hostname, port);
+            return { ...d, configured: true, ...r };
+          } catch {
+            return { ...d, configured: true, ok: false, detail: 'unparseable url' };
+          }
+        })
+      );
       const transcriptProxies = await Promise.all(
         proxies.map(async (proxy) => {
           const ctl = new AbortController();
@@ -358,6 +425,7 @@ export async function buildServer() {
         // Names and outcomes only. No URLs and no tokens: this endpoint is
         // public for the same reason /health is, and the addresses are not.
         transcriptProxies,
+        services,
       });
     },
   });

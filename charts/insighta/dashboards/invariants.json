@@ -8,7 +8,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "refresh": "1m",
   "time": {
     "from": "now-7d",
@@ -1186,6 +1186,84 @@
               {
                 "id": "unit",
                 "value": "percent"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 40,
+      "title": "서비스 가용 현황",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      },
+      "description": "호스트가 죽었는지가 아니라 사용자가 그 기능을 쓸 수 있는지를 말합니다. 대체 경로가 있으면 '가능'이고, 없으면 '불가'입니다 — 둘을 같이 세면 대시보드를 안 보게 됩니다. 클러스터 안에서 TCP 로 측정한 값입니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT s->>'feature' AS \"기능\",\n       CASE\n         WHEN NOT (s->>'configured')::boolean THEN '미설정'\n         WHEN (s->>'ok')::boolean             THEN '가능'\n         WHEN s->>'alternative' IS NOT NULL   THEN '대체 경로로 가능'\n         ELSE '불가'\n       END AS \"상태\",\n       COALESCE(s->>'alternative', '없음') AS \"대체 수단\",\n       s->>'detail' AS \"측정\",\n       e.created_at AS \"측정 시각\"\n  FROM (SELECT context, created_at FROM error_events\n         WHERE subsystem='keel' AND stage='service-reachability'\n         ORDER BY created_at DESC LIMIT 1) e,\n       jsonb_array_elements(e.context->'services') s\n ORDER BY 2, 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          },
+          "noValue": "아직 측정되지 않았습니다 — Keel 이 한 번 돌면 채워집니다"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "상태"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "가능": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "대체 경로로 가능": {
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "불가": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "미설정": {
+                        "color": "text",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
               }
             ]
           }
