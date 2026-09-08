@@ -37,19 +37,55 @@ run log only.
 Three checks fail, and all three are real.
 
 **Transcript ingestion is down (47 days).** `pipeline_events` last took a row on
-2026-07-22. The cause is not the network and not the Mac Mini service:
+2026-07-22. Two independent blockers, both measured on 2026-09-08.
 
-- `pipeline_events` is written by exactly one place in the codebase —
-  the handler for `POST /api/v1/internal/transcript/summarize`.
-- That route is called by the collector on the Mac Mini, which polls
-  `/candidates` and posts results back. The traffic runs Mac Mini → cluster,
-  not cluster → Mac Mini.
-- Measured over ssh: the transcript *service* has been up 81 days and answers
-  with the cluster's token. The *collector* is not running, and there is no
-  launchd entry for it, so nothing restarts it after a reboot.
+*The write path, so the direction is not misread:* `pipeline_events` is written
+by exactly one place in the codebase — the handler for
+`POST /api/v1/internal/transcript/summarize`. That route is called by the
+authoring batch on the Mac Mini (`mac-mini/v2-author/`), which polls
+`/candidates` and posts results back. The traffic runs **Mac Mini → cluster**.
 
-So the collector stopped, and nothing said so for forty-seven days. Restarting
-it and registering it with launchd is the open item.
+**Blocker 1 — the Webshare proxy answers 402 Payment Required.** Run directly:
+
+    yt-dlp --proxy <webshare> ... https://www.youtube.com/watch?v=<id>
+    WARNING: Unable to connect to proxy: Tunnel connection failed: 402 Payment Required
+    ERROR:   Unable to download API page ... Giving up after 3 retries
+
+The same host reaches `youtube.com` with HTTP 200 when the proxy is not used, so
+this is the subscription, not the network. Nobody can act on it but the account
+owner. Note the Azure transcript proxy uses a *different* Webshare credential
+and is working — it returned a real YouTube response today.
+
+**Blocker 2 — the launchd job is not loaded, and cannot be loaded over ssh.**
+`~/Library/LaunchAgents/com.insighta.daily-targeted.plist` exists and is correct
+(hourly 00:00–06:00, `TRANSCRIPT_FETCHER=ytdlp`, Webshare credentials, N=70).
+It is absent from `launchctl list`, and it cannot be registered remotely:
+
+    launchctl bootstrap gui/501 ...   Bootstrap failed: 125: Domain does not support specified action
+    launchctl bootstrap user/501 ...  Bootstrap failed: 5: Input/output error
+    launchctl managername             Background
+
+Error 125 on `gui/501` means no Aqua session exists — the machine sits at the
+login window (`stat -f %Su /dev/console` returns `root`). A LaunchAgent needs
+that session, and so does `claude -p`, which the batch shells out to. Loading it
+requires a GUI login on the machine, or root.
+
+The machine has **not** rebooted: uptime is 81 days, which matches the transcript
+service's own 81 days. Whatever ended the GUI session ended the scheduled jobs
+with it; long-running processes started earlier survived.
+
+**The defect that hid it, now fixed.** `process-one.sh` mapped every failed
+fetch — including a proxy that refuses — to `no_caption`, stamped
+`transcript_attempted_at` (dropping the video from the pool for seven days),
+and exited 0. Hourly, that read as "none of today's videos have subtitles" while
+consuming the backlog. It now reports `proxy_error` with the reason, does not
+stamp the video, and `batch.sh` exits 5 when every fetch was blocked at the
+proxy. Verified: one run reports
+`proxy_error=1 ... every fetch was blocked at the proxy (1)` and `rc=5`.
+
+These scripts are untracked on purpose (#771, public-repo cleanup) and live only
+on the Mac Mini at `~/code/insighta/mac-mini/v2-author/`. Backups from this
+change: `process-one.sh.bak-20260908-191834`, `batch.sh.bak-20260908-191834`.
 
 **Note figure enrichment is down.** `SNAPSHOT_SERVICE_URL` times out from a pod
 and has no alternative, so figures are not enriched.
@@ -88,6 +124,9 @@ would have caught all three: measure the running system before naming a cause.
 
 ## Open
 
-1. Restart the Mac Mini collector and register it with launchd.
-2. Set `SLACK_ALERT_WEBHOOK`, or alerts stay in the ledger.
-3. `SNAPSHOT_SERVICE_URL` has no alternative — decide whether it gets one.
+1. Pay the Webshare subscription — nothing else unblocks transcript ingestion.
+2. Log into the Mac Mini's GUI (or run `launchctl bootstrap gui/501` as root) so
+   `com.insighta.daily-targeted` loads. Both are needed; either alone leaves the
+   pipeline stopped.
+3. Set `SLACK_ALERT_WEBHOOK`, or alerts stay in the ledger.
+4. `SNAPSHOT_SERVICE_URL` has no alternative — decide whether it gets one.
