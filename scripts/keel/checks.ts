@@ -204,7 +204,6 @@ export async function checkLlmSpend(): Promise<CheckResult> {
  * Measured 2026-09-08: llm_call_logs an hour old, video_summaries sixteen days,
  * pipeline_events forty-seven. Three different states, one number.
  */
-const STALE_HOURS = Number(process.env['MONITOR_STALE_HOURS'] ?? 26);
 
 /** Surfaces, with how long each may reasonably be quiet. Transcript ingestion
  *  runs on a schedule; summaries follow it; LLM calls happen whenever anyone

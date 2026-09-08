@@ -30,10 +30,18 @@ export const transcriptEnvSchema = z.object({
   MAC_MINI_TRANSCRIPT_URL: optionalStr.default(''),
   MAC_MINI_TRANSCRIPT_TOKEN: optionalStr.default(''),
   // Azure App Service transcript proxy (2026-07-09) — an always-on cloud host
-  // running the SAME Webshare-backed service, off EC2 (ToS: scraping must not
-  // run on EC2). Fixes the Mac Mini SPOF (home machine + Tailscale cold-path).
-  // Reuses MAC_MINI_TRANSCRIPT_TOKEN (the Azure service validates the same token).
+  // running the same Webshare-backed service, off EC2 (ToS: scraping must not
+  // run on EC2). Meant to fix the Mac Mini SPOF, and it did not, because it was
+  // never reachable: the config sent it MAC_MINI_TRANSCRIPT_TOKEN on the belief
+  // that "the Azure service validates the same token", and measurement on
+  // 2026-09-08 answered 401 on every path -- the host is up, the credential is
+  // wrong. A comment asserting a fact nobody had tested left the second proxy
+  // dead for two months while it appeared configured.
+  //
+  // Its own token now, falling back to the shared one so nothing breaks if they
+  // really are the same somewhere.
   AZURE_TRANSCRIPT_URL: optionalStr.default(''),
+  AZURE_TRANSCRIPT_TOKEN: optionalStr.default(''),
 });
 
 /** One transcript proxy the extractor can forward a caption fetch to. */
@@ -71,13 +79,20 @@ export function loadTranscriptConfig(env: NodeJS.ProcessEnv = process.env): Tran
     MAC_MINI_TRANSCRIPT_URL: macUrl,
     MAC_MINI_TRANSCRIPT_TOKEN: token,
     AZURE_TRANSCRIPT_URL: azureUrl,
+    AZURE_TRANSCRIPT_TOKEN: azureToken,
   } = parsed.data;
 
-  // The shared token gates both proxies. Azure first, then Mac Mini.
+  // Each proxy carries its own credential, and each is registered only when it
+  // has one. The previous form gated both on the Mac Mini token, so a missing
+  // Azure token was invisible: the proxy appeared in the list and answered 401.
+  // Azure first (always-on cloud), Mac Mini second (KR-IP fallback).
   const proxies: TranscriptProxy[] = [];
-  if (token.length > 0) {
-    if (azureUrl.length > 0) proxies.push({ name: 'azure', url: azureUrl, token });
-    if (macUrl.length > 0) proxies.push({ name: 'mac-mini', url: macUrl, token });
+  const azureAuth = azureToken.length > 0 ? azureToken : token;
+  if (azureUrl.length > 0 && azureAuth.length > 0) {
+    proxies.push({ name: 'azure', url: azureUrl, token: azureAuth });
+  }
+  if (macUrl.length > 0 && token.length > 0) {
+    proxies.push({ name: 'mac-mini', url: macUrl, token });
   }
 
   return {
