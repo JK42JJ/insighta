@@ -27,7 +27,7 @@
 | ICS-IAM-04 | 휴면 자격증명 제거 | 90일 미사용 비활성 | Config `iam-user-unused-credentials-check` | 자동 비활성 | 규칙 이름 | ○ | 2 | CIS 1.12 |
 | ICS-IAM-05 | CI 최소권한 정책 | 문장 단위 정책 3개, IAM 읽기만 | 정책 시뮬레이션 | PR 리뷰 | `terraform/global/iam-ci/main.tf` | ● | — | CIS 1.16 |
 | ICS-IAM-06 | 노드 역할 최소권한 | `insighta-k3s-node`: CloudWatch + ECR pull + SSM 코어 + SSM 파라미터 경로 | 정책 시뮬레이션 | PR 리뷰 | 역할 ARN | ◐ | 2–3 | CIS 1.16 |
-| ICS-IAM-07 | 특권 세션 감사 | SSM Session Manager 로그 → CloudWatch Logs 90일 | 로그 그룹 존재, 세션 수 | — | 로그 그룹 이름 | ○ | 2 | — |
+| ICS-IAM-07 | 특권 세션 감사 | 세션 로그(Tailscale SSH 세션 기록 또는 SSM → CloudWatch Logs) 90일 | 로그 그룹 존재, 세션 수 | — | 로그 그룹 이름 | ○ | 2 | — |
 | ICS-IAM-08 | 이미지 pull 자격증명 없음 | 인스턴스 프로파일 + kubelet credential provider | `imagePullSecrets: []` | — | `scripts/ops/k3s-node-setup.sh:24-37` | ● | — | — |
 | ICS-IAM-09 | CI 로그 식별자 마스킹 | `::add-mask::` 계정 ID·레지스트리 | 워크플로 로그 | — | `.github/workflows/deploy.yml:255-260` | ● | — | — |
 
@@ -36,7 +36,7 @@
 | ID | 통제 | 구현 | 측정 | 시정 | 증거 | 상태 | Phase | 기준 |
 |---|---|---|---|---|---|---|---|---|
 | ICS-NET-01 | 인바운드 최소화 | SG 80/443 만 공개, 제어평면 자기 SG | Config `restricted-ssh` | 22 전체 공개 시 자동 revoke | SG ID | ◐ | 1–2 | CIS 5.2 |
-| ICS-NET-02 | 인바운드 SSH 0 | SSM Session Manager 전환, SG 22 규칙 제거 | SG 22 규칙 수 | — | SG 규칙 diff | ○ | 2 | CIS 5.2 |
+| ICS-NET-02 | 인바운드 SSH 0 | 신원 기반 접근(Tailscale SSH 또는 SSM) 전환, SG 22 규칙 제거 | SG 22 규칙 수 | — | SG 규칙 diff | ○ | 2 | CIS 5.2 |
 | ICS-NET-03 | default SG 폐쇄 | default SG 인바운드·아웃바운드 제거 | Config `vpc-default-security-group-closed` | 자동 | SG ID | ○ | 1 | CIS 5.4 |
 | ICS-NET-04 | TLS 자동 발급·갱신 | cert-manager ClusterIssuer `letsencrypt` | Keel `public-surface`(만료 14일) | 알림 | `charts/insighta/environments/prod.yaml:143-152` | ● | — | ASVS 9.1 |
 | ICS-NET-05 | HSTS·보안 헤더 | ingress-nginx `add-headers` | 응답 헤더 | — | `charts/bootstrap/ingress-nginx-config.yaml:37-70` | ● | — | ASVS 14.4 |

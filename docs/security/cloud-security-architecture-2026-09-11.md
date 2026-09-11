@@ -138,7 +138,7 @@ Terraform 모듈 `terraform/modules/security-baseline` 로 선언한다.
 | GuardDuty | 탐지기 활성(CloudTrail 관리 이벤트 + VPC Flow + DNS 분석) | 30일 무료 체험 후 이벤트량 기반. 이 규모 월 1–4 USD. 체험 종료 전 실측 후 유지 결정 |
 | Access Analyzer | 계정 단위 외부 접근 분석기 | 무료 |
 | 알림 | EventBridge 규칙(GuardDuty 심각도 ≥ 7, Security Hub FAILED, Config NON_COMPLIANT) → SNS 토픽 → 이메일. Slack webhook 은 설정 시 추가 | 무료 |
-| 자동 시정 | Config remediation(SSM Automation) 3종: ① SG 22/tcp `0.0.0.0/0` → 즉시 revoke ② S3 public ACL/정책 → PAB 적용 ③ 90일 초과 액세스 키 → 비활성(삭제 아님). 판단이 필요한 항목은 시정하지 않고 SNS 로 보낸다 | 무료 |
+| 자동 시정 | Config remediation(SSM Automation) 3종: ① SG 22/tcp `0.0.0.0/0` → 즉시 revoke ② S3 public ACL/정책 → PAB 적용 ③ 90일 초과 액세스 키 → 비활성(삭제 아님). 판단이 필요한 항목은 시정하지 않고 SNS 로 보낸다. **초기 기본값**: ① 자동, ②③ 은 수동 트리거 — ② 는 계정 내 비-Insighta 버킷 `jk-commerce` 영향 검토 후, ③ 은 Phase 2 OIDC 전환 전에는 CI·admin 키(189일)가 대상이 되어 배포와 운영 CLI 를 끊으므로 전환 뒤 자동으로 올린다 | 무료 |
 
 판정 주기: Config = 리소스 변경 즉시 + 24시간 주기. Keel `cloud-posture` = 30분(§3.8).
 검증 방법(Phase 7): 의도적 위반 주입(테스트 SG 에 22 전체 공개) → Config NON_COMPLIANT → 자동 revoke → CloudTrail 에 시정 이벤트 → Keel 원장 기록. 이 한 바퀴가 관측되면 "자동 시정 운영" 으로 본다.
@@ -150,8 +150,8 @@ Terraform 모듈 `terraform/modules/security-baseline` 로 선언한다.
 | CI (GitHub Actions) | 정적 키 189일 | 정적 키 0 | IAM OIDC provider(`token.actions.githubusercontent.com`) + 역할 `insighta-github-actions`(trust: `repo:JK42JJ/insighta:ref:refs/heads/main`, `:environment:production`, `:pull_request`) 에 기존 정책 3개 부착. 워크플로 5개를 `aws-actions/configure-aws-credentials` `role-to-assume` 로 전환(`permissions: id-token: write`). 검증 후 사용자 `github-actions-terraform` 키 비활성 → 30일 후 삭제 |
 | 사람 (`admin`) | AdministratorAccess, MFA 없음, 정적 키 189일 | MFA 없이는 아무 것도 못 함 | 비밀번호 정책(14자 · 복잡도 · 90일 · 재사용 24회 금지). 정책 `RequireMFA`(`aws:MultiFactorAuthPresent=false` 시 MFA 등록 외 전부 Deny). CLI 는 MFA 세션 토큰(`sts get-session-token`) 또는 역할 전환. James 액션 = 가상 MFA 등록(콘솔) |
 | 휴면 (`slidegen-prh`) | 미사용 키 92일 | 휴면 0 | 비활성 → 30일 후 삭제. 이후 Config `iam-user-unused-credentials-check` 가 상시 판정 |
-| 운영자 SSH | 22 인바운드, allow-list /32 ×15 | 인바운드 0, 세션 감사 | 노드 역할에 `AmazonSSMManagedInstanceCore`, SSM Agent(Ubuntu 기본 snap) 확인, Session Manager 로그 → CloudWatch Logs(90일). `scripts/ops/ssh.sh` 에 `--ssm` 경로 추가(`aws ssm start-session --target <instance-id>`; 포트포워드는 `AWS-StartPortForwardingSession`). ArgoCD/Grafana 포트포워드도 SSM 으로. SG 22 규칙은 비상용 1개 소스로 축소 후 제거 |
-| 노드 역할 | `insighta-k3s-node` | 최소권한 유지 | SSM 코어 + SSM Parameter Store `/insighta/prod/*` 읽기(§3.5) 만 추가. 정책 시뮬레이션으로 확인 |
+| 운영자 SSH | 22 인바운드, allow-list /32 ×15 | 인바운드 22 = 0, 신원 기반 접근, 세션 감사 | 두 옵션 중 James 선택(§8). **옵션 A Tailscale SSH**: 노드에 tailscaled 설치, Tailscale SSH(신원 = tailnet 계정, ACL 로 사용자·호스트 제한, 세션 기록 옵션), SG 22 규칙 전부 제거(오버레이 경유). 기존 `insighta-ec2-ts` 폴백 경로와 같은 방식이라 이식성 정책에 부합. **옵션 B SSM Session Manager**: 노드 역할에 `AmazonSSMManagedInstanceCore`, 세션 로그 → CloudWatch Logs. AWS 전용이라 `terraform/.../variables.tf` 의 `enable_ssm` 설명("portability design rejects it")에 기록된 정책의 예외 승인이 필요. 어느 쪽이든 `scripts/ops/ssh.sh` 에 새 경로를 추가하고 ArgoCD/Grafana 포트포워드도 그 경로로 옮긴다 |
+| 노드 역할 | `insighta-k3s-node` (Terraform 관리 밖, 변수로 이름만 참조) | 최소권한 유지 | SSM Parameter Store `/insighta/prod/*` 읽기(§3.5) 추가, 옵션 B 선택 시 SSM 코어 추가. 역할을 Terraform 으로 import 한 뒤 정책 시뮬레이션으로 확인 |
 | 호스트 | kubeconfig 644 | 600 | `write-kubeconfig-mode: "0600"` |
 
 PAM 관점 정의: 특권 = 클러스터 admin(kubectl) · AWS admin · DB `postgres` role. 세 경로 모두 (a) MFA 또는 OIDC 신원 (b) 세션 로그 (c) 정적 비밀 없음을 만족해야 한다. DB `postgres` 접속은 CI 마이그레이션과 백업에만 남기고 Supabase 네트워크 제한(§3.6)으로 출처를 고정한다.
@@ -164,7 +164,7 @@ PAM 관점 정의: 특권 = 클러스터 admin(kubectl) · AWS admin · DB `post
 |---|---|---|---|
 | 최종 사용자 → API | Supabase JWT(ES256, 만료, JWKS 검증) | 유지. 라우트별 리밋 적용 | 6 |
 | CI → AWS | 정적 키 | OIDC 단기 토큰(1시간), 브랜치·환경 조건 | 2 |
-| 운영자 → 노드 | SSH 키 + 소스 IP | IAM 신원 + MFA + SSM 세션 로그 | 2 |
+| 운영자 → 노드 | SSH 키 + 소스 IP | 신원 기반 SSH(옵션 A Tailscale SSH / 옵션 B SSM) + 인바운드 22 제거 + 세션 로그 | 2 |
 | 워크로드 → 워크로드 | 네임스페이스 공유, 제한 없음 | NetworkPolicy default-deny + 명시 허용 | 3 |
 | 워크로드 → K8s API | default SA 토큰 자동 마운트 | 전용 SA, 필요 없는 파드는 automount off | 3 |
 | 워크로드 → 시크릿 | etcd base64 | ESO 가 SSM Parameter Store 에서 동기화, 노드 역할 경로 제한 | 3 |
@@ -228,7 +228,7 @@ Grafana `/keel/` 에 보안 패널 6개(위 5 + 정적 자격증명 잔여 수).
 |---|---|---|---|---|---|
 | 0 | 본 문서 + `control-catalog.md` | 문서 머지 | revert | 0 | 검토 |
 | 1 계정 기준선 | `modules/security-baseline`: CloudTrail · Config 13 규칙 · Security Hub FSBP · GuardDuty · Access Analyzer · 비밀번호 정책 · EBS 기본 암호화 · SNS 알림 · 자동 시정 3종 | CloudTrail 로그 S3 도착, Config 평가 결과 존재, Security Hub 점수 표시, SNS 구독 확인 메일 수신 | `terraform destroy -target module.security_baseline` (감사 로그 버킷은 `prevent_destroy`) | 0 | 머지 승인, SNS 구독 확인, 30일 후 비용 확인 |
-| 2 아이덴티티 | OIDC provider + 역할, 워크플로 5개 전환, `RequireMFA` 정책, 휴면 키 비활성, SSM Session Manager + `ssh.sh --ssm`, kubeconfig 0600 | 워크플로 OIDC 로 성공 실행 1회, CI 사용자 활성 키 0, `ssm start-session` 성공, credential report MFA 1/1 | 키 재활성(즉시), 워크플로 revert | 0 | admin 가상 MFA 등록 |
+| 2 아이덴티티 | OIDC provider + 역할, 워크플로 5개 전환, `RequireMFA` 정책, 휴면 키 비활성, 운영자 접근 전환(옵션 A/B, §8) + `ssh.sh` 새 경로, SG 22 규칙 제거, kubeconfig 0600, 키 시정 자동화 on | 워크플로 OIDC 로 성공 실행 1회, CI 사용자 활성 키 0, 새 경로로 kubectl 1회 성공, SG 22 규칙 0, credential report MFA 1/1 | 키 재활성(즉시), 워크플로 revert, SG 22 규칙 재등록(`ssh.sh --update-sg`) | 0 | admin 가상 MFA 등록, 접근 옵션 선택 |
 | 3 클러스터 | securityContext 표준 · 전용 SA · NetworkPolicy · PSA 라벨 · ESO+SSM Parameter Store | 전 파드 non-root, 격리 테스트(frontend 파드에서 redis 6379 접속 실패, api 에서 성공), `ExternalSecret` READY, PSA `restricted` enforce 후 배포 성공 | ArgoCD 이전 리비전 sync | 0 (롤링) | — |
 | 4 공급망 | Trivy CI 게이트 · Dependabot · `npm audit --audit-level=high` 게이트(기준선) · ECR IMMUTABLE + digest 핀 · Actions SHA 핀 · push protection on | CI 통과, ECR 정책 확인, `gh api` push_protection enabled | 워크플로 revert | 0 | — |
 | 5 데이터 | 인벤토리 문서 · RLS 커버리지 게이트 · 전체 export · 복원 리허설 1회 · secret alert 4건 종결 · Supabase 설정 · EBS 루트 암호화 | 게이트 PASS, 리허설 기록, alert open 0, `Encrypted=True` | 볼륨 교체 전 스냅샷으로 복귀 | EBS 교체 10–15분 | Supabase 대시보드 설정, 정지 시점 결정 |
@@ -281,9 +281,11 @@ Grafana `/keel/` 에 보안 패널 6개(위 5 + 정적 자격증명 잔여 수).
 
 1. Phase 1 머지 승인 — 머지 즉시 `terraform apply`. 비용 추정 월 2–8 USD.
 2. `admin` 사용자 MFA 등록(콘솔) — Phase 2 `RequireMFA` 정책 적용 전 필수. 등록 전 정책을 적용하면 콘솔 작업이 막힌다.
-3. EBS 루트 볼륨 암호화 교체 시점(10–15분 정지) — Phase 5.
-4. Supabase 대시보드 설정(SSL 강제·네트워크 제한) — Phase 5.
-5. GuardDuty 30일 무료 종료 시 유지 여부 — Cost Explorer 실측 후.
+3. 운영자 접근 방식 — 옵션 A Tailscale SSH(이식성 정책 부합, 노드에 tailscaled 설치) / 옵션 B SSM Session Manager(AWS 전용, 기존 정책 예외 필요). 기본 제안 = A.
+4. EBS 루트 볼륨 암호화 교체 시점(10–15분 정지) — Phase 5.
+5. Supabase 대시보드 설정(SSL 강제·네트워크 제한) — Phase 5.
+6. GuardDuty 30일 무료 종료 시 유지 여부 — Cost Explorer 실측 후.
+7. S3 공개 차단 자동 시정을 자동으로 올릴지 — `jk-commerce` 버킷(비-Insighta, PAB 없음)의 용도 확인 후.
 
 ## 9. 실측 기록 (2026-09-11, 값 미기재)
 
