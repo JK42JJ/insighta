@@ -117,7 +117,9 @@
 6. **증거 가능성.** 모든 통제는 AWS 리소스 ID·파일 경로·PR 번호·Keel 체크명 중 하나로 인용 가능해야 한다.
 7. **비용 상한.** 계정 규모(단일 노드, 리소스 수십 개) 기준 추가 비용 월 10 USD 이하(추정). 30일 후 Cost Explorer 로 실측해 유지 여부를 결정한다.
 
-## 3. 목표 아키텍처 (JD 영역별)
+## 3. 목표 아키텍처 (JD 영역별) — 장기 목표 상태
+
+적용 순서는 §4–§5 의 ROI 단계를 따른다. 본 절은 각 영역의 목표 상태와 구현 방식을 정의한다.
 
 ### 3.1 Cloud Security Architecture — 기술 표준
 
@@ -220,38 +222,75 @@ Keel(`scripts/keel/checks.ts`, 30분)에 5개 검사를 추가한다. 결과는 
 
 Grafana `/keel/` 에 보안 패널 6개(위 5 + 정적 자격증명 잔여 수). CI 러너에는 위 읽기 권한만 가진 OIDC 역할 `insighta-keel-reader` 를 별도로 둔다.
 
-## 4. 로드맵 (단위 = PR)
+## 4. 규모 판정과 ROI 기준 (2026-09-11 재편)
 
-각 PR 은 완료판정·롤백·다운타임을 PR 본문에 적는다. Phase 1 은 **머지 = terraform apply** 이므로 James 승인 뒤 머지한다.
+James 판정: "보안 설계를 전부 적용하는 것은 무리. 워크로드와 인프라 규모를 감안해 우선순위 높고 효과가 큰 것부터 단계 적용." 이에 따라 §3 은 **목표 상태(장기)** 로 두고, 적용 순서는 본 절과 §5 를 따른다.
 
-| Phase | 내용 | 완료판정 | 롤백 | 다운타임 | James 액션 |
-|---|---|---|---|---|---|
-| 0 | 본 문서 + `control-catalog.md` | 문서 머지 | revert | 0 | 검토 |
-| 1 계정 기준선 | `modules/security-baseline`: CloudTrail · Config 13 규칙 · Security Hub FSBP · GuardDuty · Access Analyzer · 비밀번호 정책 · EBS 기본 암호화 · SNS 알림 · 자동 시정 3종 | CloudTrail 로그 S3 도착, Config 평가 결과 존재, Security Hub 점수 표시, SNS 구독 확인 메일 수신 | `terraform destroy -target module.security_baseline` (감사 로그 버킷은 `prevent_destroy`) | 0 | 머지 승인, SNS 구독 확인, 30일 후 비용 확인 |
-| 2 아이덴티티 | OIDC provider + 역할, 워크플로 5개 전환, `RequireMFA` 정책, 휴면 키 비활성, 운영자 접근 전환(옵션 A/B, §8) + `ssh.sh` 새 경로, SG 22 규칙 제거, kubeconfig 0600, 키 시정 자동화 on | 워크플로 OIDC 로 성공 실행 1회, CI 사용자 활성 키 0, 새 경로로 kubectl 1회 성공, SG 22 규칙 0, credential report MFA 1/1 | 키 재활성(즉시), 워크플로 revert, SG 22 규칙 재등록(`ssh.sh --update-sg`) | 0 | admin 가상 MFA 등록, 접근 옵션 선택 |
-| 3 클러스터 | securityContext 표준 · 전용 SA · NetworkPolicy · PSA 라벨 · ESO+SSM Parameter Store | 전 파드 non-root, 격리 테스트(frontend 파드에서 redis 6379 접속 실패, api 에서 성공), `ExternalSecret` READY, PSA `restricted` enforce 후 배포 성공 | ArgoCD 이전 리비전 sync | 0 (롤링) | — |
-| 4 공급망 | Trivy CI 게이트 · Dependabot · `npm audit --audit-level=high` 게이트(기준선) · ECR IMMUTABLE + digest 핀 · Actions SHA 핀 · push protection on | CI 통과, ECR 정책 확인, `gh api` push_protection enabled | 워크플로 revert | 0 | — |
-| 5 데이터 | 인벤토리 문서 · RLS 커버리지 게이트 · 전체 export · 복원 리허설 1회 · secret alert 4건 종결 · Supabase 설정 · EBS 루트 암호화 | 게이트 PASS, 리허설 기록, alert open 0, `Encrypted=True` | 볼륨 교체 전 스냅샷으로 복귀 | EBS 교체 10–15분 | Supabase 대시보드 설정, 정지 시점 결정 |
-| 6 AI | 라우트 리밋 배선 · 격리 템플릿 · 출력 가드 · 모델 allowlist · 상수시간 비교 | 단위 테스트 + 스테이징 챗 1회 | revert | 0 | — |
-| 7 관측 | Keel 검사 5 · Grafana 패널 · 자동 시정 한 바퀴 검증 | 위반 주입 → 시정 → 원장 기록 관측 | 검사 제거 | 0 | — |
+규모(실측): 노드 1(t3.medium) · 파드 11 · 운영자 1 + 자동화 · 베타 규모 사용자 · LLM 지출 ≈ 0/일 · 공개 리포. 통제의 가치 = 막는 사고의 크기 × 발생 확률 ÷ (구축 시간 + 월 비용 + 운영 마찰).
 
-우선순위 근거: Phase 1→2→3 이 JD 의 핵심 3개(CSPM · IAM/PAM/Zero Trust · Cloud Native)를 다운타임 0 으로 만든다. Phase 5 의 EBS 교체만 정지가 필요하므로 뒤에 둔다.
+위협 순위 (이 규모에서 현실적인 순서):
 
-## 5. 비용·다운타임·롤백 요약
-
-| 항목 | 월 비용 (추정) | 다운타임 | 롤백 |
+| 순위 | 위협 | 근거 (실측) | 막는 비용 |
 |---|---|---|---|
-| CloudTrail + S3 | < 0.1 USD | 0 | trail 삭제, 버킷 보존 |
-| AWS Config 13 규칙 | 1–3 USD | 0 | recorder 정지 |
-| Security Hub FSBP | 0 USD (무료 구간) | 0 | 표준 비활성 |
-| GuardDuty | 30일 무료 → 1–4 USD | 0 | 탐지기 삭제 |
-| SSM Session Manager · Parameter Store · ESO · OIDC · Access Analyzer · Trivy · Dependabot | 0 USD | 0 | 각 Phase 표 |
-| EBS 암호화 볼륨 | 0 USD (gp3 동일 단가) | 10–15분 | 스냅샷 복귀 |
-| 합계 | 2–8 USD (상한 10 USD) | EBS 1회 | — |
+| 1 | 자격증명 유출·도용 → 계정 탈취(요금·데이터) | 공개 리포 노출 이력 4건 중 **Google OAuth client secret·ID 는 2026-03-04 노출값과 현재 로컬 값이 동일**(해시 대조). 정적 키 2개 189일. 콘솔 MFA 0/3 | 회전·OIDC·MFA — 시간 1일, 비용 0 |
+| 2 | 사고 조사 불가 | CloudTrail trail 0 → 누가·언제·무엇을 했는지 알 수 없음 | 무료 |
+| 3 | 앱 취약점 → 컨테이너 → 단일 노드 전체 | 앱 파드 4종 root 가능 · capabilities 전부 | 차트 값 변경만 |
+| 4 | 백업 복원 미검증 | 일일 백업은 있으나 복원 리허설 기록 0 | 1시간 |
+| 5 | LLM 소비 남용 | 차단기·비용 게이트 있음, 사용자별 리밋만 미배선 | 30분 |
+| 낮음 | 워크로드 간 횡이동 · etcd 시크릿 암호화 · 구성 준수 점수화 · WAF · NetworkPolicy · ESO · DSPM 인벤토리 · AI 인젝션 | 단일 테넌트·단일 디스크·낮은 트래픽에서는 막는 사고의 크기가 작거나, 이미 아는 사실을 다시 보고하는 수준 | Stage 3 트리거 |
 
-## 6. 이력 기술용 사실 구분
+## 5. 단계 설계 (ROI 순)
 
-### 6.1 현재 시점에 사실인 것 (구현 전에도 인용 가능)
+### Stage 1 — 자격증명·감사 (목표 1일, 월 0–3 USD)
+
+| # | 항목 | 막는 것 | 작업 | 검증 |
+|---|---|---|---|---|
+| 1 | 노출 시크릿 종결 | 공개 히스토리의 자격증명 재사용 | Google OAuth client secret 재발급(GCP 콘솔) → Supabase Auth Google provider · Edge Function 시크릿 · GitHub Secrets 갱신 → 4 alert 를 revoked 로 닫음. Supabase 서비스키·Google API 키는 prod 현재값과 불일치(교체됨) 확인됨 | secret-scanning open 0, 로그인 E2E 1회 |
+| 2 | CI 정적 키 0 | CI 키 유출 시 계정 조작 | GitHub OIDC provider + 역할 `insighta-github-actions`(trust: `repo:JK42JJ/insighta` main·production·pull_request) 에 기존 정책 3개 부착 → 워크플로 5개 `role-to-assume` 전환 → 사용자 `github-actions-terraform` 키 삭제 | OIDC 로 워크플로 성공 1회, credential report CI 활성 키 0 |
+| 3 | 운영자 MFA 강제 | admin 키·비밀번호 유출 시 계정 탈취 | James: 가상 MFA 등록. 코드: `RequireMFA` 정책(MFA 없으면 MFA 등록·비밀번호 변경·`sts:GetSessionToken` 외 전부 Deny) 을 `mfa_required_users` 로 부착. CLI 는 `scripts/ops/aws-mfa.sh` 로 36시간 세션. 휴면 키(`slidegen-prh`) 삭제. 비밀번호 정책 | credential report MFA 1/1, MFA 없는 호출 AccessDenied 확인 |
+| 4 | 감사·탐지·알림 | 조사 불가, 탈취 탐지 지연 | CloudTrail 멀티리전 → S3 + CloudWatch Logs(90일) · 지표 알람 3(root 사용 · MFA 없는 콘솔 로그인 · AccessDenied 급증) · GuardDuty(유료 플랜 off) + 심각도 ≥7 알림 · SNS 이메일 · EBS 기본 암호화. **Config·Security Hub·자동 시정은 코드만 두고 플래그 off** | `get-trail-status IsLogging=true`, 알람 3 OK, GuardDuty detector 1, 구독 Confirmed, 테스트 알림 1회 |
+| 5 | 리포 보호 | 새 노출 | push protection on · Dependabot alerts on · validity checks on | 설정 확인 |
+| 6 | SG 22 정리 | 누적 출처 | /32 15개 중 실사용 외 revoke. 접근 방식 전환(Tailscale SSH/SSM)은 Stage 3 | SG 22 규칙 ≤ 2 |
+
+운영 마찰(James 결정): #3 이후 CC 의 AWS CLI 는 36시간마다 James 의 MFA 코드 1회가 필요하다. 이력 문장: "CI·운영자 정적 자격증명을 OIDC·MFA 로 대체하고, 계정 감사·위협 탐지·알림을 IaC 로 선언·운영".
+
+### Stage 2 — 워크로드·복원·상시 관측 (목표 1일, 월 0)
+
+| # | 항목 | 막는 것 | 작업 | 검증 |
+|---|---|---|---|---|
+| 1 | 워크로드 최소권한 실행 | 컨테이너 탈출·권한 상승 | api·worker·frontend·redis securityContext(runAsNonRoot · drop ALL · allowPrivilegeEscalation false · seccomp RuntimeDefault) + `automountServiceAccountToken: false`. readOnlyRootFilesystem 은 제외(쓰기 경로 조사 비용 > 효과) | 전 파드 non-root, 롤링 후 헬스 정상 |
+| 2 | 복원 리허설 | 복원 불가 백업 | 최신 백업을 별도 DB 에 복원, 테이블·행 수 대조, RTO 기록 `docs/security/restore-drills.md` | 기록 1건 |
+| 3 | 보안 자세 상시 관측 | 재발(키 노화·MFA 해제·새 노출) | Keel `iam-hygiene`(credential report: MFA·키 나이·정적 키 수) · `secret-exposure`(secret-scanning·Dependabot critical) + Grafana 행 1 | 원장 기록, 패널 |
+| 4 | 챗봇 사용자별 리밋 · 상수시간 비교 | 소비 남용·타이밍 | 정의된 tier-3 `RATE_LIMITS.llm` 배선, `crypto.timingSafeEqual` | 테스트 |
+| 5 | 전송·호스트 | 평문 DB 접속·kubeconfig 노출 | Supabase SSL 강제(대시보드), `write-kubeconfig-mode 0600` | 설정 확인 |
+
+이력 문장: "워크로드 최소권한 실행 표준, 백업 복원 검증, 보안 자세 상시 관측(Keel)".
+
+### Stage 3 — 규모 트리거 (지금 적용하지 않음)
+
+| 항목 | 적용 트리거 | 준비 상태 |
+|---|---|---|
+| Config 13 규칙 + Security Hub + 자동 시정 | 운영자 ≥2 · 고객/파트너 보안 점검 요청 · 리소스 ≥100 | 코드 완성, `enable_config`·`enable_securityhub` 플래그 on 이면 적용 |
+| NetworkPolicy + PSA restricted | 노드 ≥2 또는 제3자 워크로드 | 설계 §3.5 |
+| ESO + SSM Parameter Store | 팀 ≥2 또는 회전 주기 요구 | 설계 §3.5 |
+| EBS 루트 볼륨 재암호화 | 다음 노드 재생성에 동반(별도 정지 없음) | 기본 암호화는 Stage 1 에서 on |
+| Trivy · npm audit 게이트 · digest 핀 · Actions SHA 핀 | Dependabot critical 월 1건 이상 또는 배포 빈도 증가 | 설계 §3.5 |
+| WAF | 인그레스 로그 공격 패턴 · 429 급증 | — |
+| DSPM 인벤토리 · RLS 게이트 · 전체 export | 프론트→DB 직접 접근 확대 · 개인정보 처리방침 갱신 | 설계 §3.6 |
+| AI 인젝션 격리 · 출력 가드 · 모델 allowlist | 챗봇 tool-use 도입 또는 사용량 임계 | 설계 §3.7 |
+| 운영자 접근 전환(Tailscale SSH / SSM) · IAM Identity Center | 운영자 ≥2 | 설계 §3.3 |
+
+## 6. 비용·마찰·롤백
+
+| Stage | 월 비용(추정) | 정지 | 마찰 | 롤백 |
+|---|---|---|---|---|
+| 1 | 0–3 USD (GuardDuty 30일 무료 후, CloudWatch Logs 소량) | 0 | CC CLI MFA 세션 36h | 키 재발급 · 정책 detach · `enable_security_baseline=false` |
+| 2 | 0 | 0 (롤링) | 없음 | ArgoCD 이전 리비전 |
+| 3 | 항목별 | EBS 교체 시 10–15분 | — | 항목별 |
+
+## 7. 이력 기술용 사실 구분
+
+### 7.1 현재 시점에 사실인 것 (구현 전에도 인용 가능)
 
 - 인그레스 TLS 자동 발급·갱신(cert-manager), HSTS preload, 보안 헤더 4종, `/api` 30 rps 리밋, 관리 콘솔(ArgoCD·Grafana) 인터넷 미노출.
 - ECR pull 을 인스턴스 프로파일 + kubelet credential provider 로 처리해 이미지 pull 시크릿 0. IMDSv2 강제.
@@ -259,35 +298,29 @@ Grafana `/keel/` 에 보안 패널 6개(위 5 + 정적 자격증명 잔여 수).
 - Supabase JWT ES256/JWKS 검증(verify-only), 관리자 경계 `is_super_admin` 101/102, 봇 쓰기 1회용 승인 토큰, 서비스 role 키 프론트엔드 0.
 - 관측 경로는 읽기전용 DB role + 테이블별 RLS 정책을 PreSync 훅이 생성·회전(사람이 비밀번호를 타이핑하지 않음).
 - 일일 DB 백업 → S3(SSE·버저닝·PAB·30일 보존), 실패 시 이슈 자동 생성. LLM 비용 게이트 L1–L5 + 크레딧 차단기 + 호출 원장.
-- Keel: 8개 불변식 30분 주기 검사(배포 드리프트·공개면·TLS 만료·LLM 지출·AWS 비용·파이프라인 신선도·스키마), `error_events` 원장, 전이 시 알림.
+- Keel: 8개 불변식 30분 주기 검사, `error_events` 원장, 전이 시 알림.
 
-### 6.2 구현 후 추가되는 사실 (Phase 완료 시 §7 증거와 함께)
+### 7.2 Stage 완료 시 추가되는 사실 (§8 증거와 함께)
 
-- Phase 1: AWS 계정 보안 기준선을 IaC 로 선언 — CloudTrail·Config 13 규칙·Security Hub·GuardDuty·Access Analyzer, 위반 3종 자동 시정, 알림 파이프라인.
-- Phase 2: CI 정적 자격증명 0(OIDC), 콘솔 MFA 강제, 특권 접근을 SSM Session Manager 로 전환(인바운드 SSH 0, 세션 감사 로그).
-- Phase 3: 워크로드 격리(NetworkPolicy default-deny, restricted PSA, 전용 SA), 시크릿을 etcd 밖(SSM Parameter Store + ESO)으로.
-- Phase 4: 이미지 취약점 게이트, 의존성 취약점 게이트, digest 핀, push protection.
-- Phase 5: 데이터 인벤토리·RLS 커버리지 게이트·복원 리허설·EBS 암호화.
-- Phase 6: LLM 인젝션 격리·출력 가드·사용자별 리밋·모델 allowlist.
-- Phase 7: 보안 자세를 Keel 5 검사 + Grafana 패널로 상시 관측, 자동 시정 한 바퀴 검증 기록.
+- Stage 1: 노출 자격증명 종결, CI 정적 자격증명 0(OIDC), 콘솔 MFA 강제, CloudTrail·GuardDuty·알람 3종·알림 파이프라인을 IaC 로 선언, EBS 기본 암호화.
+- Stage 2: 워크로드 최소권한 실행 표준, 백업 복원 검증 기록, Keel 보안 검사 2종.
+- Stage 3: 트리거 충족 항목만.
 
-## 7. 증거표 (구현 시 채움)
+## 8. 증거표 (구현 시 채움)
 
-| 통제 ID | Phase | 증거 유형 | 값 | 확인일 |
+| 통제 ID | Stage | 증거 유형 | 값 | 확인일 |
 |---|---|---|---|---|
-| (Phase 1 머지 후 기입) | | | | |
+| (Stage 1 적용 후 기입) | | | | |
 
-## 8. 결정 대기 (James)
+## 9. 결정 대기 (James)
 
-1. Phase 1 머지 승인 — 머지 즉시 `terraform apply`. 비용 추정 월 2–8 USD.
-2. `admin` 사용자 MFA 등록(콘솔) — Phase 2 `RequireMFA` 정책 적용 전 필수. 등록 전 정책을 적용하면 콘솔 작업이 막힌다.
-3. 운영자 접근 방식 — 옵션 A Tailscale SSH(이식성 정책 부합, 노드에 tailscaled 설치) / 옵션 B SSM Session Manager(AWS 전용, 기존 정책 예외 필요). 기본 제안 = A.
-4. EBS 루트 볼륨 암호화 교체 시점(10–15분 정지) — Phase 5.
-5. Supabase 대시보드 설정(SSL 강제·네트워크 제한) — Phase 5.
-6. GuardDuty 30일 무료 종료 시 유지 여부 — Cost Explorer 실측 후.
-7. S3 공개 차단 자동 시정을 자동으로 올릴지 — `jk-commerce` 버킷(비-Insighta, PAB 없음)의 용도 확인 후.
+1. **Stage 1 실행 승인** — PR #1626 머지(= CloudTrail·CloudWatch 알람·GuardDuty·SNS·EBS 기본 암호화 apply) + `terraform/global/iam-ci` 수동 apply(OIDC 역할) + 워크플로 전환 PR 머지.
+2. **admin 가상 MFA 등록** + CC CLI 36시간 MFA 세션 마찰 수용. 등록 후 `mfa_required_users = ["admin"]` 으로 정책 부착.
+3. **Google OAuth client secret 재발급** — GCP 콘솔 작업은 James, 이후 Supabase Auth·EF 시크릿·GitHub Secrets 갱신은 CC. 재발급 시점에 로그인 1회 재검증.
+4. 운영자 SSH 접근 전환(Tailscale SSH / SSM)은 Stage 3 로 이월. 현행 allow-list 유지, 누적 정리만.
+5. GuardDuty 30일 무료 종료 시 유지 여부 — Cost Explorer 실측 후.
 
-## 9. 실측 기록 (2026-09-11, 값 미기재)
+## 10. 실측 기록 (2026-09-11, 값 미기재)
 
 - AWS: `sts get-caller-identity` · `cloudtrail describe-trails` · `guardduty list-detectors` · `configservice describe-configuration-recorder-status` · `securityhub describe-hub` · `accessanalyzer list-analyzers` · `iam get-account-summary` · `iam get-account-password-policy` · `iam list-users/list-mfa-devices/list-access-keys` · `iam get-credential-report` · `iam list-open-id-connect-providers` · `ec2 describe-instances`(IMDS·프로파일) · `ec2 describe-volumes` · `ec2 describe-security-groups` · `ec2 get-ebs-encryption-by-default` · `ecr describe-repositories` · `s3api get-public-access-block/get-bucket-encryption/get-bucket-versioning`.
 - 클러스터(`scripts/ops/ssh.sh k3s`): `kubectl get ns --show-labels` · `get netpol -A` · `get ingress -A` · `get clusterissuer,certificate -A` · `get applications -A` · `get secrets -A` · `k3s secrets-encrypt status` · `get pods -A -o custom-columns=(securityContext·SA·automount)` · `get clusterrolebinding/rolebinding` · `/etc/rancher/k3s/config.yaml` · `ss -ltnp` · `sshd -T` · unattended-upgrades · ufw/fail2ban.
