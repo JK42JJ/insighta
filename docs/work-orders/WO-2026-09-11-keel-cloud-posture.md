@@ -1,6 +1,6 @@
 ---
 id: WO-2026-09-11-keel-cloud-posture
-status: running
+status: verified
 owner: insighta-session
 opened: 2026-09-11
 ---
@@ -17,8 +17,8 @@ opened: 2026-09-11
 - 알람 기대 목록은 모듈 `locals.trail_alarms` 의 키 8개와 같아야 한다. 모듈에 알람을 추가하면 이 목록도 같은 PR 에서.
 
 # 검증 기준
-- [ ] `tests/unit/keel/cloud-posture.test.ts` 7건 통과(CI 백엔드 잡, ts-jest 가 `scripts/keel` 타입 검사)
-- [ ] 예약 실행에서 `cloud-posture` 행이 `error_events` 에 남고, 현재 상태에서는 ok:false "alert topic has no confirmed subscription (pending 1)" 만 보고
+- [x] `tests/unit/keel/cloud-posture.test.ts` 7건 통과(CI 백엔드 잡, ts-jest 가 `scripts/keel` 타입 검사)
+- [x] keel.yml 실행에서 `cloud-posture` 가 CI 역할로 7개 사실을 읽고 ok:false "alert topic has no confirmed subscription (pending 1)" 만 보고 — 2026-09-11 21:27 KST dispatch run 34598933706
 - [ ] James 가 support@ 받은편지함에서 SNS 구독을 확인하면 다음 주기에 ok:true 로 전이
 
 # james
@@ -28,4 +28,8 @@ SNS 구독 확인 메일(support@insighta.one) 클릭 — 이 검사가 초록�
 기준선 7가지 사실을 30분마다 읽어 하나라도 어긋나면 이름을 붙여 알린다. 지금 어긋난 것은 알림 구독 미확인 하나뿐이다.
 
 # 결과
-(머지 후 기록)
+2026-09-11 (자율 루프 2차)
+- 머지 #1641(424e6d90, merge-green). `scripts/keel/check-cloud-posture.ts` + 테스트 7(로컬 7/7, CI 백엔드 잡 통과). 보안 문서 3곳(카탈로그 ICS-OBS-02 3/5 · 아키텍처 §7 검사표 · CI 역할 서술)을 구현 사실로 교정.
+- 라이브(로컬 자격증명, 21:20 KST): trail logging · 알람 8 armed · EBS on · 비밀번호 14 · 감사 버킷 4/4 차단 · SNS confirmed 0 pending 1 → ok:false "alert topic has no confirmed subscription (pending 1)".
+- CI 역할(OIDC `insighta-github-actions`)로도 동일: dispatch run 34598933706(21:27 KST) "cloud-posture: alert topic has no confirmed subscription (pending 1)" — 읽기 7종 전부 AccessDenied 없음. 남은 것 = James 의 SNS 구독 확인(QUESTIONS).
+- 롤백: `ALL_CHECKS` 에서 `checkCloudPosture` 제거. 권한 변경 없음.

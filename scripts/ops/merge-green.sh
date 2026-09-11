@@ -39,4 +39,9 @@ case "$mstate" in
 esac
 
 [ "$mode" = "--check" ] && { echo "check only; not merging"; exit 0; }
-gh pr merge "$pr" --squash --delete-branch
+# Squash-merge, then delete the remote branch only: --delete-branch also tries
+# to switch the local checkout, which fails whenever the branch lives in a
+# worktree, and that noise was read as a failed merge once.
+branch="$(gh pr view "$pr" --json headRefName --jq .headRefName)"
+gh pr merge "$pr" --squash
+git push origin --delete "$branch" >/dev/null 2>&1 && echo "remote branch $branch deleted" || echo "remote branch $branch already gone"
