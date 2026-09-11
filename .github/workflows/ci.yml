@@ -9,6 +9,9 @@ on:
   # feature branches, and deploy.yml re-invokes this workflow via
   # `workflow_call` on main merge, so the push trigger was redundant.
   pull_request:
+    # edited: the done-gate and pr-body-english jobs read the PR body, so a body
+    # edit has to re-run them; without this the only way to re-check is a push.
+    types: [opened, synchronize, reopened, edited]
     branches: [main]
   workflow_call:
 
