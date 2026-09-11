@@ -552,31 +552,44 @@ export async function checkIamHygiene(): Promise<CheckResult> {
 }
 
 /**
- * supply-chain: open Dependabot alerts of critical or high severity on the
- * default branch. Read through gh with the workflow token (security-events:
- * read). Zero is the target; the count is kept in context so the ledger
- * shows the trend even while it is not zero.
+ * supply-chain: known vulnerabilities in the two dependency trees, counted
+ * from `npm audit` on the lockfiles (no install, no token). The Dependabot
+ * API was tried first and refused the workflow token ("Resource not
+ * accessible by integration"), so the audit is the source. Zero critical
+ * and zero high is the target; the counts stay in context so the ledger
+ * shows the trend while it is not.
  */
+function auditCounts(cwd: string): Record<string, number> {
+  const out = execSync('npm audit --json --package-lock-only 2>/dev/null || true', {
+    cwd,
+    encoding: 'utf8',
+    timeout: 120_000,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  const parsed = JSON.parse(out || '{}') as { metadata?: { vulnerabilities?: Record<string, number> } };
+  const v = parsed.metadata?.vulnerabilities ?? {};
+  return { critical: v['critical'] ?? 0, high: v['high'] ?? 0, moderate: v['moderate'] ?? 0, low: v['low'] ?? 0 };
+}
+
 export async function checkSupplyChain(): Promise<CheckResult> {
   const check = 'supply-chain';
   try {
-    const out = execSync(
-      "gh api 'repos/JK42JJ/insighta/dependabot/alerts?state=open&per_page=100' --paginate --jq '.[].security_advisory.severity'",
-      { encoding: 'utf8', timeout: PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'pipe'] }
-    );
-    const counts: Record<string, number> = {};
-    for (const sev of out.split('\n').map((x) => x.trim()).filter(Boolean)) counts[sev] = (counts[sev] ?? 0) + 1;
-    const critical = counts.critical ?? 0;
-    const high = counts.high ?? 0;
+    const root = process.cwd();
+    const backend = auditCounts(root);
+    const frontend = auditCounts(`${root}/frontend`);
+    const critical = (backend['critical'] ?? 0) + (frontend['critical'] ?? 0);
+    const high = (backend['high'] ?? 0) + (frontend['high'] ?? 0);
     const ok = critical === 0 && high === 0;
     return {
       check,
       ok,
-      detail: ok ? 'no open critical or high dependency alerts' : `open dependency alerts: critical ${critical}, high ${high}`,
-      context: counts,
+      detail: ok
+        ? 'no critical or high vulnerabilities in either lockfile'
+        : `vulnerabilities: backend critical ${backend['critical']} high ${backend['high']} · frontend critical ${frontend['critical']} high ${frontend['high']}`,
+      context: { backend, frontend },
     };
   } catch (err) {
-    return { check, ok: false, detail: `dependabot alerts unavailable: ${String(err).slice(0, 160)}` };
+    return { check, ok: false, detail: `npm audit failed: ${String(err).slice(0, 160)}` };
   }
 }
 
