@@ -1,6 +1,6 @@
 ---
 id: WO-2026-09-11-newsletter-v21-pr4-gates
-status: running
+status: verified
 owner: insighta-session
 opened: 2026-09-11
 ---
@@ -34,3 +34,4 @@ v2.1 §3.4(등급 계산) · §4 W5·W7·W8 · §9 PR 4. 픽스처 = 핸드오�
 - `tests/unit/modules/newsletter-v2-gates.test.ts`: 16 테스트 전부 통과. §A 9건 중 A1·A2·A3·A4·A5 = 미확인 검출, A6 = 관측이며 [확인] 표기 시 차단, A7·A8 = 정상 통과(관측), A9 = 마커 차단. §C 차단, §D 미확인, §E 미fetched 차단·fetched 확인. 미구현 게이트·미실행 block 게이트 = 발행 불가.
 - 미검증: 실제 DB 행(`nl_claim` 등)을 스냅샷으로 읽는 어댑터와 W7 실행 경로(PR 1 머지 후). 렌더 후 각주 검사는 렌더러(W9)가 있어야 실동작. soft 4종 중 어미 일관성 · 동사 반복 · 용어 풀이 · 이해 판정기는 형태소 분석(`kiwipiepy`)이 필요해 이번 PR 제외.
 - 롤백: 새 파일 3개 삭제. 실행 경로에 아직 배선되지 않아 서비스 무영향.
+- 2026-09-11 21:52 KST #1644: verify-log §B 정상 문장 11행 픽스처(12 테스트) — 오탐 0. 검증 기준 4/4 → verified. 남은 것(DB 어댑터 · W7 실행 경로 · 렌더 후 각주 검사)은 PR #1632 머지 뒤 별도 오더.
