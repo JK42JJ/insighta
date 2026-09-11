@@ -164,3 +164,9 @@ variable "mfa_required_users" {
   type        = list(string)
   default     = []
 }
+
+variable "enable_guardduty" {
+  description = "GuardDuty detector. Off by rule: security spends nothing, and GuardDuty bills after its trial."
+  type        = bool
+  default     = false
+}

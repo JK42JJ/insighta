@@ -227,5 +227,6 @@ module "security_baseline" {
   audit_bucket_name  = var.audit_bucket_name
   alert_email        = var.security_alert_email
   mfa_required_users = var.mfa_required_users
+  enable_guardduty   = var.enable_guardduty
   tags               = local.common_tags
 }
