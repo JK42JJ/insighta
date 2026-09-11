@@ -57,7 +57,7 @@ resource "aws_iam_role" "github_actions" {
 
   tags = {
     ManagedBy = "terraform"
-    Purpose   = "GitHub Actions CI/CD (OIDC)"
+    Purpose   = "GitHub Actions CI/CD OIDC"
   }
 }
 
