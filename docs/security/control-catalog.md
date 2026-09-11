@@ -8,9 +8,9 @@
 | ID | 통제 | 구현 | 측정 | 시정 | 증거 | 상태 | Stage | 기준 |
 |---|---|---|---|---|---|---|---|---|
 | ICS-ACC-01 | 모든 API 호출 기록 | CloudTrail 멀티리전 trail, S3 `insighta-audit-logs`, 무결성 검증 | Config `cloudtrail-enabled` | 알림 | trail ARN | ● | S1 | CIS 3.1 |
-| ICS-ACC-02 | 구성 준수 상시 판정 | AWS Config recorder + 관리형 규칙 13 | Config 대시보드, Keel `cloud-posture` | 규칙별 remediation | recorder 이름 | ○ | S3 | CIS 3.3 |
-| ICS-ACC-03 | CSPM 표준 점수 | Security Hub FSBP | 보안 점수, FAILED 수 | 알림 | hub ARN | ○ | S3 | — |
-| ICS-ACC-04 | 위협 탐지 | GuardDuty 탐지기 | 심각도 ≥ 7 findings | 알림 | detector ID | ● | S1 | CIS 4.16 |
+| ICS-ACC-02 | 구성 준수 상시 판정 | **Prowler**(오픈소스) 주간 실행 → Keel 원장 (Config 는 과금이라 사용 안 함) | Prowler 리포트, Keel `cloud-posture` | 시정 스크립트 | 워크플로 | ○ | S2 | CIS 3.3 |
+| ICS-ACC-03 | CSPM 표준 점수 | Prowler CIS 통과율 (Security Hub 는 규칙상 사용 안 함) | 통과율 추이 | 알림 | 리포트 | ○ | S2 | — |
+| ICS-ACC-04 | 위협 탐지 | CloudTrail 지표 알람 8(root · MFA 없는 로그인 · 권한 거부 급증 · IAM 정책 · 트레일 · SG 구조 · 버킷 노출 · 네트워크). GuardDuty 는 과금이라 제거 | 알람 상태 | SNS 알림 → 런북 | 알람 `insighta-*` 8개 | ● | S1 | CIS 4.x |
 | ICS-ACC-05 | 외부 접근 분석 | IAM Access Analyzer | active findings | 알림 | analyzer ARN | ● | S1 | CIS 1.20 |
 | ICS-ACC-06 | root 보호 | root MFA, 액세스 키 없음 | credential report, Config `root-account-mfa-enabled` | 알림 | 리포트 행 | ● | — | CIS 1.5 |
 | ICS-ACC-07 | 비밀번호 정책 | 14자·복잡도·90일·재사용 24회 금지 | Config `iam-password-policy` | 알림 | 정책 JSON | ● | S1 | CIS 1.8–1.9 |
@@ -72,7 +72,7 @@
 | ICS-DATA-03 | 관측 경로 읽기전용 | `keel_read` role + 테이블별 RLS 정책, PreSync 훅 생성 | 훅 로그 | 회전 | `charts/insighta/files/keel-provision.js:190-229` | ● | — | — |
 | ICS-DATA-04 | 사용자 비밀 저장 암호화 | LLM 키 AES-256-GCM, OAuth 토큰 `ENCRYPTION_SECRET` | 코드 | 회전 절차 | `src/modules/settings/llm-keys.ts` | ● | — | ASVS 6.2 |
 | ICS-DATA-05 | 백업 | 일일 pg_dump → S3(SSE·버저닝·PAB·30일), 실패 이슈 | 워크플로 결과 | 이슈 | `.github/workflows/backup.yml` | ● | — | CIS 2.x |
-| ICS-DATA-06 | 복원 리허설 | 분기 1회, 기록 | `restore-drills.md` | — | 기록 | ○ | S2 | — |
+| ICS-DATA-06 | 복원 리허설 | `scripts/ops/restore-drill.sh`, 분기 1회 | `restore-drills.md` | 절차 수정 | 기록 #1 (2026-09-11 성공, 108 테이블 일치) | ● | S1 | — |
 | ICS-DATA-07 | 저장소 공개 차단 | S3 PAB 4/4 + SSE | Config `s3-bucket-public-read-prohibited` | 자동 PAB | 버킷 설정 | ◐ (`insighta-cost-reports` BlockPublicPolicy off, `jk-commerce` PAB 없음) | S3 | CIS 2.1.4 |
 | ICS-DATA-08 | 전송 암호화 | TLS 엣지, DB `sslmode=require`, Supabase SSL 강제 | 설정 | — | 차트, 대시보드 | ◐ | S2 | ASVS 9.1 |
 | ICS-DATA-09 | DB 네트워크 제한 | Supabase network restrictions | 대시보드 | — | 설정 스크린샷 | ○ | S3 | — |

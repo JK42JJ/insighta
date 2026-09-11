@@ -10,6 +10,7 @@ Insighta 가 "보안" 을 어떻게 정의하고 운영하는지 한 장으로 �
 4. **데이터 중심.** 어떤 데이터가 어디에 어떤 등급으로 있고 누가 읽는지를 문서와 코드로 유지한다.
 5. **증거.** 모든 통제는 리소스 ID · 파일 · PR · 검사명으로 인용할 수 있어야 한다.
 6. **지속.** 단계마다 여섯 기능(거버넌스 · 식별 · 보호 · 탐지 · 대응 · 복구) 전부에 최소선을 두고, 분기 리뷰로 다음 칸을 정한다. 규모가 바꾸는 것은 도구와 깊이이지 기능의 존재 여부가 아니다.
+7. **보안 지출 0.** 유료 보안 서비스는 쓰지 않는다. 비용이 붙는 통제는 우회 방법이나 오픈소스로 대체한다. 상시 무료 구간(CloudTrail 첫 사본 · CloudWatch Logs 5 GB · 알람 10개 · SNS 이메일 · Access Analyzer)만 쓴다.
 
 ## 2. 책임 공유
 
@@ -29,9 +30,9 @@ Insighta 가 "보안" 을 어떻게 정의하고 운영하는지 한 장으로 �
 | Govern | 통제 카탈로그 ICS-* (약 60 통제, CIS · ASVS · OWASP LLM 매핑), 본 문서, 설계, 사고 대응 런북 v1 | Stage 2: 분기 리뷰 |
 | Identify | 계정 · 클러스터 · 리포 · 앱 전 계층 실측, 노출 이력 해시 대조(4건 판정), Dependabot alerts | Stage 2: 데이터 인벤토리 |
 | Protect | CI 정적 자격증명 0(GitHub OIDC 역할, 2026-09-11) · 휴면 키 비활성 · 비밀번호 정책 · EBS 기본 암호화 · push protection · SSH 허용 목록 2건, TLS 자동 갱신 · HSTS · 보안 헤더 · rate limit, JWT 검증(verify-only) · 관리자 경계 · 봇 쓰기 승인 토큰, 이미지 pull 시크릿 0 · IMDSv2, CI 최소권한 정책, 사용자 키 AES-256-GCM, 관리 콘솔 미노출 | Stage 1 잔여: admin MFA 강제 · OAuth secret 회전 · Stage 2: 워크로드 최소권한 |
-| Detect | CloudTrail(멀티리전, S3 + CloudWatch Logs) · CIS 알람 3(root 사용 · MFA 없는 로그인 · 권한 거부 급증) · GuardDuty · Access Analyzer, Keel 8 불변식(30분) · TLS 만료 · LLM 지출 · 공개면 | Stage 2: Keel 보안 검사 |
+| Detect | CloudTrail(멀티리전, S3 + CloudWatch Logs) · CIS 알람 8(root 사용 · MFA 없는 로그인 · 권한 거부 급증 · IAM 정책 · 트레일 · SG 구조 · 버킷 노출 · 네트워크 변경) · Access Analyzer, Keel 8 불변식(30분) · TLS 만료 · LLM 지출 · 공개면 | Stage 2: Keel 보안 검사 · Prowler(오픈소스 CSPM) 주간 |
 | Respond | SNS 알림 토픽(GuardDuty ≥7 · 알람 3) · 런북 v1, LLM 크레딧 차단기 · 비용 게이트 · 백업 실패 시 이슈 자동 생성 | Stage 1 잔여: 구독 확인 · Stage 2: Slack · 런북 v2 |
-| Recover | 일일 DB 백업(S3 · SSE · 버저닝 · 30일) · 복원 리허설(`restore-drills.md`), 롤백 3층(차트 태그 · ArgoCD 리비전 · IaC 재구축) | Stage 2: 롤백 실행 검증 |
+| Recover | 일일 DB 백업(S3 · SSE · 버저닝 · 30일) · 복원 리허설 1회 성공(108 테이블 일치, 약 5분, `scripts/ops/restore-drill.sh`), 롤백 3층(차트 태그 · ArgoCD 리비전 · IaC 재구축) | Stage 2: 롤백 실행 검증 · `auth` 스키마 백업 범위 결정 |
 
 ## 4. 지속 루프
 
