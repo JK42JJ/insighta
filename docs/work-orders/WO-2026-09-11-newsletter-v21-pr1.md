@@ -1,6 +1,6 @@
 ---
 id: WO-2026-09-11-newsletter-v21-pr1
-status: open
+status: running
 owner: insighta-session
 opened: 2026-09-11
 ---
@@ -30,5 +30,11 @@ opened: 2026-09-11
 - v2.1 §8 결정 3건(문체 어미 · 등급 어휘 · 논지 편집장)은 PR 4 이후에 필요. 지금은 아님.
 
 # restated
+프로덕션에 v2.1 §3 의 테이블 18개(nl_* 14 + source_creator · channel_identity · collect_job · nl_video_captions)가 생기고, fact 문장은 원자 주장과 근거 없이는 커밋조차 안 되며(트리거), 게이트 16개와 ai-tech 도메인 행이 시드돼 있고, 실행 골격이 재개되는 것을 로컬에서 먼저 확인한다. 머지는 James.
 
 # 결과
+2026-09-11 (insighta 세션, 자율 루프)
+- DDL `prisma/migrations/newsletter-v2/001_nl_core.sql`: 테이블 18(설계의 `video_captions` 는 기존 동명 테이블과 충돌해 `nl_video_captions`), 지연 제약 트리거 3개, `nl_gate_spec` 16행(hard 8 · soft 8), `nl_domain` ai-tech(검색어 28 · 신뢰 채널 12 · 개념 26, 코퍼스 274편에서 추출), `source_creator` 12 + `channel_identity` 12.
+- 로컬 Supabase 실측: 테이블 18 ✔ · fact 문장만 INSERT → `ERROR: a fact claim needs at least one atomic claim` ✔ · explain 문장 INSERT 허용 ✔ · fact + 원자 주장 + 근거 한 트랜잭션 커밋 ✔ · 근거 링크 삭제 → `1 atomic claim(s) without evidence` 거부 ✔ · 호 삭제 시 cascade 로 잔여 0 ✔ · `prisma validate` valid ✔ (`.env` 복사 후).
+- 미검증: DBOS 골격(시작 → 완료 → 재개)과 풀러 경유 여부. 이번 PR 에 넣지 않음 — 의존성 추가 + 시스템 스키마 생성이라 별도 확인이 필요. QUESTIONS 에 등록.
+- 롤백: `drop table ... cascade` 18개 (아직 참조하는 코드 없음). PR 머지 전에는 prod 무변경.

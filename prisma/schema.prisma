@@ -2612,26 +2612,26 @@ model search_algorithm_versions {
 /// Used for cost tracking, performance analysis, and the §1.5 daily cost gate.
 /// Raw SQL DDL: prisma/migrations/llm_call_logs/001_create_table.sql
 model llm_call_logs {
-  call_id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  call_id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// The calling stage, not the provider. Required at the type level in
   /// `GenerateOptions.purpose` since 2026-09-04, when an audit found five of
   /// thirty-four call sites setting it and 45,476 calls collapsed to the one
   /// label `openrouter`.
-  module        String   @db.VarChar(50)
-  model         String   @db.VarChar(100)
-  input_tokens  Int?
+  module              String   @db.VarChar(50)
+  model               String   @db.VarChar(100)
+  input_tokens        Int?
   /// Of `input_tokens`, how many the provider served from its cache. NULL
   /// means the provider reported nothing, which is not zero: no cache support
   /// and a cache miss are different facts.
   cached_input_tokens Int?
-  output_tokens Int?
-  cost_usd      Float?
-  latency_ms    Int?
-  status        String   @default("success") @db.VarChar(20)
-  error_message String?
-  created_at    DateTime @default(now()) @db.Timestamptz(6)
-  user_id       String?  @db.Uuid
-  video_id      String?  @db.VarChar(50)
+  output_tokens       Int?
+  cost_usd            Float?
+  latency_ms          Int?
+  status              String   @default("success") @db.VarChar(20)
+  error_message       String?
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  user_id             String?  @db.Uuid
+  video_id            String?  @db.VarChar(50)
 
   @@index([created_at])
   @@index([module])
@@ -2885,7 +2885,7 @@ model newsletter_issues {
   created_at       DateTime  @default(now()) @db.Timestamptz(6)
   updated_at       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
-  reads            newsletter_reads[]
+  reads newsletter_reads[]
 
   @@unique([category_key, issue_no, locale], map: "uq_newsletter_issues_category_no_locale")
   @@index([published_at(sort: Desc)], map: "idx_newsletter_issues_published_at")
@@ -3027,7 +3027,7 @@ model newsletter_subscriptions {
   from_slug    String?  @db.VarChar(80)
   created_at   DateTime @default(now()) @db.Timestamptz(6)
 
-  users        users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "newsletter_subscriptions_user_fkey")
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "newsletter_subscriptions_user_fkey")
 
   @@unique([user_id, category_key], map: "uq_newsletter_sub_user_category")
   @@index([category_key], map: "idx_newsletter_sub_category")
@@ -3047,14 +3047,14 @@ model newsletter_subscriptions {
 /// Both FKs are declared, for the reason above. The one on `slug` is why an
 /// issue cannot be deleted out from under a read record.
 model newsletter_reads {
-  user_id String            @db.Uuid
+  user_id String   @db.Uuid
   /// The issue's slug rather than its id: slugs are what links carry, so a
   /// read can be recorded from a URL without a lookup, and a slug is stable.
-  slug    String            @db.VarChar(80)
-  read_at DateTime          @default(now()) @db.Timestamptz(6)
+  slug    String   @db.VarChar(80)
+  read_at DateTime @default(now()) @db.Timestamptz(6)
 
-  users   users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "newsletter_reads_user_fkey")
-  issue   newsletter_issues @relation(fields: [slug], references: [slug], onDelete: Cascade, onUpdate: NoAction, map: "newsletter_reads_slug_fkey")
+  users users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "newsletter_reads_user_fkey")
+  issue newsletter_issues @relation(fields: [slug], references: [slug], onDelete: Cascade, onUpdate: NoAction, map: "newsletter_reads_slug_fkey")
 
   @@id([user_id, slug])
   @@index([user_id], map: "idx_newsletter_reads_user")
@@ -3171,5 +3171,280 @@ model newsletter_corpus {
 
   @@id([run_id, video_id])
   @@index([run_id, stage], map: "idx_newsletter_corpus_stage")
+  @@schema("public")
+}
+
+/// Newsletter pipeline v2.1 (WO-2026-09-11-newsletter-v21-pr1). Raw DDL is the
+/// source of truth: prisma/migrations/newsletter-v2/001_nl_core.sql. The
+/// deferred triggers that refuse a fact claim without evidence live there and
+/// are not expressible here.
+model nl_domain {
+  domain               String     @id
+  audience             String?
+  search_terms         String[]   @default([])
+  trusted_creators     String[]   @default([]) @db.Uuid
+  concept_taxonomy     Json       @default("{}") @db.JsonB
+  primary_source_types String[]   @default([])
+  term_dictionary      Json       @default("{}") @db.JsonB
+  signal_min_creators  Int        @default(8)
+  baseline_weeks       Int        @default(4)
+  cron                 String?
+  caption_retention    String     @default("until_milestone")
+  created_at           DateTime   @default(now()) @db.Timestamptz(6)
+  issues               nl_issue[]
+
+  @@schema("public")
+}
+
+model source_creator {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  channel_ids String[]           @default([])
+  kind        String             @default("unknown")
+  trust_score Decimal            @default(0.5) @db.Decimal
+  created_at  DateTime           @default(now()) @db.Timestamptz(6)
+  channels    channel_identity[]
+
+  @@schema("public")
+}
+
+model channel_identity {
+  channel_id String         @id
+  creator_id String         @db.Uuid
+  talk_org   String?
+  mapped_by  String?
+  mapped_at  DateTime       @default(now()) @db.Timestamptz(6)
+  creator    source_creator @relation(fields: [creator_id], references: [id])
+
+  @@schema("public")
+}
+
+model nl_issue {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  domain            String
+  iso_week          String
+  state             String             @default("collecting")
+  thesis            String?
+  thesis_by         String?            @db.Uuid
+  thesis_at         DateTime?          @db.Timestamptz(6)
+  published_version Int?
+  created_at        DateTime           @default(now()) @db.Timestamptz(6)
+  domain_ref        nl_domain          @relation(fields: [domain], references: [domain])
+  jobs              collect_job[]
+  signals           nl_signal[]
+  evidence          nl_evidence[]
+  claims            nl_claim[]
+  versions          nl_issue_version[]
+  gate_results      nl_gate_result[]
+  rejections        nl_rejection[]
+  feedback          nl_feedback[]
+  evals             nl_eval[]
+
+  @@unique([domain, iso_week])
+  @@schema("public")
+}
+
+model collect_job {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id        String?   @db.Uuid
+  kind            String
+  video_ids       String[]
+  state           String    @default("queued")
+  idempotency_key String    @unique
+  result          Json?     @db.JsonB
+  error           String?
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  finished_at     DateTime? @db.Timestamptz(6)
+  issue           nl_issue? @relation(fields: [issue_id], references: [id])
+
+  @@schema("public")
+}
+
+model nl_video_captions {
+  video_id    String    @id
+  lang        String?
+  fetched_at  DateTime? @db.Timestamptz(6)
+  sha256      String?
+  quality     Json?     @db.JsonB
+  archived_at DateTime? @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+model nl_signal {
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id                 String   @db.Uuid
+  concept                  String
+  creator_count            Int      @default(0)
+  video_ids                String[] @default([])
+  representative_video_ids String[] @default([])
+  baseline_mean            Decimal? @db.Decimal
+  baseline_sd              Decimal? @db.Decimal
+  z                        Decimal? @db.Decimal
+  delta_vs_last            Decimal? @db.Decimal
+  created_at               DateTime @default(now()) @db.Timestamptz(6)
+  issue                    nl_issue @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+
+  @@unique([issue_id, concept])
+  @@schema("public")
+}
+
+model nl_evidence {
+  id           String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id     String                     @db.Uuid
+  kind         String
+  video_id     String?
+  t0           Decimal?                   @db.Decimal
+  t1           Decimal?                   @db.Decimal
+  seg_hash     String?
+  url          String?
+  fetched_at   DateTime?                  @db.Timestamptz(6)
+  http_status  Int?
+  excerpt      String?
+  quoted       String
+  created_at   DateTime                   @default(now()) @db.Timestamptz(6)
+  issue        nl_issue                   @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+  claim_links  nl_claim_evidence[]
+  atomic_links nl_atomic_claim_evidence[]
+
+  @@schema("public")
+}
+
+model nl_claim {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id     String              @db.Uuid
+  version      Int                 @default(1)
+  section      String
+  seq          Int
+  ctype        String
+  text         String
+  numbers      String[]            @default([])
+  proper_nouns String[]            @default([])
+  grade        String?
+  created_at   DateTime            @default(now()) @db.Timestamptz(6)
+  issue        nl_issue            @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+  evidence     nl_claim_evidence[]
+  atomic       nl_atomic_claim[]
+  rejections   nl_rejection[]
+  feedback     nl_feedback[]
+
+  @@unique([issue_id, version, section, seq])
+  @@schema("public")
+}
+
+model nl_claim_evidence {
+  claim_id    String      @db.Uuid
+  evidence_id String      @db.Uuid
+  claim       nl_claim    @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+  evidence    nl_evidence @relation(fields: [evidence_id], references: [id], onDelete: Cascade)
+
+  @@id([claim_id, evidence_id])
+  @@schema("public")
+}
+
+model nl_atomic_claim {
+  id         String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  claim_id   String                     @db.Uuid
+  kind       String
+  text       String
+  normalized String?
+  claim      nl_claim                   @relation(fields: [claim_id], references: [id], onDelete: Cascade)
+  evidence   nl_atomic_claim_evidence[]
+
+  @@schema("public")
+}
+
+model nl_atomic_claim_evidence {
+  atomic_id   String          @db.Uuid
+  evidence_id String          @db.Uuid
+  atomic      nl_atomic_claim @relation(fields: [atomic_id], references: [id], onDelete: Cascade)
+  evidence    nl_evidence     @relation(fields: [evidence_id], references: [id], onDelete: Cascade)
+
+  @@id([atomic_id, evidence_id])
+  @@schema("public")
+}
+
+model nl_issue_version {
+  issue_id        String    @db.Uuid
+  version         Int
+  rendered_email  String?
+  rendered_web    String?
+  claims_snapshot Json?     @db.JsonB
+  published_at    DateTime? @db.Timestamptz(6)
+  correction_note String?
+  issue           nl_issue  @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+
+  @@id([issue_id, version])
+  @@schema("public")
+}
+
+model nl_gate_spec {
+  name        String           @id
+  severity    String
+  stage       String
+  description String
+  enabled     Boolean          @default(true)
+  results     nl_gate_result[]
+
+  @@schema("public")
+}
+
+model nl_gate_result {
+  id       String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id String       @db.Uuid
+  version  Int
+  gate     String
+  severity String
+  passed   Boolean
+  detail   Json?        @db.JsonB
+  run_at   DateTime     @default(now()) @db.Timestamptz(6)
+  issue    nl_issue     @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+  spec     nl_gate_spec @relation(fields: [gate], references: [name])
+
+  @@schema("public")
+}
+
+model nl_rejection {
+  id       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id String?   @db.Uuid
+  claim_id String?   @db.Uuid
+  quoted   String?
+  reason   String?
+  cause    String?
+  by_user  String?   @db.Uuid
+  at       DateTime  @default(now()) @db.Timestamptz(6)
+  issue    nl_issue? @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+  claim    nl_claim? @relation(fields: [claim_id], references: [id], onDelete: SetNull)
+
+  @@schema("public")
+}
+
+model nl_feedback {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issue_id   String?   @db.Uuid
+  version    Int?
+  claim_id   String?   @db.Uuid
+  section    String?
+  kind       String
+  value      Decimal?  @db.Decimal
+  actor_hash String?
+  at         DateTime  @default(now()) @db.Timestamptz(6)
+  issue      nl_issue? @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+  claim      nl_claim? @relation(fields: [claim_id], references: [id], onDelete: SetNull)
+
+  @@schema("public")
+}
+
+model nl_eval {
+  issue_id    String   @db.Uuid
+  axis        String
+  auto_score  Decimal? @db.Decimal
+  human_score Decimal? @db.Decimal
+  n           Int?
+  detail      Json?    @db.JsonB
+  at          DateTime @default(now()) @db.Timestamptz(6)
+  issue       nl_issue @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+
+  @@id([issue_id, axis, at])
   @@schema("public")
 }
