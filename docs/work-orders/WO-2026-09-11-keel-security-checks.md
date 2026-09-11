@@ -33,6 +33,6 @@ credential report 와 Dependabot API 를 30분마다 읽어 MFA 없는 콘솔 �
 - `scripts/keel/checks.ts` 에 `checkIamHygiene` · `checkSupplyChain` 추가, `ALL_CHECKS` 등록(8 → 10). `keel.yml` 에 `security-events: read` 와 `GH_TOKEN` 배선.
 - CI 역할 읽기 권한 6종 추가(`security-read.tf`, 수동 apply). 정책 시뮬레이션: `iam:GenerateCredentialReport` · `iam:GetCredentialReport` = allowed.
 - 로컬 실측: `iam-hygiene` → ok:false "console without MFA: admin · keys over 90d: admin:key1:189d" (현 상태와 일치) · `supply-chain` → ok:false "critical 7, high 103" (Dependabot 화면과 일치).
-- 미검증: keel.yml 안에서의 실행(머지 후 다음 30분 주기에 `error_events` 행으로 확인). 나머지 3종(cloud-posture · k8s-hardening · secret-exposure)은 S3.
+- 미검증: keel.yml 안에서의 실행(머지 후 다음 30분 주기에 `error_events` 행으로 확인). `cloud-posture` 는 `WO-2026-09-11-keel-cloud-posture`(#1641). 나머지 2종(k8s-hardening · secret-exposure)은 S3.
 - 롤백: 두 함수 등록 해제. 권한은 읽기 전용이라 유지해도 무해.
 - 첫 CI 실행(#1634 머지 직후 dispatch, run 34595765253): `iam-hygiene` 원장 행 기록 ✔ ("console without MFA: admin · keys over 90d: admin:key1:189d"). `supply-chain` 은 Dependabot API 가 GITHUB_TOKEN 을 거부("Resource not accessible by integration") → package-lock audit(두 lockfile) 로 소스 교체(#1638). 같은 PR 에서 TS4111(scripts/ 는 tsc include 밖, ts-jest 만 검사) 수정 — #1634 를 failing 체크 상태로 머지한 실수의 교정.
