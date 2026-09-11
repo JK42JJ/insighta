@@ -177,6 +177,42 @@ jobs:
           fi
           echo "PR title and body are English."
 
+  done-gate:
+    name: Definition of Done
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The four-part definition of done (docs/ops/working-method-2026-09-11.md
+    # section 3.3) lives in the PR body: what changed, what was verified with
+    # the observed result, what was not verified, and which spec section moved.
+    # A PR that leaves "Verified" empty is not done and does not merge. The
+    # template puts the headings in place; this job checks that each carries
+    # content, so the template cannot be submitted untouched.
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: PR body carries the four sections with content
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          body=$(printenv PR_BODY || true)
+          fail=0
+          section() {  # print the lines between "## $1" and the next "## "
+            printf '%s\n' "$body" | awk -v h="## $1" 'BEGIN{p=0} $0==h{p=1;next} /^## /{p=0} p' | sed -e 's/<!--.*-->//g' -e '/^[[:space:]]*$/d' -e '/^- *$/d' -e '/^- \[ \] *$/d'
+          }
+          for h in "Work order" "Changed" "Verified" "Not verified" "Spec"; do
+            if [ -z "$(section "$h")" ]; then
+              echo "::error::PR body section '## $h' is missing or empty."
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "Fill every section. 'Verified' lists commands that were run and what they showed;"
+            echo "'Not verified' names what was not checked; 'Spec' names the docs/spec section or 'no surface change'."
+            exit 1
+          fi
+          echo "Definition of done present."
+
   card-chokepoint:
     name: Card Chokepoint
     runs-on: ubuntu-latest
