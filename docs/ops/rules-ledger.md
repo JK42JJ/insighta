@@ -34,6 +34,7 @@ CLAUDE.md 는 규칙만 한 줄씩 둔다. 각 규칙이 왜 생겼고(사고), 
 | R28 | 새 admin 라우트 = `authenticate + authenticateAdmin`, 머지 전 무인증 401 | `tests/smoke/admin-api.test.ts` | 2026-07-08 PII 노출 | 유지 |
 | R29 | GitHub 아티팩트(커밋 · PR 본문)는 영문. 파일 안 UI · 문서는 한글 가능 | `.husky/commit-msg`, CI `pr-body-english` | CP524 | 유지 |
 | R30 | 워크트리는 세션 종료 시 제거, 브랜치는 머지 시 삭제. 오더 없이 코드 변경 금지 | `work-orders.sh`, 프루닝 리뷰 | 2026-09-11 브랜치 541 · 워크트리 14 | 신설 |
+| R31 | PR 머지는 현재 head 의 검사 전부를 읽고 초록일 때만. 빨간 채 머지 금지 | `scripts/ops/merge-green.sh` | 2026-09-11 #1634 백엔드 타입 검사 실패 채 머지 → #1638 핫픽스 | 신설 |
 
 ## 은퇴 · 대체
 

@@ -70,7 +70,7 @@
 
 ### 3.2 제품 스펙 = 단일 기록
 
-- `docs/spec/README.md` 하나에서 시작. 표면마다 한 절: 목적 · 고객 · 수용 기준 · 검증 명령 · 상태(`live / maintenance / deprecated`).
+- `docs/spec/README.md` 하나에서 시작. 위치: 공개 리포에서 제외(`.gitignore` "public-repo essentials only", 2026-05-27 규칙 — 스펙에는 고객 · 지표 · 결제 방향이 들어간다). 원본은 기본 체크아웃 `/Users/jeonhokim/cursor/insighta/docs/spec/`, 백업은 `insighta-private/docs/spec/`(`private-sync.sh`). 워크트리에서는 절대 경로로 읽는다. 표면마다 한 절: 목적 · 고객 · 수용 기준 · 검증 명령 · 상태(`live / maintenance / deprecated`).
 - 핸드오프 33개는 스펙으로 흡수한 뒤 `docs/handoffs/archive/` 로. 새 핸드오프는 만들지 않는다. 세션 인계는 스펙 + 열린 워크 오더로 한다.
 - 새 세션이 읽는 것은 스펙 · 열린 오더 · 훅으로 집행되는 규칙표 세 가지다. 부팅 로드 목표 40만 자 → 5만 자.
 
