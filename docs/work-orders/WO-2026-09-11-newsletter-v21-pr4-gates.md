@@ -17,7 +17,7 @@ v2.1 §3.4(등급 계산) · §4 W5·W7·W8 · §9 PR 4. 픽스처 = 핸드오�
 
 # 검증 기준
 - [x] 9건 각각을 재현한 픽스처 입력 → 결함 7건(A1~A6 · A9)은 등급 규칙 또는 hard gate 가 잡고, A7 · A8 은 자막 근거가 있는 정상 문장이라 관측 등급으로 통과하는 것이 정답 — `newsletter-v2-gates.test.ts` A1~A9 (2026-09-11, #1633)
-- [ ] 정상 문장 픽스처(verify-log §B) 는 통과(오탐 0) — §B 픽스처는 아직 없다. A7 · A8 통과만 확인됨. §B 문장 픽스처 추가 = 다음 오더
+- [x] 정상 문장 픽스처(verify-log §B) 는 통과(오탐 0) — `tests/unit/modules/newsletter-v2-normal-sentences.test.ts`: §B 11행(인용 5 · 숫자 9 · 고유명사 4)이 전부 관측 등급, 내용 hard 게이트 3종 통과(12 테스트, 2026-09-11). 고유명사는 설명문 근거가 함께 있어야 관측이 된다는 §D 규칙을 픽스처가 그대로 따른다
 - [x] `nl_claim` 등급이 §3.4 표 4행을 모두 만족하는 단위 테스트 — 확인(§E fetched primary) · 관측(A6 · A7/A8) · 고유명사 자막 단독 불가(§D) · 불일치 → 미확인(A5)
 - [x] 미실행 게이트가 있으면 발행 조건 false — 'a declared gate without an implementation fails, and an unrun block gate blocks publish'
 
