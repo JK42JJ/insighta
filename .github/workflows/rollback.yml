@@ -38,6 +38,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
   rollback:
@@ -79,11 +80,13 @@ jobs:
 
       # A tag that was never pushed produces pods stuck on ImagePullBackOff, and
       # the rollback is then a second outage on top of the first.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+
       - name: Confirm the images exist in ECR
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-west-2
         run: |
           set -euo pipefail
           T=${{ steps.target.outputs.target }}
