@@ -32,6 +32,8 @@ on:
 permissions:
   contents: read
   id-token: write
+  # supply-chain check reads Dependabot alerts.
+  security-events: read
 
 concurrency:
   # A run that overlaps its predecessor would write two ledger rows for the
@@ -74,6 +76,8 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           SLACK_ALERT_WEBHOOK: ${{ secrets.SLACK_ALERT_WEBHOOK }}
           AWS_DEFAULT_REGION: us-west-2
+          # supply-chain check: gh reads Dependabot alerts with the workflow token.
+          GH_TOKEN: ${{ github.token }}
         run: npx tsx scripts/keel/run.ts
 
   digest:

@@ -495,6 +495,91 @@ export async function checkSchema(): Promise<CheckResult> {
   return { check, ok: true, detail: `${required.length} tables and 4 tracked columns present` };
 }
 
+/**
+ * iam-hygiene: the identity layer must not drift back. Reads the account
+ * credential report (free) and fails when a console user has no MFA, an
+ * active access key is older than KEY_MAX_AGE_DAYS, or an active key has
+ * never been used for longer than KEY_UNUSED_DAYS. The report is generated
+ * on demand; AWS may answer "in progress" once, so one retry is built in.
+ */
+const KEY_MAX_AGE_DAYS = 90;
+const KEY_UNUSED_DAYS = 30;
+
+export async function checkIamHygiene(): Promise<CheckResult> {
+  const check = 'iam-hygiene';
+  try {
+    execSync('aws iam generate-credential-report', { encoding: 'utf8', timeout: PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'] });
+    let csv = '';
+    for (let attempt = 0; attempt < 3 && !csv; attempt += 1) {
+      try {
+        const b64 = execSync('aws iam get-credential-report --query Content --output text', { encoding: 'utf8', timeout: PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        csv = Buffer.from(b64, 'base64').toString('utf8');
+      } catch {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    if (!csv) return { check, ok: false, detail: 'credential report unavailable after 3 attempts' };
+    const [header, ...rows] = csv.trim().split('\n');
+    const col = (header ?? '').split(',');
+    const idx = (name: string) => col.indexOf(name);
+    const now = Date.now();
+    const days = (iso: string) => (iso && iso !== 'N/A' && iso !== 'no_information' ? Math.floor((now - Date.parse(iso)) / 86_400_000) : null);
+    const noMfa: string[] = [];
+    const staleKeys: string[] = [];
+    const unusedKeys: string[] = [];
+    for (const line of rows) {
+      const f = line.split(',');
+      const user = f[idx('user')] ?? '';
+      if (f[idx('password_enabled')] === 'true' && f[idx('mfa_active')] !== 'true') noMfa.push(user);
+      for (const k of ['1', '2']) {
+        if (f[idx(`access_key_${k}_active`)] !== 'true') continue;
+        const age = days(f[idx(`access_key_${k}_last_rotated`)] ?? '');
+        const used = days(f[idx(`access_key_${k}_last_used_date`)] ?? '');
+        if (age !== null && age > KEY_MAX_AGE_DAYS) staleKeys.push(`${user}:key${k}:${age}d`);
+        if (used === null && age !== null && age > KEY_UNUSED_DAYS) unusedKeys.push(`${user}:key${k}:never-used:${age}d`);
+      }
+    }
+    const ok = noMfa.length === 0 && staleKeys.length === 0 && unusedKeys.length === 0;
+    const parts = [
+      noMfa.length ? `console without MFA: ${noMfa.join(' ')}` : 'MFA ok',
+      staleKeys.length ? `keys over ${KEY_MAX_AGE_DAYS}d: ${staleKeys.join(' ')}` : 'key age ok',
+      unusedKeys.length ? `unused keys: ${unusedKeys.join(' ')}` : 'no unused keys',
+    ];
+    return { check, ok, detail: parts.join(' · '), context: { noMfa, staleKeys, unusedKeys } };
+  } catch (err) {
+    return { check, ok: false, detail: `credential report failed: ${String(err).slice(0, 160)}` };
+  }
+}
+
+/**
+ * supply-chain: open Dependabot alerts of critical or high severity on the
+ * default branch. Read through gh with the workflow token (security-events:
+ * read). Zero is the target; the count is kept in context so the ledger
+ * shows the trend even while it is not zero.
+ */
+export async function checkSupplyChain(): Promise<CheckResult> {
+  const check = 'supply-chain';
+  try {
+    const out = execSync(
+      "gh api 'repos/JK42JJ/insighta/dependabot/alerts?state=open&per_page=100' --paginate --jq '.[].security_advisory.severity'",
+      { encoding: 'utf8', timeout: PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    const counts: Record<string, number> = {};
+    for (const sev of out.split('\n').map((x) => x.trim()).filter(Boolean)) counts[sev] = (counts[sev] ?? 0) + 1;
+    const critical = counts.critical ?? 0;
+    const high = counts.high ?? 0;
+    const ok = critical === 0 && high === 0;
+    return {
+      check,
+      ok,
+      detail: ok ? 'no open critical or high dependency alerts' : `open dependency alerts: critical ${critical}, high ${high}`,
+      context: counts,
+    };
+  } catch (err) {
+    return { check, ok: false, detail: `dependabot alerts unavailable: ${String(err).slice(0, 160)}` };
+  }
+}
+
 export const ALL_CHECKS: Array<() => Promise<CheckResult>> = [
   checkDeployDrift,
   checkPublicSurface,
@@ -504,6 +589,8 @@ export const ALL_CHECKS: Array<() => Promise<CheckResult>> = [
   checkAwsCost,
   checkPipelineFreshness,
   checkSchema,
+  checkIamHygiene,
+  checkSupplyChain,
 ];
 
 export { report };
