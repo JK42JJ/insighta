@@ -115,7 +115,7 @@
 4. **데이터 중심 (DSPM).** 어떤 데이터가 어디에 어떤 등급으로 있고 누가 어떤 경로로 읽는지가 문서와 코드(RLS 게이트)로 존재한다. 암호화·백업·복원은 실행 기록으로 증명한다.
 5. **AI 워크로드는 신뢰 경계 밖 입력을 다룬다.** 자막·노트·검색 결과·사용자 메시지는 비신뢰 데이터로 격리하고, 소비량·유출·모델 공급망을 통제 대상에 넣는다.
 6. **증거 가능성.** 모든 통제는 AWS 리소스 ID·파일 경로·PR 번호·Keel 체크명 중 하나로 인용 가능해야 한다.
-7. **비용 상한.** 계정 규모(단일 노드, 리소스 수십 개) 기준 추가 비용 월 10 USD 이하(추정). 30일 후 Cost Explorer 로 실측해 유지 여부를 결정한다.
+7. **보안 지출 0 (James 규칙, 2026-09-11).** 유료 보안 서비스는 쓰지 않는다. "30일 무료 후 과금" 류도 금지. 비용이 붙는 통제는 우회 방법 또는 오픈소스로 대체한다. 상시 무료 구간(CloudTrail 첫 사본 · CloudWatch Logs 5 GB · 알람 10개 · SNS 이메일 · Access Analyzer · IAM/EBS 설정)만 쓴다.
 
 ## 3. 목표 아키텍처 (JD 영역별) — 장기 목표 상태
 
@@ -135,9 +135,9 @@ Terraform 모듈 `terraform/modules/security-baseline` 로 선언한다.
 | 구성요소 | 설계 | 비용 (추정) |
 |---|---|---|
 | CloudTrail | 멀티리전 trail 1개 → S3 `insighta-audit-logs` (SSE-S3 · PAB 4/4 · 버저닝 · 365일 보존), 로그 파일 무결성 검증 on, 관리 이벤트 전체 | 첫 trail 관리 이벤트 무료. S3 저장 월 0.1 USD 미만 |
-| AWS Config | recorder(전 리소스 유형) + 관리형 규칙 13: `cloudtrail-enabled` · `root-account-mfa-enabled` · `iam-user-mfa-enabled` · `access-keys-rotated(90d)` · `iam-user-unused-credentials-check(90d)` · `iam-password-policy` · `restricted-ssh` · `vpc-default-security-group-closed` · `s3-bucket-public-read-prohibited` · `s3-bucket-server-side-encryption-enabled` · `encrypted-volumes` · `ec2-imdsv2-check` · `ecr-private-image-scanning-enabled` | 구성 항목 0.003 USD/건 + 규칙 평가 0.001 USD/건. 리소스 ~60개 기준 월 1–3 USD |
-| Security Hub | CSPM 활성, 표준 = AWS Foundational Security Best Practices. 보안 점수와 실패 통제 목록을 Keel 이 읽는다 | 월 10,000 검사까지 무료 → 0 USD 예상 |
-| GuardDuty | 탐지기 활성(CloudTrail 관리 이벤트 + VPC Flow + DNS 분석) | 30일 무료 체험 후 이벤트량 기반. 이 규모 월 1–4 USD. 체험 종료 전 실측 후 유지 결정 |
+| ~~AWS Config~~ → Prowler | 과금 서비스라 코드만 두고 off. 대체 = **Prowler**(오픈소스, CIS AWS 벤치마크 300+ 검사)를 Keel 워크플로에서 주간 실행, 결과를 `error_events` 원장과 Grafana 에. 규칙 13 참고용: `cloudtrail-enabled` · `root-account-mfa-enabled` · `iam-user-mfa-enabled` · `access-keys-rotated(90d)` · `iam-user-unused-credentials-check(90d)` · `iam-password-policy` · `restricted-ssh` · `vpc-default-security-group-closed` · `s3-bucket-public-read-prohibited` · `s3-bucket-server-side-encryption-enabled` · `encrypted-volumes` · `ec2-imdsv2-check` · `ecr-private-image-scanning-enabled` | 구성 항목 0.003 USD/건 + 규칙 평가 0.001 USD/건. 리소스 ~60개 기준 월 1–3 USD |
+| ~~Security Hub~~ | 무료 구간이 있어도 규칙상 사용하지 않음. 점수·실패 목록은 Prowler 출력으로 대체 | 0 |
+| ~~GuardDuty~~ | **적용 후 같은 날 제거**(30일 후 과금). 대체 = CloudTrail 지표 알람 8종(무료) + 오픈소스 CSPM(Prowler, Keel 주간) | 0 |
 | Access Analyzer | 계정 단위 외부 접근 분석기 | 무료 |
 | 알림 | EventBridge 규칙(GuardDuty 심각도 ≥ 7, Security Hub FAILED, Config NON_COMPLIANT) → SNS 토픽 → 이메일. Slack webhook 은 설정 시 추가 | 무료 |
 | 자동 시정 | Config remediation(SSM Automation) 3종: ① SG 22/tcp `0.0.0.0/0` → 즉시 revoke ② S3 public ACL/정책 → PAB 적용 ③ 90일 초과 액세스 키 → 비활성(삭제 아님). 판단이 필요한 항목은 시정하지 않고 SNS 로 보낸다. **초기 기본값**: ① 자동, ②③ 은 수동 트리거 — ② 는 계정 내 비-Insighta 버킷 `jk-commerce` 영향 검토 후, ③ 은 Phase 2 OIDC 전환 전에는 CI·admin 키(189일)가 대상이 되어 배포와 운영 CLI 를 끊으므로 전환 뒤 자동으로 올린다 | 무료 |
@@ -284,7 +284,7 @@ James 판정(2026-09-11): 플랫폼 크기와 관계없이 보안의 중요도�
 | Identify | 자격증명 인벤토리 · 노출 종결 | 정적 자격증명 목록(소유·용도·회전 주기) 을 카탈로그 부록으로. 노출 4건 해시 대조 완료: Supabase 서비스키·Google API 키 = prod 현재값과 불일치(교체됨), **Google OAuth client secret·ID = 현재값과 동일** | 목록 1건, alert 처리 상태 |
 | Protect | 신원 | Google OAuth client secret 재발급(GCP 콘솔 James) → Supabase Auth · Edge Function 시크릿 · GitHub Secrets 갱신 · CI OIDC 역할(`insighta-github-actions`) + 워크플로 5개 전환 + 정적 키 삭제 · admin 가상 MFA 등록 + `RequireMFA` 정책(`mfa_required_users`) + CLI 36시간 MFA 세션(`scripts/ops/aws-mfa.sh`) · 휴면 키 삭제 · 비밀번호 정책 | credential report: MFA 1/1 · CI 활성 키 0, OIDC 워크플로 성공 1회, 로그인 E2E 1회 |
 | Protect | 리포·노드 | push protection · Dependabot alerts · validity checks on · EBS 기본 암호화 · SG 22 누적 /32 정리(15 → 실사용) | 설정 확인, SG 22 규칙 ≤ 2 |
-| Detect | 감사·탐지 | CloudTrail(S3 + CloudWatch Logs 90일) · CIS 알람 3(root 사용 · MFA 없는 콘솔 로그인 · AccessDenied 급증) · GuardDuty(유료 플랜 off) 심각도 ≥7. Config·Security Hub 는 코드만(플래그 off) | `IsLogging=true`, 알람 3, detector 1 |
+| Detect | 감사·탐지 | CloudTrail(S3 + CloudWatch Logs 90일) · CIS 알람 8(root 사용 · MFA 없는 콘솔 로그인 · AccessDenied 급증 · IAM 정책 변경 · 트레일 변경 · SG 구조·egress 변경 · 버킷 노출 변경 · 네트워크 변경). GuardDuty·Config·Security Hub 는 유료라 사용하지 않음(코드만, 플래그 off) | `IsLogging=true`, 알람 8 |
 | Respond | 알림·런북 | SNS 이메일 구독 확인 · 런북 v1(자격증명 유출 · MFA 없는 로그인 · GuardDuty high · 새 secret alert) · 테스트 알림 1회 | 구독 Confirmed, 메일 수신 1회 |
 | Recover | 복원 리허설 | 최신 백업을 별도 DB 에 복원, 테이블·행 수 대조, RTO 기록 `restore-drills.md` | 기록 1건 |
 
@@ -298,7 +298,7 @@ James 판정(2026-09-11): 플랫폼 크기와 관계없이 보안의 중요도�
 | Govern | 분기 리뷰 | `/harness-review` 에 보안 축 등록: 카탈로그 상태 갱신 · 트리거 재평가 · 증거표 | 첫 리뷰 기록 |
 | Identify | 데이터 인벤토리 v1 | 테이블·버킷·시크릿 단위 등급(PII·자격증명·콘텐츠·텔레메트리) · 위치 · 접근 주체 · RLS 상태 · 보존 | 문서 1건 |
 | Protect | 워크로드·앱 | api·worker·frontend·redis securityContext(runAsNonRoot · drop ALL · no privesc · seccomp) + automount off · kubeconfig 0600 · Supabase SSL 강제 · 챗봇 사용자별 리밋(tier-3 배선) · 공유 비밀 상수시간 비교 | 전 파드 non-root, 롤링 후 헬스, 테스트 |
-| Detect | 상시 관측 | Keel `iam-hygiene`(MFA·키 나이·정적 키 수) · `secret-exposure`(secret-scanning · Dependabot critical) + Grafana 행 | 원장 기록, 패널 |
+| Detect | 상시 관측 · 오픈소스 CSPM | Keel `iam-hygiene`(MFA·키 나이·정적 키 수) · `secret-exposure`(secret-scanning · Dependabot critical) · **Prowler 주간 실행**(CIS AWS 벤치마크, OIDC 읽기 역할, 결과 → 원장·Grafana) | 원장 기록, 패널, Prowler 리포트 1회 |
 | Respond | 런북 v2 · 채널 | 워크로드 침해·데이터 유출 절차 · Slack webhook 설정 | 문서, 알림 1회 |
 | Recover | 롤백 검증 | `rollback.yml` 실제 실행 1회(현재 "미검증" 표기) | 실행 기록 |
 
@@ -308,7 +308,7 @@ James 판정(2026-09-11): 플랫폼 크기와 관계없이 보안의 중요도�
 
 | 기능 | 항목 | 적용 트리거 | 준비 상태 |
 |---|---|---|---|
-| Detect·Respond | Config 13 규칙 + Security Hub + 자동 시정 3종 | 운영자 ≥2 · 고객/파트너 보안 점검 요청 · 리소스 ≥100 | 코드 완성, `enable_config`·`enable_securityhub` 플래그 |
+| Detect·Respond | 자동 시정 3종(SG 22 공개 revoke · S3 공개 차단 · 90일 키 비활성) | 운영자 ≥2 · 리소스 ≥100 | Config 없이 구현: Prowler 결과 → Keel → SSM 없이 CLI 시정 스크립트. Config·Security Hub 코드는 과금이라 사용 안 함 |
 | Protect | NetworkPolicy + PSA restricted | 노드 ≥2 또는 제3자 워크로드 | §3.5 |
 | Protect | ESO + SSM Parameter Store | 팀 ≥2 또는 회전 주기 요구 | §3.5 |
 | Protect | EBS 루트 볼륨 재암호화 | 다음 노드 재생성에 동반 | 기본 암호화는 Stage 1 |
@@ -323,7 +323,7 @@ James 판정(2026-09-11): 플랫폼 크기와 관계없이 보안의 중요도�
 
 | Stage | 월 비용(추정) | 정지 | 마찰 | 롤백 |
 |---|---|---|---|---|
-| 1 | 0–3 USD (GuardDuty 30일 무료 후, CloudWatch Logs 소량) | 0 | CC CLI MFA 세션 36h · OAuth secret 회전 시 로그인 재검증 | 키 재발급 · 정책 detach · `enable_security_baseline=false` · OIDC 역할 destroy |
+| 1 | **0 USD** (GuardDuty 제거. 잔여 = CloudTrail S3 저장 수 MB, 첫해 무료 구간 뒤 월 1센트 미만) | 0 | CC CLI MFA 세션 36h · OAuth secret 회전 시 로그인 재검증 | 키 재발급 · 정책 detach · `enable_security_baseline=false` · OIDC 역할 destroy |
 | 2 | 0 | 0 (롤링) | 없음 | ArgoCD 이전 리비전 |
 | 3 | 항목별 | EBS 교체 시 10–15분 | — | 항목별 |
 
@@ -350,7 +350,7 @@ James 판정(2026-09-11): 플랫폼 크기와 관계없이 보안의 중요도�
 | 통제 ID | Stage | 증거 유형 | 값 | 확인일 |
 |---|---|---|---|---|
 | ICS-ACC-01 | S1 | CloudTrail | trail `insighta-trail` 멀티리전, 무결성 검증, S3 `insighta-audit-logs` + CloudWatch Logs `/aws/cloudtrail/insighta-trail`(90일). `get-trail-status IsLogging=true`, 로그 스트림 수신 확인. `terraform/modules/security-baseline` (PR #1626, #1628) | 2026-09-11 |
-| ICS-ACC-04 | S1 | GuardDuty | 탐지기 1(`list-detectors`), 유료 플랜 6종 DISABLED 선언, 심각도 ≥7 EventBridge → SNS | 2026-09-11 |
+| ICS-ACC-04 | S1 | 위협 탐지 | GuardDuty 는 적용 후 같은 날 제거(과금 금지 규칙). 대체 = CloudTrail 지표 알람 8종(`insighta-*`: root-account-use · console-login-without-mfa · unauthorized-api-calls · iam-policy-changes · cloudtrail-changes · security-group-structure-changes · s3-bucket-exposure-changes · network-changes), 무료 10개 구간 내. PR #1630 | 2026-09-11 |
 | ICS-ACC-05 | S1 | Access Analyzer | `insighta-account` ACTIVE | 2026-09-11 |
 | ICS-ACC-07 | S1 | 비밀번호 정책 | 최소 14자 · 복잡도 · 90일 · 재사용 24회 금지 | 2026-09-11 |
 | ICS-ACC-08 · ICS-OBS-05 | S1 | 알림 경로 | SNS `insighta-security-alerts`, CIS 알람 3(`insighta-root-account-use` OK · `insighta-console-login-without-mfa` · `insighta-unauthorized-api-calls` OK). 이메일 구독 = **PendingConfirmation**(support@ 수신함에서 확인 필요) | 2026-09-11 |
@@ -362,7 +362,7 @@ James 판정(2026-09-11): 플랫폼 크기와 관계없이 보안의 중요도�
 | ICS-SC-05 | S1 | push protection | `secret_scanning_push_protection=enabled` | 2026-09-11 |
 | ICS-SC-02 | S1 | Dependabot alerts | 활성(open: medium 1) | 2026-09-11 |
 | ICS-DATA-12 | S1 | 노출 종결 | alert #4(Supabase 키) = 로컬 self-hosted 개발 키(`ref` 없음), prod 키와 해시 불일치 → resolved. #1(Google API 키) prod 미사용, GCP 삭제 대기. #2·#3(Google OAuth ID·secret) **prod·Supabase Auth 현재값과 일치 → 재발급 대기**(`scripts/ops/rotate-youtube-oauth-secret.sh`) | 2026-09-11 |
-| ICS-DATA-06 | S1 | 복원 리허설 | `restore-drills.md` (실행 결과 기입) | 2026-09-11 |
+| ICS-DATA-06 | S1 | 복원 리허설 | **성공** — 108 테이블 행 수 0 mismatch, 1,482 MB, 복원 39초(전체 약 5분). 절차 결함 2건 발견·수정(`vector` 확장 선행, PG17 대상). `restore-drills.md`, `scripts/ops/restore-drill.sh` | 2026-09-11 |
 | ICS-GOV | S1 | 런북·설명 | `README.md` · `incident-runbook.md` v1 (PR #1625) | 2026-09-11 |
 
 ## 9. 결정·액션 대기 (James)
@@ -372,7 +372,6 @@ Stage 1 중 CC 가 할 수 있는 항목은 2026-09-11 에 전부 적용됐다(�
 1. **admin 가상 MFA 등록**(AWS 콘솔 → IAM → 사용자 admin → 보안 자격 증명 → MFA 디바이스 할당). 등록 후 CC 가 `mfa_required_users=["admin"]` 을 머지해 정책을 부착한다. 이후 CC 의 CLI 는 `scripts/ops/aws-mfa.sh <코드>` 로 36시간 세션.
 2. **Google OAuth client secret 재발급**(GCP 콘솔 "보안 비밀 추가") → 파일 저장 → CC 가 `scripts/ops/rotate-youtube-oauth-secret.sh` 실행 → James 가 Supabase Auth 와 로컬 `.env` 갱신 → 검증 후 옛 시크릿 Disable/Delete. 같은 화면에서 2025-12 경 발급된 API 키 삭제.
 3. **SNS 구독 확인** — support@insighta.one 수신함의 "AWS Notification - Subscription Confirmation" 링크 클릭.
-4. GuardDuty 30일 무료 종료(2026-10-11) 시 유지 여부 — Cost Explorer 실측 후.
 
 ## 10. 실측 기록 (2026-09-11, 값 미기재)
 
