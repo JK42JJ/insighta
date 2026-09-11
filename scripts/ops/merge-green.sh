@@ -20,11 +20,16 @@ mstate="$(jq -r .mergeStateStatus <<<"$json")"
 echo "PR #$pr $(jq -r .title <<<"$json")"
 echo "head $head  mergeState $mstate  mergeable $(jq -r .mergeable <<<"$json")"
 
-total="$(jq '.statusCheckRollup | length' <<<"$json")"
+# A body edit re-triggers CI (pull_request: edited) and the concurrency group
+# cancels the older run, so one head can carry two entries per check name.
+# Judge only the most recently started entry of each name.
+latest='.statusCheckRollup | map(select(.name != null)) | group_by(.name) | map(max_by(.startedAt // ""))'
+checks="$(jq "$latest" <<<"$json")"
+total="$(jq length <<<"$checks")"
 [ "$total" -gt 0 ] || { echo "refuse: no checks reported on $head"; exit 2; }
-bad="$(jq -r '.statusCheckRollup[]
+bad="$(jq -r '.[]
   | select(.status != "COMPLETED" or ((.conclusion // "") | IN("SUCCESS","SKIPPED","NEUTRAL") | not))
-  | "  \(.status) \(.conclusion // "-") \(.name // .context)"' <<<"$json")"
+  | "  \(.status) \(.conclusion // "-") \(.name // .context)"' <<<"$checks")"
 if [ -n "$bad" ]; then
   echo "refuse: $(wc -l <<<"$bad" | tr -d ' ') of $total checks not green on $head:"; echo "$bad"; exit 1
 fi
