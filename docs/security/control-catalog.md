@@ -7,24 +7,24 @@
 
 | ID | 통제 | 구현 | 측정 | 시정 | 증거 | 상태 | Stage | 기준 |
 |---|---|---|---|---|---|---|---|---|
-| ICS-ACC-01 | 모든 API 호출 기록 | CloudTrail 멀티리전 trail, S3 `insighta-audit-logs`, 무결성 검증 | Config `cloudtrail-enabled` | 알림 | trail ARN | ○ | S1 | CIS 3.1 |
-| ICS-ACC-02 | 구성 준수 상시 판정 | AWS Config recorder + 관리형 규칙 13 | Config 대시보드, Keel `cloud-posture` | 규칙별 remediation | recorder 이름 | ○ | S3 | CIS 3.3 |
-| ICS-ACC-03 | CSPM 표준 점수 | Security Hub FSBP | 보안 점수, FAILED 수 | 알림 | hub ARN | ○ | S3 | — |
-| ICS-ACC-04 | 위협 탐지 | GuardDuty 탐지기 | 심각도 ≥ 7 findings | 알림 | detector ID | ○ | S1 | CIS 4.16 |
-| ICS-ACC-05 | 외부 접근 분석 | IAM Access Analyzer | active findings | 알림 | analyzer ARN | ○ | S1 | CIS 1.20 |
+| ICS-ACC-01 | 모든 API 호출 기록 | CloudTrail 멀티리전 trail, S3 `insighta-audit-logs`, 무결성 검증 | Config `cloudtrail-enabled` | 알림 | trail ARN | ● | S1 | CIS 3.1 |
+| ICS-ACC-02 | 구성 준수 상시 판정 | **Prowler**(오픈소스) 주간 실행 → Keel 원장 (Config 는 과금이라 사용 안 함) | Prowler 리포트, Keel `cloud-posture` | 시정 스크립트 | 워크플로 | ○ | S2 | CIS 3.3 |
+| ICS-ACC-03 | CSPM 표준 점수 | Prowler CIS 통과율 (Security Hub 는 규칙상 사용 안 함) | 통과율 추이 | 알림 | 리포트 | ○ | S2 | — |
+| ICS-ACC-04 | 위협 탐지 | CloudTrail 지표 알람 8(root · MFA 없는 로그인 · 권한 거부 급증 · IAM 정책 · 트레일 · SG 구조 · 버킷 노출 · 네트워크). GuardDuty 는 과금이라 제거 | 알람 상태 | SNS 알림 → 런북 | 알람 `insighta-*` 8개 | ● | S1 | CIS 4.x |
+| ICS-ACC-05 | 외부 접근 분석 | IAM Access Analyzer | active findings | 알림 | analyzer ARN | ● | S1 | CIS 1.20 |
 | ICS-ACC-06 | root 보호 | root MFA, 액세스 키 없음 | credential report, Config `root-account-mfa-enabled` | 알림 | 리포트 행 | ● | — | CIS 1.5 |
-| ICS-ACC-07 | 비밀번호 정책 | 14자·복잡도·90일·재사용 24회 금지 | Config `iam-password-policy` | 알림 | 정책 JSON | ○ | S1 | CIS 1.8–1.9 |
-| ICS-ACC-08 | 보안 이벤트 알림 경로 | EventBridge → SNS → 이메일(+Slack) | 구독 상태 | — | 토픽 ARN | ○ | S1 | CIS 4.x |
+| ICS-ACC-07 | 비밀번호 정책 | 14자·복잡도·90일·재사용 24회 금지 | Config `iam-password-policy` | 알림 | 정책 JSON | ● | S1 | CIS 1.8–1.9 |
+| ICS-ACC-08 | 보안 이벤트 알림 경로 | EventBridge → SNS → 이메일(+Slack) | 구독 상태 | — | 토픽 ARN | ◐ (구독 확인 대기) | S1 | CIS 4.x |
 | ICS-ACC-09 | 비용 이상 감시 | Keel `aws-cost`(현행) | 일일 비용 | 알림 | `scripts/keel/checks.ts` | ● | — | — |
 
 ## IAM — 신원·특권 접근
 
 | ID | 통제 | 구현 | 측정 | 시정 | 증거 | 상태 | Stage | 기준 |
 |---|---|---|---|---|---|---|---|---|
-| ICS-IAM-01 | CI 정적 자격증명 0 | GitHub OIDC provider + 역할 `insighta-github-actions` | Keel `iam-hygiene`(정적 키 수) | 키 비활성 | 역할 ARN, 워크플로 diff | ○ | S1 | CIS 1.4 |
-| ICS-IAM-02 | 콘솔 사용자 MFA 강제 | `RequireMFA` 정책 + 가상 MFA | Config `iam-user-mfa-enabled` | 알림 | 정책 ARN | ○ | S1 | CIS 1.10 |
+| ICS-IAM-01 | CI 정적 자격증명 0 | GitHub OIDC provider + 역할 `insighta-github-actions` | Keel `iam-hygiene`(정적 키 수) | 키 비활성 | 역할 ARN, 워크플로 diff | ● | S1 | CIS 1.4 |
+| ICS-IAM-02 | 콘솔 사용자 MFA 강제 | `RequireMFA` 정책 + 가상 MFA | Config `iam-user-mfa-enabled` | 알림 | 정책 ARN | ◐ (정책 생성, MFA 등록 대기) | S1 | CIS 1.10 |
 | ICS-IAM-03 | 액세스 키 90일 회전 | 정책 + Config remediation | Config `access-keys-rotated` | 90일 초과 키 자동 비활성 | 규칙 이름 | ○ | S1(측정 S3) | CIS 1.14 |
-| ICS-IAM-04 | 휴면 자격증명 제거 | 90일 미사용 비활성 | Config `iam-user-unused-credentials-check` | 자동 비활성 | 규칙 이름 | ○ | S1 | CIS 1.12 |
+| ICS-IAM-04 | 휴면 자격증명 제거 | 90일 미사용 비활성 | Config `iam-user-unused-credentials-check` | 자동 비활성 | 규칙 이름 | ● | S1 | CIS 1.12 |
 | ICS-IAM-05 | CI 최소권한 정책 | 문장 단위 정책 3개, IAM 읽기만 | 정책 시뮬레이션 | PR 리뷰 | `terraform/global/iam-ci/main.tf` | ● | — | CIS 1.16 |
 | ICS-IAM-06 | 노드 역할 최소권한 | `insighta-k3s-node`: CloudWatch + ECR pull + SSM 코어 + SSM 파라미터 경로 | 정책 시뮬레이션 | PR 리뷰 | 역할 ARN | ◐ | S3 | CIS 1.16 |
 | ICS-IAM-07 | 특권 세션 감사 | 세션 로그(Tailscale SSH 세션 기록 또는 SSM → CloudWatch Logs) 90일 | 로그 그룹 존재, 세션 수 | — | 로그 그룹 이름 | ○ | S3 | — |
@@ -35,7 +35,7 @@
 
 | ID | 통제 | 구현 | 측정 | 시정 | 증거 | 상태 | Stage | 기준 |
 |---|---|---|---|---|---|---|---|---|
-| ICS-NET-01 | 인바운드 최소화 | SG 80/443 만 공개, 제어평면 자기 SG | Config `restricted-ssh` | 22 전체 공개 시 자동 revoke | SG ID | ◐ | S1(정리) | CIS 5.2 |
+| ICS-NET-01 | 인바운드 최소화 | SG 80/443 만 공개, 제어평면 자기 SG | Config `restricted-ssh` | 22 전체 공개 시 자동 revoke | SG ID | ● (22 목록 2건) | S1(정리) | CIS 5.2 |
 | ICS-NET-02 | 인바운드 SSH 0 | 신원 기반 접근(Tailscale SSH 또는 SSM) 전환, SG 22 규칙 제거 | SG 22 규칙 수 | — | SG 규칙 diff | ○ | S3 | CIS 5.2 |
 | ICS-NET-03 | default SG 폐쇄 | default SG 인바운드·아웃바운드 제거 | Config `vpc-default-security-group-closed` | 자동 | SG ID | ○ | S3 | CIS 5.4 |
 | ICS-NET-04 | TLS 자동 발급·갱신 | cert-manager ClusterIssuer `letsencrypt` | Keel `public-surface`(만료 14일) | 알림 | `charts/insighta/environments/prod.yaml:143-152` | ● | — | ASVS 9.1 |
@@ -58,7 +58,7 @@
 | ICS-K8S-07 | 이미지 무결성 | ECR IMMUTABLE + digest 핀 | ECR 설정, 차트 값 | — | terraform, `prod.yaml` | ○ | S3 | — |
 | ICS-K8S-08 | 컨테이너 non-root 이미지 | `USER appuser`(1001) | Dockerfile | — | `Dockerfile:80`, `frontend/Dockerfile:85` | ● | — | CIS Docker 4.1 |
 | ICS-K8S-09 | 리소스 상한 | requests/limits 전 워크로드 | `get pods` | — | `charts/insighta/values.yaml` | ● | — | CIS K8s 5.7 |
-| ICS-K8S-10 | 노드 디스크 암호화 | EBS 기본 암호화 + 루트 볼륨 교체 | Config `encrypted-volumes` | — | 볼륨 ID | ○ | S1(기본값)·S3(교체) | CIS 2.2.1 |
+| ICS-K8S-10 | 노드 디스크 암호화 | EBS 기본 암호화 + 루트 볼륨 교체 | Config `encrypted-volumes` | — | 볼륨 ID | ◐ (기본값 on, 루트 볼륨 S3) | S1(기본값)·S3(교체) | CIS 2.2.1 |
 | ICS-K8S-11 | kubeconfig 권한 | `write-kubeconfig-mode 0600` | 파일 모드 | — | 노드 설정 | ○ | S2 | CIS K8s 4.1 |
 | ICS-K8S-12 | 호스트 패치 | unattended-upgrades | 서비스 상태 | — | 실측 | ● | — | — |
 | ICS-K8S-13 | GitOps 경계 | prod selfHeal, prune off, 자동 sync 는 무트래픽 클러스터만 | ArgoCD 앱 상태 | — | `charts/bootstrap/applications.yaml` | ● | — | — |
@@ -72,23 +72,23 @@
 | ICS-DATA-03 | 관측 경로 읽기전용 | `keel_read` role + 테이블별 RLS 정책, PreSync 훅 생성 | 훅 로그 | 회전 | `charts/insighta/files/keel-provision.js:190-229` | ● | — | — |
 | ICS-DATA-04 | 사용자 비밀 저장 암호화 | LLM 키 AES-256-GCM, OAuth 토큰 `ENCRYPTION_SECRET` | 코드 | 회전 절차 | `src/modules/settings/llm-keys.ts` | ● | — | ASVS 6.2 |
 | ICS-DATA-05 | 백업 | 일일 pg_dump → S3(SSE·버저닝·PAB·30일), 실패 이슈 | 워크플로 결과 | 이슈 | `.github/workflows/backup.yml` | ● | — | CIS 2.x |
-| ICS-DATA-06 | 복원 리허설 | 분기 1회, 기록 | `restore-drills.md` | — | 기록 | ○ | S2 | — |
+| ICS-DATA-06 | 복원 리허설 | `scripts/ops/restore-drill.sh`, 분기 1회 | `restore-drills.md` | 절차 수정 | 기록 #1 (2026-09-11 성공, 108 테이블 일치) | ● | S1 | — |
 | ICS-DATA-07 | 저장소 공개 차단 | S3 PAB 4/4 + SSE | Config `s3-bucket-public-read-prohibited` | 자동 PAB | 버킷 설정 | ◐ (`insighta-cost-reports` BlockPublicPolicy off, `jk-commerce` PAB 없음) | S3 | CIS 2.1.4 |
 | ICS-DATA-08 | 전송 암호화 | TLS 엣지, DB `sslmode=require`, Supabase SSL 강제 | 설정 | — | 차트, 대시보드 | ◐ | S2 | ASVS 9.1 |
 | ICS-DATA-09 | DB 네트워크 제한 | Supabase network restrictions | 대시보드 | — | 설정 스크린샷 | ○ | S3 | — |
 | ICS-DATA-10 | 사용자 데이터 삭제·export | 삭제 9 테이블(현행) + 서버측 전체 export + 계정 삭제 옵션 | 엔드포인트 테스트 | — | `src/api/routes/settings.ts` | ◐ | S3 | ASVS 8.3 |
 | ICS-DATA-11 | 관리자 행위 감사 | `admin_audit_log` | 테이블 | — | `src/api/routes/admin/audit.ts` | ● | — | ASVS 7.1 |
-| ICS-DATA-12 | 노출 이력 종결 | secret-scanning alert 4건 회전 대조·종결, push protection | `gh api` open 0 | 회전 | alert 번호 | ○ | S1 | — |
+| ICS-DATA-12 | 노출 이력 종결 | secret-scanning alert 4건 회전 대조·종결, push protection | `gh api` open 0 | 회전 | alert 번호 | ◐ (4건 중 1 종결, OAuth 재발급 대기) | S1 | — |
 
 ## SC — 공급망·CI/CD
 
 | ID | 통제 | 구현 | 측정 | 시정 | 증거 | 상태 | Stage | 기준 |
 |---|---|---|---|---|---|---|---|---|
 | ICS-SC-01 | 이미지 취약점 게이트 | Trivy CI(CRITICAL fail) + ECR scanOnPush | Keel `supply-chain` | CI FAIL | 워크플로 | ◐ | S3 | — |
-| ICS-SC-02 | 의존성 취약점 게이트 | Dependabot + `npm audit --audit-level=high`(기준선) | Keel `supply-chain` | CI FAIL | 워크플로 | ○ | S3 | — |
+| ICS-SC-02 | 의존성 취약점 게이트 | Dependabot + `npm audit --audit-level=high`(기준선) | Keel `supply-chain` | CI FAIL | 워크플로 | ◐ (alerts on) | S3 | — |
 | ICS-SC-03 | 액션 SHA 핀 | 서드파티 액션 commit SHA | grep | — | 워크플로 | ○ | S3 | — |
 | ICS-SC-04 | 브랜치 보호 | 필수 체크 8, force-push 차단 | `gh api` | — | 설정 | ◐ | — | — |
-| ICS-SC-05 | 시크릿 유출 방지 | secret scanning + push protection | `gh api` | 회전 | 설정 | ◐ | S1 | — |
+| ICS-SC-05 | 시크릿 유출 방지 | secret scanning + push protection | `gh api` | 회전 | 설정 | ● (push protection on) | S1 | — |
 | ICS-SC-06 | IaC 상태 보호 | S3 backend 버저닝·SSE + DynamoDB lock | 설정 | — | `versions.tf` | ● | — | — |
 | ICS-SC-07 | IaC 변경 검토 | plan-in-PR, 일일 드리프트 검사 | 이슈 | — | `.github/workflows/terraform.yml` | ● | — | — |
 | ICS-SC-08 | 하드코딩 감사 | `hardcode-audit`(7 규칙, 기준선 감소만) | CI | CI FAIL | `scripts/audit/hardcode-audit.ts` | ● | — | — |
@@ -127,7 +127,7 @@
 | ICS-OBS-02 | 보안 자세 검사 | Keel `cloud-posture` · `iam-hygiene` · `k8s-hardening` · `supply-chain` · `secret-exposure` | 원장 | — | 체크명 | ○ | S2(2종)·S3(3종) | — |
 | ICS-OBS-03 | 보안 대시보드 | Grafana `/keel/` 보안 패널 6 | 패널 | — | 대시보드 JSON | ○ | S2 | — |
 | ICS-OBS-04 | 자동 시정 검증 | 위반 주입 → 시정 → 원장 한 바퀴 | 기록 | — | 검증 로그 | ○ | S3 | — |
-| ICS-OBS-05 | 알림 채널 | SNS 이메일(+Slack) | 구독 | — | 토픽 ARN | ○ | S1 | — |
+| ICS-OBS-05 | 알림 채널 | SNS 이메일(+Slack) | 구독 | — | 토픽 ARN | ◐ (구독 확인 대기) | S1 | — |
 
 ## 예외 등록부
 
