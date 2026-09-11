@@ -63,3 +63,11 @@ k3s_node_count = 1
 # minutes rather than seconds. That trade is the reason this is a variable and
 # not a deletion.
 enable_prod_instance = false
+
+# Account-level security baseline (Phase 1 of docs/security/). Measured on
+# 2026-09-11: no trail, no Config recorder, no GuardDuty, no Security Hub, no
+# Access Analyzer, no password policy, EBS default encryption off. The
+# subscribed address is the public support mailbox; the subscription has to be
+# confirmed once from that inbox before anything is delivered.
+enable_security_baseline = true
+security_alert_email     = "support@insighta.one"

@@ -140,3 +140,21 @@ variable "k3s_extra_instance_type" {
   default     = "t3a.small"
 }
 
+
+variable "enable_security_baseline" {
+  description = "Create the account-level security baseline module (CloudTrail, Config, Security Hub, GuardDuty, Access Analyzer, password policy, EBS default encryption, alerts)."
+  type        = bool
+  default     = false
+}
+
+variable "audit_bucket_name" {
+  description = "Bucket for CloudTrail and Config deliveries."
+  type        = string
+  default     = "insighta-audit-logs"
+}
+
+variable "security_alert_email" {
+  description = "Address subscribed to the security alert topic. Empty leaves the topic without a subscription."
+  type        = string
+  default     = ""
+}

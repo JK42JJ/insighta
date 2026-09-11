@@ -20,3 +20,8 @@ output "security_group_id" {
   description = "Security group the deploy and backup jobs open port 22 on."
   value       = module.security.security_group_id
 }
+
+output "security_alerts_topic_arn" {
+  description = "SNS topic that receives GuardDuty, Security Hub and Config alerts. Null until the baseline is enabled."
+  value       = try(module.security_baseline[0].alerts_topic_arn, null)
+}
