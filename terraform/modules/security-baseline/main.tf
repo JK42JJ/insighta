@@ -327,12 +327,31 @@ resource "aws_guardduty_detector_feature" "optional_plans" {
     "EBS_MALWARE_PROTECTION",
     "RDS_LOGIN_EVENTS",
     "LAMBDA_NETWORK_LOGS",
-    "RUNTIME_MONITORING",
   ]) : toset([])
 
   detector_id = aws_guardduty_detector.main[0].id
   name        = each.key
   status      = "DISABLED"
+}
+
+# Runtime Monitoring carries three agent-management sub-features that the
+# API reports back even when the plan is off. Left undeclared, every plan
+# reads them as a change that forces replacement; declared off, the plan is
+# clean.
+resource "aws_guardduty_detector_feature" "runtime_monitoring" {
+  count = var.enable_guardduty ? 1 : 0
+
+  detector_id = aws_guardduty_detector.main[0].id
+  name        = "RUNTIME_MONITORING"
+  status      = "DISABLED"
+
+  dynamic "additional_configuration" {
+    for_each = ["EKS_ADDON_MANAGEMENT", "ECS_FARGATE_AGENT_MANAGEMENT", "EC2_AGENT_MANAGEMENT"]
+    content {
+      name   = additional_configuration.value
+      status = "DISABLED"
+    }
+  }
 }
 
 resource "aws_cloudwatch_event_rule" "guardduty_high" {
