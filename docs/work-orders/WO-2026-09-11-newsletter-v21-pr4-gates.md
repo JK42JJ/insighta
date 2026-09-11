@@ -1,6 +1,6 @@
 ---
 id: WO-2026-09-11-newsletter-v21-pr4-gates
-status: draft
+status: running
 owner: insighta-session
 opened: 2026-09-11
 ---
@@ -25,5 +25,12 @@ v2.1 §3.4(등급 계산) · §4 W5·W7·W8 · §9 PR 4. 픽스처 = 핸드오�
 없음(코드와 테스트만).
 
 # restated
+창간호 verify-log §A 의 9건(판정 사유의 사실 승격 · 인용 누락 · 설명문 단독 숫자 · 자막과 다른 표현 · 숫자 불일치 · 자막 단독 근거의 확인 격상 · 마커 잔존)과 §C(자막 없는 영상) · §D(자막 단독 고유명사) · §E(미확인 [확인]) 각각을 픽스처로 재현해, 등급 규칙 또는 hard 게이트가 코드로 잡는 테스트를 만든다. 정상 문장은 통과해야 하고, 선언됐지만 구현·실행되지 않은 게이트는 실패로 센다.
 
 # 결과
+2026-09-11 (insighta 세션, 자율 루프 2차)
+- `src/modules/newsletter/v2/grade.ts`: 숫자 정규화(구분자 · 배수어 · 근사어 5%) · 식별자(CVE 등)는 텍스트 비교 · 등급 계산(§3.4 4행: primary 2xx+fetched → 확인 / caption·description 일치 → 관측 / 고유명사 자막 단독 불가 / 불일치·단일 출처 → 미확인) · 자막 품질 강등(다중 화자 · 음악 · entity_recall < 0.6).
+- `src/modules/newsletter/v2/gates.ts`: hard 8(fact-has-evidence · grade-rules-pass · story-no-captionless-evidence · confirmed-primary-2xx · no-raw-markers · no-editorial-vocab-emoji · picks-match-db · footnotes-contiguous) · soft 4(banned-phrases · title-shape · judgment-count · sentence-length-variance) · `runGates`(선언됐는데 미구현 = 실패) · `publishAllowed`(block 전부 실행+통과).
+- `tests/unit/modules/newsletter-v2-gates.test.ts`: 16 테스트 전부 통과. §A 9건 중 A1·A2·A3·A4·A5 = 미확인 검출, A6 = 관측이며 [확인] 표기 시 차단, A7·A8 = 정상 통과(관측), A9 = 마커 차단. §C 차단, §D 미확인, §E 미fetched 차단·fetched 확인. 미구현 게이트·미실행 block 게이트 = 발행 불가.
+- 미검증: 실제 DB 행(`nl_claim` 등)을 스냅샷으로 읽는 어댑터와 W7 실행 경로(PR 1 머지 후). 렌더 후 각주 검사는 렌더러(W9)가 있어야 실동작. soft 4종 중 어미 일관성 · 동사 반복 · 용어 풀이 · 이해 판정기는 형태소 분석(`kiwipiepy`)이 필요해 이번 PR 제외.
+- 롤백: 새 파일 3개 삭제. 실행 경로에 아직 배선되지 않아 서비스 무영향.
