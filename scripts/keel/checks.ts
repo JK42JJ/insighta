@@ -16,6 +16,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import { checkAwsCost } from './check-aws-cost';
+import { checkCloudPosture } from './check-cloud-posture';
 import { getPrisma, report, type CheckResult } from './lib';
 
 const PROD = process.env['MONITOR_BASE_URL'] ?? 'https://insighta.one';
@@ -604,6 +605,7 @@ export const ALL_CHECKS: Array<() => Promise<CheckResult>> = [
   checkSchema,
   checkIamHygiene,
   checkSupplyChain,
+  checkCloudPosture,
 ];
 
 export { report };

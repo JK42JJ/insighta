@@ -124,7 +124,7 @@
 | ID | 통제 | 구현 | 측정 | 시정 | 증거 | 상태 | Stage | 기준 |
 |---|---|---|---|---|---|---|---|---|
 | ICS-OBS-01 | 불변식 상시 검사 | Keel 8검사/30분, 원장, 전이 알림 | 원장 | — | `scripts/keel/checks.ts` | ● | — | — |
-| ICS-OBS-02 | 보안 자세 검사 | Keel `iam-hygiene`(MFA 없는 콘솔 사용자 · 90일 초과 키 · 미사용 키) · `supply-chain`(Dependabot critical/high) 구현. `cloud-posture` · `k8s-hardening` · `secret-exposure` 는 S3 | 원장 | — | 체크명 | ◐ (2/5 구현, 2026-09-11) | S2 | — |
+| ICS-OBS-02 | 보안 자세 검사 | Keel `iam-hygiene`(MFA 없는 콘솔 사용자 · 90일 초과 키 · 미사용 키) · `supply-chain`(두 lockfile `npm audit` critical/high; Dependabot API 는 워크플로 토큰이 거부) · `cloud-posture`(트레일 · CIS 알람 8 · EBS 기본 암호화 · 비밀번호 정책 · 감사 버킷 공개 차단 · 알림 구독 확인) 구현. `k8s-hardening` · `secret-exposure` 는 S3 | 원장 | — | 체크명 | ◐ (3/5 구현, 2026-09-11) | S2 | — |
 | ICS-OBS-03 | 보안 대시보드 | Grafana `/keel/` 보안 패널 6 | 패널 | — | 대시보드 JSON | ○ | S2 | — |
 | ICS-OBS-04 | 자동 시정 검증 | 위반 주입 → 시정 → 원장 한 바퀴 | 기록 | — | 검증 로그 | ○ | S3 | — |
 | ICS-OBS-05 | 알림 채널 | SNS 이메일(+Slack) | 구독 | — | 토픽 ARN | ◐ (구독 확인 대기) | S1 | — |
