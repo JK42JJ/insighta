@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | 2026-09-11 | WO-2026-09-11-branch-worktree-cleanup | 30일 이상 미머지 원격 브랜치 28개 삭제? (미머지라 삭제는 되돌릴 수 없음) | (a) 전부 삭제 (b) 목록 중 일부 보존 지정 (c) 보류 | |
 | 2026-09-11 | WO-2026-09-11-branch-worktree-cleanup | 미커밋 변경이 있는 워크트리 5개 처리 (primary 69 · loading-fouc 2 · chatbot-rollback 1 · note-toolset 1 · book-compression 1) | (a) 커밋해 PR (b) 버림 (c) 보류 | |
+| 2026-09-11 | WO-2026-09-11-newsletter-v21-pr1 | DBOS Transact 도입(의존성 + Supabase 에 `dbos` 시스템 스키마). 풀러(pgbouncer 트랜잭션 모드) 경유 검증은 prod 자격증명이 필요 | (a) DBOS 진행, 풀러 실패 시 DIRECT_URL 전용 연결 (b) 리포에 이미 있는 pg-boss 로 같은 상태 기계 (c) 보류 | |
 
 <details><summary>미머지 30일+ 브랜치 목록 (2026-09-11)</summary>
 
