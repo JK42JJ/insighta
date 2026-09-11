@@ -566,8 +566,8 @@ export async function checkSupplyChain(): Promise<CheckResult> {
     );
     const counts: Record<string, number> = {};
     for (const sev of out.split('\n').map((x) => x.trim()).filter(Boolean)) counts[sev] = (counts[sev] ?? 0) + 1;
-    const critical = counts.critical ?? 0;
-    const high = counts.high ?? 0;
+    const critical = counts['critical'] ?? 0;
+    const high = counts['high'] ?? 0;
     const ok = critical === 0 && high === 0;
     return {
       check,
