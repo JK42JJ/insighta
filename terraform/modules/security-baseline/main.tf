@@ -1,18 +1,23 @@
-# Account-level security baseline: the detection and audit layer the account
-# had none of on 2026-09-11 (no trail, no Config recorder, no GuardDuty, no
-# Security Hub, no Access Analyzer, no password policy, EBS default
-# encryption off). Measured in docs/security/cloud-security-architecture-2026-09-11.md.
+# Account-level security baseline. Measured absent on 2026-09-11 (no trail,
+# no GuardDuty, no Config, no Security Hub, no Access Analyzer, no password
+# policy, EBS default encryption off); design and staging in
+# docs/security/cloud-security-architecture-2026-09-11.md.
 #
-# Everything here is declared, measured and remediated as one unit:
-#   declared   - this module
-#   measured   - Config rules and the Security Hub standard
-#   remediated - three Config remediation targets, two of which start as
-#                manual triggers (see the auto_* variables for why)
+# Stage 1 (always on when the module is enabled):
+#   audit bucket, multi-region CloudTrail with a CloudWatch Logs copy, three
+#   metric alarms from the CIS benchmark (root use, console login without
+#   MFA, unauthorized-call bursts), GuardDuty with every paid plan declared
+#   off, Access Analyzer, the account password policy, EBS encryption by
+#   default, the RequireMFA policy for named operators, and one SNS topic.
+#
+# Stage 3 (enable_config / enable_securityhub, off by default):
+#   the Config recorder with thirteen managed rules and three remediation
+#   targets, and Security Hub. Kept as code so the switch is a flag flip
+#   with a plan, not a rewrite.
 #
 # Cost is small by construction: the first trail's management events are
-# free, Security Hub stays inside its free tier at this resource count, and
-# Config is billed per configuration item and rule evaluation. GuardDuty is the
-# one recurring charge and has its own switch.
+# free, the Logs copy is a few tens of megabytes a month, and GuardDuty is
+# the one recurring charge with its own switch.
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
@@ -24,11 +29,12 @@ locals {
   partition  = data.aws_partition.current.partition
   trail_name = "${var.name_prefix}-trail"
   trail_arn  = "arn:${local.partition}:cloudtrail:${local.region}:${local.account_id}:trail/${local.trail_name}"
+  config_on  = var.enable_config
+  hub_on     = var.enable_config && var.enable_securityhub
 }
 
 # ── Audit bucket ─────────────────────────────────────────────────────────────
-# One bucket for both deliveries, separated by prefix. prevent_destroy because
-# an audit trail that can be removed by a plan is not an audit trail.
+# prevent_destroy because an audit trail that a plan can remove is not one.
 
 resource "aws_s3_bucket" "audit" {
   bucket = var.audit_bucket_name
@@ -192,7 +198,43 @@ resource "aws_s3_bucket_policy" "audit" {
   depends_on = [aws_s3_bucket_public_access_block.audit]
 }
 
-# ── CloudTrail ───────────────────────────────────────────────────────────────
+# ── CloudTrail → S3 + CloudWatch Logs ────────────────────────────────────────
+# S3 is the durable record; the Logs copy exists so metric filters can alarm
+# on what the trail sees, across every region, without a second pipeline.
+
+resource "aws_cloudwatch_log_group" "trail" {
+  name              = "/aws/cloudtrail/${local.trail_name}"
+  retention_in_days = var.log_retention_days
+  tags              = var.tags
+}
+
+resource "aws_iam_role" "trail_logs" {
+  name = "${var.name_prefix}-cloudtrail-logs"
+  tags = var.tags
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { Service = "cloudtrail.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "trail_logs" {
+  name = "write-trail-log-group"
+  role = aws_iam_role.trail_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+      Resource = "${aws_cloudwatch_log_group.trail.arn}:*"
+    }]
+  })
+}
 
 resource "aws_cloudtrail" "main" {
   name                          = local.trail_name
@@ -202,22 +244,280 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
   enable_log_file_validation    = true
   enable_logging                = true
+  cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.trail.arn}:*"
+  cloud_watch_logs_role_arn     = aws_iam_role.trail_logs.arn
   tags                          = var.tags
 
-  depends_on = [aws_s3_bucket_policy.audit]
+  depends_on = [aws_s3_bucket_policy.audit, aws_iam_role_policy.trail_logs]
 }
 
-# ── AWS Config ───────────────────────────────────────────────────────────────
-# The service-linked role is used rather than a custom one so that delivery to
-# the bucket is authorised by the bucket policy alone.
+# Three CIS benchmark filters. Each is a question the trail can answer that
+# nothing else in the account asks: was root used, did someone log in
+# without MFA, is a credential being used to probe what it cannot do.
+locals {
+  trail_alarms = {
+    root-account-use = {
+      pattern     = "{ $.userIdentity.type = \"Root\" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != \"AwsServiceEvent\" }"
+      threshold   = 1
+      description = "The root account was used. It should never be."
+    }
+    console-login-without-mfa = {
+      pattern     = "{ ($.eventName = \"ConsoleLogin\") && ($.additionalEventData.MFAUsed != \"Yes\") && ($.userIdentity.type = \"IAMUser\") && ($.responseElements.ConsoleLogin = \"Success\") }"
+      threshold   = 1
+      description = "An IAM user signed in to the console without MFA."
+    }
+    unauthorized-api-calls = {
+      pattern     = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
+      threshold   = var.unauthorized_calls_threshold
+      description = "A burst of AccessDenied / UnauthorizedOperation errors, the shape of a stolen credential being tried."
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "trail" {
+  for_each = local.trail_alarms
+
+  name           = "${var.name_prefix}-${each.key}"
+  log_group_name = aws_cloudwatch_log_group.trail.name
+  pattern        = each.value.pattern
+
+  metric_transformation {
+    name          = each.key
+    namespace     = "${var.name_prefix}/security"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "trail" {
+  for_each = local.trail_alarms
+
+  alarm_name          = "${var.name_prefix}-${each.key}"
+  alarm_description   = each.value.description
+  namespace           = "${var.name_prefix}/security"
+  metric_name         = each.key
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = each.value.threshold
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  depends_on = [aws_cloudwatch_log_metric_filter.trail]
+}
+
+# ── GuardDuty ────────────────────────────────────────────────────────────────
+# Foundational sources only (CloudTrail management events, VPC flow, DNS).
+# The paid plans are declared off so a console default cannot switch them on.
+
+resource "aws_guardduty_detector" "main" {
+  count = var.enable_guardduty ? 1 : 0
+
+  enable                       = true
+  finding_publishing_frequency = "SIX_HOURS"
+  tags                         = var.tags
+}
+
+resource "aws_guardduty_detector_feature" "optional_plans" {
+  for_each = var.enable_guardduty ? toset([
+    "S3_DATA_EVENTS",
+    "EKS_AUDIT_LOGS",
+    "EBS_MALWARE_PROTECTION",
+    "RDS_LOGIN_EVENTS",
+    "LAMBDA_NETWORK_LOGS",
+    "RUNTIME_MONITORING",
+  ]) : toset([])
+
+  detector_id = aws_guardduty_detector.main[0].id
+  name        = each.key
+  status      = "DISABLED"
+}
+
+resource "aws_cloudwatch_event_rule" "guardduty_high" {
+  count = var.enable_guardduty ? 1 : 0
+
+  name        = "${var.name_prefix}-guardduty-high"
+  description = "GuardDuty findings with severity 7 or above."
+  tags        = var.tags
+
+  event_pattern = jsonencode({
+    source        = ["aws.guardduty"]
+    "detail-type" = ["GuardDuty Finding"]
+    detail        = { severity = [{ numeric = [">=", 7] }] }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "guardduty_high" {
+  count = var.enable_guardduty ? 1 : 0
+
+  rule = aws_cloudwatch_event_rule.guardduty_high[0].name
+  arn  = aws_sns_topic.alerts.arn
+}
+
+# ── Access Analyzer, account settings ────────────────────────────────────────
+
+resource "aws_accessanalyzer_analyzer" "account" {
+  analyzer_name = "${var.name_prefix}-account"
+  type          = "ACCOUNT"
+  tags          = var.tags
+}
+
+resource "aws_iam_account_password_policy" "main" {
+  minimum_password_length        = 14
+  require_lowercase_characters   = true
+  require_uppercase_characters   = true
+  require_numbers                = true
+  require_symbols                = true
+  allow_users_to_change_password = true
+  max_password_age               = 90
+  password_reuse_prevention      = 24
+  hard_expiry                    = false
+}
+
+resource "aws_ebs_encryption_by_default" "main" {
+  enabled = true
+}
+
+# ── RequireMFA for operators ─────────────────────────────────────────────────
+# The AWS reference policy: without MFA a user can only set MFA up, change
+# their password, and mint an MFA session token. Everything else is denied,
+# so a leaked long-lived key is inert on its own. Attached only to the users
+# listed in mfa_required_users, and only after they have a device.
+
+data "aws_iam_policy_document" "require_mfa" {
+  statement {
+    sid = "AllowViewAccountInfo"
+    actions = [
+      "iam:GetAccountPasswordPolicy",
+      "iam:GetAccountSummary",
+      "iam:ListVirtualMFADevices",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "AllowManageOwnPasswordsAndMFA"
+    actions = [
+      "iam:ChangePassword",
+      "iam:GetUser",
+      "iam:CreateVirtualMFADevice",
+      "iam:DeleteVirtualMFADevice",
+      "iam:EnableMFADevice",
+      "iam:ListMFADevices",
+      "iam:ResyncMFADevice",
+    ]
+    resources = [
+      "arn:${local.partition}:iam::${local.account_id}:user/$${aws:username}",
+      "arn:${local.partition}:iam::${local.account_id}:mfa/*",
+    ]
+  }
+
+  statement {
+    sid    = "DenyAllExceptListedIfNoMFA"
+    effect = "Deny"
+    not_actions = [
+      "iam:CreateVirtualMFADevice",
+      "iam:EnableMFADevice",
+      "iam:GetUser",
+      "iam:GetMFADevice",
+      "iam:ListMFADevices",
+      "iam:ListVirtualMFADevices",
+      "iam:ResyncMFADevice",
+      "iam:ChangePassword",
+      "iam:GetAccountPasswordPolicy",
+      "sts:GetSessionToken",
+    ]
+    resources = ["*"]
+    condition {
+      test     = "BoolIfExists"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_iam_policy" "require_mfa" {
+  name        = "${var.name_prefix}-require-mfa"
+  description = "Denies everything except MFA setup, password change and session-token minting when the request carries no MFA."
+  policy      = data.aws_iam_policy_document.require_mfa.json
+  tags        = var.tags
+}
+
+resource "aws_iam_user_policy_attachment" "require_mfa" {
+  for_each = toset(var.mfa_required_users)
+
+  user       = each.key
+  policy_arn = aws_iam_policy.require_mfa.arn
+}
+
+# ── Alerts ───────────────────────────────────────────────────────────────────
+# One topic. Email delivery needs the subscription to be confirmed once from
+# the inbox; until then the topic exists and nothing arrives.
+
+resource "aws_sns_topic" "alerts" {
+  name = "${var.name_prefix}-security-alerts"
+  tags = var.tags
+}
+
+data "aws_iam_policy_document" "alerts_topic" {
+  statement {
+    sid       = "AllowEventBridgePublish"
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.alerts.arn]
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [local.account_id]
+    }
+  }
+
+  statement {
+    sid       = "AllowCloudWatchAlarms"
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.alerts.arn]
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [local.account_id]
+    }
+  }
+}
+
+resource "aws_sns_topic_policy" "alerts" {
+  arn    = aws_sns_topic.alerts.arn
+  policy = data.aws_iam_policy_document.alerts_topic.json
+}
+
+resource "aws_sns_topic_subscription" "email" {
+  count = var.alert_email != "" ? 1 : 0
+
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+# ══ Stage 3: AWS Config, remediation, Security Hub (enable_config) ═══════════
 
 resource "aws_iam_service_linked_role" "config" {
+  count            = local.config_on ? 1 : 0
   aws_service_name = "config.amazonaws.com"
 }
 
 resource "aws_config_configuration_recorder" "main" {
+  count = local.config_on ? 1 : 0
+
   name     = "${var.name_prefix}-recorder"
-  role_arn = aws_iam_service_linked_role.config.arn
+  role_arn = aws_iam_service_linked_role.config[0].arn
 
   recording_group {
     all_supported                 = true
@@ -226,6 +526,8 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
+  count = local.config_on ? 1 : 0
+
   name           = "${var.name_prefix}-delivery"
   s3_bucket_name = aws_s3_bucket.audit.id
   s3_key_prefix  = "config"
@@ -234,14 +536,14 @@ resource "aws_config_delivery_channel" "main" {
 }
 
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count = local.config_on ? 1 : 0
+
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
 
   depends_on = [aws_config_delivery_channel.main]
 }
 
-# The thirteen managed rules from the design. Names are the catalog names so a
-# NON_COMPLIANT notification reads the same as the document.
 locals {
   managed_rules = {
     cloudtrail-enabled = {
@@ -308,7 +610,7 @@ locals {
 }
 
 resource "aws_config_config_rule" "managed" {
-  for_each = local.managed_rules
+  for_each = local.config_on ? local.managed_rules : {}
 
   name             = each.key
   input_parameters = length(each.value.params) > 0 ? jsonencode(each.value.params) : null
@@ -322,11 +624,9 @@ resource "aws_config_config_rule" "managed" {
   depends_on = [aws_config_configuration_recorder_status.main]
 }
 
-# ── Remediation ──────────────────────────────────────────────────────────────
-# One role that Systems Manager assumes for all three targets. Each statement
-# is the minimum the named document needs.
-
 resource "aws_iam_role" "remediation" {
+  count = local.config_on ? 1 : 0
+
   name = "${var.name_prefix}-config-remediation"
   tags = var.tags
 
@@ -342,8 +642,10 @@ resource "aws_iam_role" "remediation" {
 }
 
 resource "aws_iam_role_policy" "remediation" {
+  count = local.config_on ? 1 : 0
+
   name = "remediation"
-  role = aws_iam_role.remediation.id
+  role = aws_iam_role.remediation[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -377,6 +679,8 @@ resource "aws_iam_role_policy" "remediation" {
 }
 
 resource "aws_config_remediation_configuration" "open_ssh" {
+  count = local.config_on ? 1 : 0
+
   config_rule_name = aws_config_config_rule.managed["restricted-ssh"].name
   resource_type    = "AWS::EC2::SecurityGroup"
   target_type      = "SSM_DOCUMENT"
@@ -389,7 +693,7 @@ resource "aws_config_remediation_configuration" "open_ssh" {
 
   parameter {
     name         = "AutomationAssumeRole"
-    static_value = aws_iam_role.remediation.arn
+    static_value = aws_iam_role.remediation[0].arn
   }
   parameter {
     name           = "GroupId"
@@ -398,6 +702,8 @@ resource "aws_config_remediation_configuration" "open_ssh" {
 }
 
 resource "aws_config_remediation_configuration" "public_s3" {
+  count = local.config_on ? 1 : 0
+
   config_rule_name = aws_config_config_rule.managed["s3-bucket-public-read-prohibited"].name
   resource_type    = "AWS::S3::Bucket"
   target_type      = "SSM_DOCUMENT"
@@ -410,7 +716,7 @@ resource "aws_config_remediation_configuration" "public_s3" {
 
   parameter {
     name         = "AutomationAssumeRole"
-    static_value = aws_iam_role.remediation.arn
+    static_value = aws_iam_role.remediation[0].arn
   }
   parameter {
     name           = "S3BucketName"
@@ -421,6 +727,8 @@ resource "aws_config_remediation_configuration" "public_s3" {
 # AWS ships no document that deactivates a key by age, so this one is ours.
 # Config reports the IAM user's unique id, not its name; the script resolves it.
 resource "aws_ssm_document" "deactivate_stale_keys" {
+  count = local.config_on ? 1 : 0
+
   name            = "${var.name_prefix}-DeactivateStaleAccessKeys"
   document_type   = "Automation"
   document_format = "YAML"
@@ -477,10 +785,12 @@ resource "aws_ssm_document" "deactivate_stale_keys" {
 }
 
 resource "aws_config_remediation_configuration" "stale_keys" {
+  count = local.config_on ? 1 : 0
+
   config_rule_name = aws_config_config_rule.managed["access-keys-rotated"].name
   resource_type    = "AWS::IAM::User"
   target_type      = "SSM_DOCUMENT"
-  target_id        = aws_ssm_document.deactivate_stale_keys.name
+  target_id        = aws_ssm_document.deactivate_stale_keys[0].name
 
   automatic                  = var.auto_deactivate_stale_keys
   maximum_automatic_attempts = 1
@@ -488,7 +798,7 @@ resource "aws_config_remediation_configuration" "stale_keys" {
 
   parameter {
     name         = "AutomationAssumeRole"
-    static_value = aws_iam_role.remediation.arn
+    static_value = aws_iam_role.remediation[0].arn
   }
   parameter {
     name           = "UserId"
@@ -500,10 +810,8 @@ resource "aws_config_remediation_configuration" "stale_keys" {
   }
 }
 
-# ── Security Hub ─────────────────────────────────────────────────────────────
-
 resource "aws_securityhub_account" "main" {
-  count = var.enable_securityhub ? 1 : 0
+  count = local.hub_on ? 1 : 0
 
   enable_default_standards  = false
   control_finding_generator = "SECURITY_CONTROL"
@@ -513,130 +821,15 @@ resource "aws_securityhub_account" "main" {
 }
 
 resource "aws_securityhub_standards_subscription" "fsbp" {
-  count = var.enable_securityhub ? 1 : 0
+  count = local.hub_on ? 1 : 0
 
   standards_arn = "arn:${local.partition}:securityhub:${local.region}::standards/aws-foundational-security-best-practices/v/1.0.0"
 
   depends_on = [aws_securityhub_account.main]
 }
 
-# ── GuardDuty ────────────────────────────────────────────────────────────────
-# Foundational sources only (CloudTrail management events, VPC flow, DNS). The
-# paid protection plans are declared off so a console default cannot switch
-# them on silently.
-
-resource "aws_guardduty_detector" "main" {
-  count = var.enable_guardduty ? 1 : 0
-
-  enable                       = true
-  finding_publishing_frequency = "SIX_HOURS"
-  tags                         = var.tags
-}
-
-resource "aws_guardduty_detector_feature" "optional_plans" {
-  for_each = var.enable_guardduty ? toset([
-    "S3_DATA_EVENTS",
-    "EKS_AUDIT_LOGS",
-    "EBS_MALWARE_PROTECTION",
-    "RDS_LOGIN_EVENTS",
-    "LAMBDA_NETWORK_LOGS",
-    "RUNTIME_MONITORING",
-  ]) : toset([])
-
-  detector_id = aws_guardduty_detector.main[0].id
-  name        = each.key
-  status      = "DISABLED"
-}
-
-# ── Access Analyzer ──────────────────────────────────────────────────────────
-
-resource "aws_accessanalyzer_analyzer" "account" {
-  analyzer_name = "${var.name_prefix}-account"
-  type          = "ACCOUNT"
-  tags          = var.tags
-}
-
-# ── Account settings ─────────────────────────────────────────────────────────
-
-resource "aws_iam_account_password_policy" "main" {
-  minimum_password_length        = 14
-  require_lowercase_characters   = true
-  require_uppercase_characters   = true
-  require_numbers                = true
-  require_symbols                = true
-  allow_users_to_change_password = true
-  max_password_age               = 90
-  password_reuse_prevention      = 24
-  hard_expiry                    = false
-}
-
-resource "aws_ebs_encryption_by_default" "main" {
-  enabled = true
-}
-
-# ── Alerts ───────────────────────────────────────────────────────────────────
-# Three EventBridge rules, one topic. Email delivery needs the subscription to
-# be confirmed once from the inbox; until then the topic exists and nothing
-# arrives.
-
-resource "aws_sns_topic" "alerts" {
-  name = "${var.name_prefix}-security-alerts"
-  tags = var.tags
-}
-
-data "aws_iam_policy_document" "alerts_topic" {
-  statement {
-    sid       = "AllowEventBridgePublish"
-    actions   = ["sns:Publish"]
-    resources = [aws_sns_topic.alerts.arn]
-    principals {
-      type        = "Service"
-      identifiers = ["events.amazonaws.com"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceAccount"
-      values   = [local.account_id]
-    }
-  }
-}
-
-resource "aws_sns_topic_policy" "alerts" {
-  arn    = aws_sns_topic.alerts.arn
-  policy = data.aws_iam_policy_document.alerts_topic.json
-}
-
-resource "aws_sns_topic_subscription" "email" {
-  count = var.alert_email != "" ? 1 : 0
-
-  topic_arn = aws_sns_topic.alerts.arn
-  protocol  = "email"
-  endpoint  = var.alert_email
-}
-
-resource "aws_cloudwatch_event_rule" "guardduty_high" {
-  count = var.enable_guardduty ? 1 : 0
-
-  name        = "${var.name_prefix}-guardduty-high"
-  description = "GuardDuty findings with severity 7 or above."
-  tags        = var.tags
-
-  event_pattern = jsonencode({
-    source        = ["aws.guardduty"]
-    "detail-type" = ["GuardDuty Finding"]
-    detail        = { severity = [{ numeric = [">=", 7] }] }
-  })
-}
-
-resource "aws_cloudwatch_event_target" "guardduty_high" {
-  count = var.enable_guardduty ? 1 : 0
-
-  rule = aws_cloudwatch_event_rule.guardduty_high[0].name
-  arn  = aws_sns_topic.alerts.arn
-}
-
 resource "aws_cloudwatch_event_rule" "securityhub_failed" {
-  count = var.enable_securityhub ? 1 : 0
+  count = local.hub_on ? 1 : 0
 
   name        = "${var.name_prefix}-securityhub-failed"
   description = "New Security Hub findings that failed a HIGH or CRITICAL control."
@@ -657,13 +850,15 @@ resource "aws_cloudwatch_event_rule" "securityhub_failed" {
 }
 
 resource "aws_cloudwatch_event_target" "securityhub_failed" {
-  count = var.enable_securityhub ? 1 : 0
+  count = local.hub_on ? 1 : 0
 
   rule = aws_cloudwatch_event_rule.securityhub_failed[0].name
   arn  = aws_sns_topic.alerts.arn
 }
 
 resource "aws_cloudwatch_event_rule" "config_noncompliant" {
+  count = local.config_on ? 1 : 0
+
   name        = "${var.name_prefix}-config-noncompliant"
   description = "A Config rule evaluation that changed to NON_COMPLIANT."
   tags        = var.tags
@@ -679,6 +874,8 @@ resource "aws_cloudwatch_event_rule" "config_noncompliant" {
 }
 
 resource "aws_cloudwatch_event_target" "config_noncompliant" {
-  rule = aws_cloudwatch_event_rule.config_noncompliant.name
+  count = local.config_on ? 1 : 0
+
+  rule = aws_cloudwatch_event_rule.config_noncompliant[0].name
   arn  = aws_sns_topic.alerts.arn
 }

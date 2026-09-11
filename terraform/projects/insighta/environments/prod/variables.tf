@@ -158,3 +158,9 @@ variable "security_alert_email" {
   type        = string
   default     = ""
 }
+
+variable "mfa_required_users" {
+  description = "IAM user names that get the RequireMFA policy. Add a user only after they have registered an MFA device."
+  type        = list(string)
+  default     = []
+}

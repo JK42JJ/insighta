@@ -64,10 +64,16 @@ k3s_node_count = 1
 # not a deletion.
 enable_prod_instance = false
 
-# Account-level security baseline (Phase 1 of docs/security/). Measured on
-# 2026-09-11: no trail, no Config recorder, no GuardDuty, no Security Hub, no
-# Access Analyzer, no password policy, EBS default encryption off. The
-# subscribed address is the public support mailbox; the subscription has to be
-# confirmed once from that inbox before anything is delivered.
+# Account-level security baseline (Stage 1 of docs/security/). Measured on
+# 2026-09-11: no trail, no GuardDuty, no Access Analyzer, no password policy,
+# EBS default encryption off. The subscribed address is the public support
+# mailbox; the subscription has to be confirmed once from that inbox before
+# anything is delivered.
+#
+# mfa_required_users is empty on purpose. The RequireMFA policy denies almost
+# everything to a user without an MFA session, so a name goes in here only
+# after that user has registered a device -- otherwise the next console login
+# can do nothing but set one up.
 enable_security_baseline = true
 security_alert_email     = "support@insighta.one"
+mfa_required_users       = []

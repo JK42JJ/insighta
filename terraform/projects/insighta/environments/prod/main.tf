@@ -209,20 +209,23 @@ resource "aws_eip_association" "prod_standby" {
   allocation_id = aws_eip.prod_standby[0].id
 }
 
-# Account-level detection and audit: CloudTrail, Config with thirteen rules and
-# three remediation targets, Security Hub, GuardDuty, Access Analyzer, the
-# password policy and EBS default encryption. Measured absent on 2026-09-11;
-# design in docs/security/cloud-security-architecture-2026-09-11.md.
+# Account-level detection and audit (Stage 1): CloudTrail with a CloudWatch
+# Logs copy and three CIS alarms, GuardDuty, Access Analyzer, the password
+# policy, EBS default encryption, the RequireMFA policy and one alert topic.
+# Measured absent on 2026-09-11; design in
+# docs/security/cloud-security-architecture-2026-09-11.md.
 #
 # Merging a change to enable_security_baseline applies it, like everything
 # else in this file. The one recurring charge (GuardDuty, after its 30-day
-# trial) has its own switch inside the module.
+# trial) has its own switch inside the module; Config and Security Hub are
+# Stage 3 and stay off until their triggers in the design are met.
 module "security_baseline" {
   count  = var.enable_security_baseline ? 1 : 0
   source = "../../../../modules/security-baseline"
 
-  name_prefix       = "insighta"
-  audit_bucket_name = var.audit_bucket_name
-  alert_email       = var.security_alert_email
-  tags              = local.common_tags
+  name_prefix        = "insighta"
+  audit_bucket_name  = var.audit_bucket_name
+  alert_email        = var.security_alert_email
+  mfa_required_users = var.mfa_required_users
+  tags               = local.common_tags
 }
