@@ -1,22 +1,27 @@
-## Summary
+## Work order
 
-<!-- Brief description of what this PR does -->
+<!-- docs/work-orders/WO-....md, or "none" with the reason. No code change ships without an order. -->
 
-## Changes
+## Changed
 
 -
 
-## Type of Change
+## Verified
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Refactoring (no functional changes)
-- [ ] Documentation update
-- [ ] Infrastructure / CI
+<!-- Commands or checks that were actually run, with the observed result. One per line. Nothing here = not verified. -->
 
-## Checklist
+- [ ]
 
-- [ ] `npm run build:all` passes
-- [ ] Tests added/updated if applicable
-- [ ] Documentation updated if applicable
-- [ ] No secrets or credentials committed
+## Not verified
+
+<!-- What was not checked and why. An empty section is a claim that everything above is verified. -->
+
+-
+
+## Spec
+
+<!-- Which section of docs/spec/README.md this changes, or "no surface change". -->
+
+## Decision needed
+
+<!-- Irreversible items only (send, pay, delete, spend, direction, reissue a secret). "none" otherwise. -->
