@@ -226,6 +226,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -245,12 +246,14 @@ jobs:
       #
       # The registry host is derived at runtime rather than written down: it
       # contains the AWS account id and this repository is public.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+
       - name: Log in to ECR
         id: ecr
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TF_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-west-2
         run: |
           ACCT=$(aws sts get-caller-identity --query Account --output text)
           REG="${ACCT}.dkr.ecr.us-west-2.amazonaws.com"
