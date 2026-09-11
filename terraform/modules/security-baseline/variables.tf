@@ -39,9 +39,9 @@ variable "unauthorized_calls_threshold" {
 }
 
 variable "enable_guardduty" {
-  description = "Create the GuardDuty detector. The only line item here with a recurring charge after its 30-day trial."
+  description = "Create the GuardDuty detector. Off: it bills after a 30-day trial, and the operating rule since 2026-09-11 is that security spends nothing. Detection comes from the CloudTrail metric alarms (free tier) and an open-source posture scan instead."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_config" {

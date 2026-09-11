@@ -77,3 +77,7 @@ enable_prod_instance = false
 enable_security_baseline = true
 security_alert_email     = "support@insighta.one"
 mfa_required_users       = []
+
+# No paid security services (operator rule, 2026-09-11). GuardDuty was applied
+# on the same day and removed the same day: it bills after a 30-day trial.
+enable_guardduty = false

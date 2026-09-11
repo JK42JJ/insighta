@@ -15,9 +15,11 @@
 #   targets, and Security Hub. Kept as code so the switch is a flag flip
 #   with a plan, not a rewrite.
 #
-# Cost is small by construction: the first trail's management events are
-# free, the Logs copy is a few tens of megabytes a month, and GuardDuty is
-# the one recurring charge with its own switch.
+# Cost: none by rule (2026-09-11). The first trail's management events are
+# free, the Logs copy and eight alarms sit inside the always-free tier, SNS
+# email is free, Access Analyzer is free. GuardDuty, Config and Security Hub
+# are declared but off; the detection they would add comes from the trail
+# alarms and an open-source posture scan run from CI instead.
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
@@ -251,11 +253,39 @@ resource "aws_cloudtrail" "main" {
   depends_on = [aws_s3_bucket_policy.audit, aws_iam_role_policy.trail_logs]
 }
 
-# Three CIS benchmark filters. Each is a question the trail can answer that
-# nothing else in the account asks: was root used, did someone log in
-# without MFA, is a credential being used to probe what it cannot do.
+# CIS benchmark filters on the trail. Each is a question the trail can answer
+# that nothing else in the account asks: was root used, did someone log in
+# without MFA, is a credential probing what it cannot do, did the identity
+# layer, the trail itself, the network shape or a bucket's exposure change.
+# Eight alarms; the always-free tier allows ten. Routine port-22 authorize /
+# revoke calls from scripts/ops/ssh.sh are deliberately not matched.
 locals {
   trail_alarms = {
+    iam-policy-changes = {
+      pattern     = "{ ($.eventSource = \"iam.amazonaws.com\") && (($.eventName = \"DeleteGroupPolicy\") || ($.eventName = \"DeleteRolePolicy\") || ($.eventName = \"DeleteUserPolicy\") || ($.eventName = \"PutGroupPolicy\") || ($.eventName = \"PutRolePolicy\") || ($.eventName = \"PutUserPolicy\") || ($.eventName = \"CreatePolicy\") || ($.eventName = \"DeletePolicy\") || ($.eventName = \"CreatePolicyVersion\") || ($.eventName = \"DeletePolicyVersion\") || ($.eventName = \"AttachRolePolicy\") || ($.eventName = \"DetachRolePolicy\") || ($.eventName = \"AttachUserPolicy\") || ($.eventName = \"DetachUserPolicy\") || ($.eventName = \"AttachGroupPolicy\") || ($.eventName = \"DetachGroupPolicy\")) }"
+      threshold   = 1
+      description = "An IAM policy was created, changed, attached or detached."
+    }
+    cloudtrail-changes = {
+      pattern     = "{ ($.eventName = \"CreateTrail\") || ($.eventName = \"UpdateTrail\") || ($.eventName = \"DeleteTrail\") || ($.eventName = \"StartLogging\") || ($.eventName = \"StopLogging\") }"
+      threshold   = 1
+      description = "The audit trail itself was changed or stopped."
+    }
+    security-group-structure-changes = {
+      pattern     = "{ ($.eventName = \"CreateSecurityGroup\") || ($.eventName = \"DeleteSecurityGroup\") || ($.eventName = \"AuthorizeSecurityGroupEgress\") || ($.eventName = \"RevokeSecurityGroupEgress\") }"
+      threshold   = 1
+      description = "A security group was created or deleted, or an egress rule changed. Port-22 ingress churn from the SSH helper is excluded on purpose."
+    }
+    s3-bucket-exposure-changes = {
+      pattern     = "{ ($.eventSource = \"s3.amazonaws.com\") && (($.eventName = \"PutBucketAcl\") || ($.eventName = \"PutBucketPolicy\") || ($.eventName = \"DeleteBucketPolicy\") || ($.eventName = \"PutBucketPublicAccessBlock\") || ($.eventName = \"DeletePublicAccessBlock\") || ($.eventName = \"PutBucketCors\") || ($.eventName = \"PutBucketReplication\")) }"
+      threshold   = 1
+      description = "A bucket's ACL, policy, public-access block or replication changed."
+    }
+    network-changes = {
+      pattern     = "{ ($.eventName = \"CreateRoute\") || ($.eventName = \"CreateRouteTable\") || ($.eventName = \"ReplaceRoute\") || ($.eventName = \"ReplaceRouteTableAssociation\") || ($.eventName = \"DeleteRouteTable\") || ($.eventName = \"DeleteRoute\") || ($.eventName = \"DisassociateRouteTable\") || ($.eventName = \"CreateNetworkAcl\") || ($.eventName = \"CreateNetworkAclEntry\") || ($.eventName = \"DeleteNetworkAcl\") || ($.eventName = \"DeleteNetworkAclEntry\") || ($.eventName = \"ReplaceNetworkAclEntry\") || ($.eventName = \"ReplaceNetworkAclAssociation\") || ($.eventName = \"CreateVpc\") || ($.eventName = \"DeleteVpc\") || ($.eventName = \"ModifyVpcAttribute\") || ($.eventName = \"AttachInternetGateway\") || ($.eventName = \"DetachInternetGateway\") }"
+      threshold   = 1
+      description = "Route table, network ACL, VPC or internet gateway changed."
+    }
     root-account-use = {
       pattern     = "{ $.userIdentity.type = \"Root\" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != \"AwsServiceEvent\" }"
       threshold   = 1
