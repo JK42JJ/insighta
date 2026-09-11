@@ -1,10 +1,10 @@
 # Insighta — Project Rules
 
-규칙은 한 줄씩. 근거 사고와 집행 장치는 `docs/ops/rules-ledger.md`(R01~R30). 작업 방식은 `docs/ops/working-method-2026-09-11.md`. 제품의 기록은 `docs/spec/README.md`. 작업 단위는 `docs/work-orders/`.
+규칙은 한 줄씩. 근거 사고와 집행 장치는 `docs/ops/rules-ledger.md`(R01~R30). 작업 방식은 `docs/ops/working-method-2026-09-11.md`. 제품의 기록은 `docs/spec/README.md`(공개 리포 제외 · 원본 = 기본 체크아웃 `/Users/jeonhokim/cursor/insighta/docs/spec/` · 백업 = `insighta-private/docs/spec/`). 작업 단위는 `docs/work-orders/`.
 
 ## 세션 시작
 
-1. `docs/spec/README.md` 를 읽는다 (표면 · 상태 · 수용 기준).
+1. `/Users/jeonhokim/cursor/insighta/docs/spec/README.md` 를 읽는다 (표면 · 상태 · 수용 기준). 워크트리에는 이 폴더가 없다 — `.gitignore` 정책(공개 리포 = 외부 개발자용 내용만)으로 제외되며 `scripts/backup/private-sync.sh` 가 `insighta-private` 로 백업한다.
 2. `bash scripts/ops/work-orders.sh` 로 열린 오더를 본다. 오더 없는 코드 변경은 하지 않는다.
 3. 참조가 필요할 때만 `memory/` 를 읽는다. 세션 역할: 이 리포 = insighta 서비스. career 리포 · 이력서는 다른 세션 소유(R24).
 
