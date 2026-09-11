@@ -222,69 +222,108 @@ Keel(`scripts/keel/checks.ts`, 30분)에 5개 검사를 추가한다. 결과는 
 
 Grafana `/keel/` 에 보안 패널 6개(위 5 + 정적 자격증명 잔여 수). CI 러너에는 위 읽기 권한만 가진 OIDC 역할 `insighta-keel-reader` 를 별도로 둔다.
 
-## 4. 규모 판정과 ROI 기준 (2026-09-11 재편)
+## 4. 보안 운영 모델 — 큰 줄기와 성숙도
 
-James 판정: "보안 설계를 전부 적용하는 것은 무리. 워크로드와 인프라 규모를 감안해 우선순위 높고 효과가 큰 것부터 단계 적용." 이에 따라 §3 은 **목표 상태(장기)** 로 두고, 적용 순서는 본 절과 §5 를 따른다.
+James 판정(2026-09-11): 플랫폼 크기와 관계없이 보안의 중요도와 접근 방식은 같다. 도구와 깊이는 규모에 따라 다르지만 큰 줄기·흐름·사상은 같다. 따라서 우선순위와 구조는 클라우드 보안의 큰 흐름에 맞춰 설계하고, 단계별로 발전시켜 갈 수 있는 지속적인 형태를 갖춘다. Insighta 는 이 구조로 "보안" 이라는 카테고리를 설명할 수 있어야 한다(→ `docs/security/README.md`).
 
-규모(실측): 노드 1(t3.medium) · 파드 11 · 운영자 1 + 자동화 · 베타 규모 사용자 · LLM 지출 ≈ 0/일 · 공개 리포. 통제의 가치 = 막는 사고의 크기 × 발생 확률 ÷ (구축 시간 + 월 비용 + 운영 마찰).
+### 4.1 큰 줄기: 6 기능 × 클라우드 보안 영역
 
-위협 순위 (이 규모에서 현실적인 순서):
+기능은 NIST CSF 2.0 의 여섯 가지를 쓴다. 영역은 AWS Well-Architected 보안 필러와 JD 의 7영역을 합친 것이다. 규모가 바꾸는 것은 각 칸의 **도구와 깊이**이지 칸의 존재 여부가 아니다.
+
+| 기능 | 뜻 | Insighta 에서의 구현 (영역) |
+|---|---|---|
+| Govern 거버넌스 | 정책·표준·책임 분담·위험 판정·증거 | 통제 카탈로그(ICS-*), 본 설계, 책임 공유 모델(§4.2), 분기 리뷰 |
+| Identify 식별 | 자산·데이터·자격증명·노출면의 인벤토리와 측정 | §1 실측, 자격증명 인벤토리, 데이터 인벤토리, 노출 이력 대조 |
+| Protect 보호 | 신원·접근(IAM/PAM·Zero Trust), 네트워크·엣지, 워크로드(Cloud Native), 데이터(DSPM), 공급망, 앱, AI | §3.3–3.7 |
+| Detect 탐지 | 감사 로그, 위협 탐지, 구성 준수 판정, 불변식 검사 | CloudTrail·GuardDuty·CIS 알람·(Config·Security Hub)·Keel |
+| Respond 대응 | 알림 경로, 런북, 자동 시정, 회전 절차 | SNS·Slack, `incident-runbook.md`, Config remediation |
+| Recover 복구 | 백업, 복원 리허설, 롤백, 재구축 | 일일 백업, 복원 리허설, 롤백 3층, IaC·GitOps 재구축 |
+
+원칙: **각 단계는 6 기능 전부에 최소선을 둔다.** 한 기능을 끝까지 파고 다른 기능을 비워 두지 않는다. 다음 단계는 각 기능을 한 칸씩 깊게 한다.
+
+### 4.2 책임 공유 모델 (Insighta 가 설명해야 하는 것)
+
+| 계층 | 제공자가 맡는 것 | Insighta 가 맡는 것 |
+|---|---|---|
+| AWS | 물리·하이퍼바이저·리전·관리형 서비스 자체의 보안 | 계정 설정(MFA·정책·감사), IAM, 네트워크(SG), 노드 OS·k3s, 암호화 설정, 워크로드 |
+| Supabase Cloud | PostgreSQL·Auth 서비스 운영, 인프라 백업, 패치 | RLS·역할·키 관리, SSL 강제·네트워크 제한, 데이터 분류·보존, 자체 백업 |
+| GitHub | 플랫폼·secret scanning 엔진·Actions 러너 | 브랜치 보호, 시크릿·변수 관리, 워크플로 권한, OIDC 신뢰 정책, 의존성 대응 |
+| LLM 공급자(OpenRouter 등) | 모델 호스팅·API 보안 | 프롬프트 격리, 소비 통제, 데이터 최소화, 공급자·모델 allowlist |
+| Mac Mini 수집기 | — | 기기 보안, 토큰 회전, 프록시 자격증명 |
+
+### 4.3 성숙도 단계 — 지속 발전의 형태
+
+| 단계 | 정의 | 6 기능의 최소선 | 진입 조건 |
+|---|---|---|---|
+| Stage 1 · Foundational | 규모와 무관하게 없으면 안 되는 것. 자격증명·감사·복원 | 카탈로그 · 자격증명 인벤토리 · MFA/OIDC · CloudTrail/GuardDuty/알람 · 런북 v1 · 복원 리허설 1회 | 즉시 |
+| Stage 2 · Managed | 통제가 측정되고 되풀이됨. 워크로드·상시 관측 | 분기 리뷰 · 데이터 인벤토리 v1 · 워크로드 최소권한 · Keel 보안 검사 · 런북 v2 · 롤백 검증 | Stage 1 검증 완료 |
+| Stage 3 · Optimized | 자동 준수·자동 시정·격리·데이터·AI 심화 | Config/Security Hub · NetworkPolicy/PSA · ESO · DSPM · AI 가드 · 자동 시정 검증 | §5 Stage 3 트리거 |
+
+지속 루프: **측정**(Keel 30분 · CloudTrail 상시 · Config 24h) → **판정**(`error_events` 원장 · 알람) → **시정**(자동 시정 또는 런북) → **기록**(§8 증거표) → **분기 리뷰**(카탈로그 상태 갱신 · 트리거 재평가 · 다음 단계 항목 선정). 이 루프가 도는 것이 "지속적인 보안" 의 정의다.
+
+### 4.4 우선순위 근거 — 이 규모의 위협 순위
+
+규모(실측): 노드 1(t3.medium) · 파드 11 · 운영자 1 + 자동화 · 베타 규모 사용자 · LLM 지출 ≈ 0/일 · 공개 리포. 같은 단계 안에서의 순서는 막는 사고의 크기 × 확률 ÷ (구축 시간 + 비용 + 운영 마찰) 로 정한다.
 
 | 순위 | 위협 | 근거 (실측) | 막는 비용 |
 |---|---|---|---|
-| 1 | 자격증명 유출·도용 → 계정 탈취(요금·데이터) | 공개 리포 노출 이력 4건 중 **Google OAuth client secret·ID 는 2026-03-04 노출값과 현재 로컬 값이 동일**(해시 대조). 정적 키 2개 189일. 콘솔 MFA 0/3 | 회전·OIDC·MFA — 시간 1일, 비용 0 |
-| 2 | 사고 조사 불가 | CloudTrail trail 0 → 누가·언제·무엇을 했는지 알 수 없음 | 무료 |
-| 3 | 앱 취약점 → 컨테이너 → 단일 노드 전체 | 앱 파드 4종 root 가능 · capabilities 전부 | 차트 값 변경만 |
-| 4 | 백업 복원 미검증 | 일일 백업은 있으나 복원 리허설 기록 0 | 1시간 |
-| 5 | LLM 소비 남용 | 차단기·비용 게이트 있음, 사용자별 리밋만 미배선 | 30분 |
-| 낮음 | 워크로드 간 횡이동 · etcd 시크릿 암호화 · 구성 준수 점수화 · WAF · NetworkPolicy · ESO · DSPM 인벤토리 · AI 인젝션 | 단일 테넌트·단일 디스크·낮은 트래픽에서는 막는 사고의 크기가 작거나, 이미 아는 사실을 다시 보고하는 수준 | Stage 3 트리거 |
+| 1 | 자격증명 유출·도용 → 계정 탈취(요금·데이터) | 공개 리포 노출 이력 4건 중 **Google OAuth client secret·ID 는 2026-03-04 노출값과 현재 로컬 값이 동일**(해시 대조). 정적 키 2개 189일. 콘솔 MFA 0/3 | 회전·OIDC·MFA — 1일, 비용 0 |
+| 2 | 사고 조사 불가 | CloudTrail trail 0 | 무료 |
+| 3 | 앱 취약점 → 컨테이너 → 단일 노드 전체 | 앱 파드 4종 root 가능 · capabilities 전부 | 차트 값 변경 |
+| 4 | 백업 복원 미검증 | 복원 리허설 기록 0 | 1시간 |
+| 5 | LLM 소비 남용 | 차단기 있음, 사용자별 리밋 미배선 | 30분 |
+| 낮음 | 워크로드 간 횡이동 · etcd 시크릿 암호화 · 구성 준수 점수화 · WAF · NetworkPolicy · ESO · DSPM 심화 · AI 인젝션 | 단일 테넌트·단일 디스크·낮은 트래픽에서는 막는 사고의 크기가 작거나 이미 아는 사실을 다시 보고 | Stage 3 |
 
-## 5. 단계 설계 (ROI 순)
+## 5. 단계 설계 — 6 기능 × 3 단계
 
-### Stage 1 — 자격증명·감사 (목표 1일, 월 0–3 USD)
+### Stage 1 — Foundational (목표 1–2일, 월 0–3 USD)
 
-| # | 항목 | 막는 것 | 작업 | 검증 |
-|---|---|---|---|---|
-| 1 | 노출 시크릿 종결 | 공개 히스토리의 자격증명 재사용 | Google OAuth client secret 재발급(GCP 콘솔) → Supabase Auth Google provider · Edge Function 시크릿 · GitHub Secrets 갱신 → 4 alert 를 revoked 로 닫음. Supabase 서비스키·Google API 키는 prod 현재값과 불일치(교체됨) 확인됨 | secret-scanning open 0, 로그인 E2E 1회 |
-| 2 | CI 정적 키 0 | CI 키 유출 시 계정 조작 | GitHub OIDC provider + 역할 `insighta-github-actions`(trust: `repo:JK42JJ/insighta` main·production·pull_request) 에 기존 정책 3개 부착 → 워크플로 5개 `role-to-assume` 전환 → 사용자 `github-actions-terraform` 키 삭제 | OIDC 로 워크플로 성공 1회, credential report CI 활성 키 0 |
-| 3 | 운영자 MFA 강제 | admin 키·비밀번호 유출 시 계정 탈취 | James: 가상 MFA 등록. 코드: `RequireMFA` 정책(MFA 없으면 MFA 등록·비밀번호 변경·`sts:GetSessionToken` 외 전부 Deny) 을 `mfa_required_users` 로 부착. CLI 는 `scripts/ops/aws-mfa.sh` 로 36시간 세션. 휴면 키(`slidegen-prh`) 삭제. 비밀번호 정책 | credential report MFA 1/1, MFA 없는 호출 AccessDenied 확인 |
-| 4 | 감사·탐지·알림 | 조사 불가, 탈취 탐지 지연 | CloudTrail 멀티리전 → S3 + CloudWatch Logs(90일) · 지표 알람 3(root 사용 · MFA 없는 콘솔 로그인 · AccessDenied 급증) · GuardDuty(유료 플랜 off) + 심각도 ≥7 알림 · SNS 이메일 · EBS 기본 암호화. **Config·Security Hub·자동 시정은 코드만 두고 플래그 off** | `get-trail-status IsLogging=true`, 알람 3 OK, GuardDuty detector 1, 구독 Confirmed, 테스트 알림 1회 |
-| 5 | 리포 보호 | 새 노출 | push protection on · Dependabot alerts on · validity checks on | 설정 확인 |
-| 6 | SG 22 정리 | 누적 출처 | /32 15개 중 실사용 외 revoke. 접근 방식 전환(Tailscale SSH/SSM)은 Stage 3 | SG 22 규칙 ≤ 2 |
+| 기능 | 항목 | 작업 | 검증 |
+|---|---|---|---|
+| Govern | 표준·설명 | 통제 카탈로그 + 본 설계(PR #1625) · `docs/security/README.md`(보안 카테고리 설명) · `incident-runbook.md` v1 | 문서 머지 |
+| Identify | 자격증명 인벤토리 · 노출 종결 | 정적 자격증명 목록(소유·용도·회전 주기) 을 카탈로그 부록으로. 노출 4건 해시 대조 완료: Supabase 서비스키·Google API 키 = prod 현재값과 불일치(교체됨), **Google OAuth client secret·ID = 현재값과 동일** | 목록 1건, alert 처리 상태 |
+| Protect | 신원 | Google OAuth client secret 재발급(GCP 콘솔 James) → Supabase Auth · Edge Function 시크릿 · GitHub Secrets 갱신 · CI OIDC 역할(`insighta-github-actions`) + 워크플로 5개 전환 + 정적 키 삭제 · admin 가상 MFA 등록 + `RequireMFA` 정책(`mfa_required_users`) + CLI 36시간 MFA 세션(`scripts/ops/aws-mfa.sh`) · 휴면 키 삭제 · 비밀번호 정책 | credential report: MFA 1/1 · CI 활성 키 0, OIDC 워크플로 성공 1회, 로그인 E2E 1회 |
+| Protect | 리포·노드 | push protection · Dependabot alerts · validity checks on · EBS 기본 암호화 · SG 22 누적 /32 정리(15 → 실사용) | 설정 확인, SG 22 규칙 ≤ 2 |
+| Detect | 감사·탐지 | CloudTrail(S3 + CloudWatch Logs 90일) · CIS 알람 3(root 사용 · MFA 없는 콘솔 로그인 · AccessDenied 급증) · GuardDuty(유료 플랜 off) 심각도 ≥7. Config·Security Hub 는 코드만(플래그 off) | `IsLogging=true`, 알람 3, detector 1 |
+| Respond | 알림·런북 | SNS 이메일 구독 확인 · 런북 v1(자격증명 유출 · MFA 없는 로그인 · GuardDuty high · 새 secret alert) · 테스트 알림 1회 | 구독 Confirmed, 메일 수신 1회 |
+| Recover | 복원 리허설 | 최신 백업을 별도 DB 에 복원, 테이블·행 수 대조, RTO 기록 `restore-drills.md` | 기록 1건 |
 
-운영 마찰(James 결정): #3 이후 CC 의 AWS CLI 는 36시간마다 James 의 MFA 코드 1회가 필요하다. 이력 문장: "CI·운영자 정적 자격증명을 OIDC·MFA 로 대체하고, 계정 감사·위협 탐지·알림을 IaC 로 선언·운영".
+운영 마찰(James 결정): admin MFA 이후 CC 의 AWS CLI 는 36시간마다 James 의 MFA 코드 1회가 필요하다.
+이력 문장: "CI·운영자 정적 자격증명을 OIDC·MFA 로 대체하고, 계정 감사·위협 탐지·알림·대응 절차와 복원 검증을 갖춘 보안 기반선을 IaC 로 선언·운영".
 
-### Stage 2 — 워크로드·복원·상시 관측 (목표 1일, 월 0)
+### Stage 2 — Managed (목표 1일, 월 0)
 
-| # | 항목 | 막는 것 | 작업 | 검증 |
-|---|---|---|---|---|
-| 1 | 워크로드 최소권한 실행 | 컨테이너 탈출·권한 상승 | api·worker·frontend·redis securityContext(runAsNonRoot · drop ALL · allowPrivilegeEscalation false · seccomp RuntimeDefault) + `automountServiceAccountToken: false`. readOnlyRootFilesystem 은 제외(쓰기 경로 조사 비용 > 효과) | 전 파드 non-root, 롤링 후 헬스 정상 |
-| 2 | 복원 리허설 | 복원 불가 백업 | 최신 백업을 별도 DB 에 복원, 테이블·행 수 대조, RTO 기록 `docs/security/restore-drills.md` | 기록 1건 |
-| 3 | 보안 자세 상시 관측 | 재발(키 노화·MFA 해제·새 노출) | Keel `iam-hygiene`(credential report: MFA·키 나이·정적 키 수) · `secret-exposure`(secret-scanning·Dependabot critical) + Grafana 행 1 | 원장 기록, 패널 |
-| 4 | 챗봇 사용자별 리밋 · 상수시간 비교 | 소비 남용·타이밍 | 정의된 tier-3 `RATE_LIMITS.llm` 배선, `crypto.timingSafeEqual` | 테스트 |
-| 5 | 전송·호스트 | 평문 DB 접속·kubeconfig 노출 | Supabase SSL 강제(대시보드), `write-kubeconfig-mode 0600` | 설정 확인 |
+| 기능 | 항목 | 작업 | 검증 |
+|---|---|---|---|
+| Govern | 분기 리뷰 | `/harness-review` 에 보안 축 등록: 카탈로그 상태 갱신 · 트리거 재평가 · 증거표 | 첫 리뷰 기록 |
+| Identify | 데이터 인벤토리 v1 | 테이블·버킷·시크릿 단위 등급(PII·자격증명·콘텐츠·텔레메트리) · 위치 · 접근 주체 · RLS 상태 · 보존 | 문서 1건 |
+| Protect | 워크로드·앱 | api·worker·frontend·redis securityContext(runAsNonRoot · drop ALL · no privesc · seccomp) + automount off · kubeconfig 0600 · Supabase SSL 강제 · 챗봇 사용자별 리밋(tier-3 배선) · 공유 비밀 상수시간 비교 | 전 파드 non-root, 롤링 후 헬스, 테스트 |
+| Detect | 상시 관측 | Keel `iam-hygiene`(MFA·키 나이·정적 키 수) · `secret-exposure`(secret-scanning · Dependabot critical) + Grafana 행 | 원장 기록, 패널 |
+| Respond | 런북 v2 · 채널 | 워크로드 침해·데이터 유출 절차 · Slack webhook 설정 | 문서, 알림 1회 |
+| Recover | 롤백 검증 | `rollback.yml` 실제 실행 1회(현재 "미검증" 표기) | 실행 기록 |
 
-이력 문장: "워크로드 최소권한 실행 표준, 백업 복원 검증, 보안 자세 상시 관측(Keel)".
+이력 문장: "워크로드 최소권한 실행 표준, 데이터 인벤토리, 보안 자세 상시 관측(Keel), 롤백·대응 절차 검증".
 
-### Stage 3 — 규모 트리거 (지금 적용하지 않음)
+### Stage 3 — Optimized (트리거 충족 시)
 
-| 항목 | 적용 트리거 | 준비 상태 |
-|---|---|---|
-| Config 13 규칙 + Security Hub + 자동 시정 | 운영자 ≥2 · 고객/파트너 보안 점검 요청 · 리소스 ≥100 | 코드 완성, `enable_config`·`enable_securityhub` 플래그 on 이면 적용 |
-| NetworkPolicy + PSA restricted | 노드 ≥2 또는 제3자 워크로드 | 설계 §3.5 |
-| ESO + SSM Parameter Store | 팀 ≥2 또는 회전 주기 요구 | 설계 §3.5 |
-| EBS 루트 볼륨 재암호화 | 다음 노드 재생성에 동반(별도 정지 없음) | 기본 암호화는 Stage 1 에서 on |
-| Trivy · npm audit 게이트 · digest 핀 · Actions SHA 핀 | Dependabot critical 월 1건 이상 또는 배포 빈도 증가 | 설계 §3.5 |
-| WAF | 인그레스 로그 공격 패턴 · 429 급증 | — |
-| DSPM 인벤토리 · RLS 게이트 · 전체 export | 프론트→DB 직접 접근 확대 · 개인정보 처리방침 갱신 | 설계 §3.6 |
-| AI 인젝션 격리 · 출력 가드 · 모델 allowlist | 챗봇 tool-use 도입 또는 사용량 임계 | 설계 §3.7 |
-| 운영자 접근 전환(Tailscale SSH / SSM) · IAM Identity Center | 운영자 ≥2 | 설계 §3.3 |
+| 기능 | 항목 | 적용 트리거 | 준비 상태 |
+|---|---|---|---|
+| Detect·Respond | Config 13 규칙 + Security Hub + 자동 시정 3종 | 운영자 ≥2 · 고객/파트너 보안 점검 요청 · 리소스 ≥100 | 코드 완성, `enable_config`·`enable_securityhub` 플래그 |
+| Protect | NetworkPolicy + PSA restricted | 노드 ≥2 또는 제3자 워크로드 | §3.5 |
+| Protect | ESO + SSM Parameter Store | 팀 ≥2 또는 회전 주기 요구 | §3.5 |
+| Protect | EBS 루트 볼륨 재암호화 | 다음 노드 재생성에 동반 | 기본 암호화는 Stage 1 |
+| Protect | Trivy · npm audit 게이트 · digest 핀 · Actions SHA 핀 | Dependabot critical 월 1건 이상 또는 배포 빈도 증가 | §3.5 |
+| Protect | WAF | 인그레스 로그 공격 패턴 · 429 급증 | — |
+| Identify·Protect | DSPM 심화(RLS 게이트 · 전체 export · 네트워크 제한) | 프론트→DB 직접 접근 확대 · 개인정보 처리방침 갱신 | §3.6 |
+| Protect | AI 인젝션 격리 · 출력 가드 · 모델 allowlist | 챗봇 tool-use 도입 또는 사용량 임계 | §3.7 |
+| Protect | 운영자 접근 전환(Tailscale SSH / SSM) · IAM Identity Center | 운영자 ≥2 | §3.3 |
+| Govern | 외부 기준 대조(CIS 벤치마크 점수 · 취약점 신고 창구 공개) | 고객 요청 또는 공개 트러스트 페이지 | README 기반 |
 
 ## 6. 비용·마찰·롤백
 
 | Stage | 월 비용(추정) | 정지 | 마찰 | 롤백 |
 |---|---|---|---|---|
-| 1 | 0–3 USD (GuardDuty 30일 무료 후, CloudWatch Logs 소량) | 0 | CC CLI MFA 세션 36h | 키 재발급 · 정책 detach · `enable_security_baseline=false` |
+| 1 | 0–3 USD (GuardDuty 30일 무료 후, CloudWatch Logs 소량) | 0 | CC CLI MFA 세션 36h · OAuth secret 회전 시 로그인 재검증 | 키 재발급 · 정책 detach · `enable_security_baseline=false` · OIDC 역할 destroy |
 | 2 | 0 | 0 (롤링) | 없음 | ArgoCD 이전 리비전 |
 | 3 | 항목별 | EBS 교체 시 10–15분 | — | 항목별 |
 
@@ -302,8 +341,8 @@ James 판정: "보안 설계를 전부 적용하는 것은 무리. 워크로드�
 
 ### 7.2 Stage 완료 시 추가되는 사실 (§8 증거와 함께)
 
-- Stage 1: 노출 자격증명 종결, CI 정적 자격증명 0(OIDC), 콘솔 MFA 강제, CloudTrail·GuardDuty·알람 3종·알림 파이프라인을 IaC 로 선언, EBS 기본 암호화.
-- Stage 2: 워크로드 최소권한 실행 표준, 백업 복원 검증 기록, Keel 보안 검사 2종.
+- Stage 1: 노출 자격증명 종결, CI 정적 자격증명 0(OIDC), 콘솔 MFA 강제, CloudTrail·GuardDuty·알람 3종·알림 파이프라인을 IaC 로 선언, 대응 런북, 복원 리허설 기록, EBS 기본 암호화.
+- Stage 2: 워크로드 최소권한 실행 표준, 데이터 인벤토리, Keel 보안 검사 2종, 롤백 검증, 분기 리뷰.
 - Stage 3: 트리거 충족 항목만.
 
 ## 8. 증거표 (구현 시 채움)
