@@ -1,6 +1,6 @@
 # Insighta — Project Rules
 
-규칙은 한 줄씩. 근거 사고와 집행 장치는 `docs/ops/rules-ledger.md`(R01~R30). 작업 방식은 `docs/ops/working-method-2026-09-11.md`. 제품의 기록은 `docs/spec/README.md`(공개 리포 제외 · 원본 = 기본 체크아웃 `/Users/jeonhokim/cursor/insighta/docs/spec/` · 백업 = `insighta-private/docs/spec/`). 작업 단위는 `docs/work-orders/`.
+규칙은 한 줄씩. 근거 사고와 집행 장치는 `docs/ops/rules-ledger.md`(R01~R31). 작업 방식은 `docs/ops/working-method-2026-09-11.md`. 제품의 기록은 `docs/spec/README.md`(공개 리포 제외 · 원본 = 기본 체크아웃 `/Users/jeonhokim/cursor/insighta/docs/spec/` · 백업 = `insighta-private/docs/spec/`). 작업 단위는 `docs/work-orders/`.
 
 ## 세션 시작
 
@@ -44,6 +44,7 @@
 - R27 외부 API · 다운로드 임의 사용 금지. "이미 있나" 부터.
 - R28 새 admin 라우트는 `authenticate + authenticateAdmin`, 머지 전 무인증 401.
 - R29 커밋 · PR 본문은 영문(`grep -P "[가-힣]"` = empty). 파일 안 UI · 문서는 한글 가능.
+- R31 PR 머지는 `bash scripts/ops/merge-green.sh <PR>` 로만 — 현재 head 의 검사 전부 초록을 읽은 뒤 머지, 빨간 채 머지 금지.
 
 ## 리포 사실
 
