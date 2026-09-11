@@ -32,4 +32,5 @@ SNS 구독 확인 메일(support@insighta.one) 클릭 — 이 검사가 초록�
 - 머지 #1641(424e6d90, merge-green). `scripts/keel/check-cloud-posture.ts` + 테스트 7(로컬 7/7, CI 백엔드 잡 통과). 보안 문서 3곳(카탈로그 ICS-OBS-02 3/5 · 아키텍처 §7 검사표 · CI 역할 서술)을 구현 사실로 교정.
 - 라이브(로컬 자격증명, 21:20 KST): trail logging · 알람 8 armed · EBS on · 비밀번호 14 · 감사 버킷 4/4 차단 · SNS confirmed 0 pending 1 → ok:false "alert topic has no confirmed subscription (pending 1)".
 - CI 역할(OIDC `insighta-github-actions`)로도 동일: dispatch run 34598933706(21:27 KST) "cloud-posture: alert topic has no confirmed subscription (pending 1)" — 읽기 7종 전부 AccessDenied 없음. 남은 것 = James 의 SNS 구독 확인(QUESTIONS).
+- prod 원장 실측(`scripts/ops/keel-ledger.sh cloud-posture`): 21:28 KST 행 "alert topic has no confirmed subscription (pending 1)" severity error. supply-chain 21:20 · 21:27 행도 npm audit 수치.
 - 롤백: `ALL_CHECKS` 에서 `checkCloudPosture` 제거. 권한 변경 없음.
