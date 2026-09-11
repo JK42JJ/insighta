@@ -9,7 +9,7 @@ opened: 2026-09-11
 뉴스레터가 매호 같은 품질로 나오도록 하는 기반 = 문장이 근거를 가리키지 않으면 저장조차 안 되는 데이터 모델과, 중단 지점부터 재개되는 실행 골격을 프로덕션 DB 에 둔다.
 
 # 맥락
-`~/Downloads/insighta-newsletter-pipeline-implementation-v2.1.md` §3(데이터 모델) · §1(실행 구조) · §9 PR 1. 검토 = 이 세션 2026-09-11. 기존: `prisma/migrations/newsletter/*`, `src/modules/newsletter/`, pg-boss 9 설치됨.
+`docs/spec/weekly-brief/implementation-v2.1-2026-09-08.md`(기본 체크아웃, 공개 리포 제외) §3(데이터 모델) · §1(실행 구조) · §9 PR 1. 검토 = 이 세션 2026-09-11. 기존: `prisma/migrations/newsletter/*`, `src/modules/newsletter/`, pg-boss 9 설치됨.
 
 # 제약
 - 기존 `newsletter_*` 테이블과 8단계 파이프라인은 건드리지 않는다(창간호 발송 경로).
