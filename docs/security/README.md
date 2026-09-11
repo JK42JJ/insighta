@@ -26,12 +26,12 @@ Insighta 가 "보안" 을 어떻게 정의하고 운영하는지 한 장으로 �
 
 | 기능 | 지금 있는 것 (2026-09-11 실측) | 다음 칸 |
 |---|---|---|
-| Govern | 통제 카탈로그 ICS-* (약 60 통제, CIS · ASVS · OWASP LLM 매핑), 본 문서, 설계 | Stage 1: 런북 v1 · Stage 2: 분기 리뷰 |
-| Identify | 계정 · 클러스터 · 리포 · 앱 전 계층 실측, 노출 이력 해시 대조 | Stage 1: 자격증명 인벤토리 · Stage 2: 데이터 인벤토리 |
-| Protect | TLS 자동 갱신 · HSTS · 보안 헤더 · rate limit, JWT 검증(verify-only) · 관리자 경계 · 봇 쓰기 승인 토큰, 이미지 pull 시크릿 0 · IMDSv2, CI 최소권한 정책, 사용자 키 AES-256-GCM, 관리 콘솔 미노출 | Stage 1: OIDC · MFA 강제 · OAuth secret 회전 · Stage 2: 워크로드 최소권한 |
-| Detect | Keel 8 불변식(30분) · TLS 만료 · LLM 지출 · 공개면 | Stage 1: CloudTrail · GuardDuty · CIS 알람 · Stage 2: Keel 보안 검사 |
-| Respond | LLM 크레딧 차단기 · 비용 게이트 · 백업 실패 시 이슈 자동 생성 | Stage 1: 알림 경로 · 런북 v1 · Stage 2: Slack · 런북 v2 |
-| Recover | 일일 DB 백업(S3 · SSE · 버저닝 · 30일), 롤백 3층(차트 태그 · ArgoCD 리비전 · IaC 재구축) | Stage 1: 복원 리허설 · Stage 2: 롤백 실행 검증 |
+| Govern | 통제 카탈로그 ICS-* (약 60 통제, CIS · ASVS · OWASP LLM 매핑), 본 문서, 설계, 사고 대응 런북 v1 | Stage 2: 분기 리뷰 |
+| Identify | 계정 · 클러스터 · 리포 · 앱 전 계층 실측, 노출 이력 해시 대조(4건 판정), Dependabot alerts | Stage 2: 데이터 인벤토리 |
+| Protect | CI 정적 자격증명 0(GitHub OIDC 역할, 2026-09-11) · 휴면 키 비활성 · 비밀번호 정책 · EBS 기본 암호화 · push protection · SSH 허용 목록 2건, TLS 자동 갱신 · HSTS · 보안 헤더 · rate limit, JWT 검증(verify-only) · 관리자 경계 · 봇 쓰기 승인 토큰, 이미지 pull 시크릿 0 · IMDSv2, CI 최소권한 정책, 사용자 키 AES-256-GCM, 관리 콘솔 미노출 | Stage 1 잔여: admin MFA 강제 · OAuth secret 회전 · Stage 2: 워크로드 최소권한 |
+| Detect | CloudTrail(멀티리전, S3 + CloudWatch Logs) · CIS 알람 3(root 사용 · MFA 없는 로그인 · 권한 거부 급증) · GuardDuty · Access Analyzer, Keel 8 불변식(30분) · TLS 만료 · LLM 지출 · 공개면 | Stage 2: Keel 보안 검사 |
+| Respond | SNS 알림 토픽(GuardDuty ≥7 · 알람 3) · 런북 v1, LLM 크레딧 차단기 · 비용 게이트 · 백업 실패 시 이슈 자동 생성 | Stage 1 잔여: 구독 확인 · Stage 2: Slack · 런북 v2 |
+| Recover | 일일 DB 백업(S3 · SSE · 버저닝 · 30일) · 복원 리허설(`restore-drills.md`), 롤백 3층(차트 태그 · ArgoCD 리비전 · IaC 재구축) | Stage 2: 롤백 실행 검증 |
 
 ## 4. 지속 루프
 

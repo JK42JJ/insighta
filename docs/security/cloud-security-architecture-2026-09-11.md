@@ -349,15 +349,30 @@ James 판정(2026-09-11): 플랫폼 크기와 관계없이 보안의 중요도�
 
 | 통제 ID | Stage | 증거 유형 | 값 | 확인일 |
 |---|---|---|---|---|
-| (Stage 1 적용 후 기입) | | | | |
+| ICS-ACC-01 | S1 | CloudTrail | trail `insighta-trail` 멀티리전, 무결성 검증, S3 `insighta-audit-logs` + CloudWatch Logs `/aws/cloudtrail/insighta-trail`(90일). `get-trail-status IsLogging=true`, 로그 스트림 수신 확인. `terraform/modules/security-baseline` (PR #1626, #1628) | 2026-09-11 |
+| ICS-ACC-04 | S1 | GuardDuty | 탐지기 1(`list-detectors`), 유료 플랜 6종 DISABLED 선언, 심각도 ≥7 EventBridge → SNS | 2026-09-11 |
+| ICS-ACC-05 | S1 | Access Analyzer | `insighta-account` ACTIVE | 2026-09-11 |
+| ICS-ACC-07 | S1 | 비밀번호 정책 | 최소 14자 · 복잡도 · 90일 · 재사용 24회 금지 | 2026-09-11 |
+| ICS-ACC-08 · ICS-OBS-05 | S1 | 알림 경로 | SNS `insighta-security-alerts`, CIS 알람 3(`insighta-root-account-use` OK · `insighta-console-login-without-mfa` · `insighta-unauthorized-api-calls` OK). 이메일 구독 = **PendingConfirmation**(support@ 수신함에서 확인 필요) | 2026-09-11 |
+| ICS-IAM-01 | S1 | CI 정적 자격증명 0 | OIDC provider + 역할 `insighta-github-actions`(정책 4: terraform-ci · ec2-modify · ecr · security-read), 워크플로 5개 `role-to-assume`(PR #1627). 검증 실행: keel `34566177836` · terraform drift `34566179623` · apply `34566778770`(No changes). 사용자 `github-actions-terraform` 키 Inactive, GitHub `TF_AWS_*` 시크릿 삭제 | 2026-09-11 |
+| ICS-IAM-04 | S1 | 휴면 자격증명 | `slidegen-prh` 미사용 키 Inactive. credential report: 활성 키 = admin 1개만 | 2026-09-11 |
+| ICS-IAM-02 | S1 | MFA 강제 | 정책 `insighta-require-mfa` 생성, 부착 0(`mfa_required_users=[]`). admin 가상 MFA 등록 후 부착 | 2026-09-11 (대기) |
+| ICS-K8S-10 | S1 | EBS 기본 암호화 | `EbsEncryptionByDefault=true` (루트 볼륨 재암호화는 S3) | 2026-09-11 |
+| ICS-NET-01 | S1 | SG 22 정리 | 누적 /32 16 → 2(현재 운영 기기 + VPC CIDR). SSH 정상 | 2026-09-11 |
+| ICS-SC-05 | S1 | push protection | `secret_scanning_push_protection=enabled` | 2026-09-11 |
+| ICS-SC-02 | S1 | Dependabot alerts | 활성(open: medium 1) | 2026-09-11 |
+| ICS-DATA-12 | S1 | 노출 종결 | alert #4(Supabase 키) = 로컬 self-hosted 개발 키(`ref` 없음), prod 키와 해시 불일치 → resolved. #1(Google API 키) prod 미사용, GCP 삭제 대기. #2·#3(Google OAuth ID·secret) **prod·Supabase Auth 현재값과 일치 → 재발급 대기**(`scripts/ops/rotate-youtube-oauth-secret.sh`) | 2026-09-11 |
+| ICS-DATA-06 | S1 | 복원 리허설 | `restore-drills.md` (실행 결과 기입) | 2026-09-11 |
+| ICS-GOV | S1 | 런북·설명 | `README.md` · `incident-runbook.md` v1 (PR #1625) | 2026-09-11 |
 
-## 9. 결정 대기 (James)
+## 9. 결정·액션 대기 (James)
 
-1. **Stage 1 실행 승인** — PR #1626 머지(= CloudTrail·CloudWatch 알람·GuardDuty·SNS·EBS 기본 암호화 apply) + `terraform/global/iam-ci` 수동 apply(OIDC 역할) + 워크플로 전환 PR 머지.
-2. **admin 가상 MFA 등록** + CC CLI 36시간 MFA 세션 마찰 수용. 등록 후 `mfa_required_users = ["admin"]` 으로 정책 부착.
-3. **Google OAuth client secret 재발급** — GCP 콘솔 작업은 James, 이후 Supabase Auth·EF 시크릿·GitHub Secrets 갱신은 CC. 재발급 시점에 로그인 1회 재검증.
-4. 운영자 SSH 접근 전환(Tailscale SSH / SSM)은 Stage 3 로 이월. 현행 allow-list 유지, 누적 정리만.
-5. GuardDuty 30일 무료 종료 시 유지 여부 — Cost Explorer 실측 후.
+Stage 1 중 CC 가 할 수 있는 항목은 2026-09-11 에 전부 적용됐다(§8). 남은 것은 James 의 계정·기기가 필요한 4건이다.
+
+1. **admin 가상 MFA 등록**(AWS 콘솔 → IAM → 사용자 admin → 보안 자격 증명 → MFA 디바이스 할당). 등록 후 CC 가 `mfa_required_users=["admin"]` 을 머지해 정책을 부착한다. 이후 CC 의 CLI 는 `scripts/ops/aws-mfa.sh <코드>` 로 36시간 세션.
+2. **Google OAuth client secret 재발급**(GCP 콘솔 "보안 비밀 추가") → 파일 저장 → CC 가 `scripts/ops/rotate-youtube-oauth-secret.sh` 실행 → James 가 Supabase Auth 와 로컬 `.env` 갱신 → 검증 후 옛 시크릿 Disable/Delete. 같은 화면에서 2025-12 경 발급된 API 키 삭제.
+3. **SNS 구독 확인** — support@insighta.one 수신함의 "AWS Notification - Subscription Confirmation" 링크 클릭.
+4. GuardDuty 30일 무료 종료(2026-10-11) 시 유지 여부 — Cost Explorer 실측 후.
 
 ## 10. 실측 기록 (2026-09-11, 값 미기재)
 
