@@ -9,6 +9,7 @@
 
 import type { IssueDocument } from './issue-schema';
 import { buildBriefEmail } from '../email/templates';
+import { plainText } from './plain-text';
 
 export interface MailRenderOptions {
   /** Where 전체 브리프 읽기 goes. The subscriber's own note once that lands. */
@@ -45,7 +46,7 @@ export function renderMail(
     category: doc.category.toUpperCase(),
     headline: doc.headline.join(' '),
     headlineMark: findMark(doc.headline.join(' ')),
-    deck: plain(doc.dek),
+    deck: plainText(doc.dek),
     items: doc.mail.items,
     stats: doc.mail.stats,
     method: doc.mail.method,
@@ -64,12 +65,4 @@ export function renderMail(
  */
 function findMark(headline: string): string | undefined {
   return /[0-9][0-9,.]*\s*(배|%|조|억|만|달러)/.exec(headline)?.[0];
-}
-
-/** The dek carries inline emphasis for the page; mail takes it as prose. */
-function plain(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim();
 }
