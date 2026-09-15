@@ -13,16 +13,15 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { BriefCategoryPage } from './BriefCategoryPage';
-import type { SubscribedBriefIssue } from '@/shared/lib/api-client';
+import type { BriefCategoryIssues, SubscribedBriefIssue } from '@/shared/lib/api-client';
 
-const subscribedMock = vi.fn();
-const categoriesMock = vi.fn();
+const categoryMock = vi.fn();
 const navigateMock = vi.fn();
 
 vi.mock('@/shared/lib/api-client', () => ({
   apiClient: {
-    getSubscribedBriefs: () => subscribedMock(),
-    getBriefCategories: () => categoriesMock(),
+    getBriefCategoryIssues: (key: string) => categoryMock(key),
+    unsubscribeFromBrief: vi.fn(),
   },
 }));
 
@@ -51,12 +50,28 @@ function issue(over: Partial<SubscribedBriefIssue> = {}): SubscribedBriefIssue {
     issueNo: 1,
     publishedAt: '2026-09-02T00:00:00Z',
     headline: '에이전트가 읽은 것은 전부 명령이 될 수 있다',
+    // Prose already: the server strips the markup where the excerpt is made.
     dek: '이번 주 재료에서 반복된 주제는 모델 점수가 아니라 권한이었다.',
     coverVideoId: '1IbrFrdll4U',
+    coverUrl: 'https://i.ytimg.com/vi/1IbrFrdll4U/hqdefault.jpg',
     issueLabel: '제1호',
     dateLabel: '2026년 9월 2일',
     read: false,
     ...over,
+  };
+}
+
+function payload(
+  issues: SubscribedBriefIssue[],
+  over: Partial<BriefCategoryIssues['category']> = {}
+): { status: 'ok'; data: BriefCategoryIssues } {
+  return {
+    status: 'ok',
+    data: {
+      category: { key: 'ai-tech', label: 'AI 엔지니어링', subscribed: true, ...over },
+      issues,
+      unread: issues.filter((i) => !i.read).length,
+    },
   };
 }
 
@@ -73,22 +88,11 @@ function renderGrid(categoryKey = 'ai-tech') {
   );
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  categoriesMock.mockResolvedValue({
-    status: 'ok',
-    data: {
-      categories: [
-        { key: 'ai-tech', label: 'AI 엔지니어링', blurb: '', subscribed: true, issues: 1 },
-        { key: 'dev', label: '개발', blurb: '', subscribed: true, issues: 0 },
-      ],
-    },
-  });
-});
+beforeEach(() => vi.clearAllMocks());
 
 describe('BriefCategoryPage', () => {
   it('renders an issue as a card', async () => {
-    subscribedMock.mockResolvedValue({ status: 'ok', data: { issues: [issue()], unread: 1 } });
+    categoryMock.mockResolvedValue(payload([issue()]));
     renderGrid();
 
     expect(await screen.findByText('에이전트가 읽은 것은 전부 명령이 될 수 있다')).toBeTruthy();
@@ -100,38 +104,38 @@ describe('BriefCategoryPage', () => {
     expect(img).toBeTruthy();
   });
 
+  it('asks the category route, not the subscription list', async () => {
+    categoryMock.mockResolvedValue(payload([issue()]));
+    renderGrid('ai-tech');
+    await screen.findByText('에이전트가 읽은 것은 전부 명령이 될 수 있다');
+    expect(categoryMock).toHaveBeenCalledWith('ai-tech');
+  });
+
   it('opens the issue when the card is clicked', async () => {
-    subscribedMock.mockResolvedValue({ status: 'ok', data: { issues: [issue()], unread: 1 } });
+    categoryMock.mockResolvedValue(payload([issue()]));
     renderGrid();
     fireEvent.click(await screen.findByText('에이전트가 읽은 것은 전부 명령이 될 수 있다'));
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/brief/2026-09-02-ai-tech'));
   });
 
-  it('shows only this domain, newest first', async () => {
-    subscribedMock.mockResolvedValue({
-      status: 'ok',
-      data: {
-        issues: [
-          issue({ slug: 'b', headline: '두 번째 호', issueNo: 2 }),
-          issue({ slug: 'a', headline: '첫 번째 호', issueNo: 1 }),
-          issue({ slug: 'x', headline: '다른 도메인', categoryKey: 'dev' }),
-        ],
-        unread: 3,
-      },
-    });
+  it('keeps the order the API gives, newest first', async () => {
+    categoryMock.mockResolvedValue(
+      payload([
+        issue({ slug: 'b', headline: '두 번째 호', issueNo: 2, issueLabel: '제2호' }),
+        issue({ slug: 'a', headline: '첫 번째 호', issueNo: 1 }),
+      ])
+    );
     renderGrid();
 
     await screen.findByText('두 번째 호');
-    expect(screen.queryByText('다른 도메인')).toBeNull();
     const titles = [...document.querySelectorAll('h4')].map((h) => h.textContent);
     expect(titles).toEqual(['두 번째 호', '첫 번째 호']);
   });
 
   it('marks unread issues and says how many there are', async () => {
-    subscribedMock.mockResolvedValue({
-      status: 'ok',
-      data: { issues: [issue({ read: false }), issue({ slug: 'b', read: true })], unread: 1 },
-    });
+    categoryMock.mockResolvedValue(
+      payload([issue({ read: false }), issue({ slug: 'b', read: true })])
+    );
     renderGrid();
 
     await screen.findByText('2호');
@@ -139,7 +143,7 @@ describe('BriefCategoryPage', () => {
   });
 
   it('tells a subscriber with no issues yet that the subscription took', async () => {
-    subscribedMock.mockResolvedValue({ status: 'ok', data: { issues: [], unread: 0 } });
+    categoryMock.mockResolvedValue(payload([], { key: 'dev', label: '개발' }));
     renderGrid('dev');
 
     expect(await screen.findByText(/첫 호가 발행되면/)).toBeTruthy();
@@ -148,12 +152,19 @@ describe('BriefCategoryPage', () => {
     expect(screen.getByRole('heading', { name: /개발/ })).toBeTruthy();
   });
 
-  it('renders without a cover rather than breaking when an issue has no picks', async () => {
-    subscribedMock.mockResolvedValue({
-      status: 'ok',
-      data: { issues: [issue({ coverVideoId: null })], unread: 1 },
-    });
+  it('shows the shelf to a reader who does not subscribe yet', async () => {
+    categoryMock.mockResolvedValue(payload([issue()], { subscribed: false }));
     renderGrid();
     expect(await screen.findByText('에이전트가 읽은 것은 전부 명령이 될 수 있다')).toBeTruthy();
+    expect(screen.queryByText('구독 중')).toBeNull();
+  });
+
+  it('renders the category cover when an issue has no picks', async () => {
+    categoryMock.mockResolvedValue(
+      payload([issue({ coverVideoId: null, coverUrl: '/brief-covers/ai-tech.svg' })])
+    );
+    renderGrid();
+    expect(await screen.findByText('에이전트가 읽은 것은 전부 명령이 될 수 있다')).toBeTruthy();
+    expect(document.querySelector('img[src="/brief-covers/ai-tech.svg"]')).toBeTruthy();
   });
 });

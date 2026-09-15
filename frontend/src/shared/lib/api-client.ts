@@ -25,9 +25,22 @@ export interface SubscribedBriefIssue {
   dek: string;
   /** The lead pick's video id — the card's cover. Null when the issue has no picks. */
   coverVideoId: string | null;
+  /**
+   * What the card shows: the lead pick's thumbnail, else the category's own
+   * cover. Resolved by the server so no surface is left to invent a fallback.
+   */
+  coverUrl: string;
+  /** Printed from the stored issue number, never from the editor's label. */
   issueLabel: string;
   dateLabel: string;
   read: boolean;
+}
+
+/** One brief's published issues, whether or not this reader takes it. Mirrors GET /brief/c/:key/issues. */
+export interface BriefCategoryIssues {
+  category: { key: string; label: string; subscribed: boolean };
+  issues: SubscribedBriefIssue[];
+  unread: number;
 }
 
 /** One of the ten briefs. Mirrors GET /brief/categories. */
@@ -3024,6 +3037,15 @@ class ApiClient {
   /** The ten briefs and whether this reader takes each one. */
   async getBriefCategories(): Promise<ApiResponse<{ categories: BriefCategoryRow[] }>> {
     return this.request('/brief/categories');
+  }
+
+  /**
+   * One brief's published issues, newest first, with read state — joined on
+   * the category rather than the subscription, so a reader looking at a brief
+   * they do not take yet still sees what it has published.
+   */
+  async getBriefCategoryIssues(categoryKey: string): Promise<ApiResponse<BriefCategoryIssues>> {
+    return this.request(`/brief/c/${encodeURIComponent(categoryKey)}/issues`);
   }
 
   /** Stop taking a brief, from inside the app. */
