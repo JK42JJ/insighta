@@ -14,6 +14,7 @@
 
 import { FastifyPluginCallback } from 'fastify';
 import { getPrismaClient } from '../../modules/database';
+import { toJsonInput } from '../../modules/database/json-input';
 import { enqueueCurationBuild } from '../../modules/queue/handlers/curation-build';
 import { MS_PER_DAY } from '../../utils/time-constants';
 import { suggestTopics } from '../../modules/curation/suggest';
@@ -116,11 +117,12 @@ async function requireOwnedSubscription(
     code: (n: number) => { send: (b: unknown) => unknown };
   }
 ): Promise<{ id: string; userId: string } | null> {
-  if (!request.user || !('userId' in (request.user as object))) {
+  const user = request.user;
+  if (typeof user !== 'object' || user === null || !('userId' in user)) {
     reply.code(401).send({ status: 'error', code: 'UNAUTHORIZED' });
     return null;
   }
-  const userId = (request.user as { userId: string }).userId;
+  const userId = (user as { userId: string }).userId;
   const prisma = getPrismaClient();
   const sub = await prisma.curation_subscriptions.findUnique({
     where: { id: request.params.id },
@@ -332,7 +334,7 @@ export const curationRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       const weekOf = new Date(mondayOf(new Date()));
       await prisma.curation_proposals.upsert({
         where: { user_id_week_of: { user_id: userId, week_of: weekOf } },
-        create: { user_id: userId, week_of: weekOf, proposed: result.proposals as object },
+        create: { user_id: userId, week_of: weekOf, proposed: toJsonInput(result.proposals) },
         update: {},
       });
       return reply.send({ status: 'ok', data: { proposals: result.proposals } });

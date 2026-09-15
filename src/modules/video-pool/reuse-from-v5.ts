@@ -26,7 +26,6 @@
  * false — see `reusePickedToPool`). Off = zero behavior change.
  */
 
-import { Prisma } from '@prisma/client';
 import { classifyQuality } from '@/skills/plugins/batch-video-collector/quality';
 import { shortGateFields } from '@/modules/video-pool/is-short';
 import { getPrismaClient } from '@/modules/database/client';
@@ -227,8 +226,8 @@ export async function reusePickedToPool(
       }
       await prisma.video_pool.upsert({
         where: { video_id: card.videoId },
-        create: row.create as unknown as Prisma.video_poolUncheckedCreateInput,
-        update: row.update as unknown as Prisma.video_poolUncheckedUpdateInput,
+        create: row.create,
+        update: row.update,
       });
       reused += 1;
     } catch (err) {

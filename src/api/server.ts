@@ -222,10 +222,11 @@ export async function buildServer() {
     const started = (request as { _startedAt?: bigint })._startedAt;
     if (started === undefined) return;
     const seconds = Number(process.hrtime.bigint() - started) / 1e9;
-    // routerPath is the pattern ("/api/v1/cards/:videoId/like"); when nothing
-    // matched it is undefined, and every unmatched request shares one series
-    // rather than minting one per probed path.
-    const route = (request as { routerPath?: string }).routerPath ?? 'unmatched';
+    // routeOptions.url is the pattern ("/api/v1/cards/:videoId/like"); when
+    // nothing matched it is undefined, and every unmatched request shares one
+    // series rather than minting one per probed path. (Fastify 5 removed the
+    // v4 `request.routerPath` alias this read before.)
+    const route = request.routeOptions.url ?? 'unmatched';
     const labels = {
       method: request.method,
       route,

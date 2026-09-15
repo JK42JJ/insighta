@@ -581,7 +581,7 @@ export class MandalaManager {
           mandala_id: params.mandalaId,
           user_id: params.userId,
           outcome: params.outcome,
-          timings: params.timings as Prisma.InputJsonValue,
+          timings: params.timings,
           error: params.error ?? null,
         },
       })
@@ -702,7 +702,7 @@ export class MandalaManager {
           timings['tx_mandala_create'] = Date.now() - tMandalaCreate;
 
           const tLevels = Date.now();
-          await this.createLevels(tx as any, mandala.id, levels);
+          await this.createLevels(tx, mandala.id, levels);
           timings['tx_levels_createMany'] = Date.now() - tLevels;
 
           logger.info(`Mandala created: userId=${userId}, mandalaId=${mandala.id}, tier=${tier}`);
@@ -841,14 +841,14 @@ export class MandalaManager {
     // exceed Prisma's default 5000ms.
     return await this.prisma.$transaction(
       async (tx) => {
-        await this.verifyOwnership(userId, mandalaId, tx as any);
+        await this.verifyOwnership(userId, mandalaId, tx);
 
         // Delete and recreate levels
         await tx.user_mandala_levels.deleteMany({
           where: { mandala_id: mandalaId },
         });
 
-        await this.createLevels(tx as any, mandalaId, levels);
+        await this.createLevels(tx, mandalaId, levels);
 
         // Touch updated_at on parent mandala
         await tx.user_mandalas.update({
@@ -935,7 +935,7 @@ export class MandalaManager {
     await this.prisma.$transaction(
       async (tx) => {
         // Re-verify ownership inside transaction
-        const current = await this.verifyOwnership(userId, mandalaId, tx as any);
+        const current = await this.verifyOwnership(userId, mandalaId, tx);
 
         // If deleting the default mandala, promote the next candidate
         if (current.is_default) {
@@ -1065,7 +1065,7 @@ export class MandalaManager {
         await tx.user_mandala_levels.deleteMany({
           where: { mandala_id: mandala.id },
         });
-        await this.createLevels(tx as any, mandala.id, levels);
+        await this.createLevels(tx, mandala.id, levels);
 
         // Fetch the complete result using tx (inside transaction)
         const fullMandala = await tx.user_mandalas.findFirst({
@@ -1102,7 +1102,7 @@ export class MandalaManager {
     isPublic: boolean
   ): Promise<MandalaWithLevels> {
     return await this.prisma.$transaction(async (tx) => {
-      await this.verifyOwnership(userId, mandalaId, tx as any);
+      await this.verifyOwnership(userId, mandalaId, tx);
 
       const shareSlug = isPublic ? nanoid(12) : null;
 

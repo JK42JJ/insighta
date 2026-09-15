@@ -214,7 +214,7 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
       let effectiveMandalaLimit = body.mandalaLimit;
 
       if (body.tier !== undefined) {
-        const tierKey = body.tier as keyof typeof TIER_LIMITS;
+        const tierKey = body.tier;
         const tierDefaults = TIER_LIMITS[tierKey];
 
         setClauses.push(`tier = $${idx}`);

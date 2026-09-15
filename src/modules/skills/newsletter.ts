@@ -14,7 +14,6 @@
  * Issue: #337
  */
 
-import type { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database';
 import { logger } from '@/utils/logger';
 import { config } from '@/config/index';
@@ -125,7 +124,7 @@ export class NewsletterSkill implements InsightaSkill {
             title: c.title,
             source: c.source,
             url: c.url,
-          })) as unknown as Prisma.InputJsonValue,
+          })),
           message_id: info.messageId,
           status: 'sent',
         },

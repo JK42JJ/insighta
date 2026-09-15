@@ -461,8 +461,7 @@ export const videoRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
       // For now, create a simple summary from captions
       const fullText = captionResult.caption.fullText;
       const words = fullText.split(' ');
-      const wordLimit =
-        SUMMARY_WORD_LIMITS[level as keyof typeof SUMMARY_WORD_LIMITS] ?? SUMMARY_WORD_LIMITS.brief;
+      const wordLimit = SUMMARY_WORD_LIMITS[level] ?? SUMMARY_WORD_LIMITS.brief;
       const summaryText = words.slice(0, wordLimit).join(' ') + '...';
 
       // Save summary to user state via notes field

@@ -116,7 +116,7 @@ function buildRouterFetch(scenario: FetchScenario): typeof fetch {
     }
 
     throw new Error(`Unmocked URL: ${url}`);
-  }) as unknown as typeof fetch;
+  });
 }
 
 function fakeYouTubeTrendingBody(

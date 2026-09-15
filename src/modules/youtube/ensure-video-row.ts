@@ -20,7 +20,6 @@
  * the existing no-metadata behavior applies.
  */
 
-import { youtube_v3 } from 'googleapis';
 import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
 import {
@@ -62,7 +61,7 @@ export async function ensureYoutubeVideoRow(
 
     // YouTubeVideoFullMetadata shares the snippet/contentDetails/statistics
     // shape upsertVideo reads; the cast is structural, not a behavior change.
-    await new VideoManager().upsertVideo(meta as unknown as youtube_v3.Schema$Video);
+    await new VideoManager().upsertVideo(meta);
     log.info('created missing youtube_videos row (chokepoint)', { videoId });
     return true;
   } catch (err) {
