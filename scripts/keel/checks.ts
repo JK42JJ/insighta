@@ -18,6 +18,7 @@ import { join } from 'path';
 import { checkAwsCost } from './check-aws-cost';
 import { checkCloudPosture } from './check-cloud-posture';
 import { getPrisma, report, type CheckResult } from './lib';
+import { HOURS_PER_DAY, MS_PER_HOUR } from '../../src/utils/time-constants';
 
 const PROD = process.env['MONITOR_BASE_URL'] ?? 'https://insighta.one';
 const REPO_ROOT = join(__dirname, '..', '..');
@@ -216,40 +217,89 @@ export async function checkLlmSpend(): Promise<CheckResult> {
  * pipeline_events forty-seven. Three different states, one number.
  */
 
-/** Surfaces, with how long each may reasonably be quiet. Transcript ingestion
- *  runs on a schedule; summaries follow it; LLM calls happen whenever anyone
- *  uses the product. */
-const SURFACES: Array<{ table: string; label: string; hours: number }> = [
-  { table: 'llm_call_logs', label: 'LLM calls', hours: 26 },
-  { table: 'video_summaries', label: 'summaries', hours: 24 * 7 },
-  { table: 'pipeline_events', label: 'transcript pipeline', hours: 24 * 3 },
+/** Ages under two days are printed in hours, longer ones in whole days. */
+const AGE_IN_DAYS_FROM_HOURS = HOURS_PER_DAY * 2;
+
+/** Allowed quiet period per surface, in hours. */
+const LLM_CALLS_QUIET_HOURS = 26;
+const SUMMARIES_QUIET_HOURS = HOURS_PER_DAY * 7;
+const TRANSCRIPT_PIPELINE_QUIET_HOURS = HOURS_PER_DAY * 3;
+
+const TRANSCRIPT_PIPELINE_LABEL = 'transcript pipeline';
+
+interface Surface {
+  table: string;
+  label: string;
+  /** Quiet period after which the surface is reported STALE. */
+  hours: number;
+  /** Reported for context only: the age is shown, but the surface is never
+   *  marked STALE and never fails the check. */
+  informational?: boolean;
+}
+
+/**
+ * Surfaces, with how long each may be quiet before it is reported stale.
+ *
+ * video_summaries and pipeline_events are scheduled pipeline outputs and gate
+ * the check. llm_call_logs is informational. Its 26 h allowance was set on
+ * 2026-09-08, when the scheduled trend-collector called the LLM every day.
+ * That job was disabled on 2026-09-10 under the LLM spend shutdown
+ * (docs/ops/llm-spend-census-2026-09-10.md), so the table is now written only
+ * when a user invokes an LLM feature. Its age therefore measures product usage,
+ * not pipeline health, and a day without usage is not a fault. The age is still
+ * reported because it shows whether the LLM path is being exercised at all.
+ */
+const SURFACES: Surface[] = [
+  { table: 'llm_call_logs', label: 'LLM calls', hours: LLM_CALLS_QUIET_HOURS, informational: true },
+  { table: 'video_summaries', label: 'summaries', hours: SUMMARIES_QUIET_HOURS },
+  {
+    table: 'pipeline_events',
+    label: TRANSCRIPT_PIPELINE_LABEL,
+    hours: TRANSCRIPT_PIPELINE_QUIET_HOURS,
+  },
 ];
 
-export async function checkPipelineFreshness(): Promise<CheckResult> {
-  const check = 'pipeline-freshness';
-  const rows = await getPrisma().$queryRawUnsafe<Array<{ t: string; newest: Date | null }>>(
-    SURFACES.map((s) => `SELECT '${s.table}' AS t, max(created_at) AS newest FROM ${s.table}`).join(
-      ' UNION ALL '
-    )
-  );
+/** One row of the freshness query: the newest created_at per table, or null
+ *  when the table has no rows. */
+export interface FreshnessRow {
+  t: string;
+  newest: Date | null;
+}
 
+/**
+ * What the newest row per surface means, separated from the query so the
+ * judgement can be tested without a database. `now` is injected for the same
+ * reason.
+ */
+export function interpretFreshness(
+  rows: FreshnessRow[],
+  now: number = Date.now()
+): { ok: boolean; detail: string; context: Record<string, unknown> } {
   const seen = new Map(rows.map((r) => [r.t, r.newest]));
   const parts: string[] = [];
   const stale: string[] = [];
-  const ctx: Record<string, unknown> = {};
+  const context: Record<string, unknown> = {};
 
   for (const s of SURFACES) {
     const newest = seen.get(s.table) ?? null;
     if (!newest) {
       parts.push(`${s.label} never`);
-      stale.push(s.label);
-      ctx[s.table] = null;
+      if (!s.informational) stale.push(s.label);
+      context[s.table] = null;
       continue;
     }
-    const hours = (Date.now() - new Date(newest).getTime()) / 3_600_000;
-    ctx[s.table] = { newest, hours: Number(hours.toFixed(1)), allowed: s.hours };
-    const age = hours < 48 ? `${hours.toFixed(0)}h` : `${(hours / 24).toFixed(0)}d`;
-    if (hours > s.hours) {
+    const hours = (now - new Date(newest).getTime()) / MS_PER_HOUR;
+    context[s.table] = {
+      newest,
+      hours: Number(hours.toFixed(1)),
+      allowed: s.hours,
+      ...(s.informational ? { informational: true } : {}),
+    };
+    const age =
+      hours < AGE_IN_DAYS_FROM_HOURS
+        ? `${hours.toFixed(0)}h`
+        : `${(hours / HOURS_PER_DAY).toFixed(0)}d`;
+    if (hours > s.hours && !s.informational) {
       parts.push(`${s.label} ${age} STALE`);
       stale.push(s.label);
     } else {
@@ -258,7 +308,7 @@ export async function checkPipelineFreshness(): Promise<CheckResult> {
   }
 
   if (stale.length === 0) {
-    return { check, ok: true, detail: parts.join(' · '), context: ctx };
+    return { ok: true, detail: parts.join(' · '), context };
   }
 
   // Naming the dependency turns a red flag into a next step, and naming the
@@ -269,10 +319,20 @@ export async function checkPipelineFreshness(): Promise<CheckResult> {
   // handler is the only writer of pipeline_events in the codebase. So this
   // surface going quiet means the collector stopped calling, not that the
   // cluster stopped reaching.
-  const hint = stale.includes('transcript pipeline')
+  const hint = stale.includes(TRANSCRIPT_PIPELINE_LABEL)
     ? ' — only the internal transcript route writes this, and the Mac Mini collector is what calls it'
     : '';
-  return { check, ok: false, detail: `${parts.join(' · ')}${hint}`, context: ctx };
+  return { ok: false, detail: `${parts.join(' · ')}${hint}`, context };
+}
+
+export async function checkPipelineFreshness(): Promise<CheckResult> {
+  const check = 'pipeline-freshness';
+  const rows = await getPrisma().$queryRawUnsafe<FreshnessRow[]>(
+    SURFACES.map((s) => `SELECT '${s.table}' AS t, max(created_at) AS newest FROM ${s.table}`).join(
+      ' UNION ALL '
+    )
+  );
+  return { check, ...interpretFreshness(rows) };
 }
 
 /**
