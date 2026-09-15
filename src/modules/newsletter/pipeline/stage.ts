@@ -15,13 +15,13 @@
  *     S5 resumes from S4 instead of spending 4,000 quota units again
  *
  * Composition is `RunnableSequence` from `@langchain/core`, which is already a
- * direct dependency of this repo. LangGraph was considered and rejected: it is
- * present only as a transitive dependency of `@copilotkit/runtime` and wants
- * `@langchain/core@^1.x` against the `^0.3.80` this repo pins, so adopting it
- * means moving the version the chatbot runs on. The checkpointing it would
- * bring is already served by the corpus table, and better: resume there is a
- * SELECT against the same rows the page cites, not a second serialised state
- * that could disagree with them.
+ * direct dependency of this repo (`^1.2.x` since the 2026-09 supply-chain
+ * upgrade; the `^0.3.80` pin it replaced is what first ruled LangGraph out).
+ * LangGraph was considered and rejected: it is present only as a transitive
+ * dependency of `@copilotkit/runtime`, and the checkpointing it would bring is
+ * already served by the corpus table, and better: resume there is a SELECT
+ * against the same rows the page cites, not a second serialised state that
+ * could disagree with them.
  */
 
 import { RunnableLambda, RunnableSequence } from '@langchain/core/runnables';

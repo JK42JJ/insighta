@@ -244,7 +244,7 @@ async function bulkFetchVideos(
     for (let i = 0; i < videoIds.length; i++) {
       const data = replies[i] as Record<string, string> | null;
       if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-        result.set(videoIds[i]!, data as VideoHash);
+        result.set(videoIds[i]!, data);
       }
     }
   } catch (err) {

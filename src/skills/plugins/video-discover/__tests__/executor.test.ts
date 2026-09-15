@@ -283,7 +283,7 @@ describe.skip('video-discover execute', () => {
         };
       }
       throw new Error(`Unmocked URL: ${url}`);
-    }) as unknown as typeof fetch;
+    });
   }
 
   function buildExeCtx(
@@ -902,7 +902,7 @@ describe.skip('video-discover execute', () => {
         };
       }
       throw new Error(`Unmocked: ${url}`);
-    }) as unknown as typeof fetch;
+    });
   }
 
   it('Fix 3: drops candidates with durationSec < 60 (Shorts)', async () => {

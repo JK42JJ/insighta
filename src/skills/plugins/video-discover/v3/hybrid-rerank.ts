@@ -717,7 +717,7 @@ export async function applyHybridRerank<S extends RerankSlot>(
     reorderedSlots.push({
       ...slot,
       rec_score: normScore,
-    } as S);
+    });
   }
 
   stats.reranked = reorderedSlots.length;

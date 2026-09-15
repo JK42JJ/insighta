@@ -377,11 +377,12 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
             ReturnType<typeof gateLiveSearchCards<(typeof v5Filtered)[number]>>
           > | null = null;
           let v5Exposed = v5Filtered;
+          const liveGateLanguage: 'ko' | 'en' = language === 'en' ? 'en' : 'ko';
           const liveGateCtx = {
             mandalaId,
             centerGoal,
             subGoals,
-            language: (language === 'en' ? 'en' : 'ko') as 'ko' | 'en',
+            language: liveGateLanguage,
             cfg: liveGateCfg,
           };
           // 축3 promo-penalty shadow (CP510) — compute which candidates a
@@ -521,7 +522,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           }));
 
           // Mark surfaced fire-and-forget below (CP489 Phase 2+3 retained).
-          const surfacedSet = { size: 0 } as { size: number };
+          const surfacedSet = { size: 0 };
 
           const trace: AddCardsTrace | undefined = wantTrace
             ? {

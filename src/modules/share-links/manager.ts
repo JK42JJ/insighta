@@ -100,7 +100,7 @@ export async function createShareLink(
     },
     orderBy: { created_at: 'desc' },
   });
-  if (existing && shareLinkState(existing as ShareLinkRow, new Date()) === 'valid') {
+  if (existing && shareLinkState(existing, new Date()) === 'valid') {
     return {
       code: existing.code,
       url: buildShortUrl(existing.code),

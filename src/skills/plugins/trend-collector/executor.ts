@@ -98,7 +98,7 @@ function judgeFields(
   judgedAt: Date
 ): { judge_state: string; judge_reason: string | null; judge_model: string; judged_at: Date } {
   const state = !v || v.degraded ? 'unknown' : !v.safe ? 'unsafe' : !v.learnable ? 'unfit' : 'ok';
-  if (counts) counts[state as keyof typeof counts] += 1;
+  if (counts) counts[state] += 1;
   return {
     judge_state: state,
     judge_reason: v && v.why ? v.why : null,

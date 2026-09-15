@@ -221,7 +221,7 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
             // convention, and so a list of issues can be filtered without
             // parsing every content_json.
             locale: doc.locale,
-            content_json: doc as unknown as object,
+            content_json: doc,
             // Publishing is an explicit act, not a side effect of saving.
             published_at: request.body?.publish ? new Date() : null,
           },
@@ -272,7 +272,7 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
             schema_version: doc.schemaVersion,
             template_version: doc.templateVersion,
             locale: doc.locale,
-            content_json: doc as unknown as object,
+            content_json: doc,
             // Re-publishing must not move the original date: readers cite it,
             // and a correction is not a new issue.
             published_at:

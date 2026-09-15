@@ -233,7 +233,7 @@ export async function adminFeatureStatusRoutes(fastify: FastifyInstance) {
         return {
           key: `check-${i}`,
           label: '점검 실패',
-          status: 'fail' as Level,
+          status: 'fail',
           detail: `확인할 수 없습니다: ${String(s.reason).slice(0, 120)}`,
         };
       });

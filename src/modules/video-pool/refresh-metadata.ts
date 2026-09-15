@@ -148,7 +148,7 @@ export async function runPoolMetadataRefresh(opts?: {
     return { candidates: 0, refreshed: 0, retired: 0 };
   }
   return refreshActivePoolMetadataCore({
-    db: getPrismaClient() as unknown as RefreshDb,
+    db: getPrismaClient(),
     fetchMetadata: (videoIds) => videosBatchFullMetadata({ videoIds, apiKey: apiKeys }),
     now: new Date(),
     limit: opts?.limit ?? REFRESH_BATCH_LIMIT,

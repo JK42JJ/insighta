@@ -235,7 +235,7 @@ export async function logoutCommand(): Promise<void> {
     try {
       const apiClient = createApiClient(tokens.accessToken);
       await apiClient.logout(tokens.refreshToken);
-    } catch (error) {
+    } catch {
       // Continue even if API logout fails (e.g., token already expired)
       console.log('⚠️  Note: Could not invalidate server session');
     }

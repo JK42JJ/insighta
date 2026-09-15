@@ -283,7 +283,7 @@ export interface HarvestOptions {
  */
 export async function harvest(opts: HarvestOptions): Promise<HarvestResult> {
   const { runId, topic } = opts;
-  const fetchImpl = (opts.fetchImpl ?? fetch) as FetchLike;
+  const fetchImpl = opts.fetchImpl ?? fetch;
   const since = opts.since ?? new Date(Date.now() - topic.publishedWithinDays * MS_PER_DAY);
 
   const apiKeys = resolveSearchApiKeys(process.env);

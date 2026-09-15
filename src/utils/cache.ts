@@ -278,7 +278,7 @@ export class CacheService {
             await fs.unlink(filePath);
             removedCount++;
           }
-        } catch (error) {
+        } catch {
           // Invalid cache file, remove it
           await fs.unlink(filePath);
           removedCount++;

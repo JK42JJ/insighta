@@ -565,7 +565,7 @@ export function validateV2Layered(parsed: unknown): RichSummaryV2Layered {
     const ctx: QAPair['context'] =
       ctxRaw === 'mandala_cell' || ctxRaw === 'mandala_mesh' ? ctxRaw : 'video';
     return {
-      level: level as 1 | 2 | 3,
+      level: level,
       q: requireString(qq['q'], `lora.qa_pairs[${i}].q`),
       a: requireString(qq['a'], `lora.qa_pairs[${i}].a`),
       context: ctx,
@@ -579,7 +579,7 @@ export function validateV2Layered(parsed: unknown): RichSummaryV2Layered {
   const segmentsRaw = obj['segments'];
   if (segmentsRaw !== undefined && segmentsRaw !== null) {
     validateV2Segments(segmentsRaw);
-    segments = segmentsRaw as RichSummarySegments;
+    segments = segmentsRaw;
   }
 
   return { core, analysis, lora: { qa_pairs: qa }, segments };

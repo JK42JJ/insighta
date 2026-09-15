@@ -20,8 +20,6 @@
  * is no longer the row creator.
  */
 
-import { Prisma } from '@prisma/client';
-
 import { getPrismaClient } from '@/modules/database/client';
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
 import { logger } from '@/utils/logger';
@@ -169,12 +167,12 @@ export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V
       where: { video_id: input.videoId },
       update: {
         template_version: 'v2',
-        core: minimalCore as unknown as Prisma.InputJsonValue,
+        core: minimalCore,
         // Merge: keep any pre-existing analysis keys, overwrite the
         // quick-path subset. Prisma's jsonb update replaces the whole
         // column — for safety we read first and merge in JS.
         ...(input.userId ? { user_id: input.userId } : {}),
-        analysis: minimalAnalysis as unknown as Prisma.InputJsonValue,
+        analysis: minimalAnalysis,
         mandala_relevance_pct: parsed.analysis.mandala_fit.mandala_relevance_pct,
         source_language: language,
         transcript_used: true,
@@ -185,8 +183,8 @@ export async function generateRichSummaryV2Quick(input: V2QuickInput): Promise<V
       create: {
         video_id: input.videoId,
         template_version: 'v2',
-        core: minimalCore as unknown as Prisma.InputJsonValue,
-        analysis: minimalAnalysis as unknown as Prisma.InputJsonValue,
+        core: minimalCore,
+        analysis: minimalAnalysis,
         mandala_relevance_pct: parsed.analysis.mandala_fit.mandala_relevance_pct,
         source_language: language,
         transcript_used: true,

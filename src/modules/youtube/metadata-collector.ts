@@ -134,15 +134,11 @@ export function mapToColumns(
   // higher-resolution variant on demand. thumbnail_url stays the high
   // default for back-compat.
   const thumbsFull = snippet.thumbnails ?? null;
-  const thumbsCol: Prisma.InputJsonValue | null = thumbsFull
-    ? (thumbsFull as unknown as Prisma.InputJsonValue)
-    : null;
+  const thumbsCol: Prisma.InputJsonValue | null = thumbsFull ? thumbsFull : null;
 
   const regionRaw = cd.regionRestriction;
   const regionCol: Prisma.InputJsonValue | null =
-    regionRaw && (regionRaw.allowed?.length || regionRaw.blocked?.length)
-      ? (regionRaw as unknown as Prisma.InputJsonValue)
-      : null;
+    regionRaw && (regionRaw.allowed?.length || regionRaw.blocked?.length) ? regionRaw : null;
 
   const cols: MetadataColumns = {
     view_count: parseBigInt(stats.viewCount),

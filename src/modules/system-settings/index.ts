@@ -81,5 +81,5 @@ export interface BetaWindow {
 export const BETA_DEFAULTS = {
   signupMode: 'open' as BetaSignupMode,
   phase: 'pre_launch' as BetaPhase,
-  window: { start: '2026-07-13T00:00:00+09:00', end: '2026-08-24T00:00:00+09:00' } as BetaWindow,
+  window: { start: '2026-07-13T00:00:00+09:00', end: '2026-08-24T00:00:00+09:00' },
 };

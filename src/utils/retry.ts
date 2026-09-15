@@ -87,7 +87,7 @@ export async function retry<T>(
     }
   }
 
-  throw lastError;
+  throw lastError ?? new Error('retry loop ended before any attempt ran');
 }
 
 /**
@@ -143,7 +143,7 @@ export async function retryIf<T>(
     }
   }
 
-  throw lastError;
+  throw lastError ?? new Error('retry loop ended before any attempt ran');
 }
 
 /**

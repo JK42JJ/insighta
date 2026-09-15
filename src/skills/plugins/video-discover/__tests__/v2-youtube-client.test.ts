@@ -21,9 +21,9 @@ describe('searchVideos — auth contract', () => {
       searchVideos({
         query: 'x',
         apiKey: '',
-        fetchFn: (() => {
+        fetchFn: () => {
           throw new Error('should not be called');
-        }) as unknown as typeof fetch,
+        },
       })
     ).rejects.toThrow(/server API key is required/);
   });

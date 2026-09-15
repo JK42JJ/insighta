@@ -46,7 +46,7 @@ async function main(): Promise<void> {
       const v = byKeyword.get(row.keyword);
       const state =
         !v || v.degraded ? 'unknown' : !v.safe ? 'unsafe' : !v.learnable ? 'unfit' : 'ok';
-      counts[state as keyof typeof counts] += 1;
+      counts[state] += 1;
       await prisma.trend_signals.update({
         where: { id: row.id },
         data: {
