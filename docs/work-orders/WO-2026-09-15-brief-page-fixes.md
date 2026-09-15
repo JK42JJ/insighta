@@ -118,3 +118,10 @@ James 핸드오프(2026-09-15). 시작 SHA `1b324135` (origin/main, 2026-09-11 2
 - `frontend/public/brief/*.html` 2개 untrack → `~/insighta-private/docs/brief-static-2026-08-25/` 로 이동(디스크 보존).
 - 테스트 `tests/unit/modules/newsletter-issue-surfaces.test.ts` 13건(라벨 · plainText · cover · 메일 링크/헤더). 로컬 실행은 메모리 가드에 막혀 CI 결과로 판정.
 - 남은 것: James 의 08-25 행 unpublish SQL, 2차 PR(프론트), 실제 dry-run 호출은 배포 뒤.
+
+2026-09-15 — 2차(프론트, 브랜치 `fix/brief-panel-fe`, 1차 위에 rebase). 로컬 커밋 `04659b16`.
+- `SidebarBriefPanel.tsx` 신설: 카테고리명 + 구독 버튼(구독 중 / 구독 해제 / 구독) + 호 목록(API 순서 = 최신순, 현재 호 `aria-current`, 안 읽음 점) + 현재 호 아래 목차(`SidebarBriefSection compact`). `Sidebar.tsx` 는 `/brief/c/:key` 와 `/brief/:slug` 둘 다 브리프 패널로. 만다라 목록 · 새 만다라 · 템플릿 찾기는 `isBriefRoute` 로 숨김(기존 분기).
+- `MobileDrawer.tsx`: `/brief/*` 에서 홈 링크 자리에 "← 앱으로 돌아가기" + 같은 패널. 전역 접기 · 너비 로직 무변경.
+- `BriefCategoryPage.tsx`: 소스를 `/brief/c/:key/issues` 로(구독 안 한 카테고리도 발행 호 표시). `brief-card.ts`: 서버 `coverUrl` 사용. `frontend/public/brief-covers/*.svg` 10개(카테고리명 타이포 + 카테고리별 색, 1280×720).
+- 테스트: `SidebarBriefPanel.test.tsx` 8건, `BriefCategoryPage.test.tsx` 8건(카테고리 API · 표지 폴백 · 미구독 셸프 포함).
+- **푸시 보류**: 프론트 변경은 `/verify` PASS 마커가 있어야 push 가 허용되는데(`scripts/verify-gate.sh`), 맥북 메모리 압력 2 로 빌드 · 테스트 · 브라우저 검증이 메모리 가드에 막힌다. 압력이 1 로 내려가면 `/verify` → push → PR. CI 가 vitest · tsc · 빌드 · a11y 를 다시 돈다.
