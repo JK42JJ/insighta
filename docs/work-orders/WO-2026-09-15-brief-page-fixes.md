@@ -124,4 +124,10 @@ James 핸드오프(2026-09-15). 시작 SHA `1b324135` (origin/main, 2026-09-11 2
 - `MobileDrawer.tsx`: `/brief/*` 에서 홈 링크 자리에 "← 앱으로 돌아가기" + 같은 패널. 전역 접기 · 너비 로직 무변경.
 - `BriefCategoryPage.tsx`: 소스를 `/brief/c/:key/issues` 로(구독 안 한 카테고리도 발행 호 표시). `brief-card.ts`: 서버 `coverUrl` 사용. `frontend/public/brief-covers/*.svg` 10개(카테고리명 타이포 + 카테고리별 색, 1280×720).
 - 테스트: `SidebarBriefPanel.test.tsx` 8건, `BriefCategoryPage.test.tsx` 8건(카테고리 API · 표지 폴백 · 미구독 셸프 포함).
-- **푸시 보류**: 프론트 변경은 `/verify` PASS 마커가 있어야 push 가 허용되는데(`scripts/verify-gate.sh`), 맥북 메모리 압력 2 로 빌드 · 테스트 · 브라우저 검증이 메모리 가드에 막힌다. 압력이 1 로 내려가면 `/verify` → push → PR. CI 가 vitest · tsc · 빌드 · a11y 를 다시 돈다.
+- ~~푸시 보류~~ → OrbStack · Chrome 종료로 압력 1. `/verify` 실행(타입 검사 · 단위 테스트 71파일 572건 · 빌드 · 개발 서버 스모크 4경로) → PR #1649 → CI 11 초록 → 머지 64af3999.
+
+2026-09-15 14:00~14:45 — 배포와 사고.
+- 핀 #1648(백엔드 93305881) 머지 뒤 새 api 파드 CrashLoopBackOff: `Cannot find module 'ajv/dist/core'` — #1636 lockfile 갱신이 루트에 ajv 6 을 올렸고 `@fastify/swagger-ui` 가 끌어온 `ajv-draft-04` 는 ajv 8 필요. 이전 파드가 계속 서빙해 사용자 영향 0. 수정 #1650(루트 `ajv ^8.20.0` + 서버 모듈 로드 회귀 테스트 `tests/unit/deps/server-module-resolution.test.ts`), 이미지와 같은 npm 10 · `.npmrc` 로 재현 · 해결 확인.
+- 핀 #1652(a7491352) 머지 → api 2/2 Ready. 단, 이 핀은 apiTag 만 바꿔서(프론트 파일 무변경) 프론트가 93305881 에 남음 — 프론트 빌드를 담은 핀 #1651 을 닫은 탓. 차트 커밋 #1653 으로 `frontendTag: 64af3999` → 프론트 3/3 Ready.
+- 확인(14:45 KST): ArgoCD Synced/Healthy · `/health` 200 · `/brief-covers/ai-tech.svg` 200 · `GET /brief/c/ai-tech/issues` 401(인증 요구) · 09-02 페이지 라벨 제1호 · 08-25 페이지 제0호(issue_no 기준) · Keel deploy-drift 일치.
+- 남은 것: ① James — 08-25 행 `published_at = null` (2절 SQL) ② 로그인 상태 스크린샷(데스크톱 · 모바일 드로어 · 러닝 페이지 회귀) — 브라우저 사용을 James 가 중단해 미실시 ③ 2호 등록 뒤 발송 dry-run(5절).
