@@ -26,7 +26,10 @@ const REPO_ROOT = join(__dirname, '..', '..');
  *  being probed, not as a slow network. */
 const PROBE_TIMEOUT_MS = 15_000;
 
-async function fetchJson(url: string, init?: RequestInit): Promise<{ status: number; body: unknown }> {
+async function fetchJson(
+  url: string,
+  init?: RequestInit
+): Promise<{ status: number; body: unknown }> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), PROBE_TIMEOUT_MS);
   try {
@@ -93,7 +96,12 @@ export async function checkDeployDrift(): Promise<CheckResult> {
   }
 
   if (running === apiTag) {
-    return { check, ok: true, detail: `chart and production agree on ${apiTag.slice(0, 12)}`, context: { sha: apiTag } };
+    return {
+      check,
+      ok: true,
+      detail: `chart and production agree on ${apiTag.slice(0, 12)}`,
+      context: { sha: apiTag },
+    };
   }
 
   // Different: only a stall if the chart commit is older than the window.
@@ -275,16 +283,23 @@ export async function checkPipelineFreshness(): Promise<CheckResult> {
  * because the first has gone down before; running on one is running with the
  * spare already used.
  */
-export function interpretProxyHealth(
-  deps: Array<{ name: string; ok: boolean; detail: string }>
-): { ok: boolean; detail: string } {
+export function interpretProxyHealth(deps: Array<{ name: string; ok: boolean; detail: string }>): {
+  ok: boolean;
+  detail: string;
+} {
   if (deps.length === 0) {
-    return { ok: false, detail: 'no transcript proxy is configured — captions cannot be fetched at all' };
+    return {
+      ok: false,
+      detail: 'no transcript proxy is configured — captions cannot be fetched at all',
+    };
   }
   const summary = deps.map((d) => `${d.name} ${d.ok ? 'ok' : d.detail}`).join(' · ');
   const reachable = deps.filter((d) => d.ok).length;
   if (reachable === 0) {
-    return { ok: false, detail: `no proxy reachable — transcripts, summaries and notes are all blocked · ${summary}` };
+    return {
+      ok: false,
+      detail: `no proxy reachable — transcripts, summaries and notes are all blocked · ${summary}`,
+    };
   }
   if (reachable < deps.length) {
     return { ok: false, detail: `${reachable}/${deps.length} reachable · ${summary}` };
@@ -319,9 +334,14 @@ export async function checkServiceReachability(): Promise<CheckResult> {
   try {
     const { status, body } = await fetchJson(`${PROD}/health/dependencies`);
     if (status === 404) {
-      return { check, ok: true, detail: 'production does not report services yet (deploy this change first)' };
+      return {
+        check,
+        ok: true,
+        detail: 'production does not report services yet (deploy this change first)',
+      };
     }
-    if (status !== 200) return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
+    if (status !== 200)
+      return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
     services = (body as { services?: typeof services }).services ?? [];
   } catch (err) {
     return { check, ok: false, detail: `GET /health/dependencies failed: ${String(err)}` };
@@ -356,7 +376,12 @@ export async function checkServiceReachability(): Promise<CheckResult> {
       context: ctx,
     };
   }
-  return { check, ok: true, detail: `${services.filter((s) => s.ok).length} services reachable`, context: ctx };
+  return {
+    check,
+    ok: true,
+    detail: `${services.filter((s) => s.ok).length} services reachable`,
+    context: ctx,
+  };
 }
 
 /**
@@ -389,12 +414,18 @@ export async function checkTranscriptProxies(): Promise<CheckResult> {
         detail: 'production does not report dependencies yet (deploy this change first)',
       };
     }
-    if (status !== 200) return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
+    if (status !== 200)
+      return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
 
-    const deps = (body as { transcriptProxies?: Array<{ name: string; ok: boolean; detail: string }> })
-      .transcriptProxies;
+    const deps = (
+      body as { transcriptProxies?: Array<{ name: string; ok: boolean; detail: string }> }
+    ).transcriptProxies;
     if (!deps || deps.length === 0) {
-      return { check, ok: false, detail: 'no transcript proxy is configured — captions cannot be fetched at all' };
+      return {
+        check,
+        ok: false,
+        detail: 'no transcript proxy is configured — captions cannot be fetched at all',
+      };
     }
     const { ok, detail } = interpretProxyHealth(deps);
     return { check, ok, detail, context: { deps } };
@@ -415,7 +446,8 @@ export async function checkPublicSurface(): Promise<CheckResult> {
   const check = 'public-surface';
   try {
     const { status } = await fetchJson(`${PROD}/health`);
-    if (status !== 200) return { check, ok: false, detail: `GET ${PROD}/health returned ${status}` };
+    if (status !== 200)
+      return { check, ok: false, detail: `GET ${PROD}/health returned ${status}` };
   } catch (err) {
     return { check, ok: false, detail: `GET ${PROD}/health failed: ${String(err)}` };
   }
@@ -471,7 +503,12 @@ export async function checkSchema(): Promise<CheckResult> {
   const found = rows.map((r) => r.table_name);
   const missing = required.filter((t) => !found.includes(t));
   if (missing.length > 0) {
-    return { check, ok: false, detail: `missing tables: ${missing.join(', ')}`, context: { missing } };
+    return {
+      check,
+      ok: false,
+      detail: `missing tables: ${missing.join(', ')}`,
+      context: { missing },
+    };
   }
 
   // The column added on 2026-09-07, which the silent-drop failure mode would
@@ -509,11 +546,19 @@ const KEY_UNUSED_DAYS = 30;
 export async function checkIamHygiene(): Promise<CheckResult> {
   const check = 'iam-hygiene';
   try {
-    execSync('aws iam generate-credential-report', { encoding: 'utf8', timeout: PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'] });
+    execSync('aws iam generate-credential-report', {
+      encoding: 'utf8',
+      timeout: PROBE_TIMEOUT_MS,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
     let csv = '';
     for (let attempt = 0; attempt < 3 && !csv; attempt += 1) {
       try {
-        const b64 = execSync('aws iam get-credential-report --query Content --output text', { encoding: 'utf8', timeout: PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        const b64 = execSync('aws iam get-credential-report --query Content --output text', {
+          encoding: 'utf8',
+          timeout: PROBE_TIMEOUT_MS,
+          stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
         csv = Buffer.from(b64, 'base64').toString('utf8');
       } catch {
         await new Promise((r) => setTimeout(r, 2000));
@@ -524,20 +569,25 @@ export async function checkIamHygiene(): Promise<CheckResult> {
     const col = (header ?? '').split(',');
     const idx = (name: string) => col.indexOf(name);
     const now = Date.now();
-    const days = (iso: string) => (iso && iso !== 'N/A' && iso !== 'no_information' ? Math.floor((now - Date.parse(iso)) / 86_400_000) : null);
+    const days = (iso: string) =>
+      iso && iso !== 'N/A' && iso !== 'no_information'
+        ? Math.floor((now - Date.parse(iso)) / 86_400_000)
+        : null;
     const noMfa: string[] = [];
     const staleKeys: string[] = [];
     const unusedKeys: string[] = [];
     for (const line of rows) {
       const f = line.split(',');
       const user = f[idx('user')] ?? '';
-      if (f[idx('password_enabled')] === 'true' && f[idx('mfa_active')] !== 'true') noMfa.push(user);
+      if (f[idx('password_enabled')] === 'true' && f[idx('mfa_active')] !== 'true')
+        noMfa.push(user);
       for (const k of ['1', '2']) {
         if (f[idx(`access_key_${k}_active`)] !== 'true') continue;
         const age = days(f[idx(`access_key_${k}_last_rotated`)] ?? '');
         const used = days(f[idx(`access_key_${k}_last_used_date`)] ?? '');
         if (age !== null && age > KEY_MAX_AGE_DAYS) staleKeys.push(`${user}:key${k}:${age}d`);
-        if (used === null && age !== null && age > KEY_UNUSED_DAYS) unusedKeys.push(`${user}:key${k}:never-used:${age}d`);
+        if (used === null && age !== null && age > KEY_UNUSED_DAYS)
+          unusedKeys.push(`${user}:key${k}:never-used:${age}d`);
       }
     }
     const ok = noMfa.length === 0 && staleKeys.length === 0 && unusedKeys.length === 0;
@@ -567,9 +617,16 @@ function auditCounts(cwd: string): Record<string, number> {
     timeout: 120_000,
     stdio: ['ignore', 'pipe', 'ignore'],
   });
-  const parsed = JSON.parse(out || '{}') as { metadata?: { vulnerabilities?: Record<string, number> } };
+  const parsed = JSON.parse(out || '{}') as {
+    metadata?: { vulnerabilities?: Record<string, number> };
+  };
   const v = parsed.metadata?.vulnerabilities ?? {};
-  return { critical: v['critical'] ?? 0, high: v['high'] ?? 0, moderate: v['moderate'] ?? 0, low: v['low'] ?? 0 };
+  return {
+    critical: v['critical'] ?? 0,
+    high: v['high'] ?? 0,
+    moderate: v['moderate'] ?? 0,
+    low: v['low'] ?? 0,
+  };
 }
 
 export async function checkSupplyChain(): Promise<CheckResult> {
