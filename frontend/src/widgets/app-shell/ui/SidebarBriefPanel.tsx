@@ -118,34 +118,38 @@ export function SidebarBriefPanel({
           )}
         </div>
         {/* One control, two states. Reads as a status while subscribed and
-            turns into the exit on hover, the way the list page's button does. */}
-        <button
-          type="button"
-          disabled={busy || !data}
-          onClick={() => (subscribed ? unsubscribe.mutate() : subscribe.mutate())}
-          aria-pressed={subscribed}
-          className={cn(
-            'group inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11.5px] transition-colors',
-            subscribed
-              ? 'border-sidebar-border/60 text-sidebar-foreground/60 hover:border-sidebar-border hover:text-sidebar-foreground'
-              : 'border-sidebar-primary/40 text-sidebar-primary hover:bg-sidebar-primary/10',
-            (busy || !data) && 'opacity-50'
-          )}
-        >
-          {busy ? (
-            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-          ) : subscribed ? (
-            <Check className="h-3 w-3" aria-hidden="true" />
-          ) : null}
-          {subscribed ? (
-            <>
-              <span className="group-hover:hidden">구독 중</span>
-              <span className="hidden group-hover:inline">구독 해제</span>
-            </>
-          ) : (
-            <span>구독</span>
-          )}
-        </button>
+            turns into the exit on hover, the way the list page's button does.
+            Not rendered until the state is known: a "구독" button that appears
+            before the answer arrives is wrong for every subscriber. */}
+        {data && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => (subscribed ? unsubscribe.mutate() : subscribe.mutate())}
+            aria-pressed={subscribed}
+            className={cn(
+              'group inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11.5px] transition-colors',
+              subscribed
+                ? 'border-sidebar-border/60 text-sidebar-foreground/60 hover:border-sidebar-border hover:text-sidebar-foreground'
+                : 'border-sidebar-primary/40 text-sidebar-primary hover:bg-sidebar-primary/10',
+              busy && 'opacity-50'
+            )}
+          >
+            {busy ? (
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+            ) : subscribed ? (
+              <Check className="h-3 w-3" aria-hidden="true" />
+            ) : null}
+            {subscribed ? (
+              <>
+                <span className="group-hover:hidden">구독 중</span>
+                <span className="hidden group-hover:inline">구독 해제</span>
+              </>
+            ) : (
+              <span>구독</span>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="border-t border-sidebar-border/50 pt-1.5">
