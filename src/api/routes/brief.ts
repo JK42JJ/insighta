@@ -19,6 +19,9 @@ import { getPrismaClient } from '@/modules/database/client';
 import { IssueDocumentSchema } from '@/modules/newsletter/issue-schema';
 import { renderWeb, renderCacheKey } from '@/modules/newsletter/render-web';
 import { BRIEF_CATEGORIES, CATEGORY_KEYS, categoryLabel } from '@/modules/newsletter/categories';
+import { issueLabelOf } from '@/modules/newsletter/issue-label';
+import { plainText } from '@/modules/newsletter/plain-text';
+import { coverUrlOf } from '@/modules/newsletter/cover';
 import { userIdOf } from '@/api/utils/request-user';
 
 const SLUG = /^[a-z0-9-]{3,80}$/;
@@ -37,6 +40,43 @@ export function clearBriefCache(): void {
   cache.clear();
 }
 
+/** One row of an issue list, as the two list routes read it. */
+interface IssueListRow {
+  slug: string;
+  category_key: string;
+  issue_no: number;
+  locale: string;
+  published_at: Date;
+  headline: string | null;
+  dek: string | null;
+  cover_video_id: string | null;
+  date_label: string | null;
+  read_at: Date | null;
+}
+
+/**
+ * The card's view of an issue. The label comes from `issue_no` and nothing
+ * else; the summary is prose, not markup; the cover always resolves to an
+ * image. All three were once left to the caller, and each was wrong somewhere.
+ */
+function toIssueCard(r: IssueListRow) {
+  const locale = r.locale === 'en' ? ('en' as const) : ('ko' as const);
+  return {
+    slug: r.slug,
+    categoryKey: r.category_key,
+    categoryLabel: categoryLabel(r.category_key),
+    issueNo: r.issue_no,
+    publishedAt: r.published_at.toISOString(),
+    headline: r.headline ?? '',
+    dek: plainText(r.dek ?? ''),
+    coverVideoId: r.cover_video_id,
+    coverUrl: coverUrlOf(r.cover_video_id, r.category_key),
+    issueLabel: issueLabelOf(r.issue_no, locale),
+    dateLabel: r.date_label ?? '',
+    read: r.read_at !== null,
+  };
+}
+
 export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
   /**
    * GET /api/v1/brief/subscribed
@@ -52,23 +92,11 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
     const userId = userIdOf(request);
     if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
 
-    const rows = await getPrismaClient().$queryRaw<
-      Array<{
-        slug: string;
-        category_key: string;
-        issue_no: number;
-        published_at: Date;
-        headline: string | null;
-        dek: string | null;
-        cover_video_id: string | null;
-        issue_label: string | null;
-        date_label: string | null;
-        read_at: Date | null;
-      }>
-    >`
+    const rows = await getPrismaClient().$queryRaw<IssueListRow[]>`
       SELECT i.slug,
              i.category_key,
              i.issue_no,
+             i.locale,
              i.published_at,
              i.content_json->'headline'->>0  AS headline,
              i.content_json->>'dek'          AS dek,
@@ -76,7 +104,6 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
              -- artwork of its own, and inventing one would put a picture on
              -- the shelf that is in no way about what is inside it.
              i.content_json->'picks'->0->>'videoId' AS cover_video_id,
-             i.content_json->>'issueLabel'   AS issue_label,
              i.content_json->>'dateLabel'    AS date_label,
              r.read_at
         FROM newsletter_issues i
@@ -92,23 +119,73 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
     return reply.send({
       status: 'ok',
       data: {
-        issues: rows.map((r) => ({
-          slug: r.slug,
-          categoryKey: r.category_key,
-          categoryLabel: categoryLabel(r.category_key),
-          issueNo: r.issue_no,
-          publishedAt: r.published_at.toISOString(),
-          headline: r.headline ?? '',
-          dek: r.dek ?? '',
-          coverVideoId: r.cover_video_id,
-          issueLabel: r.issue_label ?? `제${r.issue_no}호`,
-          dateLabel: r.date_label ?? '',
-          read: r.read_at !== null,
-        })),
+        issues: rows.map(toIssueCard),
         unread: rows.filter((r) => r.read_at === null).length,
       },
     });
   });
+
+  /**
+   * GET /api/v1/brief/c/:categoryKey/issues
+   *
+   * One brief's published issues, newest first, with whether this reader has
+   * opened each and whether they take the brief at all.
+   *
+   * Distinct from `/subscribed`, which is joined on the subscription: a reader
+   * looking at a brief they have not subscribed to still needs to see what it
+   * has published, or the page cannot tell them what they would be turning
+   * on. The category route is the list page and the sidebar panel's source.
+   */
+  fastify.get<{ Params: { categoryKey: string } }>(
+    '/c/:categoryKey/issues',
+    { onRequest: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = userIdOf(request);
+      if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
+
+      const { categoryKey } = request.params;
+      if (!CATEGORY_KEYS.has(categoryKey)) {
+        return reply.code(404).send({ status: 'error', error: 'unknown category' });
+      }
+
+      const rows = await getPrismaClient().$queryRaw<IssueListRow[]>`
+        SELECT i.slug,
+               i.category_key,
+               i.issue_no,
+               i.locale,
+               i.published_at,
+               i.content_json->'headline'->>0  AS headline,
+               i.content_json->>'dek'          AS dek,
+               i.content_json->'picks'->0->>'videoId' AS cover_video_id,
+               i.content_json->>'dateLabel'    AS date_label,
+               r.read_at
+          FROM newsletter_issues i
+          LEFT JOIN newsletter_reads r
+            ON r.slug = i.slug AND r.user_id = ${userId}::uuid
+         WHERE i.category_key = ${categoryKey}
+           AND i.published_at IS NOT NULL
+         ORDER BY i.issue_no DESC, i.published_at DESC
+         LIMIT 100
+      `;
+      const sub = await getPrismaClient().$queryRaw<Array<{ n: bigint }>>`
+        SELECT count(*) AS n FROM newsletter_subscriptions
+         WHERE user_id = ${userId}::uuid AND category_key = ${categoryKey}
+      `;
+
+      return reply.send({
+        status: 'ok',
+        data: {
+          category: {
+            key: categoryKey,
+            label: categoryLabel(categoryKey),
+            subscribed: Number(sub[0]?.n ?? 0) > 0,
+          },
+          issues: rows.map(toIssueCard),
+          unread: rows.filter((r) => r.read_at === null).length,
+        },
+      });
+    }
+  );
 
   /**
    * GET /api/v1/brief/categories
@@ -275,6 +352,7 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
         content_json: true,
         template_version: true,
         locale: true,
+        issue_no: true,
         published_at: true,
         updated_at: true,
       },
@@ -290,6 +368,10 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.code(500).send({ status: 'error', error: 'brief is unreadable' });
     }
 
+    // The stored columns win over the copies inside the document -- template,
+    // locale, and the issue number, which the document carries as an
+    // editor-written label that has said 제1호 twice.
+    const locale = row.locale === 'en' ? ('en' as const) : ('ko' as const);
     return reply
       .header('Cache-Control', `public, max-age=${CACHE_SECONDS}`)
       .header('Last-Modified', row.updated_at.toUTCString())
@@ -299,7 +381,8 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
           issue: {
             ...parsed.data,
             templateVersion: row.template_version,
-            locale: row.locale === 'en' ? 'en' : 'ko',
+            locale,
+            issueLabel: issueLabelOf(row.issue_no, locale),
             publishedAt: row.published_at?.toISOString() ?? parsed.data.publishedAt,
           },
         },
@@ -316,7 +399,13 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
       // A draft has no published_at, so it cannot be reached by guessing a
       // slug -- the filter is the access control, not an ordering hint.
       where: { slug, published_at: { not: null } },
-      select: { content_json: true, template_version: true, locale: true, updated_at: true },
+      select: {
+        content_json: true,
+        template_version: true,
+        locale: true,
+        issue_no: true,
+        updated_at: true,
+      },
     });
     if (!row) {
       return reply.code(404).type('text/plain; charset=utf-8').send('brief not found');
@@ -335,11 +424,14 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
 
     // The stored columns win over the copies inside the document: they are
     // what an operator edits to pin a template or correct an edition's
-    // language without rewriting the JSON.
+    // language without rewriting the JSON. The issue number is one of them --
+    // the document's label is editor-written and has said 제1호 twice.
+    const locale = row.locale === 'en' ? ('en' as const) : ('ko' as const);
     const doc = {
       ...parsed.data,
       templateVersion: row.template_version,
-      locale: row.locale === 'en' ? ('en' as const) : ('ko' as const),
+      locale,
+      issueLabel: issueLabelOf(row.issue_no, locale),
     };
     const key = renderCacheKey(doc);
     let html = cache.get(key);

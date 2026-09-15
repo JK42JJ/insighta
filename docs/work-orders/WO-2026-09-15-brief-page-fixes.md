@@ -80,7 +80,7 @@ James 핸드오프(2026-09-15). 시작 SHA `1b324135` (origin/main, 2026-09-11 2
 
 ## 6. 결정이 필요한 것 (James)
 
-1. **`/brief/*` 를 로그아웃 상태에서도 연다** — 완료 판정에 "로그아웃 상태 스크린샷" 이 있고, 메일 CTA 가 호 페이지로 가면 로그인 벽이 수신자를 막는다. 안: `ProtectedRoute` 를 벗기고, 셸은 로그인 시에만(지금 AppShell 동작), 로그아웃이면 패널 없는 읽기 전용 + 헤더의 "로그인" 링크. 읽음 표시 · 구독은 로그인 때만. 이것을 이번 범위에 넣을지.
+1. ~~`/brief/*` 로그아웃 열람~~ **불허 (James 2026-09-15)**. 이후 공유 기능에 "공개" 를 붙여 열도록 한다. 따라서 `ProtectedRoute` 유지, 메일 CTA 는 `/brief/<slug>` 로 가되 로그인(`returnTo`)을 거친다. 완료 판정의 로그아웃 스크린샷 = 로그인 리다이렉트 화면.
 2. 08-25 행 `published_at = null` 실행(위 SQL) — prod 데이터 변경.
 3. 정적 사본 2개 삭제.
 4. 1호 발송 방법 · 수신자 수 · CTA 목적지(원장 부재).
@@ -109,4 +109,12 @@ James 핸드오프(2026-09-15). 시작 SHA `1b324135` (origin/main, 2026-09-11 2
 브리프 목록 · 읽기 화면에 카테고리 · 구독 · 호 목록 패널을 달고(모바일 포함), 호수를 DB 정수 한 곳에서만 읽게 하고, 카드 요약의 HTML 태그를 서버에서 벗기고, 표지 없는 호는 카테고리 표지로 채운다. 발송 경로는 코드에 없어 이번에 dry-run 발송 라우트와 해지 헤더를 넣되 실행은 James 가 한다.
 
 # 결과
-(착수 후 기록)
+2026-09-15 — 1차 PR(백엔드 + 정적 사본 제거). 프론트는 2차 PR(사이드바 패널 · 모바일 · 카드 · 표지 SVG), `/verify` 게이트 때문에 분리.
+- `issue-label.ts` `issueLabelOf(issue_no, locale)` — 목록 두 라우트 · 문서 응답 · HTML 렌더가 전부 이것을 쓴다. `content_json.issueLabel` 은 더 이상 읽지 않는다(등록 시 번호 추출에만 쓰임).
+- `plain-text.ts` `plainText()` — 목록의 `dek` 와 메일 deck 이 같은 함수. 엔티티 복원 포함.
+- `cover.ts` `coverUrlOf()` — 응답에 `coverUrl` 추가(`coverVideoId` 는 유지). 폴백 `/brief-covers/<key>.svg` 는 2차 PR 의 정적 파일.
+- `GET /brief/c/:categoryKey/issues` 신설 — 구독 여부와 무관하게 카테고리의 발행 호 + 읽음 + 구독 상태. 패널과 목록 페이지의 소스.
+- admin: 발행 요청에 `picks[0].videoId` 없으면 400 · (category, issue_no, locale) 충돌은 409 에 번호 명시 · `POST /admin/newsletter/issues/:id/send` (dryRun 기본, `expectedRecipients` 로만 실발송, 원장 `brief:<slug>`, 수신자 = 구독 계정 − 해지, 수신자별 토큰 발급, `List-Unsubscribe` · `List-Unsubscribe-Post` 헤더, CTA = `/brief/<slug>`). 발송 계층 `send()` 에 headers 인자 추가.
+- `frontend/public/brief/*.html` 2개 untrack → `~/insighta-private/docs/brief-static-2026-08-25/` 로 이동(디스크 보존).
+- 테스트 `tests/unit/modules/newsletter-issue-surfaces.test.ts` 13건(라벨 · plainText · cover · 메일 링크/헤더). 로컬 실행은 메모리 가드에 막혀 CI 결과로 판정.
+- 남은 것: James 의 08-25 행 unpublish SQL, 2차 PR(프론트), 실제 dry-run 호출은 배포 뒤.

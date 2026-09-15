@@ -6,7 +6,7 @@
  * table layout, hosted PNG mascot (Gmail strips inline SVG), no emoji.
  */
 
-const SITE_ORIGIN = 'https://insighta.one';
+export const SITE_ORIGIN = 'https://insighta.one';
 const INK = '#232320';
 const MUTED = '#7c7a72';
 const INDIGO = '#5B4FE0';
