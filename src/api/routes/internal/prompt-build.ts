@@ -30,6 +30,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { getInternalBatchToken } from '@/config/internal-auth';
 import { getPrismaClient } from '@/modules/database/client';
 import { buildV2Prompt } from '@/modules/skills/rich-summary-v2-prompt';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { logger } from '@/utils/logger';
 import { detectContentLanguageFromTitle as detectLanguageFromTitle } from '@/utils/detect-language';
 
@@ -84,6 +85,7 @@ export const internalPromptBuildRoutes: FastifyPluginAsync = async (fastify) => 
       transcript,
       mandalaCenterGoal,
       durationSeconds: ytRow.duration_seconds,
+      uniqueClaim: loadRichSummaryConfig().uniqueClaimEnabled,
     });
 
     log.info('prompt build-v2 returned', {

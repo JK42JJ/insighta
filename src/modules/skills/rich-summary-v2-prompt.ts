@@ -24,12 +24,25 @@ export type DepthLevel = 'beginner' | 'intermediate' | 'advanced';
 export type ContentType = 'tutorial' | 'lecture' | 'vlog' | 'interview' | 'documentary' | 'review';
 export type SubjectivityLevel = 'low' | 'medium' | 'high';
 
+/**
+ * 2026-09-15 — the one claim this video makes that similar videos usually do
+ * not. Stored only when `verifyUniqueClaim` finds a verbatim run of the claim
+ * inside the transcript within ±UNIQUE_CLAIM_WINDOW_SEC of `timestamp_sec`.
+ */
+export interface UniqueClaim {
+  text: string;
+  timestamp_sec: number;
+  why_unique?: string;
+}
+
 export interface RichSummaryCore {
   one_liner: string;
   /** CP504 — short noun-form label for the left TOC (≤~18 chars), distilled
    *  from one_liner with context preserved. Optional: legacy/quick rows omit it
    *  and the FE falls back to one_liner. */
   toc_label?: string;
+  /** Optional — present only when RICH_SUMMARY_UNIQUE_CLAIM_ENABLED and the gate passed. */
+  unique_claim?: UniqueClaim;
   domain: DomainSlug;
   depth_level: DepthLevel;
   content_type: ContentType;
@@ -148,6 +161,14 @@ export interface RichSummaryV2Layered {
 export const ONE_LINER_MAX_LEN = 20;
 /** CP504 — max length for the short TOC label (core.toc_label). */
 export const TOC_LABEL_MAX_LEN = 22;
+/** unique_claim.text hard cap (chars) — two sentences, not a paragraph. */
+export const UNIQUE_CLAIM_TEXT_MAX_LEN = 240;
+/** Verbatim gate: transcript lines within ±this many seconds of timestamp_sec are searched. */
+export const UNIQUE_CLAIM_WINDOW_SEC = 60;
+/** Verbatim gate: minimum contiguous normalized run when the claim is mostly Hangul (~4-5 words). */
+export const UNIQUE_CLAIM_MIN_MATCH_HANGUL = 12;
+/** Verbatim gate: minimum contiguous normalized run for Latin-script claims (~4-5 words). */
+export const UNIQUE_CLAIM_MIN_MATCH_LATIN = 24;
 export const PASS_THRESHOLD = 0.7;
 export const MIN_KEY_CONCEPTS = 3;
 export const MIN_ACTIONABLES = 3;
@@ -211,7 +232,7 @@ Respond with this exact JSON structure (no extra keys, no comments):
   "core": {{
     "one_liner": "{language_label}: ONE sentence (~30-60 chars) capturing the video's core point WITH context (used for summary/tooltip/chatbot)",
     "toc_label": "{language_label}: short NOUN phrase <= 18 chars distilled from one_liner, context preserved (used as the left table-of-contents label)",
-    "domain": "one of: tech | learning | health | business | finance | social | creative | lifestyle | mind",
+{unique_claim_field}    "domain": "one of: tech | learning | health | business | finance | social | creative | lifestyle | mind",
     "depth_level": "beginner | intermediate | advanced",
     "content_type": "tutorial | lecture | vlog | interview | documentary | review",
     "target_audience": "1 sentence describing the target viewer"
@@ -266,7 +287,7 @@ Respond with this exact JSON structure (no extra keys, no comments):
 Field rules:
 - core.one_liner: ONE sentence (~30-60 chars) capturing the video's core point WITH enough context to stand alone as a summary/tooltip. No quotes.
 - core.toc_label: a short NOUN phrase (<= 18 chars) distilled from one_liner while PRESERVING its meaning — never a blind truncation. End on a noun and drop filler like "및 구성/관리/방법" when it adds no meaning. Examples: "AI 스케일 확대에 따른 창발 능력과 통제 불가능성의 위험" → "창발 능력과 통제 위험"; "Azure Virtual Network 생성 및 구성" → "가상 네트워크 구성".
-- core.domain: MUST be one of the 9 slugs above. No other values, no labels in Korean/English.
+{unique_claim_rule}- core.domain: MUST be one of the 9 slugs above. No other values, no labels in Korean/English.
 - analysis.key_concepts: 3-5 entries.
 - analysis.entities: 3-10 entries. Each has a 'name' (bare label, no quotes) and a 'type' that MUST be one of: concept | person | tool | framework | organization. Use 'concept' for ideas/methods, 'person' for named individuals, 'tool' for software/products, 'framework' for named methodologies/processes, 'organization' for companies/institutions. When unsure, default to 'concept'. Entries should be distinct (no duplicate names). These are the KG bridge nodes — segments.atoms[].entity_refs should reference these names verbatim.
 - analysis.actionables: 3-5 entries, each a single imperative sentence.
@@ -307,6 +328,11 @@ export interface PromptInput {
    * dogfooding surfaced.
    */
   transcript?: string;
+  /**
+   * 2026-09-15 — when true the prompt requests `core.unique_claim`. Off by default;
+   * the caller reads RICH_SUMMARY_UNIQUE_CLAIM_ENABLED.
+   */
+  uniqueClaim?: boolean;
   /**
    * CP462+ Issue #649 — optional mandala center goal text. When provided,
    * the LLM uses it as the reference point for
@@ -351,7 +377,11 @@ export function buildV2Prompt(input: PromptInput): string {
       : null;
   const durationSecText = durationSec != null ? String(durationSec) : 'unknown';
   const durationHumanText = durationSec != null ? formatHumanDuration(durationSec) : 'unknown';
+  const uniqueClaimField = input.uniqueClaim ? UNIQUE_CLAIM_FIELD_TEMPLATE : '';
+  const uniqueClaimRule = input.uniqueClaim ? UNIQUE_CLAIM_RULE_TEMPLATE : '';
   return RICH_SUMMARY_V2_LAYERED_PROMPT.replace(/\{title\}/g, input.title.slice(0, 200))
+    .replace(/\{unique_claim_field\}/g, uniqueClaimField)
+    .replace(/\{unique_claim_rule\}/g, uniqueClaimRule)
     .replace(/\{description\}/g, input.description.slice(0, 800))
     .replace(/\{channel\}/g, input.channel.slice(0, 80))
     .replace(/\{transcript_block\}/g, transcriptBlock)
@@ -366,6 +396,113 @@ export function buildV2Prompt(input: PromptInput): string {
 export const MANDALA_CENTER_GOAL_MAX_CHARS = 200;
 
 // ============================================================================
+// unique_claim — prompt fragments + verbatim gate (2026-09-15)
+// ============================================================================
+
+/** JSON line injected into the core block when the flag is on. The sentence is the original
+ *  Korean instruction ("다른 유튜브에서 얘기하지 않는 가장 중요한 내용을 발췌해 줘") kept verbatim as arm B. */
+export const UNIQUE_CLAIM_FIELD_TEMPLATE =
+  '    "unique_claim": {{"text": "{language_label}: 다른 유튜브에서 얘기하지 않는 가장 중요한 내용을 발췌해 줘 — ONE claim only, 1-2 sentences, keep the transcript wording (numbers, names, conditions) so it can be found verbatim", "timestamp_sec": 120, "why_unique": "{language_label}: one sentence on why ordinary summaries miss it"}},\n';
+
+/** Field rule injected next to core.* rules when the flag is on. */
+export const UNIQUE_CLAIM_RULE_TEMPLATE =
+  '- core.unique_claim: exactly ONE claim. text MUST reuse the transcript wording for the key phrase (a verbatim run is required downstream); timestamp_sec MUST be the [mm:ss] of the caption line that contains that phrase. Never invent what the transcript does not say.\n';
+
+export interface UniqueClaimVerdict {
+  pass: boolean;
+  /** Which minimum run applied (Hangul or Latin). */
+  minMatchLen: number;
+  /** Longest verbatim run found inside the window (normalized chars). */
+  longestRun: number;
+  /** Caption-line second where the run was found, when it sits inside one line. */
+  matchedAtSec?: number;
+  /** |matchedAtSec - timestamp_sec| when known. */
+  tsErrorSec?: number;
+  reason: 'ok' | 'no_window' | 'no_verbatim_run' | 'empty_claim';
+}
+
+const ANNOTATED_LINE_RE = /^\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]\s*(.*)$/;
+const HANGUL_RE = /[\u3131-\u318E\uAC00-\uD7A3]/g;
+const LATIN_RE = /[A-Za-z]/g;
+
+/** NFKC, lower-case, strip whitespace/punctuation/symbols — ASR captions differ from prose only there. */
+export function normalizeForVerbatim(s: string): string {
+  return s
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]/gu, '');
+}
+
+/** Parse the annotated transcript (`[mm:ss] text` per line) into (sec, text) pairs; lines without a stamp are skipped. */
+export function parseAnnotatedTranscript(transcript: string): Array<{ sec: number; text: string }> {
+  const out: Array<{ sec: number; text: string }> = [];
+  for (const raw of transcript.split('\n')) {
+    const m = ANNOTATED_LINE_RE.exec(raw.trim());
+    if (!m) continue;
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    const c = m[3] === undefined ? null : Number(m[3]);
+    const sec = c === null ? a * 60 + b : a * 3600 + b * 60 + c;
+    out.push({ sec, text: m[4] ?? '' });
+  }
+  return out;
+}
+
+export function uniqueClaimMinMatchLen(text: string): number {
+  const hangul = (text.match(HANGUL_RE) ?? []).length;
+  const latin = (text.match(LATIN_RE) ?? []).length;
+  return hangul >= latin ? UNIQUE_CLAIM_MIN_MATCH_HANGUL : UNIQUE_CLAIM_MIN_MATCH_LATIN;
+}
+
+/**
+ * Verbatim gate. Passes only when a contiguous normalized run of the claim, at least
+ * `uniqueClaimMinMatchLen` chars long, occurs in the caption lines within
+ * ±UNIQUE_CLAIM_WINDOW_SEC of `timestamp_sec`. Paraphrase does not pass; a claim with
+ * the right words at the wrong timestamp does not pass.
+ */
+export function verifyUniqueClaim(
+  claim: UniqueClaim,
+  annotatedTranscript: string
+): UniqueClaimVerdict {
+  const minMatchLen = uniqueClaimMinMatchLen(claim.text);
+  const claimNorm = normalizeForVerbatim(claim.text);
+  if (claimNorm.length < minMatchLen)
+    return { pass: false, minMatchLen, longestRun: 0, reason: 'empty_claim' };
+  const lines = parseAnnotatedTranscript(annotatedTranscript).filter(
+    (l) => Math.abs(l.sec - claim.timestamp_sec) <= UNIQUE_CLAIM_WINDOW_SEC
+  );
+  if (lines.length === 0) return { pass: false, minMatchLen, longestRun: 0, reason: 'no_window' };
+  const windowNorm = normalizeForVerbatim(lines.map((l) => l.text).join(' '));
+  let longestRun = 0;
+  let bestRun = '';
+  for (let i = 0; i + minMatchLen <= claimNorm.length; i++) {
+    let len = minMatchLen;
+    if (!windowNorm.includes(claimNorm.slice(i, i + len))) continue;
+    while (i + len + 1 <= claimNorm.length && windowNorm.includes(claimNorm.slice(i, i + len + 1)))
+      len++;
+    if (len > longestRun) {
+      longestRun = len;
+      bestRun = claimNorm.slice(i, i + len);
+    }
+  }
+  if (longestRun < minMatchLen)
+    return { pass: false, minMatchLen, longestRun, reason: 'no_verbatim_run' };
+  const hit = lines.find((l) =>
+    normalizeForVerbatim(l.text).includes(bestRun.slice(0, minMatchLen))
+  );
+  const matchedAtSec = hit?.sec;
+  return {
+    pass: true,
+    minMatchLen,
+    longestRun,
+    ...(matchedAtSec !== undefined
+      ? { matchedAtSec, tsErrorSec: Math.abs(matchedAtSec - claim.timestamp_sec) }
+      : {}),
+    reason: 'ok',
+  };
+}
+
+// ============================================================================
 // Validator (after JSON.parse) — narrow to RichSummaryV2Layered or throw
 // ============================================================================
 
@@ -377,6 +514,21 @@ export class V2ValidationError extends Error {
     super(message);
     this.name = 'V2ValidationError';
   }
+}
+
+function parseUniqueClaim(v: unknown): UniqueClaim | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const o = v as Record<string, unknown>;
+  const text = typeof o['text'] === 'string' ? o['text'].trim() : '';
+  const ts =
+    typeof o['timestamp_sec'] === 'number' ? o['timestamp_sec'] : Number(o['timestamp_sec']);
+  if (!text || text.length > UNIQUE_CLAIM_TEXT_MAX_LEN || !Number.isFinite(ts) || ts < 0)
+    return undefined;
+  const why =
+    typeof o['why_unique'] === 'string' && o['why_unique'].trim()
+      ? o['why_unique'].trim()
+      : undefined;
+  return { text, timestamp_sec: Math.floor(ts), ...(why ? { why_unique: why } : {}) };
 }
 
 function requireString(v: unknown, path: string, maxLen?: number): string {
@@ -427,9 +579,14 @@ export function validateV2Layered(parsed: unknown): RichSummaryV2Layered {
       ? undefined
       : requireString(c['toc_label'], 'core.toc_label', TOC_LABEL_MAX_LEN * 4);
 
+  // 2026-09-15 — unique_claim optional; malformed values are dropped (the gate in the
+  // summarize route decides whether a well-formed one is kept).
+  const uniqueClaim = parseUniqueClaim(c['unique_claim']);
+
   const core: RichSummaryCore = {
     one_liner: oneLiner,
     ...(tocLabel !== undefined ? { toc_label: tocLabel } : {}),
+    ...(uniqueClaim !== undefined ? { unique_claim: uniqueClaim } : {}),
     domain: domain as DomainSlug,
     depth_level: depthLevel as DepthLevel,
     content_type: contentType as ContentType,

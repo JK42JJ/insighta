@@ -25,9 +25,11 @@ import { getPrismaClient } from '@/modules/database/client';
 import { generateRichSummaryV2 } from '@/modules/skills/rich-summary-v2-generator';
 import {
   validateV2Layered,
+  verifyUniqueClaim,
   scoreCompleteness,
   V2ValidationError,
 } from '@/modules/skills/rich-summary-v2-prompt';
+import { loadRichSummaryConfig } from '@/config/rich-summary';
 import { bridgeV2ToOntology } from '@/modules/ontology/v2-bridge';
 import { snapSegmentsToMarkers, type AtomSnapMeta } from '@/modules/skills/atom-marker-snap';
 import { Prisma as PrismaCli } from '@prisma/client';
@@ -438,6 +440,29 @@ export const internalTranscriptRoutes: FastifyPluginAsync = async (fastify) => {
       const msg = err instanceof Error ? err.message : String(err);
       return reply.code(422).send({ error: 'validation_failed', path, message: msg });
     }
+    // 2026-09-15 — unique_claim verbatim gate. Kept only when the flag is on AND a
+    // contiguous run of the claim sits in the transcript within ±60s of its timestamp.
+    // Everything else is dropped; there is no 'unverified' state.
+    if (summary.core.unique_claim) {
+      const uniqueClaimEnabled = loadRichSummaryConfig().uniqueClaimEnabled;
+      const verdict =
+        uniqueClaimEnabled && typeof body.transcript === 'string' && body.transcript.length > 0
+          ? verifyUniqueClaim(summary.core.unique_claim, body.transcript)
+          : null;
+      request.log.info(
+        {
+          videoId,
+          uniqueClaimEnabled,
+          verdict,
+          timestampSec: summary.core.unique_claim.timestamp_sec,
+        },
+        'unique_claim gate'
+      );
+      if (!verdict || !verdict.pass) {
+        delete summary.core.unique_claim;
+      }
+    }
+
     const score = scoreCompleteness(summary);
     if (!score.passed) {
       return reply.code(422).send({
