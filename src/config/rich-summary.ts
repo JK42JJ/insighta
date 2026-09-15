@@ -42,6 +42,13 @@ const positiveFloat = z.preprocess(
 
 export const richSummaryEnvSchema = z.object({
   RICH_SUMMARY_ENABLED: boolFlag.default(false as unknown as string),
+  /**
+   * 2026-09-15 — asks the v2 prompt for `core.unique_claim` (the one thing this
+   * video says that similar videos usually do not) and lets the summarize route
+   * keep it only when the verbatim gate passes. Default OFF: the prompt does not
+   * request the field and the route drops any that arrives.
+   */
+  RICH_SUMMARY_UNIQUE_CLAIM_ENABLED: boolFlag.default(false as unknown as string),
   RICH_SUMMARY_CAPTION_SOURCE: captionSourceSchema.default('disabled'),
   RICH_SUMMARY_V2_CRON_ENABLED: boolFlag.default(false as unknown as string),
   RICH_SUMMARY_V2_BATCH_SIZE: positiveInt.transform((v) => v ?? 50),
@@ -95,6 +102,7 @@ export const richSummaryEnvSchema = z.object({
 
 export interface RichSummaryConfig {
   enabled: boolean;
+  uniqueClaimEnabled: boolean;
   captionSource: RichSummaryCaptionSource;
   v2CronEnabled: boolean;
   v2BatchSize: number;
@@ -112,6 +120,7 @@ export interface RichSummaryConfig {
 
 const FALLBACK_CONFIG: RichSummaryConfig = {
   enabled: false,
+  uniqueClaimEnabled: false,
   captionSource: 'disabled',
   v2CronEnabled: false,
   v2BatchSize: 50,
@@ -126,6 +135,7 @@ const FALLBACK_CONFIG: RichSummaryConfig = {
 export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): RichSummaryConfig {
   const parsed = richSummaryEnvSchema.safeParse({
     RICH_SUMMARY_ENABLED: env['RICH_SUMMARY_ENABLED'],
+    RICH_SUMMARY_UNIQUE_CLAIM_ENABLED: env['RICH_SUMMARY_UNIQUE_CLAIM_ENABLED'],
     RICH_SUMMARY_CAPTION_SOURCE: env['RICH_SUMMARY_CAPTION_SOURCE'],
     RICH_SUMMARY_V2_CRON_ENABLED: env['RICH_SUMMARY_V2_CRON_ENABLED'],
     RICH_SUMMARY_V2_BATCH_SIZE: env['RICH_SUMMARY_V2_BATCH_SIZE'],
@@ -141,6 +151,7 @@ export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): Ric
   }
   return {
     enabled: parsed.data.RICH_SUMMARY_ENABLED,
+    uniqueClaimEnabled: parsed.data.RICH_SUMMARY_UNIQUE_CLAIM_ENABLED,
     captionSource: parsed.data.RICH_SUMMARY_CAPTION_SOURCE,
     v2CronEnabled: parsed.data.RICH_SUMMARY_V2_CRON_ENABLED,
     v2BatchSize: parsed.data.RICH_SUMMARY_V2_BATCH_SIZE,
