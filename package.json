@@ -101,6 +101,7 @@
     "@langchain/core": "^0.3.80",
     "@prisma/client": "^5.7.1",
     "@scalar/fastify-api-reference": "^1.24.23",
+    "ajv": "^8.20.0",
     "bcrypt": "^6.0.0",
     "commander": "^11.1.0",
     "dotenv": "^16.3.1",
