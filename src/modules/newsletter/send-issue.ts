@@ -40,9 +40,16 @@ const TOKEN_BYTES = 24;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+export type IssueSendErrorCode =
+  | 'NOT_FOUND'
+  | 'NOT_PUBLISHED'
+  | 'UNREADABLE'
+  | 'COUNT_MISMATCH'
+  | 'TOO_MANY';
+
 export class IssueSendError extends Error {
   constructor(
-    public readonly code: 'NOT_FOUND' | 'NOT_PUBLISHED' | 'UNREADABLE' | 'COUNT_MISMATCH' | 'TOO_MANY',
+    public readonly code: IssueSendErrorCode,
     message: string
   ) {
     super(message);
