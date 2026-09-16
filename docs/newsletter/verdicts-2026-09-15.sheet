@@ -1,0 +1,446 @@
+# ai-tech, week of 2026-09-15, run 79956e3e
+# Decision sheet for S3. One line per candidate: <videoId> <code> [note].
+# Codes are defined in scripts/newsletter/expand-verdicts.ts.
+#
+# Judged by Claude Code reading titles and channels, not by a person and not
+# by a model API. The sheet is committed so every decision can be read back
+# and reversed; `verdict.judge` will say 'console' with this file as its
+# provenance.
+
+# ---- trusted channels (75) ------------------------------------------------
+XN3xNJvWXsc ok RAG and agent skills, first-hand
+HIRDzMtuWFk agent Anthropic engineer on what to build instead of agents
+9dYcwOkpCE8 agent Vercel on agent building
+6LNlCpQPYFc agent choosing an agent, from practice
+X0UI0O8YzJM sec securing AI-generated code
+wr6PMD06hP0 gtm cold email outreach
+QP8PWvxpQ9I hype
+Krzs8GeiWTc build generative UI in Python
+5QmOhvVssxY hype subscriber milestone
+68HH9HVFJDM news
+v42opQpCy60 vision design talk
+H7vFrcNWXzs build Dioxus and Cognition on ambitious software
+CKC47S92wA4 build legacy modernisation with AI
+fjF8EKnxKCU agent skills, YAML and filesystems replacing Python
+zqowMgMgSjA infra GPU acceleration
+ff7om2bBLKM agent inbox agent, hands-on
+9weiIHy9T_0 eval agentic engineering benchmarks with rankings
+XPReiOKCzFI news
+gxVZ_1tuuq4 agent harness engineering, AWS
+O1FN4awNEtM vision one designer plus AI
+sDMGWK4wZ_w vision training taste
+8KkibGU_DDY eval measuring agents
+XWcXwnysmpY agent agents on a canvas, tldraw
+Mcwl--BdH3U infra BF16 versus NVFP4
+jLKQp4SgGr0 agent Cursor engineer on trusting agents in production
+jA_x7F8caHI infra database as the agent's last line of defence
+vblnYHzBgS4 agent five voice agent failure modes
+pjv-mp5J4hA eval catching agent regressions with evals
+4lXks428C9o agent letting an agent execute bash, PostHog
+cI7zfqusmFU agent reliable agent stack, Restate
+t8Y-eqZ5_-0 sec vulnerability disclosure at scale
+p4yTWO0Y_t0 infra DGX Spark hackathon
+NW-jwOVr32w build design to code roundtrip
+MBHOH1NmDqc agent realtime voice agents
+Zd5b40Jbp_k agent act, confirm or stop
+wcqQDpRd7nM infra TensorRT model connect
+IDNfAZVKvPE agent linguistic map for voice agents
+WSPio2OavfU sec internal AI leaking company secrets, bank case
+VCQPCvN4uiA agent GitHub trending tool for an agent problem
+xLUQOqjudtA vision voice-first companion product
+OpY6MmZFeHo agent voice agents can act
+PXj0p_mW9nI infra Anthropic on token budgeting
+hOWU0KPUp1k sec adversarial agents stress testing
+18Um2VjMM_g infra speech-to-speech research
+a8EcVumh71E agent voice agent architecture
+qStB9GbppMU sec voice agent risk, from audio monitoring
+g_5g1hBmAzA infra why a GPU fails at three users
+tOPsby-irKY agent ACP, a remote control for agents
+XE5-hb-H-OY eval scoring production traces with an LLM judge
+V60wEnedg4g infra Nemotron post-training
+AUuFVfvq_JI promo
+lf75rqTaO8s infra Pstack, is it overspec
+LHpplKlnXes beginner what to learn first
+PAXtfqAGWpQ vision why AI design is not one-shot
+a5Yie-Bgx7A agent sharing a deep agent via Slack
+DND22Bf88QI vision Meta's Muse business model
+PZZ4aNF-O2E eval agents that cannot be measured
+T2bWgEhLl6M build ambitious software, Korean subtitles
+QJEe_Rhfa-U general domain storytelling book club
+usSawqBoVZU vision training design taste
+lfKTjlI2Tmw build live voice inside compound engineering
+vZ-Empnyug0 build build-time versus runtime for AI dev tools
+5wDzydCqkV8 profile Amodei interview
+fZH97QHHYjY eval BM25 for agentic search, with results
+DFI8qMCRDjc vision Meta Muse
+KfTAIanL0tY vision one designer and AI
+O84lhGc1OOI agent designing knowledge agents
+59AA5kIoqjA infra search engine for the agentic web
+IN-rb-9WmiY infra Pinecone 2.0
+waI44NP1abk agent rebuilding the web for agents
+V-isu4eTHgw infra legal documents at scale, turbopuffer
+_gvamfT8H-w infra agreements as a database
+iJVxxxHM_Oc infra RL for search
+r9OwPx_HoV0 infra chunking strategy
+d6aNbE-3dxo agent middleware for deep agents
+
+# ---- search layer (359) ---------------------------------------------------
+2aw3MF8pY3w sec Microsoft engineer on an agent incident
+E-ECbD14g_8 offtopic 3D modelling
+Mzr7byMFy_4 agent graph engineering with ADK
+nHBNa2IKWvk offtopic 3D modelling
+mNjBBO1gWFI offtopic game making
+h_mR2BRibZ8 offtopic animation workflow
+LadJAOZ2seU news
+Nm_zN6RQ_eE infra Qwen on Strix Halo with benchmarks
+yQEKMsCtsmE agent voice agent with ADK and Gemini Live
+ZBSHJ7GtiPo lang Spanish
+1HPNFF4gyq8 infra VRAM options for a 27B model
+IJS08TVGut0 promo
+Shqtk_2Jd3c agent multi-agent coding setup, hands-on
+Ua0APTMVcb8 agent repos for Codex and Claude Code setups
+PaPpyQocMww profile
+aaS2sVh-F10 hype
+NDOdTG7hyL8 unsafe jailbreak tutorial
+3AdW345Jskk agent open source managed agents
+_V1cjKmbJd8 infra cutting token usage with 33 lines
+Wik_JQ-enUA eval small coding model tested
+SWEThyRHMgQ agent computer use through Claude Code
+4myNRufwdxQ eval running DeepSeek locally for 24 hours
+UD5eja57eVo infra cost of running DeepSeek locally
+F8EZJAm9iO8 agent agent harnesses explained
+aDh2klQMDyU lang Spanish
+fh13A3y2Nrw lang not English or Korean
+-dq5PkLdAZ0 promo
+e55YEhUBATw beginner
+_lPEFp8_Yd0 hype
+ANJTdT0Ggrw promo free LLM offer
+B-uXvCi-mXU news
+Xr2MjfirjqA eval graphify versus codegraph, tested
+lXG3xzlHy6E lang Portuguese
+TkBZs5GOFFo offtopic video production
+kpBMntwPOL8 build a personal assistant, hands-on
+uydwDk91Y9Y agent MCP livestream
+soazJjifvP0 vision
+dhrJqZt-Zbc infra making a model a better agent without scaling
+XqscZEaTY_M lang Vietnamese
+QeZwQAPqgRQ infra GPU benchmarks for a 27B model
+UXMMASGqbUQ beginner
+SGodxQHnVxc sec security in AI coding workflows
+IN2Y4gBNqbM lang Portuguese
+JgZCHS1spmw infra on-device AI with 32GB VRAM, benchmarks
+1JTyPNeD9dk news
+0sRpFuYvxUk unsafe jailbreak tutorial
+b4nyIkPL4fQ lang Portuguese
+JQrTcFq51pU agent MCP livestream, VS Code
+BGArrj_ql9s infra memory reduction in DeepSeek V4.1
+7pTvAsbY36Q eval open agent model compared
+e5srAMM1amA agent managed agents and lock-in
+tSx26jgNyE0 infra free GPUs with an Ollama setup
+JQJ_8_jSAoY eval building a verifier for RL with verifiable rewards
+2OJ5dsnDPXk lang French
+UlguEdzJyfc beginner
+VpHbxLo47QM agent REST versus function calling versus MCP
+oqvZJf5Vz7U infra hardware for local LLMs
+t70k68RDAjs agent design before building an agent
+HT0KdjrDa_I infra ternary weights and 3-bit KV caches
+ROHgM8uV_8M infra EXL3 quantisation explained
+mxl4eWZFA7M infra running Qwen on a gaming PC
+wkec86Vnz_A agent computer agent to robot control
+gYtQ1LKSgXY agent harness running Claude Code and Codex together
+2-Hg8BXcckc build design workflow in Claude Code
+BrR427dfDkE infra serving LLMs at scale
+Y13MK33uOoU income
+Guot-AKcqIQ sec safest way to run an open shell agent
+gdC8qm9tyVc unsafe uncensored agents
+iia8G9HFVww infra model size reduction
+Ar1AApTXUiQ infra local AI hardware by budget
+aj9LNTMtCo0 agent first day with Cursor Projects
+Lutd6-sZ6KQ unsafe jailbreak tutorial
+V9ZnpyoTtuI promo free API keys
+dp38KsGVpgw agent graph engineering explained
+sg5zW8fIk-8 hype
+pI9fswq6c9g news
+8kmlNeW-MnE promo
+RSRHmYYSpWY infra frontier class local AI on a PC
+q__vS2F-n6A agent seven factor framework for trustworthy agents
+HpYBoFYiDm8 build local vision on security cameras with Ollama
+9DnrSvAYKsI offtopic SketchUp
+DdM6jyJyjB4 agent Cursor Projects
+CDCr2J6o4_g lang French
+-q_u6nrVdgo agent four context engineering techniques, AWS
+iLzXmEf_1y4 promo free API keys
+0gCv5Qn3MVQ eval language models reading plain English
+9_GksUJcAS0 vision
+2hpL98ILBGQ vision
+MVFwvr1MPqo agent parallel agents with Tidewave
+SLT0IwhynLc infra Qwen 27B Q4 at 200K context, throughput measured
+mWrG0MaJB3Q agent ten agents overnight
+1pqzii7di7w vision
+Kbc-w3lu5mY gtm
+M7QBehmvxxg promo
+1_RkcTO5jOA infra free server setup
+EGHURe3sthI offtopic Blender
+OSv6Lny0rV4 lang Spanish
+1x1wYTSETfE offtopic construction
+RWqAcJ7mbms beginner
+_p41ejZVEpo lang Spanish
+XQJVdActaSs lang German
+EIT8720l79Q promo paid placement
+AHWS8PNVdEA sec MCP auth evolution
+SM-Fy8e3nFk build Claude Agent SDK tutorial
+FeKwT-TbgCA promo free tokens
+KlTVpASrMow offtopic ComfyUI video
+qQxHp2pe8YE lang French
+6BDfAkHfxAo offtopic trading
+BFtsrHv4rss agent local coding agent with Serena
+Y-9ChZWD97U agent agent orchestration
+lzFMbqmVQHA promo
+69kS37M6Nfs vision
+qQNd7ajxDL8 lang Spanish
+qbZi1JpVl84 lang Spanish
+8TgxUPSuvNQ vision
+p_CX_hgod_M eval quantised model coding, livestream
+KCptcveOvfY eval attributing failures to the harness
+hmxEnLkbPxM lang Spanish
+DlILpW2FRNE agent giving an agent a phone number
+JmR1GGtcyC8 offtopic web3
+zwkzX9Svf-s sec agent eating a malicious PDF
+mLGnLiwKDAM lang Portuguese
+NxOvsFxpK3w sec secrets exposure
+XTLTffemff0 beginner
+SS_sSbBYLyE infra hidden cost of long context
+Q4hTr67ECLg lang Chinese
+dc0Q-SKJ-Vg promo
+X-uQwleiUwA agent an agent refactoring an agent
+6BZs0bVRvHI vision open science talk
+vokL-fHtj_8 lang Greek
+YqKtqS6vCDU hype
+SEb0_A3kgb0 lang Hindi
+ayF-XQU-6GU build fine-tuning on your own data
+MxRfy-dDWJA sec testing AI-written code for vulnerabilities
+VXlc_Kmz2Cs policy
+uK-nqkKOmc4 infra cutting Claude Code costs
+62WnsHO6v3U lang Bengali
+pblQ8ZwpgAo income
+on-d0ZuZxhA agent four agents for personal workflows
+_qZ5PRgB8Ag agent harness engineering as a production layer
+_tzvtH6jzkk news
+u0VofUh5Wtg promo
+jyE7iGn1yOA lang German
+KQ_bEfuN9y8 build agentic coding in AL
+h6BC9uRfAWo lang Japanese
+6k096_wfHCY agent knowledge graphs as policy engines
+UNesqTPbOgc hype
+z3L41NvF6wE agent Temporal agent harness demo
+WGDW6lLMXAM hype
+gjZXFhABLXE hype
+qGGrEj8-zik infra cost of DeepSeek locally
+ya4k28hdzDw build LangChain memory and multi-agent, hands-on
+633YwioFkQY policy
+qkD_KOP9LrQ profile
+2q4vYNfM4Ng eval 1M context local model compared
+S-cVvNmvgvY agent Cursor Projects
+Kx3Lm2hR2JY sec five MCP attacks
+p7Wq2VElq7k build multi-agent with Spring AI
+gz4ftTavnfE agent connecting a bot to your agents over A2A
+l4htTo790Gw build thirty days with Claude Max
+zPZjTWdcFa0 lang Portuguese
+yFq2SEfKZRE agent OpenAI Agent API replacing a harness
+uUV1r8jERro eval how LLM evals work
+XUbAiyq98JE lang Spanish
+1uePNc3l-Q0 vision
+mmvf2MrFnIc news
+9RF8dNSusZQ lang Sinhala
+WWMc9MAqCRs lang Italian
+EJun7UB42PM promo
+VEycJtlk2O0 hype
+2vHz6HhVfgI promo
+jdosE1k4ozw vision
+IT41K43aqTk infra network for agents, Google
+TIokisGB8h0 offtopic stock analysis
+FdIqJpxtNnU agent memory and subagents
+u-ACrRWdn58 agent shared knowledge base for agents, O'Reilly
+MpDMthxOMHE lang German
+caeuVYLX_y8 promo
+s2Rx7Te7H_Y income
+vDZv2Vc_F-M news
+H0fuB0y8DWI agent production agents with permissions and scopes
+nAMcHl8iSAg lang Portuguese
+jNU_7WSidB4 build extending FastMCP servers
+_RO-C4rfN04 sec a firewall for Ollama
+TAe-PBFputk lang Thai
+zEUAesxX8gw promo
+AuS37ZRVBpw beginner
+h3kPsucMmLI agent MCP 2.0 stateless architecture
+lQWbERU3Alg hype
+2-6V21YJU7E build deep research agent in Python
+4TB2EiYT3KM offtopic Godot game
+lfYhd5QyWjc build agentic RAG with LangGraph
+Ew0V1m5RnBQ vision CVPR trends
+DcQdzNgUjEM promo
+oq1w8psxOwM offtopic Microsoft Access
+pVBVQx9YkdI sec threat modelling escaping agents
+AsoDUBcCfSs general observability
+qaUDHViUWac infra cost of running DeepSeek locally
+lzVLGyKrlR0 beginner
+VSnwcm1HpIU build Cursor with GitLab, debugging and review
+xlexU7Je4dg offtopic classroom assistant
+2tpYrdF3PlI lang Portuguese
+80F5q5StsoE agent agent harness guide
+WusQAi7UOPE eval cost reduction claim analysed
+P7gM6gVvtNI build MCP server in .NET
+4Qlm-PrTII0 promo
+UypO9yoCkIs income
+rgIJlv0kz_0 infra why vector search returns nothing
+U_XD5NxO8KY agent writing MCP docs an agent can use
+83E7aEssiTw general databases
+bb_dgYEejKA news
+JP7-7E8XOTY sec an agent deleting production
+MNfP0LhnJYQ infra paying twice when an agent switches models
+xho6yQ6RN7c agent deep agent directing a live broadcast
+7uNzES1a5J0 sec AI versus attackers
+9SRi-IuR_p0 news
+kdQ5E8uZzUQ infra why local AI fails
+emAstTPZ-cM build local AI on Unraid
+EbFro67n9MU build connecting Claude to a local machine over MCP
+rOxtHUbC6ag income
+MW04lIKPHCM build Databricks agent skills
+hZzYuyOloOE vision
+WoBoBaUpGo4 agent agent orchestration on the BEAM
+rsHR9TEyq2c general Rust CLI
+CoiDP9C05T8 general platform observability
+CdEad9lVCvE build corrective RAG with LangChain
+IMNJWV-y7fk lang German
+30OhEBC9CSo infra long context compute in DeepSeek V4.1
+hvW_w0JzYg8 lang Portuguese
+4bxqvJlt0Ns promo
+ntLw1_byg3E news
+KgA5wy4BINk agent guardrails and context for agents, Okta
+M7MvJTFMfOA vision embodied AI research
+JmklCcqSwz8 sec breach analysis
+k4BgwH1BkYA promo
+Qtv3BbLyOfI sec top ten LLM security risks
+-fiI-741A4A agent six open source agent projects
+WDFs_nbpL5U build voice agent answering phone calls
+MmtC3Xe7X50 build agent with Vercel
+12UkcojWAwg eval measuring whether context length scales inference cost
+PEWsuXiNL6c build stopping AI slop in Claude Code
+9y_GfnHijKk vision maturity roadmap
+oaGz2GbWpWE build agent with AWS Strands and Bedrock
+Z7gNDKza-1Q lang Tamil
+3VCC9XVD0CE lang Portuguese
+KDPu3J1csXQ lang French
+7FLQ8Tx3-nI agent engineering the harness, Thoughtworks
+fzO0g0b3FIo build migrating from cloud to local AI
+7rzh7M4qirc beginner
+B7fheDB8Wio policy
+wapVJ6GdrUQ infra eight-GPU server benchmark
+1okYYMgElbA beginner
+NfmTO4Hi7fQ infra smarter quantisation on a 16GB laptop
+YY8gBiedkdU agent guardrails workshop on a real cluster
+GO2EUc9gMDE build Cursor and GitLab on legacy Java
+XwMuW3QDarg agent turning a bot into an assistant
+-_QWD52_piQ build renewal risk agent with Docusign MCP
+usjk-gdMgqM agent when MCP tools fail
+VpUSMGrol2Q infra MLA cutting the KV cache
+5d5JY2VL9uQ general observability fundamentals
+oOQ14fAtPxY build i18n with an agent
+pvBxBMsP0Z0 build building a coding agent, admin and models
+oEfHmHD-ov4 agent MCP bridging models and data streams
+gZcMvkXugh8 promo
+gscSpnNKA5w agent multi-agent in Antigravity
+jZCZAyTWgmY build fine-tuning an 8B model on a 4GB GPU from YAML
+bPRV2MaAQrc eval local engines compared
+evNPN7GF_cc sec on-behalf-of flow for agent identity
+iP7rwt7B88w lang Spanish
+i_ExEA4T-9I agent five agent patterns
+O7qNMZUf4iQ news
+MZrfaaGcUEs beginner
+ZXYcMoL7hYk sec agents as a supply chain problem
+SRLfM2MAka8 promo
+0J50wYGl9yc beginner
+ca_84Gc8So4 lang Russian
+grWlalzt-ho eval Mac LLM hosts compared
+QHJWUhxMPTI build MCP servers with Kong
+_SwelSi98bg promo
+kXE5xoiH_14 vision
+FDC8j0nzapk eval deep video discovery agent
+N8Smw22jjtE eval end-to-end agent testing
+a9vX7OzQrC8 agent twenty-four instructions for senior-level coding
+NgWCR_6i4fQ beginner
+x5zqFneOJdE agent agent harness with local models in Go
+6ajeZq9Qtow profile
+ASgeMj6lRMk agent multi-model orchestration
+ZPo8IRLMim8 beginner
+zJa-OU8-ViQ sec banning models will not stop attacks
+hqZXrPBAbAU sec serialisation flaws in agents
+gIQW5RqK9jI agent MCP progressive discovery
+15uwkmVhKVQ beginner
+XToZT975fHw build n8n MCP with Antigravity
+AKINEZG9Mcc offtopic
+FGuOOnOQo_s beginner
+k07oOkDZH1s income
+LiYh1BE-Q6g infra Claude Code usage limits, from the docs
+zgy0xMciRuU income
+PTJMNXQYJ5I sec AI penetration testing demo
+wExL8WhuJAM policy
+5HgVRv37E_U beginner
+RT5Z-CjvWjc infra vLLM serving at scale
+Iux0NCit_m4 lang Portuguese
+fse0O__Mcss policy
+7ozHcuF3uyI promo
+tFF6T5N31sw build context layer for data agents
+na3MrNdSu2Y lang Czech
+vOGJchJEhA0 infra distributed inference in the browser
+s8fdTsoae88 vision
+nkPlspPACRI infra local AI hardware guide
+Mn87c9BcIAU eval multi-agent profiling research paper
+Wr_-Rlj5R6c build UI for an agent harness
+02xRJSj3r7Q lang Spanish
+q3WMhyvmOmY agent orchestration, guardrails and multi-agent
+VLsL67UmPvs eval why a benchmark number collapses
+h906EEQSRs8 sec zero trust guardrails for agents
+5B7pLD1Bq-M beginner
+a8zQbgs7Ul8 build self-hosted voice agent
+3tjAnzxZX-o build LiteLLM with MLflow observability
+g47IqeHX4Hw profile
+qEnV8nKmtFU build local agent connected to Telegram
+-ad1DdYK9ck infra cache cost reduction in DeepSeek V4.1
+jQsGFw85Gn4 news
+J3LcItnFrmk infra cutting the cost of agentic code search
+qal1nunchAs news
+YxwHngTlQs4 agent agent configuration as technical debt
+9yiRYrQAPv0 agent agent client protocol for Java
+KaOvpIHJq94 build setting up an agent correctly
+Ek0_VRCjsT0 build fine-tuning with Unsloth Studio
+JxmCyvF3FUs agent guardrailed coding agent from several tools
+2GVSiNwRoOI lang Italian
+uLkldopu0eQ offtopic classroom assistant
+Qt5X38CfeMA eval four coding agents on the same app
+ZganO6OP_XU policy
+575v0WYJQsE infra Ollama with Codex for cost
+OSrS-hG5tOA build agentic IDE with MCP, live
+zXi5TKBUOnA lang Marathi
+bNtw1B61BY4 offtopic Unreal Engine
+9CpnITvdabk lang Cantonese
+NiZ3PM0lNTk infra running an LLM on a Raspberry Pi
+glgxB__DDiM agent Claude agents view
+JW0NOP0M5qg build MCP observability tools
+c49OYEhrzjI sec can a prompt be secured
+7CHMb8jWs6A sec why Claude Code does not wreck a machine
+ntxhWmAqtMg news
+ULAKKFUZwHc build why more AI tools make you slower
+-X3j7owtVEA eval why post-training quantisation works
+Ew_5sX_eWGg vision
+SRimvzcohzk vision
+lRuI0imju0Y vision
+S6nKV2AP0cc build training on your own comments
+3hKxOpfJ6Ok lang Indonesian
+sA656O1BrSw beginner
+hHgspoFzVrU offtopic web3
+Lx9HqptA1X8 beginner
+yHIugFyQDTY build agent framework with API management telemetry
+bLli2PRMOGk general
+CbCJx7gBfa4 eval self-evolving agents paper
+vPJNP_zyKkM build agent guardrails, input and output validation
