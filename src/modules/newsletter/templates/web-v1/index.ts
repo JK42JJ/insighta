@@ -78,16 +78,57 @@ const ALLOWED = /<(\/?)(strong|b|em|i|span|sup|br)((?:\s+class="[a-z0-9 _-]*")?)
  */
 const STASH = '\u0000';
 
+/**
+ * Turn a citation's bare video id into a link on the grade tag beside it.
+ *
+ * The writing brief for issue 1 told the author to put the id in the prose:
+ * "videoId 를 적어 주시면 링크는 저희가 만듭니다". The author did; the step that
+ * makes the link was never built. So the published issue carries 23 raw ids in
+ * its body -- `(Dsx4_kCBkbQ) [영상]` -- which no reader can use and which read
+ * as a leaked internal reference.
+ *
+ * Measured on that issue: 22 of the 23 are followed by a grade tag, and one
+ * stands alone inside a sentence. Both shapes are handled, and the tag becomes
+ * the link text because the id itself is not information a reader wants.
+ *
+ * This runs on the output of richText, after escaping, and the only anchors it
+ * creates are built from an id it matched itself -- an author cannot introduce
+ * a URL through the content path, which is the property `ALLOWED` exists for.
+ *
+ * The same rule lives in the note surface's converter
+ * (frontend/src/features/newsletter-note/lib/issue-to-note.ts). Two renderers,
+ * one rule; change one and the other has a test that fails.
+ */
+const VIDEO_CITATION = /\(([A-Za-z0-9_-]{11})\)(\s*)(\[(?:영상|확인)\])?/g;
+
+function isLikelyVideoId(token: string): boolean {
+  // A real id is effectively random base64url. An ordinary 11-letter word in
+  // parentheses is not, and excluding the all-one-case cases costs nothing:
+  // the chance a genuine id is all lowercase letters is about 1 in 20,000.
+  return !/^[a-z]+$/.test(token) && !/^[A-Z]+$/.test(token);
+}
+
+export function linkVideoCitations(html: string): string {
+  return html.replace(VIDEO_CITATION, (whole, id: string, gap: string, tag?: string) => {
+    if (!isLikelyVideoId(id)) return whole;
+    const href = `https://www.youtube.com/watch?v=${id}`;
+    const label = tag ?? '[영상]';
+    const lead = tag ? gap : '';
+    return `${lead}<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  });
+}
+
 function richText(html: string): string {
   const kept: string[] = [];
   const stashed = html.replace(ALLOWED, (m) => {
     kept.push(m);
     return `${STASH}${kept.length - 1}${STASH}`;
   });
-  return esc(stashed).replace(
+  const restored = esc(stashed).replace(
     new RegExp(`${STASH}(\\d+)${STASH}`, 'g'),
     (_m, i: string) => kept[Number(i)] ?? ''
   );
+  return linkVideoCitations(restored);
 }
 
 function gradeChip(grade: Grade, ref?: number): string {
