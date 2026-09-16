@@ -8,37 +8,15 @@
 
 import { readFileSync } from 'node:fs';
 import { IssueDocumentSchema, findUngroundedClaims } from '@/modules/newsletter/issue-schema';
-import { runPublishGates, type ResolvedVideo } from '@/modules/newsletter/publish-gates';
-import { resolveVideosApiKeys } from '@/skills/plugins/video-discover/v2/youtube-client';
-
-async function resolve(ids: string[]): Promise<Map<string, ResolvedVideo>> {
-  const key = resolveVideosApiKeys(process.env)[0];
-  if (!key) throw new Error('no YouTube API key configured');
-  const url =
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics` +
-    `&id=${ids.join(',')}&key=${key}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`videos.list HTTP ${res.status}`);
-  const body = (await res.json()) as {
-    items?: Array<{
-      id: string;
-      snippet?: { title?: string; channelTitle?: string };
-      statistics?: { viewCount?: string };
-    }>;
-  };
-  const out = new Map<string, ResolvedVideo>();
-  for (const i of body.items ?? []) {
-    out.set(i.id, {
-      videoId: i.id,
-      title: i.snippet?.title ?? '',
-      channelTitle: i.snippet?.channelTitle ?? '',
-      viewCount: i.statistics?.viewCount ? Number(i.statistics.viewCount) : null,
-    });
-  }
-  return out;
-}
+import { runPublishGates } from '@/modules/newsletter/publish-gates';
+import { createVideoResolver } from '@/modules/newsletter/video-resolver';
 
 async function main(): Promise<void> {
+  // One resolver implementation, shared with the publish route. This script
+  // used to carry a private copy, which is how the server ended up with none.
+  const resolver = createVideoResolver();
+  if (!resolver) throw new Error('no YouTube API key configured');
+
   const path = process.argv[2];
   if (!path) throw new Error('usage: issue-gates.ts <issue.json>');
 
@@ -61,7 +39,7 @@ async function main(): Promise<void> {
   );
   for (const u of ungrounded) console.log(`      ${u}`);
 
-  const report = await runPublishGates(doc, resolve);
+  const report = await runPublishGates(doc, resolver);
   console.log(
     report.passed
       ? `PASS  publish gates  (${report.checked.picks} picks, ` +
