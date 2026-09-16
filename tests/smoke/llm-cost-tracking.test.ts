@@ -18,9 +18,13 @@ export {};
 // ---------------------------------------------------------------------------
 
 const mockCreate = jest.fn();
+const mockCount = jest.fn();
+const mockFindFirst = jest.fn();
 const mockPrisma = {
   llm_call_logs: {
     create: mockCreate,
+    count: mockCount,
+    findFirst: mockFindFirst,
   },
 };
 
@@ -60,6 +64,9 @@ jest.mock('../../src/config/index', () => ({
       dailyCostLimitUsd: undefined,
       monthlyCostLimitUsd: undefined,
     },
+    // The per-user chat ceiling the L5 tests below assume (the production
+    // default is lower; see CHAT_USER_RATE_LIMIT_PER_HOUR).
+    chatbot: { userRateLimitPerHour: 100 },
   },
 }));
 
@@ -415,9 +422,10 @@ describe('checkUserRateLimit — L5 user rate', () => {
   });
 
   it('throttles user with 100+ calls in last hour', async () => {
-    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
-      .fn()
-      .mockResolvedValue([{ cnt: 120 }]);
+    // The limiter counts rows by user_id and, once refused, reads the row
+    // whose ageing-out lets the next call through to compute Retry-After.
+    mockCount.mockResolvedValue(120);
+    mockFindFirst.mockResolvedValue({ created_at: new Date(Date.now() - 30 * 60 * 1000) });
     const result = await checkUserRateLimit('user-abc-123');
     expect(result.allowed).toBe(false);
     expect(result.callCount).toBe(120);
@@ -425,9 +433,7 @@ describe('checkUserRateLimit — L5 user rate', () => {
   });
 
   it('allows user under rate limit', async () => {
-    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
-      .fn()
-      .mockResolvedValue([{ cnt: 42 }]);
+    mockCount.mockResolvedValue(42);
     const result = await checkUserRateLimit('user-abc-123');
     expect(result.allowed).toBe(true);
     expect(result.callCount).toBe(42);
@@ -479,9 +485,8 @@ describe('4/14 incident replay — which gates catch Sonnet burst', () => {
   });
 
   it('L5: 1930 calls in 1 hour blocks at 100/hr — catches burst by call ~100', async () => {
-    (mockPrisma as Record<string, unknown>)['$queryRaw'] = jest
-      .fn()
-      .mockResolvedValue([{ cnt: 1930 }]);
+    mockCount.mockResolvedValue(1930);
+    mockFindFirst.mockResolvedValue({ created_at: new Date() });
     const result = await checkUserRateLimit('dataset-script');
     expect(result.allowed).toBe(false);
     expect(result.warning).toMatch(/throttled/i);

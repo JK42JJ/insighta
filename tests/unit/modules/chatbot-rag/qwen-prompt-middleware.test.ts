@@ -15,6 +15,11 @@
  */
 
 const mockLoadVideoContext = jest.fn();
+const mockLogLLMCall = jest.fn();
+
+jest.mock('@/modules/llm/call-logger', () => ({
+  logLLMCall: mockLogLLMCall,
+}));
 
 jest.mock('@/utils/logger', () => {
   type Logger = {
@@ -49,6 +54,8 @@ import {
   _resetMiddlewareCacheForTesting,
 } from '@/modules/chatbot-rag/qwen-prompt-middleware';
 import { PRODUCT_PERSONA_KO, PRODUCT_PERSONA_EN } from '@/modules/chatbot-rag/prompt-builder';
+import { runWithChatbotContext } from '@/api/routes/chatbot-context-storage';
+import { CHAT_LEDGER_MODULE } from '@/modules/llm/ledger-modules';
 
 const SAMPLE_V2 = {
   title: '하프 1:30의 벽',
@@ -255,6 +262,80 @@ describe('createQwenPromptMiddleware', () => {
 
     expect(out.toolChoice).toEqual({ type: 'none' });
     expect(out.tools).toEqual([]);
+  });
+});
+
+describe('createQwenPromptMiddleware — wrapStream ledger row', () => {
+  const FINISH_USAGE = { inputTokens: 10, outputTokens: 5 };
+  const LEDGER_WAIT_TICKS = 20;
+
+  function streamOf(parts: unknown[]): ReadableStream<unknown> {
+    return new ReadableStream({
+      start(controller) {
+        for (const part of parts) controller.enqueue(part);
+        controller.close();
+      },
+    });
+  }
+
+  async function drain(stream: ReadableStream<unknown>): Promise<void> {
+    const reader = stream.getReader();
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) return;
+    }
+  }
+
+  /** The ledger write is fire-and-forget behind a dynamic import; poll for it. */
+  async function ledgerRow(): Promise<Record<string, unknown> | undefined> {
+    for (let i = 0; i < LEDGER_WAIT_TICKS && mockLogLLMCall.mock.calls.length === 0; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    return mockLogLLMCall.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+  }
+
+  async function runTurn(): Promise<void> {
+    const mw = createQwenPromptMiddleware({ providerLabel: 'openrouter' });
+    const doStream = jest.fn().mockResolvedValue({
+      stream: streamOf([
+        { type: 'text-delta', delta: 'hi' },
+        { type: 'finish', usage: FINISH_USAGE },
+      ]),
+    });
+    const out = await mw.wrapStream!({
+      doStream,
+      doGenerate: jest.fn(),
+      params: {} as never,
+      model: { modelId: 'gemini-flash' } as never,
+    });
+    await drain(out.stream as ReadableStream<unknown>);
+  }
+
+  beforeEach(() => {
+    mockLogLLMCall.mockResolvedValue(undefined);
+  });
+
+  it('records the caller from the request context, under the chat module label', async () => {
+    await runWithChatbotContext({ userId: 'user-1', email: 'user@example.com' }, runTurn);
+
+    const row = await ledgerRow();
+    expect(row).toMatchObject({
+      module: CHAT_LEDGER_MODULE,
+      model: 'openrouter/gemini-flash',
+      userId: 'user-1',
+      inputTokens: FINISH_USAGE.inputTokens,
+      outputTokens: FINISH_USAGE.outputTokens,
+      status: 'success',
+    });
+  });
+
+  it('leaves userId unset outside a request context', async () => {
+    await runTurn();
+
+    const row = await ledgerRow();
+    expect(row).toBeDefined();
+    expect(row!['userId']).toBeUndefined();
+    expect(row!['module']).toBe(CHAT_LEDGER_MODULE);
   });
 });
 
