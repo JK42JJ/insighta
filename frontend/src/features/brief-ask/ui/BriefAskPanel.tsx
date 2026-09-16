@@ -14,7 +14,7 @@
  * player, the mandala store and the note editor, none of which exist here.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { CopilotKit } from '@copilotkit/react-core';
 import { CopilotChat } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
@@ -23,7 +23,9 @@ import { toast } from 'sonner';
 import type { IssueDocument } from '@/features/newsletter-note/lib/issue-types';
 import { apiClient } from '@/shared/lib/api-client';
 import { buildBriefSuggestions } from '../lib/suggestions';
-import { CHAT_RUNTIME_PATH, observeChatResponses, type ChatRefusal } from '../lib/observe-chat';
+
+/** The CopilotKit runtime endpoint, the same one the learning page's chat uses. */
+const CHAT_RUNTIME_PATH = '/api/v1/chat';
 
 /** The marker the prompt middleware parses (BRIEF_SLUG_REGEX on the server). */
 export function briefMarker(slug: string): string {
@@ -39,35 +41,11 @@ const LABELS = {
 
 const FEEDBACK_SAVED = '피드백 저장됨';
 
-const REFUSAL_TEXT: Record<ChatRefusal, string> = {
-  unauthorized: '로그인이 만료됐습니다. 다시 로그인한 뒤 질문해 주세요.',
-  rate_limited: '시간당 질문 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.',
-};
-
-const SECONDS_PER_MINUTE = 60;
-
-function retryText(retryAfterSec: number | undefined): string {
-  if (!retryAfterSec) return '';
-  const minutes = Math.ceil(retryAfterSec / SECONDS_PER_MINUTE);
-  return ` 약 ${minutes}분 뒤에 다시 열립니다.`;
-}
-
-interface Refusal {
-  kind: ChatRefusal;
-  retryAfterSec?: number;
-}
-
 export function BriefAskPanel({ issue }: { issue: IssueDocument }): JSX.Element {
   // Memoised on the token string: a new object per render makes the provider
   // rebuild its runtime and drop the conversation (learning page, CP475+6).
   const token = apiClient.getAccessToken();
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
-
-  const [refusal, setRefusal] = useState<Refusal | null>(null);
-  useEffect(
-    () => observeChatResponses((kind, retryAfterSec) => setRefusal({ kind, retryAfterSec })),
-    []
-  );
 
   const instructions = useMemo(
     () =>
@@ -78,15 +56,6 @@ export function BriefAskPanel({ issue }: { issue: IssueDocument }): JSX.Element 
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="brief-ask-panel">
-      {refusal && (
-        <p
-          role="status"
-          className="shrink-0 border-b border-sidebar-border/40 px-1 py-2 text-[12px] text-muted-foreground"
-        >
-          {REFUSAL_TEXT[refusal.kind]}
-          {refusal.kind === 'rate_limited' ? retryText(refusal.retryAfterSec) : ''}
-        </p>
-      )}
       <div className="copilotkit-chat-wrapper min-h-0 flex-1">
         <CopilotKit
           runtimeUrl={CHAT_RUNTIME_PATH}

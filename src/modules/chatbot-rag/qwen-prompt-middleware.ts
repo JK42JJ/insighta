@@ -407,6 +407,9 @@ export function appendTimestampFormatRule(systemContent: string, language: Lang)
   return `${systemContent}\n\n${rule}`;
 }
 
+/** Prefix of the marker the brief page's chat panel emits (see ./brief-prompt). */
+const BRIEF_MARKER_PREFIX = '[[brief:';
+
 /**
  * Plain-string variant for the legacy SSE streaming path (QwenRunpodAdapter.process).
  *
@@ -420,6 +423,16 @@ export async function rewriteSystemContent(
   opts?: { lastUserMessage?: string }
 ): Promise<string> {
   const language = detectLanguage(originalSystemContent);
+
+  // Brief page chat: a conversation marked [[brief:<slug>]] is answered from
+  // that published issue only. The module is loaded on demand, so a request
+  // without the marker never loads it and runs the path below unchanged. An
+  // unreadable issue returns null and falls through to that path.
+  if (originalSystemContent.includes(BRIEF_MARKER_PREFIX)) {
+    const { buildBriefSystemContent } = await import('./brief-prompt');
+    const briefContent = await buildBriefSystemContent(originalSystemContent, language);
+    if (briefContent) return briefContent;
+  }
 
   // Parse FE-emitted chatContext fields out of the system prompt.
   const videoMatch = VIDEO_ID_REGEX.exec(originalSystemContent);
