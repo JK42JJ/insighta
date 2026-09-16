@@ -28,6 +28,7 @@
 import type { LanguageModelV3Middleware, LanguageModelV3Message } from '@ai-sdk/provider';
 import { logger } from '@/utils/logger';
 import { getChatbotContext } from '@/api/routes/chatbot-context-storage';
+import { CHAT_LEDGER_MODULE } from '@/modules/llm/ledger-modules';
 import {
   buildQwenSystemPrompt,
   type ChatLayer,
@@ -160,9 +161,16 @@ export function createQwenPromptMiddleware(
      * thing taken from it is the usage on the terminating `finish` part. A
      * failure to read that must never cost the user their answer, so every
      * step here is guarded and the ledger write is fire-and-forget.
+     *
+     * The caller's id is read from the request context here, before the
+     * stream is consumed: `flush` runs from the stream machinery, outside
+     * the `AsyncLocalStorage` scope the listener opened, so reading it there
+     * would find nothing. The row's `user_id` is what the per-user rate
+     * limit counts.
      */
     wrapStream: async ({ doStream, model }) => {
       const t0 = Date.now();
+      const userId = getChatbotContext()?.userId;
       const result = await doStream();
 
       let usage: { inputTokens?: number; outputTokens?: number } | undefined;
@@ -180,12 +188,13 @@ export function createQwenPromptMiddleware(
           void import('@/modules/llm/call-logger')
             .then(({ logLLMCall }) =>
               logLLMCall({
-                module: 'copilotkit',
+                module: CHAT_LEDGER_MODULE,
                 model: `${providerLabel}/${model.modelId}`,
                 inputTokens: usage?.inputTokens,
                 outputTokens: usage?.outputTokens,
                 latencyMs: Date.now() - t0,
                 status: 'success',
+                userId,
               })
             )
             .catch(() => undefined);

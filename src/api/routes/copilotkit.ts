@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import type { IncomingMessage } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { FastifyInstance, FastifyPluginCallback } from 'fastify';
 import {
   CopilotRuntime,
@@ -21,10 +21,44 @@ import {
 } from './copilotkit-model-resolver';
 import { getEffectiveProvider, startProviderHealthPoller } from './copilotkit-provider-poller';
 import { runWithChatbotContext, type ChatbotRequestContext } from './chatbot-context-storage';
-import { creditBlockedFromCache } from '@/modules/llm/cost-gate';
+import { checkUserRateLimit, creditBlockedFromCache } from '@/modules/llm/cost-gate';
 import { creditBlockMessage } from '@/modules/llm/credit-guard';
+import { MINUTES_PER_HOUR, SECONDS_PER_MINUTE } from '@/utils/time-constants';
 
 const OPENROUTER_DEFAULT_MODEL = 'google/gemini-2.5-flash';
+
+/** Path prefix the CopilotKit runtime owns on the raw HTTP server. */
+const CHAT_RUNTIME_PATH = '/api/v1/chat';
+/** Fastify route under the same prefix; served by Fastify, not by the runtime. */
+const CHAT_CONFIG_PATH = '/api/v1/chat/config';
+
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_TOO_MANY_REQUESTS = 429;
+const HTTP_INTERNAL_SERVER_ERROR = 500;
+const HTTP_SERVICE_UNAVAILABLE = 503;
+
+const UNAUTHORIZED_BODY = { error: 'unauthorized', message: '로그인이 필요합니다.' } as const;
+const RATE_LIMITED_MESSAGE = '시간당 질문 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.';
+/** Used only if the limiter refused without computing a wait: the full window. */
+const RETRY_AFTER_FALLBACK_SEC = SECONDS_PER_MINUTE * MINUTES_PER_HOUR;
+
+/**
+ * Write a JSON answer from the listener. Every early exit here (401, 429,
+ * 503, 500) goes through this so the shape and the content-type agree.
+ */
+function respondJson(
+  res: ServerResponse,
+  status: number,
+  body: Record<string, unknown>,
+  headers: Record<string, string> = {}
+): void {
+  res.statusCode = status;
+  res.setHeader('content-type', 'application/json');
+  for (const [name, value] of Object.entries(headers)) {
+    res.setHeader(name, value);
+  }
+  res.end(JSON.stringify(body));
+}
 
 function buildProviderDefaults(): ProviderDefaults {
   return {
@@ -100,13 +134,12 @@ let lazyBuildAt = 0;
 let lazyBuiltProvider: ChatbotProvider | null = null;
 
 /**
- * CP477+15 — Extract authenticated user identity from the request's
- * Authorization header so the qwen prompt middleware can build Block U
- * (mandala_count, mandala_titles, current_mandala_name). Returns an
- * empty context on missing / malformed / invalid JWT — the middleware
- * treats `{ userId: undefined }` as "skip Block U" and falls back to
- * the pre-CP477+15 behaviour, so a failed extract never breaks the
- * chatbot.
+ * Verify the request's JWT and return the caller's identity, or `null` when
+ * the header is absent, malformed, expired or fails signature verification.
+ * The listener answers `null` with 401: the chat is a per-user surface (the
+ * prompt carries the caller's mandalas and notes, the ledger row carries
+ * their `user_id`, the rate limit counts by it), so a request nobody can be
+ * named for is refused rather than served anonymously as it was before.
  *
  * SYNCHRONOUS — this MUST stay sync. The function is called BEFORE
  * `req.pause()` (the PR #732 race-fix paused window), and adding an
@@ -119,16 +152,23 @@ let lazyBuiltProvider: ChatbotProvider | null = null;
  * cannot use); we keep the same JWKS public key cache `fastify.authenticate`
  * uses, so verification is just a cached ES256 signature check.
  *
- * Mirrors the JWT verify path in `src/api/plugins/auth.ts:167`.
+ * Same verifier as `fastify.authenticate` (`src/api/plugins/auth.ts`):
+ * `request.jwtVerify()` there and `fastify.jwt.verify()` here are the two
+ * entry points of the one `@fastify/jwt` instance `registerAuth` configured,
+ * so key material, algorithm and expiry handling are shared, not copied.
+ * Not mirrored: the `INSIGHTA_BOT_KEY` service-key path and the
+ * `?access_token=` query fallback, neither of which the chat client uses.
  */
 function extractChatbotContext(
   fastify: FastifyInstance,
   req: IncomingMessage
-): ChatbotRequestContext {
+): ChatbotRequestContext | null {
   const authHeader = req.headers['authorization'];
-  if (typeof authHeader !== 'string') return {};
-  const token = extractTokenFromHeader(authHeader);
-  if (!token) return {};
+  const token = typeof authHeader === 'string' ? extractTokenFromHeader(authHeader) : null;
+  if (!token) {
+    logger.info('[copilotkit] chat request refused: no bearer token');
+    return null;
+  }
   try {
     const claims = fastify.jwt.verify<{
       sub: string;
@@ -141,16 +181,23 @@ function extractChatbotContext(
       (userMeta['full_name'] as string | undefined) ??
       claims.email?.split('@')[0] ??
       undefined;
+    if (!claims.sub) {
+      logger.info('[copilotkit] chat request refused: token has no subject');
+      return null;
+    }
     return {
       userId: claims.sub,
       email: claims.email ?? '',
       displayName,
     };
-  } catch {
-    // JWT missing / expired / malformed — return empty context. The
-    // middleware will skip Block U and the chatbot still responds with
-    // the legacy persona + video context.
-    return {};
+  } catch (err) {
+    // Expired, wrong signature, malformed. The message is @fastify/jwt's
+    // ("Access token has expired" for the case the client can recover from
+    // by refreshing).
+    logger.info('[copilotkit] chat request refused: token rejected', {
+      reason: err instanceof Error ? err.message : String(err),
+    });
+    return null;
   }
 }
 
@@ -175,6 +222,64 @@ async function getYoga(): Promise<YogaHandler> {
     lazyBuiltProvider = provider;
   }
   return lazyYoga;
+}
+
+/**
+ * Hand the request to the CopilotKit runtime, applying the per-user rate
+ * limit on the way when asked to.
+ *
+ * CP477+7 — Pause the request stream BEFORE the async wait so raw HTTP
+ * 'data'/'end' events don't fire and get lost while yoga is being lazily
+ * built or while the chatbot_settings 5-min cache is being refreshed (DB
+ * query ~50-200ms). Without this pause the body is swallowed → yoga receives
+ * an empty payload → "Invalid JSON payload" 400. Triggers: cold start
+ * (lazyYoga === null), settings cache miss every 5 min, admin model PUT
+ * (updatedAt advances).
+ *
+ * PR #732's race-fix tolerates a SINGLE async hop inside the paused window
+ * (PR #737 and the first CP477+15 ship each added a second and broke chat).
+ * The rate-limit count therefore runs alongside the runtime lookup under one
+ * `await`, not after it.
+ */
+function runChatRuntime(
+  req: IncomingMessage,
+  res: ServerResponse,
+  chatbotCtx: ChatbotRequestContext,
+  opts: { enforceRateLimit: boolean }
+): void {
+  req.pause();
+  void (async () => {
+    try {
+      const [handler, rate] = await Promise.all([
+        getYoga(),
+        opts.enforceRateLimit ? checkUserRateLimit(chatbotCtx.userId ?? null) : null,
+      ]);
+      if (rate && !rate.allowed) {
+        const retryAfterSec = rate.retryAfterSec ?? RETRY_AFTER_FALLBACK_SEC;
+        respondJson(
+          res,
+          HTTP_TOO_MANY_REQUESTS,
+          { error: 'rate_limited', message: RATE_LIMITED_MESSAGE, retryAfterSec },
+          { 'retry-after': String(retryAfterSec) }
+        );
+        return;
+      }
+      await runWithChatbotContext(chatbotCtx, async () => {
+        req.resume();
+        await handler(req, res);
+      });
+    } catch (err) {
+      // Pre-handler async step failed (e.g., chatbot_settings DB
+      // unreachable, adapter env missing). Without this catch the
+      // rejection is silent and the client hangs until socket timeout.
+      if (!res.headersSent) {
+        respondJson(res, HTTP_INTERNAL_SERVER_ERROR, {
+          error: 'chat_runtime_unavailable',
+          message: err instanceof Error ? err.message : 'unknown error',
+        });
+      }
+    }
+  })();
 }
 
 export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
@@ -207,70 +312,52 @@ export const copilotKitRoutes: FastifyPluginCallback = (fastify, _opts, done) =>
 
   server.removeAllListeners('request');
   server.on('request', (req, res) => {
-    if (req.url?.startsWith('/api/v1/chat') && !req.url?.startsWith('/api/v1/chat/config')) {
-      // CP477+15 fix — Extract user identity from the Authorization header
-      // SYNCHRONOUSLY before `req.pause()`. Headers are already parsed by
-      // Node's HTTP parser by the time this 'request' event fires (the body
-      // is the only thing still streaming), so reading them needs no await.
-      // Keeping this OUT of the paused window is mandatory: PR #737
-      // (CP477+11) and the first CP477+15 ship both broke chat with 400
-      // "Invalid JSON payload" by putting a second `await` inside the
-      // pause window — body 'data' events race the awaits and get lost.
-      // PR #732's race-fix only tolerates a SINGLE async hop
-      // (`await getYoga()`); we keep it that way.
-      const chatbotCtx = extractChatbotContext(fastify, req);
+    if (req.url?.startsWith(CHAT_RUNTIME_PATH) && !req.url?.startsWith(CHAT_CONFIG_PATH)) {
+      // A CORS preflight carries no credentials by specification, so it
+      // cannot pass the identity check, and a 401 here would stop a
+      // cross-origin client before its real request is sent. It never
+      // reaches a provider; the runtime answers it itself.
+      if (req.method === 'OPTIONS') {
+        runChatRuntime(req, res, {}, { enforceRateLimit: false });
+        return;
+      }
 
-      // Synchronous on purpose. The comment above is the reason: this runs
-      // before `req.pause()` and adds no await, so the single-async-hop rule
-      // the body handling depends on is untouched. Reads the in-process cache
-      // only — a provider known to be refusing gets a 503 here instead of a
-      // round trip that would certainly fail. Cold cache lets the call through.
+      // Guard 1 — identity. Verified SYNCHRONOUSLY before `req.pause()`.
+      // Headers are already parsed by Node's HTTP parser by the time this
+      // 'request' event fires (the body is the only thing still streaming),
+      // so reading them needs no await. Keeping this OUT of the paused
+      // window is mandatory: PR #737 (CP477+11) and the first CP477+15 ship
+      // both broke chat with 400 "Invalid JSON payload" by putting a second
+      // `await` inside the pause window — body 'data' events race the
+      // awaits and get lost. No valid JWT → 401, and nothing else runs.
+      const chatbotCtx = extractChatbotContext(fastify, req);
+      if (!chatbotCtx) {
+        respondJson(res, HTTP_UNAUTHORIZED, UNAUTHORIZED_BODY);
+        return;
+      }
+
+      // Guard 2 — provider credit / budget breaker. Synchronous on purpose:
+      // this runs before `req.pause()` and adds no await, so the
+      // single-async-hop rule the body handling depends on is untouched.
+      // Reads the in-process cache only — a provider known to be refusing
+      // gets a 503 here instead of a round trip that would certainly fail.
+      // Cold cache lets the call through.
       const chatProvider = getEffectiveProvider();
       const chatCreditKey = chatProvider === 'qwen-runpod' ? 'qwen-runpod' : 'openrouter';
       const chatCredit = creditBlockedFromCache(chatCreditKey);
       if (chatCredit) {
-        res.statusCode = 503;
-        res.setHeader('content-type', 'application/json');
-        res.end(
-          JSON.stringify({
-            error: 'chat_provider_out_of_credits',
-            message: creditBlockMessage(chatCredit),
-          })
-        );
+        respondJson(res, HTTP_SERVICE_UNAVAILABLE, {
+          error: 'chat_provider_out_of_credits',
+          message: creditBlockMessage(chatCredit),
+        });
         return;
       }
 
-      // CP477+7 — Pause the request stream BEFORE the async getYoga() wait
-      // so raw HTTP 'data'/'end' events don't fire and get lost while yoga
-      // is being lazily built or while chatbot_settings 5-min cache is being
-      // refreshed (DB query ~50-200ms). Without this pause the body is
-      // swallowed → yoga receives empty payload → "Invalid JSON payload" 400.
-      // Triggers: cold start (lazyYoga === null), settings cache miss every
-      // 5 min, admin model PUT (updatedAt advances).
-      req.pause();
-      void (async () => {
-        try {
-          const handler = await getYoga();
-          await runWithChatbotContext(chatbotCtx, async () => {
-            req.resume();
-            await handler(req, res);
-          });
-        } catch (err) {
-          // Pre-handler async step failed (e.g., chatbot_settings DB
-          // unreachable, adapter env missing). Without this catch the
-          // rejection is silent and the client hangs until socket timeout.
-          if (!res.headersSent) {
-            res.statusCode = 500;
-            res.setHeader('content-type', 'application/json');
-            res.end(
-              JSON.stringify({
-                error: 'chat_runtime_unavailable',
-                message: err instanceof Error ? err.message : 'unknown error',
-              })
-            );
-          }
-        }
-      })();
+      // Guard 3 — per-user rate limit, inside the paused window (it needs
+      // the ledger). Only POST reaches a provider: the GET `/info` bootstrap
+      // and the runtime's other reads do not, so they are not counted or
+      // refused, and a limited client can still load the chat surface.
+      runChatRuntime(req, res, chatbotCtx, { enforceRateLimit: req.method === 'POST' });
       return;
     }
     for (const listener of originalListeners) {
