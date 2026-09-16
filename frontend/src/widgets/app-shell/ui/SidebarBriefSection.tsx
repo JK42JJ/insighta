@@ -50,6 +50,13 @@ interface SidebarBriefSectionProps {
 interface Entry {
   /** The heading text, which is also how the anchor is found in the page. */
   label: string;
+  /**
+   * What the row shows when the editor wrote one. Story titles are
+   * declarative sentences with no separator, so `tocShortLabel` has nothing
+   * to cut and a one-line truncate would end them in an ellipsis. Matching
+   * and scrolling keep using `label`.
+   */
+  navLabel?: string;
   /** A story's kicker, rendered as the group above its title. */
   kicker?: string;
   depth: 0 | 1;
@@ -65,7 +72,9 @@ interface Entry {
  */
 function toEntries(doc: IssueDocument): Entry[] {
   const out: Entry[] = [];
-  for (const s of doc.stories) out.push({ label: s.title, kicker: s.kicker, depth: 1 });
+  for (const s of doc.stories) {
+    out.push({ label: s.title, navLabel: s.navLabel, kicker: s.kicker, depth: 1 });
+  }
   out.push({ label: '이번 주 한 문장', depth: 0 });
   if (doc.picks.length > 0) out.push({ label: '이번 주 추천', depth: 0 });
   if (doc.vocabulary.length > 0) out.push({ label: '용어', depth: 0 });
@@ -169,6 +178,7 @@ export function SidebarBriefSection({
               )}
               <ul className={cn(showKicker && 'ml-3.5 pt-0.5')}>
                 <li
+                  title={e.label}
                   onClick={() => {
                     onSelect(e.label);
                     scrollToHeading(e.label);
@@ -183,7 +193,7 @@ export function SidebarBriefSection({
                       : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/50 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
                   )}
                 >
-                  {tocShortLabel(e.label)}
+                  {e.navLabel ?? tocShortLabel(e.label)}
                 </li>
               </ul>
             </div>
