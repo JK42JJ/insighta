@@ -6,15 +6,13 @@
  *   L2 — Daily budget:  warn $5, block $10 (LLM_DAILY_COST_LIMIT_USD)
  *   L3 — Monthly budget: alert $30, throttle $50 (LLM_MONTHLY_COST_LIMIT_USD)
  *   L4 — Module concentration: single module > 60% daily → alert
- *   L5 — User rate limit: chat turns/hour per user_id (CHAT_USER_RATE_LIMIT_PER_HOUR) → 429
+ *   L5 — User rate limit: 100 calls/hour per user_id → throttle
  */
 
 import { config } from '@/config/index';
 import { getPrismaClient } from '@/modules/database/client';
 import { calculateCost } from '@/config/llm-pricing';
 import { logger } from '@/utils/logger';
-import { MS_PER_HOUR, MS_PER_SECOND } from '@/utils/time-constants';
-import { CHAT_LEDGER_MODULE } from './ledger-modules';
 
 const log = logger.child({ module: 'CostGate' });
 
@@ -34,10 +32,7 @@ const MONTHLY_THROTTLE_USD_DEFAULT = 50.0;
 const MODULE_CONCENTRATION_ALERT_RATIO = 0.6;
 
 // --- L5: User rate limit ---
-/** Rolling window the per-user chat count is taken over. */
-const USER_RATE_LIMIT_WINDOW_MS = MS_PER_HOUR;
-/** Floor for `Retry-After`: a client told to wait zero seconds retries immediately. */
-const RETRY_AFTER_MIN_SEC = 1;
+const USER_RATE_LIMIT_PER_HOUR = 100;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,11 +70,6 @@ export interface UserRateLimitResult {
   allowed: boolean;
   callCount: number;
   limit: number;
-  /**
-   * Seconds until enough counted rows leave the window for the next call to
-   * be allowed. Present only when refused.
-   */
-  retryAfterSec?: number;
   warning?: string;
 }
 
@@ -256,77 +246,32 @@ export async function checkModuleConcentration(): Promise<ModuleConcentrationRes
 // L5: User rate limit
 // ---------------------------------------------------------------------------
 
-/**
- * Chat turns this user has made in the last hour, against the configured
- * ceiling.
- *
- * Counts `llm_call_logs` rows with the caller's `user_id` and the chat
- * module label. The earlier version matched `module LIKE '%<userId>%'`,
- * which no writer ever produced, so it counted zero for everyone; it also
- * had no callers. The chat listener calls this one before each turn.
- *
- * `retryAfterSec` is the time until the count drops below the limit. With
- * `callCount === limit` that is when the oldest counted row ages out; when
- * concurrent turns pushed the count past the limit, it is when the
- * `(callCount - limit + 1)`-th oldest row does, so `skip` selects that row.
- *
- * Fails open, like the other gates in this file: a limiter that cannot read
- * the ledger must not be the reason a working chat refuses everyone.
- */
 export async function checkUserRateLimit(userId: string | null): Promise<UserRateLimitResult> {
-  const limit = config.chatbot.userRateLimitPerHour;
   if (!userId) {
-    return { allowed: true, callCount: 0, limit };
+    return { allowed: true, callCount: 0, limit: USER_RATE_LIMIT_PER_HOUR };
   }
 
-  const now = Date.now();
-  const where = {
-    user_id: userId,
-    module: CHAT_LEDGER_MODULE,
-    created_at: { gt: new Date(now - USER_RATE_LIMIT_WINDOW_MS) },
-  };
+  const prisma = getPrismaClient();
+  const result = await prisma.$queryRaw<[{ cnt: number }]>`
+    SELECT COUNT(*)::int AS cnt
+    FROM llm_call_logs
+    WHERE created_at >= NOW() - INTERVAL '1 hour'
+      AND module LIKE ${'%' + userId + '%'}
+  `;
 
-  try {
-    const prisma = getPrismaClient();
-    const callCount = await prisma.llm_call_logs.count({ where });
-    if (callCount < limit) {
-      return { allowed: true, callCount, limit };
-    }
+  const callCount = result[0]?.cnt ?? 0;
 
-    const pivot = await prisma.llm_call_logs.findFirst({
-      where,
-      orderBy: { created_at: 'asc' },
-      skip: callCount - limit,
-      select: { created_at: true },
-    });
-    const leavesWindowAt = pivot
-      ? pivot.created_at.getTime() + USER_RATE_LIMIT_WINDOW_MS
-      : now + USER_RATE_LIMIT_WINDOW_MS;
-    const retryAfterSec = Math.max(
-      RETRY_AFTER_MIN_SEC,
-      Math.ceil((leavesWindowAt - now) / MS_PER_SECOND)
-    );
-
-    log.warn('User chat rate limit reached — refusing the turn', {
-      userId,
-      callCount,
-      limit,
-      retryAfterSec,
-    });
+  if (callCount >= USER_RATE_LIMIT_PER_HOUR) {
+    log.warn('User rate limit exceeded — throttling', { userId, callCount });
     return {
       allowed: false,
       callCount,
-      limit,
-      retryAfterSec,
-      warning: `Throttled: user ${userId} made ${callCount} chat calls in the last hour (limit: ${limit})`,
+      limit: USER_RATE_LIMIT_PER_HOUR,
+      warning: `Throttled: user ${userId} made ${callCount} calls in last hour (limit: ${USER_RATE_LIMIT_PER_HOUR})`,
     };
-  } catch (err) {
-    log.warn('User chat rate limit could not read the ledger — allowing the call', {
-      userId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return { allowed: true, callCount: 0, limit };
   }
+
+  return { allowed: true, callCount, limit: USER_RATE_LIMIT_PER_HOUR };
 }
 
 // ---------------------------------------------------------------------------

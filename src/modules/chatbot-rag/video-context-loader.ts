@@ -46,12 +46,6 @@ export interface LoadVideoContextParams {
    * Affects only the transcript branch.
    */
   preferredLanguage?: Lang;
-  /**
-   * When true, stop after the v2 lookup and never call the caption
-   * extractor. Used by callers that read several videos per request
-   * (brief picks) and must not start one transcript fetch per video.
-   */
-  skipTranscript?: boolean;
 }
 
 /**
@@ -66,9 +60,6 @@ export async function loadVideoContext(
   const v2Data = await tryLoadV2(params.youtubeVideoId);
   if (v2Data) {
     return { v2Data, transcript: null };
-  }
-  if (params.skipTranscript) {
-    return { v2Data: null, transcript: null };
   }
 
   const transcript = await tryFetchTranscript(params.youtubeVideoId, params.preferredLanguage);
