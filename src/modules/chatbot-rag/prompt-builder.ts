@@ -28,13 +28,19 @@ import type {
   MandalaCardsContext,
   MandalaBookContext,
   NoteDraftContext,
+  BriefContext,
 } from './types';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type ChatLayer = 'global' | 'mandala' | 'cell' | 'video' | 'video-time' | 'note';
+/**
+ * `brief` (work order 2026-09-15 §2.1) — a conversation about one published
+ * brief. The FE marks it with `[[brief:<slug>]]`; the layer renders the
+ * issue text and none of the video / mandala blocks.
+ */
+export type ChatLayer = 'global' | 'mandala' | 'cell' | 'video' | 'video-time' | 'note' | 'brief';
 export type Lang = 'ko' | 'en';
 
 export interface KeyConcept {
@@ -207,7 +213,9 @@ export type BlockId =
   // cards list (matches LeftPanel), N = current-mandala note excerpt.
   | 'I'
   | 'J'
-  | 'N';
+  | 'N'
+  // Brief layer — the published issue text + source list + answering rules.
+  | 'brief_issue';
 
 /**
  * v2-grounded layer mapping (Block A-D come from V2Summary).
@@ -228,6 +236,9 @@ export const LAYER_BLOCKS: Record<ChatLayer, BlockId[]> = {
   video: ['U', 'E', 'I', 'J', 'N', 'A', 'B', 'C', 'D', 'H'],
   'video-time': ['U', 'E', 'I', 'J', 'N', 'A', 'B', 'C', 'D', 'F', 'H'],
   note: ['U', 'E', 'I', 'J', 'N', 'A', 'B', 'C', 'D', 'F', 'G', 'H'],
+  // Brief: user → issue text → RAG. No video / mandala blocks — the answer
+  // source is the issue, and the middleware skips those loads for this layer.
+  brief: ['U', 'brief_issue', 'H'],
 };
 
 /**
@@ -243,6 +254,7 @@ export const LAYER_BLOCKS_FALLBACK: Record<ChatLayer, BlockId[]> = {
   video: ['U', 'E', 'I', 'J', 'N', 'T', 'H'],
   'video-time': ['U', 'E', 'I', 'J', 'N', 'T', 'F', 'H'],
   note: ['U', 'E', 'I', 'J', 'N', 'T', 'F', 'G', 'H'],
+  brief: ['U', 'brief_issue', 'H'],
 };
 
 // ============================================================================
@@ -611,6 +623,78 @@ function blockN(n: NoteDraftContext, lang: Lang): string | null {
 }
 
 // ============================================================================
+// Block brief_issue — Published brief (work order 2026-09-15 §2.1)
+//
+// The issue text is the only answer source in the brief layer. Grade tags
+// (`[확인]` / `[영상]`) arrive exactly as written in the issue and are
+// printed unchanged; the rules block tells the model to quote them.
+// ============================================================================
+
+/** Upper bound on sentences per brief answer, stated in the rules block. */
+const BRIEF_ANSWER_MAX_SENTENCES = 6;
+
+/** Separates masthead headline lines when printed on one line. */
+const HEADLINE_LINE_SEPARATOR = ' / ';
+
+/** Separates the sources of one ref. */
+const REF_SOURCE_SEPARATOR = '; ';
+
+export const BRIEF_RULES_KO = `[브리프 답변 규칙]
+- 답은 이번 호 본문과 출처 목록 안에서만 합니다. 이 규칙이 위 [규칙]의 영상 근거 조항보다 우선합니다.
+- 어느 스토리(kicker) 근거인지와 출처 등급([확인]/[영상])을 본문에 적힌 그대로 함께 말합니다.
+- 이번 호에 없는 질문이면 "이번 호에서는 다루지 않았습니다"라고 말하고, 가장 가까운 스토리나 출처를 가리킵니다.
+- 본문에 없는 숫자·날짜·이름을 만들지 않습니다.
+- 존댓말로 답하고, ${BRIEF_ANSWER_MAX_SENTENCES}문장 이내로 답합니다.`;
+
+export const BRIEF_RULES_EN = `[Brief answering rules]
+- Answer only from this issue's text and its source list. This rule overrides the video-grounding clause in [Rules] above.
+- Name the story (kicker) the answer rests on and quote its source grade ([확인]/[영상]) exactly as written in the text.
+- If the issue does not cover the question, say "이번 호에서는 다루지 않았습니다" and point to the closest story or source.
+- Do not invent numbers, dates, or names that are not in the text.
+- Reply in the user's language, polite register (존댓말 in Korean), at most ${BRIEF_ANSWER_MAX_SENTENCES} sentences.`;
+
+function blockBrief(b: BriefContext, lang: Lang): string {
+  const ko = lang === 'ko';
+  const lines: string[] = [ko ? '[이번 호 브리프]' : '[This issue (brief)]'];
+  lines.push(
+    ko
+      ? `호: ${b.issueLabel} / 카테고리: ${b.categoryKey}`
+      : `Issue: ${b.issueLabel} / Category: ${b.categoryKey}`
+  );
+  lines.push(`${ko ? '헤드라인' : 'Headline'}: ${b.headline.join(HEADLINE_LINE_SEPARATOR)}`);
+
+  for (const s of b.stories) {
+    lines.push('');
+    const nav = s.navLabel ? ` (${ko ? '목차' : 'TOC'}: ${s.navLabel})` : '';
+    lines.push(`## [${s.kicker}] ${s.title}${nav}`);
+    lines.push(s.text);
+  }
+
+  if (b.picks.length > 0) {
+    lines.push('');
+    lines.push(ko ? '[이번 호 추천 영상]' : '[Picks in this issue]');
+    b.picks.forEach((p, i) => {
+      const vid = p.videoId ? ` (${p.videoId})` : '';
+      lines.push(`${i + 1}. "${p.title}"${vid}`);
+      lines.push(`   ${p.body}`);
+      if (p.summary) lines.push(`   ${ko ? '영상 요약' : 'Video summary'}: ${p.summary}`);
+    });
+  }
+
+  if (b.refs.length > 0) {
+    lines.push('');
+    lines.push(ko ? '[출처 목록]' : '[Sources]');
+    for (const r of b.refs) {
+      lines.push(`- ${r.label}: ${r.sources.join(REF_SOURCE_SEPARATOR)}`);
+    }
+  }
+
+  lines.push('');
+  lines.push(ko ? BRIEF_RULES_KO : BRIEF_RULES_EN);
+  return lines.join('\n');
+}
+
+// ============================================================================
 // Main builder
 // ============================================================================
 
@@ -632,6 +716,8 @@ export interface BuildQwenSystemPromptParams {
   mandalaCards?: MandalaCardsContext | null;
   /** CP477+15 — Block N (per-mandala note excerpt). */
   noteDraft?: NoteDraftContext | null;
+  /** Brief layer — the published issue (block brief_issue). */
+  briefContext?: BriefContext | null;
   /**
    * CP474 — when false, omit PRODUCT_PERSONA / EXTENDED_RULES so the output
    * is byte-identical to the legacy SFT-aligned format (used by training-
@@ -653,6 +739,7 @@ export function buildQwenSystemPrompt(params: BuildQwenSystemPromptParams): stri
     mandalaBook,
     mandalaCards,
     noteDraft,
+    briefContext,
   } = params;
   const includePersona = params.includePersona ?? true;
 
@@ -675,9 +762,12 @@ export function buildQwenSystemPrompt(params: BuildQwenSystemPromptParams): stri
   blocks.push(language === 'ko' ? ROLE_AND_RULES_KO : ROLE_AND_RULES_EN);
 
   // Extended rules — only when any CP474 block is in play. Keeps legacy
-  // layers free of training-data drift.
+  // layers free of training-data drift. Never in the brief layer: its
+  // "[영상 정보] 와 [원본 자막] 둘 다 없으면 '이 영상은 아직 분석되지 않았어요'"
+  // clause would fire on every brief turn, where no video is expected.
   const hasExtended =
     includePersona &&
+    layer !== 'brief' &&
     (Boolean(userContext) ||
       Boolean(transcript) ||
       Boolean(ragContext) ||
@@ -733,6 +823,9 @@ export function buildQwenSystemPrompt(params: BuildQwenSystemPromptParams): stri
       case 'N':
         if (noteDraft) push(blockN(noteDraft, language));
         break;
+      case 'brief_issue':
+        if (briefContext) push(blockBrief(briefContext, language));
+        break;
     }
   }
 
@@ -754,6 +847,7 @@ export function deriveTrainingLayer(input: {
 
   // Explicit region.layer wins (L4 entries from generate-l4-qa.ts)
   if (regionLayer) {
+    if (regionLayer === 'brief') return 'brief';
     if (regionLayer === 'video-time') return 'video-time';
     if (regionLayer === 'note') return 'note';
     if (regionLayer === 'cell') return 'cell';

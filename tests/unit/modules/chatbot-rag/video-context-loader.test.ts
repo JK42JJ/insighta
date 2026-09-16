@@ -280,3 +280,31 @@ describe('loadVideoContext — transcript fallback', () => {
     expect(result.transcript).toBeNull();
   });
 });
+
+describe('loadVideoContext — skipTranscript', () => {
+  it('returns both null without calling the caption extractor when v2 is absent', async () => {
+    mockV2FindUnique.mockResolvedValueOnce(null);
+
+    const result = await loadVideoContext({ youtubeVideoId: 'abc12345678', skipTranscript: true });
+
+    expect(result).toEqual({ v2Data: null, transcript: null });
+    expect(mockExtractCaptions).not.toHaveBeenCalled();
+  });
+
+  it('still returns the v2 summary when one exists', async () => {
+    mockV2FindUnique.mockResolvedValueOnce({
+      one_liner: null,
+      structured: null,
+      core: { one_liner: '속도/지구력/회복' },
+      analysis: null,
+      segments: null,
+      quality_flag: 'pass',
+      template_version: 'v2',
+    });
+
+    const result = await loadVideoContext({ youtubeVideoId: 'abc12345678', skipTranscript: true });
+
+    expect(result.v2Data?.core?.one_liner).toBe('속도/지구력/회복');
+    expect(mockExtractCaptions).not.toHaveBeenCalled();
+  });
+});
