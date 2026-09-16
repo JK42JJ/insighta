@@ -40,6 +40,7 @@ import { loadMandalaContext } from './mandala-context-loader';
 import { loadMandalaCards } from './mandala-cards-loader';
 import { loadMandalaBook } from './mandala-book-loader';
 import { loadNoteContext } from './note-loader';
+import { loadBriefContext } from './brief-context-loader';
 import { retrieveRAGContext } from './retriever';
 import type {
   UserContext,
@@ -47,6 +48,7 @@ import type {
   MandalaBookContext,
   NoteDraftContext,
   RAGContext,
+  BriefContext,
 } from './types';
 
 const log = logger.child({ module: 'chatbot-rag/qwen-prompt-middleware' });
@@ -86,6 +88,19 @@ function parseCurrentCellIndex(systemContent: string): number | null {
 }
 
 /**
+ * Brief conversations (work order 2026-09-15 §2.1). The FE writes the marker
+ * `[[brief:<slug>]]` into the system prompt; `<slug>` is
+ * `newsletter_issues.slug` and shares its `^[a-z0-9-]+$` shape, so anything
+ * else inside the brackets is not a marker. Group 1 = slug.
+ */
+const BRIEF_SLUG_REGEX = /\[\[brief:([a-z0-9-]+)\]\]/;
+
+export function parseBriefSlug(systemContent: string): string | undefined {
+  const match = BRIEF_SLUG_REGEX.exec(systemContent);
+  return match?.[1];
+}
+
+/**
  * Pulls the latest user message text out of a V3Message[] prompt — used
  * as the RAG retriever's query. Returns undefined when the prompt has
  * no user turn (e.g., the initial system-only setup).
@@ -115,9 +130,24 @@ interface CacheEntry {
 
 const videoContextCache = new Map<string, CacheEntry>();
 
-// Test hook — clears the singleton cache between unit tests.
+/**
+ * Per-slug cache for brief context. A published issue does not change
+ * between turns and its load touches one issue row plus one v2 row per
+ * pick, so the video TTL is reused as is.
+ */
+const BRIEF_CONTEXT_CACHE_MS = VIDEO_CONTEXT_CACHE_MS;
+
+interface BriefCacheEntry {
+  context: BriefContext;
+  expiresAt: number;
+}
+
+const briefContextCache = new Map<string, BriefCacheEntry>();
+
+// Test hook — clears the singleton caches between unit tests.
 export function _resetMiddlewareCacheForTesting(): void {
   videoContextCache.clear();
+  briefContextCache.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +456,7 @@ export async function rewriteSystemContent(
   const youtubeVideoId = videoMatch?.[1] ?? null;
   const currentMandalaId = parseCurrentMandalaId(originalSystemContent);
   const currentCellIndex = parseCurrentCellIndex(originalSystemContent);
+  const briefSlug = parseBriefSlug(originalSystemContent);
 
   const chatbotCtx = getChatbotContext();
   const authenticated = Boolean(chatbotCtx?.userId);
@@ -452,77 +483,102 @@ export async function rewriteSystemContent(
   // Step 2 — fetch all mandala-scoped contexts + video grounding +
   // optional RAG in parallel. Each loader is fail-safe and returns
   // null on error; prompt-builder treats null as "block omitted".
+  //
+  // A brief marker replaces the video / RAG sources: the brief layer
+  // renders neither block, so the video load (which may fetch a
+  // transcript) and the RAG retrieval (an embedding call) are skipped.
   const mandalaName = userContext?.current_mandala_name ?? '';
   const lastUserMessage = opts?.lastUserMessage;
 
-  const [videoCtx, mandalaCtxResult, mandalaCards, mandalaBook, noteDraft, ragContext] =
-    await Promise.all([
-      youtubeVideoId
-        ? loadCachedVideoContext(youtubeVideoId, language)
-        : Promise.resolve<VideoGroundingResult>({ v2Data: null, transcript: null }),
-      currentMandalaId && mandalaName
-        ? loadMandalaContext({
-            mandalaId: currentMandalaId,
-            mandalaName,
-            cellIndex: currentCellIndex,
-          })
-        : Promise.resolve(null),
-      authenticated && currentMandalaId && chatbotCtx?.userId
-        ? loadMandalaCards({
-            userId: chatbotCtx.userId,
-            mandalaId: currentMandalaId,
-          }).catch((err: unknown) => {
-            log.warn('loadMandalaCards failed', {
-              error: err instanceof Error ? err.message : String(err),
-            });
-            return null;
-          })
-        : Promise.resolve<MandalaCardsContext | null>(null),
-      currentMandalaId
-        ? loadMandalaBook({ mandalaId: currentMandalaId }).catch((err: unknown) => {
-            log.warn('loadMandalaBook failed', {
-              error: err instanceof Error ? err.message : String(err),
-            });
-            return null;
-          })
-        : Promise.resolve<MandalaBookContext | null>(null),
-      authenticated && currentMandalaId && chatbotCtx?.userId
-        ? loadNoteContext({
-            userId: chatbotCtx.userId,
-            mandalaId: currentMandalaId,
-          }).catch((err: unknown) => {
-            log.warn('loadNoteContext failed', {
-              error: err instanceof Error ? err.message : String(err),
-            });
-            return null;
-          })
-        : Promise.resolve<NoteDraftContext | null>(null),
-      authenticated && lastUserMessage && lastUserMessage.trim().length > 0 && chatbotCtx?.userId
-        ? retrieveRAGContext({
-            userId: chatbotCtx.userId,
-            query: lastUserMessage,
-            mandalaId: currentMandalaId,
-          }).catch((err: unknown) => {
-            log.warn('retrieveRAGContext failed', {
-              error: err instanceof Error ? err.message : String(err),
-            });
-            return null;
-          })
-        : Promise.resolve<RAGContext | null>(null),
-    ]);
+  const [
+    videoCtx,
+    mandalaCtxResult,
+    mandalaCards,
+    mandalaBook,
+    noteDraft,
+    ragContext,
+    briefContext,
+  ] = await Promise.all([
+    youtubeVideoId && !briefSlug
+      ? loadCachedVideoContext(youtubeVideoId, language)
+      : Promise.resolve<VideoGroundingResult>({ v2Data: null, transcript: null }),
+    currentMandalaId && mandalaName
+      ? loadMandalaContext({
+          mandalaId: currentMandalaId,
+          mandalaName,
+          cellIndex: currentCellIndex,
+        })
+      : Promise.resolve(null),
+    authenticated && currentMandalaId && chatbotCtx?.userId
+      ? loadMandalaCards({
+          userId: chatbotCtx.userId,
+          mandalaId: currentMandalaId,
+        }).catch((err: unknown) => {
+          log.warn('loadMandalaCards failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
+        })
+      : Promise.resolve<MandalaCardsContext | null>(null),
+    currentMandalaId
+      ? loadMandalaBook({ mandalaId: currentMandalaId }).catch((err: unknown) => {
+          log.warn('loadMandalaBook failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
+        })
+      : Promise.resolve<MandalaBookContext | null>(null),
+    authenticated && currentMandalaId && chatbotCtx?.userId
+      ? loadNoteContext({
+          userId: chatbotCtx.userId,
+          mandalaId: currentMandalaId,
+        }).catch((err: unknown) => {
+          log.warn('loadNoteContext failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
+        })
+      : Promise.resolve<NoteDraftContext | null>(null),
+    authenticated &&
+    !briefSlug &&
+    lastUserMessage &&
+    lastUserMessage.trim().length > 0 &&
+    chatbotCtx?.userId
+      ? retrieveRAGContext({
+          userId: chatbotCtx.userId,
+          query: lastUserMessage,
+          mandalaId: currentMandalaId,
+        }).catch((err: unknown) => {
+          log.warn('retrieveRAGContext failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
+        })
+      : Promise.resolve<RAGContext | null>(null),
+    briefSlug ? loadCachedBriefContext(briefSlug) : Promise.resolve<BriefContext | null>(null),
+  ]);
 
   const mandalaContext: PromptMandalaContext | null = mandalaCtxResult?.context ?? null;
 
-  // Layer selection follows the data we actually loaded: video page →
-  // 'video' (or 'cell' when a cell is selected), mandala-only → 'mandala',
-  // unauth or pre-mandala → 'global'.
-  const layer: ChatLayer = youtubeVideoId
-    ? currentCellIndex && currentCellIndex >= 1
-      ? 'cell'
-      : 'video'
-    : currentMandalaId
-      ? 'mandala'
-      : 'global';
+  if (briefSlug && !briefContext) {
+    log.warn('brief marker present but no published issue loaded; brief block omitted', {
+      slug: briefSlug,
+    });
+  }
+
+  // Layer selection follows the data we actually loaded: brief marker →
+  // 'brief' (wins over every other surface), video page → 'video' (or
+  // 'cell' when a cell is selected), mandala-only → 'mandala', unauth or
+  // pre-mandala → 'global'.
+  const layer: ChatLayer = briefSlug
+    ? 'brief'
+    : youtubeVideoId
+      ? currentCellIndex && currentCellIndex >= 1
+        ? 'cell'
+        : 'video'
+      : currentMandalaId
+        ? 'mandala'
+        : 'global';
 
   const built = buildQwenSystemPrompt({
     layer,
@@ -535,6 +591,7 @@ export async function rewriteSystemContent(
     mandalaBook,
     noteDraft,
     ragContext,
+    briefContext,
     includePersona: true,
   });
   // CP477+2 — tighten timestamp output to a single canonical form so the
@@ -581,6 +638,32 @@ async function loadCachedVideoContext(
     context: fresh,
     expiresAt: Date.now() + VIDEO_CONTEXT_CACHE_MS,
   });
+  return fresh;
+}
+
+/**
+ * Only a loaded issue is cached: a miss (unknown slug, draft) costs one
+ * indexed row lookup, and caching it would hide a publish for the TTL.
+ */
+async function loadCachedBriefContext(slug: string): Promise<BriefContext | null> {
+  const cached = briefContextCache.get(slug);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.context;
+  }
+
+  const fresh = await loadBriefContext(slug).catch((err: unknown) => {
+    log.warn('loadBriefContext failed', {
+      slug,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  });
+  if (fresh) {
+    briefContextCache.set(slug, {
+      context: fresh,
+      expiresAt: Date.now() + BRIEF_CONTEXT_CACHE_MS,
+    });
+  }
   return fresh;
 }
 
