@@ -1,6 +1,6 @@
 # WO-2026-09-15 Keel standing errors: supply-chain, pipeline-freshness signal, IAM key
 
-Status: in progress (2026-09-15 15:30 KST)
+Status: done 2026-09-16 (James items remain)
 
 # 목표
 
@@ -48,6 +48,14 @@ Keel 이 09-11 검사 도입 이후 계속 error 로 보고하는 4건 중 CC �
 - 콘솔 MFA 등록(IAM → admin → Security credentials).
 - 맥미니 `collect.ts` 스케줄(계정·cron/launchd) 결정. 12:21 백업 plist 의 평문 프록시 계정 삭제.
 
-# 결과
+# 결과 (2026-09-16 17:41 KST Keel 실측)
 
-(진행 중)
+| 검사 | 09-15 14:29 | 09-16 17:41 | 조치 |
+|---|---|---|---|
+| supply-chain | backend 1C/13H · frontend 2C/16H | **0/0 양쪽** | #1655 프론트(lock non-major fix, vite 6.4.3, vitest 3.2.7) · #1659 백엔드(fastify 5 + major 12종, ts-eslint 8 자동수정 48파일, 프로드 설치 리허설) |
+| pipeline-freshness | LLM 30h STALE · 요약 23d · 자막 54d | **info** — LLM 4h · 요약 5h · 자막 11h | #1656 LLM 신호 informational. 자막·요약은 맥미니 수집기가 09-15 저녁부터 가동(타 작업자) |
+| iam-hygiene | MFA 없음 · 키 193d | MFA 없음 · **키 나이 정상** | 키 회전 09-15 15:20(구 키 Inactive, 삭제 09-22 이후). MFA = James |
+| cloud-posture | 구독 미확인(pending 1) | 동일 | 확인 메일 = jamesjk4242@gmail.com(09-15 13:51 발송, 09-18 만료) = James |
+| transcript-proxies | azure ok · mac-mini ok | **azure AbortError**(1/2) | 신규. VM 은 tailnet online → 프록시 서비스 점검 필요(데몬 재시작은 CC 가 하지 않음) |
+
+배포: 프론트·백엔드 supply-chain 은 09-16 핀 36b346f8 에 포함되어 롤아웃 완료. 오늘 자동 핀이 태그 1개씩만 바꾸는 점 때문에 인접 줄 충돌이 나서 수동 핀 #1669/#1675 로 합쳐 머지함.
