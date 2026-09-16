@@ -21,6 +21,7 @@ import { isTemplateId, renderWeb } from '../../../modules/newsletter/render-web'
 import { clearBriefCache } from '../brief';
 import { CATEGORY_KEYS } from '@/modules/newsletter/categories';
 import { issueLabelOf } from '@/modules/newsletter/issue-label';
+import { missingNavLabel } from '@/modules/newsletter/publish-gate';
 import { MissingMailDigestError } from '@/modules/newsletter/render-mail';
 import { IssueSendError, planIssueSend, runIssueSend } from '@/modules/newsletter/send-issue';
 
@@ -36,7 +37,7 @@ function publishBlocker(doc: IssueDocument): string | null {
   if (!doc.picks[0]?.videoId) {
     return 'cannot publish without a lead pick that has a videoId (the cover)';
   }
-  return null;
+  return missingNavLabel(doc);
 }
 
 /**

@@ -34,6 +34,8 @@ export interface LedgerRow {
 export interface Story {
   kicker: string;
   title: string;
+  /** Editor-written sidebar label (18 characters or fewer). The body keeps `title`. */
+  navLabel?: string;
   blocks: Block[];
 }
 
