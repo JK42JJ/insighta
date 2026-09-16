@@ -1,0 +1,82 @@
+name: Brief harvest
+
+# The material half of the weekly brief, and only that half.
+#
+# S0 gathers, S1 drops what is not watchable, S2 applies the topic boundary.
+# S3 is where judgement starts and this workflow stops before it: the console
+# judge is a person reading candidates, and the model judge spends money on a
+# schedule, which is the shape of spend this project has switched off before.
+# So the machine prepares the material every week and a person decides when to
+# turn it into an issue.
+#
+# Until this existed the pipeline had run once, by hand, on 2026-09-02, and the
+# second issue had no path to being started.
+
+on:
+  schedule:
+    # Sunday 20:00 UTC = Monday 05:00 KST. The ISO week the brief is dated by
+    # has just closed, so the 7-day harvest window covers exactly that week.
+    - cron: '0 20 * * 0'
+  workflow_dispatch:
+    inputs:
+      to_stage:
+        description: 'Last stage to run (S3 and beyond need a judge)'
+        required: false
+        default: 'S2_domain'
+        type: choice
+        options: [S0_harvest, S1_format, S2_domain]
+
+concurrency:
+  # Two harvests of the same week would both write corpus rows for one run and
+  # make the funnel disagree with itself, which S6 is built to stop rather than
+  # to survive.
+  group: brief-harvest
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    name: Gather this week's material
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+
+      - name: Run S0 to ${{ inputs.to_stage || 'S2_domain' }}
+        run: |
+          npx tsx scripts/newsletter/run-pipeline.ts \
+            --from S0_harvest \
+            --to "${TO_STAGE}" \
+            --out "docs/newsletter/draft-$(date -u +%Y-%m-%d).json"
+        env:
+          TO_STAGE: ${{ inputs.to_stage || 'S2_domain' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          YOUTUBE_API_KEY_SEARCH: ${{ secrets.YOUTUBE_API_KEY_SEARCH }}
+          YOUTUBE_API_KEY_SEARCH_2: ${{ secrets.YOUTUBE_API_KEY_SEARCH_2 }}
+          YOUTUBE_API_KEY_SEARCH_3: ${{ secrets.YOUTUBE_API_KEY_SEARCH_3 }}
+          YOUTUBE_API_KEY_SEARCH_4: ${{ secrets.YOUTUBE_API_KEY_SEARCH_4 }}
+          YOUTUBE_API_KEY_SEARCH_5: ${{ secrets.YOUTUBE_API_KEY_SEARCH_5 }}
+          YOUTUBE_API_KEY_SEARCH_6: ${{ secrets.YOUTUBE_API_KEY_SEARCH_6 }}
+          YOUTUBE_API_KEY_SEARCH_7: ${{ secrets.YOUTUBE_API_KEY_SEARCH_7 }}
+          YOUTUBE_API_KEY_SEARCH_8: ${{ secrets.YOUTUBE_API_KEY_SEARCH_8 }}
+          YOUTUBE_API_KEY_VIDEOS: ${{ secrets.YOUTUBE_API_KEY_VIDEOS }}
+          ENCRYPTION_SECRET: ${{ secrets.ENCRYPTION_SECRET }}
+
+      # The run writes its counts to newsletter_pipeline_steps, which is the
+      # record. This file is the convenience copy for whoever reads the result
+      # without a database client.
+      - name: Keep the run's output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brief-material
+          path: docs/newsletter/draft-*.json
+          if-no-files-found: ignore
+          retention-days: 30
