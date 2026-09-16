@@ -37,7 +37,12 @@ function row(over: Partial<CorpusRow> & { videoId: string }): CorpusRow {
   };
 }
 
-const ctx = { topic: AI_TECH } as unknown as StageContext;
+// These cases are about the window and the two languages, which is what S2
+// did before it also began removing what is not worth judging. The selection
+// is switched off here so a reach threshold cannot decide the outcome of a
+// language test; it has its own file (s2-selection.test.ts), including the
+// assertion that this brief really does switch it on.
+const ctx = { topic: { ...AI_TECH, select: undefined } } as unknown as StageContext;
 
 describe('S2 — the topic boundary', () => {
   it('drops what fell outside the window', async () => {
