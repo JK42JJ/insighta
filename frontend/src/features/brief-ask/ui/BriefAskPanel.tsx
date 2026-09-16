@@ -15,7 +15,7 @@
  */
 
 import { useMemo } from 'react';
-import { CopilotKit } from '@copilotkit/react-core';
+import { CopilotKit, useCopilotReadable } from '@copilotkit/react-core';
 import { CopilotChat } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
 import { toast } from 'sonner';
@@ -41,18 +41,50 @@ const LABELS = {
 
 const FEEDBACK_SAVED = '피드백 저장됨';
 
-export function BriefAskPanel({ issue }: { issue: IssueDocument }): JSX.Element {
-  // Memoised on the token string: a new object per render makes the provider
-  // rebuild its runtime and drop the conversation (learning page, CP475+6).
-  const token = apiClient.getAccessToken();
-  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
-
+/**
+ * The chat itself. Separate from the panel because `useCopilotReadable` only
+ * works under the `CopilotKit` provider — the same split the learning page
+ * uses (ChatAssistant renders the provider, ChatPanel holds the readables).
+ */
+function BriefChat({ issue }: { issue: IssueDocument }): JSX.Element {
   const instructions = useMemo(
     () =>
       `${briefMarker(issue.slug)}\n이 대화는 ${issue.category} ${issue.issueLabel} 브리프에 대한 질문입니다. 서버가 붙이는 이번 호 본문과 출처 안에서만 답합니다.`,
     [issue.slug, issue.category, issue.issueLabel]
   );
   const suggestions = useMemo(() => buildBriefSuggestions(issue), [issue]);
+
+  // The marker has to travel as a readable, not only as `instructions`.
+  // CopilotKit 1.55 keeps the `instructions` prop client-side: a request sent
+  // from this panel carried `context: []` and no `[[brief:` anywhere in the
+  // body, so `rewriteSystemContent` never saw the marker and the question was
+  // answered from the ordinary video path instead of from the issue. A
+  // readable is what reaches the server's system content, and it is the path
+  // the learning page already relies on for the video context it needs.
+  useCopilotReadable({
+    description:
+      'The published brief this conversation is about. The server answers only from this issue.',
+    value: instructions,
+    convert: (v: string) => v,
+  });
+
+  return (
+    <CopilotChat
+      className="h-full"
+      labels={LABELS}
+      instructions={instructions}
+      suggestions={suggestions}
+      onThumbsUp={() => toast(FEEDBACK_SAVED)}
+      onThumbsDown={() => toast(FEEDBACK_SAVED)}
+    />
+  );
+}
+
+export function BriefAskPanel({ issue }: { issue: IssueDocument }): JSX.Element {
+  // Memoised on the token string: a new object per render makes the provider
+  // rebuild its runtime and drop the conversation (learning page, CP475+6).
+  const token = apiClient.getAccessToken();
+  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="brief-ask-panel">
@@ -63,14 +95,7 @@ export function BriefAskPanel({ issue }: { issue: IssueDocument }): JSX.Element 
           enableInspector={false}
           headers={headers}
         >
-          <CopilotChat
-            className="h-full"
-            labels={LABELS}
-            instructions={instructions}
-            suggestions={suggestions}
-            onThumbsUp={() => toast(FEEDBACK_SAVED)}
-            onThumbsDown={() => toast(FEEDBACK_SAVED)}
-          />
+          <BriefChat issue={issue} />
         </CopilotKit>
       </div>
     </div>
