@@ -30,6 +30,44 @@ export interface TopicDefinition {
    */
   maxPagesPerQuery?: number;
   /**
+   * How much of an issue the machine hands the editor, and how long the
+   * result is allowed to be.
+   *
+   * These were a `PICK_COUNT = 5` and a `.slice(0, 10)` inside S7, which made
+   * the size of an issue a property of the code rather than of the brief. The
+   * harvest now returns four times what it did, and nothing about that should
+   * make the page four times longer: a reader subscribed to a week of AI
+   * engineering, not to however much of it there was.
+   *
+   * `bodyChars` is the band a published issue has to land in, measured across
+   * the story bodies. Issue 1 held 5,057 characters over four stories and read
+   * as thin; the floor is set above it deliberately.
+   */
+  draft?: {
+    /** Recommendations S7 derives. Issue 1 shipped 5. */
+    picks?: number;
+    /** Corroborated subjects offered to the editor to choose stories from. */
+    candidateStories?: number;
+  };
+  bodyChars?: { min: number; max: number };
+  /**
+   * What is worth a person's judgement, applied at S2.
+   *
+   * Absent means everything that clears the topic boundary goes to the judge,
+   * which is what happened before the harvest grew fourfold.
+   *
+   * A trusted channel is exempt from both rules. Reach is the thing a good new
+   * source has least of, and an editor has already decided those channels
+   * matter, so filtering them on numbers would remove the densest material in
+   * the corpus.
+   */
+  select?: {
+    /** Views since publication, per day. Normalised so the newest of the week is not penalised. */
+    minViewsPerDay?: number;
+    /** Ceiling per channel, taking its most-watched first. */
+    maxPerChannel?: number;
+  };
+  /**
    * `date`, always. The client omits the parameter when it is `relevance`,
    * and the result then leans on popularity, which is the opposite of what a
    * weekly brief needs.
@@ -69,6 +107,26 @@ export const AI_TECH: TopicDefinition = {
    * over the eight search keys the deployment holds.
    */
   maxPagesPerQuery: 5,
+  /**
+   * Seven picks and fourteen candidates, against issue 1's five and ten.
+   * More to choose from, not more that must be used: the editor still writes
+   * the stories the week earned.
+   */
+  draft: { picks: 7, candidateStories: 14 },
+  /**
+   * 6,000 to 16,000 characters of story body. Issue 1 held 5,057 and reads
+   * thin, so the floor sits above it. The ceiling is roughly three times issue
+   * 1 and exists for one reason: the harvest grew from 870 videos to 3,645,
+   * and an issue must not grow with it.
+   */
+  bodyChars: { min: 6000, max: 16000 },
+  /**
+   * 50 views a day and at most three per channel, which left 431 of this
+   * week's 1,184 when the rule was measured against the corpus before it
+   * shipped. Issue 1's judge saw 440, so this is the same amount of work on
+   * four times the material.
+   */
+  select: { minViewsPerDay: 50, maxPerChannel: 3 },
   order: 'date',
 
   queries: {
