@@ -22,6 +22,8 @@ import { clearBriefCache } from '../brief';
 import { CATEGORY_KEYS } from '@/modules/newsletter/categories';
 import { issueLabelOf } from '@/modules/newsletter/issue-label';
 import { missingNavLabel } from '@/modules/newsletter/publish-gate';
+import { runPublishGates } from '@/modules/newsletter/publish-gates';
+import { createVideoResolver } from '@/modules/newsletter/video-resolver';
 import { MissingMailDigestError } from '@/modules/newsletter/render-mail';
 import { IssueSendError, planIssueSend, runIssueSend } from '@/modules/newsletter/send-issue';
 
@@ -38,6 +40,37 @@ function publishBlocker(doc: IssueDocument): string | null {
     return 'cannot publish without a lead pick that has a videoId (the cover)';
   }
   return missingNavLabel(doc);
+}
+
+/**
+ * The gates, run against the live API, on the way to publication.
+ *
+ * They existed and nothing called them: `publish-gates` was reachable only
+ * from a verify script someone had to remember to run, so an issue could go
+ * out with a recommendation pointing at a video that no longer resolves and a
+ * source nobody could open. Issue 1 is the evidence that a check reachable
+ * only by hand is a check that does not run.
+ *
+ * A missing key means the resolution gate cannot run, and an unrunnable gate
+ * is refused rather than skipped -- silence is not a pass. The structural
+ * gates need no key and run either way.
+ */
+async function gateBlocker(doc: IssueDocument): Promise<string | null> {
+  const resolver = createVideoResolver();
+  if (!resolver) {
+    return 'cannot publish: no YouTube key configured, so the video-resolution gate cannot run';
+  }
+  let report;
+  try {
+    report = await runPublishGates(doc, resolver);
+  } catch (err) {
+    // The API being unreachable is not a pass either. It is a reason to try
+    // again, and the editor is told which it was.
+    const msg = err instanceof Error ? err.message : String(err);
+    return `cannot publish: the video-resolution gate could not complete (${msg})`;
+  }
+  if (report.passed) return null;
+  return report.failures.map((f) => `[${f.gate}] ${f.where}: ${f.detail}`).join('; ');
 }
 
 /**
@@ -207,6 +240,10 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
       }
       const blocker = request.body?.publish ? publishBlocker(doc) : null;
       if (blocker) return reply.code(400).send({ status: 'error', error: blocker });
+      // Create can publish in the same call, so the gates belong here too. A
+      // check on one of two publishing routes is a check with a way around it.
+      const gateFailure = request.body?.publish ? await gateBlocker(doc) : null;
+      if (gateFailure) return reply.code(400).send({ status: 'error', error: gateFailure });
 
       const issueNo = issueNumber(doc);
       try {
@@ -261,6 +298,8 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
       const willBePublished = Boolean(request.body?.publish) || current.published_at !== null;
       const blocker = willBePublished ? publishBlocker(doc) : null;
       if (blocker) return reply.code(400).send({ status: 'error', error: blocker });
+      const gateFailure = willBePublished ? await gateBlocker(doc) : null;
+      if (gateFailure) return reply.code(400).send({ status: 'error', error: gateFailure });
 
       const issueNo = issueNumber(doc);
       try {
