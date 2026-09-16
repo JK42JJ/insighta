@@ -34,7 +34,7 @@ requireImageRegistry: true
 # and would fail the same way -- it has not been run since it was rewritten.
 images:
   apiTag: cea22a2dab723c6202fb940f4eff380ea9d5cd9e
-  frontendTag: bb9fbf0b8392c36fd481319cb40ffa852854b4b9
+  frontendTag: a2eec81f247518ea61bae2273b435c57acfa0234
   redisTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
 
 api:
