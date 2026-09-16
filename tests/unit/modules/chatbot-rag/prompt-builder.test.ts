@@ -77,7 +77,14 @@ const USER: UserContext = {
 
 const TRANSCRIPT: TranscriptContext = {
   full_text: '안녕하세요 하프 마라톤 훈련법을 소개합니다',
-  source: 'mac-mini',
+  // 'mac-mini' stopped being one of the values this field can hold when the
+  // direct path was removed on 2026-09-08 and `source` narrowed to
+  // proxy | cached | unconfigured. The fixture kept the old literal, so this
+  // suite has not compiled -- and therefore has not run -- since that day,
+  // while the run still reported every other suite passing. The Mac Mini is
+  // now one of the proxies (src/config/transcript.ts), so 'proxy' is what it
+  // was describing all along.
+  source: 'proxy',
   language: 'ko',
   truncated: false,
   total_chars: 22,
@@ -326,7 +333,7 @@ describe('buildQwenSystemPrompt — Block T (transcript fallback)', () => {
       transcript: TRANSCRIPT,
     });
 
-    expect(out).toContain('출처: mac-mini');
+    expect(out).toContain('출처: proxy');
     expect(out).toContain('안녕하세요 하프 마라톤');
     // v2-only block markers (NOT referenced in EXTENDED_RULES) must be absent.
     expect(out).not.toContain('[핵심 개념]');
@@ -361,7 +368,7 @@ describe('buildQwenSystemPrompt — Block T (transcript fallback)', () => {
     // `[원본 자막]` header is also referenced inside EXTENDED_RULES_KO so we
     // assert against the transcript body itself.
     expect(out).not.toContain('안녕하세요 하프 마라톤');
-    expect(out).not.toContain('출처: mac-mini');
+    expect(out).not.toContain('출처: proxy');
   });
 });
 
