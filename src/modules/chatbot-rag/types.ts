@@ -220,6 +220,51 @@ export interface RAGContext {
 }
 
 // ============================================================================
+// Block brief_issue — Published brief (newsletter issue) context
+//
+// Source: `newsletter_issues.content_json` (IssueDocument), flattened to
+// prose by brief-context-loader.ts. The chat surface marks a brief
+// conversation with `[[brief:<slug>]]`; the prompt then instructs the
+// model to answer from this text and its source list only.
+// ============================================================================
+
+export interface BriefStoryContext {
+  kicker: string;
+  title: string;
+  /** Table-of-contents label. Present only when the stored document carries one. */
+  navLabel?: string;
+  /** Block texts joined by newlines, HTML stripped, capped at BRIEF_STORY_TEXT_MAX. */
+  text: string;
+}
+
+export interface BriefPickContext {
+  title: string;
+  /** YouTube 11-char id when the pick is a video. */
+  videoId?: string;
+  /** The issue's own description of the pick (issue text, verbatim). */
+  body: string;
+  /** v2 rich-summary one-liner / core argument, capped at BRIEF_PICK_SUMMARY_MAX. */
+  summary?: string;
+}
+
+export interface BriefRefContext {
+  label: string;
+  /** One entry per source: `name` or `name (url)`, verbatim from the issue. */
+  sources: string[];
+}
+
+export interface BriefContext {
+  slug: string;
+  /** Printed label derived from `issue_no` (제N호 / No. N), never the editor's string. */
+  issueLabel: string;
+  categoryKey: string;
+  headline: string[];
+  stories: BriefStoryContext[];
+  picks: BriefPickContext[];
+  refs: BriefRefContext[];
+}
+
+// ============================================================================
 // Constants (module-level — shared across loaders)
 // ============================================================================
 
@@ -252,3 +297,12 @@ export const RECENT_DAYS_WINDOW = 7;
 
 /** Hard cap on transcript text length — mirrors the FE constant in ChatAssistant.tsx. */
 export const TRANSCRIPT_PROMPT_MAX_CHARS = 20_000;
+
+/** Per-story cap on the flattened block text inside the brief block. */
+export const BRIEF_STORY_TEXT_MAX = 1_200;
+
+/** Per-pick cap on the video summary inside the brief block. */
+export const BRIEF_PICK_SUMMARY_MAX = 600;
+
+/** Cap on the sum of all pick summaries inside one brief block. */
+export const BRIEF_PICKS_TOTAL_MAX = 2_000;

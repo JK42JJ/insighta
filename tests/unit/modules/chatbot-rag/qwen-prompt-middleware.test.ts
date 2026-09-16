@@ -15,6 +15,12 @@
  */
 
 const mockLoadVideoContext = jest.fn();
+const mockLoadBriefContext = jest.fn();
+const mockLogLLMCall = jest.fn();
+
+jest.mock('@/modules/llm/call-logger', () => ({
+  logLLMCall: mockLogLLMCall,
+}));
 
 jest.mock('@/utils/logger', () => {
   type Logger = {
@@ -38,6 +44,10 @@ jest.mock('@/modules/chatbot-rag/video-context-loader', () => ({
   loadVideoContext: mockLoadVideoContext,
 }));
 
+jest.mock('@/modules/chatbot-rag/brief-context-loader', () => ({
+  loadBriefContext: mockLoadBriefContext,
+}));
+
 import {
   rewriteSystemContent,
   rewriteSystemPrompt,
@@ -46,9 +56,17 @@ import {
   appendNoThinkToLastUserMessage,
   appendNoThinkToLastUserMessageString,
   appendTimestampFormatRule,
+  parseBriefSlug,
   _resetMiddlewareCacheForTesting,
 } from '@/modules/chatbot-rag/qwen-prompt-middleware';
-import { PRODUCT_PERSONA_KO, PRODUCT_PERSONA_EN } from '@/modules/chatbot-rag/prompt-builder';
+import {
+  PRODUCT_PERSONA_KO,
+  PRODUCT_PERSONA_EN,
+  BRIEF_RULES_KO,
+} from '@/modules/chatbot-rag/prompt-builder';
+import type { BriefContext } from '@/modules/chatbot-rag/types';
+import { runWithChatbotContext } from '@/api/routes/chatbot-context-storage';
+import { CHAT_LEDGER_MODULE } from '@/modules/llm/ledger-modules';
 
 const SAMPLE_V2 = {
   title: '하프 1:30의 벽',
@@ -64,11 +82,28 @@ const SAMPLE_TRANSCRIPT = {
   total_chars: 5,
 };
 
+const SAMPLE_BRIEF: BriefContext = {
+  slug: 'ai-tech-2026-09-02',
+  issueLabel: '제7호',
+  categoryKey: 'ai-tech',
+  headline: ['에이전트가 읽은 것은 전부 명령이 될 수 있다'],
+  stories: [
+    {
+      kicker: '신뢰 경계',
+      title: '부팅이 먼저다',
+      text: '설정 파일이 먼저 실행된다 [영상]. Anthropic은 패치를 냈다 [확인].',
+    },
+  ],
+  picks: [{ title: 'Pick One', body: '첫 번째 추천', videoId: 'vid00000001' }],
+  refs: [{ label: 'CVE-2025-59536', sources: ['NVD'] }],
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
   _resetMiddlewareCacheForTesting();
-  // Default: no v2, no transcript — keeps tests deterministic
+  // Default: no v2, no transcript, no brief — keeps tests deterministic
   mockLoadVideoContext.mockResolvedValue({ v2Data: null, transcript: null });
+  mockLoadBriefContext.mockResolvedValue(null);
 });
 
 describe('rewriteSystemContent', () => {
@@ -255,6 +290,80 @@ describe('createQwenPromptMiddleware', () => {
 
     expect(out.toolChoice).toEqual({ type: 'none' });
     expect(out.tools).toEqual([]);
+  });
+});
+
+describe('createQwenPromptMiddleware — wrapStream ledger row', () => {
+  const FINISH_USAGE = { inputTokens: 10, outputTokens: 5 };
+  const LEDGER_WAIT_TICKS = 20;
+
+  function streamOf(parts: unknown[]): ReadableStream<unknown> {
+    return new ReadableStream({
+      start(controller) {
+        for (const part of parts) controller.enqueue(part);
+        controller.close();
+      },
+    });
+  }
+
+  async function drain(stream: ReadableStream<unknown>): Promise<void> {
+    const reader = stream.getReader();
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) return;
+    }
+  }
+
+  /** The ledger write is fire-and-forget behind a dynamic import; poll for it. */
+  async function ledgerRow(): Promise<Record<string, unknown> | undefined> {
+    for (let i = 0; i < LEDGER_WAIT_TICKS && mockLogLLMCall.mock.calls.length === 0; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    return mockLogLLMCall.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+  }
+
+  async function runTurn(): Promise<void> {
+    const mw = createQwenPromptMiddleware({ providerLabel: 'openrouter' });
+    const doStream = jest.fn().mockResolvedValue({
+      stream: streamOf([
+        { type: 'text-delta', delta: 'hi' },
+        { type: 'finish', usage: FINISH_USAGE },
+      ]),
+    });
+    const out = await mw.wrapStream!({
+      doStream,
+      doGenerate: jest.fn(),
+      params: {} as never,
+      model: { modelId: 'gemini-flash' } as never,
+    });
+    await drain(out.stream as ReadableStream<unknown>);
+  }
+
+  beforeEach(() => {
+    mockLogLLMCall.mockResolvedValue(undefined);
+  });
+
+  it('records the caller from the request context, under the chat module label', async () => {
+    await runWithChatbotContext({ userId: 'user-1', email: 'user@example.com' }, runTurn);
+
+    const row = await ledgerRow();
+    expect(row).toMatchObject({
+      module: CHAT_LEDGER_MODULE,
+      model: 'openrouter/gemini-flash',
+      userId: 'user-1',
+      inputTokens: FINISH_USAGE.inputTokens,
+      outputTokens: FINISH_USAGE.outputTokens,
+      status: 'success',
+    });
+  });
+
+  it('leaves userId unset outside a request context', async () => {
+    await runTurn();
+
+    const row = await ledgerRow();
+    expect(row).toBeDefined();
+    expect(row!['userId']).toBeUndefined();
+    expect(row!['module']).toBe(CHAT_LEDGER_MODULE);
   });
 });
 
@@ -487,5 +596,99 @@ describe('createQwenPromptMiddleware — CP477+5 end-to-end shape', () => {
       }
     ).content[0]!;
     expect(userPart.text.endsWith('/no_think')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Brief layer (work order 2026-09-15 §2.1)
+// ---------------------------------------------------------------------------
+
+describe('parseBriefSlug', () => {
+  it('extracts the slug from a [[brief:<slug>]] marker anywhere in the prompt', () => {
+    expect(parseBriefSlug('role text\n[[brief:ai-tech-2026-09-02]]\nmore')).toBe(
+      'ai-tech-2026-09-02'
+    );
+  });
+
+  it('returns undefined when there is no marker', () => {
+    expect(parseBriefSlug('한국어 일반 응답 요청')).toBeUndefined();
+  });
+
+  it('ignores malformed markers', () => {
+    const malformed = [
+      '[[brief:]]',
+      '[[brief:Ai-Tech]]',
+      '[[brief:ai_tech]]',
+      '[[brief:ai-tech',
+      '[brief:ai-tech]',
+      '[[brief ai-tech]]',
+      '[[brief:ai-tech ]]',
+    ];
+    for (const m of malformed) {
+      expect(parseBriefSlug(m)).toBeUndefined();
+    }
+  });
+});
+
+describe('rewriteSystemContent — brief layer', () => {
+  it('loads the brief for the marker slug and renders the issue block + rules', async () => {
+    mockLoadBriefContext.mockResolvedValueOnce(SAMPLE_BRIEF);
+
+    const out = await rewriteSystemContent('[[brief:ai-tech-2026-09-02]]');
+
+    expect(mockLoadBriefContext).toHaveBeenCalledWith('ai-tech-2026-09-02');
+    expect(out).toContain('[이번 호 브리프]');
+    expect(out).toContain('## [신뢰 경계] 부팅이 먼저다');
+    expect(out).toContain('[영상]');
+    expect(out).toContain('[확인]');
+    expect(out).toContain(BRIEF_RULES_KO);
+  });
+
+  it('picks brief over video when both markers exist — video load is skipped', async () => {
+    mockLoadBriefContext.mockResolvedValueOnce(SAMPLE_BRIEF);
+    mockLoadVideoContext.mockResolvedValue({ v2Data: SAMPLE_V2, transcript: null });
+
+    const out = await rewriteSystemContent(
+      'URL: https://www.youtube.com/watch?v=abc12345678 [[brief:ai-tech-2026-09-02]]'
+    );
+
+    expect(out).toContain('[이번 호 브리프]');
+    expect(out).not.toContain('[영상 정보]');
+    expect(mockLoadVideoContext).not.toHaveBeenCalled();
+  });
+
+  it('caches the brief per slug (second call within TTL reuses the load)', async () => {
+    mockLoadBriefContext.mockResolvedValue(SAMPLE_BRIEF);
+
+    await rewriteSystemContent('[[brief:ai-tech-2026-09-02]]');
+    await rewriteSystemContent('[[brief:ai-tech-2026-09-02]]');
+
+    expect(mockLoadBriefContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache a miss, so a later publish is picked up', async () => {
+    mockLoadBriefContext.mockResolvedValueOnce(null).mockResolvedValueOnce(SAMPLE_BRIEF);
+
+    const first = await rewriteSystemContent('[[brief:ai-tech-2026-09-02]]');
+    const second = await rewriteSystemContent('[[brief:ai-tech-2026-09-02]]');
+
+    expect(first).not.toContain('[이번 호 브리프]');
+    expect(second).toContain('[이번 호 브리프]');
+    expect(mockLoadBriefContext).toHaveBeenCalledTimes(2);
+  });
+
+  it('still prepends the persona when the brief cannot be loaded (fail-safe)', async () => {
+    mockLoadBriefContext.mockRejectedValueOnce(new Error('db down'));
+
+    const out = await rewriteSystemContent('[[brief:ai-tech-2026-09-02]]');
+
+    expect(out.startsWith(PRODUCT_PERSONA_KO)).toBe(true);
+    expect(out).not.toContain('[이번 호 브리프]');
+  });
+
+  it('does not call the brief loader when no marker is present', async () => {
+    await rewriteSystemContent('URL: https://www.youtube.com/watch?v=abc12345678');
+
+    expect(mockLoadBriefContext).not.toHaveBeenCalled();
   });
 });
