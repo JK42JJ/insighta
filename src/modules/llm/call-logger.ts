@@ -57,10 +57,16 @@ export async function logLLMCall(entry: LLMCallLogEntry): Promise<void> {
   try {
     const prisma = getPrismaClient();
 
-    const costUsd =
+    // A non-finite cost fails the whole insert, so one unusable number takes
+    // the token counts, the latency and the module label down with it. Seen in
+    // production: a caller that passed token objects instead of counts
+    // produced `cost_usd: NaN` next to them. The row is worth more than the
+    // cost field, so an unusable cost is stored as NULL and the row survives.
+    const rawCost =
       entry.inputTokens != null && entry.outputTokens != null
         ? calculateCost(entry.model, entry.inputTokens, entry.outputTokens)
         : null;
+    const costUsd = typeof rawCost === 'number' && Number.isFinite(rawCost) ? rawCost : null;
 
     await prisma.llm_call_logs.create({
       data: {
