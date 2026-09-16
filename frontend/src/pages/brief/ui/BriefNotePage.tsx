@@ -106,9 +106,14 @@ export function BriefNotePage(): JSX.Element {
   // scroll box (the sidebar contents scroll that box) and has the learning
   // page's width floor, so a narrow window collapses the sidebar rather than
   // the text.
+  //
+  // `scrollbar-pro` is part of that copy, not decoration. Without it the box
+  // draws the operating system's default bar -- 15px on the live page, against
+  // 6px in the chat panel beside it -- and the two columns of one screen do not
+  // match. Every other reading surface in the product carries this class.
   return (
     <div className="flex h-full overflow-hidden">
-      <div className="h-full min-w-[380px] flex-1 overflow-y-auto max-md:min-w-0">
+      <div className="h-full min-w-[380px] flex-1 overflow-y-auto scrollbar-pro max-md:min-w-0">
         <style>{NOTE_PROSE_STYLE}</style>
         <div className="note-prose-root mx-auto w-full max-w-[720px] px-5 py-8">
           <EditorContent editor={editor} />

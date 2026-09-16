@@ -136,7 +136,7 @@ export function SidebarBriefEntry({ collapsed }: SidebarBriefEntryProps) {
           side="right"
           align="start"
           sideOffset={8}
-          className="w-72 p-1.5 max-h-[80vh] overflow-y-auto"
+          className="w-72 p-1.5 max-h-[80vh] overflow-y-auto scrollbar-sidebar"
         >
           <div className="flex items-center gap-2 px-2.5 pb-1.5 pt-1">
             <Newspaper
