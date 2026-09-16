@@ -99,6 +99,23 @@ export const AI_TECH: TopicDefinition = {
       // security and incidents
       '프롬프트 인젝션',
       'LLM 보안 취약점',
+
+      // Added 2026-09-17 from the first paged run's own numbers: the
+      // veins that produced (agents 244/233, MCP 189, context 98) are
+      // widened; the ones that returned nothing are left alone rather
+      // than reworded on a guess.
+      '클로드 코드',
+      '커서 AI',
+      'AI 코딩 도구',
+      'MCP 서버',
+      'LLM 에이전트',
+      '에이전트 워크플로우',
+      '로컬 LLM 설치',
+      '올라마',
+      'GPU 추론 속도',
+      '벡터 데이터베이스',
+      '임베딩 모델',
+      'LLM 비용',
     ],
     en: [
       'new LLM model release',
@@ -121,6 +138,44 @@ export const AI_TECH: TopicDefinition = {
       'vLLM serving',
       'prompt injection attack',
       'LLM security vulnerability',
+
+      // Added 2026-09-17 from the first paged run's own numbers: the
+      // veins that produced (agents 244/233, MCP 189, context 98) are
+      // widened; the ones that returned nothing are left alone rather
+      // than reworded on a guess.
+      'AI agent framework',
+      'autonomous agent demo',
+      'agent orchestration',
+      'multi agent system',
+      'agent memory',
+      'agent evaluation',
+      'claude code tutorial',
+      'cursor ai workflow',
+      'AI pair programming',
+      'agent guardrails',
+      'agent observability',
+      'tool calling LLM',
+      'model context protocol',
+      'MCP client',
+      'MCP tools',
+      'long context LLM',
+      'prompt caching',
+      'structured output LLM',
+      'local LLM setup',
+      'ollama tutorial',
+      'llama cpp',
+      'GPU inference benchmark',
+      'LLM serving throughput',
+      'quantized model comparison',
+      'vector database tutorial',
+      'embedding model comparison',
+      'RAG evaluation',
+      'LLM jailbreak',
+      'indirect prompt injection',
+      'AI supply chain attack',
+      'LLM cost comparison',
+      'inference pricing',
+      'AI infrastructure cost',
     ],
   },
 

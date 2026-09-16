@@ -201,6 +201,14 @@ export async function harvestSearch(
           });
           units += COST_SEARCH;
           calls += 1;
+          // Round-robin on every call, not only after one fails. Rotating on
+          // failure alone spends a single project's daily allowance before it
+          // touches the second: the 2026-09-16 run put all 57 calls on key one
+          // and left it exhausted while seven others sat unused. The keys are
+          // separate Google projects with separate daily quotas, so spreading
+          // the calls is the difference between one project's limit and the
+          // pool's.
+          keyIndex += 1;
           const items = (body['items'] ?? []) as Array<{
             id?: { videoId?: string };
             snippet?: Record<string, unknown>;
