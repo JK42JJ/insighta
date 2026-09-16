@@ -13,9 +13,6 @@ import path from 'path';
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 dotenv.config();
 
-/** Default for `CHAT_USER_RATE_LIMIT_PER_HOUR`: chat turns per user per rolling hour. */
-const CHAT_USER_RATE_LIMIT_PER_HOUR_DEFAULT = 20;
-
 /**
  * Environment configuration schema with validation
  */
@@ -172,14 +169,6 @@ const envSchema = z.object({
     .string()
     .default('false')
     .transform((v) => v === 'true' || v === '1'),
-  // Per-user ceiling on /api/v1/chat turns in a rolling hour, counted from
-  // `llm_call_logs` rows with `module = 'copilotkit'` and the caller's
-  // `user_id`. A tuning knob, not a secret: unset = 20.
-  CHAT_USER_RATE_LIMIT_PER_HOUR: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(CHAT_USER_RATE_LIMIT_PER_HOUR_DEFAULT),
 
   // Qwen-LoRA serving — RunPod Serverless endpoint base URL.
   // Accepts either the legacy runsync form (`.../<id>/runsync`) or the
@@ -573,7 +562,6 @@ export const config = {
     model: env.CHATBOT_MODEL,
     localUrl: env.CHATBOT_LOCAL_URL,
     failoverEnabled: env.CHATBOT_FAILOVER_ENABLED,
-    userRateLimitPerHour: env.CHAT_USER_RATE_LIMIT_PER_HOUR,
   },
 
   // Qwen-LoRA serving — consumed by CopilotKit OpenAIAdapter when provider

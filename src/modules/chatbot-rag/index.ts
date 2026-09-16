@@ -39,23 +39,13 @@ export {
   type RAGSourceType,
   type RAGResult,
   type RAGContext,
-  type BriefContext,
-  type BriefStoryContext,
-  type BriefPickContext,
-  type BriefRefContext,
   MAX_MANDALA_TITLES,
   RECENT_DAYS_WINDOW,
   TRANSCRIPT_PROMPT_MAX_CHARS,
-  BRIEF_STORY_TEXT_MAX,
-  BRIEF_PICK_SUMMARY_MAX,
-  BRIEF_PICKS_TOTAL_MAX,
 } from './types';
 
 // NEW in CP474 Phase B — loaders + retriever + adapter
 export { loadUserContext, type LoadUserContextParams } from './user-context-loader';
-
-// Brief layer (work order 2026-09-15 §2.1) — published issue as the answer source.
-export { loadBriefContext } from './brief-context-loader';
 
 export {
   loadVideoContext,
@@ -74,5 +64,4 @@ export {
   createQwenPromptMiddleware,
   rewriteSystemPrompt,
   rewriteSystemContent,
-  parseBriefSlug,
 } from './qwen-prompt-middleware';

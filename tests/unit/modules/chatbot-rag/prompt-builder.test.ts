@@ -20,22 +20,13 @@ import {
   ROLE_AND_RULES_KO,
   ROLE_AND_RULES_EN,
   EXTENDED_RULES_KO,
-  EXTENDED_RULES_EN,
-  BRIEF_RULES_KO,
-  BRIEF_RULES_EN,
   LAYER_BLOCKS,
   LAYER_BLOCKS_FALLBACK,
-  deriveTrainingLayer,
   type V2Summary,
   type MandalaContext,
   type RegionContext,
 } from '@/modules/chatbot-rag/prompt-builder';
-import type {
-  UserContext,
-  TranscriptContext,
-  RAGContext,
-  BriefContext,
-} from '@/modules/chatbot-rag/types';
+import type { UserContext, TranscriptContext, RAGContext } from '@/modules/chatbot-rag/types';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -86,7 +77,7 @@ const USER: UserContext = {
 
 const TRANSCRIPT: TranscriptContext = {
   full_text: '안녕하세요 하프 마라톤 훈련법을 소개합니다',
-  source: 'proxy',
+  source: 'mac-mini',
   language: 'ko',
   truncated: false,
   total_chars: 22,
@@ -335,7 +326,7 @@ describe('buildQwenSystemPrompt — Block T (transcript fallback)', () => {
       transcript: TRANSCRIPT,
     });
 
-    expect(out).toContain('출처: proxy');
+    expect(out).toContain('출처: mac-mini');
     expect(out).toContain('안녕하세요 하프 마라톤');
     // v2-only block markers (NOT referenced in EXTENDED_RULES) must be absent.
     expect(out).not.toContain('[핵심 개념]');
@@ -448,124 +439,5 @@ describe('buildQwenSystemPrompt — full stack assembly', () => {
     expect(idxF).toBeGreaterThan(idxA);
     expect(idxG).toBeGreaterThan(idxF);
     expect(idxH).toBeGreaterThan(idxG);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Brief layer (work order 2026-09-15 §2.1)
-// ---------------------------------------------------------------------------
-
-const BRIEF: BriefContext = {
-  slug: 'ai-tech-2026-09-02',
-  issueLabel: '제7호',
-  categoryKey: 'ai-tech',
-  headline: ['에이전트가 읽은 것은 전부 명령이 될 수 있다', '신뢰 경계는 부팅과 결제에 있었다'],
-  stories: [
-    {
-      kicker: '신뢰 경계',
-      title: '부팅이 먼저다',
-      navLabel: '부팅',
-      text: '설정 파일이 먼저 실행된다 (1IbrFrdll4U) [영상].\nAnthropic은 패치를 냈다 [확인].',
-    },
-    { kicker: '비용', title: '토큰 단가', text: '단가가 내렸다.' },
-  ],
-  picks: [
-    { title: 'Pick One', body: '첫 번째 추천', videoId: 'vid00000001', summary: '한 줄 요약' },
-    { title: 'Pick Two', body: '영상 없음' },
-  ],
-  refs: [{ label: 'CVE-2025-59536', sources: ['NVD (https://nvd.nist.gov/)', 'Check Point'] }],
-};
-
-describe('brief layer — block brief_issue', () => {
-  it('LAYER_BLOCKS.brief and its fallback are user → issue → RAG', () => {
-    expect(LAYER_BLOCKS.brief).toEqual(['U', 'brief_issue', 'H']);
-    expect(LAYER_BLOCKS_FALLBACK.brief).toEqual(['U', 'brief_issue', 'H']);
-  });
-
-  it('renders label, headline, story titles, texts with grade tags verbatim, picks, refs, rules (ko)', () => {
-    const out = buildQwenSystemPrompt({ layer: 'brief', language: 'ko', briefContext: BRIEF });
-
-    expect(out.startsWith(PRODUCT_PERSONA_KO)).toBe(true);
-    expect(out).toContain(ROLE_AND_RULES_KO);
-    expect(out).toContain('[이번 호 브리프]');
-    expect(out).toContain('호: 제7호 / 카테고리: ai-tech');
-    expect(out).toContain(
-      '헤드라인: 에이전트가 읽은 것은 전부 명령이 될 수 있다 / 신뢰 경계는 부팅과 결제에 있었다'
-    );
-    expect(out).toContain('## [신뢰 경계] 부팅이 먼저다 (목차: 부팅)');
-    expect(out).toContain('## [비용] 토큰 단가');
-    expect(out).toContain('설정 파일이 먼저 실행된다 (1IbrFrdll4U) [영상].');
-    expect(out).toContain('Anthropic은 패치를 냈다 [확인].');
-    expect(out).toContain('[이번 호 추천 영상]');
-    expect(out).toContain('1. "Pick One" (vid00000001)');
-    expect(out).toContain('   첫 번째 추천');
-    expect(out).toContain('   영상 요약: 한 줄 요약');
-    expect(out).toContain('2. "Pick Two"');
-    expect(out).toContain('[출처 목록]');
-    expect(out).toContain('- CVE-2025-59536: NVD (https://nvd.nist.gov/); Check Point');
-    expect(out).toContain(BRIEF_RULES_KO);
-    // The rules text itself carries the grade tags and the exact refusal sentence.
-    expect(BRIEF_RULES_KO).toContain('[확인]/[영상]');
-    expect(BRIEF_RULES_KO).toContain('"이번 호에서는 다루지 않았습니다"');
-    expect(BRIEF_RULES_KO).toContain('6문장 이내');
-  });
-
-  it('renders the English variant of headers and rules for language=en', () => {
-    const out = buildQwenSystemPrompt({ layer: 'brief', language: 'en', briefContext: BRIEF });
-
-    expect(out.startsWith(PRODUCT_PERSONA_EN)).toBe(true);
-    expect(out).toContain('[This issue (brief)]');
-    expect(out).toContain('Issue: 제7호 / Category: ai-tech');
-    expect(out).toContain('## [신뢰 경계] 부팅이 먼저다 (TOC: 부팅)');
-    expect(out).toContain(BRIEF_RULES_EN);
-    expect(out).not.toContain(BRIEF_RULES_KO);
-  });
-
-  it('places the issue block after Block U and before Block H', () => {
-    const out = buildQwenSystemPrompt({
-      layer: 'brief',
-      language: 'ko',
-      briefContext: BRIEF,
-      userContext: USER,
-      ragContext: RAG,
-    });
-
-    const idxU = out.indexOf('[사용자 컨텍스트]');
-    const idxBrief = out.indexOf('[이번 호 브리프]');
-    const idxH = out.lastIndexOf('[관련 자료 (RAG)]');
-    expect(idxU).toBeGreaterThan(-1);
-    expect(idxBrief).toBeGreaterThan(idxU);
-    expect(idxH).toBeGreaterThan(idxBrief);
-  });
-
-  it('never appends EXTENDED_RULES in the brief layer, even with user context', () => {
-    const out = buildQwenSystemPrompt({
-      layer: 'brief',
-      language: 'ko',
-      briefContext: BRIEF,
-      userContext: USER,
-    });
-
-    expect(out).not.toContain(EXTENDED_RULES_KO);
-    expect(out).not.toContain(EXTENDED_RULES_EN);
-    expect(out).not.toContain('이 영상은 아직 분석되지 않았어요');
-  });
-
-  it('renders no issue block when briefContext is null', () => {
-    const out = buildQwenSystemPrompt({ layer: 'brief', language: 'ko', briefContext: null });
-
-    expect(out).not.toContain('[이번 호 브리프]');
-    expect(out).not.toContain(BRIEF_RULES_KO);
-  });
-
-  it('ignores briefContext outside the brief layer', () => {
-    const out = buildQwenSystemPrompt({ layer: 'video', language: 'ko', briefContext: BRIEF });
-
-    expect(out).not.toContain('[이번 호 브리프]');
-  });
-
-  it('deriveTrainingLayer maps regionLayer=brief to brief', () => {
-    expect(deriveTrainingLayer({ level: 4, context: 'x', regionLayer: 'brief' })).toBe('brief');
-    expect(deriveTrainingLayer({ level: 1, context: 'x', regionLayer: null })).toBe('video');
   });
 });
