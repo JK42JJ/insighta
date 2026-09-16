@@ -71,7 +71,9 @@ function doc(): IssueDocument {
     preview: 'p',
     headline: ['h'],
     dek: 'dek',
-    stories: [{ kicker: '신뢰 경계', title: '설정 파일 이야기', blocks: [{ type: 'p', html: 'a' }] }],
+    stories: [
+      { kicker: '신뢰 경계', title: '설정 파일 이야기', blocks: [{ type: 'p', html: 'a' }] },
+    ],
     insight: { blocks: [{ type: 'p', html: 'c' }], actions: [] },
     picks: [],
     vocabulary: [],
@@ -134,9 +136,22 @@ describe('SidebarBriefPanel', () => {
     renderPanel({ currentSlug: 'a' });
     await screen.findByText('둘째');
     const rows = [...document.querySelectorAll('li > button')];
-    expect(rows.map((b) => b.textContent)).toEqual(['제2호둘째', '제1호첫째']);
+    expect(rows.map((b) => b.textContent)).toEqual([
+      '제2호2026년 9월 2일둘째',
+      '제1호2026년 9월 2일첫째',
+    ]);
     expect(rows[1].getAttribute('aria-current')).toBe('page');
     expect(rows[0].getAttribute('aria-current')).toBeNull();
+  });
+
+  it('puts the date beside the label and gives the headline two lines', async () => {
+    // A headline is a 40-character sentence; beside the label it was cut to an
+    // ellipsis after a few words. Line 1 = label + date, line 2-3 = headline.
+    categoryMock.mockResolvedValue(payload([issue({ headline: '긴 헤드라인 문장' })]));
+    renderPanel();
+    const head = await screen.findByText('긴 헤드라인 문장');
+    expect(head.className).toContain('line-clamp-2');
+    expect(screen.getByText('2026년 9월 2일')).toBeTruthy();
   });
 
   it('opens an issue when its row is clicked', async () => {
@@ -149,7 +164,9 @@ describe('SidebarBriefPanel', () => {
   });
 
   it('marks unread issues with the dot the rest of the product uses', async () => {
-    categoryMock.mockResolvedValue(payload([issue({ read: false }), issue({ slug: 'r', read: true })]));
+    categoryMock.mockResolvedValue(
+      payload([issue({ read: false }), issue({ slug: 'r', read: true })])
+    );
     renderPanel();
     await screen.findByText(/안 읽음 1/);
     expect(screen.getAllByLabelText('안 읽음')).toHaveLength(1);

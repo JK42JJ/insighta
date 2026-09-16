@@ -228,6 +228,7 @@ export const s7Draft: Stage = {
         'interest.intro',
         'interest.ledger',
         'stories',
+        'stories[].navLabel',
         'insight',
         'vocabulary',
         'picks[].body',
