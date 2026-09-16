@@ -1,10 +1,12 @@
 /**
- * "Ask about this issue" — a chat bound to one published brief.
+ * The chat body of the brief's right panel: a conversation bound to one
+ * published brief.
  *
- * The panel mounts the same CopilotKit runtime the learning page uses and
- * marks the conversation with `[[brief:<slug>]]` in the instructions. The
- * server reads that marker, replaces the instructions with the issue's text
- * and sources, and tells the model to answer only from them
+ * It mounts the same CopilotKit runtime and the same chat wrapper the
+ * learning page's AI 챗봇 tab uses, so the two look and behave alike. The
+ * conversation is marked with `[[brief:<slug>]]` in the instructions; the
+ * server reads that marker, puts the issue's text and sources in the system
+ * prompt, and tells the model to answer only from them
  * (src/modules/chatbot-rag/brief-context-loader.ts). Nothing about the
  * issue's content is sent from here; the marker is the whole contract.
  *
@@ -16,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CopilotKit } from '@copilotkit/react-core';
 import { CopilotChat } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
+import { toast } from 'sonner';
 
 import type { IssueDocument } from '@/features/newsletter-note/lib/issue-types';
 import { apiClient } from '@/shared/lib/api-client';
@@ -27,11 +30,14 @@ export function briefMarker(slug: string): string {
   return `[[brief:${slug}]]`;
 }
 
+/** Same wording pattern as the learning page's labels (learning.chat*). */
 const LABELS = {
-  title: '이 호에 질문',
-  initial: '답변은 이번 호 본문과 출처에 한정됩니다.',
-  placeholder: '이번 호에 대해 물어보세요',
-};
+  title: '브리프 어시스턴트',
+  initial: '이 호에 대해 질문하세요',
+  placeholder: '이번 호 내용에 대해 질문하세요...',
+} as const;
+
+const FEEDBACK_SAVED = '피드백 저장됨';
 
 const REFUSAL_TEXT: Record<ChatRefusal, string> = {
   unauthorized: '로그인이 만료됐습니다. 다시 로그인한 뒤 질문해 주세요.',
@@ -53,8 +59,7 @@ interface Refusal {
 
 export function BriefAskPanel({ issue }: { issue: IssueDocument }): JSX.Element {
   // Memoised on the token string: a new object per render makes the provider
-  // rebuild its runtime and drop the conversation (the learning page learnt
-  // this the hard way).
+  // rebuild its runtime and drop the conversation (learning page, CP475+6).
   const token = apiClient.getAccessToken();
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
@@ -71,26 +76,18 @@ export function BriefAskPanel({ issue }: { issue: IssueDocument }): JSX.Element 
   );
   const suggestions = useMemo(() => buildBriefSuggestions(issue), [issue]);
 
-  if (!token) {
-    return (
-      <p className="px-4 py-6 text-[13px] text-muted-foreground" data-testid="brief-ask-panel">
-        로그인한 뒤 이번 호에 대해 질문할 수 있습니다.
-      </p>
-    );
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="brief-ask-panel">
       {refusal && (
         <p
           role="status"
-          className="border-b border-border/60 bg-muted/40 px-4 py-2 text-[12.5px] text-muted-foreground"
+          className="shrink-0 border-b border-sidebar-border/40 px-1 py-2 text-[12px] text-muted-foreground"
         >
           {REFUSAL_TEXT[refusal.kind]}
           {refusal.kind === 'rate_limited' ? retryText(refusal.retryAfterSec) : ''}
         </p>
       )}
-      <div className="min-h-0 flex-1">
+      <div className="copilotkit-chat-wrapper min-h-0 flex-1">
         <CopilotKit
           runtimeUrl={CHAT_RUNTIME_PATH}
           showDevConsole={false}
@@ -102,12 +99,11 @@ export function BriefAskPanel({ issue }: { issue: IssueDocument }): JSX.Element 
             labels={LABELS}
             instructions={instructions}
             suggestions={suggestions}
+            onThumbsUp={() => toast(FEEDBACK_SAVED)}
+            onThumbsDown={() => toast(FEEDBACK_SAVED)}
           />
         </CopilotKit>
       </div>
-      <p className="border-t border-border/60 px-4 py-2 text-[11.5px] text-muted-foreground/70">
-        답변은 이번 호 본문과 출처에 한정됩니다. 본문에 없는 내용은 없다고 말합니다.
-      </p>
     </div>
   );
 }

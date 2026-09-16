@@ -93,7 +93,11 @@ export function AppShell({ children }: AppShellProps) {
   // vertical text). Auto-collapse the sidebar to the icon rail there; a
   // manual toggle while narrow overrides for the session, and widening
   // restores the persisted preference untouched.
-  const isLearningRoute = location.pathname.startsWith('/learning');
+  // A published brief (/brief/:slug, not the category index /brief/c/:key)
+  // carries the same 400px right chat panel, so it takes the same rule.
+  const isBriefIssueRoute =
+    location.pathname.startsWith('/brief/') && !location.pathname.startsWith('/brief/c/');
+  const isLearningRoute = location.pathname.startsWith('/learning') || isBriefIssueRoute;
   const [narrowLearning, setNarrowLearning] = useState(false);
   const [narrowOverride, setNarrowOverride] = useState<boolean | null>(null);
   useEffect(() => {

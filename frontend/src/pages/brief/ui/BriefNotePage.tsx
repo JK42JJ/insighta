@@ -101,13 +101,14 @@ export function BriefNotePage(): JSX.Element {
     );
   }
 
-  // The reading column keeps `.note-prose-root` inside its own scroll box
-  // (the sidebar contents scroll that box). The ask panel, when open on a
-  // wide viewport, is a sibling column; otherwise it is a sheet over the
-  // page and the column keeps its width.
+  // Same layout as the learning page: the reading column and the right chat
+  // panel side by side. The column keeps `.note-prose-root` inside its own
+  // scroll box (the sidebar contents scroll that box) and has the learning
+  // page's width floor, so a narrow window collapses the sidebar rather than
+  // the text.
   return (
-    <div className="flex h-full">
-      <div className="h-full min-w-0 flex-1 overflow-y-auto">
+    <div className="flex h-full overflow-hidden">
+      <div className="h-full min-w-[380px] flex-1 overflow-y-auto max-md:min-w-0">
         <style>{NOTE_PROSE_STYLE}</style>
         <div className="note-prose-root mx-auto w-full max-w-[720px] px-5 py-8">
           <EditorContent editor={editor} />
