@@ -249,7 +249,11 @@ jobs:
       #     rotted: prompt-builder.test.ts stopped compiling on 2026-09-08 when
       #     TranscriptContext.source narrowed, and the run kept reporting every
       #     other suite green while that one had not executed at all.
-      - run: npx jest --testPathPattern='tests/(smoke|unit/keel|unit/modules/chatbot-rag)'
+      #   unit/modules/newsletter — the brief pipeline and its publish gates.
+      #     The harvest layer's page cap decides whether an issue is built from
+      #     hundreds of videos or thousands, and the gates decide what may be
+      #     published at all; neither should be able to change unwatched.
+      - run: npx jest --testPathPattern='tests/(smoke|unit/keel|unit/modules/chatbot-rag|unit/modules/newsletter)'
         env:
           # billing smoke tests import webhook-handler / system-settings,
           # which pull in config/index.ts zod validation (ENCRYPTION_SECRET

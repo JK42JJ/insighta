@@ -20,6 +20,16 @@ export interface TopicDefinition {
   /** Harvest window in days. */
   publishedWithinDays: number;
   /**
+   * How many pages of `search.list` to take per query, at 100 units a page.
+   *
+   * Absent or 1 is the old behaviour: one page, 50 results, whatever the query
+   * had beyond that discarded. Raising it is the difference between a layer
+   * that returns hundreds and one that returns thousands, because the cap was
+   * never the topic running dry -- a query with more to give still offers a
+   * next page, and one without simply has no token and ends the loop early.
+   */
+  maxPagesPerQuery?: number;
+  /**
    * `date`, always. The client omits the parameter when it is `relevance`,
    * and the result then leans on popularity, which is the opposite of what a
    * weekly brief needs.
@@ -51,6 +61,14 @@ export const AI_TECH: TopicDefinition = {
   categoryKey: 'ai-tech',
   videoCategoryIds: [VIDEO_CATEGORY_SCIENCE_TECH],
   publishedWithinDays: 7,
+  /**
+   * Five, from measurement rather than preference. On 2026-09-16 the English
+   * queries each returned a full 50 on all five pages with no repeated id and
+   * a sixth page still on offer, while the Korean ones returned 0 to 6 and no
+   * token at all. Five pages across 40 queries is at most 12,000 units, spread
+   * over the eight search keys the deployment holds.
+   */
+  maxPagesPerQuery: 5,
   order: 'date',
 
   queries: {
