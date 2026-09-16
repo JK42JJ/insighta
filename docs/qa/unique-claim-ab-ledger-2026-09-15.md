@@ -1,85 +1,196 @@
-# unique_claim — evaluation ledger
+# 희소성 프롬프트 A/B/B′/C 점검 결과 (27편, 2026-09-16)
 
-Status: **smoke test recorded; the 30-video evaluation has not run yet.** Nothing here is a
-result that a decision may rest on until the evaluation section is filled.
+상태: **완료.** 사전 등록 판정선 기준 **기각**. 프로토콜은 `docs/handoffs/insighta-session-handoff-2026-09-15-cp507-bp-v8.md` §9-2.
 
-## What is being tested
+## 1. 이 점검이 판정한 것과 판정하지 않은 것
 
-The v2 summary prompt (`src/modules/skills/rich-summary-v2-prompt.ts`) produces
-`core.one_liner`, `core.toc_label`, sections and atoms. It has no field for "the one thing this
-video says that similar videos do not." The hypothesis (source: YouTube short `QLSLR1gQsaQ`,
-2026-09-15) is that asking for exactly that produces a more useful summary than the plain
-request.
+판정한 것: 프로덕션 v2 프롬프트(S4) 뒤에 "다른 유튜브에서 얘기하지 않는 가장 중요한 내용을 발췌해 줘"를
+붙이면 **주간 브리프의 리드로 쓸 한 줄**이 나아지는가. 결과는 기각이다.
 
-## Gate that decides whether a claim is stored (PR: flag `RICH_SUMMARY_UNIQUE_CLAIM_ENABLED`, default OFF)
+판정하지 않은 것: 같은 문장을 **v2 요약의 별도 필드**로 넣었을 때의 값어치. 네 팔 모두에서 그 문장이
+스키마 제약과 충돌했기 때문이다(§7). 이 점검 결과를 v2 품질 개선안의 기각 근거로 인용해서는 안 된다.
 
-A claim is kept only if a contiguous run of its text occurs verbatim in the transcript within
-±60 s of `timestamp_sec`. Failing claims are dropped. There is no "unverified" state.
+## 2. 표본
 
-| Parameter                          | Value                                                      | Why                                                                                                           |
-| ---------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| window                             | `UNIQUE_CLAIM_WINDOW_SEC = 60`                             | a caption line is 2–6 s; ±60 s tolerates a model that points at the start of the passage rather than the line |
-| normalization                      | NFKC, lower-case, strip whitespace + punctuation + symbols | ASR captions and prose differ only there (spacing, 。, quotes)                                                |
-| minimum run, Hangul-majority claim | `UNIQUE_CLAIM_MIN_MATCH_HANGUL = 12` normalized chars      | ≈ 4–5 Korean words; shorter runs match by accident ("할 수 있습니다")                                         |
-| minimum run, Latin-majority claim  | `UNIQUE_CLAIM_MIN_MATCH_LATIN = 24` normalized chars       | ≈ 4–5 English words at 5 letters each                                                                         |
-| claim length cap                   | `UNIQUE_CLAIM_TEXT_MAX_LEN = 240`                          | two sentences, not a paragraph                                                                                |
+`~/ab-unique-claim-20260915/sample/list.tsv` 의 **앞 27행**. 도메인 7종(tech·learning·health·business·
+finance·social·creative) 3~4편씩, ko 17 / en 10, 자막 927~93,217자. 후보는 도메인 간 중복 배제 + 4242
+자막 서비스로 800자 이상 확보된 것만 채택했다.
 
-The route logs `{ videoId, verdict: { pass, minMatchLen, longestRun, matchedAtSec, tsErrorSec, reason } }`
-for every claim it sees, so the ledger below can be filled from logs, not from memory.
+lifestyle·mind 는 후보 API 의 제목 키워드 프리필터가 후보를 내지 못해 0편이다. 표본 구성 중
+lifestyle 3편이 뒤늦게 붙어 파일은 30행이 되었으나, 판정선 18/27 이 사전 고정이므로 **앞 27행만
+평가 표본**으로 쓰고 3편(`Vjj41K8kr1Y`·`N0dBhCDXbn8`·`pTwaALIGm2Q`)은 표본 외로 둔다.
 
-## Arms
+## 3. 팔
 
-| Arm | Prompt                                                                                                | Note                                                               |
-| --- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| A   | production v2 prompt, unchanged                                                                       | baseline                                                           |
-| B   | A + the original sentence, verbatim: **"다른 유튜브에서 얘기하지 않는 가장 중요한 내용을 발췌해 줘"** | the sentence is not rewritten                                      |
-| B′  | A + the sentence used in the smoke test (below)                                                       | kept separate so B stays clean                                     |
-| C   | A + the original sentence + a list of claims from 10 neighbour videos (same topic)                    | addresses "the model does not know other videos"; neighbour k = 10 |
+프롬프트 문장은 한 글자도 바꾸지 않았다. B·B′·C 는 A 프롬프트 뒤에 줄바꿈 후 문장을 덧붙인 것이다.
 
-B′ text (smoke test, 2026-09-15 17:30 KST):
+| 팔  | 구성                                                                              |
+| --- | --------------------------------------------------------------------------------- |
+| A   | 프로덕션 S4 프롬프트, 같은 모델·같은 날 재생성                                    |
+| B   | A + `다른 유튜브에서 얘기하지 않는 가장 중요한 내용을 발췌해 줘`                  |
+| B′  | A + `다른 영상이 말하지 않는 이 영상만의 주장 1개(unique_claim, 근거 타임스탬프)` |
+| C   | A + B 문장 + `참고: 같은 주제 영상 10편에서 나온 주장 목록` + 이웃 10편           |
 
-```
-## 추가 필드 (필수)
-"core" 객체에 "unique_claim" 을 추가하라:
-{"text": "같은 주제의 다른 유튜브 영상들이 보통 말하지 않는, 이 영상만의 가장 중요한 주장 하나 (1~2문장, 구체적 수치·조건·예외 포함)", "timestamp_sec": <근거 구간 시작 초, 정수>, "why_unique": "왜 흔한 요약에는 안 나오는 내용인지 1문장"}
-자막에 없는 내용을 만들지 말 것. 나머지 출력 형식과 필드는 그대로 유지하라.
-```
+엔진은 맥미니 `claude -p`(수집기가 쓰는 것과 같은 경로). 자막은 `[mm:ss]` 주석형으로 넣었다.
+LLM API 직접 호출은 없다.
 
-## Smoke test (2026-09-15, 5 videos, arms A and B′ only) — not an evaluation
+### 이웃 정의의 편차 (§9-2 대비)
 
-Engine: Mac Mini `claude -p` (the production summariser). Transcript passed as plain text
-(no `[mm:ss]` lines) — which is why timestamps below are model estimates. The evaluation run
-uses the annotated form.
+§9-2 는 `cluster_key` → 없으면 BGE-M3 상위 10편을 지정한다. 실제로는 스키마에 `cluster_key` 가 없고
+코드베이스에 BGE-M3 가 없다(`video_chunk_embeddings` 는 qwen3-embedding 이며 64편만 덮는다). 대체:
 
-| Video                   | Domain label          | A one_liner (gist)            | B′ unique_claim (gist)                         | Verbatim in transcript                 | ts within ±60 s             |
-| ----------------------- | --------------------- | ----------------------------- | ---------------------------------------------- | -------------------------------------- | --------------------------- |
-| UaBUfB0Uvpo (×3 reruns) | tech/learning/finance | 상담 이력을 한곳에 정리       | 상태값 4종 + 항목 6유형으로 상담 페이지 재설계 | yes                                    | yes (130–168 s)             |
-| OVK4yUZWtYc             | business              | 바이브 코딩으로 MVP           | 목표 3회 미달 시 생성 AI 가 즉석 잔소리 생성   | yes                                    | yes (470 s)                 |
-| ZEk_eMZ6Sjo             | social                | 왜곡된 혼잣말 → 건강한 표현   | 듣기 ≠ 지는 것; "한쪽만 정신줄"                | first half yes; "한쪽만 정신줄" absent | yes for the first half      |
-| 1y5wgvFXfS8 (en)        | health                | boil + stir-fry bracken       | 6–8 min boil, 12–24 h soak, 4–5 water changes  | numbers yes; "fingernail" absent       | no (75 s points at rinsing) |
-| ut1hZgZ2WLU (en)        | creative              | lo-fi playlist + affirmations | survival counts as achievement                 | yes                                    | yes (180 s)                 |
+- prod `video_rich_summaries` 중 `template_version like 'v2%'` 이고 `one_liner` 가 있는 **2,646편** export
+- `title + one_liner + core_argument` 를 qwen3-embedding:8b 로 임베딩
+- 표본 자막 앞 1,500자를 쿼리로 코사인 상위 10 (자기 자신 제외), k=10 고정
+- 이웃 "주장" 형태 = 기존 요약의 `one_liner — core_argument`
 
-Counts: claim produced 7/7 runs; same claim on 3 reruns of the same video; verbatim support
-3/5 full, 2/5 partial; timestamp inside window 4/5. Raw pairs: Mac Mini
-`~/ab-unique-claim-20260915/out/{domain}.{base,var}.out` — James reads these himself before
-"more specific in 5/5" is treated as a finding.
+이 대체가 §5 의 희소 지표를 무력화했다(§5 참조). top-1 이웃 코사인은 0.39~0.64 이고 도메인이 섞인다.
 
-Two things the smoke test taught, both already fixed for the evaluation run:
+## 4. 선호 판정 (사람, 블라인드)
 
-1. the runner passed a plain-text transcript, so every timestamp was a guess;
-2. the candidate endpoint's domain filter returned the same video for three domains, and
-   returned videos without captions.
+27행 × 4안, 행마다 순서 무작위(seed 20260916), 라벨 숨김. 판정 도구는 아티팩트
+`https://claude.ai/artifact/HdHFkzkHB8Ke2kRG6kPL79`, 라벨 복호 키는 `eval/label-key.json` 에 분리.
+판정자 James, 2026-09-16 11:55~12:15 KST, 27/27 기록. 판정 기준(판정자 진술): "직관적이고 의미파악이
+한번에 되는 것들 위주로 선택".
 
-## Evaluation run (pending)
+| 팔  | 승  | 비율 | 4지선다 귀무(1/4) 단측 p |
+| --- | --- | ---- | ------------------------ |
+| B′  | 9   | 33%  | 0.214                    |
+| B   | 9   | 33%  | 0.214                    |
+| A   | 6   | 22%  | 0.701                    |
+| C   | 3   | 11%  | 0.979                    |
 
-- sample: 30 videos, 9 domains, no video in two domains, transcript ≥ 800 chars fetched
-  through the 4242 service before a video is admitted; list reported before any arm runs
-- arms A / B / B′ / C, each once per video, Mac Mini `claude -p`, annotated transcript
-- human blind sheet: 30 rows, arm order randomized per row, label key kept in a separate file
-- pass lines: taken from the 9-2 handoff as written; no post-hoc adjustment
-- per row this ledger records: video, domain, arms' claim text, neighbour k (arm C), verbatim
-  verdict (`longestRun`, `minMatchLen`), `tsErrorSec`, blind preference
+판정선 "B 또는 C 가 A 대비 18/27 이상" → B 9, C 3. A 또는 B 가 뽑힌 15행으로 좁혀도 9/15(60%)로
+67%에 못 미친다. **기각.** B+B′ 합이 18 이지만 사후 재그룹이므로 결과가 아니다(§9-2 "사후 조정 금지").
 
-| video                                              | domain | A   | B   | B′  | C   | verbatim (B/B′/C) | tsError s (B/B′/C) | blind pick |
-| -------------------------------------------------- | ------ | --- | --- | --- | --- | ----------------- | ------------------ | ---------- |
-| _to be filled from `sample/list.tsv` + route logs_ |        |     |     |     |     |                   |                    |            |
+행별 판정은 §8.
+
+## 5. 기계 지표
+
+| 지표                                | A     | B     | B′    | C      | 판정선                     | 결과                           |
+| ----------------------------------- | ----- | ----- | ----- | ------ | -------------------------- | ------------------------------ |
+| 선호 승률                           | 6/27  | 9/27  | 9/27  | 3/27   | ≥18/27                     | **기각**                       |
+| 근거율                              | 0.549 | 0.568 | 0.574 | 0.490  | A −5%p 이내                | B·B′ 통과 / **C 기각**(−5.9%p) |
+| 축어 일치율                         | 3.7%  | 0%    | 7.4%  | 7.4%   | 별도 보고                  | 전 팔 바닥                     |
+| 희소 정확도                         | 96%   | 96%   | 100%  | 100%   | ≥70%                       | **측정 불가**                  |
+| 브리프 중복(5항목 중심 간 mean cos) | 0.357 | 0.479 | 0.423 | 0.377  | A 미만                     | **전 팔 실패**                 |
+| 지연(median)                        | 88.0s | 88.6s | 83.3s | 100.1s | C 가 A 의 3배 초과 시 보고 | 1.14배, 해당 없음              |
+| 출력 토큰(median)                   | —     | 6,230 | 6,155 | 7,514  | —                          | C +21%                         |
+
+정의와 한계:
+
+- **근거율** = 발췌 문장의 내용어(2자 이상 한글 / 3자 이상 라틴 / 숫자) 중 자막에 나타나는 비율.
+- **축어 일치율** = #1662 게이트 기준(정규화 후 연속 12자 한글 / 24자 라틴). 다만 27편 중 대부분은
+  타임스탬프가 없어 **±60초 창이 아니라 자막 전체**를 대상으로 쟀다(A 27/27·B 27/27·C 27/27 전체 모드,
+  B′ 는 4편만 창 모드). 실제 게이트보다 관대한 조건인데도 0~7.4% 다.
+- **희소 정확도**: 축어 방식(이웃과 12자 연속 일치)으로 처음 쟀더니 전 팔 1.0 이 나와 의미가 없었고,
+  같은 임베딩 모델로 의미 유사도를 다시 쟀다. 결과는 전 팔 max-cos 평균 0.53 근방이고 0.70 미만 비율이
+  A 96% · B 96% · B′ 100% · C 100% 다. **희소하려 시도조차 하지 않은 A 가 96% 로 통과한다** —
+  지표가 팔을 구분하지 못한다. 원인은 프롬프트가 아니라 코퍼스다(§3 편차). 같은 주제 영상이 쌓이기
+  전에는 이 지표를 재사용하지 않는다.
+- **브리프 중복**: 팔별 27편 발췌를 임베딩해 k-means(k=5, seed 11, 팔 간 동일 초기화)로 5항목을 만들고
+  중심 간 평균 코사인을 쟀다. 값이 낮을수록 다섯 항목이 서로 덜 겹친다. A 가 가장 낮다.
+
+## 6. C 팔의 결함 2건
+
+**비교 문구 누출 (5/27, 전부 C).** 이웃 목록을 주면 모델이 비교 서술을 리드에 그대로 쓴다.
+
+| 행  | video         | 누출 문구                                                     |
+| --- | ------------- | ------------------------------------------------------------- |
+| 03  | `jgJ5yLgfsl4` | 다른 영상은 ETF·계좌·수치 목표 등 …에 집중하지만,             |
+| 09  | `2W-ir1eZqkU` | Unlike typical workout videos that …,                         |
+| 17  | `ZhLh-Sg66L8` | 타 영상들이 … 초점을 맞추는 반면,                             |
+| 18  | `1qpbLPrKT5s` | 타 영상 대비 이 영상만의 발췌 포인트:                         |
+| 21  | `RJUXiXjNZzM` | Unlike adult-focused English-pattern videos in the peer list, |
+
+브리프 독자는 "다른 영상"이 무엇인지 모른다. 판정 전에 문장 앞의 비교 절만 기계적으로 제거하고 주장
+본문은 손대지 않았으며, 원문은 `eval/ledger.json` 의 `claim_original` / `meta_scaffold_stripped` 에 남겼다.
+C 를 다시 쓸 경우 "비교 표현 금지, 결과만 서술" 제약이 프롬프트에 반드시 들어가야 한다.
+
+**리드가 아니라 문단.** 위 다섯 건은 비교 절을 떼도 여전히 열거형 분석 문단이다(행 18 은 "(1)…(5)"
+5항목 열거, 522자). 이것은 편집하지 않고 그대로 판정에 넣었다.
+
+## 7. 스키마 제약 — 왜 v2 값어치는 이 점검으로 판정되지 않는가
+
+전용 발췌 필드 생성률: **A 0/27 · B 0/27 · B′ 5/27 · C 6/27**.
+
+S4 프롬프트는 "정확한 JSON 구조, 추가 키 없음"을 요구한다. 그래서 문장을 뒤에 붙이면 모델은 새 슬롯을
+만들지 않고 `one_liner` 와 `core_argument` 의 문구를 다듬는 데 그친다. B 는 27편 전부에서 그랬다.
+
+따라서 이 점검에서 B 가 얻은 9승은 "희소한 발췌"의 승리가 아니라 **문장이 더 읽히게 다듬어진** 승리다.
+판정자의 선택 기준("한 번에 이해되는 것")과도 일치한다. 브리프 리드를 개선할 레버는 "남들이 말 안 한
+것을 찾아라"가 아니라 "한 번에 이해되는 한 줄로 써라" 쪽이다.
+
+반대로, 발췌 필드 자체의 값어치는 **필드가 스키마 안에 있을 때만** 측정할 수 있다. PR #1662 가 그
+필드(`core.unique_claim`)와 축어 게이트를 이미 넣었고 플래그는 off 다. 미지수는 개념이 아니라 수율이다.
+
+## 8. 행별 판정
+
+| #   | video         | domain   | lang | 선택 | 정체   |
+| --- | ------------- | -------- | ---- | ---- | ------ |
+| 01  | `UaBUfB0Uvpo` | tech     | ko   | 1    | **C**  |
+| 02  | `aKkW3NjiE04` | tech     | ko   | 3    | **B′** |
+| 03  | `jgJ5yLgfsl4` | tech     | ko   | 4    | **B′** |
+| 04  | `TCN2A4a6siY` | tech     | ko   | 2    | **A**  |
+| 05  | `HFRHI6OebbE` | learning | ko   | 3    | **A**  |
+| 06  | `eHoMcoBH3bg` | learning | ko   | 2    | **B**  |
+| 07  | `d8EL87UsP6o` | learning | ko   | 4    | **C**  |
+| 08  | `25wPArCYdmA` | learning | ko   | 2    | **B**  |
+| 09  | `2W-ir1eZqkU` | health   | en   | 2    | **B**  |
+| 10  | `QvE69Q1ugFU` | health   | en   | 1    | **A**  |
+| 11  | `xK68FIFWdnI` | health   | en   | 2    | **B′** |
+| 12  | `PYwLH-unQ3s` | health   | en   | 1    | **B′** |
+| 13  | `PHWD0NB6tUk` | business | en   | 1    | **A**  |
+| 14  | `3spp-2bTM5o` | business | ko   | 1    | **B**  |
+| 15  | `PTTYDOPcPFw` | business | ko   | 2    | **B**  |
+| 16  | `ioEPtfdhK-Y` | business | ko   | 1    | **B**  |
+| 17  | `ZhLh-Sg66L8` | finance  | ko   | 1    | **B**  |
+| 18  | `1qpbLPrKT5s` | finance  | ko   | 2    | **B**  |
+| 19  | `BP3_qicv8t8` | finance  | ko   | 2    | **B′** |
+| 20  | `ZEk_eMZ6Sjo` | social   | ko   | 1    | **B′** |
+| 21  | `RJUXiXjNZzM` | social   | en   | 1    | **B**  |
+| 22  | `_nXHvOsu9VM` | social   | en   | 3    | **B′** |
+| 23  | `5-X4ZYQwdTc` | social   | ko   | 4    | **A**  |
+| 24  | `p-9Wl-nmTKc` | creative | en   | 1    | **A**  |
+| 25  | `f4j9GvbGpJ0` | creative | en   | 1    | **B′** |
+| 26  | `ldMP1uBvAU4` | creative | en   | 4    | **C**  |
+| 27  | `e5HrPCGYFkU` | creative | en   | 2    | **B′** |
+
+## 9. 결론과 분기
+
+- **리드 승격 없음.** 판정선 세 축(선호·근거·희소) 중 선호에서 기각. §9-2 의 재시험 분기("선호는
+  이기는데 근거율이 떨어지면 타임스탬프 필수 제약을 넣어 1회 재시험")도 조건에 해당하지 않는다.
+- **C 는 폐기 후보.** 최하 선호(3/27), 유일한 근거율 기각, 비교 문구 누출 5/27, 토큰 +21%.
+  "모델이 다른 영상을 모른다"의 해법으로 이웃 목록을 주는 것은 이 형태로는 실패다.
+- **현행 A 도 좋지 않다.** 6/27 로 B·B′ 에 진다. 브리프 리드 개선은 별도 과제로 남는다.
+- **희소 지표는 봉인.** 같은 주제 이웃이 코퍼스에 쌓이기 전에는 재사용 금지.
+- **v2 품질 개선안은 미판정.** 후속 시험은 §10.
+
+## 10. 후속 시험안 (U 팔) — 판정선 미확정, 착수 전 James 고정 필요
+
+목적: `core.unique_claim` 이 v2 요약에 정보를 더하는가. 브리프 리드와 무관하다.
+
+- 프로덕션 무변경(`RICH_SUMMARY_UNIQUE_CLAIM_ENABLED` 은 off 유지), 같은 27편, 자막 확보 완료
+- 팔: A(이미 있음) vs U(#1662 플래그 on 프롬프트 — 필드가 스키마 안에 있음)
+- 기계: 필드 생성률 · 축어 게이트 통과율(`verifyUniqueClaim`, 12/24자 ±60초) · ts 오차 분포
+- 사람: **게이트 통과분만** — "이 한 줄이 `one_liner` + `core_argument` 에 없던 정보를 주는가" O/X
+- 제안 판정선(확정 아님): 게이트 통과율 ≥50%, 통과분 중 "새 정보" ≥70%. 둘 다 넘으면 카드 표면에
+  별도 항목(라벨 "이 영상만의 주장" + 근거 타임스탬프)으로 진행
+- 소요: 생성 약 40분 + 판정 15분
+
+## 11. 원자료
+
+맥미니 `~/ab-unique-claim-20260915/`:
+
+| 경로                                                     | 내용                                                                     |
+| -------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `sample/list.tsv`, `sample/<vid>.transcript.*`           | 표본과 자막                                                              |
+| `arms/<vid>.A.prompt`, `.A.out`                          | A 팔 프롬프트 전문과 출력                                                |
+| `arms2/<vid>.{B,Bp,C}.prompt`, `.json`                   | B·B′·C 프롬프트 전문과 출력(토큰·지연 포함)                              |
+| `neighbors/<vid>.json`, `.claims.txt`                    | 이웃 10편, 코사인, 프롬프트에 붙은 목록                                  |
+| `eval/ledger.json`                                       | 행×팔 전체: 발췌·ts·축어 run·근거율·이웃 코사인·토큰·지연·메타 제거 원문 |
+| `eval/{summary,rarity,redundancy}.md`                    | 기계 지표 표                                                             |
+| `eval/{blind-sheet.md,label-key.json,human-check-20.md}` | 블라인드 시트·복호 키·사람 대조 20                                       |
+
+사람 대조 20(기계 판정 vs 사람 판정 일치율)은 미실시. 축어·희소 지표가 위와 같이 무력화되어 대조할
+기계 판정이 없다.
