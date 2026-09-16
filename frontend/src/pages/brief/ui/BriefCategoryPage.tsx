@@ -80,7 +80,7 @@ export function BriefCategoryPage(): JSX.Element {
   const loading = category.isLoading;
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto scrollbar-pro">
       <div className="mx-auto w-full max-w-[1400px] px-5 py-7">
         <header className="mb-6 flex items-center gap-2.5">
           <h1 className="flex items-center gap-2 text-[19px] font-bold tracking-tight">

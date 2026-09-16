@@ -167,4 +167,19 @@ describe('BriefCategoryPage', () => {
     expect(await screen.findByText('에이전트가 읽은 것은 전부 명령이 될 수 있다')).toBeTruthy();
     expect(document.querySelector('img[src="/brief-covers/ai-tech.svg"]')).toBeTruthy();
   });
+
+  // The scroll box shipped without a scrollbar class, so it drew the operating
+  // system's default bar: 15px wide on the live page, against 6px on every
+  // other reading surface in the product. `scrollbar-pro` is the house class
+  // the learning page's centre column uses, and jsdom applies no styles, so
+  // the class itself is the only thing a unit test can hold.
+  it('scrolls with the house scrollbar, not the browser default', async () => {
+    categoryMock.mockResolvedValue(payload([issue()]));
+    renderGrid();
+    await screen.findByText('에이전트가 읽은 것은 전부 명령이 될 수 있다');
+
+    const box = document.querySelector('.overflow-y-auto');
+    expect(box).not.toBeNull();
+    expect(box?.className).toContain('scrollbar-pro');
+  });
 });
