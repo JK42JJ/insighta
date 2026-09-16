@@ -2,12 +2,16 @@ name: Brief harvest
 
 # The material half of the weekly brief, and only that half.
 #
-# S0 gathers, S1 drops what is not watchable, S2 applies the topic boundary.
-# S3 is where judgement starts and this workflow stops before it: the console
-# judge is a person reading candidates, and the model judge spends money on a
-# schedule, which is the shape of spend this project has switched off before.
-# So the machine prepares the material every week and a person decides when to
-# turn it into an issue.
+# S0 gathers, S1 drops what is not watchable, S2 applies the topic boundary
+# and decides what is worth a person's judgement. The schedule stops there:
+# the console judge is a person reading candidates, and the model judge spends
+# money on a schedule, which is the shape of spend this project has switched
+# off before.
+#
+# A dispatch can go further. Once the verdicts are written and committed, the
+# same workflow continues the run that harvested -- `from_stage: S3_judge`
+# with that run's id -- so the funnel stays in one ledger rather than starting
+# a second that would disagree with the first.
 #
 # Until this existed the pipeline had run once, by hand, on 2026-09-02, and the
 # second issue had no path to being started.
@@ -20,11 +24,38 @@ on:
   workflow_dispatch:
     inputs:
       to_stage:
-        description: 'Last stage to run (S3 and beyond need a judge)'
+        description: 'Last stage to run'
         required: false
         default: 'S2_domain'
         type: choice
-        options: [S0_harvest, S1_format, S2_domain]
+        options:
+          - S0_harvest
+          - S1_format
+          - S2_domain
+          - S3_judge
+          - S4_deep
+          - S5_cross
+          - S6_stats
+          - S7_draft
+      from_stage:
+        description: 'First stage to run. Use S3_judge to continue an existing run.'
+        required: false
+        default: 'S0_harvest'
+        type: choice
+        options:
+          - S0_harvest
+          - S1_format
+          - S2_domain
+          - S3_judge
+      run_id:
+        description: 'Existing run to continue. Required when from_stage is not S0_harvest.'
+        required: false
+        type: string
+      verdicts:
+        description: 'Path to the verdict file S3 reads. Required to reach S3 or beyond.'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   # Two harvests of the same week would both write corpus rows for one run and
@@ -47,14 +78,26 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
 
-      - name: Run S0 to ${{ inputs.to_stage || 'S2_domain' }}
+      # A run that reaches S3 continues one that already harvested, so the
+      # verdicts can be written against candidates that exist. Passing --run
+      # keeps the funnel in one ledger rather than starting a second that
+      # would disagree with the first.
+      - name: Run ${{ inputs.from_stage || 'S0_harvest' }} to ${{ inputs.to_stage || 'S2_domain' }}
         run: |
-          npx tsx scripts/newsletter/run-pipeline.ts \
-            --from S0_harvest \
-            --to "${TO_STAGE}" \
+          set -eu
+          ARGS="--from ${FROM_STAGE} --to ${TO_STAGE}"
+          if [ -n "${RUN_ID}" ]; then ARGS="$ARGS --run ${RUN_ID}"; fi
+          if [ -n "${VERDICTS}" ]; then
+            test -f "${VERDICTS}" || { echo "::error::verdict file not found: ${VERDICTS}"; exit 1; }
+            ARGS="$ARGS --verdicts ${VERDICTS}"
+          fi
+          npx tsx scripts/newsletter/run-pipeline.ts $ARGS \
             --out "docs/newsletter/draft-$(date -u +%Y-%m-%d).json"
         env:
+          FROM_STAGE: ${{ inputs.from_stage || 'S0_harvest' }}
           TO_STAGE: ${{ inputs.to_stage || 'S2_domain' }}
+          RUN_ID: ${{ inputs.run_id || '' }}
+          VERDICTS: ${{ inputs.verdicts || '' }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
