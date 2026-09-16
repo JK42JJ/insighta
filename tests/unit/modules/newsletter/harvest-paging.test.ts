@@ -118,4 +118,24 @@ describe('harvestSearch paging', () => {
     expect(r.failures).toHaveLength(1);
     expect(r.failures[0]).toContain('coding agent');
   });
+
+  it('spreads calls across every key instead of draining the first', async () => {
+    // The keys are separate Google projects with separate daily quotas.
+    // Rotating only on failure put all 57 calls of the 2026-09-16 run on key
+    // one and left it exhausted while seven others sat unused.
+    const keys: string[] = [];
+    const impl = (async (url: string) => {
+      keys.push(new URL(url).searchParams.get('key') ?? '');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => page(50, 'a', 'T'),
+      } as unknown as Response;
+    }) as unknown as FetchLike;
+
+    await harvestSearch({ ...BASE, maxPagesPerQuery: 4 }, new Date(), ['k1', 'k2', 'k3'], impl);
+
+    expect(keys).toEqual(['k1', 'k2', 'k3', 'k1']);
+    expect(new Set(keys).size).toBe(3);
+  });
 });
