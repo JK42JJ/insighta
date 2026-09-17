@@ -45,6 +45,7 @@ jobs:
       frontend: ${{ steps.d.outputs.frontend }}
       redis: ${{ steps.d.outputs.redis }}
       deployable: ${{ steps.d.outputs.deployable }}
+      schema: ${{ steps.d.outputs.schema }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -147,7 +148,19 @@ jobs:
           echo "api=$API"                 >> "$GITHUB_OUTPUT"
           echo "frontend=$FE"             >> "$GITHUB_OUTPUT"
           echo "deployable=$DEPLOYABLE"   >> "$GITHUB_OUTPUT"
-          echo "mobile_only=$MOBILE_ONLY dial=$DIAL api=$API frontend=$FE deployable=$DEPLOYABLE"
+          # Schema work is not image work. A change to the raw DDL, to the
+          # Prisma schema, or to the runner that applies the DDL has to reach
+          # the database even when nothing in the image moved. #1713 changed
+          # only scripts/ and .github/ -- both excluded above -- so the whole
+          # deploy skipped and the eighteen tables it was meant to create were
+          # still missing afterwards.
+          if echo "$FILES" | grep -Eq '^prisma/|^scripts/apply-custom-sql\.sh$'; then
+            SCHEMA=true
+          else
+            SCHEMA=$DEPLOYABLE
+          fi
+          echo "schema=$SCHEMA"           >> "$GITHUB_OUTPUT"
+          echo "mobile_only=$MOBILE_ONLY dial=$DIAL api=$API frontend=$FE deployable=$DEPLOYABLE schema=$SCHEMA"
 
   # The dial's only gate. Nothing in ci.yml reads frontend/public/mobile:
   # tsc looks at src, vitest looks at src, and vite copies public/ verbatim.
@@ -329,7 +342,7 @@ jobs:
     # mobile_only stays here, and deliberately. This runs `prisma db push`
     # against the production database. A dial edit cannot change the schema, so
     # running it would be a write to production with no reason to be there.
-    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
+    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
