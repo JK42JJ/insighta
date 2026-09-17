@@ -60,6 +60,7 @@ jobs:
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
             echo "redis=true"        >> "$GITHUB_OUTPUT"
             echo "deployable=true"   >> "$GITHUB_OUTPUT"
+            echo "schema=true"       >> "$GITHUB_OUTPUT"
             echo "manual run -> full pipeline"; exit 0
           fi
 
@@ -75,6 +76,7 @@ jobs:
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
             echo "redis=true"        >> "$GITHUB_OUTPUT"
             echo "deployable=true"   >> "$GITHUB_OUTPUT"
+            echo "schema=true"       >> "$GITHUB_OUTPUT"
             echo "no usable base ($BEFORE) -> full pipeline"; exit 0
           fi
 
@@ -90,6 +92,7 @@ jobs:
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
             echo "redis=true"        >> "$GITHUB_OUTPUT"
             echo "deployable=true"   >> "$GITHUB_OUTPUT"
+            echo "schema=true"       >> "$GITHUB_OUTPUT"
             echo "empty diff -> full pipeline"; exit 0
           fi
 
