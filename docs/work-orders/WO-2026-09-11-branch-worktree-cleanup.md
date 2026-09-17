@@ -1,6 +1,6 @@
 ---
 id: WO-2026-09-11-branch-worktree-cleanup
-status: running
+status: verified
 owner: insighta-session
 opened: 2026-09-11
 ---
@@ -28,6 +28,8 @@ opened: 2026-09-11
 머지된 원격 브랜치와 깨끗한 서브에이전트 워크트리는 내가 지우고, 미머지·미커밋은 목록으로 올린다.
 
 # 결과
+2026-09-11: 머지된 원격 브랜치 1 삭제(`data/channel-whitelist-seed-launch`), 서브에이전트 워크트리 2 제거(14 → 12), 미머지 30일+ 브랜치 28개는 QUESTIONS 에 목록으로. 검증: `git branch -r --merged origin/main | grep -v main` → 0 ✔ · 서브에이전트 워크트리 0 ✔ · 목록 등록 ✔. 재발 방지 = CLAUDE.md R30. 남은 것은 James 결정 2건(미머지 28 · dirty 워크트리 5).
+
 2026-09-11 (자율 루프 2차, 21:23 KST 실측)
 - 머지된 원격 브랜치 0. 이번 세션이 만든 브랜치 5개(#1633 · #1634 · #1635 · #1636 · #1638 · #1639)는 머지 시 삭제됨. 워크트리 14 → 11(서브에이전트 2 + 머지된 docs 워크트리 1 제거).
 - 남은 것은 전부 James 결정: 미머지 30일+ 28개(되돌릴 수 없는 삭제) · 미커밋 워크트리 5개. 답이 오기 전까지 running.
