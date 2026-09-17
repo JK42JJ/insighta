@@ -56,7 +56,7 @@ function flattenTipTap(doc: unknown): string {
     }
   };
   if (doc && typeof doc === 'object') {
-    visit(doc as TipTapNode);
+    visit(doc);
   }
   // Collapse any stretch of whitespace > 2 chars into a single newline —
   // TipTap leaves stray spaces when content is sparse.

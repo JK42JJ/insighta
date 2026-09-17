@@ -204,7 +204,7 @@ function normalizeRow(r: unknown): Record<string, unknown> {
 // (richSummary / embedding / avgReuse / promote).
 export function n(value: unknown, fallback = 0): number {
   if (value === null || value === undefined) return fallback;
-  const parsed = Number(value as never);
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 

@@ -95,7 +95,7 @@ export const s7Draft: Stage = {
   kind: 'person',
 
   async run(input: CorpusRow[], ctx: StageContext): Promise<StageResult> {
-    const PICK_COUNT = 5;
+    const PICK_COUNT = ctx.topic.draft?.picks ?? 5;
     const ranked = [...input].sort(rank);
 
     // One pick per channel — five videos from one channel is a channel
@@ -207,7 +207,7 @@ export const s7Draft: Stage = {
       }))
       .filter((s) => s.independentChannels >= 3)
       .sort((a, b) => b.independentChannels - a.independentChannels)
-      .slice(0, 10);
+      .slice(0, ctx.topic.draft?.candidateStories ?? 10);
 
     ctx.artifacts['draft'] = {
       generatedAt: new Date().toISOString(),
@@ -228,6 +228,7 @@ export const s7Draft: Stage = {
         'interest.intro',
         'interest.ledger',
         'stories',
+        'stories[].navLabel',
         'insight',
         'vocabulary',
         'picks[].body',

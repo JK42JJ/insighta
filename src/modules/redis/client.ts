@@ -56,7 +56,7 @@ const defaultFactory: RedisClientFactory = (cfg) =>
     database: cfg.database,
     username: cfg.username,
     password: cfg.password,
-  }) as RedisClientType;
+  });
 
 let factory: RedisClientFactory = defaultFactory;
 

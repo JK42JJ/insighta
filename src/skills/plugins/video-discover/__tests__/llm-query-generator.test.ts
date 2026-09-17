@@ -188,7 +188,7 @@ describe('generateSearchQueries', () => {
         json: async () => response.body ?? {},
         text: async () => response.bodyText ?? '',
       };
-    }) as unknown as typeof fetch;
+    });
   }
 
   it('returns parsed queries on a successful Ollama response', async () => {
@@ -540,7 +540,7 @@ describe('generateSearchQueriesRace', () => {
         }),
         text: async () => '',
       };
-    }) as unknown as typeof fetch;
+    });
   }
 
   it('degrades to Ollama-only when openRouterApiKey is empty', async () => {

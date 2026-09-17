@@ -217,9 +217,9 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
         clearTimeout(timer);
         resolve(v);
       },
-      (e) => {
+      (e: unknown) => {
         clearTimeout(timer);
-        reject(e);
+        reject(e instanceof Error ? e : new Error(String(e)));
       }
     );
   });

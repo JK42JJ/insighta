@@ -20,7 +20,7 @@
 
 ## Spec
 
-<!-- Which section of docs/spec/README.md this changes, or "no surface change". -->
+<!-- Which surface row of docs/spec/README.md this changes (the spec is local-only by .gitignore policy, mirrored to insighta-private), or "no surface change". -->
 
 ## Decision needed
 

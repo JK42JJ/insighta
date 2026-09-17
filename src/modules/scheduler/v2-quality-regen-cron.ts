@@ -37,6 +37,7 @@
 import * as cron from 'node-cron';
 
 import { db } from '@/modules/database/client';
+import { toJsonInput } from '@/modules/database/json-input';
 import { loadV2QualityAuditConfig } from '@/config/v2-quality-audit';
 import { logger } from '@/utils/logger';
 
@@ -241,7 +242,7 @@ export async function regenSingleVideo(
               m8_oneliner_len: score.m8OneLinerLen,
               model: row.model,
               duration_seconds: row.duration_seconds,
-              violations: score.violations as unknown as object,
+              violations: toJsonInput(score.violations),
             },
             update: {
               overall_score: score.overall,
@@ -255,7 +256,7 @@ export async function regenSingleVideo(
               m8_oneliner_len: score.m8OneLinerLen,
               model: row.model,
               duration_seconds: row.duration_seconds,
-              violations: score.violations as unknown as object,
+              violations: toJsonInput(score.violations),
             },
           });
         }

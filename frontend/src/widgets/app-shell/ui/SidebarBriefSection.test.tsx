@@ -174,6 +174,29 @@ describe('SidebarBriefSection', () => {
     expect(screen.queryByText(/저장소를 열기만 해도/)).toBeNull();
   });
 
+  it('shows the editor label when a story has one and still matches on the title', () => {
+    // Titles are declarative sentences with no separator, so the lead-clause
+    // cut leaves them whole and truncate ends them in an ellipsis. The editor
+    // writes a short label for the sidebar; the body heading keeps the title,
+    // and so do selection and scrolling.
+    const title = 'Claude Code는 저장소 설정 파일에 든 명령을 사용자 확인 없이 실행했습니다';
+    const { onSelect } = renderSection({
+      stories: [
+        {
+          kicker: '신뢰 경계',
+          title,
+          navLabel: '저장소 설정 파일의 숨은 명령',
+          blocks: [{ type: 'p', html: 'a' }],
+        },
+      ],
+    } as Partial<IssueDocument>);
+    const row = screen.getByText('저장소 설정 파일의 숨은 명령');
+    expect(screen.queryByText(/사용자 확인 없이/)).toBeNull();
+    expect(row.getAttribute('title')).toBe(title);
+    fireEvent.click(row);
+    expect(onSelect).toHaveBeenCalledWith(title);
+  });
+
   it('marks the selected entry with the gold bar the note uses', () => {
     renderSection({}, false, '용어');
     const sel = [...document.querySelectorAll('li')].find(

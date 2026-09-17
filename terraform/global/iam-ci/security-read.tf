@@ -27,6 +27,7 @@ resource "aws_iam_policy" "ci_security_read" {
           "iam:GetRole", "iam:GetRolePolicy", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies",
           "iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListPolicyVersions", "iam:ListEntitiesForPolicy",
           "iam:ListAttachedUserPolicies", "iam:GetUserPolicy", "iam:ListUserPolicies",
+          "iam:GenerateCredentialReport", "iam:GetCredentialReport", "iam:ListUsers", "iam:ListMFADevices", "iam:ListAccessKeys", "iam:GetAccessKeyLastUsed",
           "config:DescribeConfigurationRecorders", "config:DescribeConfigurationRecorderStatus",
           "config:DescribeDeliveryChannels", "config:DescribeConfigRules",
           "config:DescribeRemediationConfigurations", "config:ListTagsForResource",

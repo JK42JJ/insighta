@@ -50,6 +50,39 @@ function normalize(text: string): string {
  * anchors. TipTap wants marks, so the tags become marks and everything else is
  * dropped rather than shown. A reader must never see a raw tag.
  */
+/**
+ * Turn a citation's bare video id into a link on the grade tag beside it.
+ *
+ * Issue 1's writing brief told the author to put the id in the prose and
+ * promised the link would be made later; the step that makes it was never
+ * built, so the published issue carries 23 raw ids in its body. Measured on
+ * that issue, 22 are followed by a grade tag and one stands alone in a
+ * sentence, so both shapes are handled here.
+ *
+ * The anchor this produces is picked up by `inlineToNodes` below, which
+ * already turns an anchor into a link mark.
+ *
+ * The same rule lives in the server template
+ * (src/modules/newsletter/templates/web-v1/index.ts). Two renderers, one rule.
+ */
+const VIDEO_CITATION = /\(([A-Za-z0-9_-]{11})\)(\s*)(\[(?:영상|확인)\])?/g;
+
+function isLikelyVideoId(token: string): boolean {
+  // A real id is effectively random base64url; an ordinary 11-letter word is
+  // not. Excluding the all-one-case cases costs about 1 genuine id in 20,000.
+  return !/^[a-z]+$/.test(token) && !/^[A-Z]+$/.test(token);
+}
+
+export function linkVideoCitations(html: string): string {
+  return html.replace(VIDEO_CITATION, (whole, id: string, gap: string, tag?: string) => {
+    if (!isLikelyVideoId(id)) return whole;
+    const href = `https://www.youtube.com/watch?v=${id}`;
+    const label = tag ?? '[영상]';
+    const lead = tag ? gap : '';
+    return `${lead}<a href="${href}">${label}</a>`;
+  });
+}
+
 function inlineToNodes(html: string): TiptapNode[] {
   const out: TiptapNode[] = [];
   const re = /<(strong|b|em|i|code|a)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
@@ -89,7 +122,7 @@ function inlineToNodes(html: string): TiptapNode[] {
 }
 
 function para(html: string): TiptapNode {
-  const content = inlineToNodes(normalize(html));
+  const content = inlineToNodes(linkVideoCitations(normalize(html)));
   return content.length > 0 ? { type: 'paragraph', content } : { type: 'paragraph' };
 }
 

@@ -60,7 +60,7 @@ export interface HarvestResult {
   detail: Record<string, unknown>;
 }
 
-interface FetchLike {
+export interface FetchLike {
   (url: string): Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 }
 
@@ -161,7 +161,7 @@ async function harvestTrusted(
  * category ids returns HTTP 400 — the client's JSDoc says otherwise and is
  * wrong (measured 2026-08-25), which is why the loop is over categories.
  */
-async function harvestSearch(
+export async function harvestSearch(
   topic: TopicDefinition,
   since: Date,
   apiKeys: string[],
@@ -174,49 +174,76 @@ async function harvestSearch(
   let calls = 0;
   let keyIndex = 0;
 
+  // One page per query was the whole of layer 2 until now, and it is why the
+  // layer returned 725 videos from 40 calls. The cap was not the topic running
+  // out of material: measured 2026-09-16, "coding agent" inside the 7-day
+  // window returns 50 on every one of five pages, 250 distinct ids, no repeat,
+  // and still offers a sixth. The queries that come back nearly empty are the
+  // Korean ones -- 0 to 6 results, no next page at all -- so paging costs
+  // nothing there: the loop ends when the token does.
+  const maxPages = Math.max(1, topic.maxPagesPerQuery ?? 1);
+
   for (const q of queries) {
     for (const categoryId of topic.videoCategoryIds) {
-      try {
-        const body = await get(fetchImpl, 'search', {
-          part: 'snippet',
-          q,
-          type: 'video',
-          order: topic.order,
-          publishedAfter: since.toISOString(),
-          videoCategoryId: String(categoryId),
-          maxResults: String(PAGE_SIZE),
-          key: apiKeys[keyIndex % apiKeys.length] as string,
-        });
-        units += COST_SEARCH;
-        calls += 1;
-        const items = (body['items'] ?? []) as Array<{
-          id?: { videoId?: string };
-          snippet?: Record<string, unknown>;
-        }>;
-        for (const it of items) {
-          const vid = it.id?.videoId;
-          const sn = it.snippet as
-            | { title?: string; channelId?: string; channelTitle?: string; publishedAt?: string }
-            | undefined;
-          if (!vid || !sn) continue;
-          videos.push({
-            videoId: vid,
-            title: sn.title ?? '',
-            channelId: sn.channelId ?? '',
-            channelTitle: sn.channelTitle ?? '',
-            publishedAt: sn.publishedAt ?? '',
-            source: 'search',
-            query: q,
+      let pageToken: string | undefined;
+      for (let page = 0; page < maxPages; page++) {
+        try {
+          const body = await get(fetchImpl, 'search', {
+            part: 'snippet',
+            q,
+            type: 'video',
+            order: topic.order,
+            publishedAfter: since.toISOString(),
+            videoCategoryId: String(categoryId),
+            maxResults: String(PAGE_SIZE),
+            key: apiKeys[keyIndex % apiKeys.length] as string,
+            ...(pageToken ? { pageToken } : {}),
           });
+          units += COST_SEARCH;
+          calls += 1;
+          // Round-robin on every call, not only after one fails. Rotating on
+          // failure alone spends a single project's daily allowance before it
+          // touches the second: the 2026-09-16 run put all 57 calls on key one
+          // and left it exhausted while seven others sat unused. The keys are
+          // separate Google projects with separate daily quotas, so spreading
+          // the calls is the difference between one project's limit and the
+          // pool's.
+          keyIndex += 1;
+          const items = (body['items'] ?? []) as Array<{
+            id?: { videoId?: string };
+            snippet?: Record<string, unknown>;
+          }>;
+          for (const it of items) {
+            const vid = it.id?.videoId;
+            const sn = it.snippet as
+              | { title?: string; channelId?: string; channelTitle?: string; publishedAt?: string }
+              | undefined;
+            if (!vid || !sn) continue;
+            videos.push({
+              videoId: vid,
+              title: sn.title ?? '',
+              channelId: sn.channelId ?? '',
+              channelTitle: sn.channelTitle ?? '',
+              publishedAt: sn.publishedAt ?? '',
+              source: 'search',
+              query: q,
+            });
+          }
+          const next = body['nextPageToken'];
+          if (typeof next !== 'string' || next.length === 0) break;
+          pageToken = next;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          failures.push(`${q}${page > 0 ? ` p${page + 1}` : ''}: ${msg.slice(0, 80)}`);
+          // Quota exhaustion on one key is survivable; rotate and keep going, so
+          // a partial harvest is still a harvest with a number behind it. The
+          // page cursor is abandoned with the key that failed -- resuming a
+          // token on a different key is not something the API promises.
+          keyIndex += 1;
+          units += COST_SEARCH;
+          calls += 1;
+          break;
         }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        failures.push(`${q}: ${msg.slice(0, 80)}`);
-        // Quota exhaustion on one key is survivable; rotate and keep going, so
-        // a partial harvest is still a harvest with a number behind it.
-        keyIndex += 1;
-        units += COST_SEARCH;
-        calls += 1;
       }
     }
   }
@@ -283,7 +310,7 @@ export interface HarvestOptions {
  */
 export async function harvest(opts: HarvestOptions): Promise<HarvestResult> {
   const { runId, topic } = opts;
-  const fetchImpl = (opts.fetchImpl ?? fetch) as FetchLike;
+  const fetchImpl = opts.fetchImpl ?? fetch;
   const since = opts.since ?? new Date(Date.now() - topic.publishedWithinDays * MS_PER_DAY);
 
   const apiKeys = resolveSearchApiKeys(process.env);

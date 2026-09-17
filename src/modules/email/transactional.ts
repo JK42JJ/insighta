@@ -52,7 +52,8 @@ async function send(
   to: string,
   subject: string,
   html: string,
-  tag: string
+  tag: string,
+  headers?: Record<string, string>
 ): Promise<EmailSendResult> {
   if (!isTransactionalEmailEnabled()) {
     log.info(`${tag}: transactional email disabled (TRANSACTIONAL_EMAIL_ENABLED unset) — skipped`);
@@ -64,7 +65,13 @@ async function send(
   }
   try {
     // Display name "Insighta" (not the bare noreply@ local-part).
-    await transporter.sendMail({ from: `Insighta <${config.gmail.smtpFrom}>`, to, subject, html });
+    await transporter.sendMail({
+      from: `Insighta <${config.gmail.smtpFrom}>`,
+      to,
+      subject,
+      html,
+      ...(headers ? { headers } : {}),
+    });
     log.info(`${tag}: sent to ${to}`);
     return { status: 'sent' };
   } catch (err) {
@@ -113,4 +120,19 @@ export async function sendMobileGuideEmail(
 ): Promise<EmailSendResult> {
   const { subject, html } = buildMobileGuideEmail(params);
   return send(to, subject, html, 'mobile-guide-email');
+}
+
+/**
+ * One issue of the weekly brief to one subscriber. The caller renders the
+ * mail (the digest is per issue, the unsubscribe link per recipient) and
+ * passes the list headers; this only carries them through the same gate and
+ * transport every other mail uses.
+ */
+export async function sendBriefIssueEmail(
+  to: string,
+  subject: string,
+  html: string,
+  headers: Record<string, string>
+): Promise<EmailSendResult> {
+  return send(to, subject, html, 'brief-issue-email', headers);
 }

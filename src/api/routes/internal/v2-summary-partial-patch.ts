@@ -20,6 +20,7 @@
 
 import type { FastifyPluginAsync } from 'fastify';
 import { getPrismaClient } from '@/modules/database/client';
+import { toJsonInput } from '@/modules/database/json-input';
 import { getInternalBatchToken } from '@/config/internal-auth';
 import { logger } from '@/utils/logger';
 
@@ -132,7 +133,7 @@ export const v2SummaryPartialPatchRoutes: FastifyPluginAsync = async (fastify) =
       await prisma.video_rich_summaries.update({
         where: { video_id: videoId },
         data: {
-          analysis: analysis as object,
+          analysis: toJsonInput(analysis),
           updated_at: new Date(),
         },
       });
@@ -153,7 +154,7 @@ export const v2SummaryPartialPatchRoutes: FastifyPluginAsync = async (fastify) =
         await prisma.video_rich_summaries.update({
           where: { video_id: videoId },
           data: {
-            segments: { ...(segments ?? {}), sections: next } as object,
+            segments: toJsonInput({ ...(segments ?? {}), sections: next }),
             updated_at: new Date(),
           },
         });

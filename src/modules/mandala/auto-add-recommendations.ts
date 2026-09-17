@@ -103,7 +103,7 @@ export async function maybeAutoAddRecommendations(
   }
 
   const cfgObj = (cfg.config ?? {}) as Record<string, unknown>;
-  const autoAdd = typeof cfgObj['auto_add'] === 'boolean' ? (cfgObj['auto_add'] as boolean) : true;
+  const autoAdd = typeof cfgObj['auto_add'] === 'boolean' ? cfgObj['auto_add'] : true;
   if (!autoAdd) {
     return { ok: false, reason: 'auto_add disabled in skill config' };
   }

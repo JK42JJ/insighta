@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import {
@@ -9,11 +9,14 @@ import {
   HelpCircle,
   LogOut,
   Loader2,
+  ArrowLeft,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/features/auth/model/useAuth';
+import { useBriefNote } from '@/features/newsletter-note/model/useBriefNote';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/shared/ui/sheet';
+import { SidebarBriefPanel } from './SidebarBriefPanel';
 
 interface MobileDrawerProps {
   open: boolean;
@@ -45,6 +48,20 @@ export function MobileDrawer({ open, onOpenChange, onNavigateHome }: MobileDrawe
   const navigate = useNavigate();
   const { userName, userAvatar, signOut } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+
+  // On `/brief/*` the drawer carries the same panel the desktop sidebar does
+  // -- the category, its issues, the contents of the one being read -- in
+  // place of the home link. Same component, so the two cannot disagree.
+  const briefCategoryMatch = useMatch('/brief/c/:categoryKey');
+  const briefIssueMatch = useMatch('/brief/:slug');
+  const briefSlug =
+    briefIssueMatch?.params.slug && briefIssueMatch.params.slug !== 'c'
+      ? briefIssueMatch.params.slug
+      : undefined;
+  const isBriefRoute = Boolean(briefCategoryMatch) || Boolean(briefSlug);
+  const briefNote = useBriefNote(briefSlug);
+  const briefCategoryKey = briefCategoryMatch?.params.categoryKey ?? briefNote.issue?.categoryKey;
+  const [activeBriefEntry, setActiveBriefEntry] = useState<string | null>(null);
 
   const isActive = (path: string, exact?: boolean) => {
     if (exact) return location.pathname === path;
@@ -117,9 +134,32 @@ export function MobileDrawer({ open, onOpenChange, onNavigateHome }: MobileDrawe
 
         {/* Main navigation */}
         <nav className="p-2" aria-label={t('sidebar.navigation')}>
-          <ul className="space-y-0.5" role="list">
-            {MAIN_NAV.map(renderNavItem)}
-          </ul>
+          {isBriefRoute ? (
+            <div className="pb-1">
+              <button
+                type="button"
+                onClick={() => handleNav('/')}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-foreground/60 hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                {t('settings.backToApp', 'Back to app')}
+              </button>
+              <SidebarBriefPanel
+                categoryKey={briefCategoryKey}
+                currentSlug={briefSlug}
+                issue={briefNote.issue}
+                issueLoading={briefNote.loading}
+                collapsed={false}
+                activeEntry={activeBriefEntry}
+                onSelectEntry={setActiveBriefEntry}
+                onNavigated={() => onOpenChange(false)}
+              />
+            </div>
+          ) : (
+            <ul className="space-y-0.5" role="list">
+              {MAIN_NAV.map(renderNavItem)}
+            </ul>
+          )}
 
           <div className="h-px bg-border/50 mx-2 my-2" />
 

@@ -214,13 +214,13 @@ Keel(`scripts/keel/checks.ts`, 30분)에 5개 검사를 추가한다. 결과는 
 
 | 검사 | 판정 | 소스 |
 |---|---|---|
-| `cloud-posture` | Security Hub FAILED 통제 수 ≤ 기준선, GuardDuty 심각도 ≥ 7 findings = 0 | `securityhub get-findings`, `guardduty list-findings` |
+| `cloud-posture` | 트레일 IsLogging · 다중 리전 · 로그 검증 on, CIS 알람 8 존재 · 액션 활성, EBS 기본 암호화 on, 비밀번호 정책 최소 14, 감사 버킷 public access block 4/4, 알림 토픽 confirmed 구독 ≥ 1. 읽지 못한 사실 = 실패. (Security Hub · GuardDuty 는 비용 규칙으로 꺼져 있어 쓰지 않는다) | `cloudtrail get-trail-status` · `get-trail`, `cloudwatch describe-alarms`, `ec2 get-ebs-encryption-by-default`, `iam get-account-password-policy`, `s3api get-public-access-block`, `sns get-topic-attributes` — `scripts/keel/check-cloud-posture.ts` |
 | `iam-hygiene` | MFA 없는 콘솔 사용자 0, 90일 초과 활성 키 0, 사용 이력 없는 키 0 | credential report |
 | `k8s-hardening` | `insighta-prod` PSA 라벨 존재, NetworkPolicy ≥ 기준 수, non-root 파드 비율 100% | kube API(SSH 경유 또는 kube-state-metrics 지표) |
-| `supply-chain` | ECR CRITICAL 취약점 0, GitHub Dependabot open critical 0 | `ecr describe-image-scan-findings`, `gh api` |
+| `supply-chain` | 두 lockfile 의 npm audit critical 0 · high 0 (Dependabot API 는 워크플로 토큰으로 불가). ECR 이미지 스캔 집계는 미구현(S3) | `npm audit --json --package-lock-only` (root · frontend) |
 | `secret-exposure` | GitHub secret-scanning open alerts 0 | `gh api` |
 
-Grafana `/keel/` 에 보안 패널 6개(위 5 + 정적 자격증명 잔여 수). CI 러너에는 위 읽기 권한만 가진 OIDC 역할 `insighta-keel-reader` 를 별도로 둔다.
+Grafana `/keel/` 에 보안 패널 6개(위 5 + 정적 자격증명 잔여 수). CI 러너는 배포 역할 `insighta-github-actions` 에 붙인 읽기 전용 정책(`terraform/global/iam-ci/security-read.tf`)으로 위 호출을 한다. 별도 역할은 두지 않았다 — 같은 러너가 배포와 관측을 하므로 역할 분리는 권한이 아니라 워크플로 단위에서만 의미가 있고, 그 분리는 S3 에서 검토한다.
 
 ## 4. 보안 운영 모델 — 큰 줄기와 성숙도
 

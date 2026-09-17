@@ -224,7 +224,7 @@ export async function runDailyRollup(
   const db = getPrismaClient();
   // Prisma Json columns want InputJsonValue / JsonNull, not Record | null.
   const j = (v: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull =>
-    v == null ? Prisma.JsonNull : (v as Prisma.InputJsonValue);
+    v == null ? Prisma.JsonNull : v;
   const data = {
     ...metrics,
     freshness: j(metrics.freshness),
@@ -260,16 +260,11 @@ async function handleSearchMetricsRollup(): Promise<void> {
       FROM public.search_trace
       WHERE created_at >= ${start} AND created_at < ${end} AND outcome ? 'cards_count'
       ORDER BY (outcome->>'cards_count')::int ASC LIMIT 1`;
-    await sendDailyReport(
-      metricDate.toISOString().slice(0, 10),
-      metrics,
-      prior as Partial<Record<keyof DailyMetrics, unknown>> | null,
-      {
-        worstTrace: worst
-          ? { traceId: worst.trace_id, mandalaId: worst.mandala_id, cards: Number(worst.cards) }
-          : null,
-      }
-    );
+    await sendDailyReport(metricDate.toISOString().slice(0, 10), metrics, prior, {
+      worstTrace: worst
+        ? { traceId: worst.trace_id, mandalaId: worst.mandala_id, cards: Number(worst.cards) }
+        : null,
+    });
   } catch (err) {
     log.warn(
       `metrics rollup failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`

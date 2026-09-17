@@ -45,11 +45,31 @@ async function main(): Promise<void> {
   const to = arg('to') as PipelineStage | undefined;
   const out = arg('out') ?? 'docs/newsletter/draft.json';
 
-  if (judgeName === 'console' && !verdicts) {
-    throw new Error('--judge console needs --verdicts <path>');
+  // Only S3 consults a judge, and the console judge reads its file lazily, so
+  // a range that stops before S3 has no verdicts to demand. Requiring one
+  // anyway made the material-only range -- harvest, format, domain -- ask for
+  // a file that by definition does not exist until after that range has run.
+  const ORDER: PipelineStage[] = [
+    'S0_harvest',
+    'S1_format',
+    'S2_domain',
+    'S3_judge',
+    'S4_deep',
+    'S5_cross',
+    'S6_stats',
+    'S7_draft',
+  ];
+  const firstIdx = from ? ORDER.indexOf(from) : 0;
+  const lastIdx = to ? ORDER.indexOf(to) : ORDER.length - 1;
+  const judgeInRange = firstIdx <= ORDER.indexOf('S3_judge') && ORDER.indexOf('S3_judge') <= lastIdx;
+
+  if (judgeName === 'console' && judgeInRange && !verdicts) {
+    throw new Error('--judge console needs --verdicts <path> when the range includes S3_judge');
   }
   const judge =
-    judgeName === 'openrouter' ? createOpenRouterJudge() : createConsoleJudge(verdicts as string);
+    judgeName === 'openrouter'
+      ? createOpenRouterJudge()
+      : createConsoleJudge(verdicts ?? '(not needed for this range)');
 
   const runId =
     arg('run') ??

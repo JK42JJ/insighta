@@ -1610,6 +1610,12 @@ enum factor_type {
   totp
   webauthn
   phone
+  // Supabase added this to its own auth enum between 2026-09-15 and 2026-09-16.
+  // Without it every `prisma db push` plans to DROP the value and stops with
+  // "Use the --accept-data-loss flag", which reddened Database Schema Sync on
+  // every code deploy. The flag is not the fix: it would let Prisma delete a
+  // value out of Supabase's managed auth schema.
+  recovery_code
 
   @@schema("auth")
 }

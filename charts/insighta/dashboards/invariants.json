@@ -25,10 +25,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
         "x": 0,
-        "y": 0
+        "y": 2,
+        "w": 12,
+        "h": 4
       },
       "description": "검사별 가장 최근 결과만 셉니다. 0이면 이상 없음.",
       "targets": [
@@ -83,10 +83,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 5,
-        "y": 0
+        "x": 12,
+        "y": 2,
+        "w": 12,
+        "h": 4
       },
       "description": "30분 주기입니다. 90분 넘게 비어 있으면 검사 자체가 멈춘 것 — 조용한 것과 구분해야 합니다.",
       "targets": [
@@ -129,10 +129,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 8,
-        "w": 14,
-        "x": 10,
-        "y": 0
+        "x": 0,
+        "y": 10,
+        "w": 24,
+        "h": 14
       },
       "description": "각 검사의 가장 최근 한 줄.",
       "targets": [
@@ -185,8 +185,48 @@
                 ]
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "검사"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 180
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "상태"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "마지막 검사"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 210
+              }
+            ]
           }
         ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
       }
     },
     {
@@ -198,10 +238,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 8,
-        "w": 24,
         "x": 0,
-        "y": 8
+        "y": 38,
+        "w": 24,
+        "h": 8
       },
       "description": "빨간 구간이 사고입니다. 언제 시작해서 언제 끝났는지가 이 한 장에 있습니다.",
       "targets": [
@@ -250,7 +290,9 @@
           ]
         },
         "overrides": []
-      }
+      },
+      "timeFrom": "7d",
+      "hideTimeOverride": false
     },
     {
       "id": 5,
@@ -261,10 +303,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 16
+        "y": 46,
+        "w": 24,
+        "h": 23
       },
       "description": "알림이 나간 순간들입니다. 전환에서만 알리므로 이 표가 곧 Slack 이력과 같습니다.",
       "targets": [
@@ -320,7 +362,13 @@
             ]
           }
         ]
-      }
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "timeFrom": "7d",
+      "hideTimeOverride": false
     },
     {
       "id": 6,
@@ -331,10 +379,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 8,
+        "x": 0,
+        "y": 69,
         "w": 12,
-        "x": 12,
-        "y": 16
+        "h": 11
       },
       "description": "Cost Explorer API 를 부르지 않고 S3 의 비용 보고서에서 읽은 값입니다. 매월 1일에 0으로 떨어집니다.",
       "targets": [
@@ -358,7 +406,9 @@
           }
         },
         "overrides": []
-      }
+      },
+      "timeFrom": "30d",
+      "hideTimeOverride": false
     },
     {
       "id": 7,
@@ -369,12 +419,12 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 24
+        "y": 80,
+        "w": 12,
+        "h": 21
       },
-      "description": "2026-06-25 에 $36.18 을 쓴 날이 있습니다. 모든 호출이 성공이라 아무 알람도 울리지 않았습니다.",
+      "description": "하루 = 한국 시간(KST) 0시~24시. 기록이 없는 날은 0 으로 표시합니다. 막대 = 그날 성공한 LLM 호출의 비용 합계(가격표에 없는 모델은 0 으로 계산), 선 = 호출 수(오른쪽 축). 맥미니에서 claude -p 로 만드는 v2 요약은 이 표에 기록되지 않습니다. 2026-06-25 에 $36.18 을 쓴 날이 있었고, 모든 호출이 성공이라 알람이 울리지 않았습니다.",
       "targets": [
         {
           "refId": "A",
@@ -384,15 +434,18 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT date_trunc('day', created_at) AS time, sum(cost_usd) AS \"지출\"\n  FROM llm_call_logs\n WHERE status = 'success' AND $__timeFilter(created_at)\n GROUP BY 1 ORDER BY 1"
+          "rawSql": "WITH days AS (\n  SELECT generate_series(\n           date_trunc('day', $__timeFrom()::timestamptz AT TIME ZONE 'Asia/Seoul'),\n           date_trunc('day', $__timeTo()::timestamptz AT TIME ZONE 'Asia/Seoul'),\n           interval '1 day') AS d\n), spend AS (\n  SELECT date_trunc('day', created_at AT TIME ZONE 'Asia/Seoul') AS d,\n         sum(coalesce(cost_usd, 0)) AS usd,\n         count(*) AS calls\n    FROM llm_call_logs\n   WHERE status = 'success' AND $__timeFilter(created_at)\n   GROUP BY 1\n)\nSELECT days.d AT TIME ZONE 'Asia/Seoul' AS time,\n       round(coalesce(spend.usd, 0)::numeric, 4) AS \"지출\",\n       coalesce(spend.calls, 0) AS \"호출 수\"\n  FROM days LEFT JOIN spend USING (d)\n ORDER BY 1"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "currencyUSD",
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2
+            "drawStyle": "bars",
+            "barAlignment": 1,
+            "fillOpacity": 70,
+            "lineWidth": 1,
+            "showPoints": "never"
           },
           "thresholds": {
             "mode": "absolute",
@@ -408,8 +461,51 @@
             ]
           }
         },
-        "overrides": []
-      }
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "호출 수"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "line"
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "always"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 6
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "timeFrom": "14d",
+      "hideTimeOverride": false
     },
     {
       "id": 8,
@@ -420,10 +516,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 12,
-        "y": 24
+        "y": 69,
+        "w": 12,
+        "h": 11
       },
       "description": "캐시% 가 비어 있으면 프로바이더가 캐시를 보고하지 않은 것 — 0% 와 다른 사실입니다.",
       "targets": [
@@ -458,6 +554,10 @@
             ]
           }
         ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
       }
     },
     {
@@ -469,10 +569,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 7,
+        "x": 12,
+        "y": 80,
         "w": 12,
-        "x": 0,
-        "y": 32
+        "h": 21
       },
       "description": "module 은 2026-09-04 부터만 믿을 수 있습니다. 그 전에는 34개 호출 지점 중 5개만 설정해 45,476건이 'openrouter' 하나로 뭉쳐 있었습니다.",
       "targets": [
@@ -507,6 +607,10 @@
             ]
           }
         ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
       }
     },
     {
@@ -518,10 +622,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 7,
+        "x": 0,
+        "y": 101,
         "w": 12,
-        "x": 12,
-        "y": 32
+        "h": 11
       },
       "description": "status='success' 로 거르는 모든 집계에서 보이지 않는 값입니다. 재시도 낭비가 여기 있습니다.",
       "targets": [
@@ -557,6 +661,10 @@
             ]
           }
         ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
       }
     },
     {
@@ -568,10 +676,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 3,
         "x": 0,
-        "y": 4
+        "y": 6,
+        "w": 6,
+        "h": 4
       },
       "description": "만다라를 하나라도 가진 사람. auth.users 를 읽지 않는 대신 쓰는 대리 지표입니다.",
       "targets": [
@@ -623,10 +731,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 2,
-        "x": 3,
-        "y": 4
+        "x": 6,
+        "y": 6,
+        "w": 6,
+        "h": 4
       },
       "description": "누적",
       "targets": [
@@ -678,10 +786,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 2,
-        "x": 5,
-        "y": 4
+        "x": 12,
+        "y": 6,
+        "w": 6,
+        "h": 4
       },
       "description": "유료 구독 수",
       "targets": [
@@ -733,10 +841,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 3,
-        "x": 7,
-        "y": 4
+        "x": 18,
+        "y": 6,
+        "w": 6,
+        "h": 4
       },
       "description": "누적 생성된 영상 요약",
       "targets": [
@@ -788,10 +896,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 7,
+        "x": 12,
+        "y": 101,
         "w": 12,
-        "x": 0,
-        "y": 39
+        "h": 11
       },
       "description": "누적 숫자는 무엇이 만들어졌는지만 말합니다. 이 표는 지금 무슨 일이 일어나고 있는지를 말합니다 — 비어 있으면 비어 있다고.",
       "targets": [
@@ -813,6 +921,10 @@
           }
         },
         "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
       }
     },
     {
@@ -824,10 +936,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 39
+        "x": 0,
+        "y": 112,
+        "w": 24,
+        "h": 8
       },
       "description": "signal 별로 나눕니다. 합계 하나는 무엇이 늘었는지 말해 주지 않습니다.",
       "targets": [
@@ -861,7 +973,9 @@
           "noValue": "이 기간에 상호작용 없음"
         },
         "overrides": []
-      }
+      },
+      "timeFrom": "14d",
+      "hideTimeOverride": false
     },
     {
       "id": 30,
@@ -872,10 +986,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 46
+        "y": 120,
+        "w": 6,
+        "h": 4
       },
       "description": "발행 전 기준선. 발행 뒤 이 선이 꺾이는지가 첫 신호입니다.",
       "targets": [
@@ -928,10 +1042,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 6,
-        "y": 46
+        "y": 120,
+        "w": 6,
+        "h": 4
       },
       "description": "누적 발행 수",
       "targets": [
@@ -984,10 +1098,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 12,
-        "y": 46
+        "y": 120,
+        "w": 6,
+        "h": 4
       },
       "description": "고유 (사용자, 호) 조합. 같은 사람이 같은 호를 두 번 열어도 하나입니다.",
       "targets": [
@@ -1040,10 +1154,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 18,
-        "y": 46
+        "y": 120,
+        "w": 6,
+        "h": 4
       },
       "description": "구독자 수만 보면 늘어난 것처럼 보입니다. 해지는 따로 세야 보입니다.",
       "targets": [
@@ -1096,10 +1210,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 7,
-        "w": 12,
         "x": 0,
-        "y": 50
+        "y": 124,
+        "w": 12,
+        "h": 9
       },
       "description": "발행일에 시간 범위를 맞추면 전후 비교가 됩니다.",
       "targets": [
@@ -1140,7 +1254,9 @@
           "noValue": "이 기간에 구독·해지 없음"
         },
         "overrides": []
-      }
+      },
+      "timeFrom": "14d",
+      "hideTimeOverride": false
     },
     {
       "id": 35,
@@ -1151,10 +1267,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 7,
-        "w": 12,
         "x": 12,
-        "y": 50
+        "y": 124,
+        "w": 12,
+        "h": 9
       },
       "description": "열람 수만으로는 호끼리 비교가 안 됩니다. 구독자 대비여야 늘었는지 줄었는지 말할 수 있습니다.",
       "targets": [
@@ -1190,6 +1306,10 @@
             ]
           }
         ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
       }
     },
     {
@@ -1201,10 +1321,10 @@
         "uid": "insighta-pg"
       },
       "gridPos": {
-        "h": 8,
-        "w": 24,
         "x": 0,
-        "y": 57
+        "y": 133,
+        "w": 24,
+        "h": 12
       },
       "description": "호스트가 죽었는지가 아니라 사용자가 그 기능을 쓸 수 있는지를 말합니다. 대체 경로가 있으면 '가능'이고, 없으면 '불가'입니다 — 둘을 같이 세면 대시보드를 안 보게 됩니다. 클러스터 안에서 TCP 로 측정한 값입니다.",
       "targets": [
@@ -1268,7 +1388,57 @@
             ]
           }
         ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
       }
+    },
+    {
+      "id": 41,
+      "type": "text",
+      "title": "검사별 의미",
+      "description": "각 검사가 무엇을 확인하는지, 언제 실패가 되는지, 실패하면 무엇을 하는지. 조건은 scripts/keel/checks.ts · check-cloud-posture.ts · check-aws-cost.ts 기준.",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 14
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "| 검사 | 무엇을 확인하나 | 빨간색(실패)이 되는 조건 | 빨간색일 때 할 일 |\n|---|---|---|---|\n| aws-cost | AWS 이번 달 누적 비용 | 월 예산 $40 의 70%($28) 이상 | 표 \"AWS 월 누적\" 에서 비용이 큰 서비스를 확인 |\n| cloud-posture | AWS 계정의 보안 기본 설정이 그대로 켜져 있는지: 감사 로그(CloudTrail) 기록·전 리전·위변조 검증, 보안 경보 8종, 디스크 기본 암호화, 비밀번호 14자 이상 정책, 감사 로그 저장소 공개 차단, **경보를 받을 이메일 구독** | 위 항목 중 하나라도 꺼졌거나 읽을 수 없음. 예: \"no confirmed subscription\" = 보안 경보가 울려도 받을 이메일이 없음 | 내용 칸이 가리키는 항목을 되살림. 구독 문제는 받을 주소로 구독을 걸고 그 메일에서 확인(Confirm)을 누름 |\n| db-schema | 코드가 쓰는 테이블·컬럼이 실제 DB 에 있는지 | 빠진 테이블·컬럼이 있음(prisma 가 조용히 빠뜨리는 사고) | 빠진 이름에 대한 SQL 을 DB 에 적용 |\n| deploy-drift | 배포 설정에 적힌 API 버전 = 실제로 돌고 있는 API 버전 | 머지 후 30분이 지나도 둘이 다름(배포가 중간에 멈춤) | 배포 핀 PR 머지 여부와 ArgoCD 동기화 확인 |\n| iam-hygiene | AWS 로그인 계정 관리: 콘솔 비밀번호가 있는 사용자는 MFA, 액세스 키는 90일 이내, 30일 넘게 안 쓴 키 없음 | 조건 중 하나라도 어김. 예: \"console without MFA: admin\" = admin 사용자가 MFA 없이 콘솔 로그인 가능 | MFA 등록, 또는 쓰지 않는 콘솔 비밀번호·키 제거 |\n| llm-spend | LLM 지출(오늘·이번 달) | 일 한도 $10 또는 월 한도 $50 의 70% 이상 | 표 \"단계별 지출\" 에서 비용이 큰 단계를 확인 |\n| pipeline-freshness | 자막 수집과 요약 생성이 멈추지 않았는지(마지막 기록의 나이). LLM 호출 나이는 참고 표시 | 자막 3일, 요약 7일 넘게 새 기록 없음 | 맥미니 자막 수집기 실행 상태 확인 |\n| public-surface | insighta.one 이 응답하는지, HTTPS 인증서가 충분히 남았는지 | 사이트 무응답, 또는 인증서 만료 14일 미만 | 서버 상태 확인, 인증서 자동 갱신(cert-manager) 확인 |\n| service-reachability | 서버가 외부 의존 서비스에 닿아서 기능별로 동작 가능한지 | 하나 이상의 기능이 쓸 수 없는 상태 | 내용 칸에 적힌 기능·서비스 확인 |\n| supply-chain | 백엔드·프론트 의존성의 알려진 보안 취약점 | critical 또는 high 가 1개 이상 | 해당 패키지 업그레이드 |\n| transcript-proxies | 자막을 가져오는 프록시 2곳(Azure·맥미니)이 응답하는지 | 한 곳이라도 무응답(예비가 없는 상태) | 내용 칸에 적힌 프록시 확인 |\n"
+      }
+    },
+    {
+      "id": 42,
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 2
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**모든 그래프는 지금 기준으로 그립니다** — 주소나 위쪽 시간 선택과 상관없이: 검사 이력·상태 전환 최근 7일 · 일별 그래프(LLM 지출·카드 상호작용·구독) 최근 14일 · AWS 월 누적 최근 30일. 표는 제목에 적힌 기간(24시간 등)을 따릅니다."
+      }
+    }
+  ],
+  "links": [
+    {
+      "title": "최근 7일로 보기",
+      "type": "link",
+      "url": "/keel/d/insighta-keel/?from=now-7d&to=now&refresh=1m",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "기간이 고정된 주소를 지금 기준 최근 7일로 되돌립니다"
     }
   ]
 }

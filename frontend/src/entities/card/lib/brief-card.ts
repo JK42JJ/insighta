@@ -28,9 +28,9 @@ import { briefCardId } from './card-kind';
 const NO_CELL = -1;
 
 /**
- * The cover. `hqdefault` rather than `maxres`, because maxres 404s on a good
- * share of videos and the card's error handler would then show a hole where
- * the lead story is.
+ * The cover, when the server did not resolve one. `hqdefault` rather than
+ * `maxres`, because maxres 404s on a good share of videos and the card's
+ * error handler would then show a hole where the lead story is.
  */
 function coverUrl(videoId: string | null): string {
   return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '';
@@ -43,7 +43,9 @@ export function briefIssueToInsightCard(issue: SubscribedBriefIssue): InsightCar
     // review page.
     videoUrl: `/brief/${issue.slug}`,
     title: issue.headline,
-    thumbnail: coverUrl(issue.coverVideoId),
+    // The server resolves the cover, category fallback included; the local
+    // derivation only covers a response written before it did.
+    thumbnail: issue.coverUrl || coverUrl(issue.coverVideoId),
     // The standfirst is what the issue says it is about, written for a reader
     // rather than assembled from fields.
     userNote: issue.dek,

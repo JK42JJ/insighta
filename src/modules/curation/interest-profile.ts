@@ -14,6 +14,7 @@
 
 import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
+import { toJsonInput } from '@/modules/database/json-input';
 import {
   getUserSubscriptions,
   getUserPlaylists,
@@ -184,8 +185,8 @@ export async function persistInterestProfile(
   const now = new Date();
   await prisma.curation_interest_profile.upsert({
     where: { user_id: userId },
-    create: { user_id: userId, profile: profile as unknown as object, status, built_at: now },
-    update: { profile: profile as unknown as object, status, built_at: now },
+    create: { user_id: userId, profile: toJsonInput(profile), status, built_at: now },
+    update: { profile: toJsonInput(profile), status, built_at: now },
   });
 }
 

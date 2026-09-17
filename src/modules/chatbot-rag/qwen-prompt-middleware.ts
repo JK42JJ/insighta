@@ -138,6 +138,48 @@ export interface QwenPromptMiddlewareOpts {
   providerLabel?: string;
 }
 
+/**
+ * How many tokens a usage field reports.
+ *
+ * The AI SDK's v3 `finish` part does not carry two numbers. Measured on
+ * production (`openrouter/google/gemini-2.5-flash`, 2026-09-16 11:22 UTC):
+ *
+ *     inputTokens:  { total: 3844, noCache: 799, cacheRead: 3045, cacheWrite: 0 }
+ *     outputTokens: { total: 38, text: 38, reasoning: 0 }
+ *
+ * Those objects went straight into the ledger write, so every one of them
+ * failed with "Argument `input_tokens`: Expected Int or Null, provided
+ * Object" and `calculateCost` returned NaN. No chat turn has ever reached
+ * `llm_call_logs`, which is why the ledger read $0 for chat while the
+ * provider billed for every conversation. Older SDK builds report a plain
+ * number, so both shapes are read here.
+ */
+export function usageTokenCount(field: unknown): number | undefined {
+  if (typeof field === 'number') return Number.isFinite(field) ? field : undefined;
+  if (field !== null && typeof field === 'object') {
+    const total = (field as { total?: unknown }).total;
+    if (typeof total === 'number' && Number.isFinite(total)) return total;
+  }
+  return undefined;
+}
+
+/**
+ * How many of the input tokens the provider served from its own cache.
+ *
+ * This is the field that answers "is prompt caching working": the turn
+ * measured above read 3,045 of its 3,844 input tokens from cache. A
+ * number-shaped usage carries no cache information at all, and undefined is
+ * not zero -- a model without caching and a cache that missed are different
+ * facts, and the column has to keep them apart.
+ */
+export function usageCachedInputTokens(field: unknown): number | undefined {
+  if (field !== null && typeof field === 'object') {
+    const cacheRead = (field as { cacheRead?: unknown }).cacheRead;
+    if (typeof cacheRead === 'number' && Number.isFinite(cacheRead)) return cacheRead;
+  }
+  return undefined;
+}
+
 export function createQwenPromptMiddleware(
   opts: QwenPromptMiddlewareOpts = {}
 ): LanguageModelV3Middleware {
@@ -165,7 +207,7 @@ export function createQwenPromptMiddleware(
       const t0 = Date.now();
       const result = await doStream();
 
-      let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+      let usage: { inputTokens?: unknown; outputTokens?: unknown } | undefined;
       const observer = new TransformStream({
         transform(chunk, controller) {
           try {
@@ -182,8 +224,9 @@ export function createQwenPromptMiddleware(
               logLLMCall({
                 module: 'copilotkit',
                 model: `${providerLabel}/${model.modelId}`,
-                inputTokens: usage?.inputTokens,
-                outputTokens: usage?.outputTokens,
+                inputTokens: usageTokenCount(usage?.inputTokens),
+                cachedInputTokens: usageCachedInputTokens(usage?.inputTokens),
+                outputTokens: usageTokenCount(usage?.outputTokens),
                 latencyMs: Date.now() - t0,
                 status: 'success',
               })
@@ -407,6 +450,9 @@ export function appendTimestampFormatRule(systemContent: string, language: Lang)
   return `${systemContent}\n\n${rule}`;
 }
 
+/** Prefix of the marker the brief page's chat panel emits (see ./brief-prompt). */
+const BRIEF_MARKER_PREFIX = '[[brief:';
+
 /**
  * Plain-string variant for the legacy SSE streaming path (QwenRunpodAdapter.process).
  *
@@ -420,6 +466,16 @@ export async function rewriteSystemContent(
   opts?: { lastUserMessage?: string }
 ): Promise<string> {
   const language = detectLanguage(originalSystemContent);
+
+  // Brief page chat: a conversation marked [[brief:<slug>]] is answered from
+  // that published issue only. The module is loaded on demand, so a request
+  // without the marker never loads it and runs the path below unchanged. An
+  // unreadable issue returns null and falls through to that path.
+  if (originalSystemContent.includes(BRIEF_MARKER_PREFIX)) {
+    const { buildBriefSystemContent } = await import('./brief-prompt');
+    const briefContent = await buildBriefSystemContent(originalSystemContent, language);
+    if (briefContent) return briefContent;
+  }
 
   // Parse FE-emitted chatContext fields out of the system prompt.
   const videoMatch = VIDEO_ID_REGEX.exec(originalSystemContent);

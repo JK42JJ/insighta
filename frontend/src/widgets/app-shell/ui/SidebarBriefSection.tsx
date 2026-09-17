@@ -40,11 +40,23 @@ interface SidebarBriefSectionProps {
    */
   active: string | null;
   onSelect: (label: string) => void;
+  /**
+   * Nested under the issue's row in the brief panel, which already names the
+   * issue; the title block here would say it twice.
+   */
+  compact?: boolean;
 }
 
 interface Entry {
   /** The heading text, which is also how the anchor is found in the page. */
   label: string;
+  /**
+   * What the row shows when the editor wrote one. Story titles are
+   * declarative sentences with no separator, so `tocShortLabel` has nothing
+   * to cut and a one-line truncate would end them in an ellipsis. Matching
+   * and scrolling keep using `label`.
+   */
+  navLabel?: string;
   /** A story's kicker, rendered as the group above its title. */
   kicker?: string;
   depth: 0 | 1;
@@ -60,7 +72,9 @@ interface Entry {
  */
 function toEntries(doc: IssueDocument): Entry[] {
   const out: Entry[] = [];
-  for (const s of doc.stories) out.push({ label: s.title, kicker: s.kicker, depth: 1 });
+  for (const s of doc.stories) {
+    out.push({ label: s.title, navLabel: s.navLabel, kicker: s.kicker, depth: 1 });
+  }
   out.push({ label: '이번 주 한 문장', depth: 0 });
   if (doc.picks.length > 0) out.push({ label: '이번 주 추천', depth: 0 });
   if (doc.vocabulary.length > 0) out.push({ label: '용어', depth: 0 });
@@ -117,6 +131,7 @@ export function SidebarBriefSection({
   collapsed,
   active,
   onSelect,
+  compact = false,
 }: SidebarBriefSectionProps) {
   const entries = useMemo(() => (issue ? toEntries(issue) : []), [issue]);
 
@@ -133,16 +148,18 @@ export function SidebarBriefSection({
 
   return (
     <div className="px-1 flex flex-col">
-      <div className="px-2 py-2">
-        <h3 className="truncate text-[14px] font-bold leading-snug text-sidebar-foreground">
-          {issue.category} {issue.issueLabel}
-        </h3>
-        {subtitle && (
-          <p className="mt-0.5 truncate text-[13px] text-sidebar-foreground/50">{subtitle}</p>
-        )}
-      </div>
+      {!compact && (
+        <div className="px-2 py-2">
+          <h3 className="truncate text-[14px] font-bold leading-snug text-sidebar-foreground">
+            {issue.category} {issue.issueLabel}
+          </h3>
+          {subtitle && (
+            <p className="mt-0.5 truncate text-[13px] text-sidebar-foreground/50">{subtitle}</p>
+          )}
+        </div>
+      )}
 
-      <div className="border-t border-sidebar-border/50 pt-1.5">
+      <div className={cn(!compact && 'border-t border-sidebar-border/50', 'pt-1.5')}>
         {entries.map((e, i) => {
           const showKicker = e.kicker && e.kicker !== entries[i - 1]?.kicker;
           const isActive = active === e.label;
@@ -161,6 +178,7 @@ export function SidebarBriefSection({
               )}
               <ul className={cn(showKicker && 'ml-3.5 pt-0.5')}>
                 <li
+                  title={e.label}
                   onClick={() => {
                     onSelect(e.label);
                     scrollToHeading(e.label);
@@ -175,7 +193,7 @@ export function SidebarBriefSection({
                       : 'border-l border-sidebar-foreground/10 text-[13px] text-sidebar-foreground/50 hover:border-sidebar-foreground/50 hover:text-sidebar-foreground'
                   )}
                 >
-                  {tocShortLabel(e.label)}
+                  {e.navLabel ?? tocShortLabel(e.label)}
                 </li>
               </ul>
             </div>

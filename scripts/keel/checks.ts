@@ -16,7 +16,9 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import { checkAwsCost } from './check-aws-cost';
+import { checkCloudPosture } from './check-cloud-posture';
 import { getPrisma, report, type CheckResult } from './lib';
+import { HOURS_PER_DAY, MS_PER_HOUR } from '../../src/utils/time-constants';
 
 const PROD = process.env['MONITOR_BASE_URL'] ?? 'https://insighta.one';
 const REPO_ROOT = join(__dirname, '..', '..');
@@ -25,7 +27,10 @@ const REPO_ROOT = join(__dirname, '..', '..');
  *  being probed, not as a slow network. */
 const PROBE_TIMEOUT_MS = 15_000;
 
-async function fetchJson(url: string, init?: RequestInit): Promise<{ status: number; body: unknown }> {
+async function fetchJson(
+  url: string,
+  init?: RequestInit
+): Promise<{ status: number; body: unknown }> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), PROBE_TIMEOUT_MS);
   try {
@@ -92,7 +97,12 @@ export async function checkDeployDrift(): Promise<CheckResult> {
   }
 
   if (running === apiTag) {
-    return { check, ok: true, detail: `chart and production agree on ${apiTag.slice(0, 12)}`, context: { sha: apiTag } };
+    return {
+      check,
+      ok: true,
+      detail: `chart and production agree on ${apiTag.slice(0, 12)}`,
+      context: { sha: apiTag },
+    };
   }
 
   // Different: only a stall if the chart commit is older than the window.
@@ -207,40 +217,89 @@ export async function checkLlmSpend(): Promise<CheckResult> {
  * pipeline_events forty-seven. Three different states, one number.
  */
 
-/** Surfaces, with how long each may reasonably be quiet. Transcript ingestion
- *  runs on a schedule; summaries follow it; LLM calls happen whenever anyone
- *  uses the product. */
-const SURFACES: Array<{ table: string; label: string; hours: number }> = [
-  { table: 'llm_call_logs', label: 'LLM calls', hours: 26 },
-  { table: 'video_summaries', label: 'summaries', hours: 24 * 7 },
-  { table: 'pipeline_events', label: 'transcript pipeline', hours: 24 * 3 },
+/** Ages under two days are printed in hours, longer ones in whole days. */
+const AGE_IN_DAYS_FROM_HOURS = HOURS_PER_DAY * 2;
+
+/** Allowed quiet period per surface, in hours. */
+const LLM_CALLS_QUIET_HOURS = 26;
+const SUMMARIES_QUIET_HOURS = HOURS_PER_DAY * 7;
+const TRANSCRIPT_PIPELINE_QUIET_HOURS = HOURS_PER_DAY * 3;
+
+const TRANSCRIPT_PIPELINE_LABEL = 'transcript pipeline';
+
+interface Surface {
+  table: string;
+  label: string;
+  /** Quiet period after which the surface is reported STALE. */
+  hours: number;
+  /** Reported for context only: the age is shown, but the surface is never
+   *  marked STALE and never fails the check. */
+  informational?: boolean;
+}
+
+/**
+ * Surfaces, with how long each may be quiet before it is reported stale.
+ *
+ * video_summaries and pipeline_events are scheduled pipeline outputs and gate
+ * the check. llm_call_logs is informational. Its 26 h allowance was set on
+ * 2026-09-08, when the scheduled trend-collector called the LLM every day.
+ * That job was disabled on 2026-09-10 under the LLM spend shutdown
+ * (docs/ops/llm-spend-census-2026-09-10.md), so the table is now written only
+ * when a user invokes an LLM feature. Its age therefore measures product usage,
+ * not pipeline health, and a day without usage is not a fault. The age is still
+ * reported because it shows whether the LLM path is being exercised at all.
+ */
+const SURFACES: Surface[] = [
+  { table: 'llm_call_logs', label: 'LLM calls', hours: LLM_CALLS_QUIET_HOURS, informational: true },
+  { table: 'video_summaries', label: 'summaries', hours: SUMMARIES_QUIET_HOURS },
+  {
+    table: 'pipeline_events',
+    label: TRANSCRIPT_PIPELINE_LABEL,
+    hours: TRANSCRIPT_PIPELINE_QUIET_HOURS,
+  },
 ];
 
-export async function checkPipelineFreshness(): Promise<CheckResult> {
-  const check = 'pipeline-freshness';
-  const rows = await getPrisma().$queryRawUnsafe<Array<{ t: string; newest: Date | null }>>(
-    SURFACES.map((s) => `SELECT '${s.table}' AS t, max(created_at) AS newest FROM ${s.table}`).join(
-      ' UNION ALL '
-    )
-  );
+/** One row of the freshness query: the newest created_at per table, or null
+ *  when the table has no rows. */
+export interface FreshnessRow {
+  t: string;
+  newest: Date | null;
+}
 
+/**
+ * What the newest row per surface means, separated from the query so the
+ * judgement can be tested without a database. `now` is injected for the same
+ * reason.
+ */
+export function interpretFreshness(
+  rows: FreshnessRow[],
+  now: number = Date.now()
+): { ok: boolean; detail: string; context: Record<string, unknown> } {
   const seen = new Map(rows.map((r) => [r.t, r.newest]));
   const parts: string[] = [];
   const stale: string[] = [];
-  const ctx: Record<string, unknown> = {};
+  const context: Record<string, unknown> = {};
 
   for (const s of SURFACES) {
     const newest = seen.get(s.table) ?? null;
     if (!newest) {
       parts.push(`${s.label} never`);
-      stale.push(s.label);
-      ctx[s.table] = null;
+      if (!s.informational) stale.push(s.label);
+      context[s.table] = null;
       continue;
     }
-    const hours = (Date.now() - new Date(newest).getTime()) / 3_600_000;
-    ctx[s.table] = { newest, hours: Number(hours.toFixed(1)), allowed: s.hours };
-    const age = hours < 48 ? `${hours.toFixed(0)}h` : `${(hours / 24).toFixed(0)}d`;
-    if (hours > s.hours) {
+    const hours = (now - new Date(newest).getTime()) / MS_PER_HOUR;
+    context[s.table] = {
+      newest,
+      hours: Number(hours.toFixed(1)),
+      allowed: s.hours,
+      ...(s.informational ? { informational: true } : {}),
+    };
+    const age =
+      hours < AGE_IN_DAYS_FROM_HOURS
+        ? `${hours.toFixed(0)}h`
+        : `${(hours / HOURS_PER_DAY).toFixed(0)}d`;
+    if (hours > s.hours && !s.informational) {
       parts.push(`${s.label} ${age} STALE`);
       stale.push(s.label);
     } else {
@@ -249,7 +308,7 @@ export async function checkPipelineFreshness(): Promise<CheckResult> {
   }
 
   if (stale.length === 0) {
-    return { check, ok: true, detail: parts.join(' · '), context: ctx };
+    return { ok: true, detail: parts.join(' · '), context };
   }
 
   // Naming the dependency turns a red flag into a next step, and naming the
@@ -260,10 +319,20 @@ export async function checkPipelineFreshness(): Promise<CheckResult> {
   // handler is the only writer of pipeline_events in the codebase. So this
   // surface going quiet means the collector stopped calling, not that the
   // cluster stopped reaching.
-  const hint = stale.includes('transcript pipeline')
+  const hint = stale.includes(TRANSCRIPT_PIPELINE_LABEL)
     ? ' — only the internal transcript route writes this, and the Mac Mini collector is what calls it'
     : '';
-  return { check, ok: false, detail: `${parts.join(' · ')}${hint}`, context: ctx };
+  return { ok: false, detail: `${parts.join(' · ')}${hint}`, context };
+}
+
+export async function checkPipelineFreshness(): Promise<CheckResult> {
+  const check = 'pipeline-freshness';
+  const rows = await getPrisma().$queryRawUnsafe<FreshnessRow[]>(
+    SURFACES.map((s) => `SELECT '${s.table}' AS t, max(created_at) AS newest FROM ${s.table}`).join(
+      ' UNION ALL '
+    )
+  );
+  return { check, ...interpretFreshness(rows) };
 }
 
 /**
@@ -274,16 +343,23 @@ export async function checkPipelineFreshness(): Promise<CheckResult> {
  * because the first has gone down before; running on one is running with the
  * spare already used.
  */
-export function interpretProxyHealth(
-  deps: Array<{ name: string; ok: boolean; detail: string }>
-): { ok: boolean; detail: string } {
+export function interpretProxyHealth(deps: Array<{ name: string; ok: boolean; detail: string }>): {
+  ok: boolean;
+  detail: string;
+} {
   if (deps.length === 0) {
-    return { ok: false, detail: 'no transcript proxy is configured — captions cannot be fetched at all' };
+    return {
+      ok: false,
+      detail: 'no transcript proxy is configured — captions cannot be fetched at all',
+    };
   }
   const summary = deps.map((d) => `${d.name} ${d.ok ? 'ok' : d.detail}`).join(' · ');
   const reachable = deps.filter((d) => d.ok).length;
   if (reachable === 0) {
-    return { ok: false, detail: `no proxy reachable — transcripts, summaries and notes are all blocked · ${summary}` };
+    return {
+      ok: false,
+      detail: `no proxy reachable — transcripts, summaries and notes are all blocked · ${summary}`,
+    };
   }
   if (reachable < deps.length) {
     return { ok: false, detail: `${reachable}/${deps.length} reachable · ${summary}` };
@@ -318,9 +394,14 @@ export async function checkServiceReachability(): Promise<CheckResult> {
   try {
     const { status, body } = await fetchJson(`${PROD}/health/dependencies`);
     if (status === 404) {
-      return { check, ok: true, detail: 'production does not report services yet (deploy this change first)' };
+      return {
+        check,
+        ok: true,
+        detail: 'production does not report services yet (deploy this change first)',
+      };
     }
-    if (status !== 200) return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
+    if (status !== 200)
+      return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
     services = (body as { services?: typeof services }).services ?? [];
   } catch (err) {
     return { check, ok: false, detail: `GET /health/dependencies failed: ${String(err)}` };
@@ -355,7 +436,12 @@ export async function checkServiceReachability(): Promise<CheckResult> {
       context: ctx,
     };
   }
-  return { check, ok: true, detail: `${services.filter((s) => s.ok).length} services reachable`, context: ctx };
+  return {
+    check,
+    ok: true,
+    detail: `${services.filter((s) => s.ok).length} services reachable`,
+    context: ctx,
+  };
 }
 
 /**
@@ -388,12 +474,18 @@ export async function checkTranscriptProxies(): Promise<CheckResult> {
         detail: 'production does not report dependencies yet (deploy this change first)',
       };
     }
-    if (status !== 200) return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
+    if (status !== 200)
+      return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
 
-    const deps = (body as { transcriptProxies?: Array<{ name: string; ok: boolean; detail: string }> })
-      .transcriptProxies;
+    const deps = (
+      body as { transcriptProxies?: Array<{ name: string; ok: boolean; detail: string }> }
+    ).transcriptProxies;
     if (!deps || deps.length === 0) {
-      return { check, ok: false, detail: 'no transcript proxy is configured — captions cannot be fetched at all' };
+      return {
+        check,
+        ok: false,
+        detail: 'no transcript proxy is configured — captions cannot be fetched at all',
+      };
     }
     const { ok, detail } = interpretProxyHealth(deps);
     return { check, ok, detail, context: { deps } };
@@ -414,7 +506,8 @@ export async function checkPublicSurface(): Promise<CheckResult> {
   const check = 'public-surface';
   try {
     const { status } = await fetchJson(`${PROD}/health`);
-    if (status !== 200) return { check, ok: false, detail: `GET ${PROD}/health returned ${status}` };
+    if (status !== 200)
+      return { check, ok: false, detail: `GET ${PROD}/health returned ${status}` };
   } catch (err) {
     return { check, ok: false, detail: `GET ${PROD}/health failed: ${String(err)}` };
   }
@@ -470,7 +563,12 @@ export async function checkSchema(): Promise<CheckResult> {
   const found = rows.map((r) => r.table_name);
   const missing = required.filter((t) => !found.includes(t));
   if (missing.length > 0) {
-    return { check, ok: false, detail: `missing tables: ${missing.join(', ')}`, context: { missing } };
+    return {
+      check,
+      ok: false,
+      detail: `missing tables: ${missing.join(', ')}`,
+      context: { missing },
+    };
   }
 
   // The column added on 2026-09-07, which the silent-drop failure mode would
@@ -495,6 +593,124 @@ export async function checkSchema(): Promise<CheckResult> {
   return { check, ok: true, detail: `${required.length} tables and 4 tracked columns present` };
 }
 
+/**
+ * iam-hygiene: the identity layer must not drift back. Reads the account
+ * credential report (free) and fails when a console user has no MFA, an
+ * active access key is older than KEY_MAX_AGE_DAYS, or an active key has
+ * never been used for longer than KEY_UNUSED_DAYS. The report is generated
+ * on demand; AWS may answer "in progress" once, so one retry is built in.
+ */
+const KEY_MAX_AGE_DAYS = 90;
+const KEY_UNUSED_DAYS = 30;
+
+export async function checkIamHygiene(): Promise<CheckResult> {
+  const check = 'iam-hygiene';
+  try {
+    execSync('aws iam generate-credential-report', {
+      encoding: 'utf8',
+      timeout: PROBE_TIMEOUT_MS,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    let csv = '';
+    for (let attempt = 0; attempt < 3 && !csv; attempt += 1) {
+      try {
+        const b64 = execSync('aws iam get-credential-report --query Content --output text', {
+          encoding: 'utf8',
+          timeout: PROBE_TIMEOUT_MS,
+          stdio: ['ignore', 'pipe', 'ignore'],
+        }).trim();
+        csv = Buffer.from(b64, 'base64').toString('utf8');
+      } catch {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    if (!csv) return { check, ok: false, detail: 'credential report unavailable after 3 attempts' };
+    const [header, ...rows] = csv.trim().split('\n');
+    const col = (header ?? '').split(',');
+    const idx = (name: string) => col.indexOf(name);
+    const now = Date.now();
+    const days = (iso: string) =>
+      iso && iso !== 'N/A' && iso !== 'no_information'
+        ? Math.floor((now - Date.parse(iso)) / 86_400_000)
+        : null;
+    const noMfa: string[] = [];
+    const staleKeys: string[] = [];
+    const unusedKeys: string[] = [];
+    for (const line of rows) {
+      const f = line.split(',');
+      const user = f[idx('user')] ?? '';
+      if (f[idx('password_enabled')] === 'true' && f[idx('mfa_active')] !== 'true')
+        noMfa.push(user);
+      for (const k of ['1', '2']) {
+        if (f[idx(`access_key_${k}_active`)] !== 'true') continue;
+        const age = days(f[idx(`access_key_${k}_last_rotated`)] ?? '');
+        const used = days(f[idx(`access_key_${k}_last_used_date`)] ?? '');
+        if (age !== null && age > KEY_MAX_AGE_DAYS) staleKeys.push(`${user}:key${k}:${age}d`);
+        if (used === null && age !== null && age > KEY_UNUSED_DAYS)
+          unusedKeys.push(`${user}:key${k}:never-used:${age}d`);
+      }
+    }
+    const ok = noMfa.length === 0 && staleKeys.length === 0 && unusedKeys.length === 0;
+    const parts = [
+      noMfa.length ? `console without MFA: ${noMfa.join(' ')}` : 'MFA ok',
+      staleKeys.length ? `keys over ${KEY_MAX_AGE_DAYS}d: ${staleKeys.join(' ')}` : 'key age ok',
+      unusedKeys.length ? `unused keys: ${unusedKeys.join(' ')}` : 'no unused keys',
+    ];
+    return { check, ok, detail: parts.join(' · '), context: { noMfa, staleKeys, unusedKeys } };
+  } catch (err) {
+    return { check, ok: false, detail: `credential report failed: ${String(err).slice(0, 160)}` };
+  }
+}
+
+/**
+ * supply-chain: known vulnerabilities in the two dependency trees, counted
+ * from `npm audit` on the lockfiles (no install, no token). The Dependabot
+ * API was tried first and refused the workflow token ("Resource not
+ * accessible by integration"), so the audit is the source. Zero critical
+ * and zero high is the target; the counts stay in context so the ledger
+ * shows the trend while it is not.
+ */
+function auditCounts(cwd: string): Record<string, number> {
+  const out = execSync('npm audit --json --package-lock-only 2>/dev/null || true', {
+    cwd,
+    encoding: 'utf8',
+    timeout: 120_000,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  const parsed = JSON.parse(out || '{}') as {
+    metadata?: { vulnerabilities?: Record<string, number> };
+  };
+  const v = parsed.metadata?.vulnerabilities ?? {};
+  return {
+    critical: v['critical'] ?? 0,
+    high: v['high'] ?? 0,
+    moderate: v['moderate'] ?? 0,
+    low: v['low'] ?? 0,
+  };
+}
+
+export async function checkSupplyChain(): Promise<CheckResult> {
+  const check = 'supply-chain';
+  try {
+    const root = process.cwd();
+    const backend = auditCounts(root);
+    const frontend = auditCounts(`${root}/frontend`);
+    const critical = (backend['critical'] ?? 0) + (frontend['critical'] ?? 0);
+    const high = (backend['high'] ?? 0) + (frontend['high'] ?? 0);
+    const ok = critical === 0 && high === 0;
+    return {
+      check,
+      ok,
+      detail: ok
+        ? 'no critical or high vulnerabilities in either lockfile'
+        : `vulnerabilities: backend critical ${backend['critical']} high ${backend['high']} · frontend critical ${frontend['critical']} high ${frontend['high']}`,
+      context: { backend, frontend },
+    };
+  } catch (err) {
+    return { check, ok: false, detail: `npm audit failed: ${String(err).slice(0, 160)}` };
+  }
+}
+
 export const ALL_CHECKS: Array<() => Promise<CheckResult>> = [
   checkDeployDrift,
   checkPublicSurface,
@@ -504,6 +720,9 @@ export const ALL_CHECKS: Array<() => Promise<CheckResult>> = [
   checkAwsCost,
   checkPipelineFreshness,
   checkSchema,
+  checkIamHygiene,
+  checkSupplyChain,
+  checkCloudPosture,
 ];
 
 export { report };

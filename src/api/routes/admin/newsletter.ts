@@ -20,8 +20,67 @@ import {
 import { isTemplateId, renderWeb } from '../../../modules/newsletter/render-web';
 import { clearBriefCache } from '../brief';
 import { CATEGORY_KEYS } from '@/modules/newsletter/categories';
+import { issueLabelOf } from '@/modules/newsletter/issue-label';
+import { missingNavLabel } from '@/modules/newsletter/publish-gate';
+import { runPublishGates } from '@/modules/newsletter/publish-gates';
+import { createVideoResolver } from '@/modules/newsletter/video-resolver';
+import { MissingMailDigestError } from '@/modules/newsletter/render-mail';
+import { IssueSendError, planIssueSend, runIssueSend } from '@/modules/newsletter/send-issue';
 
 const UUID = /^[0-9a-f-]{36}$/i;
+
+/**
+ * Publishing needs a cover. The list card shows the lead pick's thumbnail,
+ * and an issue that goes out without one shows the category's stand-in on
+ * every shelf it appears on. A draft can be saved without it; publishing
+ * cannot.
+ */
+function publishBlocker(doc: IssueDocument): string | null {
+  if (!doc.picks[0]?.videoId) {
+    return 'cannot publish without a lead pick that has a videoId (the cover)';
+  }
+  return missingNavLabel(doc);
+}
+
+/**
+ * The gates, run against the live API, on the way to publication.
+ *
+ * They existed and nothing called them: `publish-gates` was reachable only
+ * from a verify script someone had to remember to run, so an issue could go
+ * out with a recommendation pointing at a video that no longer resolves and a
+ * source nobody could open. Issue 1 is the evidence that a check reachable
+ * only by hand is a check that does not run.
+ *
+ * A missing key means the resolution gate cannot run, and an unrunnable gate
+ * is refused rather than skipped -- silence is not a pass. The structural
+ * gates need no key and run either way.
+ */
+async function gateBlocker(doc: IssueDocument): Promise<string | null> {
+  const resolver = createVideoResolver();
+  if (!resolver) {
+    return 'cannot publish: no YouTube key configured, so the video-resolution gate cannot run';
+  }
+  let report;
+  try {
+    report = await runPublishGates(doc, resolver);
+  } catch (err) {
+    // The API being unreachable is not a pass either. It is a reason to try
+    // again, and the editor is told which it was.
+    const msg = err instanceof Error ? err.message : String(err);
+    return `cannot publish: the video-resolution gate could not complete (${msg})`;
+  }
+  if (report.passed) return null;
+  return report.failures.map((f) => `[${f.gate}] ${f.where}: ${f.detail}`).join('; ');
+}
+
+/**
+ * The unique index on (category, issue number, locale) is the identity rule.
+ * Prisma reports a collision as P2002; without this it surfaces as a 500 that
+ * says nothing about which number is taken.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
+}
 
 export async function adminNewsletterRoutes(fastify: FastifyInstance) {
   const adminAuth = { onRequest: [fastify.authenticate, fastify.authenticateAdmin] };
@@ -179,26 +238,41 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
           .code(409)
           .send({ status: 'error', error: `slug "${doc.slug}" already exists` });
       }
+      const blocker = request.body?.publish ? publishBlocker(doc) : null;
+      if (blocker) return reply.code(400).send({ status: 'error', error: blocker });
+      // Create can publish in the same call, so the gates belong here too. A
+      // check on one of two publishing routes is a check with a way around it.
+      const gateFailure = request.body?.publish ? await gateBlocker(doc) : null;
+      if (gateFailure) return reply.code(400).send({ status: 'error', error: gateFailure });
 
-      const row = await getPrismaClient().newsletter_issues.create({
-        data: {
-          slug: doc.slug,
-          category_key: doc.categoryKey,
-          issue_no: issueNumber(doc),
-          schema_version: doc.schemaVersion,
-          template_version: doc.templateVersion,
-          // Projected out of the document so the identity — one issue number,
-          // one edition per language — is a database constraint rather than a
-          // convention, and so a list of issues can be filtered without
-          // parsing every content_json.
-          locale: doc.locale,
-          content_json: doc as unknown as object,
-          // Publishing is an explicit act, not a side effect of saving.
-          published_at: request.body?.publish ? new Date() : null,
-        },
-        select: { id: true, slug: true, published_at: true },
-      });
-      return reply.code(201).send({ status: 'ok', data: { issue: row } });
+      const issueNo = issueNumber(doc);
+      try {
+        const row = await getPrismaClient().newsletter_issues.create({
+          data: {
+            slug: doc.slug,
+            category_key: doc.categoryKey,
+            issue_no: issueNo,
+            schema_version: doc.schemaVersion,
+            template_version: doc.templateVersion,
+            // Projected out of the document so the identity — one issue number,
+            // one edition per language — is a database constraint rather than a
+            // convention, and so a list of issues can be filtered without
+            // parsing every content_json.
+            locale: doc.locale,
+            content_json: doc,
+            // Publishing is an explicit act, not a side effect of saving.
+            published_at: request.body?.publish ? new Date() : null,
+          },
+          select: { id: true, slug: true, published_at: true },
+        });
+        return reply.code(201).send({ status: 'ok', data: { issue: row } });
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+        return reply.code(409).send({
+          status: 'error',
+          error: `${issueLabelOf(issueNo, doc.locale)} already exists in ${doc.categoryKey} (${doc.locale}); the number comes from issueLabel`,
+        });
+      }
     }
   );
 
@@ -221,32 +295,93 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
       });
       if (!current) return reply.code(404).send({ status: 'error', error: 'not found' });
 
-      const row = await getPrismaClient().newsletter_issues.update({
-        where: { id: request.params.id },
-        data: {
-          slug: doc.slug,
-          category_key: doc.categoryKey,
-          issue_no: issueNumber(doc),
-          schema_version: doc.schemaVersion,
-          template_version: doc.templateVersion,
-          locale: doc.locale,
-          content_json: doc as unknown as object,
-          // Re-publishing must not move the original date: readers cite it,
-          // and a correction is not a new issue.
-          published_at:
-            request.body?.publish && current.published_at === null
-              ? new Date()
-              : current.published_at,
-        },
-        select: { id: true, slug: true, published_at: true },
-      });
+      const willBePublished = Boolean(request.body?.publish) || current.published_at !== null;
+      const blocker = willBePublished ? publishBlocker(doc) : null;
+      if (blocker) return reply.code(400).send({ status: 'error', error: blocker });
+      const gateFailure = willBePublished ? await gateBlocker(doc) : null;
+      if (gateFailure) return reply.code(400).send({ status: 'error', error: gateFailure });
 
-      // The rendered page is cached by (slug, templateVersion); an edit that
-      // keeps both would otherwise keep serving the old body.
-      clearBriefCache();
-      return reply.send({ status: 'ok', data: { issue: row } });
+      const issueNo = issueNumber(doc);
+      try {
+        const row = await getPrismaClient().newsletter_issues.update({
+          where: { id: request.params.id },
+          data: {
+            slug: doc.slug,
+            category_key: doc.categoryKey,
+            issue_no: issueNo,
+            schema_version: doc.schemaVersion,
+            template_version: doc.templateVersion,
+            locale: doc.locale,
+            content_json: doc,
+            // Re-publishing must not move the original date: readers cite it,
+            // and a correction is not a new issue.
+            published_at:
+              request.body?.publish && current.published_at === null
+                ? new Date()
+                : current.published_at,
+          },
+          select: { id: true, slug: true, published_at: true },
+        });
+
+        // The rendered page is cached by (slug, templateVersion); an edit that
+        // keeps both would otherwise keep serving the old body.
+        clearBriefCache();
+        return reply.send({ status: 'ok', data: { issue: row } });
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+        return reply.code(409).send({
+          status: 'error',
+          error: `${issueLabelOf(issueNo, doc.locale)} already exists in ${doc.categoryKey} (${doc.locale}); the number comes from issueLabel`,
+        });
+      }
     }
   );
+
+  /**
+   * POST /api/v1/admin/newsletter/issues/:id/send
+   *
+   * Mail one published issue to its subscribers. Dry run unless the body says
+   * otherwise, and the real send must carry back the recipient count the dry
+   * run reported -- the same shape as the product broadcast, for the same
+   * reason: a send cannot be recalled.
+   *
+   * The dry run is also the review: it returns the subject, the CTA target
+   * (the issue page), one recipient's unsubscribe link and the list headers
+   * every mail will carry.
+   */
+  fastify.post<{
+    Params: { id: string };
+    Body: { dryRun?: boolean; expectedRecipients?: number };
+  }>('/newsletter/issues/:id/send', adminAuth, async (request, reply) => {
+    if (!UUID.test(request.params.id)) {
+      return reply.code(400).send({ status: 'error', error: 'invalid id' });
+    }
+    const dryRun = request.body?.dryRun !== false;
+    try {
+      if (dryRun) {
+        const plan = await planIssueSend(request.params.id);
+        return reply.send({ status: 'ok', data: { dryRun: true, ...plan } });
+      }
+      const expected = request.body?.expectedRecipients;
+      if (typeof expected !== 'number' || !Number.isInteger(expected) || expected < 0) {
+        return reply.code(400).send({
+          status: 'error',
+          error: 'expectedRecipients must be the integer the dry run reported',
+        });
+      }
+      const result = await runIssueSend(request.params.id, expected);
+      return reply.send({ status: 'ok', data: { dryRun: false, ...result } });
+    } catch (err) {
+      if (err instanceof IssueSendError) {
+        const code = err.code === 'NOT_FOUND' ? 404 : err.code === 'COUNT_MISMATCH' ? 409 : 400;
+        return reply.code(code).send({ status: 'error', error: err.message });
+      }
+      if (err instanceof MissingMailDigestError) {
+        return reply.code(400).send({ status: 'error', error: err.message });
+      }
+      throw err;
+    }
+  });
 
   fastify.delete<{ Params: { id: string } }>(
     '/newsletter/issues/:id',

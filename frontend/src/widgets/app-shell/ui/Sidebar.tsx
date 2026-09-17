@@ -18,7 +18,7 @@ import { SidebarMandalaSection, type MinimapData } from './SidebarMandalaSection
 import { SidebarLearningSection } from './SidebarLearningSection';
 import { SidebarTopSection } from './SidebarTopSection';
 import { SidebarBriefEntry } from './SidebarBriefEntry';
-import { SidebarBriefSection } from './SidebarBriefSection';
+import { SidebarBriefPanel } from './SidebarBriefPanel';
 import { useBriefNote } from '@/features/newsletter-note/model/useBriefNote';
 import { SidebarProfileFooter } from './SidebarProfileFooter';
 import { SidebarHeatMinimap } from '@/widgets/sidebar-heat-minimap';
@@ -126,12 +126,20 @@ export function Sidebar({
   const learningMatch = useMatch('/learning/:mandalaId/:videoId');
   const isLearningRoute = Boolean(learningMatch);
 
-  // Reading one issue, not browsing them. `/brief/c/:key` is the card grid --
-  // a list screen, which keeps the mandala panel.
-  const briefMatch = useMatch('/brief/:slug');
-  const briefSlug = briefMatch?.params.slug;
-  const isBriefRoute = Boolean(briefSlug) && briefSlug !== 'c';
-  const briefNote = useBriefNote(isBriefRoute ? briefSlug : undefined);
+  // Every `/brief/*` route gets the brief's own panel: the category list
+  // (`/brief/c/:key`) and an issue (`/brief/:slug`). The list screen used to
+  // keep the mandala panel, which put "new mandala" and the template finder
+  // beside a shelf of issues that has nothing to do with either.
+  const briefCategoryMatch = useMatch('/brief/c/:categoryKey');
+  const briefIssueMatch = useMatch('/brief/:slug');
+  const briefSlug =
+    briefIssueMatch?.params.slug && briefIssueMatch.params.slug !== 'c'
+      ? briefIssueMatch.params.slug
+      : undefined;
+  const isBriefRoute = Boolean(briefCategoryMatch) || Boolean(briefSlug);
+  const briefNote = useBriefNote(briefSlug);
+  // On an issue page the category comes from the issue itself.
+  const briefCategoryKey = briefCategoryMatch?.params.categoryKey ?? briefNote.issue?.categoryKey;
   // Held here, not in the contents panel: `useBriefNote` refetches and the
   // issue changes identity, which resets a `useState` inside that component.
   const [activeBriefEntry, setActiveBriefEntry] = useState<string | null>(null);
@@ -335,13 +343,17 @@ export function Sidebar({
           </div>
 
           <nav className="flex-1 px-0 pb-4 overflow-y-auto scrollbar-none">
-            <SidebarBriefSection
-              issue={briefNote.issue}
-              loading={briefNote.loading}
-              collapsed={collapsed}
-              active={activeBriefEntry}
-              onSelect={setActiveBriefEntry}
-            />
+            {isBriefRoute && (
+              <SidebarBriefPanel
+                categoryKey={briefCategoryKey}
+                currentSlug={briefSlug}
+                issue={briefNote.issue}
+                issueLoading={briefNote.loading}
+                collapsed={collapsed}
+                activeEntry={activeBriefEntry}
+                onSelectEntry={setActiveBriefEntry}
+              />
+            )}
           </nav>
         </div>
 

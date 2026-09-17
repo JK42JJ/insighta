@@ -1,0 +1,86 @@
+name: Restore Drill
+
+# Proves, once a month, that the newest database backup restores completely:
+# every table's row count equals the dump's COPY count, embeddings included.
+# The first drill (2026-09-11, docs/security/restore-drills.md) found two
+# procedure defects that no backup job could have shown; this keeps that
+# question answered without a person remembering to ask it.
+#
+# Zero cost: GitHub-hosted runner, a throwaway pgvector container, and one
+# S3 read of the backup object.
+
+on:
+  schedule:
+    - cron: '0 4 1 * *'   # 1st of the month, 04:00 UTC (13:00 KST)
+  workflow_dispatch:
+    inputs:
+      key:
+        description: 'Backup object key (default: newest under db/)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+concurrency:
+  group: restore-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    name: Restore the newest backup and compare row counts
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Run the drill
+        id: drill
+        env:
+          RESTORE_DRILL_DIR: ${{ runner.temp }}/drill
+        run: |
+          set -o pipefail
+          mkdir -p "$RESTORE_DRILL_DIR"
+          bash scripts/ops/restore-drill.sh "${{ inputs.key }}" 2>&1 | tee "$RESTORE_DRILL_DIR/drill.log"
+          echo "status=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always()
+        env:
+          RESTORE_DRILL_DIR: ${{ runner.temp }}/drill
+        run: |
+          {
+            echo "## Restore drill"
+            echo
+            echo '```'
+            grep '^\[drill\]' "$RESTORE_DRILL_DIR/drill.log" || cat "$RESTORE_DRILL_DIR/drill.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: restore-drill-log
+          path: ${{ runner.temp }}/drill/drill.log
+          retention-days: 90
+
+      # A failed drill is a Recover-function incident: the backup we rely on
+      # did not restore cleanly. Same pattern as backup.yml.
+      - name: Open or update an issue on failure
+        if: failure() || steps.drill.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Restore drill failed ($(date -u +%F))"
+          body="The monthly restore drill did not complete with zero mismatches. Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Procedure: docs/security/restore-drills.md."
+          existing=$(gh issue list --state open --search "Restore drill failed in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then gh issue comment "$existing" --body "$body"; else gh issue create --title "$title" --body "$body" --label ops; fi

@@ -68,9 +68,24 @@ export const FunnelBucketSchema = z.object({
   label: z.string().min(1),
 });
 
+/**
+ * Upper bound for a story's sidebar label. The sidebar is 320px wide; after
+ * the panel padding and the two levels of indent about 250px remain, which is
+ * 18 Korean glyphs at 13px. The full title stays in the body heading.
+ */
+export const NAV_LABEL_MAX = 18;
+export const NAV_LABEL_MIN = 2;
+
 export const StorySchema = z.object({
   kicker: z.string().min(1),
   title: z.string().min(1),
+  /**
+   * Editor-written contents label: a noun phrase, no full stop, no dash.
+   * Titles are declarative sentences (editorial persona) and cannot be
+   * shortened mechanically, so the sidebar shows this instead. Optional in the
+   * document so drafts save; required to publish (publish gate).
+   */
+  navLabel: z.string().min(NAV_LABEL_MIN).max(NAV_LABEL_MAX).optional(),
   blocks: z.array(BlockSchema).min(1),
 });
 

@@ -14,7 +14,6 @@
  * Shadow contract: NO effect on placement; NO writes outside judge_verdicts.
  */
 
-import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '@/modules/database/client';
 import { judgeCellCardsDetailed } from '@/modules/judge/card-cell-judge';
 import {
@@ -121,7 +120,7 @@ export async function runInflowJudgeShadow(input: {
     const db = getPrismaClient();
     await db.mandala_wizard_precompute.update({
       where: { session_id: input.sessionId },
-      data: { judge_verdicts: payload as unknown as Prisma.InputJsonValue },
+      data: { judge_verdicts: payload },
     });
     log.info(
       `[t11-shadow] session=${input.sessionId} judged=${judged} unfit=${payload.metrics.unanimous_unfit} ` +

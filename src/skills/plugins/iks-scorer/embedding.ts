@@ -281,9 +281,9 @@ function raceExternalAbort(shared: Promise<number[][]>, signal: AbortSignal): Pr
         signal.removeEventListener('abort', onAbort);
         resolve(v);
       },
-      (e) => {
+      (e: unknown) => {
         signal.removeEventListener('abort', onAbort);
-        reject(e);
+        reject(e instanceof Error ? e : new Error(String(e)));
       }
     );
   });

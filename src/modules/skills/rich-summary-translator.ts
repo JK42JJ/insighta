@@ -19,6 +19,7 @@
 
 import { logger } from '@/utils/logger';
 import { getPrismaClient } from '@/modules/database';
+import { toJsonInput } from '@/modules/database/json-input';
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
 import {
   RICH_SUMMARY_TRANSLATE_MODEL,
@@ -86,8 +87,8 @@ export function sameShape(src: unknown, out: unknown): boolean {
   }
   if (typeof src === 'object') {
     if (typeof out !== 'object' || out === null || Array.isArray(out)) return false;
-    const sk = Object.keys(src as Record<string, unknown>).sort();
-    const ok = Object.keys(out as Record<string, unknown>).sort();
+    const sk = Object.keys(src).sort();
+    const ok = Object.keys(out).sort();
     if (sk.length !== ok.length || sk.some((k, i) => k !== ok[i])) return false;
     return sk.every((k) =>
       sameShape((src as Record<string, unknown>)[k], (out as Record<string, unknown>)[k])
@@ -192,7 +193,7 @@ export async function translateAndStore(
     base[targetLang] = translated;
     await prisma.video_rich_summaries.update({
       where: { video_id: videoId },
-      data: { translations: base as object },
+      data: { translations: toJsonInput(base) },
     });
     log.info(`v2-translate stored: video=${videoId} lang=${targetLang}`);
     return translated;
@@ -204,7 +205,7 @@ export async function translateAndStore(
   };
   await prisma.video_rich_summaries.update({
     where: { video_id: videoId },
-    data: { translations: base as object },
+    data: { translations: toJsonInput(base) },
   });
   log.warn(
     `v2-translate failure recorded: video=${videoId} lang=${targetLang} n=${failures + 1}/${MAX_TRANSLATE_FAILURES}`

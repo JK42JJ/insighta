@@ -188,7 +188,7 @@ async function tryFetchTranscript(
     // we narrow to our Lang union or 'auto'.
     const resolved =
       result.caption.language === 'ko' || result.caption.language === 'en'
-        ? (result.caption.language as Lang)
+        ? result.caption.language
         : 'auto';
 
     // The direct youtube-transcript path was removed on 2026-09-08, so a

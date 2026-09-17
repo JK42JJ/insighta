@@ -181,9 +181,10 @@ export async function commitStage(
   drops: Array<{ videoId: string; reason: string; verdict?: Record<string, unknown> | undefined }>
 ): Promise<void> {
   const prisma = getPrismaClient();
-  await prisma.$transaction(async (tx) => {
-    for (const s of survivors) {
-      await tx.$executeRaw`
+  await prisma.$transaction(
+    async (tx) => {
+      for (const s of survivors) {
+        await tx.$executeRaw`
         UPDATE newsletter_corpus
            SET stage = ${stage},
                verdict = COALESCE(${s.verdict ?? null}::jsonb, verdict),
@@ -192,13 +193,13 @@ export async function commitStage(
                updated_at = now()
          WHERE run_id = ${runId}::uuid AND video_id = ${s.videoId}
       `;
-    }
-    for (const d of drops) {
-      // The verdict that rejected it is written too. A corpus that records
-      // only the survivors' reasoning answers "why is this here" and not
-      // "why is this not here", and the second question is the one an editor
-      // checking a brief actually asks.
-      await tx.$executeRaw`
+      }
+      for (const d of drops) {
+        // The verdict that rejected it is written too. A corpus that records
+        // only the survivors' reasoning answers "why is this here" and not
+        // "why is this not here", and the second question is the one an editor
+        // checking a brief actually asks.
+        await tx.$executeRaw`
         UPDATE newsletter_corpus
            SET dropped_at_stage = ${stage},
                drop_reason = ${d.reason},
@@ -206,8 +207,22 @@ export async function commitStage(
                updated_at = now()
          WHERE run_id = ${runId}::uuid AND video_id = ${d.videoId}
       `;
-    }
-  });
+      }
+    },
+    // One statement per row inside one transaction, and Prisma 5 closes an
+    // interactive transaction after 5 seconds by default. Issue 1 committed
+    // 820 rows and fit. The first paged harvest produced 1,424 and did not:
+    // the run died with "Transaction not found ... refers to an old closed
+    // transaction", which is what that timeout looks like from the client.
+    //
+    // The root cause is the round trips, not the clock: the real fix is one
+    // set-based UPDATE per group instead of one per row, and it is a larger
+    // change than the issue in front of it. This raises the ceiling so the
+    // harvest that now returns thousands can commit, and keeps the guarantee
+    // the transaction exists for -- a stage that advanced half its rows and
+    // then failed would leave a corpus that no longer matches its ledger row.
+    { timeout: 10 * 60_000, maxWait: 30_000 }
+  );
   log.info('corpus stage committed', {
     runId,
     stage,

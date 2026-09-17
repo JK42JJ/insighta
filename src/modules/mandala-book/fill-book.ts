@@ -207,7 +207,7 @@ export async function fillMandalaBook(params: {
         : null;
     v2ByVideo.set(row.video_id, {
       analysis: (tr?.analysis ?? row.analysis ?? null) as RichSummaryAnalysis | null,
-      segments: (tr?.segments ?? row.segments ?? null) as unknown as RichSummarySegments | null,
+      segments: tr?.segments ?? row.segments ?? null,
       lora: (row.lora ?? null) as RichSummaryLora | null,
     });
   }

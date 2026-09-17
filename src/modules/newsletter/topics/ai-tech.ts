@@ -20,6 +20,54 @@ export interface TopicDefinition {
   /** Harvest window in days. */
   publishedWithinDays: number;
   /**
+   * How many pages of `search.list` to take per query, at 100 units a page.
+   *
+   * Absent or 1 is the old behaviour: one page, 50 results, whatever the query
+   * had beyond that discarded. Raising it is the difference between a layer
+   * that returns hundreds and one that returns thousands, because the cap was
+   * never the topic running dry -- a query with more to give still offers a
+   * next page, and one without simply has no token and ends the loop early.
+   */
+  maxPagesPerQuery?: number;
+  /**
+   * How much of an issue the machine hands the editor, and how long the
+   * result is allowed to be.
+   *
+   * These were a `PICK_COUNT = 5` and a `.slice(0, 10)` inside S7, which made
+   * the size of an issue a property of the code rather than of the brief. The
+   * harvest now returns four times what it did, and nothing about that should
+   * make the page four times longer: a reader subscribed to a week of AI
+   * engineering, not to however much of it there was.
+   *
+   * `bodyChars` is the band a published issue has to land in, measured across
+   * the story bodies. Issue 1 held 5,057 characters over four stories and read
+   * as thin; the floor is set above it deliberately.
+   */
+  draft?: {
+    /** Recommendations S7 derives. Issue 1 shipped 5. */
+    picks?: number;
+    /** Corroborated subjects offered to the editor to choose stories from. */
+    candidateStories?: number;
+  };
+  bodyChars?: { min: number; max: number };
+  /**
+   * What is worth a person's judgement, applied at S2.
+   *
+   * Absent means everything that clears the topic boundary goes to the judge,
+   * which is what happened before the harvest grew fourfold.
+   *
+   * A trusted channel is exempt from both rules. Reach is the thing a good new
+   * source has least of, and an editor has already decided those channels
+   * matter, so filtering them on numbers would remove the densest material in
+   * the corpus.
+   */
+  select?: {
+    /** Views since publication, per day. Normalised so the newest of the week is not penalised. */
+    minViewsPerDay?: number;
+    /** Ceiling per channel, taking its most-watched first. */
+    maxPerChannel?: number;
+  };
+  /**
    * `date`, always. The client omits the parameter when it is `relevance`,
    * and the result then leans on popularity, which is the opposite of what a
    * weekly brief needs.
@@ -51,6 +99,34 @@ export const AI_TECH: TopicDefinition = {
   categoryKey: 'ai-tech',
   videoCategoryIds: [VIDEO_CATEGORY_SCIENCE_TECH],
   publishedWithinDays: 7,
+  /**
+   * Five, from measurement rather than preference. On 2026-09-16 the English
+   * queries each returned a full 50 on all five pages with no repeated id and
+   * a sixth page still on offer, while the Korean ones returned 0 to 6 and no
+   * token at all. Five pages across 40 queries is at most 12,000 units, spread
+   * over the eight search keys the deployment holds.
+   */
+  maxPagesPerQuery: 5,
+  /**
+   * Seven picks and fourteen candidates, against issue 1's five and ten.
+   * More to choose from, not more that must be used: the editor still writes
+   * the stories the week earned.
+   */
+  draft: { picks: 7, candidateStories: 14 },
+  /**
+   * 6,000 to 16,000 characters of story body. Issue 1 held 5,057 and reads
+   * thin, so the floor sits above it. The ceiling is roughly three times issue
+   * 1 and exists for one reason: the harvest grew from 870 videos to 3,645,
+   * and an issue must not grow with it.
+   */
+  bodyChars: { min: 6000, max: 16000 },
+  /**
+   * 50 views a day and at most three per channel, which left 431 of this
+   * week's 1,184 when the rule was measured against the corpus before it
+   * shipped. Issue 1's judge saw 440, so this is the same amount of work on
+   * four times the material.
+   */
+  select: { minViewsPerDay: 50, maxPerChannel: 3 },
   order: 'date',
 
   queries: {
@@ -81,6 +157,23 @@ export const AI_TECH: TopicDefinition = {
       // security and incidents
       '프롬프트 인젝션',
       'LLM 보안 취약점',
+
+      // Added 2026-09-17 from the first paged run's own numbers: the
+      // veins that produced (agents 244/233, MCP 189, context 98) are
+      // widened; the ones that returned nothing are left alone rather
+      // than reworded on a guess.
+      '클로드 코드',
+      '커서 AI',
+      'AI 코딩 도구',
+      'MCP 서버',
+      'LLM 에이전트',
+      '에이전트 워크플로우',
+      '로컬 LLM 설치',
+      '올라마',
+      'GPU 추론 속도',
+      '벡터 데이터베이스',
+      '임베딩 모델',
+      'LLM 비용',
     ],
     en: [
       'new LLM model release',
@@ -103,6 +196,44 @@ export const AI_TECH: TopicDefinition = {
       'vLLM serving',
       'prompt injection attack',
       'LLM security vulnerability',
+
+      // Added 2026-09-17 from the first paged run's own numbers: the
+      // veins that produced (agents 244/233, MCP 189, context 98) are
+      // widened; the ones that returned nothing are left alone rather
+      // than reworded on a guess.
+      'AI agent framework',
+      'autonomous agent demo',
+      'agent orchestration',
+      'multi agent system',
+      'agent memory',
+      'agent evaluation',
+      'claude code tutorial',
+      'cursor ai workflow',
+      'AI pair programming',
+      'agent guardrails',
+      'agent observability',
+      'tool calling LLM',
+      'model context protocol',
+      'MCP client',
+      'MCP tools',
+      'long context LLM',
+      'prompt caching',
+      'structured output LLM',
+      'local LLM setup',
+      'ollama tutorial',
+      'llama cpp',
+      'GPU inference benchmark',
+      'LLM serving throughput',
+      'quantized model comparison',
+      'vector database tutorial',
+      'embedding model comparison',
+      'RAG evaluation',
+      'LLM jailbreak',
+      'indirect prompt injection',
+      'AI supply chain attack',
+      'LLM cost comparison',
+      'inference pricing',
+      'AI infrastructure cost',
     ],
   },
 

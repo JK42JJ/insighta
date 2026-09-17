@@ -355,7 +355,7 @@ export function parseRerankResponse(
       if (!Number.isInteger(i) || i < 1 || i > batchSize) continue;
       if (v !== 'Y' && v !== 'N') continue;
       // i is 1-based; store as 0-based for downstream lookup
-      verdicts.set(i - 1, v as Verdict);
+      verdicts.set(i - 1, v);
     }
     if (verdicts.size > 0) return { verdicts, parseMode: 'json' };
   }
@@ -382,7 +382,7 @@ export function parseRerankResponse(
     if (v !== 'Y' && v !== 'N') continue;
     // First match wins — don't overwrite on duplicate indices
     if (!verdicts.has(i - 1)) {
-      verdicts.set(i - 1, v as Verdict);
+      verdicts.set(i - 1, v);
     }
   }
   if (verdicts.size > 0) return { verdicts, parseMode: 'regex' };
