@@ -133,18 +133,18 @@ export async function recordStep(step: StepRecord, client?: LedgerClient): Promi
     );
   }
 
-  const db = client ?? (getPrismaClient() as unknown as LedgerClient);
+  const db: LedgerClient = client ?? getPrismaClient();
   await db.newsletter_pipeline_steps.create({
     data: {
       run_id: step.runId,
       stage: step.stage,
       items_in: step.itemsIn,
       items_out: step.itemsOut,
-      drop_reasons: reasons as never,
+      drop_reasons: reasons,
       quota_units: step.quotaUnits ?? 0,
       cost_usd: step.costUsd ?? null,
       duration_ms: step.durationMs ?? null,
-      detail: (step.detail ?? undefined) as never,
+      detail: step.detail ?? undefined,
     },
   });
 

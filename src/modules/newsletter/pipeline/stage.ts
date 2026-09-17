@@ -26,7 +26,7 @@
 
 import { RunnableLambda, RunnableSequence } from '@langchain/core/runnables';
 import { logger } from '@/utils/logger';
-import { recordStep, type PipelineStage, type LedgerClient } from '../pipeline-ledger';
+import { recordStep, type PipelineStage } from '../pipeline-ledger';
 import { getPrismaClient } from '@/modules/database/client';
 import * as corpus from './corpus';
 import type { CorpusRow } from './corpus';
@@ -123,13 +123,7 @@ export function toRunnable(
     // which is the exact failure the ledger exists to catch.
     await getPrismaClient().$transaction(
       async (tx) => {
-        await corpus.commitStageWith(
-          tx as unknown as corpus.TransactionClient,
-          ctx.runId,
-          stage.id,
-          result.survivors,
-          result.drops
-        );
+        await corpus.commitStageWith(tx, ctx.runId, stage.id, result.survivors, result.drops);
         await recordStep(
           {
             runId: ctx.runId,
@@ -142,7 +136,7 @@ export function toRunnable(
             durationMs: Date.now() - t0,
             detail: { what: stage.what, kind: stage.kind, ...(result.detail ?? {}) },
           },
-          tx as unknown as LedgerClient
+          tx
         );
       },
       // Same ceiling the corpus commit carried alone: one statement per row,
