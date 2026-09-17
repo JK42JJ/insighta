@@ -14,6 +14,14 @@ import { getPrismaClient } from '@/modules/database/client';
 import { logger } from '@/utils/logger';
 import type { PipelineStage } from '../pipeline-ledger';
 
+/**
+ * The subset of the Prisma client a stage commit needs. Declared structurally
+ * rather than imported as `Prisma.TransactionClient` so a test can pass a stub.
+ */
+export interface TransactionClient {
+  $executeRaw(strings: TemplateStringsArray, ...values: unknown[]): Promise<number>;
+}
+
 const log = logger.child({ module: 'newsletter/corpus' });
 
 export interface CorpusRow {
@@ -174,15 +182,23 @@ export interface Advance {
  * leave a corpus that no longer matches its own ledger row, and the next run
  * would resume from a state that never existed.
  */
-export async function commitStage(
+/**
+ * The writes themselves, against whatever client is passed. Split out so the
+ * caller can put the corpus move and the ledger row in ONE transaction: with
+ * two, a crash between them advances the rows and records nothing, and the
+ * retry then reads zero rows from the previous stage and records a balanced
+ * `0 in, 0 out`. The arithmetic check passes on that, so the corpus empties
+ * and the ledger calls it a clean pass.
+ */
+export async function commitStageWith(
+  tx: TransactionClient,
   runId: string,
   stage: PipelineStage,
   survivors: Advance[],
   drops: Array<{ videoId: string; reason: string; verdict?: Record<string, unknown> | undefined }>
 ): Promise<void> {
-  const prisma = getPrismaClient();
-  await prisma.$transaction(
-    async (tx) => {
+  {
+    {
       for (const s of survivors) {
         await tx.$executeRaw`
         UPDATE newsletter_corpus
@@ -208,7 +224,25 @@ export async function commitStage(
          WHERE run_id = ${runId}::uuid AND video_id = ${d.videoId}
       `;
       }
-    },
+    }
+  }
+  log.info('corpus stage committed', {
+    runId,
+    stage,
+    survivors: survivors.length,
+    drops: drops.length,
+  });
+}
+
+/** Opens its own transaction. Kept for callers that are not inside one. */
+export async function commitStage(
+  runId: string,
+  stage: PipelineStage,
+  survivors: Advance[],
+  drops: Array<{ videoId: string; reason: string; verdict?: Record<string, unknown> | undefined }>
+): Promise<void> {
+  await getPrismaClient().$transaction(
+    async (tx) => commitStageWith(tx as TransactionClient, runId, stage, survivors, drops),
     // One statement per row inside one transaction, and Prisma 5 closes an
     // interactive transaction after 5 seconds by default. Issue 1 committed
     // 820 rows and fit. The first paged harvest produced 1,424 and did not:

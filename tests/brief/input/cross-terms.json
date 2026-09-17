@@ -1,0 +1,198 @@
+[
+ {
+  "term": "serving-stack",
+  "independentChannels": 38,
+  "videos": [
+   "575v0WYJQsE",
+   "S6nKV2AP0cc",
+   "a8zQbgs7Ul8",
+   "1_RkcTO5jOA",
+   "iia8G9HFVww",
+   "NiZ3PM0lNTk",
+   "12UkcojWAwg",
+   "1HPNFF4gyq8"
+  ]
+ },
+ {
+  "term": "agent-harness",
+  "independentChannels": 34,
+  "videos": [
+   "7CHMb8jWs6A",
+   "wkec86Vnz_A",
+   "MBHOH1NmDqc",
+   "_qZ5PRgB8Ag",
+   "VLsL67UmPvs",
+   "yFq2SEfKZRE",
+   "SWEThyRHMgQ",
+   "-ad1DdYK9ck"
+  ]
+ },
+ {
+  "term": "inference",
+  "independentChannels": 32,
+  "videos": [
+   "575v0WYJQsE",
+   "S6nKV2AP0cc",
+   "7CHMb8jWs6A",
+   "iia8G9HFVww",
+   "NiZ3PM0lNTk",
+   "12UkcojWAwg",
+   "1HPNFF4gyq8",
+   "usjk-gdMgqM"
+  ]
+ },
+ {
+  "term": "multi-agent",
+  "independentChannels": 32,
+  "videos": [
+   "a8zQbgs7Ul8",
+   "glgxB__DDiM",
+   "Y-9ChZWD97U",
+   "2-6V21YJU7E",
+   "c49OYEhrzjI",
+   "yFq2SEfKZRE",
+   "KaOvpIHJq94",
+   "Mn87c9BcIAU"
+  ]
+ },
+ {
+  "term": "rag",
+  "independentChannels": 31,
+  "videos": [
+   "V-isu4eTHgw",
+   "S6nKV2AP0cc",
+   "fZH97QHHYjY",
+   "vPJNP_zyKkM",
+   "t8Y-eqZ5_-0",
+   "1_RkcTO5jOA",
+   "6k096_wfHCY",
+   "iia8G9HFVww"
+  ]
+ },
+ {
+  "term": "tool-calling",
+  "independentChannels": 25,
+  "videos": [
+   "d6aNbE-3dxo",
+   "O84lhGc1OOI",
+   "9yiRYrQAPv0",
+   "oOQ14fAtPxY",
+   "CbCJx7gBfa4",
+   "yHIugFyQDTY",
+   "MBHOH1NmDqc",
+   "Wik_JQ-enUA"
+  ]
+ },
+ {
+  "term": "local-inference",
+  "independentChannels": 24,
+  "videos": [
+   "575v0WYJQsE",
+   "iia8G9HFVww",
+   "NiZ3PM0lNTk",
+   "ROHgM8uV_8M",
+   "1HPNFF4gyq8",
+   "Wik_JQ-enUA",
+   "tSx26jgNyE0",
+   "qaUDHViUWac"
+  ]
+ },
+ {
+  "term": "quantization",
+  "independentChannels": 22,
+  "videos": [
+   "iia8G9HFVww",
+   "NiZ3PM0lNTk",
+   "ROHgM8uV_8M",
+   "Wik_JQ-enUA",
+   "-X3j7owtVEA",
+   "qaUDHViUWac",
+   "Mcwl--BdH3U",
+   "g_5g1hBmAzA"
+  ]
+ },
+ {
+  "term": "guardrails",
+  "independentChannels": 20,
+  "videos": [
+   "d6aNbE-3dxo",
+   "vPJNP_zyKkM",
+   "_qZ5PRgB8Ag",
+   "c49OYEhrzjI",
+   "JxmCyvF3FUs",
+   "Qtv3BbLyOfI",
+   "KaOvpIHJq94",
+   "F8EZJAm9iO8"
+  ]
+ },
+ {
+  "term": "pricing",
+  "independentChannels": 19,
+  "videos": [
+   "575v0WYJQsE",
+   "_gvamfT8H-w",
+   "iia8G9HFVww",
+   "NiZ3PM0lNTk",
+   "Zd5b40Jbp_k",
+   "_qZ5PRgB8Ag",
+   "on-d0ZuZxhA",
+   "12UkcojWAwg"
+  ]
+ },
+ {
+  "term": "kv-cache",
+  "independentChannels": 18,
+  "videos": [
+   "iia8G9HFVww",
+   "12UkcojWAwg",
+   "1HPNFF4gyq8",
+   "qaUDHViUWac",
+   "-ad1DdYK9ck",
+   "BrR427dfDkE",
+   "-q_u6nrVdgo",
+   "g_5g1hBmAzA"
+  ]
+ },
+ {
+  "term": "context",
+  "independentChannels": 17,
+  "videos": [
+   "fZH97QHHYjY",
+   "_qZ5PRgB8Ag",
+   "1HPNFF4gyq8",
+   "VLsL67UmPvs",
+   "yFq2SEfKZRE",
+   "a9vX7OzQrC8",
+   "VCQPCvN4uiA",
+   "-q_u6nrVdgo"
+  ]
+ },
+ {
+  "term": "model-release",
+  "independentChannels": 14,
+  "videos": [
+   "S6nKV2AP0cc",
+   "iia8G9HFVww",
+   "ULAKKFUZwHc",
+   "yFq2SEfKZRE",
+   "-ad1DdYK9ck",
+   "9dYcwOkpCE8",
+   "3AdW345Jskk",
+   "NfmTO4Hi7fQ"
+  ]
+ },
+ {
+  "term": "human-in-the-loop",
+  "independentChannels": 14,
+  "videos": [
+   "glgxB__DDiM",
+   "_qZ5PRgB8Ag",
+   "-_QWD52_piQ",
+   "c49OYEhrzjI",
+   "JxmCyvF3FUs",
+   "N8Smw22jjtE",
+   "cI7zfqusmFU",
+   "Kx3Lm2hR2JY"
+  ]
+ }
+]

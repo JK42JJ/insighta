@@ -1,0 +1,140 @@
+{
+  "measuredAt": "2026-09-17T07:54:49.692Z",
+  "round": 0,
+  "inputSha": 8,
+  "axes": {
+    "T1_자립": {
+      "value": 0,
+      "pass": false,
+      "status": "measured",
+      "note": "S7 이 본문을 [[EDITOR]] 자리표시자로 낸다 — 발행본의 본문 전량이 사람/에이전트 문장"
+    },
+    "T2_멱등": {
+      "value": null,
+      "pass": false,
+      "status": "not-measurable",
+      "note": "파이프라인 2회 실행 대조 하네스 없음. S0~S2 는 쿼터를 쓰므로 고정 입력에서 S3+ 만 재실행하는 경로가 필요"
+    },
+    "T3_재진입": {
+      "value": null,
+      "pass": false,
+      "status": "not-measurable",
+      "note": "중단·재개 시험 하네스 없음. newsletter_pipeline_steps 의 unique(run_id,stage) 가 토대"
+    },
+    "T4_근거": {
+      "value": null,
+      "pass": false,
+      "status": "not-measurable",
+      "note": "Claim 레코드가 DB 에 없음 — nl_claim / nl_evidence 테이블 미존재. v2/grade.ts 로직은 있으나 저장소가 없다"
+    },
+    "T5_오염차단": {
+      "value": "6/20",
+      "pass": false,
+      "status": "measured",
+      "note": "놓친 것: C01(numeric), C02(rounding), C03(unit), C04(domain), C05(label), C07(dead-link), C08(uncited), C10(grade-source), C11(attribution), C12(fabrication), C13(quote-form), C18(date), C19(count-mismatch), C20(xref)"
+    },
+    "T6_가독성": {
+      "value": null,
+      "pass": false,
+      "status": "not-measurable",
+      "note": "읽기 검수 에이전트를 루프가 호출하는 경로 없음. 루브릭은 고정됨"
+    },
+    "T7_사람시간": {
+      "value": null,
+      "pass": false,
+      "status": "not-measurable",
+      "note": "주장 심사 화면 없음 — 잴 대상이 없다"
+    },
+    "T8_발행": {
+      "value": null,
+      "pass": false,
+      "status": "not-measurable",
+      "note": "드래프트 등록은 관리자 계정 권한이 필요. 현재 로그인 계정은 is_super_admin 아님"
+    }
+  },
+  "detail": {
+    "t5": {
+      "caught": [
+        "C06",
+        "C09",
+        "C14",
+        "C15",
+        "C16",
+        "C17"
+      ],
+      "missed": [
+        {
+          "id": "C01",
+          "kind": "numeric",
+          "expect": "수치 정렬 게이트"
+        },
+        {
+          "id": "C02",
+          "kind": "rounding",
+          "expect": "계산 원장 반올림 필드"
+        },
+        {
+          "id": "C03",
+          "kind": "unit",
+          "expect": "계산 원장 단위 검사"
+        },
+        {
+          "id": "C04",
+          "kind": "domain",
+          "expect": "계산 원장 정의역"
+        },
+        {
+          "id": "C05",
+          "kind": "label",
+          "expect": "계산 원장 라벨 대조"
+        },
+        {
+          "id": "C07",
+          "kind": "dead-link",
+          "expect": "video-resolves / source-url 게이트"
+        },
+        {
+          "id": "C08",
+          "kind": "uncited",
+          "expect": "인용↔출처 대조 게이트"
+        },
+        {
+          "id": "C10",
+          "kind": "grade-source",
+          "expect": "등급 규율 — 확인은 1차 출처만"
+        },
+        {
+          "id": "C11",
+          "kind": "attribution",
+          "expect": "귀속 가드 / 근거 인용구 검증"
+        },
+        {
+          "id": "C12",
+          "kind": "fabrication",
+          "expect": "근거 인용구 검증"
+        },
+        {
+          "id": "C13",
+          "kind": "quote-form",
+          "expect": "귀속 가드"
+        },
+        {
+          "id": "C18",
+          "kind": "date",
+          "expect": "수치 정렬 게이트"
+        },
+        {
+          "id": "C19",
+          "kind": "count-mismatch",
+          "expect": "편수 일관성 게이트"
+        },
+        {
+          "id": "C20",
+          "kind": "xref",
+          "expect": "상호 참조 게이트"
+        }
+      ],
+      "cleanFindings": []
+    }
+  }
+}

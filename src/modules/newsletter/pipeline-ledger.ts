@@ -104,7 +104,16 @@ export async function startRun(input: {
  * The unique index on (run_id, stage) makes a second write for the same stage
  * an error too — a stage reporting twice is a bug, not two stages.
  */
-export async function recordStep(step: StepRecord): Promise<void> {
+/**
+ * The client a ledger write needs. Structural so the caller can hand in the
+ * transaction it is already inside — the corpus move and this row have to
+ * land together or not at all.
+ */
+export interface LedgerClient {
+  newsletter_pipeline_steps: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
+}
+
+export async function recordStep(step: StepRecord, client?: LedgerClient): Promise<void> {
   if (step.itemsIn < 0 || step.itemsOut < 0) {
     throw new LedgerError(`${step.stage}: counts cannot be negative`);
   }
@@ -124,7 +133,8 @@ export async function recordStep(step: StepRecord): Promise<void> {
     );
   }
 
-  await getPrismaClient().newsletter_pipeline_steps.create({
+  const db = client ?? (getPrismaClient() as unknown as LedgerClient);
+  await db.newsletter_pipeline_steps.create({
     data: {
       run_id: step.runId,
       stage: step.stage,

@@ -1,0 +1,84 @@
+{
+ "funnel": {
+  "quotaUnits": 13685,
+  "stages": [
+   {
+    "stage": "S0_harvest",
+    "itemsIn": 3680,
+    "itemsOut": 2889,
+    "dropReasons": {
+     "duplicate_video_id": 791
+    }
+   },
+   {
+    "stage": "S1_format",
+    "itemsIn": 2889,
+    "itemsOut": 1164,
+    "dropReasons": {
+     "short_or_under_4min": 1725
+    }
+   },
+   {
+    "stage": "S2_domain",
+    "itemsIn": 1164,
+    "itemsOut": 434,
+    "dropReasons": {
+     "channel_quota": 17,
+     "below_reach_floor": 693,
+     "title_not_ko_or_en": 19,
+     "outside_topic_window": 1
+    }
+   },
+   {
+    "stage": "S3_judge",
+    "itemsIn": 434,
+    "itemsOut": 240,
+    "dropReasons": {
+     "unsafe": 4,
+     "out_of_scope": 79,
+     "not_learnable": 111
+    }
+   },
+   {
+    "stage": "S4_deep",
+    "itemsIn": 240,
+    "itemsOut": 240,
+    "dropReasons": {}
+   },
+   {
+    "stage": "S5_cross",
+    "itemsIn": 240,
+    "itemsOut": 240,
+    "dropReasons": {}
+   }
+  ],
+  "buckets": [
+   {
+    "key": "form",
+    "count": 1725,
+    "label": "형식 미달"
+   },
+   {
+    "key": "rule",
+    "count": 924,
+    "label": "주제·판정 탈락"
+   },
+   {
+    "key": "solo",
+    "count": 55,
+    "label": "단일 출처"
+   },
+   {
+    "key": "cross",
+    "count": 185,
+    "label": "교차 확인"
+   }
+  ],
+  "harvested": 2889,
+  "reviewed": 434,
+  "shortlist": 240
+ },
+ "judge": "console",
+ "judgeProvenance": "docs/newsletter/verdicts-2026-09-15.jsonl",
+ "runId": "79956e3e-d99f-46b3-83ca-1d6b907809ee"
+}

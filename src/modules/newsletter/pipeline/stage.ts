@@ -26,7 +26,7 @@
 
 import { RunnableLambda, RunnableSequence } from '@langchain/core/runnables';
 import { logger } from '@/utils/logger';
-import { recordStep, type PipelineStage } from '../pipeline-ledger';
+import { recordStep, type PipelineStage, type LedgerClient } from '../pipeline-ledger';
 import { getPrismaClient } from '@/modules/database/client';
 import * as corpus from './corpus';
 import type { CorpusRow } from './corpus';
@@ -111,26 +111,44 @@ export function toRunnable(
     const t0 = Date.now();
     const result = await stage.run(input, ctx);
 
-    // Corpus first. If recordStep then throws on unbalanced arithmetic the run
-    // stops with a corpus that matches what the stage decided and no ledger
-    // row, which `alreadyRecorded` reads as "did not happen" — so the retry is
-    // a clean re-run rather than a double count.
-    await corpus.commitStage(ctx.runId, stage.id, result.survivors, result.drops);
-
     const dropReasons: Record<string, number> = { ...(result.rawDropReasons ?? {}) };
     for (const d of result.drops) dropReasons[d.reason] = (dropReasons[d.reason] ?? 0) + 1;
 
-    await recordStep({
-      runId: ctx.runId,
-      stage: stage.id,
-      itemsIn: result.itemsIn ?? (previous ? input.length : result.survivors.length),
-      itemsOut: result.survivors.length,
-      dropReasons,
-      quotaUnits: result.quotaUnits ?? 0,
-      costUsd: result.costUsd ?? 0,
-      durationMs: Date.now() - t0,
-      detail: { what: stage.what, kind: stage.kind, ...(result.detail ?? {}) },
-    });
+    // The corpus move and the ledger row go in ONE transaction. With two, a
+    // crash in between leaves the rows advanced and no ledger row, and
+    // `alreadyRecorded` reads that as "did not happen". The retry then reads
+    // the previous stage -- now empty, because those rows already moved -- and
+    // records a balanced `0 in, 0 out`. The arithmetic check passes on that.
+    // One restart empties the corpus and the ledger calls it a clean pass,
+    // which is the exact failure the ledger exists to catch.
+    await getPrismaClient().$transaction(
+      async (tx) => {
+        await corpus.commitStageWith(
+          tx as unknown as corpus.TransactionClient,
+          ctx.runId,
+          stage.id,
+          result.survivors,
+          result.drops
+        );
+        await recordStep(
+          {
+            runId: ctx.runId,
+            stage: stage.id,
+            itemsIn: result.itemsIn ?? (previous ? input.length : result.survivors.length),
+            itemsOut: result.survivors.length,
+            dropReasons,
+            quotaUnits: result.quotaUnits ?? 0,
+            costUsd: result.costUsd ?? 0,
+            durationMs: Date.now() - t0,
+            detail: { what: stage.what, kind: stage.kind, ...(result.detail ?? {}) },
+          },
+          tx as unknown as LedgerClient
+        );
+      },
+      // Same ceiling the corpus commit carried alone: one statement per row,
+      // and the paged harvest commits thousands.
+      { timeout: 10 * 60_000, maxWait: 30_000 }
+    );
 
     log.info('stage complete', {
       runId: ctx.runId,
