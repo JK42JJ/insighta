@@ -290,7 +290,9 @@
           ]
         },
         "overrides": []
-      }
+      },
+      "timeFrom": "7d",
+      "hideTimeOverride": false
     },
     {
       "id": 5,
@@ -364,7 +366,9 @@
       "options": {
         "cellHeight": "sm",
         "showHeader": true
-      }
+      },
+      "timeFrom": "7d",
+      "hideTimeOverride": false
     },
     {
       "id": 6,
@@ -402,7 +406,9 @@
           }
         },
         "overrides": []
-      }
+      },
+      "timeFrom": "30d",
+      "hideTimeOverride": false
     },
     {
       "id": 7,
@@ -497,7 +503,9 @@
             ]
           }
         ]
-      }
+      },
+      "timeFrom": "14d",
+      "hideTimeOverride": false
     },
     {
       "id": 8,
@@ -965,7 +973,9 @@
           "noValue": "이 기간에 상호작용 없음"
         },
         "overrides": []
-      }
+      },
+      "timeFrom": "14d",
+      "hideTimeOverride": false
     },
     {
       "id": 30,
@@ -1244,7 +1254,9 @@
           "noValue": "이 기간에 구독·해지 없음"
         },
         "overrides": []
-      }
+      },
+      "timeFrom": "14d",
+      "hideTimeOverride": false
     },
     {
       "id": 35,
@@ -1411,7 +1423,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**표시 기간** ${__from:date:YYYY-MM-DD HH:mm} ~ ${__to:date:YYYY-MM-DD HH:mm} · 끝 시각이 지금이 아니면 그래프가 그 시각에서 멈춘 것입니다 · [최근 7일로 보기](/keel/d/insighta-keel/?from=now-7d&to=now&refresh=1m)"
+        "content": "**모든 그래프는 지금 기준으로 그립니다** — 주소나 위쪽 시간 선택과 상관없이: 검사 이력·상태 전환 최근 7일 · 일별 그래프(LLM 지출·카드 상호작용·구독) 최근 14일 · AWS 월 누적 최근 30일. 표는 제목에 적힌 기간(24시간 등)을 따릅니다."
       }
     }
   ],
