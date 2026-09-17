@@ -367,6 +367,40 @@ export function interpretProxyHealth(deps: Array<{ name: string; ok: boolean; de
   return { ok: true, detail: summary };
 }
 
+type ProxyProbe = { name: string; ok: boolean; detail: string };
+
+/**
+ * The Azure proxy runs on App Service Free (F1), which has no Always On: after
+ * an idle period the app is unloaded and the next request starts it again.
+ * Azure's own HttpResponseTime maximum in those hours was 6.2-7.6 s
+ * (2026-09-15..17; once 67 s), and the API's dependency probe gives up at 5 s
+ * (src/api/server.ts), so a sleeping proxy read as AbortError and turned this
+ * check red 13 times in 22 runs while captions kept working: the extractor
+ * waits 30 s for the same proxy (src/modules/caption/extractor.ts).
+ *
+ * A proxy that timed out is asked again after COLD_START_RETRY_DELAY_MS. The
+ * first probe has already started the app; only a second timeout counts as
+ * down. Refusals, 401s and DNS errors are not retried: waiting does not fix
+ * them.
+ */
+export const COLD_START_RETRY_DELAY_MS = 10_000;
+const TIMEOUT_DETAILS = new Set(['AbortError', 'TIMEOUT', 'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT']);
+
+/** Names of proxies whose probe failed by timing out. */
+export function timedOutProxies(deps: ProxyProbe[]): string[] {
+  return deps.filter((d) => !d.ok && TIMEOUT_DETAILS.has(d.detail)).map((d) => d.name);
+}
+
+/** First-probe results, with the retried proxies replaced by their second probe. */
+export function mergeProxyRetry(
+  first: ProxyProbe[],
+  retry: ProxyProbe[],
+  retried: string[]
+): ProxyProbe[] {
+  const again = new Map(retry.map((d) => [d.name, d]));
+  return first.map((d) => (retried.includes(d.name) ? (again.get(d.name) ?? d) : d));
+}
+
 /**
  * Which features can run, given what the cluster can currently reach.
  *
@@ -464,31 +498,45 @@ export async function checkServiceReachability(): Promise<CheckResult> {
  */
 export async function checkTranscriptProxies(): Promise<CheckResult> {
   const check = 'transcript-proxies';
-  try {
+  const probe = async (): Promise<{ status: number; deps?: ProxyProbe[] }> => {
     const { status, body } = await fetchJson(`${PROD}/health/dependencies`);
-    if (status === 404) {
-      // The endpoint ships with this check; a 404 means production predates it.
+    return { status, deps: (body as { transcriptProxies?: ProxyProbe[] }).transcriptProxies };
+  };
+  try {
+    const first = await probe();
+    if (first.status === 404) {
       return {
         check,
         ok: true,
         detail: 'production does not report dependencies yet (deploy this change first)',
       };
     }
-    if (status !== 200)
-      return { check, ok: false, detail: `GET /health/dependencies returned ${status}` };
-
-    const deps = (
-      body as { transcriptProxies?: Array<{ name: string; ok: boolean; detail: string }> }
-    ).transcriptProxies;
-    if (!deps || deps.length === 0) {
+    if (first.status !== 200)
+      return { check, ok: false, detail: `GET /health/dependencies returned ${first.status}` };
+    if (!first.deps || first.deps.length === 0) {
       return {
         check,
         ok: false,
         detail: 'no transcript proxy is configured — captions cannot be fetched at all',
       };
     }
+
+    let deps = first.deps;
+    const retried = timedOutProxies(deps);
+    if (retried.length > 0) {
+      await new Promise((r) => setTimeout(r, COLD_START_RETRY_DELAY_MS));
+      const second = await probe();
+      if (second.status === 200 && second.deps) deps = mergeProxyRetry(deps, second.deps, retried);
+    }
+
     const { ok, detail } = interpretProxyHealth(deps);
-    return { check, ok, detail, context: { deps } };
+    const note = retried.length > 0 ? ` · retried after a timeout: ${retried.join(', ')}` : '';
+    return {
+      check,
+      ok,
+      detail: `${detail}${note}`,
+      context: { deps, ...(retried.length > 0 ? { firstProbe: first.deps, retried } : {}) },
+    };
   } catch (err) {
     return { check, ok: false, detail: `GET /health/dependencies failed: ${String(err)}` };
   }
