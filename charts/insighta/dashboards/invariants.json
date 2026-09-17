@@ -239,7 +239,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 36,
         "w": 24,
         "h": 8
       },
@@ -302,7 +302,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 30,
+        "y": 44,
         "w": 24,
         "h": 23
       },
@@ -376,7 +376,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 53,
+        "y": 67,
         "w": 12,
         "h": 11
       },
@@ -414,11 +414,11 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 64,
+        "y": 78,
         "w": 12,
         "h": 21
       },
-      "description": "2026-06-25 에 $36.18 을 쓴 날이 있습니다. 모든 호출이 성공이라 아무 알람도 울리지 않았습니다.",
+      "description": "하루 = 한국 시간(KST) 0시~24시. 기록이 없는 날은 0 으로 표시합니다. 막대 = 그날 성공한 LLM 호출의 비용 합계(가격표에 없는 모델은 0 으로 계산), 선 = 호출 수(오른쪽 축). 맥미니에서 claude -p 로 만드는 v2 요약은 이 표에 기록되지 않습니다. 2026-06-25 에 $36.18 을 쓴 날이 있었고, 모든 호출이 성공이라 알람이 울리지 않았습니다.",
       "targets": [
         {
           "refId": "A",
@@ -428,15 +428,18 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT date_trunc('day', created_at) AS time, sum(cost_usd) AS \"지출\"\n  FROM llm_call_logs\n WHERE status = 'success' AND $__timeFilter(created_at)\n GROUP BY 1 ORDER BY 1"
+          "rawSql": "WITH days AS (\n  SELECT generate_series(\n           date_trunc('day', $__timeFrom()::timestamptz AT TIME ZONE 'Asia/Seoul'),\n           date_trunc('day', $__timeTo()::timestamptz AT TIME ZONE 'Asia/Seoul'),\n           interval '1 day') AS d\n), spend AS (\n  SELECT date_trunc('day', created_at AT TIME ZONE 'Asia/Seoul') AS d,\n         sum(coalesce(cost_usd, 0)) AS usd,\n         count(*) AS calls\n    FROM llm_call_logs\n   WHERE status = 'success' AND $__timeFilter(created_at)\n   GROUP BY 1\n)\nSELECT days.d AT TIME ZONE 'Asia/Seoul' AS time,\n       round(coalesce(spend.usd, 0)::numeric, 4) AS \"지출\",\n       coalesce(spend.calls, 0) AS \"호출 수\"\n  FROM days LEFT JOIN spend USING (d)\n ORDER BY 1"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "currencyUSD",
           "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 2
+            "drawStyle": "bars",
+            "barAlignment": 1,
+            "fillOpacity": 70,
+            "lineWidth": 1,
+            "showPoints": "never"
           },
           "thresholds": {
             "mode": "absolute",
@@ -452,7 +455,48 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "호출 수"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "line"
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "always"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 6
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -465,7 +509,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 53,
+        "y": 67,
         "w": 12,
         "h": 11
       },
@@ -518,7 +562,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 64,
+        "y": 78,
         "w": 12,
         "h": 21
       },
@@ -571,7 +615,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 85,
+        "y": 99,
         "w": 12,
         "h": 11
       },
@@ -845,7 +889,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 85,
+        "y": 99,
         "w": 12,
         "h": 11
       },
@@ -885,7 +929,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 96,
+        "y": 110,
         "w": 24,
         "h": 8
       },
@@ -933,7 +977,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 104,
+        "y": 118,
         "w": 6,
         "h": 4
       },
@@ -989,7 +1033,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 104,
+        "y": 118,
         "w": 6,
         "h": 4
       },
@@ -1045,7 +1089,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 104,
+        "y": 118,
         "w": 6,
         "h": 4
       },
@@ -1101,7 +1145,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 104,
+        "y": 118,
         "w": 6,
         "h": 4
       },
@@ -1157,7 +1201,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 108,
+        "y": 122,
         "w": 12,
         "h": 9
       },
@@ -1212,7 +1256,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 108,
+        "y": 122,
         "w": 12,
         "h": 9
       },
@@ -1266,7 +1310,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 117,
+        "y": 131,
         "w": 24,
         "h": 12
       },
@@ -1336,6 +1380,22 @@
       "options": {
         "cellHeight": "sm",
         "showHeader": true
+      }
+    },
+    {
+      "id": 41,
+      "type": "text",
+      "title": "검사별 의미",
+      "description": "각 검사가 무엇을 확인하는지, 언제 실패가 되는지, 실패하면 무엇을 하는지. 조건은 scripts/keel/checks.ts · check-cloud-posture.ts · check-aws-cost.ts 기준.",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 14
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "| 검사 | 무엇을 확인하나 | 빨간색(실패)이 되는 조건 | 빨간색일 때 할 일 |\n|---|---|---|---|\n| aws-cost | AWS 이번 달 누적 비용 | 월 예산 $40 의 70%($28) 이상 | 표 \"AWS 월 누적\" 에서 비용이 큰 서비스를 확인 |\n| cloud-posture | AWS 계정의 보안 기본 설정이 그대로 켜져 있는지: 감사 로그(CloudTrail) 기록·전 리전·위변조 검증, 보안 경보 8종, 디스크 기본 암호화, 비밀번호 14자 이상 정책, 감사 로그 저장소 공개 차단, **경보를 받을 이메일 구독** | 위 항목 중 하나라도 꺼졌거나 읽을 수 없음. 예: \"no confirmed subscription\" = 보안 경보가 울려도 받을 이메일이 없음 | 내용 칸이 가리키는 항목을 되살림. 구독 문제는 받을 주소로 구독을 걸고 그 메일에서 확인(Confirm)을 누름 |\n| db-schema | 코드가 쓰는 테이블·컬럼이 실제 DB 에 있는지 | 빠진 테이블·컬럼이 있음(prisma 가 조용히 빠뜨리는 사고) | 빠진 이름에 대한 SQL 을 DB 에 적용 |\n| deploy-drift | 배포 설정에 적힌 API 버전 = 실제로 돌고 있는 API 버전 | 머지 후 30분이 지나도 둘이 다름(배포가 중간에 멈춤) | 배포 핀 PR 머지 여부와 ArgoCD 동기화 확인 |\n| iam-hygiene | AWS 로그인 계정 관리: 콘솔 비밀번호가 있는 사용자는 MFA, 액세스 키는 90일 이내, 30일 넘게 안 쓴 키 없음 | 조건 중 하나라도 어김. 예: \"console without MFA: admin\" = admin 사용자가 MFA 없이 콘솔 로그인 가능 | MFA 등록, 또는 쓰지 않는 콘솔 비밀번호·키 제거 |\n| llm-spend | LLM 지출(오늘·이번 달) | 일 한도 $10 또는 월 한도 $50 의 70% 이상 | 표 \"단계별 지출\" 에서 비용이 큰 단계를 확인 |\n| pipeline-freshness | 자막 수집과 요약 생성이 멈추지 않았는지(마지막 기록의 나이). LLM 호출 나이는 참고 표시 | 자막 3일, 요약 7일 넘게 새 기록 없음 | 맥미니 자막 수집기 실행 상태 확인 |\n| public-surface | insighta.one 이 응답하는지, HTTPS 인증서가 충분히 남았는지 | 사이트 무응답, 또는 인증서 만료 14일 미만 | 서버 상태 확인, 인증서 자동 갱신(cert-manager) 확인 |\n| service-reachability | 서버가 외부 의존 서비스에 닿아서 기능별로 동작 가능한지 | 하나 이상의 기능이 쓸 수 없는 상태 | 내용 칸에 적힌 기능·서비스 확인 |\n| supply-chain | 백엔드·프론트 의존성의 알려진 보안 취약점 | critical 또는 high 가 1개 이상 | 해당 패키지 업그레이드 |\n| transcript-proxies | 자막을 가져오는 프록시 2곳(Azure·맥미니)이 응답하는지 | 한 곳이라도 무응답(예비가 없는 상태) | 내용 칸에 적힌 프록시 확인 |\n"
       }
     }
   ]
