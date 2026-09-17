@@ -15,9 +15,12 @@ import { IssueDocumentSchema, findUngroundedClaims } from '@/modules/newsletter/
 import type { IssueDocument } from '@/modules/newsletter/issue-schema';
 import { runPublishGates } from '@/modules/newsletter/publish-gates';
 import { missingNavLabel } from '@/modules/newsletter/publish-gate';
+import { runDocumentChecks } from '@/modules/newsletter/v2/doc-checks';
 
 const ROOT = resolve(__dirname, '../..');
 const IN = (f: string): string => resolve(ROOT, 'tests/brief/input', f);
+/** Derived numbers the issue declares. Absent until an issue ships one. */
+const CALC_PATH = resolve(ROOT, 'tests/brief/input/calculations.json');
 
 type Axis = {
   value: number | string | null;
@@ -77,18 +80,14 @@ async function detect(doc: unknown): Promise<string[]> {
     if (real && real.count !== b.count) found.push(`funnel: ${b.key} ${b.count} ≠ ${real.count}`);
   }
 
-  // 본문 인용 ↔ 출처 목록
-  const text = JSON.stringify(d.stories) + JSON.stringify(d.insight);
-  const cited = new Set((text.match(/\b[A-Za-z0-9_-]{11}\b/g) ?? []).filter((s) => /[-_]|[A-Z]/.test(s)));
-  const listed = new Set<string>();
-  for (const r of d.refs)
-    for (const s of r.sources) {
-      const m = /v=([A-Za-z0-9_-]{11})/.exec(s.url ?? '');
-      if (m?.[1]) listed.add(m[1]);
-      if ((s.url ?? '').includes('insighta.one')) found.push(`self-cite: ${r.label}`);
-    }
-  for (const p of d.picks) if (p.videoId) listed.add(p.videoId);
-  for (const c of cited) if (!listed.has(c)) found.push(`uncited: ${c}`);
+  // 문서 대 재료 — src/modules/newsletter/v2/doc-checks.ts 가 판정한다.
+  // 검출 로직을 이 하네스에 두지 않는 이유: 하네스는 재기만 하고, 잡는 것은
+  // 제품 코드가 해야 매 초안에서도 같은 판정이 나온다.
+  const calcs = existsSync(CALC_PATH)
+    ? (JSON.parse(readFileSync(CALC_PATH, 'utf8')) as Parameters<typeof runDocumentChecks>[2])
+    : [];
+  for (const f of runDocumentChecks(d, { factsText: readFileSync(IN('facts.md'), 'utf8'), funnelBuckets: truth.funnel.buckets }, calcs))
+    found.push(`${f.check}: ${f.where} — ${f.detail}`);
 
   return found;
 }
@@ -104,8 +103,18 @@ async function main(): Promise<void> {
   const cleanFindings = await detect(base);
   const caught: string[] = [];
   const missed: Array<{ id: string; kind: string; expect: string }> = [];
+  // A poison that does not change the document is a broken fixture, not a
+  // missed detection. Counting it as missed hides the breakage and makes the
+  // score look worse for the wrong reason; counting it as caught would hide it
+  // and make the score look better. It gets its own bucket.
+  const invalid: Array<{ id: string; path: string }> = [];
   for (const p of poisons) {
-    const findings = await detect(applyPoison(base, p));
+    const mutated = applyPoison(base, p);
+    if (JSON.stringify(mutated) === JSON.stringify(base)) {
+      invalid.push({ id: p.id, path: p.path });
+      continue;
+    }
+    const findings = await detect(mutated);
     const isNew = findings.some((f) => !cleanFindings.includes(f));
     if (isNew) caught.push(p.id);
     else missed.push({ id: p.id, kind: p.kind, expect: p.expect });
@@ -136,7 +145,9 @@ async function main(): Promise<void> {
       value: `${caught.length}/${poisons.length}`,
       pass: caught.length === poisons.length,
       status: 'measured',
-      note: missed.length ? `놓친 것: ${missed.map((m) => `${m.id}(${m.kind})`).join(', ')}` : '전건 검출',
+      note:
+        (missed.length ? `놓친 것: ${missed.map((m) => `${m.id}(${m.kind})`).join(', ')}` : '전건 검출') +
+        (invalid.length ? ` | 문서를 바꾸지 못한 오염(픽스처 결함): ${invalid.map((i) => i.id).join(', ')}` : ''),
     },
     T6_가독성: {
       value: null, pass: false, status: 'not-measurable',
@@ -157,7 +168,7 @@ async function main(): Promise<void> {
     round: 0,
     inputSha: readFileSync(resolve(ROOT, 'tests/brief/input.sha256'), 'utf8').trim().split('\n').length,
     axes,
-    detail: { t5: { caught, missed, cleanFindings } },
+    detail: { t5: { caught, missed, invalid, cleanFindings } },
   };
 
   const outArg = process.argv.indexOf('--out');
