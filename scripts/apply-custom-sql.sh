@@ -68,6 +68,12 @@ APPLY_FILES=(
   "prisma/migrations/pipeline-events/001_create_pipeline_events.sql"
   "prisma/migrations/note_documents/001_create_table.sql"
   "prisma/migrations/video_pool/001_add_tsvector_gin_index.sql"
+  # The v2.1 brief data model. The DDL shipped with #1632 but never reached
+  # this allowlist, so `prisma db push` silently dropped all eighteen tables
+  # on Supabase and the deploy's own table check failed the release. The file
+  # is idempotent -- every table, index and trigger is IF NOT EXISTS or
+  # CREATE OR REPLACE -- so it is safe on every deploy.
+  "prisma/migrations/newsletter-v2/001_nl_core.sql"
   "prisma/migrations/discover-traces/001_create_video_discover_traces.sql"
   "prisma/migrations/billing/001_billing_subscriptions.sql"
   "prisma/migrations/billing/002_billing_events.sql"
