@@ -142,6 +142,21 @@ jobs:
         # environment: (silent-override class, §10-C). See the script header.
         run: bash scripts/ci/check-config-ssot.sh
 
+  sql-allowlist:
+    name: SQL Allowlist
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: New raw DDL must be in the apply-custom-sql allowlist
+        # `prisma db push` silent-fails on Supabase, so raw DDL is the fallback
+        # -- but the runner uses an explicit allowlist. #1632 added eighteen
+        # tables and not the allowlist entry, and the release failed with
+        # seventeen missing tables. Sixth recurrence of the class.
+        run: bash scripts/ci/check-sql-allowlist.sh origin/${{ github.base_ref || 'main' }}
+
   pr-body-english:
     name: PR Body English
     runs-on: ubuntu-latest
