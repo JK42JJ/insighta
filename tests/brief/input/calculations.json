@@ -1,0 +1,45 @@
+[
+  {
+    "label": "동시 수용 요청 수 (2,000토큰)",
+    "inputs": { "pool": 637000, "ctx": 2000 },
+    "formula": "pool / ctx",
+    "result": 318,
+    "rounding": "floor",
+    "unit": "요청"
+  },
+  {
+    "label": "동시 수용 요청 수 (256,000토큰)",
+    "inputs": { "pool": 637000, "ctx": 256000 },
+    "formula": "pool / ctx",
+    "result": 2,
+    "rounding": "floor",
+    "unit": "요청"
+  },
+  {
+    "label": "충전율의 비",
+    "inputs": { "high": 0.99843, "low": 0.80377 },
+    "formula": "high / low",
+    "result": 1.24,
+    "rounding": "none",
+    "label_means": "두 충전율의 비",
+    "unit": "배"
+  },
+  {
+    "label": "KV 캐시 총량",
+    "inputs": { "tokens": 262144, "perToken": 0.0000610351562 },
+    "formula": "tokens * perToken",
+    "result": 16,
+    "rounding": "none",
+    "unit": "GiB",
+    "inputUnits": { "tokens": "token", "perToken": "GiB" }
+  },
+  {
+    "label": "3비트 빌드 + KV",
+    "inputs": { "weights": 11.77, "kv": 17.18 },
+    "formula": "weights + kv",
+    "result": 28.95,
+    "rounding": "none",
+    "unit": "GB",
+    "inputUnits": { "weights": "GB", "kv": "GB" }
+  }
+]

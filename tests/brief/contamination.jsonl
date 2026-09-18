@@ -1,20 +1,20 @@
 {"id": "C01", "kind": "numeric", "why": "근거에 없는 값으로 교체. 풀 크기 637,000 → 737,000", "path": "stories.0.blocks.3.html", "op": "replace", "from": "637,000", "to": "737,000", "expect": "수치 정렬 게이트"}
-{"id": "C02", "kind": "rounding", "why": "318.5를 318로 단정하고 소수부를 버린 사실을 감춤", "path": "interest.ledger.3.desc", "op": "replace", "from": "318.5", "to": "318", "expect": "계산 원장 반올림 필드"}
-{"id": "C03", "kind": "unit", "why": "GiB와 GB를 같은 단위로 더함", "path": "stories.4.blocks.4.rows.0.2", "op": "set", "from": "17.18GB", "to": "16GB", "expect": "계산 원장 단위 검사"}
-{"id": "C04", "kind": "domain", "why": "한 점의 값을 전 구간 규칙으로 일반화", "path": "stories.4.blocks.5.html", "op": "append", "from": "가장 크게 비는", "to": " 어떤 길이에서도 절반이 빕니다.", "expect": "계산 원장 정의역"}
+{"id": "C02", "kind": "rounding", "why": "318.5를 318로 단정하고 소수부를 버린 사실을 감춤", "path": "0.rounding", "op": "set", "expect": "계산 원장 반올림 필드", "target": "calc", "to": "none"}
+{"id": "C03", "kind": "unit", "why": "GiB와 GB를 같은 단위로 더함", "path": "4.inputUnits.kv", "op": "set", "expect": "계산 원장 단위 검사", "target": "calc", "to": "GiB"}
+{"id": "C04", "kind": "domain", "why": "한 점의 값을 전 구간 규칙으로 일반화", "path": "2.domain", "op": "set", "expect": "계산 원장 정의역", "target": "calc", "to": {"variable": "low", "from": 0.5, "to": 0.99}}
 {"id": "C05", "kind": "label", "why": "충전율의 비를 낭비의 비로 호명", "path": "interest.ledger.4.desc", "op": "replace", "from": "충전율의 비", "to": "버려지는 자리의 비", "expect": "계산 원장 라벨 대조"}
 {"id": "C06", "kind": "self-cite", "why": "이 호 자신의 URL을 출처로 등재", "path": "refs.0.sources.0.url", "op": "set", "to": "https://insighta.one/brief/2026-09-15-ai-tech", "expect": "출처 유효성 게이트"}
 {"id": "C07", "kind": "dead-link", "why": "열리지 않는 URL", "path": "refs.0.sources.0.url", "op": "set", "to": "https://www.youtube.com/watch?v=00000000000", "expect": "video-resolves / source-url 게이트"}
 {"id": "C08", "kind": "uncited", "why": "출처 목록에 없는 영상을 본문이 인용", "path": "stories.0.blocks.0.html", "op": "append", "to": " (zzzZZZzz-Az)", "expect": "인용↔출처 대조 게이트"}
 {"id": "C09", "kind": "ungrounded-grade", "why": "확인 등급인데 ref 없음", "path": "interest.ledger.6.ref", "op": "delete", "expect": "findUngroundedClaims"}
 {"id": "C10", "kind": "grade-source", "why": "확인 등급인데 근거가 영상 하나", "path": "interest.ledger.12.grade", "op": "set", "to": "verified", "expect": "등급 규율 — 확인은 1차 출처만"}
-{"id": "C11", "kind": "attribution", "why": "재료에 없는 귀속을 만들어 냄", "path": "stories.4.blocks.3.html", "op": "append", "to": " 두 영상 모두 이 파일을 4비트라고 불렀습니다.", "expect": "귀속 가드 / 근거 인용구 검증"}
-{"id": "C12", "kind": "fabrication", "why": "재료에 없는 사실 단정", "path": "stories.0.blocks.2.html", "op": "append", "to": " 게이트웨이 뒤의 복제본은 하나였습니다.", "expect": "근거 인용구 검증"}
-{"id": "C13", "kind": "quote-form", "why": "영상이 하지 않은 말을 인용형으로", "path": "stories.4.title", "op": "replace", "from": "몇 비트인지", "to": "12GB에 올라간다던 그 파일이 몇 비트인지", "expect": "귀속 가드"}
+{"id": "C11", "kind": "attribution", "why": "영상이 하지 않은 말을 했다고 적음. 수치는 그대로여서 수치 검사로는 안 잡힌다", "path": "4.text", "op": "set", "expect": "귀속 검사 — 인용구 없는 전언", "target": "sentences", "to": "두 영상 모두 이 파일을 4비트라고 불렀습니다."}
+{"id": "C12", "kind": "fabrication", "why": "재료에 없는 사실 단정", "path": "1.quoted", "op": "set", "expect": "근거 인용구 검증", "target": "sentences", "to": "게이트웨이 뒤의 복제본은 하나였습니다"}
+{"id": "C13", "kind": "quote-form", "why": "출처에 없는 말을 인용구로 붙임. 수치는 인용구에 있어 수치 검사는 통과한다", "path": "4", "op": "set", "expect": "근거 인용구 검사 — 인용구가 출처에 없음", "target": "sentences", "to": {"where": "꼭지5 제목", "text": "12GB에 올라간다던 그 파일은 3비트였습니다.", "quoted": "12GB에 올라간다", "sourceText": "11.8GB 파일 하나로 줄었다. 12GB 그래픽카드가 이 모델을 실제로 돌릴 수 있느냐"}}
 {"id": "C14", "kind": "pick-id", "why": "추천에 videoId 없음", "path": "picks.0.videoId", "op": "delete", "expect": "checkVideoIds"}
 {"id": "C15", "kind": "pick-id-form", "why": "videoId가 11자가 아님", "path": "picks.0.videoId", "op": "set", "to": "abc123", "expect": "checkVideoIds"}
 {"id": "C16", "kind": "navlabel", "why": "navLabel 18자 초과", "path": "stories.0.navLabel", "op": "set", "to": "열아홉 글자가 넘어가는 아주 긴 사이드바 라벨", "expect": "missingNavLabel / 스키마"}
 {"id": "C17", "kind": "funnel", "why": "깔때기 버킷 합이 실측과 어긋남", "path": "interest.funnel.buckets.0.count", "op": "set", "to": 9999, "expect": "깔때기 대조 게이트"}
-{"id": "C18", "kind": "date", "why": "날짜 오기 — 창간호 사고 유형", "path": "interest.ledger.7.value", "op": "replace", "from": "89", "to": "98", "expect": "수치 정렬 게이트"}
+{"id": "C18", "kind": "date", "why": "날짜 오기 — 창간호 사고 유형", "path": "2.text", "op": "replace", "expect": "수치 정렬 게이트", "target": "sentences", "from": "92.8", "to": "98.2"}
 {"id": "C19", "kind": "count-mismatch", "why": "본문 인용 편수와 편집 노트의 수가 어긋남", "path": "editNote", "op": "replace", "from": "15편", "to": "11편", "expect": "편수 일관성 게이트"}
 {"id": "C20", "kind": "xref", "why": "통찰 절이 존재하지 않는 체크포인트를 가리킴", "path": "insight.blocks.1.html", "op": "append", "to": " 제3호 측정 목록의 아홉 번째 항목이 그것입니다.", "expect": "상호 참조 게이트"}

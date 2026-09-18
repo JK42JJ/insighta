@@ -30,11 +30,26 @@ export interface DocFinding {
 /** A derived number the issue declares, so a checker can recompute it. */
 export interface Calculation {
   label: string;
+  /** Each input with the unit it is written in. A bare number cannot be checked. */
   inputs: Record<string, number>;
+  /** Unit per input name, where the input carries one: `{ kv: 'GiB', weights: 'GB' }`. */
+  inputUnits?: Record<string, string>;
   formula: string;
   result: number;
   unit?: string;
   rounding?: 'floor' | 'ceil' | 'round' | 'none';
+  /**
+   * What the number is, in the words the issue uses for it. Checked against the
+   * sentence that prints it: issue 2 called a ratio of fill rates "the share of
+   * seats thrown away", and those are different quantities -- 1.24 against 125.
+   */
+  label_means?: string;
+  /**
+   * The range the formula was checked over, when the issue states the result as
+   * a rule rather than one reading. "Past the boundary half the card empties"
+   * holds at one boundary out of four; the others waste a third and a quarter.
+   */
+  domain?: { variable: string; from: number; to: number };
 }
 
 const YOUTUBE_ID = /\b[A-Za-z0-9_-]{11}\b/g;
@@ -201,19 +216,115 @@ export function checkCalculations(calculations: Calculation[]): DocFinding[] {
   return findings;
 }
 
-/** GiB and GB are not the same unit, and an issue that adds them says so. */
+/**
+ * Adding GiB to GB is a bug the arithmetic cannot see.
+ *
+ * 16 GiB is 17.18 GB. An issue that adds them and prints the sum in one of the
+ * two is out by 1.18 GB, which in issue 2 was a third of the margin the whole
+ * story turned on. The recompute check passes it: the numbers add up, they are
+ * just not the same kind of number.
+ */
+const BINARY_UNIT = /^(Ki|Mi|Gi|Ti)B$/;
+const DECIMAL_UNIT = /^(K|M|G|T)?B$/;
+
 export function checkUnitsConsistent(calculations: Calculation[]): DocFinding[] {
   const findings: DocFinding[] = [];
   for (const c of calculations) {
-    if (!c.unit) continue;
-    const binary = /iB$/.test(c.unit);
-    const mixed = /\b\d+(\.\d+)?\s?(GB|MB|KB)\b/.test(c.formula) && binary;
-    if (mixed)
+    const units = Object.entries(c.inputUnits ?? {});
+    // Only additive formulas are checked. A division that mixes units is often
+    // exactly the point -- bytes per token, tokens per second.
+    const additive = /[+-]/.test(c.formula) && !/[*/]/.test(c.formula);
+    if (!additive || units.length < 2) continue;
+
+    const binary = units.filter(([, u]) => BINARY_UNIT.test(u));
+    const decimal = units.filter(([, u]) => DECIMAL_UNIT.test(u) && !BINARY_UNIT.test(u));
+    if (binary.length > 0 && decimal.length > 0) {
       findings.push({
         check: 'unit-mixed',
         where: c.label,
-        detail: `result is ${c.unit} but the formula carries decimal units`,
+        detail:
+          `adds ${binary.map(([k, u]) => `${k} in ${u}`).join(', ')} to ` +
+          `${decimal.map(([k, u]) => `${k} in ${u}`).join(', ')} — convert before adding`,
       });
+    }
+    if (c.unit && !units.some(([, u]) => u === c.unit)) {
+      findings.push({
+        check: 'unit-result',
+        where: c.label,
+        detail: `result is stated in ${c.unit}, which no input uses`,
+      });
+    }
+  }
+  return findings;
+}
+
+/**
+ * A number's name has to match what was computed.
+ *
+ * Issue 2 computed the ratio of two fill rates, 1.24, and called it the share
+ * of seats thrown away. That quantity is 125 — a hundred times off, under a
+ * name a reader would take at face value. The check is a word test, not a
+ * numeric one: it looks for the issue calling a ratio a waste or a share.
+ */
+export function checkCalculationLabels(
+  calculations: Calculation[],
+  doc: IssueDocument
+): DocFinding[] {
+  const findings: DocFinding[] = [];
+  const text = bodyText(doc) + JSON.stringify(doc.interest.ledger);
+  for (const c of calculations) {
+    if (!c.label_means) continue;
+    const near = new RegExp(`[^.。]{0,80}${c.result}배[^.。]{0,80}`, 'g');
+    for (const m of text.match(near) ?? []) {
+      const saysWaste = /버려지|낭비|버린/.test(m);
+      const meansWaste = /버려지|낭비|버린/.test(c.label_means);
+      if (saysWaste !== meansWaste)
+        findings.push({
+          check: 'calculation-label',
+          where: c.label,
+          detail: `computed as "${c.label_means}" but the text around ${c.result}배 names it differently`,
+        });
+    }
+  }
+  return findings;
+}
+
+/**
+ * A result stated as a rule has to hold across the range, not at one reading.
+ *
+ * "Past the boundary half the card empties" is true at one of four boundaries.
+ * At the others a third empties, or a quarter. A calculation that declares a
+ * domain gets swept; one that does not is a single reading and the issue has
+ * to print it as one.
+ */
+export function checkCalculationDomain(calculations: Calculation[]): DocFinding[] {
+  const findings: DocFinding[] = [];
+  for (const c of calculations) {
+    if (!c.domain) continue;
+    const { variable, from, to } = c.domain;
+    const steps = 200;
+    let matches = 0;
+    let sampled = 0;
+    for (let i = 0; i <= steps; i++) {
+      const x = from + ((to - from) * i) / steps;
+      let got: number;
+      try {
+        got = evaluateFormula(c.formula, { ...c.inputs, [variable]: x });
+      } catch {
+        continue;
+      }
+      sampled++;
+      if (Math.abs(got - c.result) < 1e-6) matches++;
+    }
+    if (sampled > 0 && matches < sampled) {
+      findings.push({
+        check: 'calculation-domain',
+        where: c.label,
+        detail:
+          `${c.result} holds at ${matches} of ${sampled} points over ${variable} ` +
+          `${from}..${to} — state it as one reading, not a rule`,
+      });
+    }
   }
   return findings;
 }
@@ -322,16 +433,158 @@ export function checkCrossReferences(doc: IssueDocument): DocFinding[] {
 export function runDocumentChecks(
   doc: IssueDocument,
   materials: Materials,
-  calculations: Calculation[] = []
+  calculations: Calculation[] = [],
+  sentences: GroundedSentence[] = []
 ): DocFinding[] {
   return [
     ...checkNumbersGrounded(doc, materials, calculations),
     ...checkCalculations(calculations),
     ...checkUnitsConsistent(calculations),
+    ...checkCalculationLabels(calculations, doc),
+    ...checkCalculationDomain(calculations),
+    ...checkGroundingQuotes(sentences),
+    ...checkQuoteCarriesFigures(sentences),
+    ...checkAttributionQuoted(sentences),
     ...checkCitationsListed(doc),
     ...checkNoSelfCitation(doc),
     ...checkVerifiedHasPrimary(doc),
     ...checkSelfCounts(doc),
     ...checkCrossReferences(doc),
   ];
+}
+
+/**
+ * A sentence in the issue, paired with the source text it leans on.
+ *
+ * `quoted` is the verbatim run from the source that justifies the sentence --
+ * `nl_evidence.quoted` in the v2.1 model. The check below is one `includes`,
+ * and it is the cheapest honest thing this pipeline can do: a sentence whose
+ * quote is not in its source is either paraphrased past what the source says
+ * or invented outright, and both read the same from the outside.
+ */
+export interface GroundedSentence {
+  /** Where it sits, for the finding. */
+  where: string;
+  /** The sentence as the issue prints it. */
+  text: string;
+  /** Verbatim run from the source, as the source wrote it. */
+  quoted: string;
+  /** The source text the quote should be found in. */
+  sourceText: string;
+}
+
+/**
+ * Compare the way a reader would, not the way a byte comparator would.
+ *
+ * NFC because macOS hands back decomposed Hangul and Postgres stores composed:
+ * the same title read from the Mac Mini's cache and from the database look
+ * identical on screen and differ byte for byte. Whitespace collapses because a
+ * caption line break is not a difference in what was said.
+ */
+function forComparison(s: string): string {
+  return s.normalize('NFC').replace(/\s+/g, ' ').trim();
+}
+
+/** A quote that is not in its source did not come from it. */
+export function checkGroundingQuotes(sentences: GroundedSentence[]): DocFinding[] {
+  const findings: DocFinding[] = [];
+  for (const s of sentences) {
+    const quote = forComparison(s.quoted);
+    if (quote.length === 0) {
+      findings.push({
+        check: 'grounding-quote',
+        where: s.where,
+        detail: 'no quote for a sentence that needs one',
+      });
+      continue;
+    }
+    if (!forComparison(s.sourceText).includes(quote)) {
+      findings.push({
+        check: 'grounding-quote',
+        where: s.where,
+        detail: `the quote is not in the source: "${s.quoted.slice(0, 60)}"`,
+      });
+    }
+  }
+  return findings;
+}
+
+/**
+ * Numbers and proper nouns in a sentence have to be in the quote that backs it.
+ *
+ * The quote check alone passes a sentence that keeps a real quote and changes a
+ * figure beside it. Issue 1 shipped two dates that way -- reported 8/23 where
+ * the source said 8/16, published 7/24 where it said 7/2 -- and both sat under
+ * a 확인 badge. This compares the tokens, so a changed digit is a finding even
+ * when every other word is verbatim.
+ */
+export function checkQuoteCarriesFigures(sentences: GroundedSentence[]): DocFinding[] {
+  const findings: DocFinding[] = [];
+  for (const s of sentences) {
+    const inQuote = new Set(numbersIn(s.quoted));
+    for (const n of numbersIn(s.text)) {
+      const v = Number(n);
+      if (!Number.isFinite(v) || v < 10) continue;
+      if (!inQuote.has(n))
+        findings.push({
+          check: 'figure-not-in-quote',
+          where: s.where,
+          detail: `the sentence says ${n}; the quote backing it does not`,
+        });
+    }
+  }
+  return findings;
+}
+
+/**
+ * An issue may not put words in a source's mouth.
+ *
+ * Reported-speech forms -- `~다던`, `~라고 했다`, `~라고 불렀다` -- assert that
+ * someone said a thing. When the quote does not carry it, the issue has
+ * invented an attribution. Issue 2 did this three times in a row at the same
+ * sentence: each round the wording softened and the attribution stayed, and it
+ * closed only when the clause was deleted rather than rewritten.
+ */
+const REPORTED_SPEECH = /(다던|라고 (했|불렀|적었|말했)|고 밝혔|라고 주장)/;
+
+/**
+ * What is being put in the source's mouth.
+ *
+ * In `이 파일을 4비트라고 불렀습니다` the reported content is `4비트`: the run
+ * immediately before the quotative particle. Crude, and it has to be — the
+ * alternative is a model deciding whether a paraphrase is fair, and this
+ * pipeline does not let a model near that question.
+ */
+function reportedContent(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/([^\s,.。]{1,20})\s*(?:라고|다던)/g)) if (m[1]) out.push(m[1]);
+  return out;
+}
+
+export function checkAttributionQuoted(sentences: GroundedSentence[]): DocFinding[] {
+  const findings: DocFinding[] = [];
+  for (const s of sentences) {
+    if (!REPORTED_SPEECH.test(s.text)) continue;
+    const quote = forComparison(s.quoted);
+    if (quote.length === 0) {
+      findings.push({
+        check: 'attribution-unquoted',
+        where: s.where,
+        detail: 'reports what a source said, with no quote to show it said so',
+      });
+      continue;
+    }
+    // A quote that is present but about something else is the harder case, and
+    // the one issue 2 kept producing: the sentence softened each round and the
+    // attribution survived. The reported content has to be in the quote.
+    for (const term of reportedContent(s.text)) {
+      if (!quote.includes(forComparison(term)))
+        findings.push({
+          check: 'attribution-unquoted',
+          where: s.where,
+          detail: `says the source called it "${term}"; the quote does not contain that`,
+        });
+    }
+  }
+  return findings;
 }

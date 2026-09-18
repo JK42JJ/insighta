@@ -21,6 +21,12 @@ const ROOT = resolve(__dirname, '../..');
 const IN = (f: string): string => resolve(ROOT, 'tests/brief/input', f);
 /** Derived numbers the issue declares. Absent until an issue ships one. */
 const CALC_PATH = resolve(ROOT, 'tests/brief/input/calculations.json');
+/**
+ * The sentence-and-quote pairs an issue carries. In the pipeline these come
+ * from `nl_evidence`; here they are a fixture, because the point is to measure
+ * whether the checks catch a bad pair, not whether the database round-trips.
+ */
+const SENT_PATH = resolve(ROOT, 'tests/brief/input/sentences.json');
 
 type Axis = {
   value: number | string | null;
@@ -36,6 +42,14 @@ interface Poison {
   id: string;
   kind: string;
   why: string;
+  /**
+   * Which material the defect lives in. A rounding, a unit or a domain claim
+   * cannot be expressed in prose alone -- a number in a sentence carries no
+   * declared unit -- so those poisons land on the calculation the issue
+   * declares. An invented attribution lands on the sentence-and-quote pair.
+   * Default is the document, which is where most of them belong.
+   */
+  target?: 'doc' | 'calc' | 'sentences';
   path: string;
   op: 'replace' | 'set' | 'delete' | 'append';
   from?: string;
@@ -43,11 +57,17 @@ interface Poison {
   expect: string;
 }
 
-function applyPoison(doc: IssueDocument, p: Poison): IssueDocument {
-  const next = clone(doc);
+function applyPoison(bundle: Bundle, p: Poison): Bundle {
+  const next = clone(bundle);
+  const root: Record<string, unknown> =
+    p.target === 'calc'
+      ? (next.calcs as unknown as Record<string, unknown>)
+      : p.target === 'sentences'
+        ? (next.sentences as unknown as Record<string, unknown>)
+        : (next.doc as Record<string, unknown>);
   const parts = p.path.split('.');
   const last = parts.pop() as string;
-  let cur: Record<string, unknown> = next as unknown as Record<string, unknown>;
+  let cur = root;
   for (const seg of parts) cur = cur[seg] as Record<string, unknown>;
   if (p.op === 'delete') delete cur[last];
   else if (p.op === 'set') cur[last] = p.to;
@@ -57,7 +77,14 @@ function applyPoison(doc: IssueDocument, p: Poison): IssueDocument {
 }
 
 /** 지금 동원할 수 있는 모든 검사를 한 문서에 돌리고 잡힌 사유를 모은다. */
-async function detect(doc: unknown): Promise<string[]> {
+interface Bundle {
+  doc: unknown;
+  calcs: Parameters<typeof runDocumentChecks>[2];
+  sentences: Parameters<typeof runDocumentChecks>[3];
+}
+
+async function detect(bundle: Bundle): Promise<string[]> {
+  const doc = bundle.doc;
   const found: string[] = [];
   const parsed = IssueDocumentSchema.safeParse(doc);
   if (!parsed.success) {
@@ -83,17 +110,23 @@ async function detect(doc: unknown): Promise<string[]> {
   // 문서 대 재료 — src/modules/newsletter/v2/doc-checks.ts 가 판정한다.
   // 검출 로직을 이 하네스에 두지 않는 이유: 하네스는 재기만 하고, 잡는 것은
   // 제품 코드가 해야 매 초안에서도 같은 판정이 나온다.
-  const calcs = existsSync(CALC_PATH)
-    ? (JSON.parse(readFileSync(CALC_PATH, 'utf8')) as Parameters<typeof runDocumentChecks>[2])
-    : [];
-  for (const f of runDocumentChecks(d, { factsText: readFileSync(IN('facts.md'), 'utf8'), funnelBuckets: truth.funnel.buckets }, calcs))
+  for (const f of runDocumentChecks(
+    d,
+    { factsText: readFileSync(IN('facts.md'), 'utf8'), funnelBuckets: truth.funnel.buckets },
+    bundle.calcs,
+    bundle.sentences
+  ))
     found.push(`${f.check}: ${f.where} — ${f.detail}`);
 
   return found;
 }
 
 async function main(): Promise<void> {
-  const base = JSON.parse(readFileSync(IN('issue2-handmade.json'), 'utf8')) as IssueDocument;
+  const base: Bundle = {
+    doc: JSON.parse(readFileSync(IN('issue2-handmade.json'), 'utf8')) as IssueDocument,
+    calcs: existsSync(CALC_PATH) ? JSON.parse(readFileSync(CALC_PATH, 'utf8')) : [],
+    sentences: existsSync(SENT_PATH) ? JSON.parse(readFileSync(SENT_PATH, 'utf8')) : [],
+  };
   const poisons = readFileSync(resolve(ROOT, 'tests/brief/contamination.jsonl'), 'utf8')
     .trim()
     .split('\n')
