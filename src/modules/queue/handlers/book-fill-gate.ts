@@ -22,6 +22,7 @@ import { isBookFillBarrierEnabled } from '@/config/book-gate';
 import { JOB_NAMES } from '../types';
 import { enqueueMandalaBookFill } from './mandala-book-fill';
 import { bookRefillEnqueueOptions } from './book-refill-debounce';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 const log = logger.child({ module: 'queue/book-fill-gate' });
 
@@ -51,7 +52,8 @@ const BARRIER_SETTLE_GRACE_MS = 120_000;
  * hundred summaries being generated because a function started returning the
  * right answer.
  */
-const MAX_STALE_TO_AUTO_FILL_MS = 14 * 24 * 60 * 60 * 1000;
+const MAX_STALE_TO_AUTO_FILL_DAYS = 14;
+const MAX_STALE_TO_AUTO_FILL_MS = MAX_STALE_TO_AUTO_FILL_DAYS * MS_PER_DAY;
 
 interface BookFillGateParams {
   userId: string;
