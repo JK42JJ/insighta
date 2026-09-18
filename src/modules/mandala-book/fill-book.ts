@@ -34,7 +34,7 @@ import { enqueueEnrichRichSummary, enqueueNoteCvEnrich } from '@/modules/queue';
 import { enqueueRelevanceBackfillForMandala } from '@/modules/relevance/relevance-backfill-trigger';
 import { getStoredTranslation } from '@/modules/skills/rich-summary-translator';
 import { getArchivedVideoIds } from '@/modules/exclude/archived-videos';
-import { bookV2RetryCapped } from './book-v2-retry';
+import { v2State, type V2State } from '@/modules/queue/handlers/v2-completeness';
 import type {
   RichSummaryAnalysis,
   RichSummarySegments,
@@ -181,21 +181,14 @@ export async function fillMandalaBook(params: {
   // §1④ must NOT re-enqueue these every fill (the enrich handler would re-throw
   // NO_TRANSCRIPT each time = caption-fetch churn). They are absent from the book
   // (no content) but excluded from the v2-pending enqueue.
-  const terminallySkipped = new Set<string>();
-  // quality_flag per video — used to split "준비 중" (never-attempted, genuinely
-  // generating) from 'low' (already failed generation: NOT pending — it must not
-  // keep the spinner up; it gets a bounded background retry instead).
-  const qfByVideo = new Map<string, string>();
-  // §1④ retry counts per video (translations._book_v2_retry). At the cap, the
-  // card is terminal (can't yield segments) → excluded from v2-pending so the
-  // spinner ends. NOT a blanket quality_flag='low' exclude (that would drop
-  // transiently-failed cards permanently — #968 was held for this reason).
+  // One classification per video, from `v2State` — the same function the enrich
+  // handler's skip gate is defined on. The two used to answer separately and
+  // disagree: a `pass` row with no segments was unusable here and complete
+  // there, so the book asked for it again and enrich returned a cache hit, for
+  // as long as anyone left the page open.
+  const stateByVideo = new Map<string, V2State>();
   for (const row of v2Rows) {
-    if (row.quality_flag) qfByVideo.set(row.video_id, row.quality_flag);
-    // Terminal: no-transcript skip, OR §1④ re-enqueued to the cap with no segments.
-    if (row.quality_flag === 'skipped' || bookV2RetryCapped(row.translations)) {
-      terminallySkipped.add(row.video_id);
-    }
+    stateByVideo.set(row.video_id, v2State(row, /* hasPendingAttempt */ false));
     if (row.segments == null) continue; // no time-segments → not a usable 살붙임 source
     // PR-T2 — substitute the translated atoms when this atom's source language
     // differs from the display language AND a translation is stored. The
@@ -281,18 +274,22 @@ export async function fillMandalaBook(params: {
           segments: v2.segments,
           lora: v2.lora,
         });
-      } else if (!terminallySkipped.has(p.videoId)) {
-        // Passed the gate but no usable v2 yet. Split by why:
-        //   - 'low' (already failed generation, counter < CAP since capped ones
-        //     are terminallySkipped): NOT pending (don't keep the spinner up on a
-        //     failed card) — enqueue one bounded BACKGROUND retry only.
-        //   - never-attempted (no row / quality_flag='pending'): genuine "준비 중"
-        //     → counts toward the spinner AND is enqueued.
-        // v2 completion re-fires this fill via the #958 trigger either way.
-        if (qfByVideo.get(p.videoId) === 'low') {
-          v2ToEnqueue.add(p.videoId);
-        } else {
+      } else {
+        // Passed the gate with no usable v2. What happens next is the state's
+        // to decide, not a string comparison's:
+        //   generating — being made now. The only state the spinner counts.
+        //   retryable  — failed with attempts left. Retried quietly.
+        //   terminal   — will not become usable. Neither counted nor retried.
+        // A row absent from the map has no row in the table at all, and with
+        // nothing in flight that is terminal: the retry counter is an UPDATE on
+        // a row that does not exist, so it can never rise to the cap that would
+        // retire the card. Counting it as "generating" is what made the banner
+        // immortal.
+        const state = stateByVideo.get(p.videoId) ?? v2State(null, false);
+        if (state === 'generating') {
           v2Pending.add(p.videoId);
+          v2ToEnqueue.add(p.videoId);
+        } else if (state === 'retryable') {
           v2ToEnqueue.add(p.videoId);
         }
       }
@@ -307,24 +304,35 @@ export async function fillMandalaBook(params: {
     if (enqueuedGlobal.has(videoId)) continue;
     enqueuedGlobal.add(videoId);
     const title = placements.find((p) => p.videoId === videoId)?.title ?? videoId;
-    // §1④ retry-cap — count this re-enqueue in the dedicated jsonb counter
-    // (atomic jsonb_set so concurrent fills don't lose increments). At the cap,
-    // the NEXT fill's terminallySkipped excludes this card → v2_pending drops →
-    // spinner ends. No-op when the row doesn't exist yet (first attempt); the
-    // enrich then creates the row and the counter applies on subsequent retries.
+    // Count this re-enqueue. At the cap the next fill reads the card as
+    // terminal, stops counting it, and the banner finishes.
+    //
+    // This was an UPDATE, and an UPDATE matches nothing when the row is not
+    // there. A video that never got a row could not have its attempts counted,
+    // so it never reached the cap, so it stayed in the pending bucket — the
+    // counter that would have retired it could not run for exactly the cards
+    // that needed it. INSERT ... ON CONFLICT writes the first attempt too. The
+    // row it creates carries quality_flag='pending', which is what the video
+    // is: waiting on a generation that has been asked for.
     prisma
       .$executeRawUnsafe(
-        `UPDATE video_rich_summaries
+        `INSERT INTO video_rich_summaries (video_id, quality_flag, translations, created_at, updated_at)
+         VALUES ($1, 'pending', jsonb_build_object('_book_v2_retry', 1), now(), now())
+         ON CONFLICT (video_id) DO UPDATE
          SET translations = jsonb_set(
-           COALESCE(translations, '{}'::jsonb),
-           '{_book_v2_retry}',
-           to_jsonb(COALESCE((translations->>'_book_v2_retry')::int, 0) + 1)
-         )
-         WHERE video_id = $1`,
+               COALESCE(video_rich_summaries.translations, '{}'::jsonb),
+               '{_book_v2_retry}',
+               to_jsonb(COALESCE((video_rich_summaries.translations->>'_book_v2_retry')::int, 0) + 1)
+             )`,
         videoId
       )
-      .catch(() => {
-        /* counter bump is best-effort; a missed increment just allows one extra retry */
+      .catch((err) => {
+        // Best-effort: a missed increment allows one extra retry, which is the
+        // safe direction. A missed INSERT puts the card back where it was.
+        log.warn('retry counter write failed (non-fatal)', {
+          videoId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
     enqueueEnrichRichSummary({ videoId, userId, mandalaId, title }).catch((err) => {
       log.warn('§1④ v2 enqueue failed (non-fatal)', {
