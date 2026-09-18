@@ -19,6 +19,11 @@ import {
   checkVerifiedHasPrimary,
   checkSelfCounts,
   checkCrossReferences,
+  checkGroundingQuotes,
+  checkQuoteCarriesFigures,
+  checkAttributionQuoted,
+  checkUnitsConsistent,
+  checkCalculationDomain,
   type Materials,
   type Calculation,
 } from '@/modules/newsletter/v2/doc-checks';
@@ -185,5 +190,163 @@ describe('checkCrossReferences', () => {
     const d = doc();
     d.insight.blocks = [{ type: 'p', html: '제3호 측정 목록의 아홉 번째 항목이 그것입니다.' }];
     expect(checkCrossReferences(d)).toHaveLength(1);
+  });
+});
+
+describe('checkGroundingQuotes', () => {
+  const src = '전체 어텐션을 쓰는 층은 16개뿐이고, 토큰당 64킬로바이트가 거기서 나옵니다.';
+
+  it('passes a quote that is in the source', () => {
+    const found = checkGroundingQuotes([
+      {
+        where: '꼭지5',
+        text: '토큰당 64KiB입니다.',
+        quoted: '토큰당 64킬로바이트',
+        sourceText: src,
+      },
+    ]);
+    expect(found).toHaveLength(0);
+  });
+
+  it('catches a quote the source does not contain', () => {
+    const found = checkGroundingQuotes([
+      { where: '꼭지5', text: '층당 64KiB입니다.', quoted: '층당 64킬로바이트', sourceText: src },
+    ]);
+    expect(found[0]?.check).toBe('grounding-quote');
+  });
+
+  it('ignores a line break the caption happened to have', () => {
+    const found = checkGroundingQuotes([
+      { where: '꼭지5', text: 'x', quoted: '토큰당\n  64킬로바이트', sourceText: src },
+    ]);
+    expect(found).toHaveLength(0);
+  });
+
+  it('compares composed and decomposed Hangul as the same text', () => {
+    const found = checkGroundingQuotes([
+      {
+        where: '꼭지5',
+        text: 'x',
+        quoted: '토큰당 64킬로바이트'.normalize('NFD'),
+        sourceText: src,
+      },
+    ]);
+    expect(found).toHaveLength(0);
+  });
+
+  it('catches a sentence with no quote at all', () => {
+    const found = checkGroundingQuotes([
+      { where: '꼭지1', text: 'x', quoted: '  ', sourceText: src },
+    ]);
+    expect(found[0]?.detail).toContain('no quote');
+  });
+});
+
+describe('checkQuoteCarriesFigures', () => {
+  it('catches a changed date under a verbatim quote — the issue 1 defect', () => {
+    const found = checkQuoteCarriesFigures([
+      {
+        where: '원장 7행',
+        text: '블룸버그는 8월 23일 보도했습니다.',
+        quoted: '블룸버그는 8월 16일 보도했다',
+        sourceText: '블룸버그는 8월 16일 보도했다',
+      },
+    ]);
+    expect(found[0]?.detail).toContain('23');
+  });
+
+  it('passes when the figure is in the quote', () => {
+    const found = checkQuoteCarriesFigures([
+      { where: 'x', text: '과제는 89개입니다.', quoted: '89 tasks', sourceText: '89 tasks' },
+    ]);
+    expect(found).toHaveLength(0);
+  });
+});
+
+describe('checkAttributionQuoted', () => {
+  it('catches reported speech with nothing to show for it', () => {
+    const found = checkAttributionQuoted([
+      { where: '꼭지5 제목', text: '12GB에 올라간다던 그 파일', quoted: '', sourceText: 's' },
+    ]);
+    expect(found[0]?.check).toBe('attribution-unquoted');
+  });
+
+  it('leaves a plain statement alone', () => {
+    const found = checkAttributionQuoted([
+      { where: 'x', text: '파일은 11.8GB입니다.', quoted: '', sourceText: 's' },
+    ]);
+    expect(found).toHaveLength(0);
+  });
+});
+
+describe('checkUnitsConsistent', () => {
+  it('catches GiB added to GB — the 32GB story', () => {
+    const found = checkUnitsConsistent([
+      {
+        label: '합',
+        inputs: { kv: 16, weights: 11.8 },
+        inputUnits: { kv: 'GiB', weights: 'GB' },
+        formula: 'kv + weights',
+        result: 27.8,
+        unit: 'GB',
+      },
+    ]);
+    expect(found.some((f) => f.check === 'unit-mixed')).toBe(true);
+  });
+
+  it('passes once both sides are the same kind of unit', () => {
+    const found = checkUnitsConsistent([
+      {
+        label: '합',
+        inputs: { kv: 17.18, weights: 11.8 },
+        inputUnits: { kv: 'GB', weights: 'GB' },
+        formula: 'kv + weights',
+        result: 28.98,
+        unit: 'GB',
+      },
+    ]);
+    expect(found).toHaveLength(0);
+  });
+
+  it('leaves a division that mixes units alone — bytes per token is the point', () => {
+    const found = checkUnitsConsistent([
+      {
+        label: '토큰당',
+        inputs: { bytes: 160, tokens: 1 },
+        inputUnits: { bytes: 'KiB', tokens: 'token' },
+        formula: 'bytes / tokens',
+        result: 160,
+        unit: 'KiB',
+      },
+    ]);
+    expect(found).toHaveLength(0);
+  });
+});
+
+describe('checkCalculationDomain', () => {
+  const waste: Calculation = {
+    label: '경계 낭비',
+    inputs: { pool: 637000, ctx: 318501 },
+    formula: '1 - (pool - (pool - ctx)) / pool',
+    result: 0.5,
+    domain: { variable: 'ctx', from: 159251, to: 318501 },
+  };
+
+  it('catches a single reading stated as a rule', () => {
+    const found = checkCalculationDomain([waste]);
+    expect(found[0]?.detail).toContain('one reading');
+  });
+
+  it('passes a value that holds across the range', () => {
+    const found = checkCalculationDomain([
+      {
+        label: '상수',
+        inputs: { a: 2, x: 0 },
+        formula: 'a * 3',
+        result: 6,
+        domain: { variable: 'x', from: 0, to: 10 },
+      },
+    ]);
+    expect(found).toHaveLength(0);
   });
 });
