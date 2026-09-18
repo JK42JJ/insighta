@@ -22,6 +22,7 @@ import { isBookFillBarrierEnabled } from '@/config/book-gate';
 import { JOB_NAMES } from '../types';
 import { enqueueMandalaBookFill } from './mandala-book-fill';
 import { bookRefillEnqueueOptions } from './book-refill-debounce';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 const log = logger.child({ module: 'queue/book-fill-gate' });
 
@@ -35,6 +36,24 @@ const UPDATE_THRESHOLD_NEW_V2 = 5;
  * sibling completing mid-enqueue cannot prematurely fire a partial book.
  */
 const BARRIER_SETTLE_GRACE_MS = 120_000;
+
+/**
+ * How stale a book may be and still be woken by this gate.
+ *
+ * Fixing `lastBookFillAt` makes nineteen long-stalled mandalas eligible again,
+ * and a fill enqueues an enrich for every gate-passed video without a usable
+ * v2 -- 264 of them on production. Most of that is test data: seventeen of the
+ * nineteen belong to the project's own accounts, and the two that do not were
+ * each last signed into on the day the account was created.
+ *
+ * So the gate only wakes a book that was filled recently. A mandala someone
+ * comes back to still fills -- the next enrich on it passes through here with a
+ * fresh `updated_at` from its own initial fill. What does not happen is two
+ * hundred summaries being generated because a function started returning the
+ * right answer.
+ */
+const MAX_STALE_TO_AUTO_FILL_DAYS = 14;
+const MAX_STALE_TO_AUTO_FILL_MS = MAX_STALE_TO_AUTO_FILL_DAYS * MS_PER_DAY;
 
 interface BookFillGateParams {
   userId: string;
@@ -82,22 +101,33 @@ async function mandalaVideoIds(userId: string, mandalaId: string): Promise<strin
  * completed fill, not just the gate's own triggers.
  */
 async function lastBookFillAt(mandalaId: string): Promise<Date | null> {
-  const prisma = getPrismaClient();
-  const rows = await prisma
-    .$queryRawUnsafe<Array<{ completedon: Date | null }>>(
-      `SELECT max(completedon) AS completedon
-       FROM pgboss.job
-      WHERE name = $1
-        AND data->>'mandalaId' = $2
-        AND state = 'completed'`,
-      JOB_NAMES.MANDALA_BOOK_FILL,
+  // The book row itself, not the queue.
+  //
+  // This read `max(completedon)` from `pgboss.job`, and pg-boss deletes a
+  // completed job after the archive window (7 days here). Past that the query
+  // returns null, and null means the update branch below is skipped entirely
+  // -- it sits inside `if (lastFillAt)`. The initial branch does not catch the
+  // fall either: it also needs `remaining === 0`, so a mandala with one rowless
+  // video falls between the two and never fills again.
+  //
+  // Measured on production 2026-09-18: nineteen mandalas with `v2_pending > 0`,
+  // every one of them stale, the oldest book row from 2026-06-24. One had gone
+  // from fourteen usable summaries to thirty-eight while its book stayed at the
+  // July figure, because the record of the last fill had been swept and the
+  // gate could no longer tell how long it had been.
+  //
+  // `mandala_books.updated_at` is the same fact and it is the row the fill
+  // writes. It does not expire.
+  const rows = await getPrismaClient()
+    .$queryRawUnsafe<Array<{ updated_at: Date | null }>>(
+      `SELECT updated_at FROM mandala_books WHERE mandala_id = $1::uuid`,
       mandalaId
     )
     .catch((err) => {
       log.warn('lastBookFillAt query failed (treating as none)', { mandalaId, error: String(err) });
-      return [{ completedon: null }];
+      return [{ updated_at: null }];
     });
-  return rows[0]?.completedon ?? null;
+  return rows[0]?.updated_at ?? null;
 }
 
 /**
@@ -241,6 +271,18 @@ export async function maybeTriggerBookFill(params: BookFillGateParams): Promise<
 
   // Update fill — ≥N new non-skipped summaries since the last fill.
   if (lastFillAt) {
+    // A book nobody has touched in a fortnight is not waiting on this gate; it
+    // is abandoned, and filling it spends a model call per missing summary for
+    // a page nobody will open. Reaching this point at all is new behaviour --
+    // before the `lastBookFillAt` fix these mandalas could not be seen here --
+    // so the bound is on by default rather than opt-in.
+    if (Date.now() - lastFillAt.getTime() > MAX_STALE_TO_AUTO_FILL_MS) {
+      log.info('book-fill skipped — book too stale to wake automatically', {
+        mandalaId,
+        lastFillAt: lastFillAt.toISOString(),
+      });
+      return;
+    }
     const newV2 = v2Rows.filter(
       (r) => r.quality_flag !== 'skipped' && r.updated_at != null && r.updated_at > lastFillAt
     ).length;

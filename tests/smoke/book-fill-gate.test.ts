@@ -31,6 +31,7 @@ interface V2Row {
 }
 
 const ANCIENT = new Date('2000-01-01T00:00:00Z'); // well past the settle grace
+const DAY = 24 * 60 * 60 * 1000;
 
 function mockPrisma(opts: {
   videoIds: string[];
@@ -54,7 +55,8 @@ function mockPrisma(opts: {
     },
     video_rich_summaries: { findMany: jest.fn().mockResolvedValue(opts.v2Rows) },
     // Three raw queries now — branch on the SQL text:
-    //  enrichJobStates ('is_live'), newestCardAt ('newest'), lastBookFillAt ('completedon').
+    //  enrichJobStates ('is_live'), newestCardAt ('newest'),
+    //  lastBookFillAt (now `mandala_books.updated_at`, not the queue).
     $queryRawUnsafe: jest.fn().mockImplementation((sql: string) => {
       if (sql.includes('is_live')) {
         return Promise.resolve([
@@ -67,7 +69,7 @@ function mockPrisma(opts: {
           { newest: opts.newestCard === undefined ? ANCIENT : opts.newestCard },
         ]);
       }
-      return Promise.resolve([{ completedon: opts.lastFill }]);
+      return Promise.resolve([{ updated_at: opts.lastFill }]);
     }),
   };
 }
@@ -179,8 +181,12 @@ describe('maybeTriggerBookFill', () => {
 
   it('flag ON, prior fill + ≥5 new non-skipped → update-threshold', async () => {
     flag.mockReturnValue(true);
-    const old = new Date('2026-07-09T00:00:00Z');
-    const fresh = new Date('2026-07-10T00:00:00Z');
+    // Relative to now, not a fixed date: the gate declines to wake a book that
+    // has been idle for a fortnight, and a hardcoded 2026-07 fixture silently
+    // crossed that line as the calendar moved. This case is about the ≥5 rule,
+    // so its dates have to stay inside the window the rule lives in.
+    const old = new Date(Date.now() - 2 * DAY);
+    const fresh = new Date(Date.now() - 1 * DAY);
     const ids = ['a', 'b', 'c', 'd', 'e'];
     getPrisma.mockReturnValue(
       mockPrisma({ videoIds: ids, v2Rows: ids.map((id) => row(id, 'pass', fresh)), lastFill: old })
@@ -194,8 +200,8 @@ describe('maybeTriggerBookFill', () => {
 
   it('flag ON, prior fill + <5 new → no enqueue', async () => {
     flag.mockReturnValue(true);
-    const old = new Date('2026-07-09T00:00:00Z');
-    const fresh = new Date('2026-07-10T00:00:00Z');
+    const old = new Date(Date.now() - 2 * DAY);
+    const fresh = new Date(Date.now() - 1 * DAY);
     const ids = ['a', 'b', 'c'];
     getPrisma.mockReturnValue(
       mockPrisma({ videoIds: ids, v2Rows: ids.map((id) => row(id, 'pass', fresh)), lastFill: old })
@@ -204,10 +210,66 @@ describe('maybeTriggerBookFill', () => {
     expect(enqueue).not.toHaveBeenCalled();
   });
 
+  // 2026-09-18 — `lastBookFillAt` used to read `pgboss.job`, and pg-boss deletes
+  // a completed job after seven days. Past that the update branch was skipped
+  // entirely (it sits inside `if (lastFillAt)`) and the initial branch needed
+  // remaining===0, so a mandala with one rowless video fell between the two and
+  // never filled again. Reading `mandala_books.updated_at` fixes that and makes
+  // nineteen long-stalled mandalas eligible at once -- 264 missing summaries,
+  // almost all of it test data. These two tests hold the fix and its bound
+  // together: the record has to survive, and it must not wake the dead.
+  it('reads the last fill from the book row, not the queue', async () => {
+    flag.mockReturnValue(true);
+    const prisma = mockPrisma({
+      videoIds: ['a'],
+      v2Rows: [row('a', 'pass', new Date(Date.now() - 1 * DAY))],
+      lastFill: new Date(Date.now() - 2 * DAY),
+    });
+    getPrisma.mockReturnValue(prisma);
+    await maybeTriggerBookFill({ userId: 'u', mandalaId: 'm' });
+
+    const sql = (prisma.$queryRawUnsafe as jest.Mock).mock.calls.map((c) => String(c[0]));
+    expect(sql.some((q) => q.includes('mandala_books'))).toBe(true);
+    expect(sql.some((q) => q.includes('pgboss'))).toBe(false);
+  });
+
+  it('flag ON, book idle past the staleness bound → no enqueue', async () => {
+    flag.mockReturnValue(true);
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+    getPrisma.mockReturnValue(
+      mockPrisma({
+        videoIds: ids,
+        // Six fresh summaries — far past the ≥5 update threshold, so the only
+        // thing that can hold the enqueue back is the staleness bound.
+        v2Rows: ids.map((id) => row(id, 'pass', new Date())),
+        lastFill: new Date(Date.now() - 30 * DAY),
+      })
+    );
+    await maybeTriggerBookFill({ userId: 'u', mandalaId: 'm' });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('flag ON, book idle but inside the bound → still fires', async () => {
+    flag.mockReturnValue(true);
+    const ids = ['a', 'b', 'c', 'd', 'e'];
+    getPrisma.mockReturnValue(
+      mockPrisma({
+        videoIds: ids,
+        v2Rows: ids.map((id) => row(id, 'pass', new Date())),
+        lastFill: new Date(Date.now() - 10 * DAY),
+      })
+    );
+    await maybeTriggerBookFill({ userId: 'u', mandalaId: 'm' });
+    expect(enqueue).toHaveBeenCalledWith(
+      { userId: 'u', mandalaId: 'm', trigger: 'update-threshold' },
+      expect.objectContaining({ singletonKey: 'book-fill-update-m' })
+    );
+  });
+
   it('flag ON, prior fill + skipped rows do not count toward the ≥5 update', async () => {
     flag.mockReturnValue(true);
-    const old = new Date('2026-07-09T00:00:00Z');
-    const fresh = new Date('2026-07-10T00:00:00Z');
+    const old = new Date(Date.now() - 2 * DAY);
+    const fresh = new Date(Date.now() - 1 * DAY);
     const ids = ['a', 'b', 'c', 'd', 'e'];
     getPrisma.mockReturnValue(
       mockPrisma({
