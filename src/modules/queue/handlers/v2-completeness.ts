@@ -11,11 +11,13 @@
  * on one mandala when this was measured.
  *
  * The second disagreement was narrower and the same shape. The book split
- * cards by `quality_flag === 'low'`, and the vocabulary in this codebase has
- * six values — pass, pending, low, enrichment_low, failed, skipped. The five
- * that are not `'low'` all fell through to "generating", including a card with
- * no row at all, which can never leave that bucket: the retry counter that
- * would retire it is an UPDATE on the row that does not exist.
+ * cards by `quality_flag === 'low'`, and the vocabulary has seven values —
+ * pass, pending, low, enrichment_low, qwen3_low, failed, skipped. `qwen3_low`
+ * was found by counting flags on production while writing this, which is the
+ * argument for the file: six of the seven fell through to "generating",
+ * including a card with no row at all, which can never leave that bucket
+ * because the retry counter that would retire it is an UPDATE on the row that
+ * does not exist.
  *
  * So the states are named here and the callers read them. A seventh flag added
  * later has to be classified in this file, where the compiler asks for it,
@@ -25,7 +27,14 @@
 import { bookV2RetryCapped } from '@/modules/mandala-book/book-v2-retry';
 
 /** The quality_flag vocabulary, as written across the codebase. */
-export type V2QualityFlag = 'pass' | 'pending' | 'low' | 'enrichment_low' | 'failed' | 'skipped';
+export type V2QualityFlag =
+  | 'pass'
+  | 'pending'
+  | 'low'
+  | 'enrichment_low'
+  | 'qwen3_low'
+  | 'failed'
+  | 'skipped';
 
 export interface V2CompletenessRow {
   template_version?: string | null;
@@ -80,7 +89,7 @@ export function v2State(
     return 'terminal';
   }
 
-  if (flag === 'low' || flag === 'enrichment_low' || flag === 'failed') {
+  if (flag === 'low' || flag === 'enrichment_low' || flag === 'qwen3_low' || flag === 'failed') {
     return bookV2RetryCapped(row.translations) ? 'terminal' : 'retryable';
   }
 
