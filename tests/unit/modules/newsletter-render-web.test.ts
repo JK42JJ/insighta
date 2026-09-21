@@ -15,6 +15,14 @@ import {
   renderCacheKey,
   DEFAULT_TEMPLATE,
 } from '../../../src/modules/newsletter/render-web';
+import {
+  BRIEF_PAGE_CSP,
+  type BriefPageReply,
+  FONT_FILE_HOST,
+  FONT_STYLE_HOST,
+  fetchedHostsIn,
+  sendBriefPage,
+} from '../../../src/modules/newsletter/page-headers';
 
 const base = {
   schemaVersion: 1 as const,
@@ -203,5 +211,65 @@ describe('renderWeb', () => {
 
   it('defaults to Korean, which is what every stored issue is', () => {
     expect(IssueDocumentSchema.parse(base).locale).toBe('ko');
+  });
+});
+
+/**
+ * The page and the policy it is served under, checked against each other.
+ *
+ * Measured on prod 2026-09-21: the global API policy is
+ * `style-src 'self' 'unsafe-inline'`, which does not admit the webfont
+ * stylesheet the template links -- so every published issue rendered in the
+ * fallback stack while a comment in the template asserted that Google Fonts
+ * "survives a CSP". Nothing failed; the page was merely wrong. These tests are
+ * what that comment should have been.
+ */
+describe('the policy the page is served under', () => {
+  const html = renderWeb(doc);
+  const directive = (name: string): string =>
+    BRIEF_PAGE_CSP.split('; ').find((d) => d.startsWith(`${name} `)) ?? '';
+
+  it('admits every host the rendered page asks the browser to load', () => {
+    const { style, other } = fetchedHostsIn(html);
+    // Anything here that is not admitted below would be blocked in production.
+    expect(style).toEqual([FONT_STYLE_HOST]);
+    for (const host of style) expect(directive('style-src')).toContain(host);
+    // A brief page is text, inline CSS and anchors. A template that adds a
+    // script, an image or a frame lands here, and the policy needs a directive
+    // for it before the page can ship.
+    expect(other).toEqual([]);
+  });
+
+  it('admits the host the webfont rules fetch the files from', () => {
+    expect(html).toContain(FONT_FILE_HOST);
+    expect(directive('font-src')).toContain(FONT_FILE_HOST);
+  });
+
+  it('refuses everything it does not name', () => {
+    expect(BRIEF_PAGE_CSP).toContain("default-src 'none'");
+  });
+
+  it('puts the policy on the response, and a caller cannot replace it', () => {
+    const headers: Record<string, string> = {};
+    const reply: BriefPageReply = {
+      header(name: string, value: string): BriefPageReply {
+        headers[name] = value;
+        return reply;
+      },
+      type(): BriefPageReply {
+        return reply;
+      },
+      send(payload: string): string {
+        return payload;
+      },
+    };
+    const body = sendBriefPage(reply, html, {
+      'Cache-Control': 'no-store',
+      // A caller that tries to set its own policy must not win.
+      'Content-Security-Policy': 'default-src *',
+    });
+    expect(body).toBe(html);
+    expect(headers['Cache-Control']).toBe('no-store');
+    expect(headers['Content-Security-Policy']).toBe(BRIEF_PAGE_CSP);
   });
 });

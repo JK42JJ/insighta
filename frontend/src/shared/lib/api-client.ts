@@ -3120,6 +3120,35 @@ class ApiClient {
   }
 
   /**
+   * The rendered page for an issue, draft included, as HTML.
+   *
+   * Not a link. A draft's page is admin-only, and a browser navigation carries
+   * no Authorization header — so `<a href>` to this route answers 401 every
+   * time, which is what the admin list used to do. Passing the JWT as
+   * `?access_token=` would have worked and is refused on purpose: the token
+   * would sit in browser history, in the access log, and in the Referer of
+   * anything the page loads. The server no longer accepts a query token here
+   * at all (src/api/plugins/auth.ts, QUERY_TOKEN_ROUTES).
+   *
+   * So the page is fetched with a header, like every other call, and the caller
+   * renders it in a frame.
+   */
+  async getNewsletterIssuePreview(id: string): Promise<string> {
+    const token = await this.getFreshToken();
+    if (!token) throw new Error('Not authenticated');
+
+    const res = await fetch(
+      `${this.baseUrl}/api/v1/admin/newsletter/issues/${encodeURIComponent(id)}/preview`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    // The route answers text/plain with the reason on 400/404/422 — a schema
+    // failure lists the fields — so the body is worth more than the status.
+    const body = await res.text();
+    if (!res.ok) throw new Error(body || `preview failed (${res.status})`);
+    return body;
+  }
+
+  /**
    * `document` is an IssueDocument (src/modules/newsletter/issue-schema.ts).
    * The server validates it and refuses a graded claim with no source, so a
    * 400 here is usually a real editorial problem rather than a typo.

@@ -15,6 +15,7 @@ process.env['ENCRYPTION_SECRET'] ??=
   'test-secret-test-secret-test-secret-test-secret-test-secret-1234';
 
 import { issueNumber, IssueDocumentSchema } from '@/modules/newsletter/issue-schema';
+import { QUERY_TOKEN_ROUTES, queryTokenAllowed } from '@/api/plugins/auth';
 
 export {};
 
@@ -39,6 +40,26 @@ describe('issueNumber', () => {
     const labels = ['제9호', '제10호', '제1호'];
     expect(labels.map((l) => issueNumber(doc(l))).sort((a, b) => a - b)).toEqual([1, 9, 10]);
     expect([...labels].sort()).toEqual(['제10호', '제1호', '제9호']);
+  });
+});
+
+/**
+ * A JWT in a query string lands in browser history, in the access log and in
+ * the Referer of anything the page loads -- `log-url-sanitizer.ts` exists
+ * because of one such leak. The fallback is for EventSource, which cannot set
+ * a header, and must reach nothing else.
+ */
+describe('queryTokenAllowed', () => {
+  it('allows exactly the two stream routes', () => {
+    for (const route of QUERY_TOKEN_ROUTES) expect(queryTokenAllowed(route)).toBe(true);
+    expect(QUERY_TOKEN_ROUTES).toHaveLength(2);
+  });
+
+  it('refuses every other route, including the draft preview', () => {
+    expect(queryTokenAllowed('/api/v1/admin/newsletter/issues/:id/preview')).toBe(false);
+    expect(queryTokenAllowed('/api/v1/admin/newsletter/issues')).toBe(false);
+    expect(queryTokenAllowed('/api/v1/mandalas/:id')).toBe(false);
+    expect(queryTokenAllowed(undefined)).toBe(false);
   });
 });
 
@@ -93,8 +114,29 @@ describeIfServer('brief routes', () => {
     ['POST', '/api/v1/admin/newsletter/issues'],
     ['PUT', '/api/v1/admin/newsletter/issues/00000000-0000-0000-0000-000000000000'],
     ['DELETE', '/api/v1/admin/newsletter/issues/00000000-0000-0000-0000-000000000000'],
+    ['GET', '/api/v1/admin/newsletter/issues/00000000-0000-0000-0000-000000000000/preview'],
   ])('%s %s is 401 without a token', async (method, url) => {
     const res = await app.inject({ method, url });
+    expect(res.statusCode).toBe(401);
+  });
+
+  /**
+   * The allowlist is route patterns, matched against `request.routeOptions.url`.
+   * A rename or a moved prefix would silently stop the streams from
+   * authenticating, so the patterns are checked against the routes the server
+   * actually registered rather than trusted as strings.
+   */
+  it.each(QUERY_TOKEN_ROUTES)('%s is still a route on this server', async (pattern) => {
+    const url = pattern.replace(/:[A-Za-z]+/g, '00000000-0000-0000-0000-000000000000');
+    const res = await app.inject({ method: 'GET', url });
+    expect(res.statusCode).not.toBe(404);
+  });
+
+  it('does not let a query token stand in for a header off the allowlist', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/newsletter/issues?access_token=not-a-jwt',
+    });
     expect(res.statusCode).toBe(401);
   });
 

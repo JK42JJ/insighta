@@ -18,6 +18,7 @@ import { FastifyInstance } from 'fastify';
 import { getPrismaClient } from '@/modules/database/client';
 import { IssueDocumentSchema } from '@/modules/newsletter/issue-schema';
 import { renderWeb, renderCacheKey } from '@/modules/newsletter/render-web';
+import { sendBriefPage } from '@/modules/newsletter/page-headers';
 import { BRIEF_CATEGORIES, CATEGORY_KEYS, categoryLabel } from '@/modules/newsletter/categories';
 import { issueLabelOf } from '@/modules/newsletter/issue-label';
 import { plainText } from '@/modules/newsletter/plain-text';
@@ -440,11 +441,10 @@ export async function briefRoutes(fastify: FastifyInstance): Promise<void> {
       cache.set(key, html);
     }
 
-    return reply
-      .header('Cache-Control', `public, max-age=${CACHE_SECONDS}`)
-      .header('Last-Modified', row.updated_at.toUTCString())
-      .type('text/html; charset=utf-8')
-      .send(html);
+    return sendBriefPage(reply, html, {
+      'Cache-Control': `public, max-age=${CACHE_SECONDS}`,
+      'Last-Modified': row.updated_at.toUTCString(),
+    });
   });
 }
 

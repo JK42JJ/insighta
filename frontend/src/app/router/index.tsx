@@ -21,11 +21,10 @@ import { AdminHealth } from '@/pages/admin/ui/AdminHealth';
 import { AdminBilling } from '@/pages/admin/ui/AdminBilling';
 import { AdminChatbotModels } from '@/pages/admin/ui/AdminChatbotModels';
 import { AdminPerformanceMonitor } from '@/pages/admin/ui/AdminPerformanceMonitor';
-import { AdminV2QualityAudit } from '@/pages/admin/ui/AdminV2QualityAudit';
-import { AdminPoolHealth } from '@/pages/admin/ui/AdminPoolHealth';
 import { AdminSearchTraceExplorer } from '@/pages/admin/ui/AdminSearchTraceExplorer';
 import { AdminBetaCampaign } from '@/pages/admin/ui/AdminBetaCampaign';
 import { AdminNewsletter } from '@/pages/admin/ui/AdminNewsletter';
+import { AdminNewsletterPreview } from '@/pages/admin/ui/AdminNewsletterPreview';
 import { AdminChannels } from '@/pages/admin/ui/AdminChannels';
 import BriefNotePage from '@/pages/brief/ui/BriefNotePage';
 import BriefCategoryPage from '@/pages/brief/ui/BriefCategoryPage';
@@ -187,6 +186,19 @@ export function AppRouter() {
         />
         <Route path="/explore/:slug" element={<ExplorePage />} />
         {/* Admin Routes */}
+        {/* A rendered issue, draft included. Outside AdminLayout on purpose:
+            what is under review is a page, and a 700px column would review a
+            layout that is not the one that ships. Declared before the /admin
+            parent for readability -- v6 ranks by specificity, not order, so
+            this wins over the layout's `newsletter` child either way. */}
+        <Route
+          path="/admin/newsletter/issues/:id/preview"
+          element={
+            <AdminRoute>
+              <AdminNewsletterPreview />
+            </AdminRoute>
+          }
+        />
         <Route
           path="/admin"
           element={
@@ -207,7 +219,8 @@ export function AppRouter() {
           <Route path="chatbot-models" element={<AdminChatbotModels />} />
           {/* Perf-monitor PR3 — consolidation page (타임라인/파라미터/공급/품질). */}
           <Route path="performance" element={<AdminPerformanceMonitor />} />
-          {/* Folded into /admin/performance tabs — old links keep working. */}
+          {/* Folded into /admin/performance tabs — old links keep working. The
+              screens themselves are still in pages/admin/ui, unrouted. */}
           <Route path="search-algorithms" element={<Navigate to="/admin/performance" replace />} />
           <Route path="v2-quality-audit" element={<Navigate to="/admin/performance" replace />} />
           <Route path="v4-arbiter-runs" element={<Navigate to="/admin/performance" replace />} />

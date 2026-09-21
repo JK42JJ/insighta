@@ -134,4 +134,42 @@ describe('API Client URL Contract', () => {
     );
     expect(block).toContain('encodeURIComponent');
   });
+
+  /**
+   * Raw-fetch methods bypass request(), so the checks above do not see them.
+   * This one is here because it replaced a `<a href>` that put the JWT in the
+   * query string: the credential must travel as a header, and nothing in this
+   * client may reintroduce `?access_token=` on a non-stream route.
+   */
+  describe('getNewsletterIssuePreview', () => {
+    const block = content.slice(
+      content.indexOf('async getNewsletterIssuePreview'),
+      content.indexOf('async getNewsletterIssuePreview') + 900
+    );
+
+    it('exists and builds the admin preview url with a single /api/v1', () => {
+      expect(block).toContain('/api/v1/admin/newsletter/issues/');
+      expect(block).toContain('/preview');
+      expect(block).not.toContain('/api/v1/api/v1');
+    });
+
+    it('sends the token as an Authorization header, never in the url', () => {
+      expect(block).toContain('Authorization: `Bearer ${token}`');
+      expect(block).not.toContain('access_token');
+    });
+
+    it('encodes the id', () => {
+      expect(block).toContain('encodeURIComponent(id)');
+    });
+  });
+
+  it('keeps ?access_token= to the two EventSource streams', () => {
+    // EventSource cannot set a header; nothing else in the client has that
+    // excuse, and the server now refuses a query token off those two routes.
+    const code = content
+      .split('\n')
+      .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l))
+      .filter((l) => l.includes('access_token='));
+    expect(code).toEqual([]);
+  });
 });
