@@ -17,15 +17,29 @@ import { join } from 'path';
 
 import { checkAwsCost } from './check-aws-cost';
 import { checkCloudPosture } from './check-cloud-posture';
-import { getPrisma, report, type CheckResult } from './lib';
+import {
+  ALERT_DELIVERY_STAGE,
+  alertChannelConfigured,
+  getPrisma,
+  lastDeliveryFailure,
+  report,
+  type CheckResult,
+} from './lib';
 import { HOURS_PER_DAY, MS_PER_HOUR } from '../../src/utils/time-constants';
 
 const PROD = process.env['MONITOR_BASE_URL'] ?? 'https://insighta.one';
 const REPO_ROOT = join(__dirname, '..', '..');
 
 /** Requests that take longer than this are treated as a failure of the thing
- *  being probed, not as a slow network. */
-const PROBE_TIMEOUT_MS = 15_000;
+ *  being probed, not as a slow network.
+ *
+ *  Must outlive the slowest thing the endpoint it calls waits on. The pod's
+ *  `/health/dependencies` gives a sleeping transcript proxy
+ *  PROXY_PROBE_TIMEOUT_MS = 15 s (src/config/transcript.ts); at the old 15 s
+ *  here the two budgets were equal, so a proxy cold start could abort this
+ *  fetch instead of being reported -- the check would fail on its own timeout
+ *  and say nothing about the proxy. */
+export const PROBE_TIMEOUT_MS = 25_000;
 
 async function fetchJson(
   url: string,
@@ -759,6 +773,76 @@ export async function checkSupplyChain(): Promise<CheckResult> {
   }
 }
 
+/**
+ * Whether an alert can reach a person at all.
+ *
+ * The check that had to exist. Every other check here answers a question about
+ * the service; this one answers the question about the monitor, and the monitor
+ * was failing it silently: SLACK_ALERT_WEBHOOK has never been set (48 repo
+ * secrets, measured 2026-09-21), postToSlack returned early when it was absent,
+ * and report() counted the alert as sent anyway -- so the run log has been
+ * printing "1 alert(s) sent" for every transition since the day this shipped
+ * while nothing left the process.
+ *
+ * Deliberately not silent about a steady failure the way the others are. An
+ * unconfigured channel cannot be announced through the channel, so the workflow
+ * going red is the only signal left, and run.ts treats this check specially.
+ *
+ * Configuration plus the last recorded outcome, not a live send: posting a test
+ * message every thirty minutes would be forty-eight messages a day into the
+ * channel this is meant to keep usable.
+ */
+export async function checkAlertDelivery(): Promise<CheckResult> {
+  // The unconfigured answer needs no database, which matters: this is the check
+  // that has to work when other things do not.
+  const configured = alertChannelConfigured();
+  const lastFailure = configured ? await lastDeliveryFailure() : null;
+  return { check: ALERT_DELIVERY_STAGE, ...interpretAlertDelivery({ configured, lastFailure }) };
+}
+
+/** How recent a delivery failure has to be to still count as broken. Two runs
+ *  of the thirty-minute schedule plus room for a queued runner. */
+export const DELIVERY_FAILURE_WINDOW_HOURS = 2;
+
+/**
+ * The judgement, separated from the reads so it can be tested without either an
+ * environment or a database.
+ */
+export function interpretAlertDelivery(input: {
+  configured: boolean;
+  lastFailure: { at: Date; message: string } | null;
+  now?: number;
+}): { ok: boolean; detail: string; context: Record<string, unknown> } {
+  const { configured, lastFailure, now = Date.now() } = input;
+  if (!configured) {
+    return {
+      ok: false,
+      detail:
+        'no alert channel configured (SLACK_ALERT_WEBHOOK) — transitions reach the ledger and this workflow, nobody else',
+      context: { configured: false },
+    };
+  }
+  if (lastFailure) {
+    const ageHours = Math.round((now - lastFailure.at.getTime()) / MS_PER_HOUR);
+    // A webhook that is revoked or rotated answers 403 and the alert is lost.
+    // Recent means recent: an older row is a failure that has since recovered.
+    if (ageHours <= DELIVERY_FAILURE_WINDOW_HOURS) {
+      return {
+        ok: false,
+        detail: `last alert was not delivered ${ageHours}h ago — ${lastFailure.message}`,
+        context: { configured: true, lastFailureAt: lastFailure.at.toISOString() },
+      };
+    }
+  }
+  return {
+    ok: true,
+    detail: lastFailure
+      ? `channel configured · last delivery failure ${lastFailure.at.toISOString().slice(0, 10)}, outside the window`
+      : 'channel configured · no delivery failure on record',
+    context: { configured: true },
+  };
+}
+
 export const ALL_CHECKS: Array<() => Promise<CheckResult>> = [
   checkDeployDrift,
   checkPublicSurface,
@@ -771,6 +855,7 @@ export const ALL_CHECKS: Array<() => Promise<CheckResult>> = [
   checkIamHygiene,
   checkSupplyChain,
   checkCloudPosture,
+  checkAlertDelivery,
 ];
 
 export { report };

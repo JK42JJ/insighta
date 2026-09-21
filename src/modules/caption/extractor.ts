@@ -12,7 +12,7 @@
  */
 
 import { logger } from '../../utils/logger';
-import { loadTranscriptConfig } from '@/config/transcript';
+import { loadTranscriptConfig, PROXY_FETCH_TIMEOUT_MS } from '@/config/transcript';
 
 // Mac Mini transcript proxy. EC2 us-west-2 outbound to YouTube is rate-
 // limited / returns false "Transcript is disabled" — verified by apples-
@@ -23,7 +23,6 @@ import { loadTranscriptConfig } from '@/config/transcript';
 // correct outcome. Tailscale is management-only and must not carry service
 // traffic -- the proxy address has to be one the cluster reaches directly.
 const TRANSCRIPT_CONFIG = loadTranscriptConfig();
-const PROXY_TIMEOUT_MS = 30_000;
 
 interface MacMiniSegment {
   text: string;
@@ -50,7 +49,7 @@ async function fetchViaProxy(
   lang: string
 ): Promise<MacMiniSegment[] | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), PROXY_FETCH_TIMEOUT_MS);
   try {
     const resp = await fetch(
       `${proxy.url.replace(/\/$/, '')}/transcript/${encodeURIComponent(youtubeId)}?lang=${encodeURIComponent(lang)}`,
