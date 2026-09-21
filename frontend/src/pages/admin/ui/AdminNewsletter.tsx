@@ -216,12 +216,20 @@ export function AdminNewsletter() {
                       {/* A draft has no public page — the serving route filters
                           on published_at — so it gets the admin preview, which
                           runs the same renderer and the same template. Without
-                          it an issue could only be looked at after it shipped. */}
+                          it an issue could only be looked at after it shipped.
+
+                          The draft link points at this app, not at the API. The
+                          preview route is admin-only and a navigation carries no
+                          Authorization header, so linking straight to it was 401
+                          on every click; AdminNewsletterPreview fetches it with a
+                          header instead. The published link stays on the API —
+                          that route is public, and it is the page a reader
+                          actually gets. */}
                       <a
                         href={
                           it.published_at
                             ? `/api/v1/brief/${it.slug}`
-                            : `/api/v1/admin/newsletter/issues/${it.id}/preview`
+                            : `/admin/newsletter/issues/${it.id}/preview`
                         }
                         target="_blank"
                         rel="noreferrer"

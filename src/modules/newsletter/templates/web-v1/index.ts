@@ -22,6 +22,7 @@ import type {
   Ref,
   Grade,
 } from '../../issue-schema';
+import { FONT_FILE_HOST, FONT_STYLE_HOST } from '../../page-headers';
 import { WEB_V1_CSS } from './styles';
 
 export const TEMPLATE_ID = 'web-v1';
@@ -30,13 +31,16 @@ export const TEMPLATE_ID = 'web-v1';
  * The deliverable pulled Pretendard from a third-party CDN. Dropped: it is an
  * external dependency on every page view, and a strict CSP blocks it outright.
  * Pretendard still leads the stack so installed users get it; Noto Sans KR is
- * the loaded fallback because Google Fonts is the one host that survives a CSP.
+ * the loaded fallback, which needs Google Fonts to be admitted by the policy the
+ * page is served under -- so the hosts come from `page-headers.ts`, which is
+ * also what writes that policy. When they were two literals in two files the
+ * link shipped and the policy did not admit it.
  * A visible change on machines without Pretendard -- flagged, not disguised.
  */
 const FONT_LINKS = [
-  '<link rel="preconnect" href="https://fonts.googleapis.com">',
-  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
-  '<link href="https://fonts.googleapis.com/css2?' +
+  `<link rel="preconnect" href="${FONT_STYLE_HOST}">`,
+  `<link rel="preconnect" href="${FONT_FILE_HOST}" crossorigin>`,
+  `<link href="${FONT_STYLE_HOST}/css2?` +
     'family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,560;1,6..72,400' +
     '&family=Spline+Sans+Mono:wght@400;500;600' +
     '&family=Noto+Sans+KR:wght@400;500;600' +

@@ -18,6 +18,7 @@ import {
   type IssueDocument,
 } from '../../../modules/newsletter/issue-schema';
 import { isTemplateId, renderWeb } from '../../../modules/newsletter/render-web';
+import { sendBriefPage } from '../../../modules/newsletter/page-headers';
 import { clearBriefCache } from '../brief';
 import { CATEGORY_KEYS } from '@/modules/newsletter/categories';
 import { issueLabelOf } from '@/modules/newsletter/issue-label';
@@ -211,11 +212,10 @@ export async function adminNewsletterRoutes(fastify: FastifyInstance) {
           'font:600 12px/1.6 -apple-system,system-ui,sans-serif;padding:8px 16px">' +
           'DRAFT — not published</div>';
 
-      return reply
-        .header('X-Robots-Tag', 'noindex, nofollow')
-        .header('Cache-Control', 'no-store')
-        .type('text/html; charset=utf-8')
-        .send(renderWeb(doc).replace('<body>', `<body>${banner}`));
+      return sendBriefPage(reply, renderWeb(doc).replace('<body>', `<body>${banner}`), {
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Cache-Control': 'no-store',
+      });
     }
   );
 

@@ -12,6 +12,26 @@ import { createErrorResponse, ErrorCode } from '../schemas/common.schema';
  * Fallback to HS256 via SUPABASE_JWT_SECRET for self-hosted or legacy setups.
  */
 
+/**
+ * The routes that accept the JWT as `?access_token=<jwt>`.
+ *
+ * EventSource has no way to set a request header, so these two are the only
+ * places the frontend has no alternative. Everything else — including anything
+ * that writes — must carry an Authorization header.
+ *
+ * These are route patterns as Fastify registered them, not request paths.
+ * `brief-routes.test.ts` asserts each one is a route the built server actually
+ * has, so a rename breaks the test rather than the stream.
+ */
+export const QUERY_TOKEN_ROUTES: readonly string[] = [
+  '/api/v1/mandalas/:id/videos/stream',
+  '/api/v1/cards/:videoId/enrich-stream',
+];
+
+export function queryTokenAllowed(routeUrl: string | undefined): boolean {
+  return routeUrl !== undefined && QUERY_TOKEN_ROUTES.includes(routeUrl);
+}
+
 /** Supabase JWT token payload structure */
 interface SupabaseJWTClaims {
   aud: string;
@@ -156,11 +176,21 @@ export async function registerAuth(fastify: FastifyInstance) {
       }
 
       // SSE/EventSource browser API cannot send custom headers, so the
-      // frontend passes the JWT via `?access_token=<jwt>` query for the
-      // /videos/stream endpoint. Fall back to that when no Authorization
-      // header is present — Authorization-header path stays bit-identical.
+      // frontend passes the JWT via `?access_token=<jwt>` query for the two
+      // stream endpoints. Fall back to that when no Authorization header is
+      // present — Authorization-header path stays bit-identical.
+      //
+      // Only on those routes. A token in a query string lands in browser
+      // history, in the access log, and in the Referer of anything the page
+      // loads: `log-url-sanitizer.ts` exists because of one such leak
+      // (CP475+7). Accepting it everywhere also invited using it as a way to
+      // open an authenticated page in a new tab, which is what happened.
       const queryToken = (request.query as Record<string, string> | undefined)?.['access_token'];
-      if (!request.headers.authorization && queryToken) {
+      if (
+        !request.headers.authorization &&
+        queryToken &&
+        queryTokenAllowed(request.routeOptions?.url)
+      ) {
         request.headers.authorization = `Bearer ${queryToken}`;
       }
 
