@@ -128,8 +128,11 @@ async function main(): Promise<void> {
     lines.push(`⚠️ 실패한 호출 ${failed.calls}건에 ${money(failed.cost)} — 재시도 낭비`);
   }
 
-  await postDigest(lines.join('\n'));
+  const delivery = await postDigest(lines.join('\n'));
   await prisma.$disconnect();
+  // A digest nobody received is not a digest. Red here is the only way that
+  // reaches a person while the channel is the thing that is broken.
+  if (delivery.state !== 'sent') process.exit(1);
 }
 
 void main();

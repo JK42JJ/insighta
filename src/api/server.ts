@@ -320,10 +320,13 @@ export async function buildServer() {
       tags: ['health'],
     },
     handler: async (_request, reply) => {
-      const { loadTranscriptConfig } = await import('../config/transcript');
+      const { loadTranscriptConfig, PROXY_PROBE_TIMEOUT_MS } = await import('../config/transcript');
       const { proxies } = loadTranscriptConfig();
 
-      const PROBE_TIMEOUT_MS = 5000;
+      // A TCP connect either lands or the host is not there; three of these
+      // hosts time out from a pod (measured 2026-09-08) and waiting longer on a
+      // known-dead address only slows the endpoint down.
+      const TCP_PROBE_TIMEOUT_MS = 5000;
 
       /**
        * Every external host this service is configured with, probed at the TCP
@@ -354,7 +357,7 @@ export async function buildServer() {
             sock.destroy();
             resolve({ ok, detail });
           };
-          sock.setTimeout(PROBE_TIMEOUT_MS);
+          sock.setTimeout(TCP_PROBE_TIMEOUT_MS);
           sock.once('connect', () => done(true, `${Date.now() - started}ms`));
           sock.once('timeout', () => done(false, 'TIMEOUT'));
           sock.once('error', (e: NodeJS.ErrnoException) => done(false, e.code ?? 'ERROR'));
@@ -380,7 +383,10 @@ export async function buildServer() {
       const transcriptProxies = await Promise.all(
         proxies.map(async (proxy) => {
           const ctl = new AbortController();
-          const timer = setTimeout(() => ctl.abort(), PROBE_TIMEOUT_MS);
+          // Not the TCP budget: this proxy sleeps and its wake-up is slower
+          // than a connect. PROXY_PROBE_TIMEOUT_MS carries the measurement and
+          // the probe < fetch invariant (src/config/transcript.ts).
+          const timer = setTimeout(() => ctl.abort(), PROXY_PROBE_TIMEOUT_MS);
           const started = Date.now();
           try {
             // The service exposes one route, /transcript/<id>, and no /health.

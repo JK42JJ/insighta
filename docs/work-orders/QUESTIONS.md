@@ -11,7 +11,7 @@
 | 2026-09-11 | WO-2026-09-11-newsletter-v21-pr1 | PR #1632(nl_* 18 테이블 DDL + 지연 트리거) 머지 — prod DDL 은 CI migrate 경로, 머지 후 `\d nl_claim` 확인 | (a) 머지 (b) 보류 | |
 | 2026-09-11 | WO-2026-09-11-newsletter-v21-pr1 | 실행 엔진: 설계(v2.1)는 DBOS, 리포에는 pg-boss 만 존재 | (a) pg-boss 유지(설계 §1 수정) (b) DBOS 도입(새 의존성) | |
 | 2026-09-11 | 자막 수집(브리프 선행 조건, `docs/handoffs/keel-monitoring-2026-09-08.md`) | 맥미니 transcript-collector 47일 정지 — ① plist 의 프록시 계정이 전송량 소진 계정(402)을 가리킴: PlistBuddy 로 `.transcript-svc.env` 의 정상 계정으로 교체 후 unload/load ② launchd 잡 미로드, ssh 로 등록 불가(Aqua 세션 없음): 맥미니 GUI 로그인 1회 필요 | (a) ①② 지금 (b) 날짜 지정 | |
-| 2026-09-11 | 관측 (Keel) | `SLACK_ALERT_WEBHOOK` 미설정 — 전이 알림이 원장에만 남고 사람에게 안 감 | (a) 웹훅 URL 을 GitHub Secret 으로 등록(James) (b) 이메일(SNS)로 대체 (c) 보류 | |
+| 2026-09-11 | 관측 (Keel) | `SLACK_ALERT_WEBHOOK` 미설정 — 전이 알림이 원장에만 남고 사람에게 안 감 | (a) 웹훅 URL 을 GitHub Secret 으로 등록(James) (b) 이메일(SNS)로 대체 (c) 보류 | **(a) 2026-09-21.** James 가 Slack incoming webhook 발급 → `gh secret set SLACK_ALERT_WEBHOOK` (숨김 입력, 값은 대화에 남기지 않음). 코드 쪽은 선행 완료: 미설정/전송실패가 `alert-delivery` 검사로 red, 런로그가 전송 여부를 사실대로 출력. |
 | 2026-09-11 | WO-2026-09-11-branch-worktree-cleanup | 미커밋 변경이 있는 워크트리 5개 처리 (primary 69 · loading-fouc 2 · chatbot-rollback 1 · note-toolset 1 · book-compression 1) | (a) 커밋해 PR (b) 버림 (c) 보류 | |
 | 2026-09-11 | WO-2026-09-11-newsletter-v21-pr1 | DBOS Transact 도입(의존성 + Supabase 에 `dbos` 시스템 스키마). 풀러(pgbouncer 트랜잭션 모드) 경유 검증은 prod 자격증명이 필요 | (a) DBOS 진행, 풀러 실패 시 DIRECT_URL 전용 연결 (b) 리포에 이미 있는 pg-boss 로 같은 상태 기계 (c) 보류 | |
 

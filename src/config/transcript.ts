@@ -44,6 +44,33 @@ export const transcriptEnvSchema = z.object({
   AZURE_TRANSCRIPT_TOKEN: optionalStr.default(''),
 });
 
+/**
+ * How long a caption fetch may take before the extractor gives up on a proxy.
+ *
+ * The proxy runs yt-dlp behind a rotating Webshare exit, so this covers a real
+ * download, not a handshake.
+ */
+export const PROXY_FETCH_TIMEOUT_MS = 30_000;
+
+/**
+ * How long a reachability probe may take before the proxy counts as down.
+ *
+ * Measured against prod 2026-09-21, six consecutive probes of
+ * `/health/dependencies`: azure answered AbortError, AbortError, 4159ms,
+ * 1544ms, 1537ms, 1543ms; mac-mini 1525-1539ms throughout. The two aborts were
+ * the 5 s ceiling this constant replaced, hit while the Azure App Service Free
+ * instance was waking -- the third probe, at 4159 ms, is the same host awake.
+ * So the old ceiling reported a proxy as down that the extractor, waiting
+ * 30 s, would have used. Keel's own check flipped 8 times in 13 runs on that.
+ *
+ * The invariant that matters: probe < fetch. A probe that outlives the fetch
+ * would pass a proxy the extractor then times out on -- the monitor would be
+ * reporting health the product does not have. Keel's client budget must in turn
+ * outlive this (scripts/keel/checks.ts), or the check fails on its own timeout
+ * instead of the proxy's.
+ */
+export const PROXY_PROBE_TIMEOUT_MS = 15_000;
+
 /** One transcript proxy the extractor can forward a caption fetch to. */
 export interface TranscriptProxy {
   name: string;
