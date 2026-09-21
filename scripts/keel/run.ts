@@ -33,7 +33,7 @@
 import { appendFileSync } from 'fs';
 
 import { ALL_CHECKS, report } from './checks';
-import { ALERT_DELIVERY_STAGE, alertChannelConfigured, failingSince, getPrisma } from './lib';
+import { ALERT_DISPATCH_STAGE, failingSince, getPrisma } from './lib';
 import { MS_PER_DAY } from '../../src/utils/time-constants';
 
 interface Outcome {
@@ -82,11 +82,32 @@ async function writeJobSummary(outcomes: Outcome[]): Promise<void> {
   if (undelivered.length > 0) {
     lines.push(
       '',
-      `> ${undelivered.length} alert(s) could not be delivered. See \`${ALERT_DELIVERY_STAGE}\`.`
+      `> ${undelivered.length} alert(s) could not be delivered. See \`${ALERT_DISPATCH_STAGE}\`.`
     );
   }
 
   appendFileSync(path, `${lines.join('\n')}\n`);
+}
+
+/**
+ * Whether this run is red.
+ *
+ * A confirmed transition, or a check that threw. A steady, already-reported
+ * failure leaves the run green: the ledger, the channel and the job summary's
+ * standing section carry that, and a workflow that is permanently red is a
+ * signal nobody reads.
+ *
+ * An unconfigured alert channel was an exception to that for one hour on
+ * 2026-09-21, on the reasoning that a monitor which cannot notify is not
+ * monitoring and should say so on every run. On a thirty-minute schedule that
+ * is 48 failure mails a day -- the same "signal nobody reads" the rule above
+ * exists to prevent, and they were arriving in James's inbox. It is not an
+ * exception. The alert-delivery check still fails, so the first confirmed
+ * transition produces one red run, and the standing section names it on every
+ * run after that without sending anything.
+ */
+export function shouldFail(run: { alerted: number; threw: number }): boolean {
+  return run.alerted > 0 || run.threw > 0;
 }
 
 async function main(): Promise<void> {
@@ -129,16 +150,10 @@ async function main(): Promise<void> {
   await writeJobSummary(outcomes);
   await getPrisma().$disconnect();
 
-  // Red on a new problem, a broken check, an alert that went nowhere, or no
-  // channel to send one through. A steady, already-reported failure leaves the
-  // run green: the ledger, the channel and the job summary carry that, and a
-  // workflow that is permanently red is a signal nobody reads.
-  //
-  // The unconfigured channel is the exception to that rule and stays red every
-  // run until it is set. It cannot be announced through the channel it is
-  // missing, and a monitor that cannot notify is not monitoring.
-  const noChannel = !alertChannelConfigured();
-  process.exit(alerted > 0 || undelivered > 0 || threw > 0 || noChannel ? 1 : 0);
+  process.exit(shouldFail({ alerted, threw }) ? 1 : 0);
 }
 
-void main();
+// Only when run as the script. This file also exports `shouldFail`, and an
+// import for that must not launch a monitoring run -- which it did, once, in a
+// test process.
+if (require.main === module) void main();

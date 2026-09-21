@@ -16,7 +16,10 @@ import {
 import {
   interpretAlertDelivery,
   DELIVERY_FAILURE_WINDOW_HOURS,
+  ALL_CHECKS,
 } from '../../../scripts/keel/checks';
+import { ALERT_DELIVERY_STAGE, ALERT_DISPATCH_STAGE } from '../../../scripts/keel/lib';
+import { shouldFail } from '../../../scripts/keel/run';
 
 const OK = true;
 const BAD = false;
@@ -159,5 +162,45 @@ describe('interpretAlertDelivery', () => {
     });
     expect(r.ok).toBe(true);
     expect(r.detail).toContain('outside the window');
+  });
+});
+
+/**
+ * The two defects that reached production on 2026-09-21 and had to be reverted
+ * an hour later. Both were shipped with tests; neither was the kind of test
+ * that could see them, because both were properties of the run as a whole
+ * rather than of any one function.
+ */
+describe('what a run writes and what makes it red', () => {
+  it('does not write delivery failures under a check name', () => {
+    // report() writes one observation row per check under `stage = check`. A
+    // delivery failure written under the same string put two rows in one stage
+    // in one run, so the alert-delivery check read its own failure rows as its
+    // observation history and lastDeliveryFailure() matched the row the check
+    // had just caused. Measured in the ledger at 14:11 KST before the split.
+    expect(ALERT_DISPATCH_STAGE).not.toBe(ALERT_DELIVERY_STAGE);
+  });
+
+  it('keeps the dispatch stage clear of every check name', () => {
+    // Not just of alert-delivery: any check whose name collided would corrupt
+    // its own history the same way. This is the general form of the defect.
+    const names = ALL_CHECKS.map((c) => c.name);
+    expect(names.length).toBeGreaterThan(10);
+    expect(names).not.toContain(ALERT_DISPATCH_STAGE);
+  });
+
+  it('is green when everything is steady, however much is failing', () => {
+    // The flood: an unconfigured channel forced red on every run, which on a
+    // 30-minute schedule is 48 failure mails a day. Four checks were failing in
+    // every run of that hour and none of them was new.
+    expect(shouldFail({ alerted: 0, threw: 0 })).toBe(false);
+  });
+
+  it('is red on a confirmed transition', () => {
+    expect(shouldFail({ alerted: 1, threw: 0 })).toBe(true);
+  });
+
+  it('is red when a check threw, which is a monitor that stopped looking', () => {
+    expect(shouldFail({ alerted: 0, threw: 1 })).toBe(true);
   });
 });
