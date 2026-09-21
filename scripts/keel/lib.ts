@@ -184,7 +184,7 @@ export async function report(r: CheckResult): Promise<Reported> {
     await prisma.error_events.create({
       data: {
         subsystem: SUBSYSTEM,
-        stage: ALERT_DELIVERY_STAGE,
+        stage: ALERT_DISPATCH_STAGE,
         severity: 'error',
         message: `${r.check}: ${detail}`,
         context: { check: r.check, state: delivery.state } as never,
@@ -194,8 +194,25 @@ export async function report(r: CheckResult): Promise<Reported> {
   return { alerted: true, delivery };
 }
 
-/** Ledger stage for delivery outcomes, shared with the check that reads them. */
+/** The alert-delivery check's own name, and the stage its observations go to. */
 export const ALERT_DELIVERY_STAGE = 'alert-delivery';
+
+/**
+ * Ledger stage for delivery outcomes. Deliberately not the check's name.
+ *
+ * It was the check's name for one hour on 2026-09-21, and that hour is the whole
+ * reason this constant exists. `report()` writes one observation row per check
+ * under `stage = check`, and it wrote delivery failures under the same string --
+ * so the alert-delivery check read its own failure rows as its observation
+ * history, `lastDeliveryFailure()` matched the row the check had just produced,
+ * and one run left two rows under one stage. Measured in the ledger at 14:11 KST:
+ *
+ *   alert-delivery  error  no alert channel configured (SLACK_ALERT_WEBHOOK) ...
+ *   alert-delivery  error  transcript-proxies: no alert channel configured ...
+ *
+ * A stage is a series. Two writers on one series is not a series.
+ */
+export const ALERT_DISPATCH_STAGE = 'alert-dispatch';
 
 /**
  * Whether the most recent delivery attempt failed, and what it said.
@@ -206,7 +223,7 @@ export const ALERT_DELIVERY_STAGE = 'alert-delivery';
  */
 export async function lastDeliveryFailure(): Promise<{ at: Date; message: string } | null> {
   const row = await prisma.error_events.findFirst({
-    where: { subsystem: SUBSYSTEM, stage: ALERT_DELIVERY_STAGE, severity: 'error' },
+    where: { subsystem: SUBSYSTEM, stage: ALERT_DISPATCH_STAGE, severity: 'error' },
     orderBy: { created_at: 'desc' },
     select: { created_at: true, message: true },
   });
