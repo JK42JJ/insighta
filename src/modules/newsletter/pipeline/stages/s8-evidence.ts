@@ -112,7 +112,7 @@ export function extractRuns(caption: string): EvidenceRow[] {
 
 export function makeS8Evidence(captions: CaptionSource): Stage {
   return {
-    id: 'S6_stats',
+    id: 'S8_evidence',
     what: 'verbatim runs from the captions of the shortlist',
     kind: 'machine',
 
@@ -140,13 +140,30 @@ export function makeS8Evidence(captions: CaptionSource): Stage {
       });
 
       return {
-        survivors: input.map((v) => ({
-          videoId: v.videoId,
-          enrichment: {
-            ...(v.enrichment ?? {}),
-            evidenceRuns: evidence.filter((e) => e.videoId === v.videoId).length,
-          },
-        })),
+        // The runs ride on the row they came from. Counting them and dropping
+        // the text would leave the stage provably useless: a number cannot be
+        // quoted, and a claim graded on a count is a claim with no source.
+        //
+        // Excerpts, not captions. The policy keeps full caption text off this
+        // database; what is stored here is what extractRuns already bounds --
+        // at most RUNS_PER_VIDEO runs of at most MAX_QUOTE_CHARS each,
+        // which is a quotation and not a copy.
+        survivors: input.map((v) => {
+          const runs = evidence.filter((e) => e.videoId === v.videoId);
+          return {
+            videoId: v.videoId,
+            enrichment: {
+              ...(v.enrichment ?? {}),
+              evidenceRuns: runs.length,
+              evidence: runs.map(({ quoted, from, to, carries }) => ({
+                quoted,
+                from,
+                to,
+                carries,
+              })),
+            },
+          };
+        }),
         drops,
         itemsIn: input.length,
         detail: {

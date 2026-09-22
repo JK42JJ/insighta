@@ -2940,7 +2940,7 @@ model newsletter_pipeline_runs {
 model newsletter_pipeline_steps {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   run_id       String   @db.Uuid
-  /// S0_harvest · S1_format · S2_domain · S3_judge · S4_deep · S5_cross · S6_stats · S7_draft
+  /// S0_harvest · S1_format · S2_domain · S3_judge · S4_deep · S5_cross · S6_stats · S7_draft · S8_evidence
   stage        String   @db.VarChar(16)
   items_in     Int
   items_out    Int

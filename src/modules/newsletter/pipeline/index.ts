@@ -16,6 +16,8 @@ import { s4Deep } from './stages/s4-deep';
 import { s5Cross } from './stages/s5-cross';
 import { s6Stats } from './stages/s6-stats';
 import { s7Draft } from './stages/s7-draft';
+import { makeS8Evidence } from './stages/s8-evidence';
+import { proxyCaptions } from './caption-source';
 
 export const STAGES: Stage[] = [
   s0Harvest,
@@ -26,6 +28,12 @@ export const STAGES: Stage[] = [
   s5Cross,
   s6Stats,
   s7Draft,
+  // Built here rather than exported as a value because it takes its caption
+  // source as an argument -- a run that must not spend a Webshare fetch passes
+  // `noCaptions` instead. It was written in R4 and never added to this array,
+  // so it had never run: the one thing that makes T4 measurable was dead code
+  // behind a caption fetch that pointed at an endpoint which does not exist.
+  makeS8Evidence(proxyCaptions()),
 ];
 
 /** The whole pipeline, or a contiguous slice of it (`--from S3 --to S7`). */
