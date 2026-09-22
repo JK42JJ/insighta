@@ -17,7 +17,7 @@
  * `openrouter`. A stage breakdown covering earlier data would be fiction.
  */
 
-import { getPrisma, postDigest } from './lib';
+import { getPrisma, postDigest, type Delivery } from './lib';
 
 interface Row {
   key: string;
@@ -43,13 +43,18 @@ function padStart(s: string, n: number): string {
 function table(rows: Row[], label: string): string {
   if (rows.length === 0) return `${label}: (없음)`;
   const head =
-    pad(label, 34) + padStart('calls', 7) + padStart('cost', 10) + padStart('cache', 7) + padStart('p95', 8);
+    pad(label, 34) +
+    padStart('calls', 7) +
+    padStart('cost', 10) +
+    padStart('cache', 7) +
+    padStart('p95', 8);
   const body = rows.map((r) => {
     const inTok = Number(r.in_tok ?? 0);
     const cached = Number(r.cached_tok ?? 0);
     // NULL and 0 are different facts: no cache support versus a cache miss.
     // A dash says "the provider reported nothing", which is not 0%.
-    const cacheCol = r.cached_tok === null ? '—' : inTok > 0 ? `${Math.round((cached / inTok) * 100)}%` : '0%';
+    const cacheCol =
+      r.cached_tok === null ? '—' : inTok > 0 ? `${Math.round((cached / inTok) * 100)}%` : '0%';
     return (
       pad(r.key, 34) +
       padStart(String(r.calls), 7) +
@@ -59,6 +64,11 @@ function table(rows: Row[], label: string): string {
     );
   });
   return [head, ...body].join('\n');
+}
+
+/** Whether the digest run is red. See the comment at its call site. */
+export function digestShouldFail(delivery: Delivery): boolean {
+  return delivery.state === 'failed';
 }
 
 async function main(): Promise<void> {
@@ -130,9 +140,20 @@ async function main(): Promise<void> {
 
   const delivery = await postDigest(lines.join('\n'));
   await prisma.$disconnect();
-  // A digest nobody received is not a digest. Red here is the only way that
-  // reaches a person while the channel is the thing that is broken.
-  if (delivery.state !== 'sent') process.exit(1);
+
+  // Red when a configured channel refused the digest -- that is new, and the
+  // next run may not repeat it. Green when there is no channel at all: that is
+  // a standing state, the alert-delivery check already reports it on every
+  // invariant run, and failing here as well mails a person once a day to say
+  // what they already know.
+  //
+  // This is the same mistake the invariant runner made one commit earlier, at
+  // a different rate. `delivery.state !== 'sent'` covered both cases and only
+  // one of them is news.
+  if (digestShouldFail(delivery)) process.exit(1);
 }
 
-void main();
+// Only when run as the script. This file exports `digestShouldFail` now, and
+// an import for that must not send a digest — the same guard run.ts needed for
+// the same reason.
+if (require.main === module) void main();
