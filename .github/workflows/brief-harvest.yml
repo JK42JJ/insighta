@@ -37,6 +37,13 @@ on:
           - S5_cross
           - S6_stats
           - S7_draft
+          # S8_evidence is deliberately not offered here. It reads captions,
+          # and a GitHub runner reaches neither transcript proxy -- one is on a
+          # Tailscale address, the other on a private host (the same fact that
+          # makes Keel ask the pod for /health/dependencies instead of probing
+          # them itself). Selected here it would run, find no captions for
+          # every video, and write a ledger row saying so, which is a worse
+          # answer than not offering it. It runs where the captions are.
       from_stage:
         description: 'First stage to run. Use S3_judge to continue an existing run.'
         required: false

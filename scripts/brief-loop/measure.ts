@@ -172,7 +172,9 @@ async function main(): Promise<void> {
     },
     T4_근거: {
       value: null, pass: false, status: 'not-measurable',
-      note: 'Claim 레코드가 DB 에 없음 — nl_claim / nl_evidence 테이블 미존재. v2/grade.ts 로직은 있으나 저장소가 없다',
+      note:
+        'nl_* 15개 테이블은 prod 에 존재(#1632). 삽입 이력 0 — nl_claim·nl_evidence·nl_issue 전부 0행, 씨드만(nl_domain 1, nl_gate_spec 16). ' +
+        '쓰는 코드가 없다. S8 이 뽑은 구절은 corpus enrichment 에 실리지만 nl_evidence 는 issue_id NOT NULL 이라 nl_issue 가 먼저 필요하다',
     },
     T5_오염차단: {
       value: `${caught.length}/${poisons.length}`,

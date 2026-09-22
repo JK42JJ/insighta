@@ -99,6 +99,42 @@ describe('S8 stage', () => {
     expect(e.evidenceRuns).toBeGreaterThan(0);
   });
 
+  it('carries the quotes themselves, not only how many there were', async () => {
+    // The stage extracted runs, logged a count and dropped the text. A count
+    // cannot be quoted, and a claim graded against a count has no source — so
+    // the one artifact the stage exists to produce was being discarded.
+    const captions: CaptionSource = { get: async () => CAPTION };
+    const result = await makeS8Evidence(captions).run([row('a')], ctx);
+    const e = result.survivors[0]?.enrichment as {
+      evidenceRuns?: number;
+      evidence?: Array<{ quoted: string; from: number; to: number; carries: string[] }>;
+    };
+
+    expect(e.evidence).toHaveLength(e.evidenceRuns as number);
+    for (const run of e.evidence ?? []) {
+      // Every stored run must still be findable in the caption it came from,
+      // which is the same substring test the quote check applies later.
+      expect(CAPTION.normalize('NFC')).toContain(run.quoted);
+      expect(run.carries.length).toBeGreaterThan(0);
+      expect(run.to).toBeGreaterThan(run.from);
+    }
+  });
+
+  it('stores excerpts, not the caption', async () => {
+    // The policy keeps full caption text off this database. What rides on the
+    // row is bounded by RUNS_PER_VIDEO and MAX_QUOTE_CHARS, which is a
+    // quotation; the whole caption would be a copy.
+    const captions: CaptionSource = { get: async () => CAPTION };
+    const result = await makeS8Evidence(captions).run([row('a')], ctx);
+    const e = result.survivors[0]?.enrichment as {
+      evidence?: Array<{ quoted: string }>;
+    };
+    for (const run of e.evidence ?? []) {
+      expect(run.quoted.length).toBeLessThanOrEqual(MAX_QUOTE_CHARS);
+    }
+    expect((e.evidence ?? []).length).toBeLessThanOrEqual(12);
+  });
+
   it('is the same on a second run — no model, no clock', async () => {
     const captions: CaptionSource = { get: async () => CAPTION };
     const a = await makeS8Evidence(captions).run([row('a')], ctx);

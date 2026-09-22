@@ -8,7 +8,7 @@
  *   --judge      console | openrouter        who fills the LLM role at S3
  *   --verdicts   path                        required by the console judge
  *   --run        uuid                        resume an existing run
- *   --from/--to  S0_harvest .. S7_draft      run a slice
+ *   --from/--to  S0_harvest .. S8_evidence    run a slice
  *   --out        path                        where the draft is written
  *
  * A stage that already has a ledger row is skipped, so re-running is safe and
@@ -17,7 +17,12 @@
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { startRun, finishRun, type PipelineStage } from '@/modules/newsletter/pipeline-ledger';
+import {
+  startRun,
+  finishRun,
+  PIPELINE_STAGES,
+  type PipelineStage,
+} from '@/modules/newsletter/pipeline-ledger';
 import { pipeline, corpus } from '@/modules/newsletter/pipeline';
 import { AI_TECH } from '@/modules/newsletter/topics/ai-tech';
 import { createConsoleJudge } from '@/modules/newsletter/pipeline/judge/console-judge';
@@ -49,16 +54,11 @@ async function main(): Promise<void> {
   // a range that stops before S3 has no verdicts to demand. Requiring one
   // anyway made the material-only range -- harvest, format, domain -- ask for
   // a file that by definition does not exist until after that range has run.
-  const ORDER: PipelineStage[] = [
-    'S0_harvest',
-    'S1_format',
-    'S2_domain',
-    'S3_judge',
-    'S4_deep',
-    'S5_cross',
-    'S6_stats',
-    'S7_draft',
-  ];
+  // The ledger's list, not a copy of it. This was a third hand-written stage
+  // array -- after PIPELINE_STAGES and STAGES -- and three copies is how S8
+  // came to exist in one of them and not the others.
+  const ORDER: readonly PipelineStage[] = PIPELINE_STAGES;
+  const LAST = ORDER[ORDER.length - 1] as PipelineStage;
   const firstIdx = from ? ORDER.indexOf(from) : 0;
   const lastIdx = to ? ORDER.indexOf(to) : ORDER.length - 1;
   const judgeInRange = firstIdx <= ORDER.indexOf('S3_judge') && ORDER.indexOf('S3_judge') <= lastIdx;
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
 
   console.log(`run   ${runId}`);
   console.log(`judge ${judge.name} (${judge.provenance})`);
-  console.log(`range ${from ?? 'S0_harvest'} -> ${to ?? 'S7_draft'}\n`);
+  console.log(`range ${from ?? ORDER[0]} -> ${to ?? LAST}\n`);
 
   const ctx: StageContext = { runId, topic: AI_TECH, judge, artifacts: {} };
 
@@ -103,8 +103,11 @@ async function main(): Promise<void> {
     console.log(`\ndraft written to ${out}`);
   }
 
-  if (!to || to === 'S7_draft') {
-    await finishRun(runId, { status: 'complete', throughStage: 'S7_draft' });
+  // Complete means the range reached the end of the pipeline, whatever the end
+  // currently is. Pinned to S7_draft, a full run that now ends at S8 would be
+  // left open and the next one would resume into a run that had finished.
+  if (!to || to === LAST) {
+    await finishRun(runId, { status: 'complete', throughStage: LAST });
   }
 
   console.log('\n=== corpus by stage ===');
