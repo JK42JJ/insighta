@@ -513,11 +513,38 @@ jobs:
           \`charts/insighta/environments/prod.yaml\` from this repository, and until this
           lands it still names the previous ones.
 
-          Production syncs manually, so merging does not deploy on its own.
+          Merging this is the release. ArgoCD picks the change up on its own --
+          measured 2026-09-21, twice: production moved to the new image about
+          eight minutes after each of these merged, with no sync command.
 
           Not merged automatically: GitHub does not run workflows on events created
-          with GITHUB_TOKEN, so the required checks will not report here. See A-5 in
-          \`docs/ops/k8s-migration-issue-checklist.md\`.")
+          with GITHUB_TOKEN, so CI arrives here as \`action_required\` and waits for
+          someone to approve the run. Approve it, then merge; the checks do report.
+          See A-5 in \`docs/ops/k8s-migration-issue-checklist.md\`.
+
+          Superseded by a later pin? Close it. Its tag is behind what production
+          runs, so merging it is a rollback. Ten of these were open on 2026-09-22.
+
+          ## Work order
+
+          Opened by deploy.yml. Fill the sections below before merging -- the
+          done-gate reads this body and refuses a template.
+
+          ## Changed
+
+          Image tags in \`charts/insighta/environments/prod.yaml\`.
+
+          ## Verified
+
+          The images were pushed to ECR by the run that opened this.
+
+          ## Not verified
+
+          The rollout.
+
+          ## Spec
+
+          No spec change.")
           fi
 
           echo "::notice title=Image tags need one merge::$URL"
