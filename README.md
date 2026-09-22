@@ -115,12 +115,17 @@ API reference: `http://localhost:3000/api-reference`
 ## Deployment
 
 `git push origin main` → GitHub Actions → CI (lint / typecheck / test / build) →
-image build → Prisma migrate → the cluster reconciles itself against the merged
-commit.
+image build → Prisma migrate → a pull request that names the new images →
+the cluster reconciles itself against the merged commit.
 
 The last step is a pull, not a push: the deployment state lives in this
 repository, and an agent in the cluster brings the running state to match it.
 Drift is corrected without anyone running a command.
+
+The step before it is deliberately not automatic. Building the images does not
+release them: the workflow opens a pull request that moves the image tags, and
+a person merges it. That merge is the release, and it is the one place where
+someone decides that what passed CI should now be what runs.
 
 ## Docs
 
