@@ -22,7 +22,7 @@ import { logger } from '@/utils/logger';
 const log = logger.child({ module: 'newsletter/pipeline-ledger' });
 
 /**
- * The eight stages of the brief pipeline, in order.
+ * The nine stages of the brief pipeline, in order.
  *
  * S0 harvest   collect wide — narrowing here cannot be undone later
  * S1 format    shorts, too short, duplicates. Mechanical, no model
@@ -32,6 +32,13 @@ const log = logger.child({ module: 'newsletter/pipeline-ledger' });
  * S5 cross     one channel is a claim, independent channels are an event
  * S6 stats     the shape of what was dropped, which is itself the article
  * S7 draft     a person writes; the machine hands over evidence, not prose
+ * S8 evidence  the verbatim runs that hand-over is made of
+ *
+ * S8 runs after the draft rather than before it because the draft does not
+ * read quotes: S7 derives picks, the funnel and the ledger, and leaves every
+ * sentence to a person. The quotes are for whoever writes those sentences, and
+ * they arrive with the draft. When a stage writes prose from evidence, the
+ * order becomes a real question; today it is not one.
  */
 export const PIPELINE_STAGES = [
   'S0_harvest',
@@ -42,6 +49,7 @@ export const PIPELINE_STAGES = [
   'S5_cross',
   'S6_stats',
   'S7_draft',
+  'S8_evidence',
 ] as const;
 
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];

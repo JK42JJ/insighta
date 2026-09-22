@@ -7,79 +7,77 @@
  * caller, and keeps no copy. `videos.transcript_fetched_at` is a timestamp,
  * not a document, and that is deliberate.
  *
- * The collector's HTTP endpoint (`GET /captions/:videoId`, v2.1 section 2)
- * does not exist yet -- the Mac Mini runs the fetcher as a LaunchAgent writing
- * to a local cache, with no server in front of it. So this ships with the
- * interface and a null source, and the run ledger records how many videos had
- * no caption rather than pretending they all did. Building that endpoint is
- * its own change; guessing at its shape here would be worse than saying it is
- * missing.
+ * It does not speak to the collector itself. An earlier version of this file
+ * did, against `GET /captions/:videoId` with an `x-internal-token` header, and
+ * that endpoint does not exist: the service answers `GET /transcript/:videoId`
+ * with `x-transcript-token` and a JSON body. Written from the v2.1 document
+ * rather than from the running service, it would have returned 404 for every
+ * video and recorded the result as "this video has no captions" -- the one
+ * confusion the S8 contract says must never happen.
+ *
+ * Where this can run matters. The transcript proxies are reachable from the
+ * cluster and from nowhere else -- one is on a Tailscale address, the other on
+ * a private host, which is why Keel asks the pod for /health/dependencies
+ * rather than probing them from its runner. A pipeline run on a GitHub runner
+ * therefore gets null for every video, and the ledger records that as
+ * `withoutCaptions`, correctly and uselessly. S8 belongs where the captions
+ * are.
+ *
+ * So the fetch is not reimplemented here. `CaptionExtractor` already holds the
+ * contract, the proxy order (Azure, then Mac Mini), the language fallback and
+ * the timeouts, and it is explicitly in-memory: it returns the text and
+ * persists nothing. One caller, one contract, one place to fix it.
  */
 
 import { logger } from '@/utils/logger';
+import { getCaptionExtractor, type CaptionExtractor } from '@/modules/caption/extractor';
 import type { CaptionSource } from './stages/s8-evidence';
 
 const log = logger.child({ module: 'newsletter/captions' });
 
-/** Longer than this and the collector is down, not slow. */
-const TIMEOUT_MS = 8_000;
-
-export interface CollectorConfig {
-  /** Base URL of the collector on the Mac Mini, over Tailscale. */
-  baseUrl: string;
-  /** Shared secret, the same header the internal routes check. */
-  token: string;
-}
-
 /**
- * Reads captions from the collector.
+ * Reads captions through the transcript proxies.
  *
  * Every failure returns null rather than throwing. A stage that dies because
  * one video's caption is missing produces no evidence at all, and a brief with
  * eleven sources instead of twelve is a smaller brief, not a broken one. What
- * the run must not do is silently treat "the collector is down" as "this video
- * has no captions" -- so the two are logged differently.
+ * the run must not do is silently treat "the proxies are down" as "this video
+ * has no captions" -- so the two are logged differently, and the extractor
+ * already separates them: it reports `transcript proxies unreachable` for the
+ * first and returns an empty caption for the second.
  */
-export function collectorCaptions(
-  config: CollectorConfig,
-  fetchImpl: typeof fetch = fetch
-): CaptionSource {
+export function proxyCaptions(extractor: CaptionExtractor = getCaptionExtractor()): CaptionSource {
   return {
     async get(videoId: string): Promise<string | null> {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
       try {
-        const res = await fetchImpl(`${config.baseUrl}/captions/${videoId}`, {
-          headers: { 'x-internal-token': config.token },
-          signal: controller.signal,
-        });
-        if (res.status === 404) return null; // fetched, and there is nothing there
-        if (!res.ok) {
-          log.warn('collector refused', { videoId, status: res.status });
+        const result = await extractor.extractCaptions(videoId);
+        if (!result.success || !result.caption) {
+          // `error` carries which of the two it was; both end with no quotes,
+          // and only one of them is fixed by restarting a host.
+          log.warn('no captions', { videoId, reason: result.error ?? 'unknown' });
           return null;
         }
-        const text = await res.text();
-        return text.trim().length > 0 ? text : null;
+        const text = result.caption.fullText.trim();
+        return text.length > 0 ? text : null;
       } catch (err) {
-        log.warn('collector unreachable', {
+        log.warn('caption fetch threw', {
           videoId,
           error: err instanceof Error ? err.message : String(err),
         });
         return null;
-      } finally {
-        clearTimeout(timer);
       }
     },
   };
 }
 
 /**
- * The source used when no collector is configured.
+ * The source used when captions must not be fetched at all.
  *
  * Named for what it is. A run against this produces zero evidence rows and a
  * ledger line saying every video was without captions, which is the honest
- * reading: the pipeline cannot reach the captions, so it has no quotes, so no
- * claim can be graded above what its metadata supports.
+ * reading: the pipeline did not reach the captions, so it has no quotes, so no
+ * claim can be graded above what its metadata supports. Used by tests and by
+ * any run that must not spend a Webshare fetch.
  */
 export const noCaptions: CaptionSource = {
   get: async () => null,
