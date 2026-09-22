@@ -20,6 +20,7 @@ import {
 } from '../../../scripts/keel/checks';
 import { ALERT_DELIVERY_STAGE, ALERT_DISPATCH_STAGE } from '../../../scripts/keel/lib';
 import { shouldFail } from '../../../scripts/keel/run';
+import { digestShouldFail } from '../../../scripts/keel/spend-digest';
 
 const OK = true;
 const BAD = false;
@@ -202,5 +203,28 @@ describe('what a run writes and what makes it red', () => {
 
   it('is red when a check threw, which is a monitor that stopped looking', () => {
     expect(shouldFail({ alerted: 0, threw: 1 })).toBe(true);
+  });
+});
+
+/**
+ * The digest's own exit, which repeated the flood at one mail a day.
+ *
+ * `shouldFail` fixed the invariant runner in the same commit that gave the
+ * digest `delivery.state !== 'sent'` -- the identical conflation of "no channel
+ * exists" with "the channel refused", one of which is news and one of which is
+ * a standing state the alert-delivery check already reports. It failed every
+ * day at 09:00 KST until this.
+ */
+describe('digestShouldFail', () => {
+  it('is green when there is simply no channel', () => {
+    expect(digestShouldFail({ state: 'unconfigured' })).toBe(false);
+  });
+
+  it('is red when a configured channel refused it', () => {
+    expect(digestShouldFail({ state: 'failed', reason: 'HTTP 403' })).toBe(true);
+  });
+
+  it('is green when it was sent', () => {
+    expect(digestShouldFail({ state: 'sent' })).toBe(false);
   });
 });
