@@ -3,8 +3,8 @@
  *
  *   npx tsx scripts/keel/run.ts
  *
- * Exits non-zero when something *changed* for the worse, when a check threw, or
- * when an alert could not be delivered -- not merely when a check is failing.
+ * Exits non-zero when something *changed* for the worse or when a check threw --
+ * not merely when a check is failing, and not when something recovered.
  *
  * The difference matters. pipeline-freshness has been failing since the day it
  * shipped, correctly, and exiting on any failure made every scheduled run red.
@@ -33,7 +33,7 @@
 import { appendFileSync } from 'fs';
 
 import { ALL_CHECKS, report } from './checks';
-import { ALERT_DISPATCH_STAGE, failingSince, getPrisma } from './lib';
+import { ALERT_DISPATCH_STAGE, connectWithRetry, failingSince, getPrisma } from './lib';
 import { MS_PER_DAY } from '../../src/utils/time-constants';
 
 interface Outcome {
@@ -92,10 +92,16 @@ async function writeJobSummary(outcomes: Outcome[]): Promise<void> {
 /**
  * Whether this run is red.
  *
- * A confirmed transition, or a check that threw. A steady, already-reported
- * failure leaves the run green: the ledger, the channel and the job summary's
- * standing section carry that, and a workflow that is permanently red is a
- * signal nobody reads.
+ * A confirmed transition *to failing*, or a check that threw. A steady,
+ * already-reported failure leaves the run green: the ledger, the channel and
+ * the job summary's standing section carry that, and a workflow that is
+ * permanently red is a signal nobody reads.
+ *
+ * A recovery is not red. It was, until 2026-10-01: `alerted` counted
+ * transitions in both directions, so a check coming back -- pipeline-freshness
+ * on 10-01, transcript-proxies on 09-29 -- failed the run exactly like one
+ * going down, and half of that fortnight's red runs were good news. The
+ * recovery is still recorded and still sent; it just does not page.
  *
  * An unconfigured alert channel was an exception to that for one hour on
  * 2026-09-21, on the reasoning that a monitor which cannot notify is not
@@ -106,13 +112,25 @@ async function writeJobSummary(outcomes: Outcome[]): Promise<void> {
  * transition produces one red run, and the standing section names it on every
  * run after that without sending anything.
  */
-export function shouldFail(run: { alerted: number; threw: number }): boolean {
-  return run.alerted > 0 || run.threw > 0;
+/** Confirmed transitions that went the wrong way: alerted, and now failing. */
+export function countWorsened(outcomes: ReadonlyArray<{ alerted: boolean; ok: boolean }>): number {
+  return outcomes.filter((o) => o.alerted && !o.ok).length;
+}
+
+export function shouldFail(run: { worsened: number; threw: number }): boolean {
+  return run.worsened > 0 || run.threw > 0;
 }
 
 async function main(): Promise<void> {
   const outcomes: Outcome[] = [];
   let threw = 0;
+
+  // The first check is the first query, so a pooler that drops one connect
+  // attempt used to fail whichever check ran first (deploy-drift, 10-01) while
+  // every later database check in the same run passed. A database that is
+  // really down still fails every attempt here, and then every check that
+  // needs it throws -- which is red, as it should be.
+  await connectWithRetry(getPrisma());
 
   for (const check of ALL_CHECKS) {
     try {
@@ -136,6 +154,7 @@ async function main(): Promise<void> {
 
   const failing = outcomes.filter((o) => !o.ok).length;
   const alerted = outcomes.filter((o) => o.alerted).length;
+  const worsened = countWorsened(outcomes);
   const undelivered = outcomes.filter((o) => o.undelivered).length;
   const delivered = alerted - undelivered;
 
@@ -150,7 +169,7 @@ async function main(): Promise<void> {
   await writeJobSummary(outcomes);
   await getPrisma().$disconnect();
 
-  process.exit(shouldFail({ alerted, threw }) ? 1 : 0);
+  process.exit(shouldFail({ worsened, threw }) ? 1 : 0);
 }
 
 // Only when run as the script. This file also exports `shouldFail`, and an

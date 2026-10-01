@@ -43,6 +43,33 @@ export function getPrisma(): PrismaClient {
   return prisma;
 }
 
+/** Connect attempts before the checks start, and the pause between them. */
+export const DB_CONNECT_ATTEMPTS = 3;
+export const DB_CONNECT_RETRY_MS = 5_000;
+
+/**
+ * Open the database connection before any check needs it, retrying a few
+ * times. Returns whether it connected. Never throws: a database that stays
+ * unreachable is reported by the checks that need it, each of which throws and
+ * turns the run red.
+ */
+export async function connectWithRetry(
+  client: Pick<PrismaClient, '$connect'>,
+  attempts: number = DB_CONNECT_ATTEMPTS,
+  delayMs: number = DB_CONNECT_RETRY_MS
+): Promise<boolean> {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await client.$connect();
+      return true;
+    } catch (err) {
+      console.warn(`database connect attempt ${i}/${attempts} failed: ${String(err).split('\n')[0]}`);
+      if (i < attempts) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return false;
+}
+
 /**
  * The previous answers for this check, newest first. Empty when it has never run.
  *
