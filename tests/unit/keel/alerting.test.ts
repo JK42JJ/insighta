@@ -18,8 +18,12 @@ import {
   DELIVERY_FAILURE_WINDOW_HOURS,
   ALL_CHECKS,
 } from '../../../scripts/keel/checks';
-import { ALERT_DELIVERY_STAGE, ALERT_DISPATCH_STAGE } from '../../../scripts/keel/lib';
-import { shouldFail } from '../../../scripts/keel/run';
+import {
+  ALERT_DELIVERY_STAGE,
+  ALERT_DISPATCH_STAGE,
+  connectWithRetry,
+} from '../../../scripts/keel/lib';
+import { countWorsened, shouldFail } from '../../../scripts/keel/run';
 import { digestShouldFail } from '../../../scripts/keel/spend-digest';
 
 const OK = true;
@@ -194,15 +198,35 @@ describe('what a run writes and what makes it red', () => {
     // The flood: an unconfigured channel forced red on every run, which on a
     // 30-minute schedule is 48 failure mails a day. Four checks were failing in
     // every run of that hour and none of them was new.
-    expect(shouldFail({ alerted: 0, threw: 0 })).toBe(false);
+    expect(shouldFail({ worsened: 0, threw: 0 })).toBe(false);
   });
 
-  it('is red on a confirmed transition', () => {
-    expect(shouldFail({ alerted: 1, threw: 0 })).toBe(true);
+  it('is red on a confirmed transition to failing', () => {
+    expect(shouldFail({ worsened: 1, threw: 0 })).toBe(true);
+  });
+
+  it('is green on a recovery, which used to fail the run like an outage', () => {
+    // 2026-10-01 22:37 KST: pipeline-freshness came back and the run went red.
+    // A recovery is alerted (recorded and sent) but is not a worsening.
+    const recovery = [
+      { alerted: true, ok: true },
+      { alerted: false, ok: false },
+    ];
+    expect(countWorsened(recovery)).toBe(0);
+    expect(shouldFail({ worsened: countWorsened(recovery), threw: 0 })).toBe(false);
+  });
+
+  it('counts an alerted failure as worsening, and a steady failure as nothing', () => {
+    const outcomes = [
+      { alerted: true, ok: false }, // supply-chain on 10-01 01:01 -- new high
+      { alerted: false, ok: false }, // iam-hygiene, failing for weeks
+      { alerted: true, ok: true }, // a recovery
+    ];
+    expect(countWorsened(outcomes)).toBe(1);
   });
 
   it('is red when a check threw, which is a monitor that stopped looking', () => {
-    expect(shouldFail({ alerted: 0, threw: 1 })).toBe(true);
+    expect(shouldFail({ worsened: 0, threw: 1 })).toBe(true);
   });
 });
 
@@ -226,5 +250,36 @@ describe('digestShouldFail', () => {
 
   it('is green when it was sent', () => {
     expect(digestShouldFail({ state: 'sent' })).toBe(false);
+  });
+});
+
+/**
+ * 2026-10-01 15:13 KST: the first database query of the run -- deploy-drift's --
+ * hit a pooler connect failure and threw, while db-schema passed seconds later
+ * in the same run. One dropped connect attempt should not page.
+ */
+describe('connectWithRetry', () => {
+  it('rides out a failed first attempt', async () => {
+    let calls = 0;
+    const client = {
+      $connect: async () => {
+        calls++;
+        if (calls < 3) throw new Error("Can't reach database server");
+      },
+    };
+    await expect(connectWithRetry(client, 3, 0)).resolves.toBe(true);
+    expect(calls).toBe(3);
+  });
+
+  it('gives up without throwing when the database stays down', async () => {
+    let calls = 0;
+    const client = {
+      $connect: async () => {
+        calls++;
+        throw new Error("Can't reach database server");
+      },
+    };
+    await expect(connectWithRetry(client, 3, 0)).resolves.toBe(false);
+    expect(calls).toBe(3);
   });
 });
