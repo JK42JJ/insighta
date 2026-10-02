@@ -1,7 +1,14 @@
 /**
- * Runs every invariant check, records each, alerts on confirmed transitions.
+ * The daily GitHub run: the checks that need a checkout or AWS, plus the one
+ * that reads what the in-cluster CronJob saw (cluster-keel). Records each,
+ * alerts on confirmed transitions.
  *
  *   npx tsx scripts/keel/run.ts
+ *
+ * Once a day since 2026-10-02. The "is it working now" checks run every fifteen
+ * minutes inside the cluster (src/modules/keel/run-cluster.ts), which has no
+ * failure mail; this run fails once when the cluster reports a worsening or
+ * stops reporting, so a person still hears of it while no Slack webhook exists.
  *
  * Exits non-zero when something *changed* for the worse or when a check threw in
  * two consecutive runs -- not merely when a check is failing, not when something
@@ -33,16 +40,21 @@
 
 import { appendFileSync } from 'fs';
 
-import { ALL_CHECKS, report } from './checks';
+import { CLUSTER_KEEL_CHECK, GITHUB_CHECKS, report } from './checks';
 import {
   ALERT_DISPATCH_STAGE,
+  closeLedger,
   confirmedThrows,
   connectWithRetry,
+  countWorsened,
   failingSince,
   getPrisma,
   previousRunThrew,
   recordRun,
+  shouldFail,
 } from './lib';
+
+export { countWorsened, shouldFail };
 import { MS_PER_DAY } from '../../src/utils/time-constants';
 
 interface Outcome {
@@ -121,15 +133,15 @@ async function writeJobSummary(outcomes: Outcome[]): Promise<void> {
  * exception. The alert-delivery check still fails, so the first confirmed
  * transition produces one red run, and the standing section names it on every
  * run after that without sending anything.
+ *
+ * Since 2026-10-02 the run is also red when cluster-keel is failing
+ * (`escalated`): the cluster's confirmed worsenings and its own silence reach a
+ * person this way, at most once a day.
+ *
+ * `countWorsened` and `shouldFail` live in src/modules/keel/ledger.ts, shared
+ * with the in-cluster runner, and are re-exported above for the tests.
  */
-/** Confirmed transitions that went the wrong way: alerted, and now failing. */
-export function countWorsened(outcomes: ReadonlyArray<{ alerted: boolean; ok: boolean }>): number {
-  return outcomes.filter((o) => o.alerted && !o.ok).length;
-}
 
-export function shouldFail(run: { worsened: number; threw: number }): boolean {
-  return run.worsened > 0 || run.threw > 0;
-}
 
 async function main(): Promise<void> {
   const outcomes: Outcome[] = [];
@@ -142,7 +154,7 @@ async function main(): Promise<void> {
   // needs it throws -- which is red, as it should be.
   await connectWithRetry(getPrisma());
 
-  for (const check of ALL_CHECKS) {
+  for (const check of GITHUB_CHECKS) {
     try {
       const result = await check();
       const reported = await report(result);
@@ -175,6 +187,10 @@ async function main(): Promise<void> {
   const failing = outcomes.filter((o) => !o.ok).length;
   const alerted = outcomes.filter((o) => o.alerted).length;
   const worsened = countWorsened(outcomes);
+  // What the cluster saw, escalated here because the CronJob has no failure
+  // mail: red on the first daily observation rather than after two, since the
+  // two-run rule was already applied to the cluster's own transitions.
+  const escalated = outcomes.filter((o) => o.check === CLUSTER_KEEL_CHECK && !o.ok).length;
   const undelivered = outcomes.filter((o) => o.undelivered).length;
   const delivered = alerted - undelivered;
 
@@ -188,9 +204,9 @@ async function main(): Promise<void> {
   console.log(`\n${parts.join(' · ')}`);
 
   await writeJobSummary(outcomes);
-  await getPrisma().$disconnect();
+  await closeLedger();
 
-  process.exit(shouldFail({ worsened, threw }) ? 1 : 0);
+  process.exit(shouldFail({ worsened, threw, escalated }) ? 1 : 0);
 }
 
 // Only when run as the script. This file also exports `shouldFail`, and an
