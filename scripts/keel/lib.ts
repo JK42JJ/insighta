@@ -242,6 +242,63 @@ export const ALERT_DELIVERY_STAGE = 'alert-delivery';
 export const ALERT_DISPATCH_STAGE = 'alert-dispatch';
 
 /**
+ * Ledger stage for one row per run: which checks threw. Not a check's name, for
+ * the reason above -- a stage is one series.
+ */
+export const RUN_STAGE = 'keel-run';
+
+/**
+ * The checks that threw in the previous run, or null when that cannot be read.
+ *
+ * A throw is held to the same rule as a transition: one observation is not
+ * enough to page. Until 2026-10-02 a single throw turned the run red and sent
+ * GitHub's failure mail, so any probe that met one network blip -- the pooler on
+ * 10-01 15:13 KST, while the same run's later database checks passed -- mailed
+ * James. Null (the ledger is unreadable) is treated by the caller as "every
+ * throw is confirmed": if the database is gone, that is worth a mail.
+ */
+export async function previousRunThrew(): Promise<Set<string> | null> {
+  try {
+    const row = await prisma.error_events.findFirst({
+      where: { subsystem: SUBSYSTEM, stage: RUN_STAGE },
+      orderBy: { created_at: 'desc' },
+      select: { context: true },
+    });
+    if (!row) return new Set();
+    const threw = (row.context as { threw?: unknown } | null)?.threw;
+    return new Set(Array.isArray(threw) ? threw.map(String) : []);
+  } catch {
+    return null;
+  }
+}
+
+/** Record which checks threw in this run. Best effort: a failure here must not hide the run's result. */
+export async function recordRun(threw: string[]): Promise<void> {
+  try {
+    await prisma.error_events.create({
+      data: {
+        subsystem: SUBSYSTEM,
+        stage: RUN_STAGE,
+        severity: threw.length > 0 ? 'error' : 'info',
+        message: threw.length > 0 ? `threw: ${threw.join(', ')}` : 'no check threw',
+        context: { threw } as never,
+      },
+    });
+  } catch (err) {
+    console.warn(`could not record the run: ${String(err).split('\n')[0]}`);
+  }
+}
+
+/**
+ * Throws that held across two runs. `previous` null means the last run is
+ * unknown, so nothing can be ruled a blip.
+ */
+export function confirmedThrows(current: ReadonlyArray<string>, previous: Set<string> | null): string[] {
+  if (previous === null) return [...current];
+  return current.filter((name) => previous.has(name));
+}
+
+/**
  * Whether the most recent delivery attempt failed, and what it said.
  *
  * Read from the ledger rather than held in memory because a delivery failure in

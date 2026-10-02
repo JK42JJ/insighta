@@ -21,6 +21,8 @@ import {
 import {
   ALERT_DELIVERY_STAGE,
   ALERT_DISPATCH_STAGE,
+  RUN_STAGE,
+  confirmedThrows,
   connectWithRetry,
 } from '../../../scripts/keel/lib';
 import { countWorsened, shouldFail } from '../../../scripts/keel/run';
@@ -192,6 +194,7 @@ describe('what a run writes and what makes it red', () => {
     const names = ALL_CHECKS.map((c) => c.name);
     expect(names.length).toBeGreaterThan(10);
     expect(names).not.toContain(ALERT_DISPATCH_STAGE);
+    expect(names).not.toContain(RUN_STAGE);
   });
 
   it('is green when everything is steady, however much is failing', () => {
@@ -281,5 +284,41 @@ describe('connectWithRetry', () => {
     };
     await expect(connectWithRetry(client, 3, 0)).resolves.toBe(false);
     expect(calls).toBe(3);
+  });
+});
+
+/**
+ * 2026-10-02: a single throw sent GitHub's failure mail. A throw now pages only
+ * when the same check also threw in the previous run.
+ */
+describe('confirmedThrows', () => {
+  it('lets a first throw pass without paging', () => {
+    expect(confirmedThrows(['checkDeployDrift'], new Set())).toEqual([]);
+  });
+
+  it('pages when the same check threw last run too', () => {
+    expect(confirmedThrows(['checkDeployDrift'], new Set(['checkDeployDrift']))).toEqual([
+      'checkDeployDrift',
+    ]);
+  });
+
+  it('does not confirm a throw by a different check last run', () => {
+    expect(confirmedThrows(['checkAwsCost'], new Set(['checkDeployDrift']))).toEqual([]);
+  });
+
+  it('treats an unreadable ledger as confirming every throw', () => {
+    expect(confirmedThrows(['checkDeployDrift', 'checkAwsCost'], null)).toEqual([
+      'checkDeployDrift',
+      'checkAwsCost',
+    ]);
+  });
+
+  it('is green for a single throw, red for a repeated one', () => {
+    expect(shouldFail({ worsened: 0, threw: confirmedThrows(['x'], new Set()).length })).toBe(
+      false
+    );
+    expect(shouldFail({ worsened: 0, threw: confirmedThrows(['x'], new Set(['x'])).length })).toBe(
+      true
+    );
   });
 });
