@@ -3,8 +3,9 @@
  *
  *   npx tsx scripts/keel/run.ts
  *
- * Exits non-zero when something *changed* for the worse or when a check threw --
- * not merely when a check is failing, and not when something recovered.
+ * Exits non-zero when something *changed* for the worse or when a check threw in
+ * two consecutive runs -- not merely when a check is failing, not when something
+ * recovered, and not on one throw.
  *
  * The difference matters. pipeline-freshness has been failing since the day it
  * shipped, correctly, and exiting on any failure made every scheduled run red.
@@ -33,7 +34,15 @@
 import { appendFileSync } from 'fs';
 
 import { ALL_CHECKS, report } from './checks';
-import { ALERT_DISPATCH_STAGE, connectWithRetry, failingSince, getPrisma } from './lib';
+import {
+  ALERT_DISPATCH_STAGE,
+  confirmedThrows,
+  connectWithRetry,
+  failingSince,
+  getPrisma,
+  previousRunThrew,
+  recordRun,
+} from './lib';
 import { MS_PER_DAY } from '../../src/utils/time-constants';
 
 interface Outcome {
@@ -92,7 +101,8 @@ async function writeJobSummary(outcomes: Outcome[]): Promise<void> {
 /**
  * Whether this run is red.
  *
- * A confirmed transition *to failing*, or a check that threw. A steady,
+ * A confirmed transition *to failing*, or a check that threw in this run and
+ * the last (`confirmedThrows`). A steady,
  * already-reported failure leaves the run green: the ledger, the channel and
  * the job summary's standing section carry that, and a workflow that is
  * permanently red is a signal nobody reads.
@@ -123,7 +133,7 @@ export function shouldFail(run: { worsened: number; threw: number }): boolean {
 
 async function main(): Promise<void> {
   const outcomes: Outcome[] = [];
-  let threw = 0;
+  const threwNames: string[] = [];
 
   // The first check is the first query, so a pooler that drops one connect
   // attempt used to fail whichever check ran first (deploy-drift, 10-01) while
@@ -145,12 +155,22 @@ async function main(): Promise<void> {
       });
     } catch (err) {
       // The check itself broke, which is different from the check reporting a
-      // problem. A monitor that silently stops checking is worse than no
-      // monitor, because it reads as "all clear" -- so this always goes red.
+      // problem. It is printed and recorded every time; it turns the run red
+      // when it also threw last run (below), the same two-run rule transitions
+      // follow, so one network blip does not send a failure mail.
       console.error(`💥 ${check.name} threw: ${String(err)}`);
-      threw++;
+      threwNames.push(check.name);
     }
   }
+
+  // A throw pages only when the same check also threw last run -- the rule
+  // transitions already follow. A single throw is still printed above and in
+  // the summary; it just does not send the failure mail on its own.
+  const previous = threwNames.length > 0 ? await previousRunThrew() : new Set<string>();
+  const confirmed = confirmedThrows(threwNames, previous);
+  const threw = confirmed.length;
+  const blips = threwNames.filter((n) => !confirmed.includes(n));
+  await recordRun(threwNames);
 
   const failing = outcomes.filter((o) => !o.ok).length;
   const alerted = outcomes.filter((o) => o.alerted).length;
@@ -163,7 +183,8 @@ async function main(): Promise<void> {
   // now, always, because the interesting one is the second.
   parts.push(`${delivered} alert(s) delivered`);
   if (undelivered > 0) parts.push(`${undelivered} NOT delivered`);
-  if (threw > 0) parts.push(`${threw} threw`);
+  if (threw > 0) parts.push(`${threw} threw (also last run)`);
+  if (blips.length > 0) parts.push(`${blips.length} threw once: ${blips.join(', ')} -- red if it throws again`);
   console.log(`\n${parts.join(' · ')}`);
 
   await writeJobSummary(outcomes);
