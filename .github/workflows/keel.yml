@@ -8,18 +8,20 @@ name: Keel
 # day cost $36.18 across calls that all succeeded. Not one of those moves a
 # CPU graph, which is why the first monitoring here is not a dashboard.
 #
-# Everything runs from a GitHub runner, which cannot reach the cluster -- port
-# 22 is restricted by source address and a runner's address changes every run.
-# So nothing uses kubectl. The public `/health` endpoint reports the commit it
-# was built from, the database answers for spend and freshness, and AWS
-# delivers its own billing data to S3. All three are reachable from anywhere.
+# Two places since 2026-10-02. The "is it working right now" checks run every
+# fifteen minutes inside the cluster (CronJob keel, src/modules/keel). This
+# workflow runs once a day: the checks that need a repository checkout or AWS
+# credentials, plus cluster-keel, which fails once if the cluster saw something
+# get worse in the last day or stopped reporting. That is how the cluster's
+# findings reach a person while no Slack webhook exists -- at most one failure
+# mail a day, instead of one per red run on a schedule GitHub delayed to one to
+# five hours.
 
 on:
   schedule:
-    # Every thirty minutes. Chosen against the grace window in the drift check:
-    # a deploy is legitimately mid-flight for a few minutes, and a check that
-    # ran more often than the thing it watches would only add noise.
-    - cron: '*/30 * * * *'
+    # Daily checks, 09:20 KST. After the digest so the two do not queue
+    # behind each other on the concurrency group.
+    - cron: '20 0 * * *'
     # Daily spend digest, 09:00 KST.
     - cron: '0 0 * * *'
   workflow_dispatch:

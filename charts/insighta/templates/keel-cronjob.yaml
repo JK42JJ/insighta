@@ -1,0 +1,60 @@
+{{- if .Values.keel.enabled }}
+# Keel, in the cluster: the "is it working right now" checks every fifteen
+# minutes (src/modules/keel/run-cluster.ts).
+#
+# They ran from a GitHub runner until 2026-10-02. GitHub delayed the
+# thirty-minute schedule to one to five hours and mailed every red run; here the
+# schedule holds and nothing is mailed. What this job sees reaches a person
+# through Slack when a webhook exists, and otherwise through the daily GitHub
+# run, which reads this job's ledger rows and fails once if anything worsened or
+# this job stopped.
+#
+# Same image as the api: it already carries node, the compiled module and the
+# Prisma client. No AWS permissions are needed or granted -- the checks that
+# need AWS stay in the GitHub run, where OIDC scopes them to one workflow.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "insighta.fullname" . }}-keel
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keel
+spec:
+  schedule: {{ .Values.keel.schedule | quote }}
+  # A run that overlaps its predecessor writes two observations for one state.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ .Values.keel.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "insighta.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: keel
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          {{- include "insighta.imagePullSecrets" . | nindent 10 }}
+          containers:
+            - name: keel
+              image: {{ include "insighta.image" (dict "root" $ "img" .Values.api.image "tag" (get ($.Values.images | default dict) "apiTag")) | quote }}
+              imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+              # Not an entrypoint mode: docker/entrypoint.sh waits for the
+              # database, then runs any other command as given.
+              args: ["node", "dist/modules/keel/run-cluster.js"]
+              env:
+                # The api service inside the cluster, not the public URL: the
+                # question is whether the pods answer. The public view, and the
+                # certificate, are checked from outside by the daily GitHub run.
+                - name: MONITOR_BASE_URL
+                  value: "http://{{ include "insighta.fullname" . }}-api:{{ .Values.api.port }}"
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.envSecretName }}
+              resources:
+                {{- toYaml .Values.keel.resources | nindent 16 }}
+{{- end }}
