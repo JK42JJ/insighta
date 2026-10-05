@@ -82,6 +82,11 @@ spec:
               value: {{ .Values.statelessness.ontologyChatDbStore | quote }}
             - name: YOUTUBE_CACHE_SHARED_INVALIDATION
               value: {{ .Values.statelessness.youtubeSharedInvalidation | quote }}
+            # The weekly curation refresh. Set here rather than in the secret:
+            # it is a switch, not a credential. See CURATION_WEEKLY_ENABLED in
+            # src/config/index.ts for why prod has it off.
+            - name: CURATION_WEEKLY_ENABLED
+              value: {{ .Values.curation.weeklyEnabled | quote }}
           envFrom:
             - secretRef:
                 name: {{ .Values.envSecretName }}

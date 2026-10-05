@@ -58,6 +58,30 @@ export async function findDueSubscriptions(
   });
 }
 
+/**
+ * One scan: find what is due and enqueue a build for each, unless the weekly
+ * refresh is switched off (`CURATION_WEEKLY_ENABLED=false`), in which case
+ * nothing is read and nothing is built. Dependencies are injected so the
+ * switch can be tested without a queue or a database.
+ */
+export async function scanCuration(
+  now: Date,
+  deps: {
+    enabled: boolean;
+    findDue: (now: Date) => Promise<Array<{ id: string }>>;
+    enqueue: (job: { subscriptionId: string; weekOf: string }) => Promise<unknown>;
+    weekOf: (now: Date) => string;
+  }
+): Promise<{ paused: boolean; due: number }> {
+  if (!deps.enabled) return { paused: true, due: 0 };
+  const due = await deps.findDue(now);
+  const weekOf = deps.weekOf(now);
+  for (const sub of due) {
+    await deps.enqueue({ subscriptionId: sub.id, weekOf });
+  }
+  return { paused: false, due: due.length };
+}
+
 export async function registerCurationWeeklyWorker(): Promise<void> {
   const boss = getJobQueue().getInstance();
   const cron = config.curationSchedule.kstEnabled
@@ -68,14 +92,19 @@ export async function registerCurationWeeklyWorker(): Promise<void> {
   await boss.work(JOB_NAMES.CURATION_WEEKLY, async () => {
     const prisma = getPrismaClient();
     const now = new Date();
-    const due = await findDueSubscriptions(prisma, now);
-    const weekOf = curationWeekKey(now);
-    for (const sub of due) {
-      await enqueueCurationBuild({ subscriptionId: sub.id, weekOf });
+    const result = await scanCuration(now, {
+      enabled: config.curationSchedule.weeklyEnabled,
+      findDue: (at) => findDueSubscriptions(prisma, at),
+      enqueue: (job) => enqueueCurationBuild(job),
+      weekOf: curationWeekKey,
+    });
+    if (result.paused) {
+      log.info('curation weekly scan paused (CURATION_WEEKLY_ENABLED=false) -- nothing built');
+      return;
     }
     log.info('curation weekly scan', {
-      due: due.length,
-      weekOf,
+      due: result.due,
+      weekOf: curationWeekKey(now),
       mode: config.curationSchedule.kstEnabled ? 'kst' : 'legacy',
       kstDow: kstDow(now),
     });

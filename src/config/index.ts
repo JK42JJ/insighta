@@ -276,6 +276,17 @@ const envSchema = z.object({
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
 
+  // Weekly curation refresh on/off (2026-10-05). On (default) keeps the shipped
+  // behaviour exactly. Off: the scan still runs on its schedule but builds
+  // nothing -- measured 2026-10-05, nine straight weeks with zero watches and
+  // zero bookmarks across every curation item, seven of the eight active
+  // subscriptions on James's own accounts, while each Monday spent LLM fit-gate
+  // calls and YouTube search quota. Building a subscription when it is created
+  // is not affected. Rollback is a config flip, not a revert.
+  CURATION_WEEKLY_ENABLED: z
+    .preprocess((v) => (v === undefined ? true : String(v).toLowerCase() === 'true'), z.boolean())
+    .default(true),
+
   // Channel-mode curation (2026-07-27). Off (default) keeps the shipped behaviour
   // exactly: a subscription with source='youtube_subs' still builds through the
   // discover path, so the column can be set before the leg exists. On: such a
@@ -515,6 +526,7 @@ export const config = {
   // Weekly curation schedule — KST calendar instead of UTC wall-clock (2026-07-27).
   curationSchedule: {
     kstEnabled: env.CURATION_SCHED_KST_ENABLED,
+    weeklyEnabled: env.CURATION_WEEKLY_ENABLED,
   },
 
   // Channel-mode curation — build from followed channels' uploads (2026-07-27).
