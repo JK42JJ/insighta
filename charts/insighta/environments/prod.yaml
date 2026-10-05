@@ -192,3 +192,11 @@ grafana:
 # this is the environment worth measuring.
 metrics:
   enabled: true
+
+# Weekly curation refresh paused 2026-10-05 (James decision): nine weeks with
+# zero watches and zero bookmarks, seven of eight active subscriptions on
+# James's own accounts, while every Monday spent LLM fit-gate calls and YouTube
+# search quota. Building a new subscription on creation is unaffected.
+# Resume: set true.
+curation:
+  weeklyEnabled: false

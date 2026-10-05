@@ -134,6 +134,10 @@ worker:
       memory: 768Mi     # batch work peaks higher than request handling
       cpu: "1"
 
+# Weekly curation refresh (worker). true = shipped behaviour.
+curation:
+  weeklyEnabled: true
+
 # In-cluster Keel (templates/keel-cronjob.yaml).
 keel:
   enabled: true
