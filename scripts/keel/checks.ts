@@ -19,7 +19,14 @@ import { join } from 'path';
 
 import { checkAwsCost } from './check-aws-cost';
 import { checkCloudPosture } from './check-cloud-posture';
-import { CLUSTER_RUN_STAGE, SUBSYSTEM, getPrisma, report, type CheckResult } from './lib';
+import {
+  CLUSTER_RUN_STAGE,
+  SUBSYSTEM,
+  deliveryFailuresSince,
+  getPrisma,
+  report,
+  type CheckResult,
+} from './lib';
 import { CLUSTER_CHECKS, PROBE_TIMEOUT_MS, fetchJson } from '../../src/modules/keel/cluster-checks';
 import { keelConfig } from '../../src/modules/keel/config';
 import { MINUTES_PER_HOUR, MS_PER_HOUR, MS_PER_MINUTE } from '../../src/utils/time-constants';
@@ -312,12 +319,13 @@ export async function checkSupplyChain(): Promise<CheckResult> {
 }
 
 /**
- * The cluster's Keel is running, and nothing it saw got worse in the last day.
+ * The cluster's Keel is running, and what it saw reached Slack.
  *
- * The CronJob has no failure mail. Until a Slack webhook exists, this is the
- * path by which what it sees reaches a person: once a day, one red run at most.
- * It also covers the case the CronJob cannot report about itself -- the
- * cluster, or the job, having stopped.
+ * The CronJob alerts through Slack itself; a worsening it saw and delivered is
+ * already told, and repeating it here as a red run was a duplicate failure mail
+ * (10-04 and 10-05). What this check is for is the two things the cluster
+ * cannot report: having stopped, and a delivery that failed. The daily run
+ * posts either to Slack and turns red only if that post fails too.
  */
 export const CLUSTER_KEEL_CHECK = 'cluster-keel';
 /** Four missed fifteen-minute runs. */
@@ -330,10 +338,11 @@ export interface ClusterRunRow {
   confirmedThrows: string[];
 }
 
-/** The judgement, separated from the read so it can be tested without a database. */
+/** The judgement, separated from the reads so it can be tested without a database. */
 export function interpretClusterKeel(
   latest: Date | null,
   recent: ClusterRunRow[],
+  deliveryFailures: Array<{ at: Date; message: string }> = [],
   now: number = Date.now()
 ): { ok: boolean; detail: string; context: Record<string, unknown> } {
   if (!latest) {
@@ -348,15 +357,29 @@ export function interpretClusterKeel(
   const threw = [...new Set(recent.flatMap((r) => r.confirmedThrows))];
   const problems: string[] = [];
   if (ageMinutes > CLUSTER_STALE_MINUTES) {
-    problems.push(`cluster Keel last ran ${Math.round(ageMinutes / MINUTES_PER_HOUR)}h ago — the CronJob or the cluster has stopped`);
+    problems.push(
+      `cluster Keel last ran ${Math.round(ageMinutes / MINUTES_PER_HOUR)}h ago — the CronJob or the cluster has stopped`
+    );
   }
-  if (worsened.length > 0) problems.push(`worsened in the last ${CLUSTER_LOOKBACK_HOURS}h: ${worsened.join(', ')}`);
-  if (threw.length > 0) problems.push(`threw in consecutive runs: ${threw.join(', ')}`);
-  const context = { latest: latest.toISOString(), ageMinutes, worsened, threw, runs: recent.length };
+  if (deliveryFailures.length > 0) {
+    problems.push(
+      `${deliveryFailures.length} alert(s) in the last ${CLUSTER_LOOKBACK_HOURS}h reached nobody — latest: ${deliveryFailures[0]!.message}`
+    );
+  }
+  const context = {
+    latest: latest.toISOString(),
+    ageMinutes,
+    worsened,
+    threw,
+    deliveryFailures: deliveryFailures.length,
+    runs: recent.length,
+  };
   if (problems.length > 0) return { ok: false, detail: problems.join(' · '), context };
+  // Worsenings are listed for the record; they were delivered when they happened.
+  const seen = worsened.length > 0 ? ` · alerted in ${CLUSTER_LOOKBACK_HOURS}h: ${worsened.join(', ')}` : '';
   return {
     ok: true,
-    detail: `cluster Keel ran ${ageMinutes}m ago · ${recent.length} runs in ${CLUSTER_LOOKBACK_HOURS}h, nothing worsened`,
+    detail: `cluster Keel ran ${ageMinutes}m ago · ${recent.length} runs in ${CLUSTER_LOOKBACK_HOURS}h · every alert delivered${seen}`,
     context,
   };
 }
@@ -378,7 +401,11 @@ export async function checkClusterKeel(): Promise<CheckResult> {
     const c = (r.context ?? {}) as { worsened?: unknown; confirmedThrows?: unknown };
     return { at: r.created_at, worsened: list(c.worsened), confirmedThrows: list(c.confirmedThrows) };
   });
-  return { check: CLUSTER_KEEL_CHECK, ...interpretClusterKeel(latest?.created_at ?? null, recent) };
+  const failures = await deliveryFailuresSince(since);
+  return {
+    check: CLUSTER_KEEL_CHECK,
+    ...interpretClusterKeel(latest?.created_at ?? null, recent, failures),
+  };
 }
 
 /** Run once a day from GitHub. */

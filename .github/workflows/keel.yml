@@ -11,11 +11,10 @@ name: Keel
 # Two places since 2026-10-02. The "is it working right now" checks run every
 # fifteen minutes inside the cluster (CronJob keel, src/modules/keel). This
 # workflow runs once a day: the checks that need a repository checkout or AWS
-# credentials, plus cluster-keel, which fails once if the cluster saw something
-# get worse in the last day or stopped reporting. That is how the cluster's
-# findings reach a person while no Slack webhook exists -- at most one failure
-# mail a day, instead of one per red run on a schedule GitHub delayed to one to
-# five hours.
+# credentials, plus cluster-keel, which posts to Slack if the cluster stopped
+# reporting or an alert reached nobody. Every alert goes to the Slack channel;
+# a run is red -- and GitHub mails -- only when Slack could not be reached,
+# so the failure mail is the fallback, not a second copy (since 2026-10-06).
 
 on:
   schedule:

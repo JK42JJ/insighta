@@ -10,9 +10,12 @@
  * failure mail; this run fails once when the cluster reports a worsening or
  * stops reporting, so a person still hears of it while no Slack webhook exists.
  *
- * Exits non-zero when something *changed* for the worse or when a check threw in
- * two consecutive runs -- not merely when a check is failing, not when something
- * recovered, and not on one throw.
+ * Exits non-zero only when something could not be told: a confirmed worsening
+ * whose Slack alert was not delivered, a repeated throw whose notice was not
+ * delivered, or a cluster problem whose notice was not delivered. A delivered
+ * alert is the notification (since 2026-10-06; before that every confirmed
+ * worsening also failed the run, which mailed what Slack had already said).
+ * Not on a steady failure, not on a recovery, not on one throw.
  *
  * The difference matters. pipeline-freshness has been failing since the day it
  * shipped, correctly, and exiting on any failure made every scheduled run red.
@@ -47,14 +50,16 @@ import {
   confirmedThrows,
   connectWithRetry,
   countWorsened,
+  countWorsenedUndelivered,
   failingSince,
   getPrisma,
+  notify,
   previousRunThrew,
   recordRun,
   shouldFail,
 } from './lib';
 
-export { countWorsened, shouldFail };
+export { countWorsened, countWorsenedUndelivered, shouldFail };
 import { MS_PER_DAY } from '../../src/utils/time-constants';
 
 interface Outcome {
@@ -134,10 +139,10 @@ async function writeJobSummary(outcomes: Outcome[]): Promise<void> {
  * transition produces one red run, and the standing section names it on every
  * run after that without sending anything.
  *
- * Since 2026-10-02 the run is also red when cluster-keel is failing
- * (`escalated`): the cluster's confirmed worsenings and its own silence reach a
- * person this way, at most once a day.
- *
+ * Since 2026-10-06 the inputs are all "could not be told" (see the header):
+ * cluster-keel failing is posted to Slack, and only an undelivered post turns
+ * the run red. The 10-04 and 10-05 runs went red for worsenings Slack had
+ * already received. *
  * `countWorsened` and `shouldFail` live in src/modules/keel/ledger.ts, shared
  * with the in-cluster runner, and are re-exported above for the tests.
  */
@@ -184,13 +189,37 @@ async function main(): Promise<void> {
   const blips = threwNames.filter((n) => !confirmed.includes(n));
   await recordRun(threwNames);
 
+  // A check that threw twice has no transition to alert on, so it is told
+  // directly. Red only if that could not be delivered.
+  let threwUndelivered = 0;
+  if (threw > 0) {
+    const d = await notify(
+      `\u{1F4A5} *Keel (daily)* — threw in two consecutive runs: ${confirmed.join(', ')}`,
+      'keel-daily-throw'
+    );
+    if (d.state !== 'sent') threwUndelivered = threw;
+  }
+
+  // What only this run can say about the cluster: it stopped, or something it
+  // alerted reached nobody. Posted every day the problem holds -- not only on
+  // the transition -- because both mean the normal path is not working. Not
+  // posted when report() already alerted it this run.
+  let escalated = 0;
+  const cluster = outcomes.find((o) => o.check === CLUSTER_KEEL_CHECK);
+  if (cluster && !cluster.ok) {
+    if (cluster.alerted) {
+      if (cluster.undelivered) escalated = 1;
+    } else {
+      const d = await notify(`\u{1F534} *${CLUSTER_KEEL_CHECK}*\n${cluster.detail}`, CLUSTER_KEEL_CHECK);
+      if (d.state !== 'sent') escalated = 1;
+    }
+  }
+
   const failing = outcomes.filter((o) => !o.ok).length;
   const alerted = outcomes.filter((o) => o.alerted).length;
-  const worsened = countWorsened(outcomes);
-  // What the cluster saw, escalated here because the CronJob has no failure
-  // mail: red on the first daily observation rather than after two, since the
-  // two-run rule was already applied to the cluster's own transitions.
-  const escalated = outcomes.filter((o) => o.check === CLUSTER_KEEL_CHECK && !o.ok).length;
+  // Red means nobody could be told. A worsening Slack received is notified;
+  // the failure mail on top of it was a duplicate (10-04, 10-05).
+  const worsened = countWorsenedUndelivered(outcomes);
   const undelivered = outcomes.filter((o) => o.undelivered).length;
   const delivered = alerted - undelivered;
 
@@ -206,7 +235,7 @@ async function main(): Promise<void> {
   await writeJobSummary(outcomes);
   await closeLedger();
 
-  process.exit(shouldFail({ worsened, threw, escalated }) ? 1 : 0);
+  process.exit(shouldFail({ worsened, threw: threwUndelivered, escalated }) ? 1 : 0);
 }
 
 // Only when run as the script. This file also exports `shouldFail`, and an
