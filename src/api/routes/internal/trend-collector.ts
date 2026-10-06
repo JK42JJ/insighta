@@ -17,7 +17,13 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify';
-import { skillRegistry } from '@/modules/skills/registry';
+// '@/modules/skills', not '.../skills/registry'. The registry module exports an
+// empty Map; the index re-exports it AND performs the side-effect import that
+// fills it. The api process happened to load the index through routes/skills.ts,
+// so this read correct there. The worker has no routes, so its registry stayed
+// empty and every batch-video-collector-run failed with "Skill not found" --
+// daily, silently, from at least 2026-08-21.
+import { skillRegistry } from '@/modules/skills';
 import { createGenerationProvider } from '@/modules/llm';
 import { getInternalBatchToken, getInternalUserId } from '@/config/internal-auth';
 import { logger } from '@/utils/logger';
