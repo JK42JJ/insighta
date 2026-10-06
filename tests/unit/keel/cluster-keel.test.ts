@@ -11,7 +11,12 @@ import {
   interpretClusterKeel,
 } from '../../../scripts/keel/checks';
 import { CLUSTER_CHECKS } from '../../../src/modules/keel/cluster-checks';
-import { CLUSTER_RUN_STAGE, RUN_STAGE, shouldFail } from '../../../src/modules/keel/ledger';
+import {
+  CLUSTER_RUN_STAGE,
+  RUN_STAGE,
+  countWorsenedUndelivered,
+  shouldFail,
+} from '../../../src/modules/keel/ledger';
 import { MS_PER_MINUTE } from '../../../src/utils/time-constants';
 
 const NOW = Date.parse('2026-10-02T00:20:00Z');
@@ -24,36 +29,58 @@ const run = (m: number, worsened: string[] = [], confirmedThrows: string[] = [])
 
 describe('interpretClusterKeel', () => {
   it('is green before the CronJob has ever run, and says why', () => {
-    const r = interpretClusterKeel(null, [], NOW);
+    const r = interpretClusterKeel(null, [], [], NOW);
     expect(r.ok).toBe(true);
     expect(r.detail).toMatch(/not run yet/);
   });
 
   it('is green when the cluster ran recently and nothing worsened', () => {
-    const r = interpretClusterKeel(minutesAgo(10), [run(10), run(25), run(40)], NOW);
+    const r = interpretClusterKeel(minutesAgo(10), [run(10), run(25), run(40)], [], NOW);
     expect(r.ok).toBe(true);
   });
 
   it('is red when the cluster stopped reporting -- the case it cannot report itself', () => {
-    const r = interpretClusterKeel(minutesAgo(CLUSTER_STALE_MINUTES + 1), [], NOW);
+    const r = interpretClusterKeel(minutesAgo(CLUSTER_STALE_MINUTES + 1), [], [], NOW);
     expect(r.ok).toBe(false);
     expect(r.detail).toMatch(/stopped/);
   });
 
-  it('is red when a check worsened in the last day, naming it once', () => {
+  it('is green for a worsening the cluster already delivered, and lists it once', () => {
+    // 10-04 and 10-05: these turned the daily run red and mailed what Slack had
+    // already received.
     const r = interpretClusterKeel(
       minutesAgo(5),
       [run(5), run(200, ['transcript-proxies']), run(215, ['transcript-proxies'])],
+      [],
+      NOW
+    );
+    expect(r.ok).toBe(true);
+    expect(r.detail).toMatch(/alerted in 24h: transcript-proxies$/);
+  });
+
+  it('is red when an alert in the last day reached nobody', () => {
+    const r = interpretClusterKeel(
+      minutesAgo(5),
+      [run(5, ['pipeline-freshness'])],
+      [{ at: minutesAgo(5), message: 'pipeline-freshness: delivery failed: HTTP 403' }],
       NOW
     );
     expect(r.ok).toBe(false);
-    expect(r.detail).toBe('worsened in the last 24h: transcript-proxies');
+    expect(r.detail).toMatch(
+      /reached nobody — latest: pipeline-freshness: delivery failed: HTTP 403/
+    );
   });
+});
 
-  it('is red when a check threw in consecutive cluster runs', () => {
-    const r = interpretClusterKeel(minutesAgo(5), [run(5, [], ['checkSchema'])], NOW);
-    expect(r.ok).toBe(false);
-    expect(r.detail).toMatch(/checkSchema/);
+describe('red means nobody could be told', () => {
+  it('counts only worsenings whose alert was not delivered', () => {
+    const outcomes = [
+      { alerted: true, ok: false, undelivered: false }, // delivered to Slack
+      { alerted: true, ok: false, undelivered: true }, // Slack refused
+      { alerted: true, ok: true, undelivered: false }, // a recovery
+      { alerted: false, ok: false, undelivered: false }, // steady failure
+    ];
+    expect(countWorsenedUndelivered(outcomes)).toBe(1);
   });
 });
 

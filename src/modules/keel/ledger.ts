@@ -374,6 +374,54 @@ export async function failingSince(check: string): Promise<Date | null> {
   return firstErrorAfter?.created_at ?? null;
 }
 
+/**
+ * Tell the channel something that is not a check transition -- a check that
+ * threw twice, the cluster runner having stopped. A failed or unconfigured
+ * delivery is written to `alert-dispatch` like a transition's, so the runners
+ * can treat "nobody could be told" the same way wherever it happened.
+ */
+export async function notify(text: string, source: string): Promise<Delivery> {
+  const delivery = await postToSlack(text);
+  if (delivery.state !== 'sent') {
+    const detail =
+      delivery.state === 'unconfigured'
+        ? 'no alert channel configured (SLACK_ALERT_WEBHOOK)'
+        : `delivery failed: ${delivery.reason}`;
+    console.error(`   🔴 ${source} notice NOT delivered — ${detail}`);
+    try {
+      await prisma.error_events.create({
+        data: {
+          subsystem: SUBSYSTEM,
+          stage: ALERT_DISPATCH_STAGE,
+          severity: 'error',
+          message: `${source}: ${detail}`,
+          context: { check: source, state: delivery.state } as never,
+        },
+      });
+    } catch (err) {
+      console.warn(`could not record the delivery failure: ${String(err).split('\n')[0]}`);
+    }
+  }
+  return delivery;
+}
+
+/** Delivery failures recorded since `since`, newest first. */
+export async function deliveryFailuresSince(
+  since: Date
+): Promise<Array<{ at: Date; message: string }>> {
+  const rows = await prisma.error_events.findMany({
+    where: {
+      subsystem: SUBSYSTEM,
+      stage: ALERT_DISPATCH_STAGE,
+      severity: 'error',
+      created_at: { gte: since },
+    },
+    orderBy: { created_at: 'desc' },
+    select: { created_at: true, message: true },
+  });
+  return rows.map((r) => ({ at: r.created_at, message: r.message ?? '' }));
+}
+
 /** A digest, sent on a schedule rather than on a transition. Used by the daily
  *  spend summary, which is a report and not an alarm. Returns the outcome so a
  *  digest that reached nobody does not read as a digest that was sent. */
@@ -397,11 +445,19 @@ export function countWorsened(outcomes: ReadonlyArray<{ alerted: boolean; ok: bo
   return outcomes.filter((o) => o.alerted && !o.ok).length;
 }
 
+/** Of those, the ones nobody was told about: the alert was not delivered. */
+export function countWorsenedUndelivered(
+  outcomes: ReadonlyArray<{ alerted: boolean; ok: boolean; undelivered: boolean }>
+): number {
+  return outcomes.filter((o) => o.alerted && !o.ok && o.undelivered).length;
+}
+
 /**
- * Whether a run is red: a confirmed transition to failing, a throw that also
- * happened last run, or (GitHub run) a problem it escalates on the cluster's
- * behalf. Recoveries and one-off throws are not red. History of each rule is in
- * scripts/keel/run.ts.
+ * Whether a run is red. Since 2026-10-06 every input is "could not be told":
+ * a confirmed worsening whose alert was not delivered, a repeated throw whose
+ * notice was not delivered, a cluster-side problem whose notice was not
+ * delivered. A delivered alert is the notification; a failure mail on top of
+ * it is a duplicate. History of each rule is in scripts/keel/run.ts.
  */
 export function shouldFail(run: { worsened: number; threw: number; escalated?: number }): boolean {
   return run.worsened > 0 || run.threw > 0 || (run.escalated ?? 0) > 0;
