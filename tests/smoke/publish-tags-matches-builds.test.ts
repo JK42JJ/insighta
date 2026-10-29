@@ -177,3 +177,42 @@ describe('publish-tags writes only what build-and-push built', () => {
     }
   });
 });
+
+describe('scope: what counts as deployable', () => {
+  // The rule that decides whether a push reaches the prod pipeline at all. A path
+  // matching it is excluded; a change to any other path is deployable.
+  const line = deploy.split('\n').find((l) => l.includes("IRRELEVANT='")) ?? '';
+  const source = /IRRELEVANT='([^']+)'/.exec(line)?.[1] ?? '';
+  const irrelevant = new RegExp(source || '(?!)');
+
+  it('finds the rule in deploy.yml', () => {
+    expect(source).not.toBe('');
+  });
+
+  it.each([
+    'frontend/tests/stg/login.spec.ts',
+    'frontend/tests/a11y.spec.ts',
+    'frontend/playwright.config.ts',
+    'frontend/playwright.stg.config.ts',
+    'tests/smoke/publish-tags-matches-builds.test.ts',
+    '.github/workflows/deploy.yml',
+    'charts/insighta/values.yaml',
+    'scripts/ops/ssh.sh',
+  ])('does not treat %s as a change to ship', (file) => {
+    expect(irrelevant.test(file)).toBe(true);
+  });
+
+  it.each([
+    'frontend/src/App.tsx',
+    'frontend/index.html',
+    'frontend/package.json',
+    'frontend/vite.config.ts',
+    'frontend/Dockerfile',
+    'frontend/nginx/nginx.conf.template',
+    'frontend/public/mobile/dial.html',
+    'src/api/server.ts',
+    'prisma/schema.prisma',
+  ])('still treats %s as a change to ship', (file) => {
+    expect(irrelevant.test(file)).toBe(false);
+  });
+});

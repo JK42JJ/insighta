@@ -151,7 +151,14 @@ jobs:
           # which decides what goes into the image and is the opposite of
           # irrelevant. Verified 2026-08-14 by listing /app inside the running
           # image: none of these are present.
-          IRRELEVANT='^(terraform|ansible|charts|docs|prompt|tests|scripts|\.github|\.claude)/|^[^/]*\.md$|^(\.gitignore|\.gitattributes|\.editorconfig|LICENSE)$'
+          # frontend/tests and the Playwright configs are test tooling, not product.
+          # .dockerignore keeps frontend/tests out of the build context and the
+          # runtime image carries only the Vite output, which imports nothing from
+          # them. Counting them as deployable ran the whole prod pipeline -- schema
+          # sync, Edge Functions, image builds, a pin pull request -- for a change
+          # to the staging E2E (found 2026-10-29 by evaluating this rule against
+          # the pull request's own file list).
+          IRRELEVANT='^(terraform|ansible|charts|docs|prompt|tests|scripts|\.github|\.claude)/|^frontend/(tests/|playwright[^/]*\.ts$)|^[^/]*\.md$|^(\.gitignore|\.gitattributes|\.editorconfig|LICENSE)$'
           if echo "$FILES" | grep -Eqv "$IRRELEVANT"; then
             DEPLOYABLE=true
           else
