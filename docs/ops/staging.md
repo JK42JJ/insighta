@@ -48,7 +48,7 @@ stg 만 배포: Actions → Deploy → Run workflow → `staging_only` 체크. p
 | 메일 · 정기 작업 플래그 7개 | `false` (prod `true`) | R02, 키 없는 API 호출 방지 | 메일 발송, 정기 수집 · 감사 |
 | 결제 (LemonSqueezy) | 없음 | 운영 키는 실결제 | 결제 흐름 |
 | 슬랙 알림 · 자막(맥미니) · Naver | 없음 | 알림 혼선, 프록시 대역폭 공유 | 해당 기능 |
-| Google 로그인 | prod 와 같은 OAuth 클라이언트 | Google 콘솔에 stg 콜백 등록 필요 (아래 남은 일) | 등록 전까지 이메일 로그인만 |
+| Google 로그인 | prod 와 같은 OAuth 클라이언트 | stg 콜백 URI 를 Google 콘솔에 등록해야 하고(James, 2026-10-29 완료), 비밀번호는 평문으로 넣어야 한다 (함정 표) | 가입이 닫혀 있어 `jkim0420@gmail.com` 처럼 미리 만든 계정만 연결됨 |
 | 데이터 | 비어 있음 + 참조 데이터 14개 테이블 복사 | 무료 500MB (prod 2.4GB) | 영상 풀 기반 추천 |
 | worker · keel | 0 · 끔 | 메모리 쿼터, 정기 작업 차단 | 큐 작업 (`PIPELINE_DURABLE_ENABLED=false` 라 파이프라인은 api 안에서 실행) |
 
@@ -91,6 +91,7 @@ stg 만 배포: Actions → Deploy → Run workflow → `staging_only` 체크. p
 | `DELETE FROM storage.buckets` 실패 | Supabase 가 storage 테이블의 직접 삭제를 막음 | Storage API 사용. 정리 스크립트는 객체 잔여 수만 경고 |
 | `newsletter_settings` 를 참조 데이터로 분류 | 이름만 보고 판단. 컬럼에 `user_id` (사용자별 구독) | 분류는 컬럼으로. 사용자 소유 테이블은 비움 |
 | Google 버튼에서 `Unsupported provider: provider is not enabled` | stg Supabase 의 Google 이 꺼져 있었음 | 켬. 이어서 `redirect_uri_mismatch` = Google 콘솔에 stg 콜백 미등록 |
+| Google 로그인이 Google 단계는 통과하는데 앱 첫 화면으로 되돌아옴 (stg 의 `auth.identities` 에 `google` 신원이 생기지 않음) | Supabase Management API 는 Google 클라이언트 비밀번호를 **평문이 아니라 암호화된 64자 문자열**로 돌려준다. 이를 그대로 stg 에 넣으면 틀린 비밀번호가 되어 토큰 교환이 실패한다. 읽은 값이 "있다"는 것만 확인하고 "유효한가"는 확인하지 않았음 | 평문은 prod k8s Secret 의 `YOUTUBE_CLIENT_SECRET` (같은 OAuth 클라이언트, `GOCSPX-` 로 시작하는 35자). 클라이언트 ID 가 `external_google_client_id` 와 같은지 확인한 뒤 stg 에 `external_google_secret` 으로 PATCH. 성공 판정 = 로그인 후 `auth.identities` 에 `google` 행 |
 | 로컬 확인이 CI 와 다르게 나옴 | macOS BSD `grep` 은 여러 줄 `-qv` 가 GNU 와 다름. zsh 에서 변수 `path` 는 `PATH` 와 연결됨 | CI 셸 판정은 리눅스 컨테이너(GNU)에서 평가. 반복 변수 이름에 `path` 를 쓰지 않음 |
 | `gh pr edit` 실패 (Projects classic GraphQL 오류) | GitHub 의 폐지 예고 | `gh api -X PATCH repos/JK42JJ/insighta/pulls/N -F body=@파일` |
 | 무거운 로컬 명령이 차단됨 | 메모리 압력 2 이상에서 `memory-guard.sh` 가 차단 (명령 본문의 키워드도 오탐 가능) | `sysctl kern.memorystatus_vm_pressure_level` 이 1 일 때 실행. 우회하지 않음 |
@@ -99,7 +100,7 @@ stg 만 배포: Actions → Deploy → Run workflow → `staging_only` 체크. p
 ## 남은 일 · 결정 대기
 
 - `promote.yml` (승인 게이트): R33 의 집행 장치. 성공 직후 `stg-clean.yml` 호출까지 연결.
-- Google 콘솔: 운영 OAuth 클라이언트(ID 가 `…aavnr.apps.googleusercontent.com` 으로 끝남)의 승인된 리디렉션 URI 에 `https://ekflpwzjnjllizkhsedz.supabase.co/auth/v1/callback` 추가 (James).
+- Google 로그인: 콘솔 등록(James)과 평문 비밀번호 설정은 끝났다. James 의 재시도 결과로 확정한다 (성공 = stg `auth.identities` 에 `google` 행).
 - 임베딩: 맥미니 Ollama 연결(무료)은 클러스터에서의 도달성을 아직 확인하지 않았다.
 - 영상 풀 데이터: 무료 500MB 안에서 어느 만큼 둘지 (James).
 - `insighta-dev` ArgoCD 앱: 클러스터에 남은 정의(OutOfSync/Missing). dev 는 맥북이며 이 앱은 쓰이지 않는다.
