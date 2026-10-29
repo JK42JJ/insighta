@@ -2,13 +2,17 @@
 # a bare `kubectl apply`: the script fills in helm parameter imageRegistry,
 # which names the AWS account and so is not committed (public repository).
 #
-# Two sources:
-#   - the chart, from main, with environments/staging.yaml;
-#   - branch deploy/staging, referenced as $state, holding staging-images.yaml
-#     (the image tags). CI writes that branch directly on every main merge.
-#     main is protected and a CI push cannot satisfy its required checks, which
-#     is why prod's tags arrive through a pull request; staging has no such
-#     gate on purpose -- reaching staging is the point of merging.
+# One source: branch deploy/staging. deploy.yml rebuilds that branch on every
+# main merge as the merged commit plus staging's image tags
+# (environments/staging-images.yaml), so staging runs exactly the chart of the
+# commit it deployed. main is protected and a CI push cannot satisfy its
+# required checks, which is why prod's tags arrive through a pull request;
+# deploy/staging has no such gate on purpose.
+#
+# Not two sources (chart from main, tags from deploy/staging): ArgoCD refuses
+# two revisions of one repository in a single Application -- "cannot reference
+# a different revision of the same repository", measured 2026-10-29 on the
+# first apply.
 #
 # Automated sync with prune: staging exists to show what main does when it is
 # deployed, and a manual sync would postpone exactly that answer.
@@ -19,27 +23,35 @@ metadata:
   namespace: argocd
 spec:
   project: insighta-staging
-  sources:
-    - repoURL: https://github.com/JK42JJ/insighta
-      targetRevision: main
-      path: charts/insighta
-      helm:
-        releaseName: insighta
-        valueFiles:
-          - environments/staging.yaml
-          - $state/staging-images.yaml
-        parameters:
-          - name: imageRegistry
-            value: __IMAGE_REGISTRY__
-    - repoURL: https://github.com/JK42JJ/insighta
-      targetRevision: deploy/staging
-      ref: state
+  source:
+    repoURL: https://github.com/JK42JJ/insighta
+    targetRevision: deploy/staging
+    path: charts/insighta
+    helm:
+      releaseName: insighta
+      valueFiles:
+        - environments/staging.yaml
+        - environments/staging-images.yaml
+      parameters:
+        - name: imageRegistry
+          value: __IMAGE_REGISTRY__
   destination:
     server: https://kubernetes.default.svc
     namespace: insighta-staging
+  # Same as prod and validation: with ServerSideApply, the API server's
+  # defaulting of a StatefulSet's claim templates leaves the app permanently
+  # OutOfSync with no content difference (see applications.yaml, validation).
+  # Reproduced on staging's redis on its first sync, 2026-10-29. The templates
+  # are immutable after creation, so ignoring them masks nothing changeable.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true

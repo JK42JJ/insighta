@@ -12,9 +12,9 @@
 # here reaches prod data. The env Secret leaves out every paid or outward key
 # (LLM, YouTube, billing, transcripts, Slack, mail) -- see the staging runbook.
 #
-# Image tags are not in this file. They live on branch deploy/staging
-# (staging-images.yaml), which CI writes directly; the Application reads it as
-# a second source. imageRegistry is injected when the Application is applied
+# Image tags are not in this file: they are in staging-images.yaml, and the
+# copy staging runs is on branch deploy/staging, rebuilt by deploy.yml on every
+# main merge. imageRegistry is injected when the Application is applied
 # (scripts/ops/apply-staging-app.sh) because the registry host names the AWS
 # account and this repository is public.
 requireImageRegistry: true

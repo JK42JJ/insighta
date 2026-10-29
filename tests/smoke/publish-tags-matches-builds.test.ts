@@ -33,14 +33,38 @@ describe('publish-tags writes only what build-and-push built', () => {
   it('each image build is conditional on its own scope output', () => {
     // The premise. If these ever become unconditional the whole hazard goes
     // away, and this test should be deleted rather than worked around.
+    // Prod images only: the staging frontend build is its own step, checked below.
     const steps = wf.jobs['build-and-push']?.steps ?? [];
     const conds = steps
       .filter((s) => (s.name ?? '').startsWith('Build & push'))
+      .filter((s) => !(s.name ?? '').includes('(staging)'))
       .map((s) => s.if ?? '');
     expect(conds).toHaveLength(3);
     expect(conds.join(' ')).toMatch(/scope\.outputs\.api/);
     expect(conds.join(' ')).toMatch(/scope\.outputs\.frontend/);
     expect(conds.join(' ')).toMatch(/scope\.outputs\.redis/);
+  });
+
+  it('the staging frontend build runs with the frontend, and never tags latest', () => {
+    // A second frontend build exists because the bundle compiles the Supabase
+    // URL in. It must follow the same scope output as the prod build, and must
+    // not push a tag anything prod-facing could pull.
+    type Step = { if?: string; name?: string; with?: { tags?: string } };
+    const steps = (wf.jobs['build-and-push']?.steps ?? []) as Step[];
+    const stg = steps.filter((s) => (s.name ?? '').includes('(staging)'));
+    expect(stg).toHaveLength(1);
+    const step: Step = stg[0] ?? {};
+    expect(step.if ?? '').toMatch(/scope\.outputs\.frontend/);
+    // One tag per line; a tag itself contains spaces (`${{ github.sha }}`).
+    const tags = (step.with?.tags ?? '')
+      .split('\n')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+    expect(tags.length).toBeGreaterThan(0);
+    for (const t of tags) {
+      expect(t).toMatch(/:stg-\$\{\{ github\.sha \}\}$/);
+      expect(t).not.toMatch(/ghcr\.io|:latest/);
+    }
   });
 
   it('the tag loop reads the same three outputs', () => {

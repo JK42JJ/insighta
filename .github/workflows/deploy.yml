@@ -19,6 +19,16 @@ on:
         type: string
         required: false
         default: ''
+      # Deploy to staging and skip every job that writes to prod: the prod
+      # schema sync, the prod Edge Functions, the prod-built frontend and the
+      # prod tag pull request. For rebuilding staging -- including its first
+      # build, since a merge that touches only .github/, charts/ or scripts/ is
+      # marked non-deployable and builds nothing.
+      staging_only:
+        description: 'Staging only: skip every job that writes to prod'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: deploy-production
@@ -202,7 +212,7 @@ jobs:
     # is inside the frontend image and that job is the only thing that ships it.
     # Edge functions are a different artifact that a dial edit cannot affect, so
     # skipping them is narrowing, not a missed deploy.
-    if: github.ref == 'refs/heads/main' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
+    if: github.ref == 'refs/heads/main' && !inputs.staging_only && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -298,7 +308,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push Frontend image
-        if: needs.scope.outputs.frontend == 'true'
+        if: needs.scope.outputs.frontend == 'true' && !inputs.staging_only
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -320,6 +330,27 @@ jobs:
       # This image existed in no registry until 2026-08-14: deploy.yml pushed
       # api and frontend, and the box built redis itself through compose. A
       # cluster cannot build, so a cutover had no redis to pull.
+      # The same commit built again for staging. The bundle has the Supabase URL
+      # and publishable key compiled in, so the prod image cannot run in staging
+      # without pointing staging's UI at prod's auth. Tagged stg-<sha> in ECR only:
+      # never :latest, never GHCR, so nothing that pulls prod images can pick it up.
+      # No PostHog key -- staging traffic stays out of product analytics.
+      - name: Build & push Frontend image (staging)
+        if: needs.scope.outputs.frontend == 'true' && vars.STG_SUPABASE_URL != ''
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/insighta-frontend:stg-${{ github.sha }}
+          build-args: |
+            VITE_API_URL=/api
+            VITE_SUPABASE_URL=${{ vars.STG_SUPABASE_URL }}
+            VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.STG_SUPABASE_ANON_KEY }}
+            VITE_CHATBOT_PROVIDER=qwen-lora
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Build & push Redis image
         if: needs.scope.outputs.redis == 'true'
         uses: docker/build-push-action@v5
@@ -345,7 +376,7 @@ jobs:
     # mobile_only stays here, and deliberately. This runs `prisma db push`
     # against the production database. A dial edit cannot change the schema, so
     # running it would be a write to production with no reason to be there.
-    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true'
+    if: ${{ !inputs.staging_only && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -395,7 +426,7 @@ jobs:
   publish-tags:
     name: Point the chart at this commit
     needs: [scope, build-and-push]
-    if: github.ref == 'refs/heads/main' && needs.scope.outputs.deployable == 'true'
+    if: github.ref == 'refs/heads/main' && !inputs.staging_only && needs.scope.outputs.deployable == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -555,6 +586,186 @@ jobs:
             echo
             echo "$URL"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Staging. Everything below targets the staging Supabase project and the
+  # insighta-staging namespace, never prod. Each job is skipped while the
+  # STG_* repository variables are unset, so this file is safe to merge before
+  # staging exists. Docs: docs/work-orders/WO-2026-10-29-staging-environment.md
+  #
+  # These run beside the prod jobs above, not before them, until the promote
+  # workflow replaces the prod path (step 6 of the work order).
+  # ---------------------------------------------------------------------------
+
+  migrate-staging:
+    name: Database Schema Sync (staging)
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    needs: [scope]
+    if: github.ref == 'refs/heads/main' && vars.STG_PROJECT_REF != '' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      # Refuses to run unless the URL names the staging project. A secret
+      # pasted into the wrong slot would otherwise point this at prod.
+      - name: Assert the target is staging
+        env:
+          DIRECT_URL: ${{ secrets.STG_DIRECT_URL }}
+          STG_REF: ${{ vars.STG_PROJECT_REF }}
+        run: |
+          case "$DIRECT_URL" in
+            *"postgres.${STG_REF}:"*) echo "target: staging project" ;;
+            *) echo "::error::STG_DIRECT_URL does not name project ${STG_REF}"; exit 1 ;;
+          esac
+      # Same tolerance as prod: Supabase owns the auth tables, so prisma's
+      # attempt to reshape them fails, and the public schema is then checked by
+      # the custom SQL runner and verify-db-tables below.
+      - name: Sync database schema
+        run: |
+          set +e
+          npx prisma db push --skip-generate 2>&1 | tee /tmp/prisma-push.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          if [ $EXIT_CODE -ne 0 ]; then
+            if grep -q "must be owner of table" /tmp/prisma-push.log; then
+              echo "::warning::Prisma db push failed on auth-owned table -- running table verification"
+            else
+              exit $EXIT_CODE
+            fi
+          fi
+        env:
+          DATABASE_URL: ${{ secrets.STG_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.STG_DIRECT_URL }}
+      - name: Install PostgreSQL client (for custom SQL runner)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+      - name: Apply custom SQL migrations (raw DDL fallback)
+        run: bash scripts/apply-custom-sql.sh
+        env:
+          DIRECT_URL: ${{ secrets.STG_DIRECT_URL }}
+          SKIP_SQL_FILES: ${{ vars.SKIP_SQL_FILES || '' }}
+      - name: Verify all tables exist
+        run: node scripts/verify-db-tables.js
+        env:
+          DATABASE_URL: ${{ secrets.STG_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.STG_DIRECT_URL }}
+
+  deploy-edge-functions-staging:
+    name: Deploy Edge Functions (staging)
+    needs: [scope]
+    if: github.ref == 'refs/heads/main' && vars.STG_PROJECT_REF != '' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+      - name: Deploy Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STG_REF: ${{ vars.STG_PROJECT_REF }}
+        run: |
+          for fn in local-cards youtube-sync youtube-auth fetch-url-metadata; do
+            echo "Deploying $fn to staging..."
+            supabase functions deploy "$fn" --project-ref "$STG_REF" --no-verify-jwt
+          done
+
+  # Staging runs branch deploy/staging, which this job rebuilds as: the merged
+  # commit + the tags staging last ran + the images this run built. The branch
+  # is derived state, not history -- it is force-pushed every time, and the
+  # workflow's concurrency group (deploy-production, no cancel) serialises the
+  # runs that write it. It is unprotected on purpose: no pull request, no merge
+  # click. The staging Application syncs it on its own.
+  publish-staging-tags:
+    name: Point staging at this commit
+    needs: [scope, build-and-push, migrate-staging]
+    # migrate-staging may be skipped (no schema change); a skip is not a failure.
+    if: >-
+      always() && github.ref == 'refs/heads/main' && vars.STG_PROJECT_REF != ''
+      && needs.scope.outputs.deployable == 'true'
+      && needs.build-and-push.result == 'success'
+      && (needs.migrate-staging.result == 'success' || needs.migrate-staging.result == 'skipped')
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      api: ${{ needs.scope.outputs.api }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild deploy/staging at this commit
+        env:
+          SHA: ${{ github.sha }}
+          API: ${{ needs.scope.outputs.api }}
+          FE: ${{ needs.scope.outputs.frontend }}
+          RD: ${{ needs.scope.outputs.redis }}
+        run: |
+          set -euo pipefail
+          F=charts/insighta/environments/staging-images.yaml
+          # The tags staging last ran. With no branch, or a branch without the
+          # file, start from the seed committed on main.
+          if git fetch -q --depth 1 origin deploy/staging 2>/dev/null \
+             && git cat-file -e "FETCH_HEAD:$F" 2>/dev/null; then
+            git show "FETCH_HEAD:$F" > /tmp/prev-tags.yaml
+            echo "previous tags: deploy/staging"
+          else
+            cp "$F" /tmp/prev-tags.yaml
+            echo "previous tags: none -- starting from the seed"
+          fi
+          git checkout -q -B deploy/staging "$SHA"
+          cp /tmp/prev-tags.yaml "$F"
+          bash scripts/ci/write-staging-tags.sh "$F" "$SHA" "$API" "$FE" "$RD"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$F"
+          git commit -q --allow-empty -m "chore(staging): $SHA with staging image tags"
+          git push --force origin HEAD:deploy/staging
+          echo "### Staging branch rebuilt at \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # Waits for staging to serve this commit, then checks the page and the API.
+  # A failure here is the signal not to promote; it does not touch prod.
+  smoke-staging:
+    name: Staging smoke check
+    needs: [publish-staging-tags]
+    if: needs.publish-staging-tags.result == 'success'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the new api, then check
+        env:
+          WANT: ${{ github.sha }}
+          API_MOVED: ${{ needs.publish-staging-tags.outputs.api }}
+        run: |
+          set -uo pipefail
+          BASE=https://stg.insighta.one
+          # ArgoCD polls git every 3 minutes by default; the rollout follows.
+          for i in $(seq 1 40); do
+            body=$(curl -fsS --max-time 10 "$BASE/health" 2>/dev/null || true)
+            sha=$(printf '%s' "$body" | sed -n 's/.*"sha":"\([0-9a-f]*\)".*/\1/p')
+            if [ "$API_MOVED" != "true" ] && [ -n "$sha" ]; then break; fi
+            if [ "$sha" = "$WANT" ]; then break; fi
+            echo "attempt $i: staging api at '${sha:-unreachable}', waiting for $WANT"
+            sleep 15
+          done
+          [ -n "$sha" ] || { echo "::error::staging /health unreachable"; exit 1; }
+          if [ "$API_MOVED" = "true" ] && [ "$sha" != "$WANT" ]; then
+            echo "::error::staging api still at $sha after 10 minutes"; exit 1
+          fi
+          code=$(curl -s -o /tmp/index.html -w '%{http_code}' --max-time 10 "$BASE/")
+          [ "$code" = "200" ] || { echo "::error::staging / returned $code"; exit 1; }
+          grep -q '<div id="root"' /tmp/index.html || { echo "::error::staging / is not the app shell"; exit 1; }
+          echo "### Staging serves \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
 
   # `fast-mobile` and `deploy` lived here until 2026-08-19. Both ended in an SSH
   # session to secrets.EC2_HOST, copying files onto the host that served the site
