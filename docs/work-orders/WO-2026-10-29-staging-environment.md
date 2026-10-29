@@ -49,3 +49,13 @@ opened: 2026-10-29
 # restated
 
 같은 노드의 별도 namespace 와 별도 무료 Supabase 프로젝트로 stg 를 세우고, main 머지는 stg 까지만 가며, prod 는 stg 에서 검증된 sha 를 promote 로만 받는다.
+
+# 데이터 정리 (2026-10-29 추가, James 지시)
+
+- 검증 주기가 끝날 때마다 stg DB 를 전부 비우지 않고, **필수 데이터는 남기고 테스트로 생긴 데이터만 지운다.**
+  - `scripts/ops/clean-stg-data.sh` + `scripts/ops/stg-keep-tables.txt`: 남길 테이블 목록(사유 필수). 목록에 없는 테이블은 비운다(새 테이블은 기본적으로 정리 대상).
+  - `.github/workflows/stg-clean.yml`: 정리 후 참조 데이터를 운영에서 갱신. 수동 실행 또는 재사용(`workflow_call`).
+- 참조 데이터는 운영에서 복사한다(`sync-stg-reference.sh`, `stg-reference-tables.txt`). 구조만 복제한 stg 에서는 만다라 생성이 외래키 오류로 실패한다 (`ontology.object_types` 운영 20행이 없었음, 2026-10-29 실측).
+- 구조 복구용 `rebuild-stg-db.sh` + `dump-prod-schema.sh`: 리포 마이그레이션만으로는 빈 DB 를 재구성할 수 없다(`prisma db push` 가 auth 테이블에서 실패, `ontology` 스키마 생성 SQL 없음). 정리가 아니라 복구 도구이며 파괴적이다.
+- 실행 시점은 운영 반영 성공 직후(PR-3 에서 promote 의 마지막 단계로 연결). 지금은 수동 실행.
+- 아직 다루지 않는 것: 스토리지 객체(저장소 테이블이 직접 삭제를 막음, Storage API 필요), 대용량 공유 콘텐츠(video_pool 등)의 stg 적재(무료 한도 500MB, James 결정 대기).
