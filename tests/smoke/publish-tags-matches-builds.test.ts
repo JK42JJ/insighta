@@ -53,8 +53,9 @@ describe('publish-tags writes only what build-and-push built', () => {
     const steps = (wf.jobs['build-and-push']?.steps ?? []) as Step[];
     const stg = steps.filter((s) => (s.name ?? '').includes('(staging)'));
     expect(stg).toHaveLength(1);
-    expect(stg[0].if ?? '').toMatch(/scope\.outputs\.frontend/);
-    const tags = (stg[0].with?.tags ?? '').trim().split(/\s+/);
+    const step: Step = stg[0] ?? {};
+    expect(step.if ?? '').toMatch(/scope\.outputs\.frontend/);
+    const tags = (step.with?.tags ?? '').trim().split(/\s+/);
     expect(tags.length).toBeGreaterThan(0);
     for (const t of tags) {
       expect(t).toMatch(/:stg-\$\{\{ github\.sha \}\}$/);
