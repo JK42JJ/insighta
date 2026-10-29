@@ -20,7 +20,11 @@ jobs:
   e2e-local:
     name: Playwright E2E (Local)
     if: ${{ inputs.environment != 'production' }}
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that label moved to Ubuntu 26.04, which this
+    # Playwright version cannot install a browser on ("Playwright does not
+    # support chromium on ubuntu26.04-x64", seen 2026-10-29). Move the pin when
+    # Playwright is upgraded to a release that supports the newer image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +60,11 @@ jobs:
   e2e-production:
     name: Playwright E2E (Production)
     if: ${{ inputs.environment == 'production' }}
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that label moved to Ubuntu 26.04, which this
+    # Playwright version cannot install a browser on ("Playwright does not
+    # support chromium on ubuntu26.04-x64", seen 2026-10-29). Move the pin when
+    # Playwright is upgraded to a release that supports the newer image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

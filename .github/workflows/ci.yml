@@ -280,7 +280,11 @@ jobs:
   # Combined: build-frontend + a11y (saves 1 npm install + 1 vite build)
   build-and-a11y-frontend:
     name: Build Frontend & Accessibility
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that label moved to Ubuntu 26.04, which this
+    # Playwright version cannot install a browser on ("Playwright does not
+    # support chromium on ubuntu26.04-x64", seen 2026-10-29). Move the pin when
+    # Playwright is upgraded to a release that supports the newer image.
+    runs-on: ubuntu-24.04
     needs: [test-frontend]
     # No job in this file had a timeout until 2026-08-19, so a step that hangs
     # runs to GitHub's 6-hour default. On that day the browser install below

@@ -20,7 +20,11 @@ jobs:
     name: Playwright E2E (staging)
     # Same switch the other staging jobs use: absent until staging exists.
     if: ${{ vars.STG_PROJECT_REF != '' }}
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that label moved to Ubuntu 26.04, which this
+    # Playwright version cannot install a browser on ("Playwright does not
+    # support chromium on ubuntu26.04-x64", first run 2026-10-29). Move the pin
+    # when Playwright is upgraded to a release that supports the newer image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
