@@ -669,9 +669,12 @@ jobs:
             supabase functions deploy "$fn" --project-ref "$STG_REF" --no-verify-jwt
           done
 
-  # Staging's image tags live on branch deploy/staging, which is not protected,
-  # so this pushes directly -- no pull request, no merge click. The staging
-  # Application reads the branch as its second source and syncs on its own.
+  # Staging runs branch deploy/staging, which this job rebuilds as: the merged
+  # commit + the tags staging last ran + the images this run built. The branch
+  # is derived state, not history -- it is force-pushed every time, and the
+  # workflow's concurrency group (deploy-production, no cancel) serialises the
+  # runs that write it. It is unprotected on purpose: no pull request, no merge
+  # click. The staging Application syncs it on its own.
   publish-staging-tags:
     name: Point staging at this commit
     needs: [scope, build-and-push, migrate-staging]
@@ -688,31 +691,34 @@ jobs:
       api: ${{ needs.scope.outputs.api }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: src
-      - uses: actions/checkout@v4
-        with:
-          ref: deploy/staging
-          path: state
-      - name: Write the tags
-        run: |
-          bash src/scripts/ci/write-staging-tags.sh state/staging-images.yaml "${{ github.sha }}" \
-            "${{ needs.scope.outputs.api }}" "${{ needs.scope.outputs.frontend }}" "${{ needs.scope.outputs.redis }}"
-      - name: Push to deploy/staging
-        working-directory: state
+      - name: Rebuild deploy/staging at this commit
+        env:
+          SHA: ${{ github.sha }}
+          API: ${{ needs.scope.outputs.api }}
+          FE: ${{ needs.scope.outputs.frontend }}
+          RD: ${{ needs.scope.outputs.redis }}
         run: |
           set -euo pipefail
-          if git diff --quiet; then echo "staging already at these tags"; exit 0; fi
+          F=charts/insighta/environments/staging-images.yaml
+          # The tags staging last ran. With no branch, or a branch without the
+          # file, start from the seed committed on main.
+          if git fetch -q --depth 1 origin deploy/staging 2>/dev/null \
+             && git cat-file -e "FETCH_HEAD:$F" 2>/dev/null; then
+            git show "FETCH_HEAD:$F" > /tmp/prev-tags.yaml
+            echo "previous tags: deploy/staging"
+          else
+            cp "$F" /tmp/prev-tags.yaml
+            echo "previous tags: none -- starting from the seed"
+          fi
+          git checkout -q -B deploy/staging "$SHA"
+          cp /tmp/prev-tags.yaml "$F"
+          bash scripts/ci/write-staging-tags.sh "$F" "$SHA" "$API" "$FE" "$RD"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore(staging): point staging at ${{ github.sha }}"
-          # Two merges close together: the later one wins, which is what staging
-          # should run. Rebase rather than force so neither push is lost silently.
-          for _ in 1 2 3; do
-            git push origin HEAD:deploy/staging && exit 0
-            git pull --rebase origin deploy/staging
-          done
-          exit 1
+          git add "$F"
+          git commit -q --allow-empty -m "chore(staging): $SHA with staging image tags"
+          git push --force origin HEAD:deploy/staging
+          echo "### Staging branch rebuilt at \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
 
   # Waits for staging to serve this commit, then checks the page and the API.
   # A failure here is the signal not to promote; it does not touch prod.

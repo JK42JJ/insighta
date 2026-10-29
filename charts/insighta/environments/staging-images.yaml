@@ -1,0 +1,19 @@
+# Image tags for staging -- the seed copy.
+#
+# Staging does not read this copy. The insighta-staging Application reads
+# branch deploy/staging, which deploy.yml (publish-staging-tags) rebuilds on
+# every main merge as: that commit of main + the tags staging last ran + the
+# images this merge built. This file is what that branch starts from when it
+# has no tags yet, and it is what keeps the chart checks able to confirm the
+# Application's value files exist.
+#
+# Seed values (2026-10-29): api and redis at the images prod ran that day;
+# frontend held at 0 replicas until a staging-built frontend exists. A
+# prod-built frontend has the prod Supabase URL compiled in and must never run
+# in staging.
+images:
+  apiTag: 4bdf07ebd49931dfc24e431796ccb78ffd5c8ba9
+  frontendTag: none
+  redisTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
+frontend:
+  replicaCount: 0
