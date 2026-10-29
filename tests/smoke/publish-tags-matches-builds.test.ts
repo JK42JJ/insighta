@@ -114,6 +114,41 @@ describe('publish-tags writes only what build-and-push built', () => {
     expect(deploy?.run ?? '').toMatch(/--use-api/);
   });
 
+  it('the staging smoke check still runs when build-and-push was skipped', () => {
+    // Without a status function GitHub also requires every ancestor job to have
+    // run. A chart-only merge skips build-and-push, and the check was skipped
+    // with it (observed 2026-10-29, run 40824883266).
+    const job = (wf.jobs as unknown as Record<string, { if?: string }>)['smoke-staging'];
+    expect(job).toBeDefined();
+    expect(job?.if ?? '').toMatch(/^always\(\)/);
+    expect(job?.if ?? '').toMatch(/publish-staging-tags\.result == 'success'/);
+  });
+
+  it('the staging E2E runs after the smoke check, through the reusable workflow', () => {
+    type Job = { if?: string; needs?: string | string[]; uses?: string };
+    const job = (wf.jobs as unknown as Record<string, Job>)['e2e-staging'];
+    expect(job).toBeDefined();
+    expect(job?.uses).toBe('./.github/workflows/e2e-staging.yml');
+    expect(job?.needs).toEqual(['smoke-staging']);
+    expect(job?.if ?? '').toMatch(/^always\(\)/);
+    expect(job?.if ?? '').toMatch(/smoke-staging\.result == 'success'/);
+  });
+
+  it('the staging E2E workflow targets staging and has no other host to fall back to', () => {
+    type Step = { run?: string; env?: Record<string, string> };
+    const e2e = yaml.load(
+      fs.readFileSync(path.join(ROOT, '.github/workflows/e2e-staging.yml'), 'utf-8')
+    ) as { on: Record<string, unknown>; jobs: Record<string, { steps?: Step[] }> };
+    expect(Object.keys(e2e.on)).toEqual(
+      expect.arrayContaining(['workflow_call', 'workflow_dispatch'])
+    );
+    const run = (e2e.jobs['e2e-staging']?.steps ?? []).find((st) =>
+      (st.run ?? '').includes('playwright test')
+    );
+    expect(run?.run ?? '').toMatch(/playwright\.stg\.config\.ts/);
+    expect(run?.env?.['BASE_URL']).toBe('https://stg.insighta.one');
+  });
+
   it('the tag loop reads the same three outputs', () => {
     // The defect was `for key in apiTag frontendTag redisTag` with no reference
     // to what was built. Pinning the pairing, not the syntax.
