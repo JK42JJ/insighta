@@ -55,7 +55,11 @@ describe('publish-tags writes only what build-and-push built', () => {
     expect(stg).toHaveLength(1);
     const step: Step = stg[0] ?? {};
     expect(step.if ?? '').toMatch(/scope\.outputs\.frontend/);
-    const tags = (step.with?.tags ?? '').trim().split(/\s+/);
+    // One tag per line; a tag itself contains spaces (`${{ github.sha }}`).
+    const tags = (step.with?.tags ?? '')
+      .split('\n')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
     expect(tags.length).toBeGreaterThan(0);
     for (const t of tags) {
       expect(t).toMatch(/:stg-\$\{\{ github\.sha \}\}$/);
