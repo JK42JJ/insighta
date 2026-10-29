@@ -25,6 +25,9 @@ spec:
         app.kubernetes.io/component: redis
     spec:
       {{- include "insighta.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.podPriorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
       containers:
         - name: redis
           image: {{ include "insighta.image" (dict "root" $ "img" .Values.redis.image "tag" (get ($.Values.images | default dict) "redisTag")) | quote }}

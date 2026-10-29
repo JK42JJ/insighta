@@ -1,0 +1,15 @@
+{{- if .Values.resourceQuota.enabled }}
+# Caps what this namespace can claim in total. Every container in the chart
+# declares requests and limits, which a quota on those resources requires --
+# a pod without them would be refused admission here.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ include "insighta.fullname" . }}-quota
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+spec:
+  hard:
+    requests.memory: {{ required "resourceQuota.requestsMemory is required when resourceQuota.enabled" .Values.resourceQuota.requestsMemory | quote }}
+    limits.memory: {{ required "resourceQuota.limitsMemory is required when resourceQuota.enabled" .Values.resourceQuota.limitsMemory | quote }}
+{{- end }}

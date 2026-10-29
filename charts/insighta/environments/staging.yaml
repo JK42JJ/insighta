@@ -1,25 +1,102 @@
-# staging -- shaped like prod but single-replica. Its job is to catch what
-# breaks on promotion, not to survive a node loss.
+# staging -- shaped like prod, sized to share prod's node.
+#
+# It runs in namespace insighta-staging on the same k3s node as prod (no extra
+# cost), so three things keep it from hurting prod:
+#   - podPriorityClassName insighta-staging (-200): evicted first under memory
+#     pressure, and it never preempts.
+#   - resourceQuota: the namespace as a whole is capped, whatever a manifest asks.
+#   - small requests: under a kernel OOM the lowest request/limit ratio is
+#     killed first, which is staging.
+#
+# Its database is a separate Supabase project (free org), so nothing written
+# here reaches prod data. The env Secret leaves out every paid or outward key
+# (LLM, YouTube, billing, transcripts, Slack, mail) -- see the staging runbook.
+#
+# Image tags are not in this file. They live on branch deploy/staging
+# (staging-images.yaml), which CI writes directly; the Application reads it as
+# a second source. imageRegistry is injected when the Application is applied
+# (scripts/ops/apply-staging-app.sh) because the registry host names the AWS
+# account and this repository is public.
+requireImageRegistry: true
+podPriorityClassName: insighta-staging
+
+resourceQuota:
+  enabled: true
+  # Normal running (worker at 0): requests 224Mi, limits 544Mi.
+  # Worker scaled to 1 for a verification run: requests 352Mi, limits 928Mi.
+  requestsMemory: 384Mi
+  limitsMemory: 960Mi
+
 api:
   replicaCount: 1
   # Single replica, so a ReadWriteOnce claim is valid and the YouTube
   # response cache survives a restart instead of spending quota to rebuild.
   persistence:
     enabled: true
+  resources:
+    requests:
+      memory: 192Mi      # prod api measured 188-190 MiB on 2026-10-29
+      cpu: 50m
+    limits:
+      memory: 384Mi
+      cpu: 500m
+
+# Enabled so the api pods run HTTP only (RUN_SCHEDULERS=false): no cron fires
+# in staging unless the worker is scaled up for a verification run.
+worker:
+  enabled: true
+  replicaCount: 0
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 384Mi
+      cpu: 500m
+
+curation:
+  weeklyEnabled: false
+
+keel:
+  enabled: false
+
 frontend:
   replicaCount: 1
+  resources:
+    requests:
+      memory: 16Mi
+      cpu: 10m
+    limits:
+      memory: 64Mi
+      cpu: 200m
+
 redis:
   replicaCount: 1
+  maxmemory: 64mb
   persistence:
     enabled: true
     size: 1Gi
+  resources:
+    requests:
+      memory: 16Mi
+      cpu: 10m
+    limits:
+      memory: 96Mi
+      cpu: 200m
+
+# Schema reaches staging from deploy.yml, the same path prod uses. The in-cluster
+# hook runs `prisma db push`, which fails on Supabase's auth-owned tables.
+schemaSync:
+  enabled: false
 
 ingress:
   enabled: true
   # Without a class the controller refuses the object outright -- it does not
   # fall back to a default. prod hit exactly that on 2026-08-18.
   className: nginx
-  host: staging.insighta.one
+  host: stg.insighta.one
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
   tls:
     enabled: true
     secretName: insighta-staging-tls
