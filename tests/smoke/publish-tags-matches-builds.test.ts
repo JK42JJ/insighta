@@ -149,6 +149,31 @@ describe('publish-tags writes only what build-and-push built', () => {
     expect(run?.env?.['BASE_URL']).toBe('https://stg.insighta.one');
   });
 
+  it('every job that installs Playwright browsers runs on an image Playwright supports', () => {
+    // ubuntu-latest moved to 26.04, which Playwright 1.58 cannot install a browser
+    // on. A floating label turns a runner upgrade into a red gate: for the staging
+    // E2E, and for the CI job that every pull request waits on.
+    type Job = { 'runs-on'?: string; steps?: Array<{ run?: string }> };
+    const dir = path.join(ROOT, '.github/workflows');
+    const offenders: string[] = [];
+    let checked = 0;
+    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+      const doc = yaml.load(fs.readFileSync(path.join(dir, file), 'utf-8')) as {
+        jobs?: Record<string, Job>;
+      };
+      for (const [name, job] of Object.entries(doc.jobs ?? {})) {
+        const installs = (job.steps ?? []).some((st) =>
+          (st.run ?? '').includes('playwright install')
+        );
+        if (!installs) continue;
+        checked += 1;
+        if (!/^ubuntu-(22|24)\.04$/.test(job['runs-on'] ?? '')) offenders.push(`${file}:${name}`);
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(4);
+    expect(offenders).toEqual([]);
+  });
+
   it('the tag loop reads the same three outputs', () => {
     // The defect was `for key in apiTag frontendTag redisTag` with no reference
     // to what was built. Pinning the pairing, not the syntax.
