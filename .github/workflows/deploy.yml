@@ -56,6 +56,7 @@ jobs:
       redis: ${{ steps.d.outputs.redis }}
       deployable: ${{ steps.d.outputs.deployable }}
       schema: ${{ steps.d.outputs.schema }}
+      charts: ${{ steps.d.outputs.charts }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,6 +71,7 @@ jobs:
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
             echo "redis=true"        >> "$GITHUB_OUTPUT"
             echo "deployable=true"   >> "$GITHUB_OUTPUT"
+            echo "charts=true"       >> "$GITHUB_OUTPUT"
             echo "schema=true"       >> "$GITHUB_OUTPUT"
             echo "manual run -> full pipeline"; exit 0
           fi
@@ -86,6 +88,7 @@ jobs:
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
             echo "redis=true"        >> "$GITHUB_OUTPUT"
             echo "deployable=true"   >> "$GITHUB_OUTPUT"
+            echo "charts=true"       >> "$GITHUB_OUTPUT"
             echo "schema=true"       >> "$GITHUB_OUTPUT"
             echo "no usable base ($BEFORE) -> full pipeline"; exit 0
           fi
@@ -102,6 +105,7 @@ jobs:
             echo "frontend=true"     >> "$GITHUB_OUTPUT"
             echo "redis=true"        >> "$GITHUB_OUTPUT"
             echo "deployable=true"   >> "$GITHUB_OUTPUT"
+            echo "charts=true"       >> "$GITHUB_OUTPUT"
             echo "schema=true"       >> "$GITHUB_OUTPUT"
             echo "empty diff -> full pipeline"; exit 0
           fi
@@ -161,6 +165,16 @@ jobs:
           echo "api=$API"                 >> "$GITHUB_OUTPUT"
           echo "frontend=$FE"             >> "$GITHUB_OUTPUT"
           echo "deployable=$DEPLOYABLE"   >> "$GITHUB_OUTPUT"
+          # Did the chart staging runs change? A merge touching only charts/ is
+          # non-deployable (no image is built), yet it changes what staging
+          # should run. prod.yaml is excluded: it changes on every prod pin and
+          # staging does not read it.
+          if echo "$FILES" | grep '^charts/insighta/' | grep -qv '^charts/insighta/environments/prod\.yaml$'; then
+            CHARTS=true
+          else
+            CHARTS=false
+          fi
+          echo "charts=$CHARTS"           >> "$GITHUB_OUTPUT"
           # Schema work is not image work. A change to the raw DDL, to the
           # Prisma schema, or to the runner that applies the DDL has to reach
           # the database even when nothing in the image moved. #1713 changed
@@ -173,7 +187,7 @@ jobs:
             SCHEMA=$DEPLOYABLE
           fi
           echo "schema=$SCHEMA"           >> "$GITHUB_OUTPUT"
-          echo "mobile_only=$MOBILE_ONLY dial=$DIAL api=$API frontend=$FE deployable=$DEPLOYABLE schema=$SCHEMA"
+          echo "mobile_only=$MOBILE_ONLY dial=$DIAL api=$API frontend=$FE deployable=$DEPLOYABLE schema=$SCHEMA charts=$CHARTS"
 
   # The dial's only gate. Nothing in ci.yml reads frontend/public/mobile:
   # tsc looks at src, vitest looks at src, and vite copies public/ verbatim.
@@ -678,7 +692,10 @@ jobs:
         run: |
           for fn in local-cards youtube-sync youtube-auth fetch-url-metadata; do
             echo "Deploying $fn to staging..."
-            supabase functions deploy "$fn" --project-ref "$STG_REF" --no-verify-jwt
+            # --use-api bundles on Supabase's side. The default bundles in a docker
+            # container whose image comes from a registry that rate-limits shared
+            # runners: "Data limit exceeded" on the first staging run, 2026-10-29.
+            supabase functions deploy "$fn" --project-ref "$STG_REF" --no-verify-jwt --use-api
           done
 
   # Staging runs branch deploy/staging, which this job rebuilds as: the merged
@@ -690,26 +707,46 @@ jobs:
   publish-staging-tags:
     name: Point staging at this commit
     needs: [scope, build-and-push, migrate-staging]
-    # migrate-staging may be skipped (no schema change); a skip is not a failure.
+    # Runs when images were built, or when only the chart staging runs changed.
+    # build-and-push is skipped on a chart-only merge; that is not a failure.
+    # migrate-staging may be skipped too (no schema change).
     if: >-
       always() && github.ref == 'refs/heads/main' && vars.STG_PROJECT_REF != ''
-      && needs.scope.outputs.deployable == 'true'
-      && needs.build-and-push.result == 'success'
+      && (needs.scope.outputs.deployable == 'true' || needs.scope.outputs.charts == 'true')
+      && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
       && (needs.migrate-staging.result == 'success' || needs.migrate-staging.result == 'skipped')
     timeout-minutes: 5
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
-      api: ${{ needs.scope.outputs.api }}
+      api: ${{ steps.flags.outputs.api }}
     steps:
       - uses: actions/checkout@v4
-      - name: Rebuild deploy/staging at this commit
+      # scope.outputs.api is true for any change outside frontend/, including a
+      # chart-only one that builds nothing. Writing that tag would name an image
+      # that was never pushed -- ImagePullBackOff at the next sync. An image
+      # counts as built only when the run was deployable and its own output says so.
+      - name: Which images this run built
+        id: flags
         env:
-          SHA: ${{ github.sha }}
+          DEPLOYABLE: ${{ needs.scope.outputs.deployable }}
           API: ${{ needs.scope.outputs.api }}
           FE: ${{ needs.scope.outputs.frontend }}
           RD: ${{ needs.scope.outputs.redis }}
+        run: |
+          if [ "$DEPLOYABLE" = "true" ]; then
+            { echo "api=$API"; echo "frontend=$FE"; echo "redis=$RD"; } >> "$GITHUB_OUTPUT"
+          else
+            { echo "api=false"; echo "frontend=false"; echo "redis=false"; } >> "$GITHUB_OUTPUT"
+            echo "chart-only change: no image was built, tags stay where they are"
+          fi
+      - name: Rebuild deploy/staging at this commit
+        env:
+          SHA: ${{ github.sha }}
+          API: ${{ steps.flags.outputs.api }}
+          FE: ${{ steps.flags.outputs.frontend }}
+          RD: ${{ steps.flags.outputs.redis }}
         run: |
           set -euo pipefail
           F=charts/insighta/environments/staging-images.yaml

@@ -29,6 +29,10 @@ resourceQuota:
 
 api:
   replicaCount: 1
+  # Replace the pod instead of overlapping two: the namespace quota admits one
+  # api pod's requests, not two. staging may go down for a few seconds on a
+  # deploy; prod may not, and does not use this.
+  strategyType: Recreate
   # Single replica, so a ReadWriteOnce claim is valid and the YouTube
   # response cache survives a restart instead of spending quota to rebuild.
   persistence:

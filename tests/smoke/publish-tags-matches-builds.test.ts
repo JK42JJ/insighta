@@ -67,6 +67,53 @@ describe('publish-tags writes only what build-and-push built', () => {
     }
   });
 
+  it('staging tags move only for images this run built, chart-only merges included', () => {
+    // scope.outputs.api is true for any change outside frontend/, including a
+    // chart-only merge that builds nothing. Writing that tag names an image that
+    // was never pushed: ImagePullBackOff at the next sync.
+    type Step = { id?: string; name?: string; env?: Record<string, string>; run?: string };
+    type Job = { if?: string; outputs?: Record<string, string>; steps?: Step[] };
+    const job = (wf.jobs as unknown as Record<string, Job>)['publish-staging-tags'];
+    expect(job).toBeDefined();
+
+    // Runs for a chart-only change, and tolerates build-and-push being skipped.
+    const cond = job?.if ?? '';
+    expect(cond).toMatch(/scope\.outputs\.charts/);
+    expect(cond).toMatch(/build-and-push\.result == 'skipped'/);
+    // A failed build must still stop it.
+    expect(cond).not.toMatch(/build-and-push\.result == 'failure'/);
+
+    // The flags come from a step that zeroes them unless the run was deployable.
+    const flags = (job?.steps ?? []).find((st) => st.id === 'flags');
+    expect(flags).toBeDefined();
+    expect(flags?.run ?? '').toMatch(/\$DEPLOYABLE" = "true"/);
+    expect(flags?.run ?? '').toMatch(/api=false/);
+
+    // The tag writer and the smoke check read those flags, never scope's raw outputs.
+    const writer = (job?.steps ?? []).find((st) =>
+      (st.name ?? '').startsWith('Rebuild deploy/staging')
+    );
+    expect(writer).toBeDefined();
+    expect(writer?.env?.['API'] ?? '').toMatch(/steps\.flags\.outputs\.api/);
+    expect(writer?.env?.['FE'] ?? '').toMatch(/steps\.flags\.outputs\.frontend/);
+    expect(writer?.env?.['RD'] ?? '').toMatch(/steps\.flags\.outputs\.redis/);
+    expect(job?.outputs?.['api'] ?? '').toMatch(/steps\.flags\.outputs\.api/);
+  });
+
+  it('the staging Edge Function deploy bundles server-side, not in docker', () => {
+    // The docker bundling pulls an image from a registry that rate-limits shared
+    // runners: "Data limit exceeded", first staging run 2026-10-29.
+    type Step = { name?: string; run?: string };
+    const job = (wf.jobs as unknown as Record<string, { steps?: Step[] }>)[
+      'deploy-edge-functions-staging'
+    ];
+    expect(job).toBeDefined();
+    const deploy = (job?.steps ?? []).find((st) =>
+      (st.run ?? '').includes('supabase functions deploy')
+    );
+    expect(deploy?.run ?? '').toMatch(/--use-api/);
+  });
+
   it('the tag loop reads the same three outputs', () => {
     // The defect was `for key in apiTag frontendTag redisTag` with no reference
     // to what was built. Pinning the pairing, not the syntax.
