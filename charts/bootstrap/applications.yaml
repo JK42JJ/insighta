@@ -1,12 +1,18 @@
-# One Application per environment, all sourced from the same chart.
+# Applications sourced from the chart, applied by hand (`kubectl apply -f`).
+# There is no root Application on the cluster, so nothing here is picked up
+# from git on its own -- merging a change to this file changes the cluster only
+# when someone applies it.
 #
 # syncPolicy is empty on purpose. Design P3: ArgoCD reports the difference
 # first, a human reads it, and automated sync is enabled only once the app
 # stays InSync without help.
 #
-# There is no prod Application yet. Production still runs as docker compose
-# on EC2, so a prod Application would report every resource Missing --
-# noise, not information. It is added at P4, with the cutover.
+# Two Applications are not in this file:
+#   - insighta-prod: carries helm parameter imageRegistry, which names the AWS
+#     account. This repository is public, so its spec lives only on the cluster
+#     (`kubectl -n argocd get application insighta-prod -o yaml`).
+#   - insighta-staging: same reason; staging-app.yaml is its template and
+#     scripts/ops/apply-staging-app.sh applies it with the registry filled in.
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -26,26 +32,6 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: insighta-dev
-  syncPolicy: {}
----
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: insighta-staging
-  namespace: argocd
-spec:
-  project: insighta-staging
-  source:
-    repoURL: https://github.com/JK42JJ/insighta
-    targetRevision: main
-    path: charts/insighta
-    helm:
-      releaseName: insighta
-      valueFiles:
-        - environments/staging.yaml
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: insighta-staging
   syncPolicy: {}
 ---
 # The AWS validation node. Deployed by hand first, then handed to Argo so the

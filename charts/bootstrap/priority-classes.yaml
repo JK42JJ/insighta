@@ -19,3 +19,16 @@ metadata:
 value: -100
 globalDefault: false
 description: "Observability tooling. Evicted and preempted before anything serving traffic."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: insighta-staging
+# Below observability (-100). staging runs on prod's node at no extra cost;
+# this is what makes that safe -- when memory runs short the kubelet evicts
+# staging first, then observability, and prod last.
+value: -200
+globalDefault: false
+# Never preempts: a staging pod waiting for room must not push anything out.
+preemptionPolicy: Never
+description: "Staging. Evicted before anything else on the shared node; never preempts."

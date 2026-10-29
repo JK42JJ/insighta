@@ -45,6 +45,20 @@ imageRegistry: ""
 # into an outage.
 spreadAcrossNodes: true
 
+# PriorityClass for every long-running pod this chart renders. Empty means the
+# cluster default, which is what prod runs with. staging shares prod's node
+# and sets insighta-staging (-200), so under memory pressure the kubelet
+# evicts staging before anything serving users.
+podPriorityClassName: ""
+
+# Namespace ResourceQuota. Off unless an environment turns it on. staging uses
+# it so the environment as a whole cannot take more than its share of the
+# shared node, whatever a single manifest asks for.
+resourceQuota:
+  enabled: false
+  requestsMemory: ""
+  limitsMemory: ""
+
 # Set true in an environment whose images only exist in a registry that
 # imageRegistry has to name. Rendering without it is then an error, not a pull
 # failure discovered later in ImagePullBackOff.

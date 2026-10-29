@@ -1,0 +1,45 @@
+# Staging Application. Apply with scripts/ops/apply-staging-app.sh, never with
+# a bare `kubectl apply`: the script fills in helm parameter imageRegistry,
+# which names the AWS account and so is not committed (public repository).
+#
+# Two sources:
+#   - the chart, from main, with environments/staging.yaml;
+#   - branch deploy/staging, referenced as $state, holding staging-images.yaml
+#     (the image tags). CI writes that branch directly on every main merge.
+#     main is protected and a CI push cannot satisfy its required checks, which
+#     is why prod's tags arrive through a pull request; staging has no such
+#     gate on purpose -- reaching staging is the point of merging.
+#
+# Automated sync with prune: staging exists to show what main does when it is
+# deployed, and a manual sync would postpone exactly that answer.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: insighta-staging
+  namespace: argocd
+spec:
+  project: insighta-staging
+  sources:
+    - repoURL: https://github.com/JK42JJ/insighta
+      targetRevision: main
+      path: charts/insighta
+      helm:
+        releaseName: insighta
+        valueFiles:
+          - environments/staging.yaml
+          - $state/staging-images.yaml
+        parameters:
+          - name: imageRegistry
+            value: __IMAGE_REGISTRY__
+    - repoURL: https://github.com/JK42JJ/insighta
+      targetRevision: deploy/staging
+      ref: state
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: insighta-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
