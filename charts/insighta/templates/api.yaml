@@ -17,6 +17,10 @@ metadata:
     app.kubernetes.io/component: api
 spec:
   replicas: {{ .Values.api.replicaCount }}
+  {{- with .Values.api.strategyType }}
+  strategy:
+    type: {{ . }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "insighta.selectorLabels" . | nindent 6 }}

@@ -66,6 +66,13 @@ requireImageRegistry: false
 
 api:
   replicaCount: 1
+  # Deployment strategy type. Empty keeps the Kubernetes default, RollingUpdate,
+  # which is what prod runs: a new pod is ready before an old one is removed, so
+  # a deploy never lowers the number of pods serving traffic. staging sets
+  # Recreate -- it shares prod's node under a memory quota, and a rolling
+  # replacement of its api holds two api pods' requests at once, which the quota
+  # refuses (measured 2026-10-29: 224Mi used + 192Mi requested > 384Mi limit).
+  strategyType: ""
   image:
     repository: ghcr.io/jk42jj/insighta-api
     # environments/*.yaml override this via images.apiTag; see prod.yaml

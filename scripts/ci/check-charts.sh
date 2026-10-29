@@ -214,6 +214,33 @@ else
   ok "all resource quantities are in canonical form"
 fi
 
+# The api rollout strategy differs by environment on purpose. prod keeps the
+# Kubernetes default (RollingUpdate), so a deploy never lowers the number of
+# pods serving users. staging runs Recreate: it shares prod's node under a
+# memory quota, and a rolling replacement of its api asks for two api pods'
+# requests at once, which the quota refuses -- the new pod is never created
+# (measured 2026-10-29). Losing either side silently is the defect: prod on
+# Recreate is downtime on every deploy; staging on RollingUpdate is a deploy
+# that never finishes.
+echo "api strategy:"
+for env in $ENVS; do
+  reg=""
+  grep -q '^requireImageRegistry: true' "$CHART/environments/$env.yaml" && reg="--set imageRegistry=registry.invalid"
+  # shellcheck disable=SC2086
+  st=$(helm template insighta "$CHART" -f "$CHART/environments/$env.yaml" --namespace insighta $reg 2>/dev/null \
+    | python3 -c "
+import sys, yaml
+for d in yaml.safe_load_all(sys.stdin):
+    if d and d.get('kind') == 'Deployment' and d['metadata']['name'].endswith('-api'):
+        print(d['spec'].get('strategy', {}).get('type', 'default'))
+")
+  if [ "$env" = "staging" ]; then
+    [ "$st" = "Recreate" ] && ok "$env: api strategy Recreate" || bad "$env: api strategy is '$st', want Recreate (quota refuses a rolling replacement)"
+  else
+    [ "$st" = "default" ] && ok "$env: api strategy left at the default (rolling)" || bad "$env: api strategy is '$st', want the default -- a Recreate api is downtime on every deploy"
+  fi
+done
+
 echo "bootstrap:"
 for f in charts/bootstrap/*.yaml; do
   [ -f "$f" ] || continue
