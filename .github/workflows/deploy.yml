@@ -19,6 +19,16 @@ on:
         type: string
         required: false
         default: ''
+      # Deploy to staging and skip every job that writes to prod: the prod
+      # schema sync, the prod Edge Functions, the prod-built frontend and the
+      # prod tag pull request. For rebuilding staging -- including its first
+      # build, since a merge that touches only .github/, charts/ or scripts/ is
+      # marked non-deployable and builds nothing.
+      staging_only:
+        description: 'Staging only: skip every job that writes to prod'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: deploy-production
@@ -202,7 +212,7 @@ jobs:
     # is inside the frontend image and that job is the only thing that ships it.
     # Edge functions are a different artifact that a dial edit cannot affect, so
     # skipping them is narrowing, not a missed deploy.
-    if: github.ref == 'refs/heads/main' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
+    if: github.ref == 'refs/heads/main' && !inputs.staging_only && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -298,7 +308,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push Frontend image
-        if: needs.scope.outputs.frontend == 'true'
+        if: needs.scope.outputs.frontend == 'true' && !inputs.staging_only
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -366,7 +376,7 @@ jobs:
     # mobile_only stays here, and deliberately. This runs `prisma db push`
     # against the production database. A dial edit cannot change the schema, so
     # running it would be a write to production with no reason to be there.
-    if: needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true'
+    if: ${{ !inputs.staging_only && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -416,7 +426,7 @@ jobs:
   publish-tags:
     name: Point the chart at this commit
     needs: [scope, build-and-push]
-    if: github.ref == 'refs/heads/main' && needs.scope.outputs.deployable == 'true'
+    if: github.ref == 'refs/heads/main' && !inputs.staging_only && needs.scope.outputs.deployable == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
