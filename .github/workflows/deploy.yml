@@ -599,6 +599,7 @@ jobs:
 
   migrate-staging:
     name: Database Schema Sync (staging)
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     needs: [scope]
     if: github.ref == 'refs/heads/main' && vars.STG_PROJECT_REF != '' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true'
@@ -663,6 +664,7 @@ jobs:
     name: Deploy Edge Functions (staging)
     needs: [scope]
     if: github.ref == 'refs/heads/main' && vars.STG_PROJECT_REF != '' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -694,6 +696,7 @@ jobs:
       && needs.scope.outputs.deployable == 'true'
       && needs.build-and-push.result == 'success'
       && (needs.migrate-staging.result == 'success' || needs.migrate-staging.result == 'skipped')
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -736,6 +739,7 @@ jobs:
     name: Staging smoke check
     needs: [publish-staging-tags]
     if: needs.publish-staging-tags.result == 'success'
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - name: Wait for the new api, then check
