@@ -8,7 +8,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 5,
+  "version": 6,
   "refresh": "1m",
   "time": {
     "from": "now-7d",
@@ -16,6 +16,19 @@
   },
   "editable": false,
   "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "1 · 서비스 정상여부",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
     {
       "id": 1,
       "title": "지금 실패 중인 검사",
@@ -26,8 +39,8 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 14,
-        "w": 12,
+        "y": 1,
+        "w": 8,
         "h": 4
       },
       "description": "검사별 가장 최근 결과만 셉니다. 0이면 이상 없음.",
@@ -75,20 +88,44 @@
       }
     },
     {
-      "id": 2,
-      "title": "마지막 실행",
+      "id": 50,
       "type": "stat",
+      "title": "불가 서비스",
+      "description": "서비스 가용 현황에서 지금 불가인 항목 수입니다. 0이면 모두 응답 중입니다.",
       "datasource": {
         "type": "postgres",
         "uid": "insighta-pg"
       },
-      "gridPos": {
-        "x": 12,
-        "y": 14,
-        "w": 12,
-        "h": 4
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "description": "30분 주기입니다. 90분 넘게 비어 있으면 검사 자체가 멈춘 것 — 조용한 것과 구분해야 합니다.",
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
       "targets": [
         {
           "refId": "A",
@@ -98,9 +135,49 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT (extract(epoch FROM max(created_at)) * 1000)::float8 AS \"마지막\"\n  FROM error_events WHERE subsystem = 'keel'"
+          "editorMode": "code",
+          "rawSql": "SELECT count(*) AS \"불가\"\n  FROM (SELECT context FROM error_events\n         WHERE subsystem='keel' AND stage='service-reachability'\n         ORDER BY created_at DESC LIMIT 1) e,\n       jsonb_array_elements(e.context->'services') s\n WHERE (s->>'configured')::boolean AND NOT (s->>'ok')::boolean"
         }
       ],
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 8,
+        "h": 4
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "마지막 실행 후 경과",
+      "description": "검사는 30분 주기입니다. 45분을 넘으면 노랑, 90분을 넘으면 검사 자체가 멈춘 것입니다.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 45
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": []
+      },
       "options": {
         "reduceOptions": {
           "calcs": [
@@ -109,15 +186,231 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "none",
+        "colorMode": "background",
         "graphMode": "none",
         "textMode": "auto"
       },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT (extract(epoch FROM now() - max(created_at)) / 60)::float8 AS \"경과(분)\"\n  FROM error_events WHERE subsystem = 'keel'"
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 8,
+        "h": 4
+      }
+    },
+    {
+      "id": 40,
+      "title": "서비스 가용 현황",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 11
+      },
+      "description": "위에 있을수록 급합니다 — 불가가 먼저 나옵니다. \"현재 상태 시작\"은 그 상태가 이어진 지 얼마나 됐는지, \"먼저 볼 곳\"은 복구 때 처음 확인할 대상입니다. 아래 이력 그래프에서 과거 장애 구간을 봅니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH samples AS (SELECT e.created_at AS ts, s->>'env' AS env, (s->>'ok')::boolean AS ok FROM error_events e, jsonb_array_elements(e.context->'services') s WHERE e.subsystem='keel' AND e.stage='service-reachability' AND e.created_at > now() - interval '120 days'),\ncur AS (SELECT DISTINCT ON (env) env, ok, ts FROM samples ORDER BY env, ts DESC)\nSELECT CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '자막 수집 (맥미니)' WHEN 'AZURE_TRANSCRIPT_URL' THEN '자막 수집 (Azure 보조)' WHEN 'MANDALA_GEN_URL' THEN '만다라 임베딩 (맥미니)' WHEN 'SNAPSHOT_SERVICE_URL' THEN '노트 figure 스냅샷' WHEN 'QWEN_LORA_API_URL' THEN '챗봇 (자체 호스팅)' WHEN 'OPENROUTER_API_URL' THEN 'LLM 호출 (OpenRouter)' WHEN 'YOUTUBE_API_BASE' THEN '영상 검색·메타데이터 (YouTube)' WHEN 'SUPABASE_URL' THEN '인증·Edge Function (Supabase)' WHEN 'GMAIL_SMTP_HOST' THEN '뉴스레터 발송 (Gmail)' ELSE s->>'feature' END AS \"기능\",\n       CASE\n         WHEN NOT (s->>'configured')::boolean THEN '미설정'\n         WHEN (s->>'ok')::boolean             THEN '가능'\n         WHEN s->>'alternative' IS NOT NULL   THEN '대체 경로로 가능'\n         ELSE '불가'\n       END AS \"상태\",\n       CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '새 영상의 자막·요약이 쌓이지 않음' WHEN 'AZURE_TRANSCRIPT_URL' THEN '맥미니 장애 때 대체 경로가 사라짐' WHEN 'MANDALA_GEN_URL' THEN '템플릿 추천·카드 매칭이 OpenRouter 로만 동작' WHEN 'SNAPSHOT_SERVICE_URL' THEN '노트 이미지 보강 중단' WHEN 'QWEN_LORA_API_URL' THEN '챗봇이 OpenRouter 로 전환' WHEN 'OPENROUTER_API_URL' THEN '요약·챗봇·임베딩 전반' WHEN 'YOUTUBE_API_BASE' THEN '카드 추천·검색 불가' WHEN 'SUPABASE_URL' THEN '로그인 불가' WHEN 'GMAIL_SMTP_HOST' THEN '메일 발송 불가' ELSE '-' END AS \"불가 시 영향\",\n       COALESCE(s->>'alternative', '없음') AS \"대체 수단\",\n       s->>'detail' AS \"측정\",\n       COALESCE((SELECT max(sm.ts) FROM samples sm WHERE sm.env = s->>'env' AND sm.ok IS DISTINCT FROM cur.ok),\n                (SELECT min(ts) FROM samples)) AS \"현재 상태 시작\",\n       CASE WHEN (s->>'ok')::boolean THEN '' ELSE CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '맥미니: Tailscale 노드 키 만료 · claude 로그인 · transcript-svc' WHEN 'AZURE_TRANSCRIPT_URL' THEN 'Azure VM: tailnet 연결 · 프록시 서비스' WHEN 'MANDALA_GEN_URL' THEN '맥미니: Ollama(11434)' WHEN 'SNAPSHOT_SERVICE_URL' THEN '맥미니: 스냅샷 서비스(8077)' WHEN 'QWEN_LORA_API_URL' THEN 'RunPod 파드 상태' WHEN 'OPENROUTER_API_URL' THEN 'OpenRouter 상태 · 크레딧 잔액' WHEN 'YOUTUBE_API_BASE' THEN 'YouTube 일일 쿼터 · API 키' WHEN 'SUPABASE_URL' THEN 'Supabase 상태 · 프로젝트 일시중지 여부' WHEN 'GMAIL_SMTP_HOST' THEN 'SMTP 릴레이 설정' ELSE '-' END END AS \"먼저 볼 곳\"\n  FROM (SELECT context FROM error_events\n         WHERE subsystem='keel' AND stage='service-reachability'\n         ORDER BY created_at DESC LIMIT 1) e,\n       jsonb_array_elements(e.context->'services') s\n  JOIN cur ON cur.env = s->>'env'\n ORDER BY (s->>'ok')::boolean, 1"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "dateTimeFromNow"
+          "custom": {
+            "align": "left"
+          },
+          "noValue": "아직 측정되지 않았습니다 — Keel 이 한 번 돌면 채워집니다"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "상태"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "가능": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "대체 경로로 가능": {
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "불가": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "미설정": {
+                        "color": "text",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      }
+    },
+    {
+      "id": 51,
+      "title": "서비스 가용 이력",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 9
+      },
+      "description": "서비스별 가용 이력입니다. 빨간 구간이 그 서비스가 불가였던 시간 — 시작과 끝이 한눈에 보입니다. 15분 간격 기록입니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT e.created_at AS time,\n       CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '자막 수집 (맥미니)' WHEN 'AZURE_TRANSCRIPT_URL' THEN '자막 수집 (Azure 보조)' WHEN 'MANDALA_GEN_URL' THEN '만다라 임베딩 (맥미니)' WHEN 'SNAPSHOT_SERVICE_URL' THEN '노트 figure 스냅샷' WHEN 'QWEN_LORA_API_URL' THEN '챗봇 (자체 호스팅)' WHEN 'OPENROUTER_API_URL' THEN 'LLM 호출 (OpenRouter)' WHEN 'YOUTUBE_API_BASE' THEN '영상 검색·메타데이터 (YouTube)' WHEN 'SUPABASE_URL' THEN '인증·Edge Function (Supabase)' WHEN 'GMAIL_SMTP_HOST' THEN '뉴스레터 발송 (Gmail)' ELSE s->>'feature' END AS metric,\n       CASE WHEN (s->>'ok')::boolean THEN 1 ELSE 0 END AS value\n  FROM error_events e, jsonb_array_elements(e.context->'services') s\n WHERE e.subsystem = 'keel' AND e.stage = 'service-reachability' AND $__timeFilter(e.created_at)\n ORDER BY e.created_at"
+        }
+      ],
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "실패",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "정상",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ]
         },
         "overrides": []
+      },
+      "timeFrom": "30d",
+      "hideTimeOverride": false
+    },
+    {
+      "id": 101,
+      "type": "row",
+      "title": "2 · 장애 대응",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 52,
+      "type": "table",
+      "title": "지금 실패 중인 검사",
+      "description": "검사별 가장 최근 결과가 실패인 것만 보입니다. 담당과 다음 행동은 대시보드에 적어 둔 기본값입니다.",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT stage AS \"검사\",\n       left(message, 200) AS \"원인\",\n       created_at AS \"마지막 검사\",\n       CASE stage WHEN 'alert-dispatch' THEN 'James' WHEN 'cloud-posture' THEN 'James' WHEN 'iam-hygiene' THEN 'James' WHEN 'pipeline-freshness' THEN 'James · CC' WHEN 'supply-chain' THEN 'CC' ELSE '미정' END AS \"담당\",\n       CASE stage WHEN 'alert-dispatch' THEN '슬랙 웹훅 생성 후 SLACK_ALERT_WEBHOOK 등록' WHEN 'cloud-posture' THEN 'SNS 알림 구독 확인 메일 승인' WHEN 'iam-hygiene' THEN 'admin 콘솔 계정 MFA 등록' WHEN 'pipeline-freshness' THEN '맥미니 수집기: claude 로그인 · transcript-svc · Tailscale 키 확인' WHEN 'supply-chain' THEN 'npm audit critical 항목 업그레이드 PR' ELSE '원인 확인 필요' END AS \"다음 행동\"\n  FROM (SELECT DISTINCT ON (stage) stage, severity, message, created_at\n          FROM error_events WHERE subsystem = 'keel'\n         ORDER BY stage, created_at DESC) t\n WHERE severity <> 'info'\n ORDER BY 1"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 7
       }
     },
     {
@@ -130,7 +423,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 33,
         "w": 24,
         "h": 14
       },
@@ -239,7 +532,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 50,
+        "y": 47,
         "w": 24,
         "h": 8
       },
@@ -304,7 +597,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 58,
+        "y": 55,
         "w": 24,
         "h": 23
       },
@@ -371,6 +664,75 @@
       "hideTimeOverride": false
     },
     {
+      "id": 24,
+      "title": "서비스 활동 최신성",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 78,
+        "w": 24,
+        "h": 9
+      },
+      "description": "누적 숫자는 무엇이 만들어졌는지만 말합니다. 이 표는 지금 무슨 일이 일어나고 있는지를 말합니다 — 비어 있으면 비어 있다고.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT '카드 상호작용' AS \"활동\", max(created_at) AS \"마지막\",\n       (now() - max(created_at)) AS \"경과\" FROM card_interactions\nUNION ALL\nSELECT '영상 요약', max(created_at), (now() - max(created_at)) FROM video_summaries\nUNION ALL\nSELECT '노트 문서', max(created_at), (now() - max(created_at)) FROM note_documents\nUNION ALL\nSELECT 'LLM 호출', max(created_at), (now() - max(created_at)) FROM llm_call_logs\nUNION ALL\nSELECT '파이프라인', max(created_at), (now() - max(created_at)) FROM pipeline_events\nORDER BY 2 DESC NULLS LAST"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      }
+    },
+    {
+      "id": 41,
+      "type": "text",
+      "title": "검사별 의미",
+      "description": "각 검사가 무엇을 확인하는지, 언제 실패가 되는지, 실패하면 무엇을 하는지. 조건은 scripts/keel/checks.ts · check-cloud-posture.ts · check-aws-cost.ts 기준.",
+      "gridPos": {
+        "x": 0,
+        "y": 87,
+        "w": 24,
+        "h": 14
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "| 검사 | 무엇을 확인하나 | 빨간색(실패)이 되는 조건 | 빨간색일 때 할 일 |\n|---|---|---|---|\n| aws-cost | AWS 이번 달 누적 비용 | 월 예산 $40 의 70%($28) 이상 | 표 \"AWS 월 누적\" 에서 비용이 큰 서비스를 확인 |\n| cloud-posture | AWS 계정의 보안 기본 설정이 그대로 켜져 있는지: 감사 로그(CloudTrail) 기록·전 리전·위변조 검증, 보안 경보 8종, 디스크 기본 암호화, 비밀번호 14자 이상 정책, 감사 로그 저장소 공개 차단, **경보를 받을 이메일 구독** | 위 항목 중 하나라도 꺼졌거나 읽을 수 없음. 예: \"no confirmed subscription\" = 보안 경보가 울려도 받을 이메일이 없음 | 내용 칸이 가리키는 항목을 되살림. 구독 문제는 받을 주소로 구독을 걸고 그 메일에서 확인(Confirm)을 누름 |\n| db-schema | 코드가 쓰는 테이블·컬럼이 실제 DB 에 있는지 | 빠진 테이블·컬럼이 있음(prisma 가 조용히 빠뜨리는 사고) | 빠진 이름에 대한 SQL 을 DB 에 적용 |\n| deploy-drift | 배포 설정에 적힌 API 버전 = 실제로 돌고 있는 API 버전 | 머지 후 30분이 지나도 둘이 다름(배포가 중간에 멈춤) | 배포 핀 PR 머지 여부와 ArgoCD 동기화 확인 |\n| iam-hygiene | AWS 로그인 계정 관리: 콘솔 비밀번호가 있는 사용자는 MFA, 액세스 키는 90일 이내, 30일 넘게 안 쓴 키 없음 | 조건 중 하나라도 어김. 예: \"console without MFA: admin\" = admin 사용자가 MFA 없이 콘솔 로그인 가능 | MFA 등록, 또는 쓰지 않는 콘솔 비밀번호·키 제거 |\n| llm-spend | LLM 지출(오늘·이번 달) | 일 한도 $10 또는 월 한도 $50 의 70% 이상 | 표 \"단계별 지출\" 에서 비용이 큰 단계를 확인 |\n| pipeline-freshness | 자막 수집과 요약 생성이 멈추지 않았는지(마지막 기록의 나이). LLM 호출 나이는 참고 표시 | 자막 3일, 요약 7일 넘게 새 기록 없음 | 맥미니 자막 수집기 실행 상태 확인 |\n| public-surface | insighta.one 이 응답하는지, HTTPS 인증서가 충분히 남았는지 | 사이트 무응답, 또는 인증서 만료 14일 미만 | 서버 상태 확인, 인증서 자동 갱신(cert-manager) 확인 |\n| service-reachability | 서버가 외부 의존 서비스에 닿아서 기능별로 동작 가능한지 | 하나 이상의 기능이 쓸 수 없는 상태 | 내용 칸에 적힌 기능·서비스 확인 |\n| supply-chain | 백엔드·프론트 의존성의 알려진 보안 취약점 | critical 또는 high 가 1개 이상 | 해당 패키지 업그레이드 |\n| transcript-proxies | 자막을 가져오는 프록시 2곳(Azure·맥미니)이 응답하는지 | 한 곳이라도 무응답(예비가 없는 상태) | 내용 칸에 적힌 프록시 확인 |\n"
+      }
+    },
+    {
+      "id": 102,
+      "type": "row",
+      "title": "3 · 비용",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 101,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
       "id": 6,
       "title": "AWS 월 누적",
       "type": "timeseries",
@@ -380,7 +742,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 81,
+        "y": 102,
         "w": 12,
         "h": 11
       },
@@ -411,6 +773,59 @@
       "hideTimeOverride": false
     },
     {
+      "id": 8,
+      "title": "모델별 지출 (24시간)",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "insighta-pg"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 102,
+        "w": 12,
+        "h": 11
+      },
+      "description": "캐시% 가 비어 있으면 프로바이더가 캐시를 보고하지 않은 것 — 0% 와 다른 사실입니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "insighta-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT regexp_replace(model, '^openrouter/', '') AS \"모델\",\n       count(*) AS \"호출\",\n       round(sum(cost_usd)::numeric, 4) AS \"비용\",\n       CASE WHEN sum(cached_input_tokens) IS NULL THEN NULL\n            ELSE round(100.0 * sum(cached_input_tokens) / NULLIF(sum(input_tokens), 0), 1)\n       END AS \"캐시%\",\n       round(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)::numeric, 0) AS \"p95ms\"\n  FROM llm_call_logs\n WHERE status = 'success' AND created_at >= now() - interval '24 hours'\n GROUP BY model ORDER BY 3 DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "비용"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      }
+    },
+    {
       "id": 7,
       "title": "LLM 일별 지출",
       "type": "timeseries",
@@ -420,7 +835,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 92,
+        "y": 113,
         "w": 12,
         "h": 21
       },
@@ -508,59 +923,6 @@
       "hideTimeOverride": false
     },
     {
-      "id": 8,
-      "title": "모델별 지출 (24시간)",
-      "type": "table",
-      "datasource": {
-        "type": "postgres",
-        "uid": "insighta-pg"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 81,
-        "w": 12,
-        "h": 11
-      },
-      "description": "캐시% 가 비어 있으면 프로바이더가 캐시를 보고하지 않은 것 — 0% 와 다른 사실입니다.",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "postgres",
-            "uid": "insighta-pg"
-          },
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT regexp_replace(model, '^openrouter/', '') AS \"모델\",\n       count(*) AS \"호출\",\n       round(sum(cost_usd)::numeric, 4) AS \"비용\",\n       CASE WHEN sum(cached_input_tokens) IS NULL THEN NULL\n            ELSE round(100.0 * sum(cached_input_tokens) / NULLIF(sum(input_tokens), 0), 1)\n       END AS \"캐시%\",\n       round(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)::numeric, 0) AS \"p95ms\"\n  FROM llm_call_logs\n WHERE status = 'success' AND created_at >= now() - interval '24 hours'\n GROUP BY model ORDER BY 3 DESC"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "left"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "비용"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "currencyUSD"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true
-      }
-    },
-    {
       "id": 9,
       "title": "단계별 지출 (24시간)",
       "type": "table",
@@ -570,7 +932,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 92,
+        "y": 113,
         "w": 12,
         "h": 21
       },
@@ -623,8 +985,8 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 113,
-        "w": 12,
+        "y": 134,
+        "w": 24,
         "h": 11
       },
       "description": "status='success' 로 거르는 모든 집계에서 보이지 않는 값입니다. 재시도 낭비가 여기 있습니다.",
@@ -668,6 +1030,472 @@
       }
     },
     {
+      "id": 103,
+      "type": "row",
+      "title": "4 · 성능",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 145,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 60,
+      "title": "노드 메모리",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "insighta-metrics"
+      },
+      "description": "85%를 넘으면 관측 스택이 먼저 쫓겨납니다 — 서비스보다 우선순위가 낮게 설정돼 있습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "timeFrom": "6h",
+      "gridPos": {
+        "x": 0,
+        "y": 146,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": 61,
+      "title": "노드 CPU",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "insighta-metrics"
+      },
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "timeFrom": "6h",
+      "gridPos": {
+        "x": 6,
+        "y": 146,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": 62,
+      "title": "노드 디스크",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "insighta-metrics"
+      },
+      "description": "이 노드에서 가장 임박했던 위험입니다. 2026-09-07에 81%까지 갔습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/host/root\"} / node_filesystem_size_bytes{mountpoint=\"/host/root\"})",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "timeFrom": "6h",
+      "gridPos": {
+        "x": 12,
+        "y": 146,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": 63,
+      "title": "10분 내 재시작",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "insighta-metrics"
+      },
+      "description": "크래시 루프는 CPU를 거의 안 씁니다. 사용량 그래프로는 안 보이고 이 값으로만 보입니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "expr": "sum(increase(kube_pod_container_status_restarts_total[10m]))",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "timeFrom": "6h",
+      "gridPos": {
+        "x": 18,
+        "y": 146,
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": 64,
+      "title": "요청 지연 (ingress)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "insighta-metrics"
+      },
+      "description": "p95가 p50과 크게 벌어지면 일부 요청만 느린 것입니다 — 전체가 느린 것과 원인이 다릅니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 2,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "timeFrom": "6h",
+      "gridPos": {
+        "x": 0,
+        "y": 150,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "id": 65,
+      "title": "5xx 비율",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "insighta-metrics"
+      },
+      "description": "1%를 넘으면 사용자가 이미 겪고 있습니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "expr": "100 * sum(rate(nginx_ingress_controller_requests{status=~\"5..\"}[5m])) / clamp_min(sum(rate(nginx_ingress_controller_requests[5m])), 0.001)",
+          "legendFormat": "5xx %"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            },
+            "fillOpacity": 8,
+            "lineWidth": 2
+          },
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "timeFrom": "6h",
+      "gridPos": {
+        "x": 12,
+        "y": 150,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "id": 66,
+      "title": "앱 요청 지연 (라우트별 p95)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "insighta-metrics"
+      },
+      "description": "인그레스는 어느 라우트가 느린지 모릅니다. 앱만 알 수 있고, '느리다'는 보고에 답하려면 그게 필요합니다.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "insighta-metrics"
+          },
+          "legendFormat": "{{route}}",
+          "expr": "topk(8, histogram_quantile(0.95, sum by (route, le) (rate(insighta_http_request_duration_seconds_bucket[5m]))))"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 6,
+            "lineWidth": 2
+          },
+          "noValue": "앱이 아직 /metrics 를 내지 않습니다"
+        },
+        "overrides": []
+      },
+      "timeFrom": "6h",
+      "gridPos": {
+        "x": 0,
+        "y": 158,
+        "w": 24,
+        "h": 8
+      }
+    },
+    {
+      "id": 67,
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "options": {
+        "mode": "markdown",
+        "content": "파드별 메모리·CPU, 요청률, 응답 코드 등 상세는 [Insighta · Keel 자원](/keel/d/insighta-resources/) 에 있습니다."
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 166,
+        "w": 24,
+        "h": 2
+      }
+    },
+    {
+      "id": 104,
+      "type": "row",
+      "title": "참고 · 사용 현황",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 168,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
       "id": 20,
       "title": "사용자",
       "type": "stat",
@@ -677,7 +1505,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 18,
+        "y": 169,
         "w": 6,
         "h": 4
       },
@@ -732,7 +1560,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 18,
+        "y": 169,
         "w": 6,
         "h": 4
       },
@@ -787,7 +1615,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 18,
+        "y": 169,
         "w": 6,
         "h": 4
       },
@@ -842,7 +1670,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 18,
+        "y": 169,
         "w": 6,
         "h": 4
       },
@@ -888,46 +1716,6 @@
       }
     },
     {
-      "id": 24,
-      "title": "서비스 활동 최신성",
-      "type": "table",
-      "datasource": {
-        "type": "postgres",
-        "uid": "insighta-pg"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 113,
-        "w": 12,
-        "h": 11
-      },
-      "description": "누적 숫자는 무엇이 만들어졌는지만 말합니다. 이 표는 지금 무슨 일이 일어나고 있는지를 말합니다 — 비어 있으면 비어 있다고.",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "postgres",
-            "uid": "insighta-pg"
-          },
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT '카드 상호작용' AS \"활동\", max(created_at) AS \"마지막\",\n       (now() - max(created_at)) AS \"경과\" FROM card_interactions\nUNION ALL\nSELECT '영상 요약', max(created_at), (now() - max(created_at)) FROM video_summaries\nUNION ALL\nSELECT '노트 문서', max(created_at), (now() - max(created_at)) FROM note_documents\nUNION ALL\nSELECT 'LLM 호출', max(created_at), (now() - max(created_at)) FROM llm_call_logs\nUNION ALL\nSELECT '파이프라인', max(created_at), (now() - max(created_at)) FROM pipeline_events\nORDER BY 2 DESC NULLS LAST"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "left"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true
-      }
-    },
-    {
       "id": 25,
       "title": "카드 상호작용 (일별)",
       "type": "timeseries",
@@ -937,7 +1725,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 124,
+        "y": 173,
         "w": 24,
         "h": 8
       },
@@ -987,7 +1775,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 132,
+        "y": 181,
         "w": 6,
         "h": 4
       },
@@ -1043,7 +1831,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 132,
+        "y": 181,
         "w": 6,
         "h": 4
       },
@@ -1099,7 +1887,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 132,
+        "y": 181,
         "w": 6,
         "h": 4
       },
@@ -1155,7 +1943,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 132,
+        "y": 181,
         "w": 6,
         "h": 4
       },
@@ -1211,7 +1999,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 136,
+        "y": 185,
         "w": 12,
         "h": 9
       },
@@ -1268,7 +2056,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 136,
+        "y": 185,
         "w": 12,
         "h": 9
       },
@@ -1313,111 +2101,13 @@
       }
     },
     {
-      "id": 40,
-      "title": "서비스 가용 현황",
-      "type": "table",
-      "datasource": {
-        "type": "postgres",
-        "uid": "insighta-pg"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 24,
-        "h": 12
-      },
-      "description": "호스트가 죽었는지가 아니라 사용자가 그 기능을 쓸 수 있는지를 말합니다. 대체 경로가 있으면 '가능'이고, 없으면 '불가'입니다 — 둘을 같이 세면 대시보드를 안 보게 됩니다. 클러스터 안에서 TCP 로 측정한 값입니다.",
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "postgres",
-            "uid": "insighta-pg"
-          },
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT s->>'feature' AS \"기능\",\n       CASE\n         WHEN NOT (s->>'configured')::boolean THEN '미설정'\n         WHEN (s->>'ok')::boolean             THEN '가능'\n         WHEN s->>'alternative' IS NOT NULL   THEN '대체 경로로 가능'\n         ELSE '불가'\n       END AS \"상태\",\n       COALESCE(s->>'alternative', '없음') AS \"대체 수단\",\n       s->>'detail' AS \"측정\",\n       e.created_at AS \"측정 시각\"\n  FROM (SELECT context, created_at FROM error_events\n         WHERE subsystem='keel' AND stage='service-reachability'\n         ORDER BY created_at DESC LIMIT 1) e,\n       jsonb_array_elements(e.context->'services') s\n ORDER BY 2, 1"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "left"
-          },
-          "noValue": "아직 측정되지 않았습니다 — Keel 이 한 번 돌면 채워집니다"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "상태"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "가능": {
-                        "color": "green",
-                        "index": 0
-                      },
-                      "대체 경로로 가능": {
-                        "color": "orange",
-                        "index": 1
-                      },
-                      "불가": {
-                        "color": "red",
-                        "index": 2
-                      },
-                      "미설정": {
-                        "color": "text",
-                        "index": 3
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true
-      }
-    },
-    {
-      "id": 41,
-      "type": "text",
-      "title": "검사별 의미",
-      "description": "각 검사가 무엇을 확인하는지, 언제 실패가 되는지, 실패하면 무엇을 하는지. 조건은 scripts/keel/checks.ts · check-cloud-posture.ts · check-aws-cost.ts 기준.",
-      "gridPos": {
-        "x": 0,
-        "y": 36,
-        "w": 24,
-        "h": 14
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "| 검사 | 무엇을 확인하나 | 빨간색(실패)이 되는 조건 | 빨간색일 때 할 일 |\n|---|---|---|---|\n| aws-cost | AWS 이번 달 누적 비용 | 월 예산 $40 의 70%($28) 이상 | 표 \"AWS 월 누적\" 에서 비용이 큰 서비스를 확인 |\n| cloud-posture | AWS 계정의 보안 기본 설정이 그대로 켜져 있는지: 감사 로그(CloudTrail) 기록·전 리전·위변조 검증, 보안 경보 8종, 디스크 기본 암호화, 비밀번호 14자 이상 정책, 감사 로그 저장소 공개 차단, **경보를 받을 이메일 구독** | 위 항목 중 하나라도 꺼졌거나 읽을 수 없음. 예: \"no confirmed subscription\" = 보안 경보가 울려도 받을 이메일이 없음 | 내용 칸이 가리키는 항목을 되살림. 구독 문제는 받을 주소로 구독을 걸고 그 메일에서 확인(Confirm)을 누름 |\n| db-schema | 코드가 쓰는 테이블·컬럼이 실제 DB 에 있는지 | 빠진 테이블·컬럼이 있음(prisma 가 조용히 빠뜨리는 사고) | 빠진 이름에 대한 SQL 을 DB 에 적용 |\n| deploy-drift | 배포 설정에 적힌 API 버전 = 실제로 돌고 있는 API 버전 | 머지 후 30분이 지나도 둘이 다름(배포가 중간에 멈춤) | 배포 핀 PR 머지 여부와 ArgoCD 동기화 확인 |\n| iam-hygiene | AWS 로그인 계정 관리: 콘솔 비밀번호가 있는 사용자는 MFA, 액세스 키는 90일 이내, 30일 넘게 안 쓴 키 없음 | 조건 중 하나라도 어김. 예: \"console without MFA: admin\" = admin 사용자가 MFA 없이 콘솔 로그인 가능 | MFA 등록, 또는 쓰지 않는 콘솔 비밀번호·키 제거 |\n| llm-spend | LLM 지출(오늘·이번 달) | 일 한도 $10 또는 월 한도 $50 의 70% 이상 | 표 \"단계별 지출\" 에서 비용이 큰 단계를 확인 |\n| pipeline-freshness | 자막 수집과 요약 생성이 멈추지 않았는지(마지막 기록의 나이). LLM 호출 나이는 참고 표시 | 자막 3일, 요약 7일 넘게 새 기록 없음 | 맥미니 자막 수집기 실행 상태 확인 |\n| public-surface | insighta.one 이 응답하는지, HTTPS 인증서가 충분히 남았는지 | 사이트 무응답, 또는 인증서 만료 14일 미만 | 서버 상태 확인, 인증서 자동 갱신(cert-manager) 확인 |\n| service-reachability | 서버가 외부 의존 서비스에 닿아서 기능별로 동작 가능한지 | 하나 이상의 기능이 쓸 수 없는 상태 | 내용 칸에 적힌 기능·서비스 확인 |\n| supply-chain | 백엔드·프론트 의존성의 알려진 보안 취약점 | critical 또는 high 가 1개 이상 | 해당 패키지 업그레이드 |\n| transcript-proxies | 자막을 가져오는 프록시 2곳(Azure·맥미니)이 응답하는지 | 한 곳이라도 무응답(예비가 없는 상태) | 내용 칸에 적힌 프록시 확인 |\n"
-      }
-    },
-    {
       "id": 42,
       "type": "text",
       "title": "",
       "transparent": true,
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 194,
         "w": 24,
         "h": 2
       },
@@ -1439,6 +2129,18 @@
       "asDropdown": false,
       "tags": [],
       "tooltip": "기간이 고정된 주소를 지금 기준 최근 7일로 되돌립니다"
+    },
+    {
+      "title": "자원 (상세)",
+      "type": "link",
+      "url": "/keel/d/insighta-resources/",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": false,
+      "includeVars": false,
+      "asDropdown": false,
+      "tags": [],
+      "tooltip": "노드·파드 자원과 트래픽 상세"
     }
   ]
 }
