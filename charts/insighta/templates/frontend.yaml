@@ -17,6 +17,10 @@ spec:
       labels:
         {{- include "insighta.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: frontend
+      {{- if .Values.survey.enabled }}
+      annotations:
+        checksum/survey: {{ include (print $.Template.BasePath "/survey.yaml") . | sha256sum }}
+      {{- end }}
     spec:
       # compose had depends_on: api service_healthy. Kubernetes has no
       # equivalent and does not need one: the frontend's readiness probe
@@ -47,6 +51,18 @@ spec:
             {{- toYaml .Values.frontend.livenessProbe | nindent 12 }}
           readinessProbe:
             {{- toYaml .Values.frontend.readinessProbe | nindent 12 }}
+          {{- if .Values.survey.enabled }}
+          volumeMounts:
+            - name: survey
+              mountPath: /usr/share/nginx/html/survey
+              readOnly: true
+          {{- end }}
+      {{- if .Values.survey.enabled }}
+      volumes:
+        - name: survey
+          configMap:
+            name: {{ include "insighta.fullname" . }}-survey
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
