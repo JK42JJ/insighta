@@ -172,6 +172,11 @@ keel:
       memory: 384Mi
       cpu: 500m
 
+# Static survey preview page at /survey/ (see templates/survey.yaml). Off unless an
+# environment turns it on, so existing environments render exactly as before.
+survey:
+  enabled: false
+
 frontend:
   replicaCount: 1
   image:

@@ -1,0 +1,19 @@
+{{- if .Values.survey.enabled }}
+# Static survey preview page served at /survey/. The share preview crawler (Kakao,
+# link unfurlers) does not run JavaScript, so the Open Graph tags must be in the HTML
+# the server returns for this path. It is mounted into the frontend pods rather than
+# built into the image, so adding or editing it is a chart change and needs no image
+# build. nginx serves a file that exists before it falls back to the app shell.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "insighta.fullname" . }}-survey
+  labels:
+    {{- include "insighta.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+data:
+  index.html: |
+{{ .Files.Get "files/survey/index.html" | indent 4 }}
+binaryData:
+  survey-og.jpg: {{ .Files.Get "files/survey/survey-og.jpg" | b64enc }}
+{{- end }}
