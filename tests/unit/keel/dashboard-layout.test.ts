@@ -36,13 +36,11 @@ describe('Keel dashboard layout', () => {
   it('has no two panels occupying the same grid cells', () => {
     const panels = loadPanels();
     const overlapping: Array<[number, number]> = [];
-    for (let i = 0; i < panels.length; i++) {
-      for (let j = i + 1; j < panels.length; j++) {
-        if (overlap(panels[i].gridPos, panels[j].gridPos)) {
-          overlapping.push([panels[i].id, panels[j].id]);
-        }
+    panels.forEach((a, i) => {
+      for (const b of panels.slice(i + 1)) {
+        if (overlap(a.gridPos, b.gridPos)) overlapping.push([a.id, b.id]);
       }
-    }
+    });
     expect(overlapping).toEqual([]);
   });
 });
