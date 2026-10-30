@@ -12,8 +12,6 @@
 # prod-built frontend has the prod Supabase URL compiled in and must never run
 # in staging.
 images:
-  apiTag: 4bdf07ebd49931dfc24e431796ccb78ffd5c8ba9
-  frontendTag: none
-  redisTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
-frontend:
-  replicaCount: 0
+  apiTag: 691d9a54a6472850a376e7db3f85176eca70ab23
+  frontendTag: stg-691d9a54a6472850a376e7db3f85176eca70ab23
+  redisTag: 691d9a54a6472850a376e7db3f85176eca70ab23
