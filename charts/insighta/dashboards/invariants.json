@@ -234,13 +234,17 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH samples AS (SELECT e.created_at AS ts, s->>'env' AS env, (s->>'ok')::boolean AS ok FROM error_events e, jsonb_array_elements(e.context->'services') s WHERE e.subsystem='keel' AND e.stage='service-reachability' AND e.created_at > now() - interval '120 days'),\ncur AS (SELECT DISTINCT ON (env) env, ok, ts FROM samples ORDER BY env, ts DESC)\nSELECT CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '자막 수집 (맥미니)' WHEN 'AZURE_TRANSCRIPT_URL' THEN '자막 수집 (Azure 보조)' WHEN 'MANDALA_GEN_URL' THEN '만다라 임베딩 (맥미니)' WHEN 'SNAPSHOT_SERVICE_URL' THEN '노트 figure 스냅샷' WHEN 'QWEN_LORA_API_URL' THEN '챗봇 (자체 호스팅)' WHEN 'OPENROUTER_API_URL' THEN 'LLM 호출 (OpenRouter)' WHEN 'YOUTUBE_API_BASE' THEN '영상 검색·메타데이터 (YouTube)' WHEN 'SUPABASE_URL' THEN '인증·Edge Function (Supabase)' WHEN 'GMAIL_SMTP_HOST' THEN '뉴스레터 발송 (Gmail)' ELSE s->>'feature' END AS \"기능\",\n       CASE\n         WHEN NOT (s->>'configured')::boolean THEN '미설정'\n         WHEN (s->>'ok')::boolean             THEN '가능'\n         WHEN s->>'alternative' IS NOT NULL   THEN '대체 경로로 가능'\n         ELSE '불가'\n       END AS \"상태\",\n       CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '새 영상의 자막·요약이 쌓이지 않음' WHEN 'AZURE_TRANSCRIPT_URL' THEN '맥미니 장애 때 대체 경로가 사라짐' WHEN 'MANDALA_GEN_URL' THEN '템플릿 추천·카드 매칭이 OpenRouter 로만 동작' WHEN 'SNAPSHOT_SERVICE_URL' THEN '노트 이미지 보강 중단' WHEN 'QWEN_LORA_API_URL' THEN '챗봇이 OpenRouter 로 전환' WHEN 'OPENROUTER_API_URL' THEN '요약·챗봇·임베딩 전반' WHEN 'YOUTUBE_API_BASE' THEN '카드 추천·검색 불가' WHEN 'SUPABASE_URL' THEN '로그인 불가' WHEN 'GMAIL_SMTP_HOST' THEN '메일 발송 불가' ELSE '-' END AS \"불가 시 영향\",\n       COALESCE(s->>'alternative', '없음') AS \"대체 수단\",\n       s->>'detail' AS \"측정\",\n       COALESCE((SELECT max(sm.ts) FROM samples sm WHERE sm.env = s->>'env' AND sm.ok IS DISTINCT FROM cur.ok),\n                (SELECT min(ts) FROM samples)) AS \"현재 상태 시작\",\n       CASE WHEN (s->>'ok')::boolean THEN '' ELSE CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '맥미니: Tailscale 노드 키 만료 · claude 로그인 · transcript-svc' WHEN 'AZURE_TRANSCRIPT_URL' THEN 'Azure VM: tailnet 연결 · 프록시 서비스' WHEN 'MANDALA_GEN_URL' THEN '맥미니: Ollama(11434)' WHEN 'SNAPSHOT_SERVICE_URL' THEN '맥미니: 스냅샷 서비스(8077)' WHEN 'QWEN_LORA_API_URL' THEN 'RunPod 파드 상태' WHEN 'OPENROUTER_API_URL' THEN 'OpenRouter 상태 · 크레딧 잔액' WHEN 'YOUTUBE_API_BASE' THEN 'YouTube 일일 쿼터 · API 키' WHEN 'SUPABASE_URL' THEN 'Supabase 상태 · 프로젝트 일시중지 여부' WHEN 'GMAIL_SMTP_HOST' THEN 'SMTP 릴레이 설정' ELSE '-' END END AS \"먼저 볼 곳\"\n  FROM (SELECT context FROM error_events\n         WHERE subsystem='keel' AND stage='service-reachability'\n         ORDER BY created_at DESC LIMIT 1) e,\n       jsonb_array_elements(e.context->'services') s\n  JOIN cur ON cur.env = s->>'env'\n ORDER BY (s->>'ok')::boolean, 1"
+          "rawSql": "WITH samples AS (SELECT e.created_at AS ts, s->>'env' AS env, (s->>'ok')::boolean AS ok FROM error_events e, jsonb_array_elements(e.context->'services') s WHERE e.subsystem='keel' AND e.stage='service-reachability' AND e.created_at > now() - interval '120 days'),\ncur AS (SELECT DISTINCT ON (env) env, ok, ts FROM samples ORDER BY env, ts DESC)\nSELECT CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '자막 수집 (맥미니)' WHEN 'AZURE_TRANSCRIPT_URL' THEN '자막 수집 (Azure 보조)' WHEN 'MANDALA_GEN_URL' THEN '만다라 임베딩 (맥미니)' WHEN 'SNAPSHOT_SERVICE_URL' THEN '노트 figure 스냅샷' WHEN 'QWEN_LORA_API_URL' THEN '챗봇 (자체 호스팅)' WHEN 'OPENROUTER_API_URL' THEN 'LLM 호출 (OpenRouter)' WHEN 'YOUTUBE_API_BASE' THEN '영상 검색·메타데이터 (YouTube)' WHEN 'SUPABASE_URL' THEN '인증·Edge Function (Supabase)' WHEN 'GMAIL_SMTP_HOST' THEN '뉴스레터 발송 (Gmail)' ELSE s->>'feature' END AS \"기능\",\n       CASE\n         WHEN NOT (s->>'configured')::boolean THEN '미설정'\n         WHEN (s->>'ok')::boolean             THEN '가능'\n         WHEN s->>'alternative' IS NOT NULL   THEN '대체 경로로 가능'\n         ELSE '불가'\n       END AS \"상태\",\n       CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '새 영상의 자막·요약이 쌓이지 않음' WHEN 'AZURE_TRANSCRIPT_URL' THEN '맥미니 장애 때 대체 경로가 사라짐' WHEN 'MANDALA_GEN_URL' THEN '템플릿 추천·카드 매칭이 OpenRouter 로만 동작' WHEN 'SNAPSHOT_SERVICE_URL' THEN '노트 이미지 보강 중단' WHEN 'QWEN_LORA_API_URL' THEN '챗봇이 OpenRouter 로 전환' WHEN 'OPENROUTER_API_URL' THEN '요약·챗봇·임베딩 전반' WHEN 'YOUTUBE_API_BASE' THEN '카드 추천·검색 불가' WHEN 'SUPABASE_URL' THEN '로그인 불가' WHEN 'GMAIL_SMTP_HOST' THEN '메일 발송 불가' ELSE '-' END AS \"불가 시 영향\",\n       COALESCE(s->>'alternative', '없음') AS \"대체 수단\",\n       s->>'detail' AS \"측정\",\n       to_char(COALESCE((SELECT max(sm.ts) FROM samples sm WHERE sm.env = s->>'env' AND sm.ok IS DISTINCT FROM cur.ok),\n                (SELECT min(ts) FROM samples)) AT TIME ZONE 'Asia/Seoul', 'MM-DD HH24:MI') AS \"현재 상태 시작 (KST)\",\n       CASE WHEN (s->>'ok')::boolean THEN '-' ELSE CASE s->>'env' WHEN 'MAC_MINI_TRANSCRIPT_URL' THEN '맥미니: Tailscale 노드 키 만료 · claude 로그인 · transcript-svc' WHEN 'AZURE_TRANSCRIPT_URL' THEN 'Azure VM: tailnet 연결 · 프록시 서비스' WHEN 'MANDALA_GEN_URL' THEN '맥미니: Ollama(11434)' WHEN 'SNAPSHOT_SERVICE_URL' THEN '맥미니: 스냅샷 서비스(8077)' WHEN 'QWEN_LORA_API_URL' THEN 'RunPod 파드 상태' WHEN 'OPENROUTER_API_URL' THEN 'OpenRouter 상태 · 크레딧 잔액' WHEN 'YOUTUBE_API_BASE' THEN 'YouTube 일일 쿼터 · API 키' WHEN 'SUPABASE_URL' THEN 'Supabase 상태 · 프로젝트 일시중지 여부' WHEN 'GMAIL_SMTP_HOST' THEN 'SMTP 릴레이 설정' ELSE '-' END END AS \"먼저 볼 곳\"\n  FROM (SELECT context FROM error_events\n         WHERE subsystem='keel' AND stage='service-reachability'\n         ORDER BY created_at DESC LIMIT 1) e,\n       jsonb_array_elements(e.context->'services') s\n  JOIN cur ON cur.env = s->>'env'\n ORDER BY (s->>'ok')::boolean, 1"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "align": "left"
+            "align": "left",
+            "cellOptions": {
+              "type": "auto",
+              "wrapText": true
+            }
           },
           "noValue": "아직 측정되지 않았습니다 — Keel 이 한 번 돌면 채워집니다"
         },
@@ -288,7 +292,7 @@
         ]
       },
       "options": {
-        "cellHeight": "sm",
+        "cellHeight": "md",
         "showHeader": true
       }
     },
@@ -383,7 +387,8 @@
         "defaults": {
           "custom": {
             "cellOptions": {
-              "type": "auto"
+              "type": "auto",
+              "wrapText": true
             }
           }
         },
@@ -391,7 +396,7 @@
       },
       "options": {
         "showHeader": true,
-        "cellHeight": "sm"
+        "cellHeight": "md"
       },
       "targets": [
         {
