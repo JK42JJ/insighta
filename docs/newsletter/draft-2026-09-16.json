@@ -1,0 +1,408 @@
+{
+  "generatedAt": "2026-09-16T18:02:30.052Z",
+  "runId": "79956e3e-d99f-46b3-83ca-1d6b907809ee",
+  "categoryKey": "ai-tech",
+  "judge": "console",
+  "judgeProvenance": "docs/newsletter/verdicts-2026-09-15.jsonl",
+  "shortlist": 240,
+  "picks": [
+    {
+      "title": "Middleware for Managed Deep Agents",
+      "latin": true,
+      "meta": "LangChain · 82회",
+      "body": "[[EDITOR]]",
+      "videoId": "d6aNbE-3dxo",
+      "url": "https://www.youtube.com/watch?v=d6aNbE-3dxo",
+      "channelTitle": "LangChain",
+      "viewCount": 82,
+      "publishedAt": "2026-09-16T16:21:03Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "agent design or tooling, from practice — middleware for deep agents",
+      "independentChannels": 25
+    },
+    {
+      "title": "Connect AI to Billions of Legal Documents — Simon Eskildsen, turbopuffer & Jacob Lauritzen, Legora",
+      "latin": true,
+      "meta": "AI Engineer · 147회",
+      "body": "[[EDITOR]]",
+      "videoId": "V-isu4eTHgw",
+      "url": "https://www.youtube.com/watch?v=V-isu4eTHgw",
+      "channelTitle": "AI Engineer",
+      "viewCount": 147,
+      "publishedAt": "2026-09-16T16:00:19Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "inference, serving or model infrastructure — legal documents at scale, turbopuffer",
+      "independentChannels": 31
+    },
+    {
+      "title": "The vulnpocalypse might not be so bad after all",
+      "latin": true,
+      "meta": "IBM Technology · 6,684회",
+      "body": "[[EDITOR]]",
+      "videoId": "t8Y-eqZ5_-0",
+      "url": "https://www.youtube.com/watch?v=t8Y-eqZ5_-0",
+      "channelTitle": "IBM Technology",
+      "viewCount": 6684,
+      "publishedAt": "2026-09-16T10:00:32Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "security or safety of AI systems, with specifics — vulnerability disclosure at scale",
+      "independentChannels": 31
+    },
+    {
+      "title": "[한영자막] GitHub 1위 트렌딩 도구가 해결한 AI 에이전트의 치명적인 문제입니다",
+      "latin": false,
+      "meta": "Tech Bridge · 4,860회",
+      "body": "[[EDITOR]]",
+      "videoId": "VCQPCvN4uiA",
+      "url": "https://www.youtube.com/watch?v=VCQPCvN4uiA",
+      "channelTitle": "Tech Bridge",
+      "viewCount": 4860,
+      "publishedAt": "2026-09-14T22:00:16Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "agent design or tooling, from practice — GitHub trending tool for an agent problem",
+      "independentChannels": 19
+    },
+    {
+      "title": "BF16 vs NVFP4 with Nemotron 3.5 Lightning",
+      "latin": true,
+      "meta": "NVIDIA Developer · 7,573회",
+      "body": "[[EDITOR]]",
+      "videoId": "Mcwl--BdH3U",
+      "url": "https://www.youtube.com/watch?v=Mcwl--BdH3U",
+      "channelTitle": "NVIDIA Developer",
+      "viewCount": 7573,
+      "publishedAt": "2026-09-14T19:34:21Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "inference, serving or model infrastructure — BF16 versus NVFP4",
+      "independentChannels": 38
+    },
+    {
+      "title": "Why Your GPU Fails at 3 Users (LLM Inference Isn't a Compute Problem)",
+      "latin": true,
+      "meta": "DevOps & AI Toolkit · 3,411회",
+      "body": "[[EDITOR]]",
+      "videoId": "g_5g1hBmAzA",
+      "url": "https://www.youtube.com/watch?v=g_5g1hBmAzA",
+      "channelTitle": "DevOps & AI Toolkit",
+      "viewCount": 3411,
+      "publishedAt": "2026-09-14T16:00:36Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "inference, serving or model infrastructure — why a GPU fails at three users",
+      "independentChannels": 38
+    },
+    {
+      "title": "Agentic Engineering Benchmarks: How I RANK Astra, Fable 5.1, and Open-Weights",
+      "latin": true,
+      "meta": "IndyDevDan · 2.1만회",
+      "body": "[[EDITOR]]",
+      "videoId": "9weiIHy9T_0",
+      "url": "https://www.youtube.com/watch?v=9weiIHy9T_0",
+      "channelTitle": "IndyDevDan",
+      "viewCount": 20737,
+      "publishedAt": "2026-09-14T13:00:39Z",
+      "source": "trusted",
+      "judgedBy": "console",
+      "why": "measurement or evaluation with results — agentic engineering benchmarks with rankings",
+      "independentChannels": 34
+    }
+  ],
+  "candidateStories": [
+    {
+      "term": "serving-stack",
+      "independentChannels": 38,
+      "videos": [
+        "575v0WYJQsE",
+        "S6nKV2AP0cc",
+        "a8zQbgs7Ul8",
+        "1_RkcTO5jOA",
+        "iia8G9HFVww",
+        "NiZ3PM0lNTk",
+        "12UkcojWAwg",
+        "1HPNFF4gyq8"
+      ]
+    },
+    {
+      "term": "agent-harness",
+      "independentChannels": 34,
+      "videos": [
+        "7CHMb8jWs6A",
+        "wkec86Vnz_A",
+        "MBHOH1NmDqc",
+        "_qZ5PRgB8Ag",
+        "VLsL67UmPvs",
+        "yFq2SEfKZRE",
+        "SWEThyRHMgQ",
+        "-ad1DdYK9ck"
+      ]
+    },
+    {
+      "term": "inference",
+      "independentChannels": 32,
+      "videos": [
+        "575v0WYJQsE",
+        "S6nKV2AP0cc",
+        "7CHMb8jWs6A",
+        "iia8G9HFVww",
+        "NiZ3PM0lNTk",
+        "12UkcojWAwg",
+        "1HPNFF4gyq8",
+        "usjk-gdMgqM"
+      ]
+    },
+    {
+      "term": "multi-agent",
+      "independentChannels": 32,
+      "videos": [
+        "a8zQbgs7Ul8",
+        "glgxB__DDiM",
+        "Y-9ChZWD97U",
+        "2-6V21YJU7E",
+        "c49OYEhrzjI",
+        "yFq2SEfKZRE",
+        "KaOvpIHJq94",
+        "Mn87c9BcIAU"
+      ]
+    },
+    {
+      "term": "rag",
+      "independentChannels": 31,
+      "videos": [
+        "V-isu4eTHgw",
+        "S6nKV2AP0cc",
+        "fZH97QHHYjY",
+        "vPJNP_zyKkM",
+        "t8Y-eqZ5_-0",
+        "1_RkcTO5jOA",
+        "6k096_wfHCY",
+        "iia8G9HFVww"
+      ]
+    },
+    {
+      "term": "tool-calling",
+      "independentChannels": 25,
+      "videos": [
+        "d6aNbE-3dxo",
+        "O84lhGc1OOI",
+        "9yiRYrQAPv0",
+        "oOQ14fAtPxY",
+        "CbCJx7gBfa4",
+        "yHIugFyQDTY",
+        "MBHOH1NmDqc",
+        "Wik_JQ-enUA"
+      ]
+    },
+    {
+      "term": "local-inference",
+      "independentChannels": 24,
+      "videos": [
+        "575v0WYJQsE",
+        "iia8G9HFVww",
+        "NiZ3PM0lNTk",
+        "ROHgM8uV_8M",
+        "1HPNFF4gyq8",
+        "Wik_JQ-enUA",
+        "tSx26jgNyE0",
+        "qaUDHViUWac"
+      ]
+    },
+    {
+      "term": "quantization",
+      "independentChannels": 22,
+      "videos": [
+        "iia8G9HFVww",
+        "NiZ3PM0lNTk",
+        "ROHgM8uV_8M",
+        "Wik_JQ-enUA",
+        "-X3j7owtVEA",
+        "qaUDHViUWac",
+        "Mcwl--BdH3U",
+        "g_5g1hBmAzA"
+      ]
+    },
+    {
+      "term": "guardrails",
+      "independentChannels": 20,
+      "videos": [
+        "d6aNbE-3dxo",
+        "vPJNP_zyKkM",
+        "_qZ5PRgB8Ag",
+        "c49OYEhrzjI",
+        "JxmCyvF3FUs",
+        "Qtv3BbLyOfI",
+        "KaOvpIHJq94",
+        "F8EZJAm9iO8"
+      ]
+    },
+    {
+      "term": "pricing",
+      "independentChannels": 19,
+      "videos": [
+        "575v0WYJQsE",
+        "_gvamfT8H-w",
+        "iia8G9HFVww",
+        "NiZ3PM0lNTk",
+        "Zd5b40Jbp_k",
+        "_qZ5PRgB8Ag",
+        "on-d0ZuZxhA",
+        "12UkcojWAwg"
+      ]
+    },
+    {
+      "term": "kv-cache",
+      "independentChannels": 18,
+      "videos": [
+        "iia8G9HFVww",
+        "12UkcojWAwg",
+        "1HPNFF4gyq8",
+        "qaUDHViUWac",
+        "-ad1DdYK9ck",
+        "BrR427dfDkE",
+        "-q_u6nrVdgo",
+        "g_5g1hBmAzA"
+      ]
+    },
+    {
+      "term": "context",
+      "independentChannels": 17,
+      "videos": [
+        "fZH97QHHYjY",
+        "_qZ5PRgB8Ag",
+        "1HPNFF4gyq8",
+        "VLsL67UmPvs",
+        "yFq2SEfKZRE",
+        "a9vX7OzQrC8",
+        "VCQPCvN4uiA",
+        "-q_u6nrVdgo"
+      ]
+    },
+    {
+      "term": "model-release",
+      "independentChannels": 14,
+      "videos": [
+        "S6nKV2AP0cc",
+        "iia8G9HFVww",
+        "ULAKKFUZwHc",
+        "yFq2SEfKZRE",
+        "-ad1DdYK9ck",
+        "9dYcwOkpCE8",
+        "3AdW345Jskk",
+        "NfmTO4Hi7fQ"
+      ]
+    },
+    {
+      "term": "human-in-the-loop",
+      "independentChannels": 14,
+      "videos": [
+        "glgxB__DDiM",
+        "_qZ5PRgB8Ag",
+        "-_QWD52_piQ",
+        "c49OYEhrzjI",
+        "JxmCyvF3FUs",
+        "N8Smw22jjtE",
+        "cI7zfqusmFU",
+        "Kx3Lm2hR2JY"
+      ]
+    }
+  ],
+  "funnel": {
+    "quotaUnits": 13685,
+    "stages": [
+      {
+        "stage": "S0_harvest",
+        "itemsIn": 3680,
+        "itemsOut": 2889,
+        "dropReasons": {
+          "duplicate_video_id": 791
+        }
+      },
+      {
+        "stage": "S1_format",
+        "itemsIn": 2889,
+        "itemsOut": 1164,
+        "dropReasons": {
+          "short_or_under_4min": 1725
+        }
+      },
+      {
+        "stage": "S2_domain",
+        "itemsIn": 1164,
+        "itemsOut": 434,
+        "dropReasons": {
+          "channel_quota": 17,
+          "below_reach_floor": 693,
+          "title_not_ko_or_en": 19,
+          "outside_topic_window": 1
+        }
+      },
+      {
+        "stage": "S3_judge",
+        "itemsIn": 434,
+        "itemsOut": 240,
+        "dropReasons": {
+          "unsafe": 4,
+          "out_of_scope": 79,
+          "not_learnable": 111
+        }
+      },
+      {
+        "stage": "S4_deep",
+        "itemsIn": 240,
+        "itemsOut": 240,
+        "dropReasons": {}
+      },
+      {
+        "stage": "S5_cross",
+        "itemsIn": 240,
+        "itemsOut": 240,
+        "dropReasons": {}
+      }
+    ],
+    "buckets": [
+      {
+        "key": "form",
+        "count": 1725,
+        "label": "형식 미달"
+      },
+      {
+        "key": "rule",
+        "count": 924,
+        "label": "주제·판정 탈락"
+      },
+      {
+        "key": "solo",
+        "count": 55,
+        "label": "단일 출처"
+      },
+      {
+        "key": "cross",
+        "count": 185,
+        "label": "교차 확인"
+      }
+    ],
+    "harvested": 2889,
+    "reviewed": 434,
+    "shortlist": 240
+  },
+  "awaitingEditor": [
+    "headline",
+    "dek",
+    "runline",
+    "preview",
+    "interest.intro",
+    "interest.ledger",
+    "stories",
+    "stories[].navLabel",
+    "insight",
+    "vocabulary",
+    "picks[].body",
+    "next",
+    "mail",
+    "refs"
+  ]
+}
