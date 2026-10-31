@@ -71,11 +71,52 @@ export async function computeErrorSummary(start: Date, end: Date): Promise<Error
   const llmErrors = llmRows.reduce((s, r) => s + n(r.c), 0);
 
   // ── pg-boss failed jobs (generic — ALL queue handlers that threw) ──
-  const jobRows = await db.$queryRaw<{ k: string; c: bigint }[]>`
-    SELECT name AS k, count(*) AS c
-    FROM pgboss.job
-    WHERE state = 'failed' AND createdon >= ${start} AND createdon < ${end}
-    GROUP BY 1 ORDER BY 2 DESC`;
+  // `streak` = how many consecutive days ending at this window the job has
+  // failed on. Added 2026-08-24, after batch-video-collector-run failed twice a
+  // day for four days and appeared in four digests as a plain "n=2".
+  //
+  // Spike detection cannot see this: a constant 2/day never grows by
+  // SPIKE_FRAC, so it reads as background from the second day onward. The count
+  // was in every one of those emails and told the reader nothing, because
+  // "n=2" and "n=2, 4 days running" are different sentences and only the
+  // second one is actionable.
+  const jobRows = await db.$queryRaw<{ k: string; c: bigint; streak: bigint }[]>`
+    WITH win AS (
+      SELECT name AS k, count(*) AS c
+      FROM pgboss.job
+      WHERE state = 'failed' AND createdon >= ${start} AND createdon < ${end}
+      GROUP BY 1
+    ),
+    days AS (
+      -- One row per (job, day it failed on) over a bounded lookback, so the
+      -- streak query stays cheap and cannot walk the whole table.
+      SELECT DISTINCT name, (createdon AT TIME ZONE 'UTC')::date AS d
+      FROM pgboss.job
+      WHERE state = 'failed'
+        AND createdon >= ${start} - INTERVAL '30 days'
+        AND createdon < ${end}
+    ),
+    g AS (
+      -- Ordered newest-first the date decreases as the rank increases, so it is
+      -- the SUM that is constant across a consecutive run, not the difference.
+      -- Written as a subtraction first and caught by the test below: the real
+      -- four-day run came back as 1.
+      SELECT name, d,
+             d + (row_number() OVER (PARTITION BY name ORDER BY d DESC) * INTERVAL '1 day') AS grp
+      FROM days
+    ),
+    newest AS (SELECT name, max(d) AS nd FROM days GROUP BY name),
+    streaks AS (
+      -- Only the run anchored at the newest failure counts. An older run that
+      -- recovered must not be added to it.
+      SELECT g.name, count(*) AS len
+      FROM g JOIN newest ON newest.name = g.name
+      WHERE g.grp = newest.nd + INTERVAL '1 day'
+      GROUP BY g.name
+    )
+    SELECT win.k, win.c, COALESCE(streaks.len, 1) AS streak
+    FROM win LEFT JOIN streaks ON streaks.name = win.k
+    ORDER BY win.c DESC`;
   const jobsFailed = jobRows.reduce((s, r) => s + n(r.c), 0);
 
   // ── mandala generation + pipeline + wizard ──
@@ -129,7 +170,12 @@ export async function computeErrorSummary(start: Date, end: Date): Promise<Error
     llmErrors,
     llmBy: llmRows.slice(0, TOP_N).map((r) => ({ key: r.k, count: n(r.c) })),
     jobsFailed,
-    jobsBy: jobRows.slice(0, TOP_N).map((r) => ({ key: r.k, count: n(r.c) })),
+    jobsBy: jobRows.slice(0, TOP_N).map((r) => {
+      const streak = n(r.streak);
+      // Only say it when it is the point. A one-day failure reads as noise and
+      // should; a run of them is the thing the reader has to act on.
+      return { key: streak >= 2 ? `${r.k} (${streak}일 연속)` : r.k, count: n(r.c) };
+    }),
     mandalaCreateErrors: n(mc?.c),
     pipelineFailed: n(pl?.c),
     wizardFailed: n(wz?.c),
@@ -271,11 +317,38 @@ export async function sendErrorReport(
     return false;
   }
   try {
-    await transporter.sendMail({ from: config.gmail.smtpFrom, to, subject, html });
+    // The result was discarded until 2026-08-24, so the log said "emailed to X"
+    // whenever no exception was thrown -- a claim with no evidence behind it.
+    // With more than one recipient that gets worse: one address can be refused
+    // while the line still names both.
+    //
+    // accepted/rejected are per recipient; messageId is what makes a delivery
+    // traceable at the provider afterwards.
+    const info = (await transporter.sendMail({
+      from: config.gmail.smtpFrom,
+      to,
+      subject,
+      html,
+    })) as { accepted?: unknown[]; rejected?: unknown[]; messageId?: string };
+
+    const accepted = (info.accepted ?? []).map(String);
+    const rejected = (info.rejected ?? []).map(String);
+
     log.info(
-      `error digest emailed to ${to} (${metricDate}, total=${today.grandTotal}, spikes=${spikes.length})`
+      `error digest sent (${metricDate}, total=${today.grandTotal}, spikes=${spikes.length}) ` +
+        `accepted=[${accepted.join(' ')}] rejected=[${rejected.join(' ')}] id=${info.messageId ?? '-'}`
     );
-    return true;
+
+    if (rejected.length > 0) {
+      // The channel that reports failures has itself partially failed, and
+      // nothing else watches it. Say so at a level that stands out in the same
+      // logs the digest is built from.
+      log.warn(
+        `error digest REJECTED for ${rejected.length} recipient(s): ${rejected.join(' ')} ` +
+          `-- the alert channel is degraded, not the subsystems it reports on`
+      );
+    }
+    return accepted.length > 0;
   } catch (err) {
     log.warn(
       `error digest email failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`
