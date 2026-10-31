@@ -5,6 +5,7 @@
 import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopilotKit, useCopilotReadable, useCopilotChat } from '@copilotkit/react-core';
+import { ProxiedCopilotRuntimeAgent } from '@copilotkit/core';
 import { CopilotChat } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
 import { toast } from 'sonner';
@@ -541,9 +542,71 @@ export function ChatAssistant({ mandalaId, videoId, onSeek }: ChatAssistantProps
   const token = apiClient.getAccessToken();
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
+  // Issue #733 Option (1) — explicit self-managed agent registry.
+  //
+  // Root cause we are addressing (verified via lib source, no guesses):
+  //   1. BE `copilotRuntimeNodeHttpEndpoint` is single-route only
+  //      (lib/integrations/node-http/index.ts:49 → createCopilotEndpointSingleRoute).
+  //   2. When `selfManagedAgents` is absent, FE's `_agents` map stays `{}`
+  //      until `fetchRuntimeInfo()` resolves; meanwhile every render of
+  //      `useCopilotChat` / `use-render-custom-messages` / `useAgent` hits
+  //      `core/dist/index.cjs:911 getAgent → if (id in _agents) {}` empty →
+  //      fires `console.warn(\`Agent default not found\`)` 600+ times per
+  //      page-load (the "warning storm" seen since CP477+8 / Issue #733).
+  //   3. After fetchRuntimeInfo resolves, lib auto-creates
+  //      `remoteAgents.default = new ProxiedCopilotRuntimeAgent({...,
+  //      transport: _runtimeTransport})` (core/index.cjs:966-981) and merges
+  //      it as `_agents = {...localAgents, ...remoteAgents}` (later spread
+  //      wins). At THAT point chat works normally. The storm is purely the
+  //      mount→fetch race window.
+  //
+  // Fix mechanism:
+  //   - Inject the SAME class lib creates at runtime
+  //     (`ProxiedCopilotRuntimeAgent`) into `localAgents` synchronously at
+  //     mount time. Provider's `useMemo({...agents, ...selfManagedAgents})`
+  //     (CopilotKitProvider.tsx:386-389) inlines it into the
+  //     `CopilotKitCoreReact` constructor's `agents__unsafe_dev_only` (line
+  //     548), which `AgentRegistry.initialize` sets as `localAgents` AND
+  //     `_agents` at construction (core/index.cjs:848-850). So `_agents.default`
+  //     is populated on the very first render → `getAgent("default")` always
+  //     hits → zero warns.
+  //
+  //   - Set `transport: 'single'` explicitly (matches our BE's single-route
+  //     endpoint). ProxiedCopilotRuntimeAgent's constructor (core/index.cjs:512)
+  //     reads transport: single → fetch URL = runtimeUrl (no /agent/:id/run
+  //     suffix) + body = `{method:"agent/run", params:{...}}` envelope. This
+  //     is exactly what `single-route-helpers.ts:validateMethod` accepts, so
+  //     even the first send before fetchRuntimeInfo resolves goes to BE 200.
+  //
+  //   - `useSingleEndpoint={true}` on the Provider tells the lib to skip
+  //     `fetchRuntimeInfoAutoDetect`'s GET /info probe (which returns 405 on
+  //     our BE) and go straight to single-route POST root — eliminates a
+  //     red console error per mount.
+  //
+  // Why this is the canonical fix and not a workaround: we inject the EXACT
+  // class lib would have created itself once fetchRuntimeInfo resolved,
+  // simply moved earlier in the lifecycle. After fetch resolves, the
+  // remoteAgents.default override (line 980) lands and merges cleanly with
+  // localAgents (identical class, identical transport). No protocol
+  // mismatch is possible because there's only one transport in play
+  // (single) at every point of the lifecycle.
+  const agents = useMemo(
+    () => ({
+      default: new ProxiedCopilotRuntimeAgent({
+        runtimeUrl: '/api/v1/chat',
+        agentId: 'default',
+        transport: 'single',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      }),
+    }),
+    [token]
+  );
+
   return (
     <CopilotKit
       runtimeUrl="/api/v1/chat"
+      useSingleEndpoint={true}
+      selfManagedAgents={agents}
       showDevConsole={false}
       enableInspector={false}
       headers={headers}
