@@ -1,0 +1,27 @@
+# Reference tables copied from prod into staging (scripts/ops/sync-stg-reference.sh).
+#
+# The application reads these on every run and some of them gate the first write:
+# creating a mandala inserts a graph node whose type must exist in
+# ontology.object_types, so a staging built from structure alone refuses it with a
+# foreign-key error (found 2026-10-29). Every table here must also be in
+# stg-keep-tables.txt, otherwise the next clean would empty what this copied.
+#
+# One `schema.table  [null:col,col]  # reason` per line. Parents come before the
+# tables that reference them; the copy deletes in reverse order. `null:` lists
+# columns written as NULL on staging because they point at prod-only rows.
+# Only tables that hold no user data belong here.
+
+ontology.object_types              # graph vocabulary
+ontology.relation_types            # graph vocabulary
+ontology.action_types              # graph vocabulary
+public.system_settings             null:updated_by  # runtime configuration; updated_by points at a prod user
+public.app_notices                 # in-app notices
+public.search_algorithm_versions   null:created_by  # catalog the search traces point at
+public.nl_domain                   # brief domains
+public.nl_gate_spec                # brief gate definitions
+public.source_creator              # known creators (before channel_identity, which references it)
+public.channel_identity            # known channels
+public.channel_blocklist           # channels excluded from recommendations
+public.newsletter_trusted_channels # trusted channel list for the brief
+public.scoring_weights             # recommendation scoring weights
+public.chatbot_settings            null:updated_by  # chatbot model names; updated_by points at a prod user

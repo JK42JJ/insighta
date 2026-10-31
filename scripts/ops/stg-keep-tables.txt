@@ -1,0 +1,49 @@
+# Tables whose rows survive a staging data clean (scripts/ops/clean-stg-data.sh).
+# Every other table in public, ontology and slidegen is emptied.
+#
+# One `schema.table   # reason` per line, and the reason is required. A table that
+# is not listed is cleared, so a new table starts out as test data until someone
+# decides it is not: the failure to avoid is test data piling up, and the cost of
+# a wrong "clear" is a reseed on staging, never a loss on prod.
+#
+# Rule of thumb. Keep what the application reads on every run and what is costly
+# to regenerate. Clear what a test session produces. The test account itself
+# lives in the auth schema, which the clean never touches.
+
+# --- configuration and reference rows (read on every run; also seeded by custom SQL)
+public.system_settings              # runtime configuration
+public.app_notices                  # in-app notices
+public.search_algorithm_versions    # catalog the search traces point at
+public.nl_domain                    # brief domains
+public.nl_gate_spec                 # brief gate definitions
+public.source_creator               # known creators
+public.channel_identity             # known channels
+public.channel_blocklist            # channels excluded from recommendations
+public.newsletter_trusted_channels  # trusted channel list for the brief
+public.scoring_weights              # recommendation scoring weights
+public.chatbot_settings             # chatbot configuration
+ontology.object_types               # graph vocabulary
+ontology.relation_types             # graph vocabulary
+ontology.action_types               # graph vocabulary
+
+# --- shared content (owned by no user; costly to regenerate)
+public.video_pool                   # candidate videos recommendations draw from
+public.video_pool_domain_tags       # domain labels of the pool
+public.video_pool_embeddings        # pool embeddings
+public.video_pool_collection_runs   # collection history of the pool
+public.youtube_videos               # video metadata cache
+public.youtube_channels             # channel metadata cache
+public.video_summaries              # generated summaries (LLM cost to redo)
+public.video_rich_summaries         # generated rich summaries (LLM cost to redo)
+public.video_captions               # transcripts (proxy bandwidth to redo)
+public.video_chunk_embeddings       # transcript chunk embeddings
+public.video_figure_snapshots       # extracted figures
+public.trend_signals                # collected trend corpus
+
+# --- the test account's own settings (account configuration, not activity)
+public.user_subscriptions           # plan of the account
+public.user_ui_preferences          # UI preferences
+public.youtube_sync_settings        # sync configuration
+public.user_llm_keys                # per-account keys
+public.credentials                  # per-account OAuth credentials
+public.billing_subscriptions        # billing state of the account

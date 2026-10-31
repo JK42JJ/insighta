@@ -1,6 +1,6 @@
 # Insighta — Project Rules
 
-규칙은 한 줄씩. 근거 사고와 집행 장치는 `docs/ops/rules-ledger.md`(R01~R31). 작업 방식은 `docs/ops/working-method-2026-09-11.md`. 제품의 기록은 `docs/spec/README.md`(공개 리포 제외 · 원본 = 기본 체크아웃 `/Users/jeonhokim/cursor/insighta/docs/spec/` · 백업 = `insighta-private/docs/spec/`). 작업 단위는 `docs/work-orders/`.
+규칙은 한 줄씩. 근거 사고와 집행 장치는 `docs/ops/rules-ledger.md`(R01~R33). 작업 방식은 `docs/ops/working-method-2026-09-11.md`. 제품의 기록은 `docs/spec/README.md`(공개 리포 제외 · 원본 = 기본 체크아웃 `/Users/jeonhokim/cursor/insighta/docs/spec/` · 백업 = `insighta-private/docs/spec/`). 작업 단위는 `docs/work-orders/`.
 
 ## 세션 시작
 
@@ -45,6 +45,8 @@
 - R28 새 admin 라우트는 `authenticate + authenticateAdmin`, 머지 전 무인증 401.
 - R29 커밋 · PR 본문은 영문(`grep -P "[가-힣]"` = empty). 파일 안 UI · 문서는 한글 가능.
 - R31 PR 머지는 `bash scripts/ops/merge-green.sh <PR>` 로만 — 현재 head 의 검사 전부 초록을 읽은 뒤 머지, 빨간 채 머지 금지.
+- R32 시장 검증 전 추가 비용 금지. 유료 옵션은 권고하지 않고 $0 대안을 먼저 낸다.
+- R33 prod 반영은 stg 검증 후 James 승인으로만. 현재 배포 대상 머지는 prod 스키마 · Edge Function 을 즉시 바꾼다(`promote.yml` 전까지) — 상세 `docs/ops/staging.md`.
 
 ## 리포 사실
 
@@ -52,5 +54,6 @@
 - ALTER 직후 PostgREST 스키마 리로드(로컬 `NOTIFY pgrst`; prod 대시보드).
 - 새 컬럼은 write path 전수 검토(`grep -n "\.from('<table>')"`).
 - service 도메인(mandala · resource · note · insight) ≠ system 도메인(pattern · decision · problem). Bot 은 service 만.
+- stg(stg.insighta.one): 구성 · 의도적 차이 · 절차 · 함정은 `docs/ops/staging.md`. 사용자에게 사용 경로를 안내하기 전에 실제로 실행해 확인한다(R13).
 - 삭제 금지: `scripts/agent-dashboard.sh` · `scripts/ops-dashboard.sh` · `.claude/**` · `prompt/**` · `docs/**/*.md` · `terraform/README.md` · `tests/README.md` · `tests/RESULTS_TEMPLATE.md` · `tests/manual/README.md`.
 - 컨벤션 상세: `docs/CODING_CONVENTIONS.md`. 3단계 이상 상대 import 금지(`@/`). 컴포넌트 삭제 대신 `-legacy/` + `@deprecated`.
