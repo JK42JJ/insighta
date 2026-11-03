@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const ALLOWED_ORIGINS = [
   'https://insighta.one',
   'https://www.insighta.one',
+  'https://stg.insighta.one',
   'http://localhost:8081',
   'http://localhost:5173',
 ];
