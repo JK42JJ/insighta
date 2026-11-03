@@ -124,6 +124,29 @@ promote (workflow_dispatch, 입력 sha, reason)
 - 스키마: 추가형만 허용하는 가드(P1) 이후에는 코드 롤백이 스키마 롤백 없이 가능하다. P1 전에는 스키마 변경 PR 을 James 가 개별 확인한다.
 - P5: 삭제 전까지만 가능(일시정지 재개). 삭제 후에는 export 로 새 프로젝트 생성.
 
+# P0 결과 (읽기 전용 실측, 2026-11-03)
+
+클러스터 Secret 은 키 이름과 짧은 해시 비교만 사용했고 값은 출력하지 않았다.
+
+| 항목 | 실측 | 설계에 미치는 영향 |
+|---|---|---|
+| stg 와 prod 의 DB 대상 | `DATABASE_URL`, `DIRECT_URL` 해시가 서로 다름(`c3ef1b5e` 대 `f4e70e9a`). stg 내부에서 두 값은 같음 | 두 프로젝트가 구분된다. 삭제 사전 확인 1(식별)이 해시 대조로 가능함이 입증됨 |
+| 인증 엔드포인트 | `SUPABASE_URL` 호스트 해시도 서로 다름(`c4f56d9a` 대 `e3f96979`). stg 는 자체 인증 프로젝트 | B 가 prod DB 를 쓰려면 `DATABASE_URL`, `DIRECT_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` 5개를 prod 값으로 바꿔야 한다(인증 프로젝트와 DB 는 한 쌍). 나머지 130개 키는 그대로 둔다 |
+| stg Secret | `insighta-env` 한 개, 키 135개. `OPENROUTER_API_KEY` 가 있고 메일 발송 키는 없음 | 재배선 시 prod Secret 을 통째로 복사하지 않는다(메일 키가 B 에 생기면 B 에서 실제 메일이 나갈 수 있음). 위 5개만 교체 |
+| stg api | `RUN_QUEUE_WORKERS=false`, `RUN_SCHEDULERS=false`, replicas 1 | 목표 구조와 이미 일치 |
+| stg worker | replicas 0 이지만 환경값은 `RUN_QUEUE_WORKERS=true`, `RUN_SCHEDULERS=true` | 누군가 1 로 올리면 prod DB 의 큐와 스케줄러를 가져간다. 재배선 시 `worker.enabled: false` 로 아예 만들지 않는다 |
+| stg 프런트 이미지 | 별도 빌드(`stg-<sha>`). `VITE_SUPABASE_URL` 에 `vars.STG_SUPABASE_URL`, 키에 `STG_SUPABASE_ANON_KEY` 가 박힘 | 재배선하면 B 는 prod 빌드와 같은 번들(prod 인증 값)을 써야 한다. stg 전용 프런트 빌드 단계를 제거하고 prod 빌드 이미지를 B 에 쓴다. prod 프런트 빌드가 `staging_only` 에서 제외돼 있으므로 P3 에서 조건 정리 |
+| B 접근 제한 수단 | 가입 모드(`open`/`invite_only`/`closed`)는 있으나 **서비스 전체 설정이라 B 만 따로 제한할 수 없음** | 인그레스 단계의 제한을 쓴다(아래) |
+| 인증 리다이렉트 허용 목록 | 저장소에 없음. prod 인증 프로젝트의 콘솔 설정 | `stg.insighta.one` 등록 여부는 James 확인 필요(콘솔 작업) |
+
+## B 접근 제한 방식 (결정 4 확정)
+
+인그레스 어노테이션으로 `stg.insighta.one` 에 접근 제한을 건다(코드 변경 없음, 추가 비용 없음). 후보는 기본 인증(Secret 한 개)이며, 소스 IP 허용은 James 의 접속 위치가 바뀌므로 제외한다. 가입 모드 설정은 prod 사용자에게도 영향을 주므로 쓰지 않는다.
+
+## B 의 비용 소모
+
+B 의 api 는 `OPENROUTER_API_KEY` 와 YouTube 쿼터를 prod 와 같은 키로 쓰고, 만다라 생성은 api 안에서 인라인으로 돈다(`PIPELINE_DURABLE_ENABLED=false`). 내부 계정만 접근하더라도 B 에서의 시험은 실제 LLM 비용과 쿼터를 쓴다. 시험 횟수를 제한한다. B 의 `OPENROUTER_API_KEY` 를 제거해 LLM 호출을 막는 선택지도 있으나 그러면 만다라 생성을 B 에서 시험할 수 없다(P2 에서 결정).
+
 # 결정 사항 (James 위임, 2026-11-03: "취지에 맞게 알아서 판단/결정")
 
 취지: prod 를 보호하면서 stg(B)에서 실제 데이터로 먼저 검증하고, 추가 비용 없이, 승인 없이는 prod 가 변하지 않게 한다.
