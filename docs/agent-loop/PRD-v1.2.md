@@ -17,6 +17,7 @@
 | Q10 | M1–M9 정의 문서는 별도 제공. 그 전까지 M1–M9 관련 FR 보류 | §2 보류 목록 |
 | Q1 | 별도 답변 | **이 세션에서는 수신하지 못했다.** 전달 받으면 `program.md` 에 반영. 그 전까지 STRAT-5(지표가 비면 추천 변경 과제 금지)가 적용된다 |
 | 확인 | public repo 는 Environments required reviewers 사용 가능 | v1.1 의 "미검증" 해소 |
+| 승인 경로 | 승인 주체는 GitHub(`Production` required reviewer = James). Slack 은 GitHub 공식 앱의 알림 + 인플레이스 승인만. 채널 2개 | §8, `slack-approval-setup.md`. Slack 워크스페이스와 앱 연결은 James |
 
 ## 2. 트랙 A 범위 변경
 
@@ -99,9 +100,34 @@
 | Q17 | 문서 · 차트만 바뀐 커밋처럼 E2E 가 건너뛰어진 sha 를 promote 해도 되나, 항상 가장 최근 초록 sha 만 허용하나 | PR-A gate |
 | Q18 | `Production` 과 `production` 환경 이름 불일치는 의도인가 | PR-B |
 | Q19 | WO-11-03 P2(DB 한 벌) 전에 스키마가 바뀐 sha 를 promote 할 수 있나 (stg E2E 가 아직 prod DB 가 아닌 stg DB 로 돎) | PR-D |
+| Q20 | Slack 버튼으로 누른 승인이 노드 증설 규칙의 "Slack 승인 요청 후 James 의 명시 승인"(2026-11-03)을 충족하는 것으로 보나 | 노드 증설 경로 |
+| Q21 | Keel 알림과 GitHub 앱 알림처럼 수신자가 James 본인뿐인 자동 인프라 알림은 R02("알림 발송은 명시 지시 후")의 대상이 아닌 것으로 보나 | M3 알림 채널 |
 | 확인 | Q8 의 "Max 포함 월 $100" 크레딧의 정확한 범위 | R01 개정 문구 |
 
 ## 7. 승인 요청
 
 - 이 문서 PR 머지(문서만).
 - PR-A 착수(스텁 워크플로, 가역). PR-B · D · E 는 James 작업 또는 머지.
+
+## 8. 승인 채널
+
+원칙: **승인 주체는 GitHub, Slack 은 알림과 인플레이스 승인 버튼만.** 승인 권한은 `Production` 환경의 required reviewer(James)이며, Slack 의 버튼은 같은 권한을 호출하는 입구다. Slack 이 없어도 GitHub Actions 화면에서 같은 대기 건을 승인할 수 있다. 설정 절차와 구독 명령은 `slack-approval-setup.md`.
+
+| 채널 | 멤버 | 용도 |
+|---|---|---|
+| `#insighta-approvals` (비공개) | James, GitHub 앱만. **helpdesk 미참여** | 배포 검토 요청과 승인 · 거절 |
+| `#insighta-agent` | James, helpdesk, Keel 알림, GitHub 앱 | helpdesk 응답, 일일 스크럼, 알림, `risk:human` PR 링크 |
+
+**승인 대상**: `promote`, terraform apply(별도 dispatch), 노드 증설. 셋 다 `Production` 환경 대기를 거친다. 노드 증설은 terraform 변경 후 apply 로 반영된다고 추정하며(미확인) PR-E 설계에서 확인한다.
+
+**`risk:human` 과제**: Slack 에는 PR 링크만 보낸다(`#insighta-agent`). 승인은 GitHub PR 리뷰다. Slack 버튼은 없다.
+
+**권한 경계**
+- helpdesk 에는 승인 · dispatch 권한도 도구도 주지 않는다(FR-HELP-2 의 3개 도구 유지).
+- 에이전트 GitHub App 에는 `actions: write` · `administration` · `workflows` 를 주지 않는다. 에이전트는 `promote` 를 시작할 수 없다.
+- 에이전트가 작성한 PR 제목 · 본문이 Slack 에 노출되므로, 승인 판단은 GitHub 의 diff 와 gate 결과로 한다.
+- "Prevent self-review" 는 끈 채로 유지한다(James 가 dispatch 와 승인을 모두 하는 구조).
+
+**성립 조건**: repo 가 public 이다(Environments required reviewers). private 전환 시 대안은 한 줄 — promote 승인을 James 만 머지할 수 있는 prod 태그 고정 PR 의 머지로 옮기고 Slack 은 PR 알림만 맡는다(private 의 required reviewers 는 유료 플랜이라는 점은 GitHub 문서 기준 지식, 미검증).
+
+**영향**: M3 의 "알림 채널 해결"(X8)이 이 구조로 해소된다. Slack 이 생기면 노드 증설의 "Slack 승인" 선행조건이 충족된다. FR-HELP 는 v1.1 에서 "반대"였으나 Slack 이 생기면 재검토 조건 중 하나가 충족된다 — 트랙 B(Q8 머지 후)에서 판단한다.
