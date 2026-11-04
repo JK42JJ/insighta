@@ -124,7 +124,7 @@ function gate(sha: string) {
     encoding: 'utf-8',
     env: {
       ...process.env,
-      PATH: `${join(dir, 'bin')}:${process.env.PATH}`,
+      PATH: `${join(dir, 'bin')}:${process.env['PATH']}`,
       GATE_MAIN_REF: 'main',
       GATE_REPO: 'owner/name',
       GITHUB_STEP_SUMMARY: join(dir, 'summary.md'),
@@ -205,7 +205,7 @@ describe('promote-gate.sh', () => {
 
   it.each([
     ['not hex', 'zzzz'],
-    ['too short', onMainPrefix()],
+    ['too short', 'abc1234'],
     ['empty', ''],
     ['uppercase', 'A'.repeat(40)],
     ['option-shaped', '--help'],
@@ -230,10 +230,6 @@ describe('promote-gate.sh', () => {
   });
 });
 
-function onMainPrefix(): string {
-  return 'abc123';
-}
-
 // ---------------------------------------------------------------------------
 // Workflow file: the properties that keep the skeleton harmless.
 // ---------------------------------------------------------------------------
@@ -257,6 +253,12 @@ const wf = yaml.load(text) as {
   concurrency: { group: string; 'cancel-in-progress': boolean };
   jobs: Record<string, WfJob>;
 };
+
+function wfJob(name: string): WfJob {
+  const job = wf.jobs[name];
+  if (!job) throw new Error(`promote.yml has no job '${name}'`);
+  return job;
+}
 
 describe('promote.yml', () => {
   it('is dispatched by hand only', () => {
@@ -287,9 +289,9 @@ describe('promote.yml', () => {
   });
 
   it('keeps every expression out of run: bodies', () => {
-    for (const [name, job] of Object.entries(wf.jobs)) {
+    for (const job of Object.values(wf.jobs)) {
       for (const step of job.steps) {
-        if (step.run) expect([name, step.run]).not.toEqual([name, expect.stringContaining('${{')]);
+        if (step.run) expect(step.run).not.toContain('${{');
       }
     }
   });
@@ -300,17 +302,18 @@ describe('promote.yml', () => {
   });
 
   it('runs the gate only from main, then waits on the Production environment', () => {
-    expect(wf.jobs.gate.if).toBe("github.ref == 'refs/heads/main'");
-    expect(wf.jobs.approve.needs).toEqual(['gate']);
-    expect(wf.jobs.approve.environment).toBe('Production');
+    expect(wfJob('gate').if).toBe("github.ref == 'refs/heads/main'");
+    expect(wfJob('approve').needs).toEqual(['gate']);
+    expect(wfJob('approve').environment).toBe('Production');
   });
 
   it.each(['migrate', 'edge', 'pin-images'])('%s is an approval-gated echo stub', (name) => {
-    const job = wf.jobs[name];
+    const job = wfJob(name);
     expect(job.needs).toEqual(['approve']);
     expect(job.environment).toBeUndefined();
     expect(job.steps).toHaveLength(1);
-    expect(job.steps[0].uses).toBeUndefined();
-    expect(job.steps[0].run).toMatch(/^echo "STUB: would /);
+    const step = job.steps[0];
+    expect(step?.uses).toBeUndefined();
+    expect(step?.run).toMatch(/^echo "STUB: would /);
   });
 });
