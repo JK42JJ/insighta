@@ -49,7 +49,12 @@ api:
 # in staging unless the worker is scaled up for a verification run.
 worker:
   enabled: true
-  replicaCount: 0
+  # Drains the queue: a card opened by a user enqueues its summary, and without a
+  # worker that job stays "created" for ever. Schedulers stay off so that nothing
+  # runs on a timer unattended; the creation-time summary chain is stopped by
+  # V2_AUTO_ENRICH_ENABLED=false in the staging Secret (build-stg-secret.py).
+  replicaCount: 1
+  runSchedulers: false
   resources:
     requests:
       memory: 128Mi

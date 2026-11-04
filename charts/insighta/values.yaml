@@ -147,6 +147,10 @@ worker:
   enabled: true
   replicaCount: 1
   port: 3001
+  # Whether this process runs the in-process cron schedulers. true = shipped
+  # behaviour. An environment that drains the queue but must not run anything on a
+  # schedule sets it to false.
+  runSchedulers: true
   resources:
     requests:
       memory: 256Mi

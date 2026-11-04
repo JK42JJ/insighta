@@ -78,7 +78,7 @@ spec:
             - name: RUN_QUEUE_WORKERS
               value: "true"
             - name: RUN_SCHEDULERS
-              value: "true"
+              value: {{ .Values.worker.runSchedulers | quote }}
             - name: PLAYLIST_SYNC_VIA_QUEUE
               value: {{ .Values.statelessness.playlistSyncViaQueue | quote }}
             - name: ONTOLOGY_CHAT_DB_STORE
