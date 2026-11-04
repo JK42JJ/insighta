@@ -4,6 +4,7 @@
 - 전제: 파이프라인 변경(PR-B~E)이 출시 뒤이므로 **main 머지는 즉시 prod 에 DB 마이그레이션과 Edge Function 배포를 일으킨다**(`deploy.yml` 의 `migrate`, `deploy-edge-functions`). 이미지는 봇이 만든 핀 PR 을 James 가 머지할 때 배포된다. 이 사실이 이 체크리스트의 순서를 정한다.
 - 규칙: R02(메일은 James 의 "보내" 후에만), R04(SSH 는 `scripts/ops/ssh.sh` 로만), R06(로컬 → prod), R31(`merge-green.sh` 로만 머지), R32(노드 증설 금지, 승인 전), "Done = Prod Verified".
 - 표기: ☐ 미완, 괄호는 근거 문서.
+- **일정 변경(2026-11-04 결정)**: SCH-1(스키마, additive-only)은 일요일이 아니라 **금~토에 백업 · 복원 증명 후 먼저 머지하고 하루 관찰**한다(N 절). 그래서 일요일에는 새 DDL 이 없다. 하네스 §0.1 의 출시 체크리스트 대응은 O 절.
 
 ## A. 일요일 오전: 스프린트 결과 점검 (James, 약 30분)
 
@@ -14,15 +15,16 @@
 
 ## B. 사전 확인 (James, 약 30분)
 
-- ☐ **백업 (BAK-1)**: `gh workflow run backup.yml` → `gh run watch` → 성공 확인. S3 객체 시각 · 크기 확인(`aws s3 ls s3://insighta-backups/db/...`)
-- ☐ **복원 증명 (BAK-2)**: `gh workflow run restore-drill.yml -f key=<방금 키>` → 로그 `[drill]` 에서 불일치 0
+- ☐ **백업 (BAK-1)**: SCH-1 머지 전(금~토)에 이미 실행했는지 확인(N 절). 일요일에는 가장 최근 백업의 시각 · 크기만 확인한다(`aws s3 ls s3://insighta-backups/db/...`). 일요일 머지에 데이터 변경이 없으면 재백업은 선택
+- ☐ **복원 증명 (BAK-2)**: 금~토에 SCH-1 머지 전 증명한 결과(`[drill]` 불일치 0)가 기록돼 있는지 확인
 - ☐ **플랜 · 용량 (BAK-4)**: Supabase 콘솔에서 플랜, DB 크기, Backups 탭 기록. `auth.users` 는 `pg_dump --schema=public` 백업에 없으므로 Supabase 쪽 백업 유무를 적어 둔다
 - ☐ prod 에 `recommendation_feedback` 이 실제로 있는지 확인(`\d recommendation_feedback`). 없으면 SCH-1 에 `CREATE TABLE IF NOT EXISTS` 가 있는지 확인
 - ☐ 롤백 좌표 기록: 현재 prod `apiTag`/`frontendTag`(`charts/insighta/environments/prod.yaml`) 와 직전 정상 sha (R20)
+- ☐ **PR-B 조건 확인 (James 결정)**: 출시할 PR 전부에서 `terraform/**` 변경이 없는지 확인한다. 각 PR 에 대해 `gh pr diff <번호> --name-only` 결과에 `terraform/` 로 시작하는 줄이 **없으면** PR-B(`Production` 환경 required reviewer, "Prevent self-review" 는 끔)를 **출시 전에 적용**한다. 하나라도 있으면 출시 후. 적용 효과는 terraform apply 와 promote 스텁 승인 대기뿐이며 `deploy.yml` 의 prod 잡은 여전히 승인 없이 돈다(README §7)
 
 ## C. DDL 검토와 로컬 검증 (James + CC)
 
-R06 순서: 로컬 → prod. 출시 DDL 은 한 PR(SCH-1)이다.
+R06 순서: 로컬 → prod. 출시 DDL 은 한 PR(SCH-1)이며 **금~토에 이미 머지 · 관찰한다(N 절)**. 이 절의 항목은 N 절에서 수행하고, 일요일에는 결과만 확인한다.
 
 - ☐ 로컬에서 적용: `psql "$LOCAL_DATABASE_URL" -f prisma/migrations/recommendation-provenance/001_*.sql` (2회), `prisma/migrations/feature-flags/001_*.sql` (2회)
 - ☐ `\d user_video_states`, `\d user_feature_flags` 로 컬럼 직접 확인 (**`prisma db push` silent fail 점검**)
@@ -42,8 +44,8 @@ R06 순서: 로컬 → prod. 출시 DDL 은 한 PR(SCH-1)이다.
 
 | 순서 | PR | 이유 |
 |---|---|---|
-| 1 | SCH-1 (DDL만) | 이후 코드가 새 컬럼 · 테이블을 쓰므로 먼저. 머지 즉시 prod 에 적용된다 |
-| 2 | (DDL 확인 후) PostgREST 스키마 재적재 | ALTER 직후 필수 (Supabase 대시보드 → Settings → API → Reload schema). 안 하면 새 컬럼이 조용히 누락될 수 있다 |
+| 1 | (SCH-1 은 이미 머지됨 — N 절) | 일요일에는 새 DDL 이 없다. 하루 관찰 결과만 확인 |
+| 2 | (SCH-1 머지 직후 이미 수행) PostgREST 스키마 재적재 | 확인만 |
 | 3 | FLG-2, FLG-3 (플래그 모듈 · 라우트) | 전역 env 스위치 기본값 = 꺼짐 |
 | 4 | PRV-2, FB-1 (출처 기록 · 피드백 라우트) | 사용자에게 보이지 않는 변경 |
 | 5 | ERR-1, ERR-2 (5xx 저장 · 클라이언트 에러 수집) | 출시 직전에 관측 경로를 먼저 가동 |
@@ -71,10 +73,12 @@ R06 순서: 로컬 → prod. 출시 DDL 은 한 PR(SCH-1)이다.
 
 ## H. 출시 구성 (James)
 
-- ☐ 가입 모드 설정: 관리자 화면 `AdminBetaCampaign` 에서 `beta_signup_mode=invite_only` (기본값은 `open`이므로 **반드시 확인**). INV-1 설정안을 쓰는 경우 Supabase 대시보드의 신규 가입 비활성화도 확인
+- ☐ 가입 모드 설정: 관리자 화면 `AdminBetaCampaign` 에서 `beta_signup_mode=invite_only` (기본값은 `open`이므로 **반드시 확인**). 출시는 INV-0(설정만)으로 시작하므로 Supabase 대시보드의 **신규 가입 비활성화** 상태도 확인한다(금요일 시험 5b 의 결과가 근거)
 - ☐ 초대 대상자 승인: 신청자 `invited` 처리. **초대 이메일 발송은 James 가 직접 실행**(R02). CC 는 발송하지 않는다
 - ☐ 초대 사용자의 플래그 활성화 (FLG-5 가 없으면 관리자 SQL/루트로 `user_feature_flags` 행 추가 — James/로컬 세션)
-- ☐ 등급 결정(INV-4): 초대 사용자에게 `pro` 를 줄지
+- ☐ **초대 사용자에게 `pro` 30일 부여 (INV-4, 결정됨)**: 부여 후 `user_subscriptions.tier` 와 `tier_expires_at`(=부여일+30일)이 기록됐는지 읽기 전용 SELECT 로 확인. 만료 예정일을 James 가 캘린더에 등록(자동 강등은 하지 않음 — INV-4a 결정 전 기본값)
+- ☐ **사용자 안내문과 피드백 경로 (OPS-2)**: 안내문에 피드백 받을 곳을 적는다. 발송은 James 가 "보내" 로 직접(R02)
+- ☐ **개인정보 안내 (OPS-3)**: `PrivacyPage.tsx` 가 새로 수집하는 이벤트(추천 노출 · 클릭 · 저장 · 해제, 클라이언트 오류, 사용 시 PostHog)를 포함하는지 대조표로 확인하고, 부족하면 James 가 문구를 확정한다
 
 ## I. prod 검증 — "Done = Prod Verified"
 
@@ -114,8 +118,37 @@ DB 조회는 R04 를 따른다. prod DB 에 데이터를 넣거나 바꾸지 않
 - ☐ 구독 토큰 폐기 · 재발급 (`claude setup-token` 로 만든 `CLAUDE_CODE_OAUTH_TOKEN` 은 코드스페이스에 노출된 적이 있으므로 폐기)
 - ☐ Codespaces 사용자 비밀값 삭제, 코드스페이스 삭제
 - ☐ `insighta-sprint` repo 접근권한 점검, 필요 없으면 보관 또는 삭제
-- ☐ 코드스페이스 사용량 확인(예산 상한 설정 시 청구 확인)
+- ☐ 코드스페이스 사용량 확인(예산 상한 $20 대비 청구 확인)
+- ☐ Ultra 플랜 처리: 웹 월 결제만 가능하므로 다음 결제일 전에 유지 · 변경을 정한다(James)
+- ☐ 워크스페이스 한도: 콘솔에서 크레딧 금액을 확인한 뒤 James 가 설정, 자동 충전 끔. **트랙 B 에서 키를 쓰기 전에** 완료(이 체크리스트의 값은 문서에 쓰지 않는다)
 - ☐ 회고: blocked · 실패 원인을 규칙 · 검사로 옮긴다. 이 결과가 상시 루프 하네스의 재료다
+
+## N. SCH-1 선머지 절차 (금~토, James 결정)
+
+| # | 단계 | 확인 |
+|---|---|---|
+| 1 | 본 repo 에 PR 을 열고 전체 CI 초록 | 12개 체크 통과 |
+| 2 | **James 가 컬럼 단위로 확인 (Q19)**: `user_video_states` 에 `origin`, `origin_rec_id`, `origin_weight_version`, `origin_at`(모두 nullable), `user_subscriptions` 에 `tier_expires_at`(nullable), 새 테이블 `user_feature_flags`(RLS). 삭제 · 이름 변경 · 타입 변경 · NOT NULL 추가가 없음 | diff 에서 확인 |
+| 3 | 로컬에서 `\d` 로 컬럼 확인 (R06, `prisma db push` silent fail 점검) | 컬럼 존재 |
+| 4 | prod 에 `recommendation_feedback` 이 있는지 확인. 없으면 SCH-1 에 `CREATE TABLE IF NOT EXISTS` 포함 여부 | — |
+| 5 | **BAK-1 백업 실행 → BAK-2 복원 증명** (`[drill]` 불일치 0). 증명 전에는 머지하지 않는다 | 로그 기록 |
+| 6 | `bash scripts/ops/merge-green.sh <PR>` 로 머지 → `deploy.yml` 의 `migrate` 단계 오류 · 경고 없음 | headSha 대조 |
+| 7 | **PostgREST 스키마 재적재** (Supabase 대시보드 → Settings → API → Reload schema) | 필수. 누락하면 새 컬럼이 조용히 누락될 수 있다 |
+| 8 | prod 에서 `\d user_video_states`, `\d user_feature_flags`, `\d user_subscriptions` 로 컬럼 확인 (R04 경로 또는 Supabase SQL 편집기, 읽기 전용) | 컬럼 존재 |
+| 9 | **하루 관찰**: 앱 동작, `error_events`, Keel 실행. 문제 신호가 없으면 일요일 머지로 진행 | 이상 없음 |
+| 10 | 문제 시: 추가 전용이므로 코드가 쓰지 않으면 무해. 되돌리지 않고 후속 마이그레이션으로 처리 | — |
+
+## O. 하네스 §0.1 출시 체크리스트 대응
+
+| §0.1 항목 | 이 문서의 위치 |
+|---|---|
+| 머지할 PR 각각 CI 통과, 스키마는 추가만 | D, E, N-1~2, F |
+| 출시 전 DB 백업 | N-5 (금~토), B |
+| prod 스모크(가입 → 첫 덱 → 카드 시청) | I-1, OPS-1 |
+| 초대 사용자 목록과 플래그 설정 | H (S7a 로 목록 · 인원 필요) |
+| 롤백 경로 확인(rollback.yml, 플래그 끄기) | B 롤백 좌표, I-8, K |
+| 피드백 받을 곳 준비(사용자 안내문) | H (OPS-2) |
+| 개인정보 안내가 새로 수집하는 이벤트를 포함하는지 확인 | H (OPS-3) |
 
 ## M. 이 체크리스트가 확인하지 못한 것
 

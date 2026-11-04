@@ -1,7 +1,7 @@
 # 출시 스프린트 과제 목록 (출시 P0 / P1 / P2)
 
 - 근거: 조사 4건(가입 · 기능 플래그, 추천 출처 · 피드백, 에러 모니터링 · 백업, 컨테이너 실행 조건). 경로는 `origin/main` 기준.
-- **verify 의 상태**: 아래 명령은 이 세션에서 실행하지 못했다(이 머신은 메모리 압력으로 Jest 를 돌릴 수 없고, 새 테스트 파일은 아직 없다). 그래서 "실제로 돌아가는" 상태는 **금요일 시험 운전에서 확정**한다 (`friday-dry-run.md` 4단계). 규칙: 기존 테스트를 가리키는 명령은 main 에서 PASS 해야 하고, 새 테스트를 가리키는 명령은 "No tests found" 로 **실패(적색)** 해야 한다. 둘 다 아닌 명령은 과제에서 뺀다.
+- **verify 의 상태**: 아래 명령은 이 세션에서 실행하지 못했다(이 머신은 메모리 압력으로 Jest 를 돌릴 수 없고, 새 테스트 파일은 아직 없다). 그래서 "실제로 돌아가는" 상태는 **목요일 Codespaces 실행에서 먼저 확정**한다 (`thursday-verify-run.md`, 초안 `drafts/verify-commands.tsv`). BROKEN 은 금요일 전에 고치거나 과제에서 뺀다. 규칙: 기존 테스트를 가리키는 명령은 main 에서 PASS 해야 하고, 새 테스트를 가리키는 명령은 "No tests found" 로 **실패(적색)** 해야 한다. 둘 다 아닌 명령은 과제에서 뺀다.
 - 이름 충돌: WO-11-03 의 단계명 P0~P5 와 겹치므로 이 문서에서는 "출시 P0/P1/P2" 라 부른다. **P1 · P2 는 제안값**이다(James 는 P0 만 정의). S1 이니셔티브를 받으면 확정한다.
 
 ## 1. 공통 규칙 (모든 과제)
@@ -29,11 +29,26 @@
 | 레인 | 담당 | 순서 |
 |---|---|---|
 | L1 데이터 | worker 1 | SCH-1 → PRV-2 → FB-1 → FB-3 → FB-4 |
-| L2 접근 | worker 2 | FLG-2 → FLG-3 → INV-1 → INV-3 → FLG-5 → INV-2 |
+| L2 접근 | worker 2 | FLG-2 → FLG-3 → INV-4 → INV-3 → FLG-5 → INV-2 |
 | L3 관측 + FE | L1 · L2 중 먼저 끝난 worker | ERR-1 → ERR-2 → ERR-3 → ERR-4, FB-2 · FLG-4 (FLG-3 · FB-1 뒤) |
 | James/로컬 | 스프린트 밖 | BAK-1 ~ BAK-4 (자격 증명 필요) |
 
-L1 · L2 의 SCH-1 은 L2 의 FLG-2 보다 먼저 머지되어야 하므로 시작 순서는 **SCH-1 → (L1, L2 병렬)**.
+SCH-1 은 스프린트 시작 전에 끝나 있어야 한다(아래 2.5). 따라서 토요일 아침 시작 시 L1 · L2 는 병렬로 바로 출발한다.
+
+## 2.5 일정 변경: SCH-1 선머지 (James 결정 2026-11-04)
+
+SCH-1(스키마, additive-only)은 일요일이 아니라 **금~토에 백업 · 복원 증명 후 먼저 머지하고 하루 관찰**한다. 그래서 SCH-1 은 스프린트 worker 의 과제가 아니라 **금요일 시험 운전의 실제 과제**가 된다.
+
+| 시점 | 작업 | 담당 |
+|---|---|---|
+| 금 오전 | 목요일 verify 결과 반영. prod 에서 `recommendation_feedback` 존재 확인(없으면 SCH-1 에 `CREATE TABLE IF NOT EXISTS` 추가) | James |
+| 금 낮 | 시험 운전의 worker 1개가 SCH-1 구현 · 로컬 `\d` 검증 · PR(스프린트 repo) | 코드스페이스 |
+| 금 오후 | James 가 컬럼 단위 확인(Q19) → 본 repo 로 가져와 PR → 전체 CI | James |
+| 금 저녁~토 아침 | BAK-1 · BAK-2(백업 + 복원 증명) → SCH-1 머지 → Supabase 스키마 재적재 → `\d` 로 prod 확인 | James |
+| 토 | 하루 관찰: 오류 · `error_events` · 앱 동작 | James |
+| 토 오전 | 스프린트 시작. 워커는 SCH-1 머지 후의 main 을 받아 시작(`git pull`) | 코드스페이스 |
+
+SCH-1 이 금요일에 끝나지 않으면: 토요일 스프린트는 SCH-1 에 의존하지 않는 과제(ERR-1, ERR-2, INV-3, FB-1 의 라우트 골격)부터 시작하고, FLG · PRV 는 SCH-1 머지 후로 미룬다. 일요일 머지는 하루 관찰이 없다는 위험이 있으므로 James 가 판단한다.
 
 ## 3. 컷 라인
 
@@ -41,9 +56,9 @@ L1 · L2 의 SCH-1 은 L2 의 FLG-2 보다 먼저 머지되어야 하므로 시�
 
 | 등급 | 과제 |
 |---|---|
-| Must | SCH-1, PRV-2, FB-1, FLG-2, FLG-3, INV-1(또는 대안), ERR-1, ERR-2, BAK-1, BAK-2 |
+| Must | SCH-1(금~토 선머지), PRV-2, FB-1, FLG-2, FLG-3, INV-0(설정), INV-4, ERR-1, ERR-2, BAK-1, BAK-2, OPS-1, OPS-3 |
 | Should | FB-2, FLG-4, ERR-3, ERR-4, INV-3 |
-| Could | FB-3, FB-4, FLG-5, INV-2, INV-4, INV-5, BAK-3, BAK-4 |
+| Could | FB-3, FB-4, FLG-5, INV-1(월요일 이후), INV-2, INV-5, BAK-3, BAK-4 |
 
 ## 4. 출시 P0 과제
 
@@ -53,7 +68,7 @@ L1 · L2 의 SCH-1 은 L2 의 FLG-2 보다 먼저 머지되어야 하므로 시�
 
 | ID | 제목 | done_when | verify | 필요 | files | depends | 스키마 |
 |---|---|---|---|---|---|---|---|
-| SCH-1 | 출시용 추가 DDL 한 PR (출처 보존 컬럼 + 사용자별 플래그 테이블) | ① `user_video_states` 에 `origin varchar(20)`, `origin_rec_id uuid`, `origin_weight_version int`, `origin_at timestamptz` 가 nullable 로 존재(FK 없음). ② `user_feature_flags(user_id uuid, flag text, enabled bool, PRIMARY KEY(user_id, flag))` + RLS 켜짐. ③ SQL 은 idempotent(2회 적용 OK) ④ 끝에 `NOTIFY pgrst,'reload schema'` | `psql "$LOCAL_DATABASE_URL" -f prisma/migrations/recommendation-provenance/001_*.sql` 2회 → 오류 0 / `psql ... -c '\d user_video_states'` 에 4컬럼 / `psql ... -c '\d user_feature_flags'` / `npx prisma generate && npm run typecheck` / `bash scripts/ci/check-sql-allowlist.sh origin/main` | PG (일부 없음) | `prisma/schema.prisma`, `prisma/migrations/recommendation-provenance/`, `prisma/migrations/feature-flags/`, allowlist 스크립트 | 없음 | **y (추가만)** |
+| SCH-1 | 출시용 추가 DDL 한 PR (출처 보존 컬럼 + 사용자별 플래그 테이블 + 구독 만료 컬럼). **금~토에 백업 · 복원 증명 후 먼저 머지, 하루 관찰(§2.5)** | ① `user_video_states` 에 `origin varchar(20)`, `origin_rec_id uuid`, `origin_weight_version int`, `origin_at timestamptz` 가 nullable 로 존재(FK 없음). ② `user_feature_flags(user_id uuid, flag text, enabled bool, PRIMARY KEY(user_id, flag))` + RLS 켜짐. ③ `user_subscriptions` 에 `tier_expires_at timestamptz` nullable (INV-4 용; 현재 이 테이블에는 만료 컬럼이 없다) ④ SQL 은 idempotent(2회 적용 OK) ⑤ 끝에 `NOTIFY pgrst,'reload schema'` | `psql "$LOCAL_DATABASE_URL" -f prisma/migrations/recommendation-provenance/001_*.sql` 2회 → 오류 0 / `psql ... -c '\d user_video_states'` 에 4컬럼 / `psql ... -c '\d user_feature_flags'` / `psql ... -c '\d user_subscriptions'` / `npx prisma generate && npm run typecheck` / `bash scripts/ci/check-sql-allowlist.sh origin/main` | PG (일부 없음) | `prisma/schema.prisma`, `prisma/migrations/recommendation-provenance/`, `prisma/migrations/feature-flags/`, allowlist 스크립트 | 없음 | **y (추가만)** |
 
 로컬 DB 에 기본 스키마를 만드는 방법(`prisma db push` 가 평문 Postgres 에서 `auth` 스키마와 함께 동작하는지)은 금요일 시험 3 에서 확인한다. 안 되면 대안: `prisma migrate diff --from-empty --to-schema-datamodel --script` 로 SQL 을 만들어 `psql` 로 적용(미검증).
 
@@ -63,10 +78,11 @@ L1 · L2 의 SCH-1 은 L2 의 FLG-2 보다 먼저 머지되어야 하므로 시�
 
 | ID | 제목 | done_when | verify | 필요 | files | depends | 스키마 |
 |---|---|---|---|---|---|---|---|
-| INV-1 | **서버 측 가입 게이트** (결정 필요: 코드 vs 설정, 아래 ①) | 초대 상태(`invited`/`joined`)가 아닌 이메일의 인증된 API 호출이 403. Google · 매직 링크 가입도 동일. 설정 조회 실패 시 닫힘이 아니라 **기존 사용자는 통과, 신규는 거부** | `npx jest tests/smoke/<new>invite-gate.test.ts`(Prisma 모의: 초대됨/미초대/기존 사용자/설정 실패 4케이스) / 수동: PG + Supabase 인증 스택 + BR | 없음 (수동은 컨테이너 밖) | `src/api/plugins/auth.ts`, `src/modules/invites/gate.ts`(신규) | 없음 | n |
+| INV-0 | **설정만으로 초대 전용 시작** (James 결정 2026-11-04). 신규 가입 비활성화 + `beta_signup_mode=invite_only` | 금요일 시험 순서 통과: ① 초대 사용자 계정 먼저 생성 ② 신규 가입 비활성화 ③ 처음 보는 Google 계정 가입 **차단** 확인 ④ 초대 사용자의 Google · 매직 링크 로그인 **성공** 확인 | 수동(James): Supabase 대시보드 + 브라우저. 컨테이너 밖. 시험 환경 질문 INV-1a (README §11) | BR + 대시보드 | Supabase 대시보드, 관리자 화면 `AdminBetaCampaign` | 없음 | n |
+| INV-1 | **서버 측 가입 게이트 (코드) — 월요일 이후로 이동** | 초대 상태(`invited`/`joined`)가 아닌 이메일의 인증된 API 호출이 403. Google · 매직 링크 가입도 동일. 설정 조회 실패 시 닫힘이 아니라 **기존 사용자는 통과, 신규는 거부** | `npx jest tests/smoke/<new>invite-gate.test.ts`(Prisma 모의: 초대됨/미초대/기존 사용자/설정 실패 4케이스) / 수동: PG + Supabase 인증 스택 + BR | 없음 (수동은 컨테이너 밖) | `src/api/plugins/auth.ts`, `src/modules/invites/gate.ts`(신규) | 없음 | n |
 | INV-2 | `joined` 기록 + Google 경로의 안내 | 첫 로그인 후 `beta_applications.status='joined'`. 미초대 Google 사용자는 `/beta` 로 안내 | `npx jest tests/smoke/<new>beta-joined.test.ts` / `cd frontend && npx vitest run src/__tests__/<new>login-invite` | 없음 | `LoginPage.tsx`, `AuthContext.tsx`, `src/api/routes/beta.ts` | INV-1 | n |
 | INV-3 | 출시일 초대 런북 + 모드 전환 확인 | `docs/ops/launch-invite-runbook.md`(모드 전환 · 신청자 승인 · 이메일 발송은 **James 가 직접**(R02)). `/beta/config`·`/beta/check-invite` 가 `open`/`invite_only`/`closed` 에서 기대값 | `npx jest tests/smoke/<new>beta-modes.test.ts` / `rg -n "xox|postgres(ql)?://|AKIA" docs/ops/launch-invite-runbook.md` → 0 | 없음 | `docs/ops/`, `tests/smoke/` | 없음 | n |
-| INV-4 | 초대 → 등급 매핑 | **James 결정 필요**(초대 시 `pro` 를 줄지). 정해지면 `mark-invited` 또는 첫 로그인에서 `user_subscriptions` 를 설정하고 감사 기록 | `npx jest tests/smoke/<new>invite-tier.test.ts` | 없음 | `src/api/routes/admin/beta-applications.ts`, quota 관리자 | INV-1 | n (컬럼이 필요하면 y — 추측) |
+| INV-4 | 초대 → 30일 한정 `pro` | 초대 사용자에게 `tier='pro'` 와 `tier_expires_at = now()+30일` 을 기록하고 감사 기록. 만료 예정 목록을 읽기 전용 SELECT 로 뽑을 수 있다. 자동 강등은 하지 않는다(INV-4a 결정 전 기본값: 수동) | `npx jest tests/smoke/<new>invite-tier.test.ts` | 없음 | `src/api/routes/admin/beta-applications.ts`, quota 관리자 | SCH-1 | n (컬럼은 SCH-1) |
 | INV-5 | 초대 사용자 첫 사용 Playwright 명세 | 스테이징에서 `STG_TEST_EMAIL` 로 로그인 → 마법사 → 만다라 생성 → 카드 표시 | `cd frontend && npx playwright test -c playwright.stg.config.ts tests/stg/first-use.spec.ts` | 스테이징 + BR + STG 비밀값 | `frontend/tests/stg/first-use.spec.ts` | INV-2 | n |
 
 **① INV-1 결정 필요**
@@ -123,6 +139,14 @@ ERR-4 의 알림은 James 에게만 가는 GitHub 기본 메일이다(R02 허용
 | BAK-4 | Supabase 플랜 · 용량 확인 | 플랜, DB 크기, Backups 탭 존재 여부를 기록(복원 훈련에서 약 1.5GB 로 보여 500MB 무료 한도와 맞지 않음 → 유료 플랜일 가능성, 추측) | Supabase 콘솔 (브라우저) | James |
 
 `auth.users` 는 `pg_dump --schema=public` 에 없으므로 계정 복구는 Supabase 쪽 백업에 달려 있다 → BAK-4 에서 확인.
+
+### 4.7 출시 운영 항목 (하네스 §0.1 체크리스트에서)
+
+| ID | 제목 | done_when | verify | 담당 |
+|---|---|---|---|---|
+| OPS-1 | prod 스모크: 가입 → 첫 덱 → 카드 시청 | 초대 계정으로 prod 에서 끝까지 통과, 결과 기록 | 실제 로그인 앱(실뷰포트 · 실데이터)에서 수동 수행. 강제 렌더 불가 | James (CC 가 시나리오 작성) |
+| OPS-2 | 사용자 안내문과 피드백 경로 | 초대 사용자에게 보낼 안내문(피드백 받을 곳 포함) 초안 → James 가 "보내" 지시 후 발송(R02) | 문서 검토. 발송은 James | James |
+| OPS-3 | 개인정보 안내가 새 수집 이벤트를 포함하는가 | `frontend/src/pages/privacy/ui/PrivacyPage.tsx` 가 추천 노출 · 클릭 · 저장 · 해제와 클라이언트 오류 수집(+ PostHog 사용 시)을 다루는지 대조표 작성. 부족하면 문구 수정안을 제시 | `rg -n "추천|오류|이벤트|PostHog" frontend/src/pages/privacy/ui/PrivacyPage.tsx` 결과 대조 | CC 대조표, 문구 확정은 James |
 
 ## 5. P1 · P2 (제안 — S1 수령 후 확정)
 
