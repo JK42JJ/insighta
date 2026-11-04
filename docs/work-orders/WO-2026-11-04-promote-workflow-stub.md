@@ -25,9 +25,9 @@ prod 승급을 "main 머지"에서 "수동 dispatch + staging 증명 gate + Prod
 - [x] 같은 스크립트, staging 잡이 건너뛰어진 main sha → exit 1 과 한 줄 사유
 - [x] 같은 스크립트, staging 잡이 없는 옛 실패 run 의 sha → exit 1
 - [x] 같은 스크립트, 형식이 틀린 입력 · main 에 없는 커밋 · 없는 sha → exit 2 / 1 / 1
-- [ ] `npx jest tests/smoke/promote-gate.test.ts` 통과 (gh 대역 + 워크플로 불변식)
+- [x] `tests/smoke/promote-gate.test.ts` 통과 (gh 대역 + 워크플로 불변식) — CI `Test Backend & Build API` 에서 PASS (이 머신에서는 실행 불가, 아래 결과 참조)
 - [x] actionlint 통과 (`rhysd/actionlint:latest` 로컬 이미지, exit 0, 출력 없음)
-- [ ] CI 필수 체크 8개 통과
+- [x] CI 체크 12개 모두 통과 (head d571cb28)
 
 # james
 - PR 머지 (가역: 변경 잡이 스텁이라 prod 효과 없음).
@@ -47,6 +47,6 @@ prod 승급을 "main 머지"에서 "수동 dispatch + staging 증명 gate + Prod
 - gh 대역 + 임시 git 저장소로 같은 스크립트 실행(bash 하니스, 7건 모두 기대와 일치): green 0, E2E cancelled 1, E2E 진행 중(conclusion null) 1, 중복 E2E 중 하나 skipped 1, run 진행 중 1, run 없음 1, run 두 개면 최신 run(id 2)의 jobs 만 조회 0.
 - 하니스가 찾은 결함: 스텁 `run: echo "STUB: would ..."` 의 평문 스칼라 안 `: ` 로 YAML 파싱 실패 → 블록 스칼라(`run: |`)로 수정. 수정 후 PyYAML 파싱 통과, 인라인 `${{` 0건, `secrets.` 참조 0건.
 - `gh run list --commit` 는 이 머신의 gh 에 없는 플래그라 REST(`head_sha` · `event` 쿼리)로 구현.
-- 미검증: Jest 파일(`tests/smoke/promote-gate.test.ts`)은 이 머신에서 실행하지 못했다. memory-guard 가 압력 2 (스왑 19.9GB/20GB)로 차단했고, 이 워크트리의 `node_modules` 링크 대상(메인 트리)도 정상 설치본이 아니다. 우회하지 않았다. CI 의 Test Backend & Build API 가 첫 실행이다.
+- 테스트 파일(`tests/smoke/promote-gate.test.ts`)은 이 머신에서 실행하지 못했다(memory-guard 압력 2, 스왑 19.9GB/20GB, 워크트리 `node_modules` 링크 대상이 정상 설치본이 아님). 우회하지 않고 CI 로 검증했다. 첫 CI(head 511f93c5)는 `noUncheckedIndexedAccess` · `noPropertyAccessFromIndexSignature` 컴파일 오류로 스위트가 실행되지 않아 실패했고, d571cb28 에서 고친 뒤 `PASS tests/smoke/promote-gate.test.ts`, 전체 114 스위트 · 1158 테스트 통과(2026-11-04 CI 로그).
 - 미검증: `workflow_dispatch` 실행은 파일이 기본 브랜치에 있어야 가능해 머지 전 불가. `approve` 의 환경 대기와 `Production` 환경 reviewer 동작은 PR-B 이후 확인한다.
 - 롤백: PR 닫기 또는 revert. 새 파일 3개 + 테스트 1개 + 오더 1개뿐이며 기존 워크플로 · 차트 변경 0.
