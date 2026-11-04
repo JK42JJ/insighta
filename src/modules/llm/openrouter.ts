@@ -106,6 +106,13 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       body['reasoning'] = { enabled: false };
     }
 
+    // An explicit per-call effort wins. Reasoning tokens count inside
+    // max_tokens, so a model that reasons by default can leave no room for the
+    // body (deepseek-v4-flash: 8192 of 8192 spent on reasoning, empty content).
+    if (options?.reasoningEffort) {
+      body['reasoning'] = { effort: options.reasoningEffort };
+    }
+
     // Forward external abort (e.g. race-fallback discarding the LLM loser)
     // into the per-attempt controller so the underlying fetch is cancelled too.
     const externalSignal = options?.signal;

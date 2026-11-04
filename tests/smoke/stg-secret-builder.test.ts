@@ -114,6 +114,11 @@ describe('build-stg-secret.py', () => {
     expect(out['CURATION_SCHED_KST_ENABLED']).toBe('false');
   });
 
+  it('sets a lower reasoning effort for the detailed summary on staging only', () => {
+    expect(PROD['RICH_SUMMARY_V2_REASONING_EFFORT']).toBeUndefined();
+    expect(out['RICH_SUMMARY_V2_REASONING_EFFORT']).toBe('low');
+  });
+
   it('keeps the detailed-summary model prod uses, until staging sets one on purpose', () => {
     expect(PROD['RICH_SUMMARY_V2_MODEL']).toBe('deepseek/deepseek-v4-flash');
     expect(out['RICH_SUMMARY_V2_MODEL']).toBe(PROD['RICH_SUMMARY_V2_MODEL']);

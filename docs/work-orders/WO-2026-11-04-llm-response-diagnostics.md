@@ -43,3 +43,23 @@ opened: 2026-11-04
 # 롤백
 
 PR revert. 이미지는 커밋 해시 핀이라 이전 핀으로 복귀 가능.
+
+# 진단 결과 (2026-11-05, stg, 카드 `r-kfj2PVUy4`, 호출 2회 모두 동일)
+
+| 항목 | 값 |
+|---|---|
+| `finishReason` / `nativeFinishReason` | `length` / `length` |
+| `completionTokens` / `maxTokens` | 8192 / 8192 |
+| `reasoningTokens` | **8192** (출력 전부가 추론) |
+| `reasoningChars` / `contentChars` | 17,951·19,462 / **0** |
+| `provider` / `responseModel` | `GMICloud` / `deepseek/deepseek-v4-flash` |
+
+결론: 모델이 출력 예산 전부를 추론에 쓰고 본문을 쓰지 못한 채 `length` 로 잘린다. OpenRouter 문서(reasoning tokens)도 "대부분의 제공자에서 `max_tokens` 는 추론과 본문의 합이며, 추론이 예산을 다 쓰면 본문 없이 불완전 응답이 반환되고 추론 토큰은 과금된다"고 명시한다. 같은 영상은 재시도에서도 같은 결과라 재시도는 효과 없이 비용만 늘린다. 한 줄 요약(빠른 경로, haiku, Bedrock)은 추론 0토큰으로 정상.
+
+# 다음 단계: 추론 강도를 설정으로 제한 (같은 오더의 후속)
+
+- `RICH_SUMMARY_V2_REASONING_EFFORT`(미설정 = 현재 동작, prod 불변)를 v2 생성 호출에 `reasoning.effort` 로 전달. 잘못된 값은 무시(설정 전체가 폴백으로 떨어지지 않게).
+- stg 에서만 `low` 로 켜고(`build-stg-secret.py` 의 `FIXED_VALUES`) 같은 카드를 열어 `reasoningTokens` 와 `contentChars` 로 효과를 직접 읽는다. 부족하면 `none`, 거부되면 그 오류가 로그에 남는다.
+- 확인 못 한 것: 이 모델과 GMICloud 에서 `none` 이 허용되는지(추론 필수 모델은 거부), `low` 로 얼마나 줄어드는지.
+- `apply-stg-secret.sh` 는 api 를 다시 올린 뒤에 worker 를 재시작한다(2026-11-04 동시 재시작이 ingress 를 4.5분 내린 사고).
+- prod 반영은 stg 결과를 보고 James 승인 후 별도.
