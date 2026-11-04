@@ -10,7 +10,7 @@ opened: 2026-11-04
 
 # 맥락
 - 입력: James 2026-11-04 답변(S2 Codespaces, S3 Ultra, S6~S9, R32 유지, PR-B 월요일 이후, Q15~Q19, 출시 P0 5개).
-- 산출: `docs/sprint/launch-2026-11-09/{README,environment-codespaces,tasks,friday-dry-run,sunday-launch-checklist,thursday-verify-run}.md` + `drafts/` 4개(목요일 실행 초안, 미실행).
+- 산출: `docs/sprint/launch-2026-11-09/{README,environment-codespaces,tasks,friday-dry-run,sunday-launch-checklist,thursday-verify-run}.md` + `invite-fallback-email-magic-link.md` + `drafts/` 4개(목요일 실행 초안, 미실행).
 - 2차 반영(2026-11-04 밤): 하네스 §0.1 최신판 수신, S2' = 4코어 + 예산 $20, verify 목요일 선실행, SCH-1 금~토 선머지, PR-B 조건부, INV-1 설정만, INV-4 pro 30일.
 - 관련: #1766(R01), #1767(PRD v1.2), #1768(R02/R32), #1769(PR-A), #1770(스프린트 현행화), #1771(이슈 폼).
 
@@ -43,4 +43,5 @@ James 의 결정을 반영해 출시 스프린트의 환경 · 과제 · 시험 
 - 미검증: verify 명령 전부(이 머신은 메모리 압력으로 Jest 불가, 새 테스트 파일 없음) → 금요일 시험 운전 4단계에서 확정. 머신 RAM, 기본 토큰 범위, `NET_ADMIN`, 컨테이너 PostgreSQL + pgvector, Supabase 신규 가입 비활성화의 Google 효과, prod 의 `recommendation_feedback` 존재, Ultra 도움말 내용.
 - 2차 반영 실측: 과제 ID 27개(INV-0, OPS-1~3 추가) 전부 컷 라인 또는 일요일 체크리스트에 등장. `user:password@` 형 URL 0건(초안의 로컬 DB 접속을 소켓 peer 인증으로 바꿈). `user_subscriptions` 에 만료 컬럼이 없음을 `prisma/schema.prisma` 에서 확인 → SCH-1 에 `tier_expires_at` 추가. 서비스 · 배포 설정에 `ANTHROPIC_API_KEY` 이름 없음(grep).
 - 2차 미검증: `drafts/` 의 스크립트 · tsv · devcontainer 는 한 번도 실행하지 않았다(목요일에 James 가 실행). pgvector 패키지 이름, 4코어 RAM, Google 가입 차단이 설정만으로 되는지, 기존 계정과 Google 아이덴티티 연결.
+- 3차 반영(밤): INV-1a prod 금요일 시험(시험 창 · 상태 기록 표), 5b-4 실패 대안 문서, S7b DB 테이블, INV-4a 수동 강등, (c) 연기, 비용 기록 표(README §13). **비용은 실측 전이라 추정과 빈 칸만 있다** — 주말 후 James 가 청구 화면 값으로 채운다.
 - 롤백: PR 닫기 또는 revert. 문서만.
