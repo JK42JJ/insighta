@@ -9,7 +9,7 @@
 | 채널 | 들어가는 주체 | 흐르는 것 | 들어가면 안 되는 것 |
 |---|---|---|---|
 | `#insighta-approvals` (비공개) | James, **GitHub 앱만** | 배포 검토 요청(Production 환경 대기), 승인 · 거절 버튼 | helpdesk 봇, 다른 모든 앱, James 외 사람 |
-| `#insighta-agent` | James, helpdesk, Keel 알림, GitHub 앱 | 스크럼, 알림, `risk:human` PR 링크, 실패한 워크플로 | 승인 버튼이 있는 메시지 |
+| `#insighta-agent` | James, helpdesk, Keel 알림, GitHub 앱 | 스크럼, 알림, `risk:human` PR 링크 | 승인 버튼이 있는 메시지 (`workflows` 구독 금지) |
 
 원칙: **승인 주체는 GitHub** (Production 환경 required reviewer = James). Slack 은 알림과 인플레이스 승인 버튼만 제공한다. Slack 이 죽어도 GitHub Actions 화면에서 같은 대기 건을 승인할 수 있다.
 
@@ -46,21 +46,25 @@
 - [ ] 비공개 채널에 앱 초대: `/invite @GitHub`
 
 ### D-3 구독 명령
-`#insighta-approvals` 에서:
+`#insighta-approvals` 에서 (James 확정, 2026-11-04: **인플레이스 승인은 `workflows` 기능**):
 ```
+/github subscribe JK42JJ/insighta workflows
 /github subscribe JK42JJ/insighta deployments
 ```
-`#insighta-agent` 에서:
+- `workflows` = 승인 요청과 인플레이스 승인 버튼. 필수.
+- `deployments` = 상태 알림용. 선택. 노이즈가 크면 `/github unsubscribe JK42JJ/insighta deployments` 가 아니라 기능 단위 해제 문법을 `list features` 로 확인한다.
+
+`#insighta-agent` 에서 (**`workflows` 를 구독하지 않는다** — 승인 버튼이 이 채널에 뜨면 "승인 버튼이 있는 메시지는 `#insighta-approvals` 에만" 원칙이 깨진다):
 ```
 /github subscribe JK42JJ/insighta pulls +label:"risk:human"
 /github subscribe JK42JJ/insighta pulls +label:"needs-human"
-/github subscribe JK42JJ/insighta workflows
 ```
 - 구독 확인: `/github subscribe list`
 - 해제: `/github unsubscribe JK42JJ/insighta`
 - 기능 이름 목록 확인: `/github subscribe list features`
-- `pulls` 구독에 라벨 필터를 쓰는 문법과 `workflows` 의 필터(이름 · 이벤트 · 브랜치)는 지원 여부를 위 명령으로 확인한다. 지원하지 않으면 `pulls` 전체를 구독하고 노이즈가 크면 해제한다.
-- `#insighta-approvals` 에는 `deployments` 외에 구독하지 않는다. 다른 이벤트가 섞이면 승인 요청이 묻힌다.
+- `pulls` 의 라벨 필터 문법은 지원 여부를 위 명령으로 확인한다(미검증). 지원하지 않으면 `pulls` 전체를 구독하고 노이즈가 크면 해제한다.
+- `workflows` 가 모든 워크플로 실행을 알리면 `#insighta-approvals` 가 시끄러워질 수 있다. 이름 · 이벤트 필터를 쓸 수 있는지 `list features` 로 확인하고, 되면 `promote.yml` 과 terraform apply dispatch 로 좁힌다(미검증).
+- `#insighta-approvals` 에는 `workflows` 와 선택적 `deployments` 외에 구독하지 않는다. 다른 이벤트가 섞이면 승인 요청이 묻힌다.
 
 ### D-4 GitHub 설정
 - [ ] Settings → Environments → `Production`: **Required reviewers = JK42JJ**

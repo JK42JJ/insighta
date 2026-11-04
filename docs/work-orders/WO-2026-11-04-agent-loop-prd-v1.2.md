@@ -6,12 +6,12 @@ opened: 2026-11-04
 ---
 
 # 목표
-상시 에이전트 루프의 현황 조사 · 차이 분석 · PRD v1.1 · v1.2 · Slack 승인 채널 설정 체크리스트를 repo 에 기록해, 이후 구현 PR 이 같은 근거를 가리키게 한다.
+상시 에이전트 루프의 현황 조사 · 차이 분석 · PRD v1.1 · v1.2 · Slack 승인 채널 설정 체크리스트 · 요건 접수 체계를 repo 에 기록해, 이후 구현 PR 이 같은 근거를 가리키게 한다.
 
 # 맥락
 - 입력: James PRD v1.0 (2026-11-04), v1.1 검토 답변.
 - 산출: `docs/agent-loop/{current-state,gap-analysis,PRD-v1.1,PRD-v1.2,slack-approval-setup}.md`.
-- 관련: R01 개정 PR #1766, `WO-2026-11-03-stg-to-prod-promotion`.
+- 관련: R01 개정 PR #1766, 원장 R02/R32 PR(#1766 위에 쌓음), 이슈 템플릿 PR, `WO-2026-11-03-stg-to-prod-promotion`.
 
 # 제약
 - 문서만 바꾼다. 코드 · CI · 워크플로 · 시크릿 변경 0.
@@ -38,4 +38,5 @@ opened: 2026-11-04
 - 정정한 오류: 초안 `current-state.md` · `gap-analysis.md` · `PRD-v1.1.md` 가 원장 문구를 그대로 옮겨 이 CI 장치를 있는 것처럼 적었다. 4곳 수정.
 - 미검증: 개인 계정 repo 룰셋의 우회 대상 지정 가능 범위, `Production`/`production` 대소문자 처리, Q1 답변(미수신).
 - Slack 앱 명령어(`/github subscribe …`, `list features`) · 기능 이름 · 인플레이스 승인 동작은 GitHub 문서 기준 지식이며 실행해 확인하지 않았다. 체크리스트 H 절의 시험으로 확인하도록 했다.
+- 2026-11-04 James 정정 반영: 인플레이스 승인은 `workflows` 구독. `#insighta-agent` 에서 `workflows` 구독 제거(승인 버튼이 그 채널에 뜨는 것을 방지).
 - 롤백: PR 닫기 또는 revert. 문서만.
