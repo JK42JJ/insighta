@@ -78,6 +78,15 @@ ORIGIN_VALUES = {
     "YOUTUBE_REDIRECT_URI": STG_ORIGIN + "/oauth/callback",
 }
 
+# 3b. Values staging sets on purpose, apart from prod. RICH_SUMMARY_V2_MODEL: the
+# deepseek/deepseek-v4-flash model prod uses answered 18 of 25 detailed-summary
+# calls since 2026-10-21 with an empty body (all of its 8192 output tokens spent on
+# reasoning), so card summaries came out as one line. Staging tries a model that
+# does not reason (James, 2026-11-04); the value prod has stays in prod's Secret.
+FIXED_VALUES = {
+    "RICH_SUMMARY_V2_MODEL": "anthropic/claude-haiku-4.5",
+}
+
 # 4. Staging's own secrets.
 GENERATED = {
     "ENCRYPTION_SECRET": lambda: secrets.token_hex(48),  # config requires >= 64 chars
@@ -112,6 +121,8 @@ def build(prod, stg, overrides):
             out[k], origin[k] = "false", "forced"
     for k, v in ORIGIN_VALUES.items():
         out[k], origin[k] = v, "staging address"
+    for k, v in FIXED_VALUES.items():
+        out[k], origin[k] = v, "staging value"
     for k, make in GENERATED.items():
         out[k], origin[k] = stg.get(k) or make(), "generated"
     missing = [k for k in OVERRIDES_REQUIRED if not overrides.get(k)]
@@ -136,7 +147,7 @@ def report(prod, out, origin):
     for k in sorted(k for k, o in origin.items() if o == "forced"):
         lines.append(f"  {k}: {prod.get(k, '(unset)')} -> {out[k]}")
     lines.append("")
-    for label in ("staging address", "generated", "staging project"):
+    for label in ("staging address", "staging value", "generated", "staging project"):
         names = sorted(k for k, o in origin.items() if o == label)
         lines.append(f"{label}: " + " ".join(names))
     same = sum(1 for o in origin.values() if o == "same")

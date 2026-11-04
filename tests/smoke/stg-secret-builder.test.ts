@@ -113,6 +113,10 @@ describe('build-stg-secret.py', () => {
     expect(out['CURATION_SCHED_KST_ENABLED']).toBe('false');
   });
 
+  it('sets the detailed-summary model for staging apart from the one prod uses', () => {
+    expect(out['RICH_SUMMARY_V2_MODEL']).toBe('anthropic/claude-haiku-4.5');
+  });
+
   it('stops the creation-time summary chain, so summaries are made only when a card is opened', () => {
     expect(PROD['V2_AUTO_ENRICH_ENABLED']).toBe('true');
     expect(out['V2_AUTO_ENRICH_ENABLED']).toBe('false');

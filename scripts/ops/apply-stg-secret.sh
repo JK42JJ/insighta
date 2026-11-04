@@ -10,7 +10,8 @@
 # values only for the flags that are set to a fixed value on staging.
 #
 # --apply restarts the api, which on staging replaces its pod (about 30 seconds
-# without an api). It restarts only when the Secret actually changed.
+# without an api), and the worker when one runs. It restarts only when the Secret
+# actually changed.
 
 set -euo pipefail
 
@@ -43,4 +44,6 @@ printf '%s\n' "$OUT"
 
 if [ "$MODE" = "--apply" ] && printf '%s\n' "$OUT" | grep -qE '^changed: [1-9]'; then
   "${HERE}/ssh.sh" k3s "sudo k3s kubectl -n insighta-staging rollout restart deploy/insighta-api" 2>&1 | grep -v '^\[ssh\]'
+  # The worker reads the Secret too (summaries are made there), and a pod only reads it at start.
+  "${HERE}/ssh.sh" k3s "sudo k3s kubectl -n insighta-staging get deploy/insighta-worker -o jsonpath='{.spec.replicas}' | grep -qx '[1-9][0-9]*' && sudo k3s kubectl -n insighta-staging rollout restart deploy/insighta-worker || true" 2>&1 | grep -v '^\[ssh\]'
 fi
