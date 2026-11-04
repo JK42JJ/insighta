@@ -9,6 +9,18 @@
 
 import { z } from 'zod';
 
+/** The values OpenRouter's `reasoning.effort` accepts. */
+export const REASONING_EFFORTS = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 const boolFlag = z.preprocess((v) => {
   if (v == null || v === '') return false;
   const s = String(v).trim().toLowerCase();
@@ -98,6 +110,23 @@ export const richSummaryEnvSchema = z.object({
       z.string()
     )
     .default('anthropic/claude-sonnet-4-6'),
+  /**
+   * Reasoning effort sent with the v2 generation (OpenRouter `reasoning.effort`).
+   * Unset = no parameter: the model's own default, which is today's behaviour.
+   *
+   * Reasoning tokens count inside RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS, so a model
+   * that reasons by default can spend the whole budget and return no body:
+   * deepseek/deepseek-v4-flash on GMICloud used 8192 reasoning tokens of 8192
+   * and 0 characters of content (read from the response, 2026-11-05).
+   *
+   * An unrecognised value is ignored (`catch`) rather than failing the parse:
+   * a failed parse returns FALLBACK_CONFIG, which would switch rich summaries
+   * off over a typo in one tuning knob.
+   */
+  RICH_SUMMARY_V2_REASONING_EFFORT: z.preprocess(
+    (v) => (v == null || String(v).trim() === '' ? undefined : String(v).trim().toLowerCase()),
+    z.enum(REASONING_EFFORTS).optional().catch(undefined)
+  ),
 });
 
 export interface RichSummaryConfig {
@@ -116,6 +145,8 @@ export interface RichSummaryConfig {
   maxOutputTokens: number;
   /** v2 enrich LLM model id (OpenRouter). Default 'anthropic/claude-sonnet-4-6'. */
   enrichModel: string;
+  /** Reasoning effort for the v2 generation. Unset = the model's default. */
+  reasoningEffort?: ReasoningEffort;
 }
 
 const FALLBACK_CONFIG: RichSummaryConfig = {
@@ -145,6 +176,7 @@ export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): Ric
     RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS: env['RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS'],
     RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS: env['RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS'],
     RICH_SUMMARY_V2_MODEL: env['RICH_SUMMARY_V2_MODEL'],
+    RICH_SUMMARY_V2_REASONING_EFFORT: env['RICH_SUMMARY_V2_REASONING_EFFORT'],
   });
   if (!parsed.success) {
     return FALLBACK_CONFIG;
@@ -161,5 +193,6 @@ export function loadRichSummaryConfig(env: NodeJS.ProcessEnv = process.env): Ric
     transcriptMaxChars: parsed.data.RICH_SUMMARY_V2_TRANSCRIPT_MAX_CHARS,
     maxOutputTokens: parsed.data.RICH_SUMMARY_V2_MAX_OUTPUT_TOKENS,
     enrichModel: parsed.data.RICH_SUMMARY_V2_MODEL,
+    reasoningEffort: parsed.data.RICH_SUMMARY_V2_REASONING_EFFORT,
   };
 }

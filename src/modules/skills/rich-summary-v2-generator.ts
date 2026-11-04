@@ -197,6 +197,7 @@ export async function generateRichSummaryV2(
         format: 'json',
         temperature: TEMPERATURE,
         maxTokens: richConfig.maxOutputTokens,
+        ...(richConfig.reasoningEffort ? { reasoningEffort: richConfig.reasoningEffort } : {}),
         // #963 — cost attribution onto llm_call_logs
         videoId: input.videoId,
         userId: input.userId ?? undefined,

@@ -22,6 +22,12 @@ export interface GenerateOptions {
    */
   signal?: AbortSignal;
   /**
+   * OpenRouter `reasoning.effort` for this call. Absent = no parameter, the
+   * model's own default. Reasoning tokens count inside `maxTokens`, so a model
+   * that reasons by default can leave no room for the body.
+   */
+  reasoningEffort?: string;
+  /**
    * Cost-attribution passthrough (#963) — providers copy these onto the
    * llm_call_logs row so per-video/per-user cost and cache-hit-rate become
    * measurable. Purely additive: absent = NULL, logging behavior unchanged.

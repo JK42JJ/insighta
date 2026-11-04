@@ -81,7 +81,12 @@ ORIGIN_VALUES = {
 # 3b. Values staging sets on purpose, apart from prod: the way to try a different
 # model or setting on staging without touching prod's Secret. Empty means staging
 # runs what prod runs. Remove an entry (and re-apply) to go back to prod's value.
-FIXED_VALUES = {}
+# RICH_SUMMARY_V2_REASONING_EFFORT: deepseek-v4-flash spends all 8192 output tokens on
+# reasoning for some videos and returns no body (read from the response, 2026-11-05);
+# staging tries a lower reasoning effort (James, 2026-11-05).
+FIXED_VALUES = {
+    "RICH_SUMMARY_V2_REASONING_EFFORT": "low",
+}
 
 # 4. Staging's own secrets.
 GENERATED = {
