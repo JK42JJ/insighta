@@ -11,7 +11,6 @@ import { config } from '../../config';
 import { logLLMCall } from './call-logger';
 import { creditGate, creditBlockMessage, noteCreditRefusal } from './credit-guard';
 import { extractResponseMeta, type OpenRouterChatResponse } from './response-meta';
-import { logger } from '../../utils/logger';
 
 /**
  * The chat endpoint, declared once.
@@ -240,12 +239,14 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
 
     // How the generation ended, for every call: an empty body is explained by
     // these fields and by nothing the token counts say.
-    logger.info('openrouter response meta', {
-      purpose: options?.purpose,
-      requestedModel: activeModel,
-      maxTokens: body['max_tokens'],
-      ...extractResponseMeta(data),
-    });
+    console.info(
+      `[OpenRouter] meta ${JSON.stringify({
+        purpose: options?.purpose,
+        requestedModel: activeModel,
+        maxTokens: body['max_tokens'],
+        ...extractResponseMeta(data),
+      })}`
+    );
 
     const message = data.choices?.[0]?.message;
     const content = message?.content;
