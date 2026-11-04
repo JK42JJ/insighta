@@ -64,6 +64,10 @@ FORCE_FALSE = [
     "TRANSACTIONAL_EMAIL_ENABLED", "CURATION_SCHED_KST_ENABLED", "RICH_SUMMARY_V2_CRON_ENABLED",
     "V2_QUALITY_AUDIT_ENABLED", "V2_QUALITY_REGEN_ENABLED", "YOUTUBE_METADATA_BACKFILL_ENABLED",
     "NARRATION_PREPRODUCE_ENABLED",
+    # Summaries on staging are made when a user opens a card (James, 2026-11-04), not
+    # for every card a new mandala gets: this stops the creation-time enrich-video
+    # chain and the note build that follows it. The click path is not gated by it.
+    "V2_AUTO_ENRICH_ENABLED",
 ]
 
 # 3. The public address. PUBLIC_ORIGIN is not in prod's Secret at all: the code
