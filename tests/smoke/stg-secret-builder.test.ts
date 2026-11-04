@@ -94,7 +94,6 @@ describe('build-stg-secret.py', () => {
   it('keeps the prod value of flags that are not fixed, including the LLM-backed query generator', () => {
     expect(out['V5_QUERY_GEN']).toBe('llm');
     expect(out['LIVE_SEARCH_GC_GATE']).toBe('shadow');
-    expect(out['V2_AUTO_ENRICH_ENABLED']).toBe('true');
     expect(out['SOME_TUNING_FLAG']).toBe('keep-me');
   });
 
@@ -112,6 +111,11 @@ describe('build-stg-secret.py', () => {
   it('fixes e-mail and the unattended scheduled work to false', () => {
     expect(out['TRANSACTIONAL_EMAIL_ENABLED']).toBe('false');
     expect(out['CURATION_SCHED_KST_ENABLED']).toBe('false');
+  });
+
+  it('stops the creation-time summary chain, so summaries are made only when a card is opened', () => {
+    expect(PROD['V2_AUTO_ENRICH_ENABLED']).toBe('true');
+    expect(out['V2_AUTO_ENRICH_ENABLED']).toBe('false');
   });
 
   it('points every public address at staging, including one prod does not set', () => {
