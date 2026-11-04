@@ -78,14 +78,10 @@ ORIGIN_VALUES = {
     "YOUTUBE_REDIRECT_URI": STG_ORIGIN + "/oauth/callback",
 }
 
-# 3b. Values staging sets on purpose, apart from prod. RICH_SUMMARY_V2_MODEL: the
-# deepseek/deepseek-v4-flash model prod uses answered 18 of 25 detailed-summary
-# calls since 2026-10-21 with an empty body (all of its 8192 output tokens spent on
-# reasoning), so card summaries came out as one line. Staging tries a model that
-# does not reason (James, 2026-11-04); the value prod has stays in prod's Secret.
-FIXED_VALUES = {
-    "RICH_SUMMARY_V2_MODEL": "anthropic/claude-haiku-4.5",
-}
+# 3b. Values staging sets on purpose, apart from prod: the way to try a different
+# model or setting on staging without touching prod's Secret. Empty means staging
+# runs what prod runs. Remove an entry (and re-apply) to go back to prod's value.
+FIXED_VALUES = {}
 
 # 4. Staging's own secrets.
 GENERATED = {
