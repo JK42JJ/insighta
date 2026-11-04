@@ -31,6 +31,7 @@ const PROD: Record<string, string> = {
   TRANSACTIONAL_EMAIL_ENABLED: 'true',
   CURATION_SCHED_KST_ENABLED: 'true',
   V5_QUERY_GEN: 'llm',
+  RICH_SUMMARY_V2_MODEL: 'deepseek/deepseek-v4-flash',
   LIVE_SEARCH_GC_GATE: 'shadow',
   V2_AUTO_ENRICH_ENABLED: 'true',
   SOME_TUNING_FLAG: 'keep-me',
@@ -111,6 +112,11 @@ describe('build-stg-secret.py', () => {
   it('fixes e-mail and the unattended scheduled work to false', () => {
     expect(out['TRANSACTIONAL_EMAIL_ENABLED']).toBe('false');
     expect(out['CURATION_SCHED_KST_ENABLED']).toBe('false');
+  });
+
+  it('keeps the detailed-summary model prod uses, until staging sets one on purpose', () => {
+    expect(PROD['RICH_SUMMARY_V2_MODEL']).toBe('deepseek/deepseek-v4-flash');
+    expect(out['RICH_SUMMARY_V2_MODEL']).toBe(PROD['RICH_SUMMARY_V2_MODEL']);
   });
 
   it('stops the creation-time summary chain, so summaries are made only when a card is opened', () => {

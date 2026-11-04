@@ -78,6 +78,11 @@ ORIGIN_VALUES = {
     "YOUTUBE_REDIRECT_URI": STG_ORIGIN + "/oauth/callback",
 }
 
+# 3b. Values staging sets on purpose, apart from prod: the way to try a different
+# model or setting on staging without touching prod's Secret. Empty means staging
+# runs what prod runs. Remove an entry (and re-apply) to go back to prod's value.
+FIXED_VALUES = {}
+
 # 4. Staging's own secrets.
 GENERATED = {
     "ENCRYPTION_SECRET": lambda: secrets.token_hex(48),  # config requires >= 64 chars
@@ -112,6 +117,8 @@ def build(prod, stg, overrides):
             out[k], origin[k] = "false", "forced"
     for k, v in ORIGIN_VALUES.items():
         out[k], origin[k] = v, "staging address"
+    for k, v in FIXED_VALUES.items():
+        out[k], origin[k] = v, "staging value"
     for k, make in GENERATED.items():
         out[k], origin[k] = stg.get(k) or make(), "generated"
     missing = [k for k in OVERRIDES_REQUIRED if not overrides.get(k)]
@@ -136,7 +143,7 @@ def report(prod, out, origin):
     for k in sorted(k for k, o in origin.items() if o == "forced"):
         lines.append(f"  {k}: {prod.get(k, '(unset)')} -> {out[k]}")
     lines.append("")
-    for label in ("staging address", "generated", "staging project"):
+    for label in ("staging address", "staging value", "generated", "staging project"):
         names = sorted(k for k, o in origin.items() if o == label)
         lines.append(f"{label}: " + " ".join(names))
     same = sum(1 for o in origin.values() if o == "same")
