@@ -10,6 +10,8 @@ import type { GenerationProvider, GenerateOptions } from './provider';
 import { config } from '../../config';
 import { logLLMCall } from './call-logger';
 import { creditGate, creditBlockMessage, noteCreditRefusal } from './credit-guard';
+import { extractResponseMeta, type OpenRouterChatResponse } from './response-meta';
+import { logger } from '../../utils/logger';
 
 /**
  * The chat endpoint, declared once.
@@ -227,20 +229,7 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
       throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
     }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content: string; reasoning?: string } }>;
-      usage?: {
-        prompt_tokens?: number;
-        completion_tokens?: number;
-        total_tokens?: number;
-        /**
-         * Present when the provider served part of the prompt from cache.
-         * OpenRouter has returned this the whole time and nothing read it, so
-         * "is caching working" had no answer and neither did "would it".
-         */
-        prompt_tokens_details?: { cached_tokens?: number };
-      };
-    };
+    const data = (await response.json()) as OpenRouterChatResponse;
 
     // Log token usage for performance analysis (existing behaviour preserved)
     if (data.usage) {
@@ -248,6 +237,15 @@ export class OpenRouterGenerationProvider implements GenerationProvider {
         `[OpenRouter] model=${activeModel} prompt=${data.usage.prompt_tokens} completion=${data.usage.completion_tokens} total=${data.usage.total_tokens}`
       );
     }
+
+    // How the generation ended, for every call: an empty body is explained by
+    // these fields and by nothing the token counts say.
+    logger.info('openrouter response meta', {
+      purpose: options?.purpose,
+      requestedModel: activeModel,
+      maxTokens: body['max_tokens'],
+      ...extractResponseMeta(data),
+    });
 
     const message = data.choices?.[0]?.message;
     const content = message?.content;
