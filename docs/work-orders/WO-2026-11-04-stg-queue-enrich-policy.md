@@ -1,6 +1,6 @@
 ---
 id: WO-2026-11-04-stg-queue-enrich-policy
-status: draft
+status: done
 owner: insighta-session
 opened: 2026-11-04
 ---
@@ -97,3 +97,22 @@ stg worker 는 임시다. WO-2026-11-03-stg-to-prod-promotion 의 P2 에서 B �
 
 1. 노트 자동 생성도 stg 에서 멈추는 것(위 3번 표)에 동의하는지.
 2. 정책 B 의 관련도 판정 비용(만다라당 약 $0.13)을 stg 에서 허용하는지.
+
+# 실행 결과 (2026-11-04)
+
+James 승인("ok") 후 아래 순서로 실행했다. 설계와 다르게 한 점은 표시한다.
+
+| 단계 | 실행 | 결과 |
+|---|---|---|
+| 1 | stg Secret 의 `V2_AUTO_ENRICH_ENABLED` 를 `false` 로 | **설계와 다름**: 차트 `extraEnv` 가 아니라 stg Secret 빌더(`build-stg-secret.py`)의 강제 false 목록에 추가(PR #1763). stg 플래그는 원래 이 빌더가 관리하므로 차트 값을 늘리지 않았다. 적용 후 stg api 재시작, `/health` 200, 노드 가용 메모리 346MB |
+| 2 | 큐 취소 | 대상이 stg 프로젝트임을 확인(URL 이 stg ref 를 포함, prod ref 를 포함하지 않음) → 705건 보관(`~/insighta-backups/stg-queue-2026-11-04/cancelled-jobs.csv`, 705행) → 행 수가 705 가 아니면 예외로 되돌리는 블록으로 취소. 남은 61건: 관련도 55, 셀 채우기 3, 클릭 요약 2, 실행 항목 1. 첫 시도는 psql 문법 오류로 중단되어 롤백됐고 큐는 변하지 않았다 |
+| 3 | worker 가동 | PR #1764(`worker.runSchedulers` 값 추가, stg worker 1, 스케줄러 off). prod 렌더링 diff 0, stg 는 의도한 2줄만 변경 |
+
+검증
+- worker 메모리 93Mi, 노드 가용 메모리 360MB → 243MB.
+- 관련도 55건, 셀 채우기 3건, 클릭 요약 3건 완료. 새 `enrich-video` 0건(취소된 55건은 `cancelled` 유지). 스케줄러 skipped 로그 확인.
+- 아직 James 의 화면 확인(클릭한 카드의 요약 표시)은 받지 못했다.
+
+계획과 다르게 확인된 것
+- 상세 요약(v2 full)이 stg 에서도 실패한다: `OpenRouter returned empty content (reasoning-only response detected)` 후 `v2 marked low`. prod 30일 실측 25건 중 18건 실패와 같은 증상이며 빠른 요약은 성공한다. 원인은 미확인이고 별도 작업(본작업 정리 후 원인 파악)으로 다룬다.
+- worker 를 켜면 pg-boss 등록형 작업(`error-log-check` 일 1회, `collapse-watch` 15분 주기)이 stg 에서도 등록된다. `RUN_SCHEDULERS=false` 의 영향을 받지 않는다. 알림 수신처(Slack, 메일)는 stg Secret 에서 제외되어 있다.
