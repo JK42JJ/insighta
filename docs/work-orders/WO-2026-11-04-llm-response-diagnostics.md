@@ -18,14 +18,14 @@ opened: 2026-11-04
 # 변경
 
 - `src/modules/llm/response-meta.ts`(신규, 설정 의존 없음): 응답에서 `model`, `provider`, `finish_reason`, `native_finish_reason`, `completion_tokens`, `reasoning_tokens`, 추론 텍스트 길이, 본문 길이를 뽑는 함수. 텍스트 자체는 저장하지 않는다.
-- `openrouter.ts`: 모든 호출에서 위 값을 구조화 로그 한 줄(`openrouter response meta`)로 남긴다. 동작 변경 없음, DB 스키마 변경 없음.
+- `openrouter.ts`: 모든 호출에서 위 값을 로그 한 줄(`[OpenRouter] meta {JSON}`, 이 파일의 기존 `console.info` 방식)로 남긴다. 처음에는 `logger` 를 import 했으나 설정을 대체하는 기존 테스트(`compute-card-relevance`)가 깨져 CI 가 잡았고, `console.info` 로 바꿨다. 동작 변경 없음, DB 스키마 변경 없음.
 - 단위 테스트 4개.
 
 # 검증 방법
 
 1. CI 통과 후 머지 → stg 자동 배포.
 2. stg 에서 100% 실패했던 카드 3장(`9n4jtXxjdc4`, `sy8ofKp3JYw`, `r-kfj2PVUy4`)의 요약 행을 지우고(백업 후, stg DB 전용) James 가 카드를 연다. 호출당 약 $0.003, stg 전용 키.
-3. worker 로그의 `openrouter response meta` 를 읽어 아래로 판정한다.
+3. worker 로그의 `[OpenRouter] meta` 줄을 읽어 아래로 판정한다.
 
 | 로그 | 결론 | 다음 |
 |---|---|---|
