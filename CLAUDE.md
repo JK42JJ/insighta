@@ -1,6 +1,6 @@
 # Insighta — Project Rules
 
-규칙은 한 줄씩. 근거 사고와 집행 장치는 `docs/ops/rules-ledger.md`(R01~R31). 작업 방식은 `docs/ops/working-method-2026-09-11.md`. 제품의 기록은 `docs/spec/README.md`(공개 리포 제외 · 원본 = 기본 체크아웃 `/Users/jeonhokim/cursor/insighta/docs/spec/` · 백업 = `insighta-private/docs/spec/`). 작업 단위는 `docs/work-orders/`.
+규칙은 한 줄씩. 근거 사고와 집행 장치는 `docs/ops/rules-ledger.md`(R01~R32). 작업 방식은 `docs/ops/working-method-2026-09-11.md`. 제품의 기록은 `docs/spec/README.md`(공개 리포 제외 · 원본 = 기본 체크아웃 `/Users/jeonhokim/cursor/insighta/docs/spec/` · 백업 = `insighta-private/docs/spec/`). 작업 단위는 `docs/work-orders/`.
 
 ## 세션 시작
 
@@ -20,7 +20,7 @@
 ## 절대 규칙 (집행 장치는 원장 참조)
 
 - R01 LLM API(Anthropic · OpenRouter) 는 서비스 코드 경로와 에이전트 루프 전용 워크스페이스 키(월 $100 · 일일 $3 · 자동 충전 끔)로만 호출한다. 데이터셋 · 실험 · 테스트 · 개발 세션의 임의 호출 금지. 한도 변경은 James 승인.
-- R02 메일 · 알림 발송은 James 의 "보내" 후에만. 검수 사본도 발송이다.
+- R02 메일 · 알림 발송은 James 의 "보내" 후에만. 검수 사본도 발송이다. 자동 알림 허용 목록: 수신자 James 만, 채널 `#insighta-approvals` · `#insighta-agent` 만. 새 수신자 · 채널은 재지시 필요.
 - R03 시크릿 이름 · 값 추측 금지. `memory/credentials.md` 만.
 - R04 EC2 · k3s 접근은 `scripts/ops/ssh.sh` 로만.
 - R05 `.env*` 수정 · 교체 · 삭제 금지. prod 실행은 인라인 env.
@@ -45,6 +45,7 @@
 - R28 새 admin 라우트는 `authenticate + authenticateAdmin`, 머지 전 무인증 401.
 - R29 커밋 · PR 본문은 영문(`grep -P "[가-힣]"` = empty). 파일 안 UI · 문서는 한글 가능.
 - R31 PR 머지는 `bash scripts/ops/merge-green.sh <PR>` 로만 — 현재 head 의 검사 전부 초록을 읽은 뒤 머지, 빨간 채 머지 금지.
+- R32 노드 증설 · 동급 상시 비용 증가는 Slack 승인 요청 후 James 의 명시 승인(GitHub `Production` 환경 승인, Slack 인플레이스 포함) 전에는 실행하지 않는다. 채팅 응답 · 침묵은 승인 아님.
 
 ## 리포 사실
 
