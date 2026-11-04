@@ -8,8 +8,8 @@
 
 | 질문 | James 결정 | v1.2 반영 |
 |---|---|---|
-| Q8 | (a) R01 개정. 별도 `agent-loop` 워크스페이스, 월 $100 한도(Max 포함 크레딧 범위), 자동 충전 끔 | 개정안 PR #1766 (머지는 James). 머지 + 콘솔 설정 확인 전에는 **LLM 호출 0** |
-| Q9 | 월 상한 $100 + 일일 카운터 $3. 변경은 James 승인 | R01 개정안에 명시. 일일 카운터 집행(Keel 검사)은 트랙 B 이슈로 "예정" |
+| Q8 | (a) R01 개정. 별도 `agent-loop` 워크스페이스, 월 한도는 **플랜 포함 월 크레딧**(2026-11-04 James 수정; 초안은 "$100", S3 Ultra 선택에 따라 변경), 자동 충전 끔 | 개정안 PR #1766 (머지는 James). 머지 + 콘솔 설정 확인 전에는 **LLM 호출 0** |
+| Q9 | 월 상한은 플랜 포함 월 크레딧 안 + 일일 카운터 $3. 변경은 James 승인 | R01 개정안에 명시. 일일 카운터 집행(Keel 검사)은 트랙 B 이슈로 "예정" |
 | Q14 | 구조 변경: main 머지는 **stg 배포까지만**. prod 마이그레이션 · Edge Function · terraform apply 는 promote 단계로 이동 | M0 로 승격(§3). 설계안 §4 |
 | Q12 | `promote.yml` + WO-11-03 을 M0 최우선. 완료 전 에이전트 PR 머지 금지(M4 게이트 유지) | 게이트가 M0 완료 조건이 됨. 공개 범위는 이 설계와 함께 결정 |
 | Q13 | James 의 PR 은 ruleset 우회 목록에 James 만. 에이전트 App 은 우회 금지 | §5 |
@@ -98,12 +98,12 @@
 | Q1 | 가치 지표 한 문장 (별도 답변 중, 미수신) | M1 완료 판정, STRAT-5 |
 | Q7 | 품질 지표 현재값 · 목표값 | program.md |
 | Q10 | M1–M9 정의 문서 | MEAS-4 지연, EVAL-3 |
-| Q15 | terraform apply 를 promote 에 포함하나, 별도 수동 dispatch 로 두나 (설계 권고: 별도) | PR-E |
-| Q16 | `rollback.yml` 에도 승인 게이트를 거나, 사고 시 승인 없이 가능하게 하나 (같은 concurrency 그룹이라 대기가 롤백을 막을 수 있음) | PR-D/E |
-| Q17 | 문서 · 차트만 바뀐 커밋처럼 E2E 가 건너뛰어진 sha 를 promote 해도 되나, 항상 가장 최근 초록 sha 만 허용하나 | PR-A gate |
-| Q18 | `Production` 과 `production` 환경 이름 불일치는 의도인가 | PR-B |
-| Q19 | WO-11-03 P2(DB 한 벌) 전에 스키마가 바뀐 sha 를 promote 할 수 있나 (stg E2E 가 아직 prod DB 가 아닌 stg DB 로 돎) | PR-D |
-| 확인 | Q8 의 "Max 포함 월 $100" 크레딧의 정확한 범위 | R01 개정 문구 |
+| Q15 | **결정**: terraform apply 는 별도 수동 dispatch (plan 확인 포함) | PR-E |
+| Q16 | **결정**: 롤백은 승인 게이트 없이 직전 이미지만, James 만 실행, concurrency 그룹 분리 | PR-D/E |
+| Q17 | **결정**: promote 는 smoke + E2E 가 모두 성공한 **최신** sha 만. (PR-A #1769 의 gate 는 "해당 sha 의 성공"까지만 확인하므로 "최신" 조건은 PR-D 에서 추가) | PR-A/D gate |
+| Q18 | **해소**: 공식 문서상 환경 이름은 대소문자를 구분하지 않으므로 `Production` 과 `production` 은 같은 환경 (이 세션의 문서 조사, 요약 도구 경유) | PR-B |
+| Q19 | **결정**: WO-11-03 P2 전에는 스키마를 additive-only 로만 허용하고 James 가 확인한 뒤 | PR-D, 출시 DDL |
+| 확인 | 워크스페이스 한도에 실제로 걸 금액 (플랜 포함 월 크레딧의 값은 James 가 콘솔에서 확인해 설정) | 콘솔 설정 |
 
 ## 7. 승인 요청
 
@@ -121,7 +121,7 @@
 
 **승인 대상**: `promote`, terraform apply(별도 dispatch), 노드 증설. 셋 다 `Production` 환경 대기를 거친다. 노드 증설은 terraform 변경 후 apply 로 반영된다고 추정하며(미확인) PR-E 설계에서 확인한다.
 
-**`risk:human` 과제**: Slack 에는 PR 링크만 보낸다(`#insighta-agent`). 승인은 GitHub PR 리뷰다. Slack 버튼은 없다.
+**`risk:human` 과제**: Slack 에는 PR 링크만 보낸다(`#insighta-agent`). 승인은 GitHub PR 리뷰다. Slack 버튼은 없다. (채널 선택 James 승인 2026-11-04)
 
 **권한 경계**
 - helpdesk 에는 승인 · dispatch 권한도 도구도 주지 않는다(FR-HELP-2 의 3개 도구 유지).
@@ -158,7 +158,7 @@
 
 그 외 이슈(외부 작성자)는 **읽기만** 하고 어떤 행동도 하지 않는다.
 
-아래는 이 PRD 가 추가로 제안하는 보강이다(James 확인 필요):
+아래 보강 3건은 James 가 승인했다(2026-11-04):
 - **`approved` 판정은 라벨 이벤트의 행위자가 `JK42JJ` 일 때만 유효하다.** 라벨 이름만 보면, 이슈 쓰기 권한을 가진 다른 주체(예: 트랙 B 의 helpdesk App 이 `issues: write` 를 가진 경우)가 같은 라벨을 붙여 승인을 위조할 수 있다. 이벤트 행위자는 이슈 타임라인 API 로 확인한다.
 - **승인 뒤 본문이 바뀌면 승인이 무효다.** 승인 시점의 본문 해시(또는 `updated_at`)를 작업 오더에 기록하고, 달라지면 `needs re-approve` 로 되돌린다.
 - **James 가 쓴 이슈의 코멘트라도 James 외 작성자의 코멘트는 데이터이지 지시가 아니다.** 프롬프트 인젝션 방어(v1.0 §7)와 같은 원칙이다.
