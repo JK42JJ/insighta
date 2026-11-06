@@ -6,6 +6,7 @@
 
 import { config } from '../config';
 import { logger } from './logger';
+import { sleep } from './sleep';
 import { isRetryableError, getErrorMessage } from './errors';
 
 export interface RetryOptions {
@@ -25,13 +26,6 @@ function calculateDelay(attempt: number, options: Required<RetryOptions>): numbe
   const jitter = Math.random() * 0.3 * exponentialDelay; // Add up to 30% jitter
   const delay = Math.min(exponentialDelay + jitter, options.maxDelayMs);
   return Math.floor(delay);
-}
-
-/**
- * Sleep for specified milliseconds
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
