@@ -1,11 +1,5 @@
-/**
- * Staged candidate pipeline: freshness -> language -> duplicate -> relevance -> cap.
- * Every input candidate gets exactly one terminal decision. Reasons are short
- * codes only; untrusted titles never appear in them.
- */
-
-import type { MorningCardsConfig } from './config';
-import { resolveFreshnessClass } from './config';
+/** Staged pipeline (freshness, language, duplicate, relevance, cap); reasons are codes only. */
+import { resolveFreshnessClass, type MorningCardsConfig } from './config';
 import { isFresh } from './freshness';
 
 export interface Candidate {
@@ -28,7 +22,6 @@ export interface Decision {
 }
 
 export interface RelevanceScorer {
-  /** Returns an integer 0-100. */
   score(candidate: Candidate, ctx: { fieldId: string; topicText: string }): Promise<number>;
 }
 
@@ -48,127 +41,68 @@ export interface PipelineResult {
 
 const MAX_SCORE = 100;
 
-function at(list: Candidate[], i: number): Candidate {
-  const c = list[i];
-  if (!c) throw new Error('candidate index out of range');
-  return c;
-}
-
 export function normalizeTitle(title: string): string {
   return (title ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function clampScore(n: unknown): number | null {
-  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
-  return Math.min(MAX_SCORE, Math.max(0, Math.round(n)));
-}
-
 export async function runPipeline(input: PipelineInput): Promise<PipelineResult> {
   const { fieldId, topicText, candidates, now, config, deps } = input;
-  const decisions = new Map<number, Decision>();
-  const freshnessClass = resolveFreshnessClass(fieldId, topicText, config);
-
-  let alive: number[] = [];
-  candidates.forEach((c, i) => {
-    const f = isFresh({ publishedAt: c.publishedAt, now, freshnessClass, config });
-    if (!f.passed) {
-      decisions.set(i, { videoId: c.videoId, stage: 'freshness', passed: false, reason: f.reason });
-    } else alive.push(i);
-  });
-
+  const out = new Map<Candidate, Decision>();
+  const fail = (c: Candidate, stage: Stage, reason: string, score?: number): void => {
+    out.set(c, { videoId: c.videoId, stage, passed: false, reason, score });
+  };
+  const cls = resolveFreshnessClass(fieldId, topicText, config);
   const allowed = new Set(config.allowedLanguages);
-  const afterLang: number[] = [];
-  for (const i of alive) {
-    const c = at(candidates, i);
-    if (!c.language || !allowed.has(c.language)) {
-      decisions.set(i, {
-        videoId: c.videoId,
-        stage: 'language',
-        passed: false,
-        reason: 'language_not_allowed',
-      });
-    } else afterLang.push(i);
-  }
-  alive = afterLang;
-
   const seenIds = new Set<string>();
   const seenTitles = new Set<string>();
-  const afterDup: number[] = [];
-  for (const i of alive) {
-    const c = at(candidates, i);
+  const scored: { c: Candidate; score: number }[] = [];
+
+  // Copies keep decision keys unique even if the same object appears twice in the input.
+  const items = candidates.map((c) => ({ ...c }));
+  for (const c of items) {
+    const fresh = isFresh({ publishedAt: c.publishedAt, now, freshnessClass: cls, config });
+    if (!fresh.passed) {
+      fail(c, 'freshness', fresh.reason);
+      continue;
+    }
+    if (!c.language || !allowed.has(c.language)) {
+      fail(c, 'language', 'language_not_allowed');
+      continue;
+    }
     const title = normalizeTitle(c.title);
-    if (seenIds.has(c.videoId)) {
-      decisions.set(i, {
-        videoId: c.videoId,
-        stage: 'duplicate',
-        passed: false,
-        reason: 'duplicate_video',
-      });
-    } else if (title && seenTitles.has(title)) {
-      decisions.set(i, {
-        videoId: c.videoId,
-        stage: 'duplicate',
-        passed: false,
-        reason: 'duplicate_title',
-      });
-    } else {
-      seenIds.add(c.videoId);
-      if (title) seenTitles.add(title);
-      afterDup.push(i);
+    if (seenIds.has(c.videoId) || (title && seenTitles.has(title))) {
+      fail(c, 'duplicate', seenIds.has(c.videoId) ? 'duplicate_video' : 'duplicate_title');
+      continue;
     }
-  }
-  alive = afterDup;
+    seenIds.add(c.videoId);
+    if (title) seenTitles.add(title);
 
-  const scored: { i: number; score: number }[] = [];
-  for (const i of alive) {
-    const c = at(candidates, i);
-    let score: number | null = null;
+    let raw: unknown = null;
     try {
-      score = clampScore(await deps.scorer.score(c, { fieldId, topicText }));
+      raw = await deps.scorer.score(c, { fieldId, topicText });
     } catch {
-      score = null;
+      raw = null; // scorer failure is handled below
     }
-    if (score === null) {
-      decisions.set(i, {
-        videoId: c.videoId,
-        stage: 'relevance',
-        passed: false,
-        reason: 'scorer_failed',
-      });
-    } else if (score < config.minRelevance) {
-      decisions.set(i, {
-        videoId: c.videoId,
-        stage: 'relevance',
-        passed: false,
-        reason: 'below_min_relevance',
-        score,
-      });
-    } else scored.push({ i, score });
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+      fail(c, 'relevance', 'scorer_failed');
+      continue;
+    }
+    const score = Math.min(MAX_SCORE, Math.max(0, Math.round(raw)));
+    if (score < config.minRelevance) fail(c, 'relevance', 'below_min_relevance', score);
+    else scored.push({ c, score });
   }
 
-  scored.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    const ta = Date.parse(at(candidates, a.i).publishedAt as string);
-    const tb = Date.parse(at(candidates, b.i).publishedAt as string);
-    return tb - ta;
-  });
+  // publishedAt is valid for everything that reached scoring.
+  const time = (c: Candidate): number => Date.parse(c.publishedAt as string);
+  scored.sort((a, b) => b.score - a.score || time(b.c) - time(a.c));
 
   const passed: Candidate[] = [];
-  scored.forEach(({ i, score }, rank) => {
-    const c = at(candidates, i);
+  scored.forEach(({ c, score }, rank) => {
     if (rank < config.maxCardsPerField) {
-      decisions.set(i, { videoId: c.videoId, stage: 'cap', passed: true, reason: 'passed', score });
+      out.set(c, { videoId: c.videoId, stage: 'cap', passed: true, reason: 'passed', score });
       passed.push(c);
-    } else {
-      decisions.set(i, {
-        videoId: c.videoId,
-        stage: 'cap',
-        passed: false,
-        reason: 'over_cap',
-        score,
-      });
-    }
+    } else fail(c, 'cap', 'over_cap', score);
   });
 
-  return { passed, decisions: candidates.map((_, i) => decisions.get(i) as Decision) };
+  return { passed, decisions: items.map((c) => out.get(c) as Decision) };
 }

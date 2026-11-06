@@ -1,7 +1,4 @@
-/**
- * Pure freshness decision. `now` is always a parameter; no clock reads.
- */
-
+/** Pure freshness decision. `now` is always a parameter; no clock reads. */
 import { KST_OFFSET_HOURS } from '../../utils/kst';
 import { MS_PER_DAY, MS_PER_HOUR } from '../../utils/time-constants';
 import type { FreshnessClass, MorningCardsConfig } from './config';
@@ -20,56 +17,35 @@ export interface FreshnessInput {
 export interface FreshnessResult {
   passed: boolean;
   reason: string;
-  /** ISO string, or null for no limit. */
   windowStart: string | null;
 }
 
 function parseDate(v: unknown): Date | null {
-  if (v === null || v === undefined || v === '') return null;
-  const d = v instanceof Date ? v : typeof v === 'string' ? new Date(v) : null;
+  const d = v instanceof Date ? v : typeof v === 'string' && v ? new Date(v) : null;
   return d && !Number.isNaN(d.getTime()) ? d : null;
 }
 
-/** Start instant of the time_bound window for `now` (KST calendar). */
-export function timeBoundWindowStart(now: Date, fallbackMonths: number): Date {
+/** Start of the time_bound window: Jan 1 00:00 KST, minus fallback months in Jan/Feb. */
+function timeBoundStart(now: Date, fallbackMonths: number): Date {
   const kst = new Date(now.getTime() + KST_OFFSET_MS);
-  const year = kst.getUTCFullYear();
   const month = kst.getUTCMonth();
   const back = month === JANUARY || month === FEBRUARY ? fallbackMonths : 0;
   // Date.UTC normalises negative months into the previous year.
-  return new Date(Date.UTC(year, JANUARY - back, 1) - KST_OFFSET_MS);
+  return new Date(Date.UTC(kst.getUTCFullYear(), JANUARY - back, 1) - KST_OFFSET_MS);
 }
 
-/** Window start for a class, or null when unlimited. */
-export function windowStartFor(
-  freshnessClass: FreshnessClass,
-  now: Date,
-  config: MorningCardsConfig
-): Date | null {
-  switch (freshnessClass) {
-    case 'fast':
-      return new Date(now.getTime() - config.windows.fastDays * MS_PER_DAY);
-    case 'market':
-      return new Date(now.getTime() - config.windows.marketDays * MS_PER_DAY);
-    case 'evergreen':
-      return config.windows.evergreenDays === null
-        ? null
-        : new Date(now.getTime() - config.windows.evergreenDays * MS_PER_DAY);
-    case 'time_bound':
-      return timeBoundWindowStart(now, config.timeBoundFallbackMonths);
-    default:
-      return null;
-  }
+function windowStartFor(cls: FreshnessClass, now: Date, config: MorningCardsConfig): Date | null {
+  const { fastDays, marketDays, evergreenDays } = config.windows;
+  const daysBack = (d: number): Date => new Date(now.getTime() - d * MS_PER_DAY);
+  if (cls === 'fast') return daysBack(fastDays);
+  if (cls === 'market') return daysBack(marketDays);
+  if (cls === 'time_bound') return timeBoundStart(now, config.timeBoundFallbackMonths);
+  return evergreenDays === null ? null : daysBack(evergreenDays);
 }
 
 export function isFresh(input: FreshnessInput): FreshnessResult {
-  const { now, freshnessClass, config } = input;
-  const nowOk = parseDate(now);
-  if (!nowOk) return { passed: false, reason: 'invalid_now', windowStart: null };
-  if (!(FRESHNESS_KNOWN as readonly string[]).includes(freshnessClass)) {
-    return { passed: false, reason: 'unknown_freshness_class', windowStart: null };
-  }
-  const start = windowStartFor(freshnessClass, nowOk, config);
+  const { now } = input;
+  const start = windowStartFor(input.freshnessClass, now, input.config);
   const windowStart = start ? start.toISOString() : null;
   const published = parseDate(input.publishedAt);
   if (!published) return { passed: false, reason: 'invalid_published_at', windowStart };
@@ -78,5 +54,3 @@ export function isFresh(input: FreshnessInput): FreshnessResult {
   }
   return { passed: true, reason: start ? 'within_window' : 'no_limit', windowStart };
 }
-
-const FRESHNESS_KNOWN = ['fast', 'market', 'evergreen', 'time_bound'] as const;
