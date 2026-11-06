@@ -49,6 +49,23 @@ const DEFAULT_BATCH_SIZE = 20;
 
 const log = logger.child({ module: 'llm-reranker' });
 
+const RERANK_SAMPLE_MAX_CHARS = 500;
+
+/** True when parsing failed or fewer than half of the batch was parsed. */
+export function shouldLogRerankSample(
+  parseMode: 'json' | 'regex' | 'failed',
+  parsedCount: number,
+  batchSize: number
+): boolean {
+  return parseMode === 'failed' || parsedCount < batchSize / 2;
+}
+
+/** Bounded sample of the raw model response for diagnostics. Never throws. */
+export function rerankSample(raw: string | undefined | null): string {
+  if (!raw) return '';
+  return raw.slice(0, RERANK_SAMPLE_MAX_CHARS);
+}
+
 export type Verdict = 'Y' | 'N';
 
 export interface RerankCandidate {
@@ -254,6 +271,16 @@ export async function rerankBatch(opts: RerankBatchOpts): Promise<RerankResult> 
     rejectedCount,
     error: null,
   };
+
+  if (shouldLogRerankSample(parseMode, result.parsedCount, result.batchSize)) {
+    log.warn('rerank raw response sample', {
+      phase: 'video-discover.rerank-raw',
+      parse_mode: parseMode,
+      parsed_count: result.parsedCount,
+      batch_size: result.batchSize,
+      raw_content_sample: rerankSample(raw),
+    });
+  }
 
   log.info(`rerank batch complete`, {
     phase: 'video-discover.rerank',
