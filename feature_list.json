@@ -91,7 +91,7 @@
       "npx jest --maxWorkers=2 tests/smoke/morning-cards-routes.test.ts passes a case where one POST produces exactly one repository write",
       "the test asserts a non-test user gets 403 and no write happens"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",

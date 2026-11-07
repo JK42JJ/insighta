@@ -8,15 +8,30 @@ import { getPrismaClient } from '@/modules/database/client';
 import { isMorningCardsEnabled, isMorningCardsTestUser } from '@/config/morning-cards';
 import { isMorningCardDomainKey } from '@/modules/morning-cards/domains';
 import { fetchMorningCardsWithShortage, type MorningCardsDb } from '@/modules/morning-cards/source';
+import {
+  saveJudgment,
+  JudgmentValidationError,
+  type JudgmentDb,
+} from '@/modules/morning-cards/judgment-repo';
 import { userIdOf } from '@/api/utils/request-user';
 
 export interface MorningCardsRouteDeps {
   getDb: () => MorningCardsDb;
+  /** Defaults to the prisma client; the table DDL ships in a separate feature. */
+  getJudgmentDb?: () => JudgmentDb;
 }
 
 const defaultDeps: MorningCardsRouteDeps = {
   getDb: () => getPrismaClient() as unknown as MorningCardsDb,
+  getJudgmentDb: () => getPrismaClient() as unknown as JudgmentDb,
 };
+
+interface JudgmentBody {
+  video_id?: unknown;
+  domain?: unknown;
+  verdict?: unknown;
+  shown_position?: unknown;
+}
 
 async function flagGate(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!isMorningCardsEnabled()) {
@@ -41,6 +56,36 @@ export function createMorningCardsRoutes(deps: MorningCardsRouteDeps = defaultDe
         }
         const { cards, shortage } = await fetchMorningCardsWithShortage(deps.getDb(), domain);
         return reply.send({ status: 'ok', data: { domain, cards, shortage } });
+      }
+    );
+
+    fastify.post<{ Body: JudgmentBody }>(
+      '/judgments',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = userIdOf(request);
+        if (!userId) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
+        if (!isMorningCardsTestUser(userId)) {
+          return reply.code(403).send({ status: 'error', error: 'forbidden' });
+        }
+        const body = (request.body ?? {}) as JudgmentBody;
+        const getJudgmentDb = deps.getJudgmentDb ?? defaultDeps.getJudgmentDb!;
+        try {
+          // Only these fields are accepted; reason tags are set later via the review PATCH.
+          const row = await saveJudgment(getJudgmentDb(), {
+            user_id: userId,
+            video_id: String(body.video_id ?? ''),
+            domain: String(body.domain ?? ''),
+            verdict: String(body.verdict ?? ''),
+            shown_position: body.shown_position as number,
+          });
+          return reply.code(201).send({ status: 'ok', data: row });
+        } catch (err) {
+          if (err instanceof JudgmentValidationError) {
+            return reply.code(400).send({ status: 'error', error: 'invalid_judgment' });
+          }
+          throw err;
+        }
       }
     );
   };
