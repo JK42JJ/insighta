@@ -4,7 +4,7 @@
  * output only. No YouTube API call, no transcript access.
  */
 import { DOMAIN_LABEL_KO } from '@/config/domains';
-import type { MorningCardDomainKey } from './domains';
+import { MORNING_CARD_DOMAINS, type MorningCardDomainKey } from './domains';
 import { buildMorningCardReason } from './reason';
 
 /** Default number of cards shown per domain. */

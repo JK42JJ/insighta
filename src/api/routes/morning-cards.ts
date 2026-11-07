@@ -28,8 +28,8 @@ export interface MorningCardsRouteDeps {
 
 const defaultDeps: MorningCardsRouteDeps = {
   getDb: () => getPrismaClient() as unknown as MorningCardsDb,
-  getJudgmentDb: () => getPrismaClient() as unknown as JudgmentDb,
-  getReviewDb: () => getPrismaClient() as unknown as JudgmentReviewDb,
+  getJudgmentDb: () => getPrismaClient(),
+  getReviewDb: () => getPrismaClient(),
 };
 
 interface JudgmentBody {
