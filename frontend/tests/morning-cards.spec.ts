@@ -45,10 +45,19 @@ const CARDS: MockCard[] = [
   },
 ];
 
+// The API origin differs from the page origin, so every mocked answer (and the
+// CORS preflight) must carry explicit CORS headers.
+const CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': '*',
+  'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
+};
+
 function json(route: Route, data: unknown, status = 200): Promise<void> {
   return route.fulfill({
     status,
     contentType: 'application/json',
+    headers: CORS_HEADERS,
     body: JSON.stringify({ data }),
   });
 }
@@ -88,6 +97,9 @@ async function mockApi(
 ): Promise<{ judgments: Record<string, unknown>[] }> {
   const captured: { judgments: Record<string, unknown>[] } = { judgments: [] };
   await page.route('**/api/v1/morning-cards/**', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    }
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/status')) return json(route, { enabled: true });
     if (url.pathname.endsWith('/judgments') && route.request().method() === 'POST') {
