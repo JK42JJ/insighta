@@ -8,6 +8,9 @@ import { useEffect, useRef, useState } from 'react';
 
 interface YtPlayer {
   mute(): void;
+  unMute(): void;
+  isMuted(): boolean;
+  getPlayerState(): number;
   playVideo(): void;
   pauseVideo(): void;
   destroy(): void;
@@ -32,6 +35,26 @@ declare global {
 }
 
 const API_SRC = 'https://www.youtube.com/iframe_api';
+const SOUND_KEY = 'mf_sound_on';
+const PLAYING = 1;
+const SOUND_START_GRACE_MS = 1500;
+const WATCH_MS = 400;
+
+/** Once the person turns the sound on, the next cards start with sound too. */
+function soundPreferred(): boolean {
+  try {
+    return window.localStorage.getItem(SOUND_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function rememberSound(on: boolean): void {
+  try {
+    window.localStorage.setItem(SOUND_KEY, on ? '1' : '0');
+  } catch {
+    /* private mode */
+  }
+}
 let apiPromise: Promise<YtApi> | null = null;
 
 function loadYouTubeApi(): Promise<YtApi> {
@@ -68,6 +91,7 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
 
   useEffect(() => {
     let alive = true;
+    let watcher: number | null = null;
     setFailed(false);
     const mount = document.createElement('div');
     host.current?.appendChild(mount);
@@ -89,8 +113,45 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
           },
           events: {
             onReady: (e) => {
-              e.target.mute();
-              e.target.playVideo();
+              const p = e.target;
+              let autoMuted = false;
+              if (soundPreferred()) {
+                // try with sound first; a browser that refuses gets the muted fallback
+                p.unMute();
+                p.playVideo();
+                window.setTimeout(() => {
+                  if (!alive) return;
+                  try {
+                    if (p.getPlayerState() !== PLAYING) {
+                      autoMuted = true;
+                      p.mute();
+                      p.playVideo();
+                    }
+                  } catch {
+                    /* player gone */
+                  }
+                }, SOUND_START_GRACE_MS);
+              } else {
+                autoMuted = true;
+                p.mute();
+                p.playVideo();
+              }
+              // the sound button inside the player is the only control: watch it and remember the choice
+              watcher = window.setInterval(() => {
+                try {
+                  if (p.getPlayerState() !== PLAYING) return;
+                  const muted = p.isMuted();
+                  if (autoMuted && !muted) {
+                    autoMuted = false;
+                    rememberSound(true);
+                  } else if (!autoMuted && muted) {
+                    autoMuted = true;
+                    rememberSound(false);
+                  }
+                } catch {
+                  /* player gone */
+                }
+              }, WATCH_MS);
             },
             onError: () => alive && setFailed(true),
           },
@@ -99,6 +160,7 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
       .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
+      if (watcher != null) window.clearInterval(watcher);
       try {
         player.current?.destroy();
       } catch {

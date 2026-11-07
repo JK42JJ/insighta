@@ -35,7 +35,11 @@
   --mf-dot-rest: rgba(255, 255, 255, 0.18);
 
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100dvh; /* iOS Safari: the address bar must not push the bottom off screen (M1) */
   overflow: hidden;
   background: var(--mf-page);
   overscroll-behavior: none;
@@ -49,10 +53,12 @@
 }
 
 .mf-app {
-  width: 390px;
-  height: 844px;
+  /* M2: 320..430 wide, centred and capped at 430 above that; as tall as the screen (M1) */
+  width: min(100%, 430px);
+  height: 100%;
   margin: 0 auto;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
   background: var(--mf-bg);
   color: var(--mf-fg);
   font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Inter', sans-serif;
@@ -82,4 +88,24 @@
 .mf-app.mf-noanim * {
   transition: none !important;
   animation: none !important;
+}
+
+/* The video area stays 16:9 on every width (219 px at 390). */
+@supports (height: round(down, 10px, 1px)) {
+  .mf-app [data-testid='mf-player'] {
+    height: round(down, calc(min(100vw, 430px) * 9 / 16), 1px) !important;
+  }
+}
+
+/* Screen readers: the keep / skip actions without a visible button (M13). */
+.mf-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }

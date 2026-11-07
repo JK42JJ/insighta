@@ -171,6 +171,13 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
       dy: out.dy,
       pulse: kind === 'keep',
     });
+    if (kind === 'keep') {
+      try {
+        navigator.vibrate?.(10);
+      } catch {
+        /* not supported */
+      }
+    }
     later(() => {
       const deck = deckOf(S.c);
       const res = { ...S.res };
@@ -187,12 +194,36 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     }, 260);
   };
 
+  // M10: opening the sheet adds one history entry, so Back (Android button, gesture) closes the sheet only
+  const popOwnEntry = () => {
+    try {
+      if ((window.history.state as { mfPicker?: boolean } | null)?.mfPicker) window.history.back();
+    } catch {
+      /* history unavailable */
+    }
+  };
+  const openPicker = () => {
+    if (S.picker) return;
+    try {
+      window.history.pushState({ ...(window.history.state ?? {}), mfPicker: true }, '');
+    } catch {
+      /* history unavailable */
+    }
+    set({ picker: true });
+  };
+  const closePicker = () => {
+    if (!S.picker) return;
+    set({ picker: false });
+    popOwnEntry();
+  };
+
   const pickCell = (k: number) => {
     if (S.picking >= 0) return;
     set({ picking: k });
     later(() => {
       if (timers.current.tt != null) window.clearTimeout(timers.current.tt);
       set({ picker: false, c: k, i: 0, anim: false, dx: 0, dy: 520, play: false, toast: null });
+      popOwnEntry();
       later(() => {
         set({ anim: true, dy: 0, picking: -1 });
         showToast(grid[k].short + ' · ' + deckOf(k).length + '개', false);
@@ -215,6 +246,47 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fontsReady]);
+
+  // Phone page setup for this screen only; everything is put back when the screen closes.
+  useEffect(() => {
+    const undo: Array<() => void> = [];
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp) {
+      const before = vp.getAttribute('content') ?? '';
+      if (!/viewport-fit=cover/.test(before))
+        vp.setAttribute('content', before + ', viewport-fit=cover');
+      undo.push(() => vp.setAttribute('content', before));
+    }
+    const html = document.documentElement;
+    const prev = [html.style.overscrollBehavior, document.body.style.overscrollBehavior];
+    html.style.overscrollBehavior = 'none';
+    document.body.style.overscrollBehavior = 'none';
+    undo.push(() => {
+      html.style.overscrollBehavior = prev[0];
+      document.body.style.overscrollBehavior = prev[1];
+    });
+    const add = (tag: string, attrs: Record<string, string>) => {
+      const el = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+      document.head.appendChild(el);
+      undo.push(() => el.remove());
+    };
+    add('link', { rel: 'manifest', href: '/morning-cards.webmanifest' });
+    add('meta', { name: 'theme-color', content: '#0E0E11' });
+    add('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
+    add('meta', { name: 'mobile-web-app-capable', content: 'yes' });
+    add('meta', { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' });
+    return () => undo.forEach((fn) => fn());
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => {
+      if (S.picker) set({ picker: false });
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── render values (same expressions as the reference) ──
   const s = S;
@@ -255,6 +327,19 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     g.ly = e.clientY;
     set({ drag: true });
   };
+  const pending = useRef<{ dx: number; dy: number } | null>(null);
+  const frame = useRef<number | null>(null);
+  const flushDrag = () => {
+    if (frame.current != null) {
+      window.cancelAnimationFrame(frame.current);
+      frame.current = null;
+    }
+    if (pending.current) {
+      const p = pending.current;
+      pending.current = null;
+      set({ dx: p.dx, dy: p.dy });
+    }
+  };
   const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!S.drag) return;
     const g = gesture.current;
@@ -267,11 +352,18 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     const x = e.clientX - g.sx;
     const y = e.clientY - g.sy;
     g.moved = Math.max(Math.abs(x), Math.abs(y));
-    if (Math.abs(x) > Math.abs(y)) set({ dx: Math.max(0, x), dy: 0 });
-    else set({ dx: 0, dy: Math.min(0, y) });
+    pending.current =
+      Math.abs(x) > Math.abs(y) ? { dx: Math.max(0, x), dy: 0 } : { dx: 0, dy: Math.min(0, y) };
+    if (frame.current == null) {
+      frame.current = window.requestAnimationFrame(() => {
+        frame.current = null;
+        flushDrag();
+      });
+    }
   };
   const onUp = () => {
     if (!S.drag) return;
+    flushDrag();
     const g = gesture.current;
     // distance, or a fast flick (0.5 px/ms and 30 px)
     if (S.dx > 100 || (g.vx > 0.5 && S.dx > 30)) commit('keep');
@@ -309,14 +401,14 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
       >
         <div
           style={css(
-            'position: absolute; top: 0; left: 0; right: 0; height: 60px; z-index: 6; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; background: var(--mf-bg)'
+            'position: absolute; top: 0; left: 0; right: 0; height: 60px; z-index: 6; padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; justify-content: space-between; background: var(--mf-bg)'
           )}
         >
           <button
             type="button"
             data-testid="mf-chip"
             aria-label="목표 칸 고르기"
-            onClick={() => set({ picker: true })}
+            onClick={() => openPicker()}
             style={css(
               'height: 36px; padding: 0 14px 0 12px; border-radius: 999px; border: none; background: var(--mf-surface); color: var(--mf-fg); font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: transform 0.2s cubic-bezier(.34,1.4,.64,1); transform: scale(' +
                 (s.picker ? 0.94 : 1) +
@@ -380,16 +472,22 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
             onPointerUp={onUp}
             onPointerCancel={onUp}
             style={css(
-              'position: absolute; top: 60px; left: 0; right: 0; height: 640px; background: var(--mf-bg); touch-action: none; cursor: grab; transform: translate(' +
+              'position: absolute; top: calc(60px + env(safe-area-inset-top, 0px)); left: 0; right: 0; height: 640px; background: var(--mf-bg); touch-action: none; cursor: grab; transform: translate(' +
                 s.dx +
                 'px, ' +
                 s.dy +
                 'px) rotate(' +
                 rot +
-                'deg); transform-origin: 50% 100%; transition: ' +
+                'deg); will-change: transform; transform-origin: 50% 100%; transition: ' +
                 ease
             )}
           >
+            <button type="button" className="mf-sr" onClick={() => commit('keep')}>
+              담기
+            </button>
+            <button type="button" className="mf-sr" onClick={() => commit('skip')}>
+              넘기기
+            </button>
             <div
               data-testid="mf-player"
               onClick={onPlayer}
@@ -531,7 +629,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
 
           <div
             style={css(
-              'position: absolute; left: 20px; right: 20px; bottom: 26px; z-index: 5; display: flex; flex-direction: column; gap: 14px'
+              'position: absolute; left: 20px; right: 20px; bottom: max(26px, env(safe-area-inset-bottom, 0px)); z-index: 5; display: flex; flex-direction: column; gap: 14px'
             )}
           >
             <div
@@ -614,7 +712,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
         <div
           data-testid="mf-done"
           style={css(
-            'position: absolute; top: 60px; left: 0; right: 0; bottom: 0; padding: 28px 20px 28px; flex-direction: column; gap: 22px; display: ' +
+            'position: absolute; top: calc(60px + env(safe-area-inset-top, 0px)); left: 0; right: 0; bottom: 0; padding: 28px 20px 28px; flex-direction: column; gap: 22px; display: ' +
               (done ? 'flex' : 'none')
           )}
         >
@@ -674,7 +772,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
             <button
               type="button"
               data-testid="mf-other"
-              onClick={() => set({ picker: true })}
+              onClick={() => openPicker()}
               style={css(
                 'height: 52px; border-radius: 16px; border: none; background: var(--mf-surface); color: var(--mf-fg); font-size: 15px; font-weight: 700; cursor: pointer'
               )}
@@ -686,7 +784,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
 
         <div
           data-testid="mf-scrim"
-          onClick={() => set({ picker: false })}
+          onClick={() => closePicker()}
           style={css(
             'position: absolute; inset: 0; z-index: 20; background: var(--mf-scrim); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); transition: opacity 0.28s ease; opacity: ' +
               (s.picker ? 1 : 0) +
@@ -697,7 +795,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
         <div
           data-testid="mf-sheet"
           style={css(
-            "position: absolute; left: 8px; right: 8px; top: 56px; z-index: 21; padding: 8px 14px 18px; border-radius: 38px; font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: var(--mf-sheet); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 40px 80px var(--mf-shadow-sheet), inset 0 0.5px 0 var(--mf-sheet-edge); display: flex; flex-direction: column; gap: 16px; transform-origin: 20% 0%; transition: transform 0.42s cubic-bezier(.34,1.25,.64,1), opacity 0.22s ease; opacity: " +
+            "position: absolute; left: 8px; right: 8px; top: calc(56px + env(safe-area-inset-top, 0px)); z-index: 21; padding: 8px 14px 18px; border-radius: 38px; font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: var(--mf-sheet); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 40px 80px var(--mf-shadow-sheet), inset 0 0.5px 0 var(--mf-sheet-edge); display: flex; flex-direction: column; gap: 16px; transform-origin: 20% 0%; transition: transform 0.42s cubic-bezier(.34,1.25,.64,1), opacity 0.22s ease; opacity: " +
               (s.picker ? 1 : 0) +
               '; transform: ' +
               (s.picker ? 'scale(1) translateY(0)' : 'scale(0.6) translateY(-30px)') +
@@ -729,7 +827,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
               type="button"
               data-testid="mf-sheet-close"
               aria-label="닫기"
-              onClick={() => set({ picker: false })}
+              onClick={() => closePicker()}
               style={css(
                 'width: 30px; height: 30px; border-radius: 50%; border: none; background: var(--mf-fill); display: grid; place-items: center; cursor: pointer; margin-bottom: 4px'
               )}
