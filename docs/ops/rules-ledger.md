@@ -4,8 +4,8 @@ CLAUDE.md 는 규칙만 한 줄씩 둔다. 각 규칙이 왜 생겼고(사고), 
 
 | ID | 규칙 (한 줄) | 집행 장치 | 근거 사고 | 상태 |
 |---|---|---|---|---|
-| R01 | LLM API(Anthropic · OpenRouter) 를 데이터셋 · 실험 · 테스트에 호출하지 않는다. 서비스 코드 경로만 | 없음 (CI 가드 baseline: `llm-call-ledger` 5경로) | 2026-04-15 재정 손실 | 유지 |
-| R02 | 메일 · 알림 발송은 James 의 명시 지시("보내") 후에만 | `scripts/hooks/email-send-guard.sh` | 2026-07-28 지인 10명 이중 발송 | 유지 |
+| R01 | LLM API(Anthropic · OpenRouter) 호출은 두 경로만 허용한다: ① 서비스 코드 경로 ② 에이전트 루프 전용 워크스페이스 키(아래 "R01 개정"). 데이터셋 · 실험 · 테스트 · 개발 세션의 임의 호출은 금지 | ① `hardcode-audit` 의 `openrouter-endpoint-redeclared` (OpenRouter 엔드포인트 재선언만 탐지, Anthropic 직접 호출은 미탐지) ② 워크스페이스 월 한도 + 자동 충전 끔 (James 콘솔 설정) + Keel 일일 카운터 검사 (예정) | 2026-04-15 재정 손실 | 개정안 (James 머지 시 유효) |
+| R02 | 메일 · 알림 발송은 James 의 명시 지시("보내") 후에만. **자동 알림 허용 목록(2026-11-04 James 지시)**: 수신자 James 만, 채널 `#insighta-approvals` · `#insighta-agent` 만. 새 수신자 · 채널은 재지시 필요 | `scripts/hooks/email-send-guard.sh` (메일 경로만 차단). 허용 목록 자체의 코드 집행은 없음 — 채널 멤버 구성(James 한 명 + 앱)과 웹훅 대상 채널 고정으로 제한 | 2026-07-28 지인 10명 이중 발송 | 유지, 허용 목록 추가 |
 | R03 | 시크릿 이름 · 값을 추측하지 않는다. `memory/credentials.md` 만 | 없음 | 반복 | 유지 |
 | R04 | EC2 · k3s 접근은 `scripts/ops/ssh.sh` 로만 | `scripts/hooks/ssh-ec2-guard.sh` | CP389 · 422 · 438 | 유지 |
 | R05 | `.env*` 를 수정 · 교체 · 삭제하지 않는다. prod 실행은 인라인 env | 없음 | CP358 | 유지 |
@@ -35,6 +35,56 @@ CLAUDE.md 는 규칙만 한 줄씩 둔다. 각 규칙이 왜 생겼고(사고), 
 | R29 | GitHub 아티팩트(커밋 · PR 본문)는 영문. 파일 안 UI · 문서는 한글 가능 | `.husky/commit-msg`, CI `pr-body-english` | CP524 | 유지 |
 | R30 | 워크트리는 세션 종료 시 제거, 브랜치는 머지 시 삭제. 오더 없이 코드 변경 금지 | `work-orders.sh`, 프루닝 리뷰 | 2026-09-11 브랜치 541 · 워크트리 14 | 신설 |
 | R31 | PR 머지는 현재 head 의 검사 전부를 읽고 초록일 때만. 빨간 채 머지 금지 | `scripts/ops/merge-green.sh` | 2026-09-11 #1634 백엔드 타입 검사 실패 채 머지 → #1638 핫픽스 | 신설 |
+| R32 | 노드 증설과 그와 동급인 상시 비용 증가(노드 추가 · 인스턴스 상향 · 유료 플랜 전환)는 Slack 승인 요청 후 James 의 명시 승인(GitHub `Production` 환경 승인, Slack 인플레이스 포함) 전에는 실행하지 않는다. 채팅 응답 · 침묵은 승인이 아니다 | `Production` 환경 required reviewer — **설정 전에는 장치 없음**. 설정과 Slack 연결이 끝나기 전에는 증설을 실행하지 않는다 | 2026-11-03 prod A/B 환경 계획에서 James 가 단 승인 조건. 2026-11-04 승인 기록의 정의 확정 | 신설 (memory 규칙 `feedback_node_expansion_needs_slack_approval` 승격) |
+
+## R01 개정 (2026-11-04, 개정안 — James 머지 시 유효)
+
+근거: PRD v1.1 Q8 · Q9 (`docs/agent-loop/PRD-v1.1.md`), 작업 오더 `WO-2026-11-04-agent-loop-r01-amendment`.
+
+**허용 경로 (둘뿐)**
+1. 서비스 코드 경로 (현행 유지).
+2. 에이전트 루프 전용 `agent-loop` 워크스페이스의 키. 서비스 키와 분리한다.
+
+**에이전트 루프 호출의 조건**
+- 월 한도 $100 (Max 포함 크레딧 한도 안), 자동 충전 끔. 한도는 워크스페이스 설정으로 건다.
+- 일일 카운터 $3 초과 시 새 사이클을 시작하지 않는다.
+- 한도 · 일일 카운터 변경은 James 승인 (R14 의 "비용").
+- 키 이름과 위치는 `memory/credentials.md` 에만 적는다. 값은 코드 · 로그 · 커밋 · 대화에 쓰지 않는다 (R03).
+- 이 키로 서비스 기능을 호출하지 않고, 서비스 키로 에이전트 루프를 호출하지 않는다.
+
+**계속 금지**
+- 데이터셋 생성 · 실험 · 테스트 · 개발 세션(CC 콘솔 포함)에서의 임의 호출. 데이터셋은 CC 가 직접 작성한다.
+- 워크스페이스 한도와 자동 충전 끔이 확인되기 전의 키 사용.
+- 정답 라벨 · 평가 데이터(`insighta-eval`) 생성에 LLM 을 쓰는 것. 라벨은 사람만.
+
+**집행 장치 현황 (R18: 없는 것은 없다고 적는다)**
+
+| 항목 | 장치 | 상태 |
+|---|---|---|
+| 월 한도 · 자동 충전 끔 | Anthropic 콘솔 워크스페이스 설정 | 있음 (James 가 설정 · 확인 후 키 사용) |
+| 일일 $3 카운터 | Keel 검사 + 사용량 API 조회 | **예정** (트랙 B 이슈) |
+| 서비스 밖 호출 탐지 | `hardcode-audit` 에 Anthropic 엔드포인트 규칙 추가 | **예정**. 현재 `openrouter-endpoint-redeclared` 만 있다 |
+| 키 노출 | R03 | 장치 없음 |
+
+원장의 구 서술 "CI 가드 baseline: `llm-call-ledger` 5경로" 는 `origin/main` 에서 같은 이름의 파일 · 잡 · 테스트를 찾지 못해 삭제했다 (2026-11-04 `git ls-files` · `git grep`).
+
+## R02 허용 목록 · R32 상세 (2026-11-04)
+
+근거: James 2026-11-04 지시(Q20 · Q21), PRD v1.2 §8 (`docs/agent-loop/PRD-v1.2.md`).
+
+**R02 자동 알림 허용 목록**
+- 수신자: James 만.
+- 채널: `#insighta-approvals`, `#insighta-agent` 만.
+- 허용되는 발신: Keel 알림, GitHub 공식 Slack 앱(승인 요청 · PR · 실행 알림), helpdesk 의 James 대상 응답(트랙 B).
+- 새 수신자나 새 채널(다른 사람 · 외부 서비스 · 메일 포함)은 James 의 재지시가 있어야 추가한다. 이 목록에 없는 발송은 기존 R02 대로 "보내" 지시 후에만 한다.
+- 메일은 이 목록의 대상이 아니다. `email-send-guard.sh` 는 그대로 유지한다.
+
+**R32 승인 기록**
+- 승인으로 인정되는 것: GitHub `Production` 환경 대기 건에 대한 James 의 승인. Slack 에서 누른 인플레이스 승인도 같은 GitHub 승인 기록이므로 인정한다.
+- 승인이 아닌 것: 채팅 답변, 침묵, 질문형 문장, 수정 지시.
+- 요청에 담을 것: 무엇을, 왜, 월 비용 추정, 롤백 방법.
+- 집행 장치 현황: `Production` 환경에 required reviewer 가 지정되기 전에는 승인 기록이 만들어지지 않으므로 증설을 실행하지 않는다. 노드 증설이 terraform 변경 후 apply 로 반영된다는 점은 추정이며 `promote` 분리(PRD v1.2 M0) 설계에서 확인한다.
+- 기존 규칙 "추가 비용 불가"(2026-10-29, 시장 검증 전)는 이 원장에 아직 행이 없다. R32 는 그 규칙의 승인 절차만 다루며 금지 자체를 대체하지 않는다.
 
 ## 은퇴 · 대체
 
