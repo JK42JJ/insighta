@@ -137,7 +137,7 @@
       "the same test renders a title containing <script> and asserts no script element is created and the literal text is shown",
       "grep -rn 'dangerouslySetInnerHTML' frontend/src/features/morning-cards returns no matches"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
