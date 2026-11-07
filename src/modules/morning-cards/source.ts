@@ -55,12 +55,8 @@ export interface MorningCardsDb {
   };
 }
 
-function buildSimpleReason(row: TagRow): string {
-  return buildMorningCardReason({
-    relevance_score: row.relevance_score,
-    source: row.source,
-    published_at: row.video_pool.published_at,
-  });
+function buildSimpleReason(domain: MorningCardDomainKey): string {
+  return buildMorningCardReason({ domain_label: MORNING_CARD_DOMAINS[domain].label });
 }
 
 export interface MorningCardsResult {
@@ -130,7 +126,7 @@ export async function fetchMorningCardsWithShortage(
       channel_name: v.channel_name,
       published_at: v.published_at,
       thumbnail_url: v.thumbnail_url,
-      reason: buildSimpleReason(row),
+      reason: buildSimpleReason(domain),
     });
     if (cards.length >= limit) break;
   }

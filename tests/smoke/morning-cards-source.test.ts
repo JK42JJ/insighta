@@ -85,3 +85,16 @@ describe('morning-cards source', () => {
     expect(cards).toEqual([]);
   });
 });
+
+describe('morning-cards reason text from the source', () => {
+  it('shows the domain label and no internal score, source or date', async () => {
+    const db = {
+      video_pool_domain_tags: {
+        findMany: jest.fn().mockResolvedValue([row('abcdefghijk', 0.99)]),
+      },
+    };
+    const { cards } = await fetchMorningCardsWithShortage(db as never, 'ai_tools', 10);
+    expect(cards[0]!.reason).toContain('AI 도구');
+    expect(cards[0]!.reason).not.toMatch(/관련도|출처|batch_trend|0\.99|\d{4}-\d{2}-\d{2}/);
+  });
+});

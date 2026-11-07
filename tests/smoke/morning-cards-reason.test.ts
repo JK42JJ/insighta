@@ -4,30 +4,24 @@ import {
 } from '@/modules/morning-cards/reason';
 
 describe('morning-cards reason', () => {
-  it('is non-empty and includes score, source and date', () => {
-    const r = buildMorningCardReason({
-      relevance_score: 0.8765,
-      source: 'tag',
-      published_at: new Date('2026-03-05T00:00:00Z'),
-    });
-    expect(r).toContain('0.88');
-    expect(r).toContain('tag');
-    expect(r).toContain('2026-03-05');
-    expect(r.length).toBeGreaterThan(0);
+  it('is one non-empty line naming the domain and the year window', () => {
+    const r = buildMorningCardReason({ domain_label: '업무 실무' });
+    expect(r).toContain('업무 실무');
+    expect(r).toContain('올해');
+    expect(r).not.toContain('\n');
   });
 
-  it('stays under the max length even for a very long source', () => {
-    const r = buildMorningCardReason({
-      relevance_score: 0.5,
-      source: 'x'.repeat(500),
-      published_at: null,
-    });
+  it('never exposes internal values: score, pool source or the upload date', () => {
+    const r = buildMorningCardReason({ domain_label: 'AI 도구' });
+    expect(r).not.toMatch(/관련도|출처|r1_min|\d{4}-\d{2}-\d{2}|0\.\d/);
+  });
+
+  it('stays under the max length even for a very long label', () => {
+    const r = buildMorningCardReason({ domain_label: 'x'.repeat(500) });
     expect(r.length).toBeLessThanOrEqual(MORNING_CARD_REASON_MAX_LENGTH);
   });
 
-  it('handles missing date and non-finite score', () => {
-    const r = buildMorningCardReason({ relevance_score: NaN, source: '', published_at: null });
-    expect(r).not.toBe('');
-    expect(r).not.toContain('업로드');
+  it('falls back when the label is empty', () => {
+    expect(buildMorningCardReason({ domain_label: '' })).not.toBe('');
   });
 });

@@ -61,6 +61,54 @@ describe('MorningCardsPage', () => {
     );
   });
 
+  it('button click saves exactly one judgment, then shows the next card', async () => {
+    render(<MorningCardsPage />);
+    expect(await screen.findByText('첫째')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('verdict-useful'));
+    expect(await screen.findByText('둘째')).toBeTruthy();
+    expect(mocks.postJudgment).toHaveBeenCalledTimes(1);
+    expect(mocks.postJudgment).toHaveBeenCalledWith({
+      video_id: 'aaaaaaaaaaa',
+      domain: 'work_practice',
+      verdict: 'useful',
+      shown_position: 0,
+    });
+    fireEvent.click(screen.getByTestId('verdict-skip'));
+    await waitFor(() => expect(mocks.postJudgment).toHaveBeenCalledTimes(2));
+    expect(mocks.postJudgment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ verdict: 'skip', shown_position: 1 })
+    );
+  });
+
+  it('arrow keys judge: right = useful, left = skip', async () => {
+    render(<MorningCardsPage />);
+    expect(await screen.findByText('첫째')).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(await screen.findByText('둘째')).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    await waitFor(() => expect(mocks.postJudgment).toHaveBeenCalledTimes(2));
+    expect(mocks.postJudgment).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ verdict: 'useful' })
+    );
+    expect(mocks.postJudgment).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ verdict: 'skip' })
+    );
+  });
+
+  it('a failed save keeps the same card and says so', async () => {
+    mocks.postJudgment.mockRejectedValueOnce(new Error('500'));
+    render(<MorningCardsPage />);
+    expect(await screen.findByText('첫째')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('verdict-useful'));
+    expect(await screen.findByTestId('verdict-save-failed')).toBeTruthy();
+    expect(screen.getByText('첫째')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('verdict-useful'));
+    expect(await screen.findByText('둘째')).toBeTruthy();
+    expect(screen.queryByTestId('verdict-save-failed')).toBeNull();
+  });
+
   it('shows the honest message and zero cards for an empty domain', async () => {
     mocks.fetchMorningCards.mockResolvedValue({
       domain: 'work_practice',

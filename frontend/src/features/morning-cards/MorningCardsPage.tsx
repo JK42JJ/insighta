@@ -55,19 +55,45 @@ export function MorningCardsPage() {
 
   const current: MorningCardDto | undefined = cards[index];
 
-  const handleSwipe = useCallback(
-    (verdict: MorningCardVerdict) => {
-      if (!current) return;
-      void postJudgment({
-        video_id: current.video_id,
-        domain,
-        verdict,
-        shown_position: index,
-      }).catch(() => undefined);
-      setIndex((i) => i + 1);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+
+  // One judgment = one saved row, then the next card. A failed save keeps the
+  // same card on screen so nothing is silently lost.
+  const handleVerdict = useCallback(
+    async (verdict: MorningCardVerdict) => {
+      if (!current || savingRef.current) return;
+      savingRef.current = true;
+      setSaving(true);
+      setSaveFailed(false);
+      try {
+        await postJudgment({
+          video_id: current.video_id,
+          domain,
+          verdict,
+          shown_position: index,
+        });
+        setIndex((i) => i + 1);
+      } catch {
+        setSaveFailed(true);
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
     },
     [current, domain, index]
   );
+  const handleSwipe = handleVerdict;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') void handleVerdict('useful');
+      else if (e.key === 'ArrowLeft') void handleVerdict('skip');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleVerdict]);
 
   const { dragX, handlers } = useCardSwipe({ onSwipe: handleSwipe });
 
@@ -110,6 +136,38 @@ export function MorningCardsPage() {
           {cards.length === 0 ? EMPTY_MESSAGE : DONE_MESSAGE}
         </p>
       )}
+      {!loading && !failed && current ? (
+        <div className="flex gap-3">
+          <button
+            type="button"
+            data-testid="verdict-skip"
+            disabled={saving}
+            onClick={() => void handleVerdict('skip')}
+            className="flex-1 rounded-lg border border-border bg-card py-3 text-base font-semibold disabled:opacity-50"
+          >
+            별로
+          </button>
+          <button
+            type="button"
+            data-testid="verdict-useful"
+            disabled={saving}
+            onClick={() => void handleVerdict('useful')}
+            className="flex-1 rounded-lg bg-primary py-3 text-base font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            볼 만함
+          </button>
+        </div>
+      ) : null}
+      {saveFailed ? (
+        <p data-testid="verdict-save-failed" className="text-sm text-destructive">
+          저장하지 못했습니다. 다시 눌러 주세요.
+        </p>
+      ) : null}
+      {!loading && !failed && current ? (
+        <p className="text-xs text-muted-foreground">
+          {index + 1} / {cards.length}
+        </p>
+      ) : null}
       {!loading && !failed && shortage && current ? (
         <p data-testid="morning-cards-shortage" className="text-xs text-muted-foreground">
           {EMPTY_MESSAGE}
