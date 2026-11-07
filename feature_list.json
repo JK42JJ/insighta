@@ -191,7 +191,7 @@
       "cd frontend && npx vitest run src/__tests__/morning-cards-review.test.tsx passes",
       "the test asserts each row shows title, channel, upload date, verdict, and selecting a tag calls the PATCH client"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "e2e",
