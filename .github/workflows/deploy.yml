@@ -796,20 +796,29 @@ jobs:
           F=charts/insighta/environments/staging-images.yaml
           # The tags staging last ran. With no branch, or a branch without the
           # file, start from the seed committed on main.
+          HAVE_PREV=0
           if git fetch -q --depth 1 origin deploy/staging 2>/dev/null \
              && git cat-file -e "FETCH_HEAD:$F" 2>/dev/null; then
             git show "FETCH_HEAD:$F" > /tmp/prev-tags.yaml
             echo "previous tags: deploy/staging"
+            HAVE_PREV=1
           else
             cp "$F" /tmp/prev-tags.yaml
             echo "previous tags: none -- starting from the seed"
           fi
           git checkout -q -B deploy/staging "$SHA"
+          # This branch only feeds ArgoCD (charts). The Actions token may not create or
+          # update workflow files, so keep .github/workflows exactly as the branch had it
+          # (run 42357134107 was refused when a new workflow file rode along).
+          if [ "$HAVE_PREV" = "1" ] && git cat-file -e "FETCH_HEAD:.github/workflows" 2>/dev/null; then
+            git rm -rq --ignore-unmatch .github/workflows
+            git checkout -q FETCH_HEAD -- .github/workflows
+          fi
           cp /tmp/prev-tags.yaml "$F"
           bash scripts/ci/write-staging-tags.sh "$F" "$SHA" "$API" "$FE" "$RD" "$AGENT"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$F"
+          git add "$F" .github/workflows
           git commit -q --allow-empty -m "chore(staging): $SHA with staging image tags"
           git push --force origin HEAD:deploy/staging
           echo "### Staging branch rebuilt at \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
