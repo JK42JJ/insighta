@@ -30,6 +30,10 @@ on:
         required: false
         default: false
 
+# Staging jobs below (migrate-staging, deploy-edge-functions-staging, publish-staging-tags) run for a push to main, and ALSO for a manual run
+# with staging_only=true from an agent/* branch. That lets a draft change be seen on staging before it is merged. Every prod job keeps its
+# own condition (main push or !staging_only), so a staging_only run from a branch writes nothing to prod.
+
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -269,7 +273,7 @@ jobs:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
     needs: [scope]
-    if: needs.scope.outputs.deployable == 'true'
+    if: needs.scope.outputs.deployable == 'true' && (!startsWith(github.ref, 'refs/heads/agent/') || inputs.staging_only)
     permissions:
       contents: read
       packages: write
@@ -296,7 +300,8 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          # An agent/* branch run (staging_only) assumes a role that can push only to the staging repositories; every other run keeps the CI role.
+          role-to-assume: ${{ startsWith(github.ref, 'refs/heads/agent/') && secrets.AWS_STG_BUILD_ROLE_ARN || secrets.AWS_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: Log in to ECR
@@ -313,7 +318,7 @@ jobs:
       # to rebuild the frontend image and vice versa; the other side's :latest
       # is already correct, so the rebuild was pure wall-clock.
       - name: Build & push API image
-        if: needs.scope.outputs.api == 'true'
+        if: needs.scope.outputs.api == 'true' && !startsWith(github.ref, 'refs/heads/agent/')
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -323,6 +328,20 @@ jobs:
             ${{ env.API_IMAGE }}:${{ github.sha }}
             ${{ steps.ecr.outputs.registry }}/insighta-api:latest
             ${{ steps.ecr.outputs.registry }}/insighta-api:${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Agent branch (staging_only): the staging repository only, tagged with the commit. Never :latest, never GHCR, never the prod repositories.
+      - name: Build & push API image (agent branch, staging repository)
+        if: needs.scope.outputs.api == 'true' && startsWith(github.ref, 'refs/heads/agent/')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/insighta-stg-api:${{ github.sha }}
           build-args: |
             GIT_SHA=${{ github.sha }}
           cache-from: type=gha
@@ -357,7 +376,7 @@ jobs:
       # never :latest, never GHCR, so nothing that pulls prod images can pick it up.
       # No PostHog key -- staging traffic stays out of product analytics.
       - name: Build & push Frontend image (staging)
-        if: needs.scope.outputs.frontend == 'true' && vars.STG_SUPABASE_URL != ''
+        if: needs.scope.outputs.frontend == 'true' && vars.STG_SUPABASE_URL != '' && !startsWith(github.ref, 'refs/heads/agent/')
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -372,8 +391,24 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build & push Frontend image (staging, agent branch)
+        if: needs.scope.outputs.frontend == 'true' && vars.STG_SUPABASE_URL != '' && startsWith(github.ref, 'refs/heads/agent/')
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/insighta-stg-frontend:${{ github.sha }}
+          build-args: |
+            VITE_API_URL=/api
+            VITE_SUPABASE_URL=${{ vars.STG_SUPABASE_URL }}
+            VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.STG_SUPABASE_ANON_KEY }}
+            VITE_CHATBOT_PROVIDER=qwen-lora
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Build & push Redis image
-        if: needs.scope.outputs.redis == 'true'
+        if: needs.scope.outputs.redis == 'true' && !startsWith(github.ref, 'refs/heads/agent/')
         uses: docker/build-push-action@v5
         with:
           context: ./docker/redis
@@ -397,7 +432,7 @@ jobs:
     # mobile_only stays here, and deliberately. This runs `prisma db push`
     # against the production database. A dial edit cannot change the schema, so
     # running it would be a write to production with no reason to be there.
-    if: ${{ !inputs.staging_only && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true' }}
+    if: ${{ !inputs.staging_only && !startsWith(github.ref, 'refs/heads/agent/') && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -623,7 +658,7 @@ jobs:
     timeout-minutes: 20
     runs-on: ubuntu-latest
     needs: [scope]
-    if: github.ref == 'refs/heads/main' && vars.STG_PROJECT_REF != '' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true'
+    if: (github.ref == 'refs/heads/main' || (inputs.staging_only && startsWith(github.ref, 'refs/heads/agent/'))) && vars.STG_PROJECT_REF != '' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.schema == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -684,7 +719,7 @@ jobs:
   deploy-edge-functions-staging:
     name: Deploy Edge Functions (staging)
     needs: [scope]
-    if: github.ref == 'refs/heads/main' && vars.STG_PROJECT_REF != '' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
+    if: (github.ref == 'refs/heads/main' || (inputs.staging_only && startsWith(github.ref, 'refs/heads/agent/'))) && vars.STG_PROJECT_REF != '' && needs.scope.outputs.mobile_only != 'true' && needs.scope.outputs.deployable == 'true'
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
@@ -718,7 +753,7 @@ jobs:
     # build-and-push is skipped on a chart-only merge; that is not a failure.
     # migrate-staging may be skipped too (no schema change).
     if: >-
-      always() && github.ref == 'refs/heads/main' && vars.STG_PROJECT_REF != ''
+      always() && (github.ref == 'refs/heads/main' || (inputs.staging_only && startsWith(github.ref, 'refs/heads/agent/'))) && vars.STG_PROJECT_REF != ''
       && (needs.scope.outputs.deployable == 'true' || needs.scope.outputs.charts == 'true')
       && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
       && (needs.migrate-staging.result == 'success' || needs.migrate-staging.result == 'skipped')
@@ -743,6 +778,7 @@ jobs:
           RD: ${{ needs.scope.outputs.redis }}
         run: |
           if [ "$DEPLOYABLE" = "true" ]; then
+            case "$GITHUB_REF" in refs/heads/agent/*) RD=false ;; esac     # an agent branch run builds no redis image
             { echo "api=$API"; echo "frontend=$FE"; echo "redis=$RD"; } >> "$GITHUB_OUTPUT"
           else
             { echo "api=false"; echo "frontend=false"; echo "redis=false"; } >> "$GITHUB_OUTPUT"
@@ -754,6 +790,7 @@ jobs:
           API: ${{ steps.flags.outputs.api }}
           FE: ${{ steps.flags.outputs.frontend }}
           RD: ${{ steps.flags.outputs.redis }}
+          AGENT: ${{ startsWith(github.ref, 'refs/heads/agent/') }}
         run: |
           set -euo pipefail
           F=charts/insighta/environments/staging-images.yaml
@@ -769,7 +806,7 @@ jobs:
           fi
           git checkout -q -B deploy/staging "$SHA"
           cp /tmp/prev-tags.yaml "$F"
-          bash scripts/ci/write-staging-tags.sh "$F" "$SHA" "$API" "$FE" "$RD"
+          bash scripts/ci/write-staging-tags.sh "$F" "$SHA" "$API" "$FE" "$RD" "$AGENT"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$F"
