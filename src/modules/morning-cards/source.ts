@@ -3,7 +3,7 @@
  * Reads today's candidates from the existing video_pool + video_pool_domain_tags
  * output only. No YouTube API call, no transcript access.
  */
-import { DOMAIN_LABEL_KO, type DomainSlug } from '@/config/domains';
+import { DOMAIN_LABEL_KO } from '@/config/domains';
 import type { MorningCardDomainKey } from './domains';
 import { buildMorningCardReason } from './reason';
 
@@ -13,18 +13,18 @@ export const MORNING_CARDS_DEFAULT_LIMIT = 10;
 const FETCH_MULTIPLIER = 3;
 
 /**
- * PRD domain -> video_pool_domain_tags.domain labels (KO labels of the 9 pool slugs).
- * The pool taxonomy has no separate startup/gov slug, so that domain shares the
- * business label with work practice for now.
+ * PRD domain -> video_pool_domain_tags.domain values.
+ * Owner decision (2026-11-07): 창업·정부 지원 reads the pool tags `startup` and `policy`
+ * (the 9 pool slugs have no separate startup/government slug, but the pool carries both tags).
  */
-const POOL_SLUGS_BY_DOMAIN: Readonly<Record<MorningCardDomainKey, readonly DomainSlug[]>> = {
-  work_practice: ['business'],
-  startup_gov_support: ['business', 'finance'],
-  ai_tools: ['tech'],
+const POOL_LABELS_BY_DOMAIN: Readonly<Record<MorningCardDomainKey, readonly string[]>> = {
+  work_practice: [DOMAIN_LABEL_KO.business],
+  startup_gov_support: ['startup', 'policy'],
+  ai_tools: [DOMAIN_LABEL_KO.tech],
 };
 
 export function poolDomainLabels(domain: MorningCardDomainKey): string[] {
-  return POOL_SLUGS_BY_DOMAIN[domain].map((s) => DOMAIN_LABEL_KO[s]);
+  return [...POOL_LABELS_BY_DOMAIN[domain]];
 }
 
 export interface MorningCard {

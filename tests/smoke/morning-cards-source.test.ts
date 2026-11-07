@@ -18,6 +18,14 @@ function row(id: string, score: number) {
   };
 }
 
+describe('pool tag mapping (owner decision 2026-11-07)', () => {
+  it('maps each PRD domain to the pool tags the cards are read from', () => {
+    expect(poolDomainLabels('work_practice')).toEqual(['비즈니스/커리어']);
+    expect(poolDomainLabels('startup_gov_support')).toEqual(['startup', 'policy']);
+    expect(poolDomainLabels('ai_tools')).toEqual(['기술/개발']);
+  });
+});
+
 describe('morning-cards source', () => {
   it('returns cards with the required fields and dedupes videos', async () => {
     const findMany = jest.fn().mockResolvedValue([row('a', 0.9), row('a', 0.8), row('b', 0.7)]);
