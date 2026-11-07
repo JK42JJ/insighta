@@ -118,7 +118,7 @@
       "cd frontend && npx vitest run src/__tests__/morning-cards-api.test.ts passes with mocked fetch",
       "the test asserts the judgment POST body contains video_id, domain, verdict and shown_position only"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
