@@ -68,7 +68,7 @@ export function createMorningCardsRoutes(deps: MorningCardsRouteDeps = defaultDe
         if (!isMorningCardsTestUser(userId)) {
           return reply.code(403).send({ status: 'error', error: 'forbidden' });
         }
-        const body = (request.body ?? {}) as JudgmentBody;
+        const body = request.body ?? {};
         const getJudgmentDb = deps.getJudgmentDb ?? defaultDeps.getJudgmentDb!;
         try {
           // Only these fields are accepted; reason tags are set later via the review PATCH.
