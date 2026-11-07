@@ -25,7 +25,7 @@
       "test -f docs/work-orders/mobile-morning-cards-swipe-reuse.md exits 0",
       "grep -c 'index.html' docs/work-orders/mobile-morning-cards-swipe-reuse.md returns at least 1"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
