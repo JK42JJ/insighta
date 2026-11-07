@@ -14,7 +14,7 @@ async function signIn(page: Page): Promise<void> {
   await expect(page).not.toHaveURL(/\/login/);
 }
 
-test('morning feed: swipe right saves one judgment, undo cancels it (phone 390x844)', async ({ page }) => {
+test('morning feed: swipe right saves one judgment, undo cancels it (phone 390x844)', async ({ page }, info) => {
   expect(EMAIL, 'STG_TEST_EMAIL is not set').not.toBe('');
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
@@ -22,6 +22,20 @@ test('morning feed: swipe right saves one judgment, undo cancels it (phone 390x8
   await expect(page.getByTestId('mf-card')).toBeVisible({ timeout: 25_000 });
   // the live card carries a YouTube video, not the fixture text
   await expect(page.getByTestId('mf-title')).not.toHaveText('');
+
+  // diagnostics for the report: what the video area really shows after the player had time to start
+  await page.waitForTimeout(6000);
+  const frames = page.frames().map((f) => f.url()).filter((u) => u.includes('youtube'));
+  await info.attach('live-feed-screen', { body: await page.screenshot(), contentType: 'image/png' });
+  await info.attach('player-state', {
+    body: JSON.stringify({
+      iframeCount: await page.locator('iframe').count(),
+      youtubeFrames: frames,
+      title: await page.getByTestId('mf-title').innerText(),
+      playerBox: await page.getByTestId('mf-player').boundingBox(),
+    }),
+    contentType: 'application/json',
+  });
 
   const saved = page.waitForResponse(
     (r) => r.url().includes('/api/v1/morning-feed/judgments') && r.request().method() === 'POST'
