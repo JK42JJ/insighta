@@ -297,6 +297,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     <div className="mf-page">
       <div
         ref={appRef}
+        lang="ko"
         className={'mf-app' + (q.get('noanim') === '1' ? ' mf-noanim' : '')}
         data-testid="mf-root"
       >
