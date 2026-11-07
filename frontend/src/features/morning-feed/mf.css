@@ -1,0 +1,85 @@
+/*
+ * 오늘의 픽 (morning feed) tokens and base rules.
+ * Values are copied from morning-feed.reference.html (design original, James 2026-11-07);
+ * names follow SPEC section 4. Do not tune values here.
+ */
+.mf-page {
+  --mf-page: #000000;
+  --mf-bg: #0e0e11;
+  --mf-fg: #f4f2ee;
+  --mf-muted: #a9a59c;
+  --mf-surface: #1d1d23;
+  --mf-fit: #18181d;
+  --mf-fit-keep: #2a2117;
+  --mf-accent: #e0703f;
+  --mf-accent-soft: #f0a07a;
+  --mf-butter: #f5d48a;
+  --mf-why: #d9d5cc;
+  --mf-ink: #1a1916;
+  --mf-white: #ffffff;
+  --mf-sheet: rgba(37, 37, 40, 0.78);
+  --mf-scrim: rgba(8, 8, 10, 0.55);
+  --mf-label2: rgba(235, 235, 245, 0.6);
+  --mf-fill: rgba(118, 118, 128, 0.24);
+  --mf-handle: rgba(235, 235, 245, 0.3);
+  --mf-tile: #1c1c1e;
+  /* values the reference uses besides the SPEC list (shadows, washes, dots) */
+  --mf-shadow-toast: rgba(0, 0, 0, 0.4);
+  --mf-shadow-cell: rgba(0, 0, 0, 0.6);
+  --mf-shadow-sheet: rgba(0, 0, 0, 0.55);
+  --mf-sheet-edge: rgba(255, 255, 255, 0.18);
+  --mf-accent-wash: rgba(224, 112, 63, 0.14);
+  --mf-accent-glow: rgba(224, 112, 63, 0.5);
+  --mf-dots-bg: rgba(255, 255, 255, 0.08);
+  --mf-dot-skip: rgba(255, 255, 255, 0.38);
+  --mf-dot-rest: rgba(255, 255, 255, 0.18);
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--mf-page);
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* The reference page has no CSS reset: undo what the app's global styles add. */
+.mf-app,
+.mf-app * {
+  -webkit-touch-callout: none;
+}
+
+.mf-app {
+  width: 390px;
+  height: 844px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: var(--mf-bg);
+  color: var(--mf-fg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: normal;
+  font-feature-settings: normal;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mf-app *,
+.mf-app *::before,
+.mf-app *::after {
+  box-sizing: content-box;
+}
+
+.mf-app button {
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mf-app.mf-noanim,
+.mf-app.mf-noanim * {
+  transition: none !important;
+  animation: none !important;
+}

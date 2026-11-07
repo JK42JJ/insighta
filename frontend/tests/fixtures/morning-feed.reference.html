@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>오늘의 픽 — 기준 구현 (reference v1)</title>
+<!--
+  Insighta 오늘의 픽 — 디자인 기준 구현 v1 (2026-11-07, James 확정)
+  이 파일이 디자인의 원본이다. 구현은 이 파일과 픽셀 단위로 같아야 한다.
+  값(색·크기·간격·곡선·시간)을 바꾸거나 "개선"하지 말 것. 바꿔야 하면 James 승인.
+  테스트 훅: ?onboard=0  ?noanim=1  ?state=feed|keep|picker|done|toast  ?cell=0..8
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Inter:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #000; overscroll-behavior: none; -webkit-text-size-adjust: 100%; }
+  #app, #app * { -webkit-touch-callout: none; }
+  button { font-family: inherit; -webkit-tap-highlight-color: transparent; }
+  .noanim, .noanim * { transition: none !important; animation: none !important; }
+  #app { width: 390px; height: 844px; margin: 0 auto; box-sizing: border-box; background: #0E0E11; color: #F4F2EE; font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Inter', sans-serif; position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; }
+</style>
+</head>
+<body>
+<div id="app" data-testid="mf-root">
+
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 60px; z-index: 6; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; background: #0E0E11">
+    <button type="button" id="chip" data-testid="mf-chip" aria-label="목표 칸 고르기">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F5D48A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="9.5" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><rect x="16" y="9.5" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><rect x="9.5" y="16" width="5" height="5" rx="1"/><rect x="16" y="16" width="5" height="5" rx="1"/></svg>
+      <span id="chipLabel"></span>
+    </button>
+    <div id="tray" data-testid="mf-tray" aria-label="오늘 담은 영상">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#E0703F" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/></svg>
+      <span id="trayCount" style="font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700"></span>
+    </div>
+  </div>
+
+  <div id="deckWrap">
+    <div id="card" data-testid="mf-card">
+      <div id="player" data-testid="mf-player" style="height: 219px; position: relative; display: flex; align-items: flex-end; padding: 0 20px 20px; box-sizing: border-box; cursor: pointer">
+        <div id="thumb" style="font-size: 30px; line-height: 1.12; font-weight: 900; letter-spacing: -0.02em; white-space: pre-line; color: #FFFFFF"></div>
+        <div id="progress"></div>
+      </div>
+      <div style="position: relative; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; gap: 8px; align-items: center; font-size: 13px; color: #A9A59C">
+          <span id="fresh" data-testid="mf-fresh"></span>
+          <span id="dur" style="font-family: 'Inter', sans-serif"></span>
+        </div>
+        <div id="title" data-testid="mf-title" style="font-size: 23px; line-height: 1.38; font-weight: 700; letter-spacing: -0.02em"></div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <div id="avatar" style="width: 32px; height: 32px; border-radius: 50%; color: #FFFFFF; font-size: 13px; font-weight: 700; display: grid; place-items: center"></div>
+          <div style="display: flex; flex-direction: column">
+            <span id="ch" style="font-size: 14px; font-weight: 700"></span>
+            <span id="chMeta" style="font-size: 12px; color: #A9A59C"></span>
+          </div>
+        </div>
+        <div id="fit" data-testid="mf-fit">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5D48A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            <span id="fitLabel" style="font-size: 13px; font-weight: 700; color: #F5D48A"></span>
+          </div>
+          <div id="why" style="font-size: 14px; line-height: 1.55; color: #D9D5CC"></div>
+        </div>
+        <div id="keepMark" data-testid="mf-keepmark">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div style="position: absolute; left: 20px; right: 20px; bottom: 26px; z-index: 5; display: flex; flex-direction: column; gap: 14px">
+      <div id="toast" data-testid="mf-toast" style="align-self: center; height: 44px; padding: 0 6px 0 18px; border-radius: 999px; background: #F4F2EE; color: #1A1916; display: none; align-items: center; gap: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.4)">
+        <span id="toastText" style="font-size: 14px; font-weight: 700"></span>
+        <button type="button" id="undo" data-testid="mf-undo" style="height: 34px; padding: 0 14px; border-radius: 999px; border: none; background: #1A1916; color: #F4F2EE; font-size: 13px; font-weight: 700; cursor: pointer">되돌리기</button>
+      </div>
+      <div id="onboard" data-testid="mf-onboard">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E0703F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        담기
+      </div>
+      <div id="dots" data-testid="mf-dots" style="align-self: center; height: 22px; padding: 0 9px; border-radius: 11px; background: rgba(255,255,255,0.08); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); display: flex; align-items: center; gap: 6px"></div>
+    </div>
+  </div>
+
+  <div id="done" data-testid="mf-done" style="position: absolute; top: 60px; left: 0; right: 0; bottom: 0; padding: 28px 20px 28px; display: none; flex-direction: column; gap: 22px">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div id="doneSub" style="font-size: 14px; color: #A9A59C"></div>
+      <div style="display: flex; align-items: baseline; gap: 8px">
+        <span id="doneCount" style="font-family: 'Inter', sans-serif; font-size: 64px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; color: #E0703F"></span>
+        <span style="font-size: 22px; font-weight: 700">개 담았어요</span>
+      </div>
+    </div>
+    <div id="keptList" style="display: flex; flex-direction: column; gap: 12px"></div>
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 10px">
+      <button type="button" data-testid="mf-watch" style="height: 56px; border-radius: 16px; border: none; background: #E0703F; color: #1A1916; font-size: 16px; font-weight: 700; cursor: pointer">지금 하나 보기</button>
+      <button type="button" id="doneOther" data-testid="mf-other" style="height: 52px; border-radius: 16px; border: none; background: #1D1D23; color: #F4F2EE; font-size: 15px; font-weight: 700; cursor: pointer">다른 칸 고르기</button>
+    </div>
+  </div>
+
+  <div id="scrim" data-testid="mf-scrim"></div>
+  <div id="sheet" data-testid="mf-sheet">
+    <div style="display: flex; justify-content: center"><div style="width: 36px; height: 5px; border-radius: 3px; background: rgba(235,235,245,0.3)"></div></div>
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; padding: 2px 6px 0">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 28px; font-weight: 700; letter-spacing: 0.01em">어디부터 볼까요</div>
+        <div id="leftAll" style="font-size: 15px; color: rgba(235,235,245,0.6)"></div>
+      </div>
+      <button type="button" id="sheetClose" data-testid="mf-sheet-close" aria-label="닫기" style="width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(118,118,128,0.24); display: grid; place-items: center; cursor: pointer; margin-bottom: 4px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(235,235,245,0.6)" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div id="grid" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; row-gap: 16px"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  // ── 고정 데이터 (fixture). 구현의 fixture 모드는 이 배열과 같은 데이터를 써야 한다. ──
+  var CARDS = [
+    { bg: '#1E3A5F', ini: '택', thumb: '가지급금\n이렇게 정리', dur: '14:22', ago: '6일 전', ch: '택스노트', chMeta: '세무사 운영 채널', title: '가지급금, 상여 처리 말고 이렇게 정리하세요', cell: '비즈니스/커리어', focus: '업무 실무', why: '대표이사 가지급금을 줄이는 세 가지 방법을 올해 개정 기준으로 비교해요.' },
+    { bg: '#2B2A63', ini: 'A', thumb: 'Claude Code\n업무 자동화', dur: '21:10', ago: '4일 전', ch: 'AI 랩', chMeta: '실습형 AI 강의', title: 'Claude Code로 반복 업무를 자동화하는 에이전트 만들기', cell: '기술/개발', focus: 'AI 도구', why: '따라 만들 수 있는 실습형, 최근 30일 안에 올라왔어요.' },
+    { bg: '#14476B', ini: '창', thumb: '혁신바우처\n신청 기준', dur: '12:40', ago: '1주 전', ch: '창업브리핑', chMeta: '지원사업 해설', title: '2026 소상공인 혁신바우처, 신청 자격과 가점 받는 법', cell: '비즈니스/커리어', focus: '창업·정부 지원', why: '올해 공고 기준으로 자격 요건과 가점 항목을 정리해요.' },
+    { bg: '#4A2F1E', ini: '세', thumb: '상속·증여세\n바뀐 5가지', dur: '18:05', ago: '3주 전', ch: '세무사 브리핑', chMeta: '세법 개정 해설', title: '2026 상속증여세 개정, 실제 신고에서 달라지는 5가지', cell: '비즈니스/커리어', focus: '업무 실무', why: '올해 바뀐 공제 한도와 신고 일정을 실제 신고서 기준으로 짚어요.' },
+    { bg: '#173E4A', ini: '툴', thumb: 'Claude\n이번 달 바뀐 점', dur: '9:15', ago: '2일 전', ch: '툴리뷰', chMeta: 'AI 도구 리뷰', title: '이번 달 Claude 업데이트, 실무에서 달라진 것만', cell: '기술/개발', focus: 'AI 도구', why: '바뀐 기능 중 실무에 영향 있는 것만 짧게 정리해요.' },
+    { bg: '#5A3418', ini: '글', thumb: '수출바우처\n서류 순서', dur: '15:02', ago: '2주 전', ch: '글로벌셀러스쿨', chMeta: '수출 실무 교육', title: '수출바우처 처음 신청할 때, 서류 순서 그대로', cell: '비즈니스/커리어', focus: '창업·정부 지원', why: '처음 신청하는 사람이 막히는 서류를 순서대로 짚어요.' },
+    { bg: '#24402F', ini: '현', thumb: '크레인 작업 전\n안전 점검', dur: '9:48', ago: '2개월 전', ch: '현장안전TV', chMeta: '산업안전 교육', title: '크레인 작업 전 안전조치 체크리스트', cell: '비즈니스/커리어', focus: '업무 실무', why: '작업 전 점검 항목을 감독자 시점에서 순서대로 보여줘요.' },
+    { bg: '#40315E', ini: '개', thumb: 'Skills 구조\n한 장 정리', dur: '13:48', ago: '1주 전', ch: '개발자노트', chMeta: '개발 구조 해설', title: 'Claude Skills와 하네스 구조, 그림 한 장으로', cell: '기술/개발', focus: 'AI 도구', why: '구조를 그림 한 장으로 설명해서 처음 봐도 이해돼요.' },
+    { bg: '#3D4520', ini: '스', thumb: '창업보육센터\n입주 조건', dur: '10:21', ago: '1개월 전', ch: '스타트업캠퍼스', chMeta: '창업 교육', title: '창업보육센터 입주 요건, 심사에서 실제로 보는 것', cell: '비즈니스/커리어', focus: '창업·정부 지원', why: '입주 요건과 심사 기준을 함께 설명해요.' },
+    { bg: '#3A2A5A', ini: '사', thumb: '부가세 신고\n실수 TOP 5', dur: '11:30', ago: '1개월 전', ch: '사장님세무', chMeta: '개인사업자 세무', title: '개인사업자 부가세 신고에서 가장 많이 틀리는 5가지', cell: '비즈니스/커리어', focus: '업무 실무', why: '신고 직전에 확인할 실수 사례만 모았어요.' },
+    { bg: '#1E4A36', ini: 'A', thumb: 'ChatGPT\n11월 새 기능', dur: '7:32', ago: '3일 전', ch: 'AI 수업연구소', chMeta: '강의 자료 공유', title: 'ChatGPT 11월 업데이트, 강의 자료용 요약', cell: '기술/개발', focus: 'AI 도구', why: '새 기능을 강의에서 바로 쓸 수 있게 정리했어요.' },
+    { bg: '#283B5C', ini: '지', thumb: '지자체 공모\n놓치지 않기', dur: '8:55', ago: '3주 전', ch: '지원사업노트', chMeta: '공모사업 정리', title: '지자체 공모사업, 공고 찾는 곳과 놓치지 않는 법', cell: '비즈니스/커리어', focus: '창업·정부 지원', why: '공고를 한곳에서 모아 보는 방법을 실제 화면으로 보여줘요.' },
+    { bg: '#1D4646', ini: '기', thumb: '차명주식\n환원 절차', dur: '16:12', ago: '5주 전', ch: '기업세무랩', chMeta: '법인 세무 상담', title: '차명주식 실명전환, 세금 부담 줄이며 정리하는 절차', cell: '비즈니스/커리어', focus: '업무 실무', why: '실명전환 절차와 그때 생기는 세금을 단계별로 설명해요.' },
+    { bg: '#46254A', ini: '경', thumb: '경기북부\nAI 창업교육', dur: '6:40', ago: '4일 전', ch: '경기창업톡', chMeta: '지역 창업 소식', title: '경기북부 AI 창업 교육 프로그램 정리 (11월 모집)', cell: '비즈니스/커리어', focus: '창업·정부 지원', why: '이번 달 모집 중인 지역 교육 일정과 신청 방법이에요.' },
+    { bg: '#4D2B2B', ini: '풀', thumb: '웹 서비스에\nAI 에이전트', dur: '24:05', ago: '2주 전', ch: '풀스택AI', chMeta: '웹 개발 실전', title: '웹 서비스에 붙이는 AI 에이전트, 설계부터 배포까지', cell: '기술/개발', focus: 'AI 도구', why: '설계부터 배포까지 한 흐름으로 보여줘요.' }
+  ];
+  var GRID = [
+    { label: '기술/개발', short: '기술·개발', dom: 0 }, { label: '비즈니스/커리어', short: '비즈니스', dom: 0 }, { label: '재테크/투자', short: '재테크', dom: 0 },
+    { label: '학습/교육', short: '학습', dom: 0 }, { label: '오늘 전체', short: '오늘 전체', dom: -1 }, { label: '건강/피트니스', short: '건강', dom: 0 },
+    { label: '인간관계/커뮤니티', short: '인간관계', dom: 0 }, { label: '창작/예술', short: '창작', dom: 0 }, { label: '라이프스타일/여행', short: '라이프', dom: 0 }
+  ];
+
+  // ── 상태 ──
+  var Q = new URLSearchParams(location.search);
+  var S = { c: 4, i: 0, dx: 0, dy: 0, drag: false, anim: true, leaving: false, play: false, res: {}, toast: null, undoable: false, pulse: false, picker: false, picking: -1, onboard: Q.get('onboard') !== '0', demo: false };
+  var obt = [], tt = null, sx = 0, sy = 0, moved = 0, lastKey = null, vx = 0, vy = 0, lt = 0, lx = 0, ly = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  if (Q.get('noanim') === '1') $('app').classList.add('noanim');
+  if (Q.get('cell') != null) S.c = Math.max(0, Math.min(8, parseInt(Q.get('cell'), 10) || 0));
+
+  function set(p) { for (var k in p) S[k] = p[k]; render(); }
+  function deckOf(c) {
+    var g = GRID[c], all = CARDS.map(function (x, k) { return k; });
+    return g.dom === -1 ? all : all.filter(function (k) { return CARDS[k].cell === g.label; });
+  }
+  function showToast(text, undoable) {
+    clearTimeout(tt);
+    set({ toast: text, undoable: undoable });
+    tt = setTimeout(function () { set({ toast: null }); }, undoable ? 3000 : 1600);
+  }
+  function endOnboard() { obt.forEach(clearTimeout); obt = []; if (S.onboard) set({ onboard: false, demo: false }); }
+  function commit(kind) {
+    if (S.leaving) return;
+    var out = kind === 'keep' ? { dx: 460, dy: 0 } : { dx: 0, dy: -900 };
+    set({ leaving: true, drag: false, anim: true, play: false, dx: out.dx, dy: out.dy, pulse: kind === 'keep' });
+    setTimeout(function () {
+      var deck = deckOf(S.c), res = Object.assign({}, S.res);
+      res[deck[S.i]] = kind; lastKey = deck[S.i];
+      // 저장 지점: 실제 구현은 여기서 판정 1행 저장 (keep → useful, skip → skip)
+      window.__mfJudgments = (window.__mfJudgments || []).concat([{ index: deck[S.i], verdict: kind === 'keep' ? 'useful' : 'skip' }]);
+      set({ res: res, i: S.i + 1, anim: false, dx: 0, dy: 420, pulse: false });
+      setTimeout(function () { set({ anim: true, dy: 0, leaving: false }); }, 30);
+      showToast(kind === 'keep' ? '담았어요' : '넘겼어요', true);
+    }, 260);
+  }
+  function pickCell(k) {
+    if (S.picking >= 0) return;
+    if (deckOf(k).length === 0) return; // 카드 없는 칸은 흐리게 '0', 눌러도 이동 없음
+    set({ picking: k });
+    setTimeout(function () {
+      clearTimeout(tt);
+      set({ picker: false, c: k, i: 0, anim: false, dx: 0, dy: 520, play: false, toast: null });
+      setTimeout(function () {
+        set({ anim: true, dy: 0, picking: -1 });
+        showToast(GRID[k].short + ' · ' + deckOf(k).length + '개', false);
+      }, 60);
+    }, 260);
+  }
+
+  // ── 그리드 9칸 (한 번 만들고 스타일만 갱신) ──
+  var cellEls = GRID.map(function (g, k) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('data-testid', 'mf-cell-' + k);
+    var art = document.createElement('span');
+    var mosaic = document.createElement('span');
+    mosaic.style.cssText = 'position: absolute; inset: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px';
+    var tiles = [0, 1, 2, 3].map(function () { var t = document.createElement('span'); mosaic.appendChild(t); return t; });
+    var th = document.createElement('span');
+    th.style.cssText = 'position: absolute; left: 9px; right: 8px; bottom: 8px; font-size: 13px; line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; color: #FFFFFF; white-space: pre-line';
+    if (g.dom === -1) art.appendChild(mosaic); else art.appendChild(th);
+    var lab = document.createElement('span'), meta = document.createElement('span');
+    b.appendChild(art); b.appendChild(lab); b.appendChild(meta);
+    b.addEventListener('click', function () { pickCell(k); });
+    $('grid').appendChild(b);
+    return { b: b, art: art, tiles: tiles, th: th, lab: lab, meta: meta };
+  });
+
+  var dotsFor = -1, dotEls = [];
+  function buildDots(n) {
+    $('dots').innerHTML = ''; dotEls = [];
+    for (var k = 0; k < n; k++) { var d = document.createElement('div'); $('dots').appendChild(d); dotEls.push(d); }
+  }
+
+  function render() {
+    var s = S, deck = deckOf(s.c), n = deck.length, done = s.i >= n;
+    var card = CARDS[deck[Math.min(s.i, n - 1)]];
+    var ease = s.anim && !s.drag ? (s.demo ? 'transform 0.7s cubic-bezier(0.45,0,0.2,1)' : 'transform 0.34s cubic-bezier(0.32,0.72,0,1)') : 'none';
+    var rot = s.dx > 0 ? (s.dx / 30).toFixed(2) : '0';
+    var ko = Math.max(0, Math.min(1, s.dx / 90));
+    var fresh = /일 전/.test(card.ago) && parseInt(card.ago, 10) <= 7;
+
+    $('chip').style.cssText = 'height: 36px; padding: 0 14px 0 12px; border-radius: 999px; border: none; background: #1D1D23; color: #F4F2EE; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: transform 0.2s cubic-bezier(.34,1.4,.64,1); transform: scale(' + (s.picker ? 0.94 : 1) + ')';
+    $('chipLabel').textContent = GRID[s.c].short;
+    $('tray').style.cssText = 'height: 36px; padding: 0 14px; border-radius: 999px; background: #1D1D23; display: flex; align-items: center; gap: 6px; transition: transform 0.2s cubic-bezier(.34,1.4,.64,1); transform: scale(' + (s.pulse ? 1.2 : 1) + ')';
+    $('trayCount').textContent = String(Object.keys(s.res).filter(function (k) { return s.res[k] === 'keep'; }).length);
+
+    $('deckWrap').style.display = done ? 'none' : 'block';
+    $('card').style.cssText = 'position: absolute; top: 60px; left: 0; right: 0; height: 640px; background: #0E0E11; touch-action: none; cursor: grab; transform: translate(' + s.dx + 'px, ' + s.dy + 'px) rotate(' + rot + 'deg); transform-origin: 50% 100%; transition: ' + ease;
+    $('player').style.background = card.bg;
+    $('thumb').textContent = card.thumb;
+    $('progress').style.cssText = 'position: absolute; left: 0; bottom: 0; height: 3px; background: #FFFFFF; transition: width 0.3s; width: ' + (s.play ? '42%' : '18%') + '; opacity: 0.85';
+    $('fresh').style.cssText = 'height: 26px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; font-weight: 700; ' + (fresh ? 'background: #E0703F; color: #1A1916' : 'background: #1D1D23; color: #D9D5CC');
+    $('fresh').textContent = card.ago;
+    $('dur').textContent = card.dur;
+    $('title').textContent = card.title;
+    $('avatar').style.background = card.bg; $('avatar').textContent = card.ini;
+    $('ch').textContent = card.ch; $('chMeta').textContent = card.chMeta;
+    $('fit').style.cssText = 'border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; transition: background 0.15s, box-shadow 0.15s; background: ' + (ko > 0.3 ? '#2A2117' : '#18181D') + '; box-shadow: ' + (ko > 0.3 ? 'inset 0 0 0 1.5px #E0703F' : 'none');
+    $('fitLabel').textContent = card.cell;
+    $('why').textContent = card.why;
+    $('keepMark').style.cssText = 'position: absolute; top: 50%; left: 50%; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; background: #E0703F; display: grid; place-items: center; box-shadow: 0 10px 30px rgba(224,112,63,0.5); pointer-events: none; opacity: ' + ko + '; transform: scale(' + (0.5 + 0.5 * ko).toFixed(2) + ')';
+
+    var showToastNow = !!s.toast && !done;
+    $('toast').style.display = showToastNow ? 'flex' : 'none';
+    $('toastText').textContent = s.toast || '';
+    $('onboard').style.cssText = 'align-self: center; height: 34px; padding: 0 14px; border-radius: 999px; background: rgba(224,112,63,0.14); color: #F0A07A; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; transition: opacity 0.4s ease, transform 0.4s ease; opacity: ' + (s.onboard && !done ? 1 : 0) + '; transform: translateY(' + (s.onboard ? 0 : 6) + 'px)';
+
+    if (dotsFor !== s.c || dotEls.length !== n) { buildDots(n); dotsFor = s.c; }
+    deck.forEach(function (key, k) {
+      var cur = k === s.i && !done, rk = s.res[key];
+      var bg = cur ? '#FFFFFF' : (rk ? (rk === 'keep' ? '#E0703F' : 'rgba(255,255,255,0.38)') : 'rgba(255,255,255,0.18)');
+      dotEls[k].style.cssText = 'width: ' + (cur ? '18px' : '6px') + '; height: 6px; border-radius: 3px; background: ' + bg + '; transition: width 0.35s cubic-bezier(.34,1.4,.64,1), background 0.25s ease';
+    });
+
+    $('done').style.display = done ? 'flex' : 'none';
+    var keptKeys = deck.filter(function (key) { return s.res[key] === 'keep'; });
+    $('doneSub').textContent = GRID[s.c].short + ' · ' + n + '개 중';
+    $('doneCount').textContent = String(keptKeys.length);
+    $('keptList').innerHTML = '';
+    keptKeys.forEach(function (key) {
+      var c = CARDS[key];
+      var row = document.createElement('div'); row.style.cssText = 'display: flex; gap: 12px; align-items: center';
+      var im = document.createElement('div'); im.style.cssText = 'width: 104px; height: 58px; border-radius: 10px; background: ' + c.bg + '; flex: none';
+      var tx = document.createElement('div'); tx.style.cssText = 'display: flex; flex-direction: column; gap: 3px; min-width: 0';
+      var t1 = document.createElement('span'); t1.style.cssText = 'font-size: 14px; line-height: 1.4; font-weight: 700'; t1.textContent = c.title;
+      var t2 = document.createElement('span'); t2.style.cssText = 'font-size: 12px; color: #F5D48A'; t2.textContent = c.cell;
+      tx.appendChild(t1); tx.appendChild(t2); row.appendChild(im); row.appendChild(tx); $('keptList').appendChild(row);
+    });
+
+    $('scrim').style.cssText = 'position: absolute; inset: 0; z-index: 20; background: rgba(8,8,10,0.55); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); transition: opacity 0.28s ease; opacity: ' + (s.picker ? 1 : 0) + '; pointer-events: ' + (s.picker ? 'auto' : 'none');
+    $('sheet').style.cssText = "position: absolute; left: 8px; right: 8px; top: 56px; z-index: 21; padding: 8px 14px 18px; border-radius: 38px; font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: rgba(37,37,40,0.78); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 40px 80px rgba(0,0,0,0.55), inset 0 0.5px 0 rgba(255,255,255,0.18); display: flex; flex-direction: column; gap: 16px; transform-origin: 20% 0%; transition: transform 0.42s cubic-bezier(.34,1.25,.64,1), opacity 0.22s ease; opacity: " + (s.picker ? 1 : 0) + '; transform: ' + (s.picker ? 'scale(1) translateY(0)' : 'scale(0.6) translateY(-30px)') + '; pointer-events: ' + (s.picker ? 'auto' : 'none');
+    $('leftAll').textContent = '새 영상 ' + CARDS.filter(function (x, k) { return !s.res[k]; }).length;
+
+    GRID.forEach(function (g, k) {
+      var el = cellEls[k], keys = deckOf(k);
+      var unseen = keys.filter(function (key) { return !s.res[key]; });
+      var left = unseen.length, center = g.dom === -1, sel = k === s.c, picking = k === s.picking, empty = left === 0;
+      var delay = (Math.abs(Math.floor(k / 3) - 1) + Math.abs((k % 3) - 1)) * 45;
+      var rep = CARDS[(unseen.length ? unseen : keys)[0]] || null;
+      el.b.setAttribute('aria-label', g.label + ', ' + (empty ? '다 봤어요' : left + '개 남음'));
+      el.b.style.cssText = 'border: none; background: none; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: stretch; gap: 0; text-align: left; font-family: inherit; min-width: 0; '
+        + 'transition: transform 0.42s cubic-bezier(.34,1.3,.64,1) ' + (s.picker ? delay : 0) + 'ms, opacity 0.26s ease ' + (s.picker ? delay : 0) + 'ms; '
+        + 'opacity: ' + (s.picker ? (empty ? 0.4 : 1) : 0) + '; transform: scale(' + (picking ? 1.06 : (s.picker ? 1 : 0.8)) + ')';
+      el.art.style.cssText = 'position: relative; display: block; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: ' + (center || !rep ? '#1C1C1E' : rep.bg) + '; '
+        + 'box-shadow: ' + (sel ? '0 0 0 2px #0E0E11, 0 0 0 4px #FFFFFF' : '0 6px 16px -6px rgba(0,0,0,0.6)');
+      var mk = (unseen.length >= 4 ? unseen : keys).slice(0, 4);
+      el.tiles.forEach(function (t, j) { t.style.cssText = 'display: block; background: ' + (mk[j] != null ? CARDS[mk[j]].bg : 'transparent'); });
+      el.th.textContent = rep ? rep.thumb : '';
+      el.lab.style.cssText = 'margin-top: 8px; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #FFFFFF';
+      el.lab.textContent = g.short;
+      el.meta.style.cssText = 'margin-top: 1px; font-size: 12px; color: rgba(235,235,245,0.6)';
+      el.meta.textContent = String(left);
+    });
+  }
+
+  // ── 입력 ──
+  var cardEl = $('card');
+  cardEl.addEventListener('pointerdown', function (e) {
+    var done = S.i >= deckOf(S.c).length;
+    if (S.leaving || done || S.picker) return;
+    if (e.clientX - $('app').getBoundingClientRect().left < 24) return; // iOS 가장자리 뒤로 가기와 충돌 방지 (M4)
+    endOnboard();
+    cardEl.setPointerCapture(e.pointerId); sx = e.clientX; sy = e.clientY; moved = 0; vx = 0; vy = 0; lt = e.timeStamp; lx = e.clientX; ly = e.clientY; set({ drag: true });
+  });
+  cardEl.addEventListener('pointermove', function (e) {
+    if (!S.drag) return;
+    var dt = Math.max(1, e.timeStamp - lt);
+    vx = 0.8 * ((e.clientX - lx) / dt) + 0.2 * vx; vy = 0.8 * ((e.clientY - ly) / dt) + 0.2 * vy;
+    lt = e.timeStamp; lx = e.clientX; ly = e.clientY;
+    var x = e.clientX - sx, y = e.clientY - sy;
+    moved = Math.max(Math.abs(x), Math.abs(y));
+    if (Math.abs(x) > Math.abs(y)) set({ dx: Math.max(0, x), dy: 0 }); else set({ dx: 0, dy: Math.min(0, y) });
+  });
+  function up() {
+    if (!S.drag) return;
+    // 거리 또는 빠른 튕김(0.5px/ms 이상 + 30px 이상)으로 확정 — 네이티브 앱과 같은 감각
+    if (S.dx > 100 || (vx > 0.5 && S.dx > 30)) commit('keep');
+    else if (S.dy < -90 || (vy < -0.5 && S.dy < -30)) commit('skip');
+    else set({ drag: false, anim: true, dx: 0, dy: 0 });
+  }
+  cardEl.addEventListener('pointerup', up); cardEl.addEventListener('pointercancel', up);
+  $('player').addEventListener('click', function () { if (moved > 6) return; set({ play: !S.play }); });
+  $('undo').addEventListener('click', function () {
+    if (!S.undoable || S.i === 0 || lastKey == null) return;
+    clearTimeout(tt);
+    var res = Object.assign({}, S.res); delete res[lastKey]; lastKey = null;
+    window.__mfJudgments = (window.__mfJudgments || []).slice(0, -1);
+    set({ res: res, i: S.i - 1, toast: null, anim: false, dy: -300 });
+    setTimeout(function () { set({ anim: true, dy: 0 }); }, 30);
+  });
+  $('chip').addEventListener('click', function () { set({ picker: true }); });
+  $('doneOther').addEventListener('click', function () { set({ picker: true }); });
+  $('scrim').addEventListener('click', function () { set({ picker: false }); });
+  $('sheetClose').addEventListener('click', function () { set({ picker: false }); });
+
+  // ── 테스트용 상태 고정 ──
+  var st = Q.get('state');
+  if (st === 'keep') { S.onboard = false; S.dx = 118; S.anim = false; }
+  if (st === 'picker') { S.onboard = false; S.picker = true; }
+  if (st === 'toast') { S.onboard = false; S.res = { 0: 'keep' }; S.i = 1; S.toast = '담았어요'; S.undoable = true; }
+  if (st === 'done') {
+    S.onboard = false;
+    deckOf(S.c).forEach(function (key, j) { S.res[key] = (j % 3 === 0) ? 'keep' : 'skip'; });
+    S.i = deckOf(S.c).length;
+  }
+  render();
+
+  // ── 최초 온보딩: 오른쪽 담기 동작을 한 번 시연 ──
+  if (S.onboard) {
+    var at = function (ms, fn) { obt.push(setTimeout(fn, ms)); };
+    at(900, function () { set({ demo: true, anim: true, dx: 84 }); });
+    at(1900, function () { set({ dx: 0 }); });
+    at(2700, function () { set({ demo: false }); });
+    at(4200, function () { set({ onboard: false }); });
+  }
+})();
+</script>
+</body>
+</html>

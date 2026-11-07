@@ -1,0 +1,59 @@
+name: Morning feed parity
+
+# Pixel comparison of /morning-cards?fixture=1 against the delivered design reference
+# (frontend/tests/fixtures), 7 states, plus 3 behaviour tests. Never touches staging or prod.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['agent/1788-stg']
+    paths:
+      - 'frontend/src/features/morning-feed/**'
+      - 'frontend/src/app/router/**'
+      - 'frontend/tests/morning-feed.parity.spec.ts'
+      - 'frontend/tests/fixtures/morning-feed.*'
+      - 'frontend/playwright.parity.config.ts'
+      - '.github/workflows/morning-feed-parity.yml'
+
+concurrency:
+  group: morning-feed-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    name: Morning feed parity
+    # Pinned: ubuntu-latest moved to 26.04, which this Playwright cannot install a browser on.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: cd frontend && npm ci
+      - name: Install Playwright browsers
+        run: cd frontend && npx playwright install --with-deps chromium
+      - name: Build the frontend (placeholder service addresses, nothing is called)
+        run: cd frontend && npm run build
+        env:
+          VITE_SUPABASE_URL: https://placeholder.invalid
+          VITE_SUPABASE_ANON_KEY: placeholder
+          VITE_API_URL: http://127.0.0.1:9
+      - name: Run parity tests
+        run: cd frontend && npx playwright test -c playwright.parity.config.ts
+        env:
+          CI: true
+          IMPL_BASE: http://127.0.0.1:4173
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: morning-feed-parity
+          path: |
+            frontend/test-results/parity-report/
+            frontend/test-results/parity-artifacts/
+            frontend/tests/morning-feed.parity.spec.ts-snapshots/
+          retention-days: 7

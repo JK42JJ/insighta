@@ -107,6 +107,11 @@ export async function postJudgment(input: JudgmentInput): Promise<void> {
   });
 }
 
+/** Cancels the caller's latest judgment (the row is kept and marked cancelled server-side). */
+export async function undoLastJudgment(): Promise<void> {
+  await call<unknown>('/judgments/last', { method: 'DELETE' });
+}
+
 /** Server flag status. Answers 200 even when the flag is off. */
 export async function fetchMorningCardsStatus(): Promise<{ enabled: boolean }> {
   const res = await call<{ data: { enabled: boolean } }>('/status');

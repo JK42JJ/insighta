@@ -27,7 +27,7 @@ import { AdminNewsletter } from '@/pages/admin/ui/AdminNewsletter';
 import { AdminNewsletterPreview } from '@/pages/admin/ui/AdminNewsletterPreview';
 import { AdminChannels } from '@/pages/admin/ui/AdminChannels';
 import { MorningCardsReviewRoute } from '@/features/morning-cards/MorningCardsReviewRoute';
-import { MorningCardsRoute } from '@/features/morning-cards/MorningCardsRoute';
+import { MorningCardsEntry } from './MorningCardsEntry';
 import BriefNotePage from '@/pages/brief/ui/BriefNotePage';
 import BriefCategoryPage from '@/pages/brief/ui/BriefCategoryPage';
 
@@ -155,14 +155,7 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/morning-cards"
-          element={
-            <ProtectedRoute>
-              <MorningCardsRoute />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/morning-cards" element={<MorningCardsEntry />} />
         <Route
           path="/morning-cards/review"
           element={
