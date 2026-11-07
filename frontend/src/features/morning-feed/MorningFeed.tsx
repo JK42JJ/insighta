@@ -562,7 +562,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                     onPointerDown={(ev) => ev.stopPropagation()}
                     onClick={() => soundCtl.current?.toggleSound()}
                     style={css(
-                      'margin-left: auto; height: 26px; padding: 0 10px; border: none; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; cursor: pointer; background: ' +
+                      'margin-left: auto; width: 26px; height: 26px; padding: 0; border: none; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; background: ' +
                         (soundOn ? 'var(--mf-accent)' : 'var(--mf-surface)') +
                         '; color: ' +
                         (soundOn ? 'var(--mf-ink)' : 'var(--mf-why)')
@@ -586,7 +586,6 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                         <path d="M17 9l5 6M22 9l-5 6" />
                       )}
                     </svg>
-                    {soundOn ? '소리 켬' : '소리 켜기'}
                   </button>
                 ) : null}
               </div>
