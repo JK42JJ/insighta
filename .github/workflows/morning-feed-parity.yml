@@ -47,6 +47,36 @@ jobs:
         env:
           CI: true
           IMPL_BASE: http://127.0.0.1:4173
+      - name: Compare the separately saved captures (reference vs implementation)
+        if: always()
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          import glob, os
+          from PIL import Image, ImageChops
+          base = 'frontend/test-results/parity-captures'
+          lines = ['| state | different pixels (level > 24) | of |', '|---|---|---|']
+          for ref in sorted(glob.glob(base + '/reference/*.png')):
+              name = os.path.basename(ref)
+              impl = base + '/implementation/' + name
+              if not os.path.exists(impl):
+                  lines.append(f'| {name} | missing implementation capture | |'); continue
+              a, b = Image.open(ref).convert('RGB'), Image.open(impl).convert('RGB')
+              if a.size != b.size:
+                  lines.append(f'| {name} | size differs {a.size} vs {b.size} | |'); continue
+              d = ImageChops.difference(a, b).convert('L').point(lambda v: 255 if v > 24 else 0)
+              n = sum(1 for v in d.getdata() if v)
+              lines.append(f'| {name} | {n} | {a.size[0] * a.size[1]} |')
+              w, h = a.size
+              side = Image.new('RGB', (w * 2 + 40, h), (40, 40, 40)); side.paste(a, (0, 0)); side.paste(b, (w + 40, 0))
+              os.makedirs(base + '/side-by-side', exist_ok=True)
+              side.resize((side.width // 2, side.height // 2)).save(base + '/side-by-side/' + name)
+          out = os.environ.get('GITHUB_STEP_SUMMARY')
+          text = '\n'.join(lines)
+          print(text)
+          if out:
+              open(out, 'a').write('### Separately saved captures\n' + text + '\n')
+          PY
       - name: Upload results
         uses: actions/upload-artifact@v4
         if: always()
@@ -55,5 +85,6 @@ jobs:
           path: |
             frontend/test-results/parity-report/
             frontend/test-results/parity-artifacts/
+            frontend/test-results/parity-captures/
             frontend/tests/morning-feed/morning-feed.parity.spec.ts-snapshots/
           retention-days: 7
