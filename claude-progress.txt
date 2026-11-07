@@ -6,3 +6,4 @@ DONE: src/config/morning-cards.ts (MOBILE_MORNING_CARDS, MORNING_CARDS_TEST_USER
 Next: domain constants (morning-cards-domains).
 DONE: src/modules/morning-cards/domains.ts (3 domains mapped to CURATION_DOMAINS) + tests/smoke/morning-cards-domains.test.ts (3 pass, tsc clean). Next: swipe-reuse decision doc.
 DONE: docs/work-orders/mobile-morning-cards-swipe-reuse.md (decision: no reuse; cited lines are in frontend/public/mobile/index.html and are down-swipe/back/vertical-strip handlers). Next: card-source function.
+DONE: src/modules/morning-cards/source.ts (fetchMorningCards from video_pool_domain_tags, KO pool labels mapped per PRD domain; placeholder reason until the reason feature) + tests/smoke/morning-cards-source.test.ts (3 pass, tsc clean). Note: pool tags use the 9 KO labels, not curation domains; startup_gov_support shares the business label. Next: upload-window filter + shortage marker.

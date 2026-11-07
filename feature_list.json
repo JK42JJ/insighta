@@ -35,7 +35,7 @@
       "the test asserts each card has video_id, title, channel_name, published_at, thumbnail_url and reason",
       "grep -rn 'googleapis\\|youtube.googleapis' src/modules/morning-cards returns no matches"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
