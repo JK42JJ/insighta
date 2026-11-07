@@ -1,0 +1,19 @@
+// DRAFT for insighta-sprint/.devcontainer/devcontainer.json — not applied anywhere.
+// Thursday needs only a place to run the verify commands; the firewall and the
+// unattended-session pieces come from Anthropic's reference devcontainer
+// (devcontainer.json, Dockerfile, init-firewall.sh) before Saturday.
+{
+  "name": "insighta-sprint",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "remoteUser": "node",
+  "hostRequirements": { "cpus": 4 },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [],
+  "customizations": {
+    "codespaces": {
+      "repositories": {
+        "JK42JJ/insighta-sprint": { "permissions": { "contents": "write" } }
+      }
+    }
+  }
+}
