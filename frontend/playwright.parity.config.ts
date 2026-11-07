@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 // with the delivered reference page, state by state. Served from a production build.
 export default defineConfig({
   testDir: './tests',
-  testMatch: /morning-feed\/morning-feed\.(parity|selfcheck)\.spec\.ts/,
+  testMatch: /morning-feed\/morning-feed\.(parity|selfcheck|sizes)\.spec\.ts/,
   timeout: 60_000,
   retries: 0,
   fullyParallel: false,
