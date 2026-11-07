@@ -3454,3 +3454,36 @@ model nl_eval {
   @@id([issue_id, axis, at])
   @@schema("public")
 }
+
+model morning_card_judgments {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  video_id       String   @db.VarChar(20)
+  domain         String   @db.VarChar(50)
+  verdict        String   @db.VarChar(10)
+  reason_tags    String[]
+  shown_position Int
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  cell           String?  @db.VarChar(50)
+  focus          String[]
+  canceled_at    DateTime? @db.Timestamptz(6)
+
+  @@index([user_id, created_at(sort: Desc)], map: "idx_mc_judgments_user_created")
+  @@index([domain, video_id], map: "idx_mc_judgments_domain_video")
+  @@schema("public")
+}
+
+/// Morning feed (오늘의 픽) per-video annotation. Raw SQL DDL: prisma/migrations/morning-feed/001_morning_feed.sql
+model morning_feed_annotations {
+  video_id    String    @id @db.VarChar(20)
+  cell        String    @db.VarChar(50)
+  focus       String[]
+  why         String?   @db.VarChar(80)
+  judge_score Int?
+  judged_at   DateTime? @db.Timestamptz(6)
+  source      String    @default("manual") @db.VarChar(30)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([cell], map: "idx_mf_annotations_cell")
+  @@schema("public")
+}
