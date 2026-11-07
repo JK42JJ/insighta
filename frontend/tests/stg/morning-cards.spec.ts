@@ -32,7 +32,7 @@ for (const vp of [
     expect(EMAIL, 'STG_TEST_EMAIL is not set').not.toBe('');
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await signIn(page);
-    await page.goto('/morning-cards');
+    await page.goto('/morning-cards/classic');
     await expect(page.getByTestId('morning-card')).toBeVisible();
     const title = await page.getByTestId('morning-card').locator('h2').innerText();
     await expect(page.getByTestId('morning-card')).not.toContainText(/관련도|r1_min/);
