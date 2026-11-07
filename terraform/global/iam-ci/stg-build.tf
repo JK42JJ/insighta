@@ -65,6 +65,9 @@ resource "aws_iam_policy" "stg_ecr_push" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
           "ecr:PutImage",
+          # buildx reads the target repository while pushing (manifest and layer checks); read access is limited to the same two staging repositories.
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
         ]
         Resource = [for r in aws_ecr_repository.stg : r.arn]
       },
