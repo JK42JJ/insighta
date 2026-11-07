@@ -84,3 +84,64 @@ export async function saveJudgment(db: JudgmentDb, input: JudgmentInput): Promis
   await db.morning_card_judgments.create({ data });
   return data;
 }
+
+/** Db surface for the PC review list (read verdicts, update reason tags). */
+export interface JudgmentReviewDb {
+  morning_card_judgments: {
+    findMany(args: {
+      where: { user_id: string; domain: string };
+      orderBy: { created_at: 'desc' };
+    }): Promise<Array<{ video_id: string; verdict: string; reason_tags: string[] }>>;
+    updateMany(args: {
+      where: { user_id: string; video_id: string; domain: string };
+      data: { reason_tags: MorningCardReasonTag[] };
+    }): Promise<{ count: number }>;
+  };
+}
+
+export interface SavedVerdict {
+  verdict: string;
+  reason_tags: string[];
+}
+
+/** Latest saved verdict per video for one user and domain. */
+export async function loadVerdictsByVideo(
+  db: JudgmentReviewDb,
+  userId: string,
+  domain: string
+): Promise<Map<string, SavedVerdict>> {
+  const rows = await db.morning_card_judgments.findMany({
+    where: { user_id: userId, domain },
+    orderBy: { created_at: 'desc' },
+  });
+  const out = new Map<string, SavedVerdict>();
+  for (const r of rows) {
+    // Rows are newest first; keep the first one seen per video.
+    if (!out.has(r.video_id)) {
+      out.set(r.video_id, { verdict: r.verdict, reason_tags: r.reason_tags });
+    }
+  }
+  return out;
+}
+
+/** Sets reason tags on an existing judgment. Returns false when none matched. */
+export async function setReasonTags(
+  db: JudgmentReviewDb,
+  input: { user_id: string; video_id: string; domain: string; reason_tags: unknown }
+): Promise<boolean> {
+  if (!YOUTUBE_VIDEO_ID_RE.test(input.video_id ?? '')) {
+    throw new JudgmentValidationError('invalid video_id');
+  }
+  if (!Object.prototype.hasOwnProperty.call(MORNING_CARD_DOMAINS, input.domain)) {
+    throw new JudgmentValidationError('unknown domain');
+  }
+  const tags = input.reason_tags;
+  if (!Array.isArray(tags) || !tags.every(isReasonTag)) {
+    throw new JudgmentValidationError('unknown reason tag');
+  }
+  const res = await db.morning_card_judgments.updateMany({
+    where: { user_id: input.user_id, video_id: input.video_id, domain: input.domain },
+    data: { reason_tags: [...new Set(tags)] },
+  });
+  return res.count > 0;
+}

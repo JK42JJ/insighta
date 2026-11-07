@@ -100,7 +100,7 @@
       "npx jest --maxWorkers=2 tests/smoke/morning-cards-review.test.ts passes",
       "the test asserts the list joins verdicts to cards and PATCH rejects unknown reason tags"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
