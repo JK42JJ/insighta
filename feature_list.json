@@ -53,7 +53,7 @@
       "npx jest --maxWorkers=2 tests/smoke/morning-cards-reason.test.ts passes",
       "the test asserts the reason is non-empty and under a named max length constant"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "schema",

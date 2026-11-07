@@ -5,6 +5,7 @@
  */
 import { DOMAIN_LABEL_KO, type DomainSlug } from '@/config/domains';
 import type { MorningCardDomainKey } from './domains';
+import { buildMorningCardReason } from './reason';
 
 /** Default number of cards shown per domain. */
 export const MORNING_CARDS_DEFAULT_LIMIT = 10;
@@ -55,7 +56,11 @@ export interface MorningCardsDb {
 }
 
 function buildSimpleReason(row: TagRow): string {
-  return `관련도 ${row.relevance_score.toFixed(2)} (${row.source})`;
+  return buildMorningCardReason({
+    relevance_score: row.relevance_score,
+    source: row.source,
+    published_at: row.video_pool.published_at,
+  });
 }
 
 export interface MorningCardsResult {
