@@ -73,7 +73,7 @@
       "npx jest --maxWorkers=2 tests/smoke/morning-cards-judgment-repo.test.ts passes with a mocked db",
       "the test asserts an unknown verdict or reason tag is rejected and a valid call writes exactly one row"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
