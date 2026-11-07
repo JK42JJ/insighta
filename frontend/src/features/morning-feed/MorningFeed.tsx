@@ -1133,7 +1133,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
         <div
           data-testid="mf-sheet"
           style={css(
-            "position: absolute; left: 8px; right: 8px; top: calc(56px + env(safe-area-inset-top, 0px)); z-index: 21; padding: 8px 14px 18px; border-radius: 38px; font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: var(--mf-sheet); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 40px 80px var(--mf-shadow-sheet), inset 0 0.5px 0 var(--mf-sheet-edge); display: flex; flex-direction: column; gap: 16px; transform-origin: 20% 0%; transition: transform 0.42s cubic-bezier(.34,1.25,.64,1), opacity 0.22s ease; opacity: " +
+            "position: absolute; left: 8px; right: 8px; top: calc(56px + env(safe-area-inset-top, 0px)); z-index: 21; box-sizing: border-box; max-height: calc(100% - 56px - env(safe-area-inset-top, 0px) - max(12px, env(safe-area-inset-bottom, 0px))); overflow-y: auto; overscroll-behavior: contain; padding: 8px 14px 18px; border-radius: 38px; font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: var(--mf-sheet); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 40px 80px var(--mf-shadow-sheet), inset 0 0.5px 0 var(--mf-sheet-edge); display: flex; flex-direction: column; gap: 16px; transform-origin: 20% 0%; transition: transform 0.42s cubic-bezier(.34,1.25,.64,1), opacity 0.22s ease; opacity: " +
               (s.picker ? 1 : 0) +
               '; transform: ' +
               (s.picker ? 'scale(1) translateY(0)' : 'scale(0.6) translateY(-30px)') +

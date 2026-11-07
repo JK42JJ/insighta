@@ -61,6 +61,13 @@ for (const [label, w, h] of SIZES) {
         expect(Math.abs(p.height - Math.floor((Math.min(w, 430) * 9) / 16))).toBeLessThanOrEqual(1);
       }
 
+      if (state === 'picker') {
+        // the sheet is never taller than the screen: on a short phone it scrolls instead of being cut off
+        const sheet = (await page.getByTestId('mf-sheet').boundingBox())!;
+        expect(sheet.y + sheet.height, 'sheet bottom edge').toBeLessThanOrEqual(h + 0.5);
+        expect(sheet.x + sheet.width, 'sheet right edge').toBeLessThanOrEqual(box.x + box.width + 0.5);
+      }
+
       fs.mkdirSync(OUT, { recursive: true });
       fs.writeFileSync(path.join(OUT, `${label}-${state}.png`), await page.screenshot());
     });
