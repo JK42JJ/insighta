@@ -2,3 +2,5 @@ PRD #1788: stg-only mobile morning-card screen (flag MOBILE_MORNING_CARDS, off b
 Split into 25 features: config (flag, allowlist, domain map) -> backend (pool source, window filter, reason, schema DDL [protected], repo, routes) -> frontend (api client, card, picker, swipe hook, page, empty state, route, review list) -> Playwright 390x844 -> stg chart flag [protected] -> full verify.
 Notes: frontend/index.html is 127 lines, so the cited swipe lines 6283-6330 do not exist; MobileGateNotice exists in the router and must be bypassed only for this flagged route; PRD domains are not in DOMAIN_SLUGS, map them to curation domains.
 First feature: src/config/morning-cards.ts flag + test-account allowlist with a Jest test.
+DONE: src/config/morning-cards.ts (MOBILE_MORNING_CARDS, MORNING_CARDS_TEST_USER_IDS) + tests/smoke/morning-cards-config.test.ts (4 pass, tsc clean).
+Next: domain constants (morning-cards-domains).

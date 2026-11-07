@@ -7,7 +7,7 @@
       "the same test asserts a listed user id is allowed and an unlisted one is not",
       "grep -rn \"process.env\\[\" src/modules/morning-cards returns no matches"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "config",
