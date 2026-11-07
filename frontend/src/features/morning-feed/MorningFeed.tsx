@@ -563,9 +563,9 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                     onClick={() => soundCtl.current?.toggleSound()}
                     style={css(
                       'margin-left: auto; width: 26px; height: 26px; padding: 0; border: none; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; background: ' +
-                        (soundOn ? 'var(--mf-accent)' : 'var(--mf-surface)') +
+                        'var(--mf-surface)' +
                         '; color: ' +
-                        (soundOn ? 'var(--mf-ink)' : 'var(--mf-why)')
+                        (soundOn ? 'var(--mf-fg)' : 'var(--mf-muted)')
                     )}
                   >
                     <svg
