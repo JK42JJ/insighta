@@ -71,6 +71,10 @@ keel:
 
 frontend:
   replicaCount: 1
+  # Replace the pod instead of overlapping two. The namespace quota (limits.memory)
+  # had no room for the surge pod, so the 2026-11-07 frontend rollout never
+  # started and staging kept serving the 2026-10-29 bundle. Same reason as api.
+  strategyType: Recreate
   resources:
     requests:
       memory: 16Mi
