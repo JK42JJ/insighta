@@ -191,7 +191,7 @@ export async function fetchMorningFeed(): Promise<{ cells: FeedApiCell[]; cards:
 export async function postFeedJudgment(input: {
   video_id: string;
   cell: string;
-  verdict: MorningCardVerdict;
+  verdict: MorningCardVerdict | 'pass';
   shown_position: number;
 }): Promise<void> {
   await call<unknown>(

@@ -127,6 +127,20 @@ describe('morning feed', () => {
     expect(
       queries.filter((q) => q.sql.includes('INSERT INTO public.morning_card_judgments'))
     ).toHaveLength(1);
+    for (const verdict of ['skip', 'pass']) {
+      const res = await app.inject({
+        method: 'POST',
+        url: `${BASE}/judgments`,
+        payload: { video_id: 'aaaaaaaaaaa', cell: '기술/개발', verdict, shown_position: 1 },
+      });
+      expect(res.statusCode).toBe(201);
+    }
+    const unknown = await app.inject({
+      method: 'POST',
+      url: `${BASE}/judgments`,
+      payload: { video_id: 'aaaaaaaaaaa', cell: '기술/개발', verdict: 'love', shown_position: 1 },
+    });
+    expect(unknown.statusCode).toBe(400);
     const bad = await app.inject({
       method: 'POST',
       url: `${BASE}/judgments`,

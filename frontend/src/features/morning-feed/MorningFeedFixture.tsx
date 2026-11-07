@@ -17,9 +17,10 @@ export function MorningFeedFixture() {
       cards={CARDS}
       grid={GRID}
       onJudge={(e) => {
-        void postFixtureJudgment({ verdict: e.verdict, shown_position: e.shownPosition }).catch(
-          () => undefined
-        );
+        void postFixtureJudgment({
+          verdict: e.verdict === 'pass' ? 'skip' : e.verdict,
+          shown_position: e.shownPosition,
+        }).catch(() => undefined);
       }}
       onUndo={() => {
         void undoFixtureJudgment().catch(() => undefined);

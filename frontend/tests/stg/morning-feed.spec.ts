@@ -57,3 +57,34 @@ test('morning feed: swipe right saves one judgment, undo cancels it (phone 390x8
   expect(res.status()).toBe(200);
   expect(((await res.json()) as { data?: { canceled?: number } }).data?.canceled).toBe(1);
 });
+
+// Left = dislike (saved as 'skip'), up = the card is replaced (saved as 'pass'); undo cancels each.
+for (const [name, dx, dy, verdict] of [
+  ['left', -160, 0, 'skip'],
+  ['up', 0, -160, 'pass'],
+] as const) {
+  test(`morning feed: swipe ${name} saves '${verdict}' and undo cancels it`, async ({ page }) => {
+    expect(EMAIL, 'STG_TEST_EMAIL is not set').not.toBe('');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page);
+    await page.goto('/morning-cards?onboard=0');
+    await expect(page.getByTestId('mf-card')).toBeVisible({ timeout: 25_000 });
+    const saved = page.waitForRequest(
+      (r) => r.url().includes('/api/v1/morning-feed/judgments') && r.method() === 'POST'
+    );
+    const b = (await page.getByTestId('mf-title').boundingBox())!;
+    const x = b.x + b.width / 2 + (dx < 0 ? 60 : 0);
+    const y = b.y + b.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 10 });
+    await page.mouse.up();
+    const req = await saved;
+    expect((req.postDataJSON() as { verdict: string }).verdict).toBe(verdict);
+    const undone = page.waitForResponse(
+      (r) => r.url().includes('/api/v1/morning-feed/judgments/last') && r.request().method() === 'DELETE'
+    );
+    await page.getByTestId('mf-undo').click();
+    expect((await undone).status()).toBe(200);
+  });
+}

@@ -32,7 +32,8 @@ export const FEED_MAX_CARDS_PER_CELL = 15;
 export const FEED_MIN_DURATION_SEC = 180;
 export const FEED_MAX_POSITION = 1000;
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
-export const FEED_VERDICTS = ['useful', 'skip'] as const;
+/** useful = like, skip = dislike (X), pass = the card was replaced without a judgment. */
+export const FEED_VERDICTS = ['useful', 'skip', 'pass'] as const;
 
 import { MS_PER_DAY } from '@/utils/time-constants';
 

@@ -51,7 +51,8 @@ export interface FeedCell {
 
 export interface JudgeEvent {
   index: number;
-  verdict: 'useful' | 'skip';
+  /** useful = like, skip = dislike (X), pass = card replaced without a judgment. */
+  verdict: 'useful' | 'skip' | 'pass';
   shownPosition: number;
 }
 
@@ -71,7 +72,7 @@ interface FeedState {
   anim: boolean;
   leaving: boolean;
   play: boolean;
-  res: Record<number, 'keep' | 'skip'>;
+  res: Record<number, 'keep' | 'skip' | 'pass'>;
   toast: string | null;
   undoable: boolean;
   pulse: boolean;
@@ -240,7 +241,17 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     set({ picking: k });
     later(() => {
       if (timers.current.tt != null) window.clearTimeout(timers.current.tt);
-      set({ picker: false, c: k, i: 0, anim: false, dx: 0, dy: 520, play: false, toast: null });
+      const firstUnseen = smooth ? deckOf(k).findIndex((key) => !S.res[key]) : 0;
+      set({
+        picker: false,
+        c: k,
+        i: firstUnseen < 0 ? deckOf(k).length : firstUnseen,
+        anim: false,
+        dx: 0,
+        dy: 520,
+        play: false,
+        toast: null,
+      });
       popOwnEntry();
       if (smooth) enterFrom(520);
       later(() => {
@@ -253,6 +264,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
   // ── live mode: the card is moved by physics and painted straight onto the element ──
   const cardEl = useRef<HTMLDivElement | null>(null);
   const keepEl = useRef<HTMLDivElement | null>(null);
+  const dislikeEl = useRef<HTMLDivElement | null>(null);
   const fitEl = useRef<HTMLDivElement | null>(null);
   const pos = useRef({ x: 0, y: 0 });
   const frameId = useRef<number | null>(null);
@@ -269,13 +281,18 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     pos.current = { x, y };
     const el = cardEl.current;
     if (!el) return;
-    const rot = x > 0 ? x / 30 : 0;
+    const rot = x / 30; // tilts toward the side it is going
     el.style.transform =
       'translate3d(' + x + 'px, ' + y + 'px, 0) rotate(' + rot.toFixed(2) + 'deg)';
     const k = Math.max(0, Math.min(1, x / 90));
     if (keepEl.current) {
       keepEl.current.style.opacity = String(k);
       keepEl.current.style.transform = 'scale(' + (0.5 + 0.5 * k).toFixed(2) + ')';
+    }
+    if (dislikeEl.current) {
+      const d = Math.max(0, Math.min(1, -x / 90));
+      dislikeEl.current.style.opacity = String(d);
+      dislikeEl.current.style.transform = 'scale(' + (0.5 + 0.5 * d).toFixed(2) + ')';
     }
     if (fitEl.current) {
       const on = k > 0.3;
@@ -361,7 +378,10 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     );
   };
 
-  const commitSmooth = (kind: 'keep' | 'skip', v: { x: number; y: number } = { x: 0, y: 0 }) => {
+  const commitSmooth = (
+    kind: 'keep' | 'dislike' | 'pass',
+    v: { x: number; y: number } = { x: 0, y: 0 }
+  ) => {
     if (S.leaving) return;
     set({ leaving: true, play: false, pulse: kind === 'keep' });
     if (kind === 'keep') {
@@ -371,24 +391,30 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
         /* not supported */
       }
     }
-    const tx = kind === 'keep' ? 460 : pos.current.x;
-    const ty = kind === 'keep' ? pos.current.y : -900;
+    const tx = kind === 'keep' ? 460 : kind === 'dislike' ? -460 : pos.current.x;
+    const ty = kind === 'pass' ? -900 : pos.current.y;
     flyTo(tx, ty, Math.hypot(v.x, v.y) * 1000, () => {
       const deck = deckOf(S.c);
       const res = { ...S.res };
-      res[deck[S.i]] = kind;
+      res[deck[S.i]] = kind === 'keep' ? 'keep' : kind === 'dislike' ? 'skip' : 'pass';
       lastKey.current = deck[S.i];
       onJudge({
         index: deck[S.i],
-        verdict: kind === 'keep' ? 'useful' : 'skip',
+        verdict: kind === 'keep' ? 'useful' : kind === 'dislike' ? 'skip' : 'pass',
         shownPosition: S.i,
       });
       set({ res, i: S.i + 1, pulse: false, leaving: false });
-      showToast(kind === 'keep' ? '담았어요' : '넘겼어요', true);
+      showToast(
+        kind === 'keep' ? '담았어요' : kind === 'dislike' ? '비선호로 표시했어요' : '넘겼어요',
+        true
+      );
       enterFrom(420);
     });
   };
-  const doCommit = (kind: 'keep' | 'skip') => (smooth ? commitSmooth(kind) : commit(kind));
+  const doCommit = (kind: 'keep' | 'skip' | 'pass') =>
+    smooth
+      ? commitSmooth(kind === 'skip' ? 'dislike' : kind)
+      : commit(kind === 'pass' ? 'skip' : kind);
 
   const onDownS = (e: ReactPointerEvent<HTMLDivElement>) => {
     const isDone = S.i >= deckOf(S.c).length;
@@ -434,8 +460,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     }
     let x = m.axis === 'x' ? m.ox + dx : m.ox;
     let y = m.axis === 'y' ? m.oy + dy : m.oy;
-    if (x < 0) x = rubberBand(x, 40); // directions the card may not go pull back softly
-    if (y > 0) y = rubberBand(y, 40);
+    if (y > 0) y = rubberBand(y, 40); // down is not a direction: it pulls back softly
     m.pend = { x, y };
     if (m.paintRaf == null) {
       m.paintRaf = window.requestAnimationFrame(() => {
@@ -464,7 +489,8 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     const v = idle ? { x: 0, y: 0 } : { x: g.vx, y: g.vy };
     const { x, y } = pos.current;
     if (x > 100 || (v.x > 0.5 && x > 30)) commitSmooth('keep', v);
-    else if (y < -90 || (v.y < -0.5 && y < -30)) commitSmooth('skip', v);
+    else if (x < -100 || (v.x < -0.5 && x < -30)) commitSmooth('dislike', v);
+    else if (y < -90 || (v.y < -0.5 && y < -30)) commitSmooth('pass', v);
     else springTo(0, 0, v, 420, 0.72);
   };
 
@@ -735,8 +761,11 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
             <button type="button" className="mf-sr" onClick={() => doCommit('keep')}>
               담기
             </button>
-            <button type="button" className="mf-sr" onClick={() => doCommit('skip')}>
+            <button type="button" className="mf-sr" onClick={() => doCommit('pass')}>
               넘기기
+            </button>
+            <button type="button" className="mf-sr" onClick={() => doCommit('skip')}>
+              비선호
             </button>
             <div
               data-testid="mf-player"
@@ -890,6 +919,28 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                   {card.why}
                 </div>
               </div>
+              {smooth ? (
+                <div
+                  data-testid="mf-dislikemark"
+                  ref={dislikeEl}
+                  style={css(
+                    'position: absolute; top: 50%; left: 50%; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; background: var(--mf-surface); display: grid; place-items: center; box-shadow: 0 10px 30px var(--mf-shadow-toast); pointer-events: none; opacity: 0; transform: scale(0.5)'
+                  )}
+                >
+                  <svg
+                    width="40"
+                    height="40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--mf-fg)"
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </div>
+              ) : null}
               <div
                 data-testid="mf-keepmark"
                 ref={keepEl}

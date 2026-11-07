@@ -7,7 +7,12 @@
 export type QueueOp =
   | {
       kind: 'judge';
-      body: { video_id: string; cell: string; verdict: 'useful' | 'skip'; shown_position: number };
+      body: {
+        video_id: string;
+        cell: string;
+        verdict: 'useful' | 'skip' | 'pass';
+        shown_position: number;
+      };
     }
   | { kind: 'undo' };
 

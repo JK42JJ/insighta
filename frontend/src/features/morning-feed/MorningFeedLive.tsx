@@ -70,7 +70,7 @@ export function MorningFeedLive() {
   const onJudge = useMemo(
     () =>
       (cards: FeedCard[]) =>
-      (e: { index: number; verdict: 'useful' | 'skip'; shownPosition: number }) => {
+      (e: { index: number; verdict: 'useful' | 'skip' | 'pass'; shownPosition: number }) => {
         const card = cards[e.index];
         if (!card?.videoId) return;
         queue.current?.enqueue({

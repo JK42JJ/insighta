@@ -83,6 +83,8 @@ APPLY_FILES=(
   "prisma/migrations/morning-cards/001_morning_card_judgments.sql"
   # Morning feed (오늘의 픽): annotation table + 3 judgment columns. IF NOT EXISTS -- idempotent.
   "prisma/migrations/morning-feed/001_morning_feed.sql"
+  # Morning feed: third verdict "pass". DROP/ADD CONSTRAINT -- idempotent.
+  "prisma/migrations/morning-feed/002_pass_verdict.sql"
   "prisma/migrations/mandala_embeddings/001_add_ivfflat_index.sql"
   # CP462+ Issue #649 — Card preference signal (heart/archive/delete) +
   # mandala_relevance_pct 0-100 single fit score. Both files use
