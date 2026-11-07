@@ -164,7 +164,7 @@
       "cd frontend && npx vitest run src/__tests__/morning-cards-page.test.tsx passes",
       "the test asserts one swipe advances to the next card and calls the judgment API exactly once with the shown position"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
