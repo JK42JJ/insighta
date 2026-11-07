@@ -38,6 +38,8 @@ describe('publish-tags writes only what build-and-push built', () => {
     const conds = steps
       .filter((s) => (s.name ?? '').startsWith('Build & push'))
       .filter((s) => !(s.name ?? '').includes('(staging)'))
+      // The agent-branch builds (staging repositories only) have their own steps, pinned in stg-repo-override.test.ts.
+      .filter((s) => !(s.name ?? '').includes('agent branch'))
       .map((s) => s.if ?? '');
     expect(conds).toHaveLength(3);
     expect(conds.join(' ')).toMatch(/scope\.outputs\.api/);

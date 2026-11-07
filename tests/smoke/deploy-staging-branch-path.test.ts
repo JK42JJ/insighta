@@ -31,7 +31,8 @@ describe('staging from an agent branch, prod untouched', () => {
     (job) => {
       const c = cond(job);
       expect(c).toContain('!inputs.staging_only');
-      expect(c).not.toContain('agent/');
+      // No prod job runs FROM an agent branch: at most it names the branch to exclude it.
+      expect(c.replace("!startsWith(github.ref, 'refs/heads/agent/')", '')).not.toContain('agent/');
     }
   );
 
@@ -41,10 +42,12 @@ describe('staging from an agent branch, prod untouched', () => {
     }
   });
 
-  it('no job other than the three staging jobs mentions agent/', () => {
+  it('only the staging jobs allow agent/*; the build job and prod schema sync mention it to restrict it', () => {
+    const allowed = [...STAGING_JOBS, 'build-and-push', 'migrate'];
     const others = Object.keys(wf.jobs).filter(
-      (j) => !STAGING_JOBS.includes(j) && cond(j).includes('agent/')
+      (j) => !allowed.includes(j) && cond(j).includes('agent/')
     );
     expect(others).toEqual([]);
+    expect(cond('build-and-push')).toContain('inputs.staging_only');
   });
 });
