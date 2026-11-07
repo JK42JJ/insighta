@@ -71,10 +71,14 @@ async function fakeSession(page: Page): Promise<void> {
         created_at: '2026-01-01T00:00:00.000Z',
       },
     };
-    // The key depends on the Supabase host; the dev default host is localhost.
-    for (const ref of ['localhost', '127']) {
-      localStorage.setItem(`sb-${ref}-auth-token`, JSON.stringify(session));
-    }
+    // The storage key depends on the Supabase host (sb-<host>-auth-token), which is
+    // unknown here. Answer any such key with the fake session instead of guessing.
+    const authKey = /^sb-.+-auth-token$/;
+    const realGetItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = function (key: string): string | null {
+      if (this === window.localStorage && authKey.test(key)) return JSON.stringify(session);
+      return realGetItem.call(this, key);
+    };
   }, FAR_FUTURE_SECONDS);
 }
 
