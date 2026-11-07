@@ -499,11 +499,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
               }}
             >
               {card.videoId ? (
-                <YouTubePlayer
-                  key={card.videoId}
-                  videoId={card.videoId}
-                  active={!s.leaving && !s.picker && !done}
-                />
+                <YouTubePlayer videoId={card.videoId} active={!s.leaving && !s.picker && !done} />
               ) : (
                 <>
                   <div

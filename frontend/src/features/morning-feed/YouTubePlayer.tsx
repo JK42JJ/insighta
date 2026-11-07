@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
  */
 
 interface YtPlayer {
+  loadVideoById(videoId: string): void;
   mute(): void;
   unMute(): void;
   isMuted(): boolean;
@@ -89,17 +90,24 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
   const player = useRef<YtPlayer | null>(null);
   const [failed, setFailed] = useState(false);
 
+  const ready = useRef(false);
+  const loaded = useRef(videoId);
+  const wantSound = useRef(soundPreferred());
+  const first = useRef(videoId);
+
+  // One player for the whole screen. A new card calls loadVideoById on it instead of building a
+  // new iframe: the sound the person turned on belongs to this player, so it carries over (a
+  // fresh iframe per card starts muted again and the browser will not unmute it without a tap).
   useEffect(() => {
     let alive = true;
     let watcher: number | null = null;
-    setFailed(false);
     const mount = document.createElement('div');
     host.current?.appendChild(mount);
     loadYouTubeApi()
       .then((yt) => {
         if (!alive) return;
         player.current = new yt.Player(mount, {
-          videoId,
+          videoId: first.current,
           width: '100%',
           height: '100%',
           playerVars: {
@@ -114,16 +122,15 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
           events: {
             onReady: (e) => {
               const p = e.target;
-              let autoMuted = false;
-              if (soundPreferred()) {
-                // try with sound first; a browser that refuses gets the muted fallback
+              ready.current = true;
+              if (wantSound.current) {
+                // a returning visitor who chose sound: try it, fall back to muted if the browser refuses
                 p.unMute();
                 p.playVideo();
                 window.setTimeout(() => {
                   if (!alive) return;
                   try {
                     if (p.getPlayerState() !== PLAYING) {
-                      autoMuted = true;
                       p.mute();
                       p.playVideo();
                     }
@@ -132,7 +139,6 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
                   }
                 }, SOUND_START_GRACE_MS);
               } else {
-                autoMuted = true;
                 p.mute();
                 p.playVideo();
               }
@@ -140,18 +146,20 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
               watcher = window.setInterval(() => {
                 try {
                   if (p.getPlayerState() !== PLAYING) return;
-                  const muted = p.isMuted();
-                  if (autoMuted && !muted) {
-                    autoMuted = false;
-                    rememberSound(true);
-                  } else if (!autoMuted && muted) {
-                    autoMuted = true;
-                    rememberSound(false);
+                  const on = !p.isMuted();
+                  if (on !== wantSound.current) {
+                    wantSound.current = on;
+                    rememberSound(on);
                   }
                 } catch {
                   /* player gone */
                 }
               }, WATCH_MS);
+              // the card may have changed while the player was starting
+              if (loaded.current !== first.current) {
+                p.loadVideoById(loaded.current);
+                if (wantSound.current) p.unMute();
+              }
             },
             onError: () => alive && setFailed(true),
           },
@@ -160,6 +168,7 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
       .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
+      ready.current = false;
       if (watcher != null) window.clearInterval(watcher);
       try {
         player.current?.destroy();
@@ -169,6 +178,20 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
       player.current = null;
       mount.remove();
     };
+  }, []);
+
+  useEffect(() => {
+    setFailed(false);
+    if (videoId === loaded.current) return;
+    loaded.current = videoId;
+    const p = player.current;
+    if (!ready.current || !p) return; // onReady loads it
+    try {
+      p.loadVideoById(videoId);
+      if (wantSound.current) p.unMute();
+    } catch {
+      setFailed(true);
+    }
   }, [videoId]);
 
   useEffect(() => {
