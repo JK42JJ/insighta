@@ -8,6 +8,14 @@ import {
 
 import { cssText as css } from '@/features/morning-feed/css-text';
 import { useFontsReady } from '@/features/morning-feed/use-fonts-ready';
+import {
+  flingDuration,
+  flingProgress,
+  isSettled,
+  rubberBand,
+  stepSpring,
+  type SpringState,
+} from '@/features/morning-feed/card-motion';
 import { YouTubePlayer, type SoundController } from '@/features/morning-feed/YouTubePlayer';
 import './mf.css';
 
@@ -79,6 +87,8 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const q = useRef(new URLSearchParams(window.location.search)).current;
   const appRef = useRef<HTMLDivElement>(null);
+  // Live cards get the physics-driven card motion; the fixed test screen keeps the reference motion.
+  const smooth = cards.some((c) => !!c.videoId);
   const soundCtl = useRef<SoundController | null>(null);
   const [soundOn, setSoundOn] = useState(false);
   const fontText = useRef(
@@ -232,6 +242,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
       if (timers.current.tt != null) window.clearTimeout(timers.current.tt);
       set({ picker: false, c: k, i: 0, anim: false, dx: 0, dy: 520, play: false, toast: null });
       popOwnEntry();
+      if (smooth) enterFrom(520);
       later(() => {
         set({ anim: true, dy: 0, picking: -1 });
         showToast(grid[k].short + ' · ' + deckOf(k).length + '개', false);
@@ -239,12 +250,240 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     }, 260);
   };
 
+  // ── live mode: the card is moved by physics and painted straight onto the element ──
+  const cardEl = useRef<HTMLDivElement | null>(null);
+  const keepEl = useRef<HTMLDivElement | null>(null);
+  const fitEl = useRef<HTMLDivElement | null>(null);
+  const pos = useRef({ x: 0, y: 0 });
+  const frameId = useRef<number | null>(null);
+  const sg = useRef({
+    ox: 0,
+    oy: 0,
+    axis: null as 'x' | 'y' | null,
+    pend: null as { x: number; y: number } | null,
+    active: false,
+    paintRaf: null as number | null,
+  });
+
+  const paint = (x: number, y: number) => {
+    pos.current = { x, y };
+    const el = cardEl.current;
+    if (!el) return;
+    const rot = x > 0 ? x / 30 : 0;
+    el.style.transform =
+      'translate3d(' + x + 'px, ' + y + 'px, 0) rotate(' + rot.toFixed(2) + 'deg)';
+    const k = Math.max(0, Math.min(1, x / 90));
+    if (keepEl.current) {
+      keepEl.current.style.opacity = String(k);
+      keepEl.current.style.transform = 'scale(' + (0.5 + 0.5 * k).toFixed(2) + ')';
+    }
+    if (fitEl.current) {
+      const on = k > 0.3;
+      fitEl.current.style.background = on ? 'var(--mf-fit-keep)' : 'var(--mf-fit)';
+      fitEl.current.style.boxShadow = on ? 'inset 0 0 0 1.5px var(--mf-accent)' : 'none';
+    }
+  };
+  const stopFrame = () => {
+    if (frameId.current != null) {
+      window.cancelAnimationFrame(frameId.current);
+      frameId.current = null;
+    }
+  };
+  /** Spring toward (tx, ty), starting at the finger's speed v (px/ms). */
+  const springTo = (
+    tx: number,
+    ty: number,
+    v: { x: number; y: number },
+    k: number,
+    zeta: number,
+    done?: () => void
+  ) => {
+    stopFrame();
+    let st: SpringState = { x: pos.current.x, y: pos.current.y, vx: v.x * 1000, vy: v.y * 1000 };
+    let last = performance.now();
+    const loop = (now: number) => {
+      const dt = Math.min(0.032, Math.max(0.001, (now - last) / 1000));
+      last = now;
+      st = stepSpring(st, tx, ty, k, zeta, dt);
+      paint(st.x, st.y);
+      if (isSettled(st, tx, ty)) {
+        paint(tx, ty);
+        frameId.current = null;
+        done?.();
+        return;
+      }
+      frameId.current = window.requestAnimationFrame(loop);
+    };
+    frameId.current = window.requestAnimationFrame(loop);
+  };
+  /** Leave toward (tx, ty): starts at the finger's speed, then slows down. */
+  const flyTo = (tx: number, ty: number, speed: number, done: () => void) => {
+    stopFrame();
+    const fx = pos.current.x;
+    const fy = pos.current.y;
+    const dur = flingDuration(Math.hypot(tx - fx, ty - fy), speed);
+    const t0 = performance.now();
+    const loop = (now: number) => {
+      const t = (now - t0) / 1000;
+      const p = flingProgress(t / dur);
+      paint(fx + (tx - fx) * p, fy + (ty - fy) * p);
+      if (t >= dur) {
+        frameId.current = null;
+        done();
+        return;
+      }
+      frameId.current = window.requestAnimationFrame(loop);
+    };
+    frameId.current = window.requestAnimationFrame(loop);
+  };
+  /** Ease-in-out move over `ms` (the first-run demo of the keep gesture). */
+  const tweenTo = (tx: number, ty: number, ms: number) => {
+    stopFrame();
+    const fx = pos.current.x;
+    const fy = pos.current.y;
+    const t0 = performance.now();
+    const loop = (now: number) => {
+      const t = Math.min(1, (now - t0) / ms);
+      const p = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      paint(fx + (tx - fx) * p, fy + (ty - fy) * p);
+      frameId.current = t >= 1 ? null : window.requestAnimationFrame(loop);
+    };
+    frameId.current = window.requestAnimationFrame(loop);
+  };
+  /** The next card slides in from below (or above, for an undo) without ever flashing the old one. */
+  const enterFrom = (y: number) => {
+    paint(0, y > 0 ? 900 : -900);
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => {
+        paint(0, y);
+        springTo(0, 0, { x: 0, y: 0 }, 300, 1);
+      })
+    );
+  };
+
+  const commitSmooth = (kind: 'keep' | 'skip', v: { x: number; y: number } = { x: 0, y: 0 }) => {
+    if (S.leaving) return;
+    set({ leaving: true, play: false, pulse: kind === 'keep' });
+    if (kind === 'keep') {
+      try {
+        navigator.vibrate?.(10);
+      } catch {
+        /* not supported */
+      }
+    }
+    const tx = kind === 'keep' ? 460 : pos.current.x;
+    const ty = kind === 'keep' ? pos.current.y : -900;
+    flyTo(tx, ty, Math.hypot(v.x, v.y) * 1000, () => {
+      const deck = deckOf(S.c);
+      const res = { ...S.res };
+      res[deck[S.i]] = kind;
+      lastKey.current = deck[S.i];
+      onJudge({
+        index: deck[S.i],
+        verdict: kind === 'keep' ? 'useful' : 'skip',
+        shownPosition: S.i,
+      });
+      set({ res, i: S.i + 1, pulse: false, leaving: false });
+      showToast(kind === 'keep' ? '담았어요' : '넘겼어요', true);
+      enterFrom(420);
+    });
+  };
+  const doCommit = (kind: 'keep' | 'skip') => (smooth ? commitSmooth(kind) : commit(kind));
+
+  const onDownS = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const isDone = S.i >= deckOf(S.c).length;
+    if (S.leaving || isDone || S.picker) return;
+    const left = appRef.current ? appRef.current.getBoundingClientRect().left : 0;
+    if (e.clientX - left < EDGE_PX) return; // iOS edge-swipe back (M4)
+    endOnboard();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    stopFrame(); // grab the card in the middle of a move and carry on from there
+    const g = gesture.current;
+    g.sx = e.clientX;
+    g.sy = e.clientY;
+    g.moved = 0;
+    g.vx = 0;
+    g.vy = 0;
+    g.lt = e.timeStamp;
+    g.lx = e.clientX;
+    g.ly = e.clientY;
+    const m = sg.current;
+    m.ox = pos.current.x;
+    m.oy = pos.current.y;
+    m.axis = null;
+    m.pend = null;
+    m.active = true;
+  };
+  const onMoveS = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const m = sg.current;
+    if (!m.active) return;
+    const g = gesture.current;
+    const dt = Math.max(1, e.timeStamp - g.lt);
+    g.vx = 0.8 * ((e.clientX - g.lx) / dt) + 0.2 * g.vx;
+    g.vy = 0.8 * ((e.clientY - g.ly) / dt) + 0.2 * g.vy;
+    g.lt = e.timeStamp;
+    g.lx = e.clientX;
+    g.ly = e.clientY;
+    const dx = e.clientX - g.sx;
+    const dy = e.clientY - g.sy;
+    g.moved = Math.max(Math.abs(dx), Math.abs(dy));
+    // one direction per gesture: switching between sideways and up every event made the card jump
+    if (!m.axis) {
+      if (g.moved < 8) return;
+      m.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    let x = m.axis === 'x' ? m.ox + dx : m.ox;
+    let y = m.axis === 'y' ? m.oy + dy : m.oy;
+    if (x < 0) x = rubberBand(x, 40); // directions the card may not go pull back softly
+    if (y > 0) y = rubberBand(y, 40);
+    m.pend = { x, y };
+    if (m.paintRaf == null) {
+      m.paintRaf = window.requestAnimationFrame(() => {
+        m.paintRaf = null;
+        if (m.pend) {
+          paint(m.pend.x, m.pend.y);
+          m.pend = null;
+        }
+      });
+    }
+  };
+  const onUpS = () => {
+    const m = sg.current;
+    if (!m.active) return;
+    m.active = false;
+    if (m.paintRaf != null) {
+      window.cancelAnimationFrame(m.paintRaf);
+      m.paintRaf = null;
+    }
+    if (m.pend) {
+      paint(m.pend.x, m.pend.y);
+      m.pend = null;
+    }
+    const g = gesture.current;
+    const idle = performance.now() - g.lt > 90; // finger rested before lifting: no fling
+    const v = idle ? { x: 0, y: 0 } : { x: g.vx, y: g.vy };
+    const { x, y } = pos.current;
+    if (x > 100 || (v.x > 0.5 && x > 30)) commitSmooth('keep', v);
+    else if (y < -90 || (v.y < -0.5 && y < -30)) commitSmooth('skip', v);
+    else springTo(0, 0, v, 420, 0.72);
+  };
+
   // first-run demo of the keep gesture
   useEffect(() => {
     if (!fontsReady || !S.onboard) return undefined;
     const at = (ms: number, fn: () => void) => timers.current.obt.push(window.setTimeout(fn, ms));
-    at(900, () => set({ demo: true, anim: true, dx: 84 }));
-    at(1900, () => set({ dx: 0 }));
+    at(900, () => {
+      if (smooth) {
+        set({ demo: true });
+        tweenTo(84, 0, 700);
+      } else {
+        set({ demo: true, anim: true, dx: 84 });
+      }
+    });
+    at(1900, () => {
+      if (smooth) tweenTo(0, 0, 700);
+      else set({ dx: 0 });
+    });
     at(2700, () => set({ demo: false }));
     at(4200, () => set({ onboard: false }));
     const own = timers.current;
@@ -302,8 +541,9 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
   const n = deck.length;
   const done = s.i >= n;
   const card = cards[deck[Math.min(s.i, n - 1)]] || cards[0]; // empty-deck guard (v1.2)
-  const ease =
-    s.anim && !s.drag
+  const ease = smooth
+    ? 'none'
+    : s.anim && !s.drag
       ? s.demo
         ? 'transform 0.7s cubic-bezier(0.45,0,0.2,1)'
         : 'transform 0.34s cubic-bezier(0.32,0.72,0,1)'
@@ -390,6 +630,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     lastKey.current = null;
     onUndo();
     set({ res, i: S.i - 1, toast: null, anim: false, dy: -300 });
+    if (smooth) enterFrom(-300);
     later(() => set({ anim: true, dy: 0 }), 30);
   };
 
@@ -475,10 +716,11 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
         <div style={{ display: done ? 'none' : 'block' }}>
           <div
             data-testid="mf-card"
-            onPointerDown={onDown}
-            onPointerMove={onMove}
-            onPointerUp={onUp}
-            onPointerCancel={onUp}
+            ref={cardEl}
+            onPointerDown={smooth ? onDownS : onDown}
+            onPointerMove={smooth ? onMoveS : onMove}
+            onPointerUp={smooth ? onUpS : onUp}
+            onPointerCancel={smooth ? onUpS : onUp}
             style={css(
               'position: absolute; top: calc(60px + env(safe-area-inset-top, 0px)); left: 0; right: 0; height: 640px; background: var(--mf-bg); touch-action: none; cursor: grab; transform: translate(' +
                 s.dx +
@@ -490,10 +732,10 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                 ease
             )}
           >
-            <button type="button" className="mf-sr" onClick={() => commit('keep')}>
+            <button type="button" className="mf-sr" onClick={() => doCommit('keep')}>
               담기
             </button>
-            <button type="button" className="mf-sr" onClick={() => commit('skip')}>
+            <button type="button" className="mf-sr" onClick={() => doCommit('skip')}>
               넘기기
             </button>
             <div
@@ -615,6 +857,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
               </div>
               <div
                 data-testid="mf-fit"
+                ref={fitEl}
                 style={css(
                   'border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; transition: background 0.15s, box-shadow 0.15s; background: ' +
                     (ko > 0.3 ? 'var(--mf-fit-keep)' : 'var(--mf-fit)') +
@@ -649,6 +892,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
               </div>
               <div
                 data-testid="mf-keepmark"
+                ref={keepEl}
                 style={css(
                   'position: absolute; top: 50%; left: 50%; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; background: var(--mf-accent); display: grid; place-items: center; box-shadow: 0 10px 30px var(--mf-accent-glow); pointer-events: none; opacity: ' +
                     ko +
