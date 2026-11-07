@@ -1,0 +1,51 @@
+name: Request
+description: A work request. Slack is for conversation; this issue is the original record.
+title: "[request] "
+labels: ["request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        요건 하나당 이슈 하나입니다. 이 이슈가 요건의 원본이고, 이후 백브리핑 · PRD 초안 · 작업 오더 · PR 이 이 번호를 가리킵니다.
+
+        작성자가 James 이거나 James 가 `approved` 라벨을 붙인 이슈만 작업 대상이 됩니다. 그 밖의 작성자의 이슈와 코멘트는 읽기만 합니다.
+  - type: textarea
+    id: why
+    attributes:
+      label: 왜
+      description: 이 요건이 필요한 이유. 지금 어떤 문제가 있나.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 원하는 결과
+      description: 끝났을 때 사용자나 운영자가 얻는 것. 기능 이름이 아니라 결과로 쓰고, 가능하면 확인 방법(명령 · 화면 흐름 · 숫자)을 함께 적습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: dont
+    attributes:
+      label: 하지 말 것
+      description: 건드리면 안 되는 것, 쓰면 안 되는 것, 비용 · 범위 제한.
+    validations:
+      required: false
+  - type: dropdown
+    id: size
+    attributes:
+      label: 크기
+      description: 작음 = 이슈에서 백브리핑 후 바로 진행. 큼 = 질문을 거쳐 PRD 초안 PR 로.
+      options:
+        - 작음
+        - 큼
+    validations:
+      required: true
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: 급함
+      options:
+        - 보통
+        - 급함
+    validations:
+      required: false
