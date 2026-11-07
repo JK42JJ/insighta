@@ -112,6 +112,19 @@ export async function undoLastJudgment(): Promise<void> {
   await call<unknown>('/judgments/last', { method: 'DELETE' });
 }
 
+/** Fixture screen only: the server answers 2xx and writes nothing. */
+export async function postFixtureJudgment(input: {
+  verdict: MorningCardVerdict;
+  shown_position: number;
+}): Promise<void> {
+  await call<unknown>('/fixture-sink', { method: 'POST', body: JSON.stringify(input) });
+}
+
+/** Fixture screen only: pretend undo, nothing is written. */
+export async function undoFixtureJudgment(): Promise<void> {
+  await call<unknown>('/fixture-sink', { method: 'DELETE', body: JSON.stringify({}) });
+}
+
 /** Server flag status. Answers 200 even when the flag is off. */
 export async function fetchMorningCardsStatus(): Promise<{ enabled: boolean }> {
   const res = await call<{ data: { enabled: boolean } }>('/status');

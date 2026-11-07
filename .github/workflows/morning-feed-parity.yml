@@ -1,7 +1,7 @@
 name: Morning feed parity
 
 # Pixel comparison of /morning-cards?fixture=1 against the delivered design reference
-# (frontend/tests/fixtures), 7 states, plus 3 behaviour tests. Never touches staging or prod.
+# (frontend/tests/morning-feed/fixtures), 7 states, plus 3 behaviour tests. Never touches staging or prod.
 
 on:
   workflow_dispatch:
@@ -10,8 +10,7 @@ on:
     paths:
       - 'frontend/src/features/morning-feed/**'
       - 'frontend/src/app/router/**'
-      - 'frontend/tests/morning-feed.parity.spec.ts'
-      - 'frontend/tests/fixtures/morning-feed.*'
+      - 'frontend/tests/morning-feed/**'
       - 'frontend/playwright.parity.config.ts'
       - '.github/workflows/morning-feed-parity.yml'
 
@@ -56,5 +55,5 @@ jobs:
           path: |
             frontend/test-results/parity-report/
             frontend/test-results/parity-artifacts/
-            frontend/tests/morning-feed.parity.spec.ts-snapshots/
+            frontend/tests/morning-feed/morning-feed.parity.spec.ts-snapshots/
           retention-days: 7

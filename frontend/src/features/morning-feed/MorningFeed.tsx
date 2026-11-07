@@ -90,6 +90,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
     };
     if (q.get('cell') != null)
       s.c = Math.max(0, Math.min(8, parseInt(q.get('cell') ?? '', 10) || 0));
+    if (deckFor(cards, grid, s.c).length === 0) s.c = 4; // never start on a cell with 0 cards (v1.2)
     const deckOfInit = (c: number) => deckFor(cards, grid, c);
     const st = q.get('state');
     if (st === 'keep') {
@@ -206,7 +207,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
   const deck = deckOf(s.c);
   const n = deck.length;
   const done = s.i >= n;
-  const card = cards[deck[Math.min(s.i, n - 1)]];
+  const card = cards[deck[Math.min(s.i, n - 1)]] || cards[0]; // empty-deck guard (v1.2)
   const ease =
     s.anim && !s.drag
       ? s.demo

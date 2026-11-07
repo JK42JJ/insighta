@@ -14,7 +14,7 @@ const sha = (p: string) =>
 describe('morning feed fixture', () => {
   it('the in-app fixture is byte-identical to the delivered test fixture', () => {
     expect(sha('../features/morning-feed/morning-feed.fixture.json')).toBe(
-      sha('../../tests/fixtures/morning-feed.fixture.json')
+      sha('../../tests/morning-feed/fixtures/morning-feed.fixture.json')
     );
   });
 });

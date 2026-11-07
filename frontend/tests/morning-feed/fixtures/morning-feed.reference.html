@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>오늘의 픽 — 기준 구현 (reference v1)</title>
 <!--
-  Insighta 오늘의 픽 — 디자인 기준 구현 v1 (2026-11-07, James 확정)
+  Insighta 오늘의 픽 — 디자인 기준 구현 v1.2 (2026-11-07 17:20, James 확정 · 9개 도메인 중 8칸 · 빈 칸 방어)
   이 파일이 디자인의 원본이다. 구현은 이 파일과 픽셀 단위로 같아야 한다.
   값(색·크기·간격·곡선·시간)을 바꾸거나 "개선"하지 말 것. 바꿔야 하면 James 승인.
   테스트 훅: ?onboard=0  ?noanim=1  ?state=feed|keep|picker|done|toast  ?cell=0..8
@@ -144,6 +144,7 @@
   var $ = function (id) { return document.getElementById(id); };
   if (Q.get('noanim') === '1') $('app').classList.add('noanim');
   if (Q.get('cell') != null) S.c = Math.max(0, Math.min(8, parseInt(Q.get('cell'), 10) || 0));
+  if (deckOf(S.c).length === 0) S.c = 4; // 카드 0장인 칸으로는 시작하지 않음(오늘 전체로)
 
   function set(p) { for (var k in p) S[k] = p[k]; render(); }
   function deckOf(c) {
@@ -210,7 +211,7 @@
 
   function render() {
     var s = S, deck = deckOf(s.c), n = deck.length, done = s.i >= n;
-    var card = CARDS[deck[Math.min(s.i, n - 1)]];
+    var card = CARDS[deck[Math.min(s.i, n - 1)]] || CARDS[0]; // 빈 덱 방어
     var ease = s.anim && !s.drag ? (s.demo ? 'transform 0.7s cubic-bezier(0.45,0,0.2,1)' : 'transform 0.34s cubic-bezier(0.32,0.72,0,1)') : 'none';
     var rot = s.dx > 0 ? (s.dx / 30).toFixed(2) : '0';
     var ko = Math.max(0, Math.min(1, s.dx / 90));

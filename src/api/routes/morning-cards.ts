@@ -59,6 +59,15 @@ export function createMorningCardsRoutes(deps: MorningCardsRouteDeps = defaultDe
       return reply.send({ status: 'ok', data: { enabled: isMorningCardsEnabled() } });
     });
 
+    // Test-hook sink for the design fixture screen (?fixture=1): pretends to save a
+    // judgment and answers 2xx. It has no database access and needs no sign-in.
+    fastify.post('/fixture-sink', async (_request, reply) => {
+      return reply.code(200).send({ status: 'ok', data: { simulated: true } });
+    });
+    fastify.delete('/fixture-sink', async (_request, reply) => {
+      return reply.code(200).send({ status: 'ok', data: { simulated: true } });
+    });
+
     fastify.get<{ Querystring: { domain?: string } }>(
       '/',
       { onRequest: [flagGate, fastify.authenticate] },

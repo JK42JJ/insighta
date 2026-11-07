@@ -25,7 +25,8 @@ const STATES: Array<[string, string]> = [
   ['04-picker', 'state=picker&noanim=1'],
   ['05-done', 'state=done&noanim=1'],
   ['06-feed-cell0', 'onboard=0&noanim=1&cell=0'],
-  ['07-picker-cell2', 'state=picker&noanim=1&cell=2'],
+  ['07-picker-cell1', 'state=picker&noanim=1&cell=1'],
+  ['08-empty-cell-param', 'onboard=0&noanim=1&cell=2'],
 ];
 
 test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
