@@ -1,10 +1,6 @@
 import { MORNING_CARD_DOMAIN_KEYS, type MorningCardDomainKey } from '@/features/morning-cards/api';
 
-export const MORNING_CARD_DOMAIN_LABELS: Record<MorningCardDomainKey, string> = {
-  work_practice: '업무 실무',
-  startup_gov_support: '창업·정부 지원',
-  ai_tools: 'AI 도구',
-};
+import { MORNING_CARD_DOMAIN_LABELS } from '@/features/morning-cards/domain-labels';
 
 interface DomainPickerProps {
   value: MorningCardDomainKey;

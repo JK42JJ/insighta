@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MorningCard, formatUploadDate } from '@/features/morning-cards/MorningCard';
+import { MorningCard } from '@/features/morning-cards/MorningCard';
+import { formatUploadDate } from '@/features/morning-cards/upload-date';
 import type { MorningCardDto } from '@/features/morning-cards/api';
 
 const base: MorningCardDto = {

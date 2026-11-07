@@ -9,7 +9,7 @@ import {
   type MorningCardReviewItem,
 } from '@/features/morning-cards/api';
 import { DomainPicker } from '@/features/morning-cards/DomainPicker';
-import { formatUploadDate } from '@/features/morning-cards/MorningCard';
+import { formatUploadDate } from '@/features/morning-cards/upload-date';
 
 const DEFAULT_DOMAIN: MorningCardDomainKey = 'work_practice';
 const EMPTY_MESSAGE = '올해 올라온 영상이 적습니다. 오래된 영상으로 채우지 않았습니다.';
