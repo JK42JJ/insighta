@@ -7,10 +7,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPrismaClient } from '@/modules/database/client';
 import { isMorningCardsEnabled, isMorningCardsTestUser } from '@/config/morning-cards';
 import { isMorningCardDomainKey } from '@/modules/morning-cards/domains';
-import {
-  fetchMorningCardsWithShortage,
-  type MorningCardsDb,
-} from '@/modules/morning-cards/source';
+import { fetchMorningCardsWithShortage, type MorningCardsDb } from '@/modules/morning-cards/source';
 import { userIdOf } from '@/api/utils/request-user';
 
 export interface MorningCardsRouteDeps {
