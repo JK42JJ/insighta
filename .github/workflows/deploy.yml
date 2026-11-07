@@ -850,6 +850,26 @@ jobs:
           [ "$code" = "200" ] || { echo "::error::staging / returned $code"; exit 1; }
           grep -q '<div id="root"' /tmp/index.html || { echo "::error::staging / is not the app shell"; exit 1; }
           echo "### Staging serves \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
+      # The api check above says nothing about the frontend. On 2026-11-07 the api
+      # was new while the frontend pod could not start (namespace quota) and the
+      # old bundle kept being served. When the router source in this commit has the
+      # /morning-cards route, the bundle staging serves must have it too.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: frontend/src/app/router
+      - name: Served frontend bundle has the routes of this commit
+        run: |
+          set -uo pipefail
+          BASE=https://stg.insighta.one
+          grep -q '"/morning-cards"' frontend/src/app/router/index.tsx || { echo "route not in source; nothing to check"; exit 0; }
+          for i in $(seq 1 40); do
+            js=$(curl -fsS --max-time 10 "$BASE/morning-cards" 2>/dev/null | grep -o 'assets/index-[A-Za-z0-9_-]*\.js' | head -n 1)
+            if [ -n "$js" ] && curl -fsS --max-time 30 "$BASE/$js" | grep -q '"/morning-cards"'; then
+              echo "### Staging frontend bundle \`$js\` has /morning-cards" >> "$GITHUB_STEP_SUMMARY"; exit 0
+            fi
+            echo "attempt $i: bundle '${js:-none}' has no /morning-cards route yet"; sleep 15
+          done
+          echo "::error::staging still serves a frontend bundle without /morning-cards (old image or frontend pod not started)"; exit 1
 
   # Signs in through the real UI and exercises the API against what was just
   # deployed. The smoke check above only proves the server answers; this is the
