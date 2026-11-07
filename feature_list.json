@@ -200,7 +200,7 @@
       "cd frontend && npx playwright test tests/morning-cards.spec.ts exits 0",
       "the spec asserts exactly two judgment requests were captured after two swipes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "e2e",
@@ -209,7 +209,7 @@
       "cd frontend && npx playwright test tests/morning-cards.spec.ts -g empty exits 0",
       "the case asserts the card locator count is 0"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "ops",
