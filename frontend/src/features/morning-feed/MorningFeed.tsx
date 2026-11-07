@@ -1,8 +1,14 @@
-import { useEffect, useReducer, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 
 import { cssText as css } from '@/features/morning-feed/css-text';
 import { useFontsReady } from '@/features/morning-feed/use-fonts-ready';
-import { YouTubePlayer } from '@/features/morning-feed/YouTubePlayer';
+import { YouTubePlayer, type SoundController } from '@/features/morning-feed/YouTubePlayer';
 import './mf.css';
 
 /*
@@ -73,6 +79,8 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const q = useRef(new URLSearchParams(window.location.search)).current;
   const appRef = useRef<HTMLDivElement>(null);
+  const soundCtl = useRef<SoundController | null>(null);
+  const [soundOn, setSoundOn] = useState(false);
   const fontText = useRef(
     [
       '오늘 전체 목표 칸 고르기 담았어요 넘겼어요 되돌리기 담기 어디부터 볼까요 새 영상 개 담았어요 지금 하나 보기 다른 칸 고르기 일 전 주 전 개월 전',
@@ -499,7 +507,12 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
               }}
             >
               {card.videoId ? (
-                <YouTubePlayer videoId={card.videoId} active={!s.leaving && !s.picker && !done} />
+                <YouTubePlayer
+                  videoId={card.videoId}
+                  active={!s.leaving && !s.picker && !done}
+                  controller={soundCtl}
+                  onSound={setSoundOn}
+                />
               ) : (
                 <>
                   <div
@@ -541,6 +554,41 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                   {card.ago}
                 </span>
                 <span style={css("font-family: 'Inter', sans-serif")}>{card.dur}</span>
+                {card.videoId ? (
+                  <button
+                    type="button"
+                    data-testid="mf-sound"
+                    aria-label={soundOn ? '소리 끄기' : '소리 켜기'}
+                    onPointerDown={(ev) => ev.stopPropagation()}
+                    onClick={() => soundCtl.current?.toggleSound()}
+                    style={css(
+                      'margin-left: auto; height: 26px; padding: 0 10px; border: none; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; cursor: pointer; background: ' +
+                        (soundOn ? 'var(--mf-accent)' : 'var(--mf-surface)') +
+                        '; color: ' +
+                        (soundOn ? 'var(--mf-ink)' : 'var(--mf-why)')
+                    )}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 9v6h4l5 4V5L8 9H4z" />
+                      {soundOn ? (
+                        <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />
+                      ) : (
+                        <path d="M17 9l5 6M22 9l-5 6" />
+                      )}
+                    </svg>
+                    {soundOn ? '소리 켬' : '소리 켜기'}
+                  </button>
+                ) : null}
               </div>
               <div
                 data-testid="mf-title"

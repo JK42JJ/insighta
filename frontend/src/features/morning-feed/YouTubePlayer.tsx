@@ -79,13 +79,23 @@ function loadYouTubeApi(): Promise<YtApi> {
   return apiPromise;
 }
 
+export interface SoundController {
+  toggleSound: () => void;
+}
+
 interface YouTubePlayerProps {
   videoId: string;
   /** False while the card is leaving or a sheet covers it: playback is paused. */
   active: boolean;
+  /** Set once the player is ready: lets a button outside the video turn the sound on and off. */
+  controller?: { current: SoundController | null };
+  /** Called whenever the sound state changes (button, or the control inside the player). */
+  onSound?: (on: boolean) => void;
 }
 
-export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
+export function YouTubePlayer({ videoId, active, controller, onSound }: YouTubePlayerProps) {
+  const onSoundRef = useRef(onSound);
+  onSoundRef.current = onSound;
   const host = useRef<HTMLDivElement>(null);
   const player = useRef<YtPlayer | null>(null);
   const [failed, setFailed] = useState(false);
@@ -123,6 +133,22 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
             onReady: (e) => {
               const p = e.target;
               ready.current = true;
+              if (controller) {
+                controller.current = {
+                  toggleSound: () => {
+                    try {
+                      const turnOn = p.isMuted();
+                      if (turnOn) p.unMute();
+                      else p.mute();
+                      wantSound.current = turnOn;
+                      rememberSound(turnOn);
+                      onSoundRef.current?.(turnOn);
+                    } catch {
+                      /* player gone */
+                    }
+                  },
+                };
+              }
               if (wantSound.current) {
                 // a returning visitor who chose sound: try it, fall back to muted if the browser refuses
                 p.unMute();
@@ -150,6 +176,7 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
                   if (on !== wantSound.current) {
                     wantSound.current = on;
                     rememberSound(on);
+                    onSoundRef.current?.(on);
                   }
                 } catch {
                   /* player gone */
@@ -169,6 +196,7 @@ export function YouTubePlayer({ videoId, active }: YouTubePlayerProps) {
     return () => {
       alive = false;
       ready.current = false;
+      if (controller) controller.current = null;
       if (watcher != null) window.clearInterval(watcher);
       try {
         player.current?.destroy();
