@@ -146,7 +146,7 @@
       "cd frontend && npx vitest run src/__tests__/morning-cards-domain-picker.test.tsx passes",
       "the test asserts three options render and selecting one calls the change handler with its key"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
