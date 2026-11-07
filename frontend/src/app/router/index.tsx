@@ -28,6 +28,7 @@ import { AdminNewsletterPreview } from '@/pages/admin/ui/AdminNewsletterPreview'
 import { AdminChannels } from '@/pages/admin/ui/AdminChannels';
 import { MorningCardsReviewRoute } from '@/features/morning-cards/MorningCardsReviewRoute';
 import { MorningCardsEntry } from './MorningCardsEntry';
+import { MorningCardsRoute } from '@/features/morning-cards/MorningCardsRoute';
 import BriefNotePage from '@/pages/brief/ui/BriefNotePage';
 import BriefCategoryPage from '@/pages/brief/ui/BriefCategoryPage';
 
@@ -156,6 +157,14 @@ export function AppRouter() {
           }
         />
         <Route path="/morning-cards" element={<MorningCardsEntry />} />
+        <Route
+          path="/morning-cards/classic"
+          element={
+            <ProtectedRoute>
+              <MorningCardsRoute />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/morning-cards/review"
           element={

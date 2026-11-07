@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, type PointerEvent as ReactPointerEvent }
 
 import { cssText as css } from '@/features/morning-feed/css-text';
 import { useFontsReady } from '@/features/morning-feed/use-fonts-ready';
+import { YouTubePlayer } from '@/features/morning-feed/YouTubePlayer';
 import './mf.css';
 
 /*
@@ -22,6 +23,10 @@ export interface FeedCard {
   cell: string;
   focus?: string;
   why: string;
+  /** Live data only: the YouTube video, its thumbnail, and the badge colour rule (under 7 days). */
+  videoId?: string;
+  thumbUrl?: string;
+  fresh?: boolean;
 }
 
 export interface FeedCell {
@@ -225,7 +230,8 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
       : 'none';
   const rot = s.dx > 0 ? (s.dx / 30).toFixed(2) : '0';
   const ko = Math.max(0, Math.min(1, s.dx / 90));
-  const fresh = /일 전/.test(card.ago) && parseInt(card.ago, 10) <= 7;
+  const fresh =
+    card.fresh !== undefined ? card.fresh : /일 전/.test(card.ago) && parseInt(card.ago, 10) <= 7;
   const keepCount = Object.keys(s.res).filter((k) => s.res[Number(k)] === 'keep').length;
   const unseenAll = cards.filter((_x, k) => !s.res[k]).length;
   if (dotsFor.current !== s.c) dotsFor.current = s.c;
@@ -394,20 +400,30 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                 background: card.bg,
               }}
             >
-              <div
-                style={css(
-                  'font-size: 30px; line-height: 1.12; font-weight: 900; letter-spacing: -0.02em; white-space: pre-line; color: var(--mf-white)'
-                )}
-              >
-                {card.thumb}
-              </div>
-              <div
-                style={css(
-                  'position: absolute; left: 0; bottom: 0; height: 3px; background: var(--mf-white); transition: width 0.3s; width: ' +
-                    (s.play ? '42%' : '18%') +
-                    '; opacity: 0.85'
-                )}
-              />
+              {card.videoId ? (
+                <YouTubePlayer
+                  key={card.videoId}
+                  videoId={card.videoId}
+                  active={!s.leaving && !s.picker && !done}
+                />
+              ) : (
+                <>
+                  <div
+                    style={css(
+                      'font-size: 30px; line-height: 1.12; font-weight: 900; letter-spacing: -0.02em; white-space: pre-line; color: var(--mf-white)'
+                    )}
+                  >
+                    {card.thumb}
+                  </div>
+                  <div
+                    style={css(
+                      'position: absolute; left: 0; bottom: 0; height: 3px; background: var(--mf-white); transition: width 0.3s; width: ' +
+                        (s.play ? '42%' : '18%') +
+                        '; opacity: 0.85'
+                    )}
+                  />
+                </>
+              )}
             </div>
             <div
               style={css(
@@ -626,6 +642,13 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                     style={{
                       ...css('width: 104px; height: 58px; border-radius: 10px; flex: none'),
                       background: c.bg,
+                      ...(c.thumbUrl
+                        ? {
+                            backgroundImage: 'url(' + c.thumbUrl + ')',
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                          }
+                        : {}),
                     }}
                   />
                   <div style={css('display: flex; flex-direction: column; gap: 3px; min-width: 0')}>
@@ -789,10 +812,30 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                             style={{
                               display: 'block',
                               background: mk[j] != null ? cards[mk[j]].bg : 'transparent',
+                              ...(mk[j] != null && cards[mk[j]].thumbUrl
+                                ? {
+                                    backgroundImage: 'url(' + cards[mk[j]].thumbUrl + ')',
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                  }
+                                : {}),
                             }}
                           />
                         ))}
                       </span>
+                    ) : rep && rep.thumbUrl ? (
+                      <img
+                        src={rep.thumbUrl}
+                        alt=""
+                        draggable={false}
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                        }}
+                      />
                     ) : (
                       <span
                         style={css(

@@ -63,6 +63,7 @@ export interface JudgmentInput {
 const VITE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const API_BASE_URL = VITE_API_URL.endsWith('/api') ? VITE_API_URL.slice(0, -4) : VITE_API_URL;
 const MORNING_CARDS_PATH = '/api/v1/morning-cards';
+const MORNING_FEED_PATH = '/api/v1/morning-feed';
 
 export class MorningCardsApiError extends Error {
   constructor(
@@ -74,13 +75,17 @@ export class MorningCardsApiError extends Error {
   }
 }
 
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function call<T>(
+  path: string,
+  init: RequestInit = {},
+  base: string = MORNING_CARDS_PATH
+): Promise<T> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
-  const res = await fetch(`${API_BASE_URL}${MORNING_CARDS_PATH}${path}`, { ...init, headers });
+  const res = await fetch(`${API_BASE_URL}${base}${path}`, { ...init, headers });
   if (!res.ok) {
     throw new MorningCardsApiError(`Morning cards request failed: ${res.status}`, res.status);
   }
@@ -153,4 +158,53 @@ export async function patchReasonTags(input: {
       reason_tags: input.reason_tags,
     }),
   });
+}
+
+/** Morning feed (오늘의 픽): the cards per cell, the judgment write and the undo. */
+export interface FeedApiCard {
+  video_id: string;
+  title: string;
+  channel: string | null;
+  published_at: string;
+  duration: number;
+  view_count: number | null;
+  thumbnail_url: string | null;
+  cell: string;
+  focus: string[];
+  why: string;
+}
+export interface FeedApiCell {
+  label: string;
+  short: string;
+  dom: number;
+}
+
+export async function fetchMorningFeed(): Promise<{ cells: FeedApiCell[]; cards: FeedApiCard[] }> {
+  const res = await call<{ data: { cells: FeedApiCell[]; cards: FeedApiCard[] } }>(
+    '/',
+    {},
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
+export async function postFeedJudgment(input: {
+  video_id: string;
+  cell: string;
+  verdict: MorningCardVerdict;
+  shown_position: number;
+}): Promise<void> {
+  await call<unknown>(
+    '/judgments',
+    { method: 'POST', body: JSON.stringify(input) },
+    MORNING_FEED_PATH
+  );
+}
+
+export async function undoFeedJudgment(): Promise<void> {
+  await call<unknown>(
+    '/judgments/last',
+    { method: 'DELETE', body: JSON.stringify({}) },
+    MORNING_FEED_PATH
+  );
 }
