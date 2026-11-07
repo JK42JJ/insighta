@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { cssText as css } from '@/features/morning-feed/css-text';
+import { useFontsReady } from '@/features/morning-feed/use-fonts-ready';
 import './mf.css';
 
 /*
@@ -67,6 +68,14 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const q = useRef(new URLSearchParams(window.location.search)).current;
   const appRef = useRef<HTMLDivElement>(null);
+  const fontText = useRef(
+    [
+      '오늘 전체 목표 칸 고르기 담았어요 넘겼어요 되돌리기 담기 어디부터 볼까요 새 영상 개 담았어요 지금 하나 보기 다른 칸 고르기 일 전 주 전 개월 전',
+      ...cards.flatMap((c) => [c.thumb, c.title, c.ch, c.chMeta, c.cell, c.why, c.ini]),
+      ...grid.map((g) => g.short + g.label),
+    ].join(' ')
+  ).current;
+  const fontsReady = useFontsReady(fontText);
 
   const init = useRef<FeedState | null>(null);
   if (init.current === null) {
@@ -188,7 +197,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
 
   // first-run demo of the keep gesture
   useEffect(() => {
-    if (!S.onboard) return undefined;
+    if (!fontsReady || !S.onboard) return undefined;
     const at = (ms: number, fn: () => void) => timers.current.obt.push(window.setTimeout(fn, ms));
     at(900, () => set({ demo: true, anim: true, dx: 84 }));
     at(1900, () => set({ dx: 0 }));
@@ -200,7 +209,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
       if (own.tt != null) window.clearTimeout(own.tt);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fontsReady]);
 
   // ── render values (same expressions as the reference) ──
   const s = S;
@@ -280,6 +289,9 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
 
   const showToastNow = !!s.toast && !done;
   const keptKeys = deck.filter((key) => s.res[key] === 'keep');
+
+  // text is laid out once, with the final font metrics (offline: shown after a timeout)
+  if (!fontsReady) return <div className="mf-page" />;
 
   return (
     <div className="mf-page">
