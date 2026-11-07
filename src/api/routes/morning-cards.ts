@@ -53,6 +53,12 @@ async function flagGate(_request: FastifyRequest, reply: FastifyReply): Promise<
 
 export function createMorningCardsRoutes(deps: MorningCardsRouteDeps = defaultDeps) {
   return async function morningCardsRoutes(fastify: FastifyInstance): Promise<void> {
+    // Flag status only (no card data, no user check): lets the client decide
+    // whether to render the screen. Unlike other routes it answers when off.
+    fastify.get('/status', async (_request, reply) => {
+      return reply.send({ status: 'ok', data: { enabled: isMorningCardsEnabled() } });
+    });
+
     fastify.get<{ Querystring: { domain?: string } }>(
       '/',
       { onRequest: [flagGate, fastify.authenticate] },

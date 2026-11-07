@@ -182,7 +182,7 @@
       "cd frontend && npx vitest run src/__tests__/morning-cards-route.test.tsx passes",
       "the test asserts the page is not rendered when the status endpoint reports the flag off"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

@@ -107,6 +107,12 @@ export async function postJudgment(input: JudgmentInput): Promise<void> {
   });
 }
 
+/** Server flag status. Answers 200 even when the flag is off. */
+export async function fetchMorningCardsStatus(): Promise<{ enabled: boolean }> {
+  const res = await call<{ data: { enabled: boolean } }>('/status');
+  return { enabled: res.data.enabled === true };
+}
+
 export async function fetchMorningCardsReview(
   domain: MorningCardDomainKey
 ): Promise<MorningCardsReviewResponse> {
