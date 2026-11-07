@@ -100,9 +100,10 @@ describe('morning feed', () => {
       'eeeeeeeeeee',
     ]);
     // the query itself carries the duration floor, the year start and the user for "already judged"
-    expect(queries[0].params[0]).toBe(180);
-    expect(queries[0].params[2]).toBe(USER);
-    expect(queries[0].sql).toContain('canceled_at IS NULL');
+    const first = queries[0]!;
+    expect(first.params[0]).toBe(180);
+    expect(first.params[2]).toBe(USER);
+    expect(first.sql).toContain('canceled_at IS NULL');
   });
 
   it('caps each cell', async () => {
