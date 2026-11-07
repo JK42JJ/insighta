@@ -1,4 +1,8 @@
-import { fetchMorningCards, poolDomainLabels } from '../../src/modules/morning-cards/source';
+import {
+  fetchMorningCards,
+  fetchMorningCardsWithShortage,
+  poolDomainLabels,
+} from '../../src/modules/morning-cards/source';
 
 function row(id: string, score: number) {
   return {
@@ -38,6 +42,33 @@ describe('morning-cards source', () => {
     expect(cards).toHaveLength(2);
     const args = findMany.mock.calls[0][0];
     expect(args.where.domain.in).toEqual(poolDomainLabels('work_practice'));
+  });
+
+  it('excludes out-of-window videos and flags shortage without padding', async () => {
+    const old = row('old', 1);
+    old.video_pool.published_at = new Date('2025-12-31T23:59:59Z');
+    const nodate = row('nodate', 1);
+    (nodate.video_pool as { published_at: Date | null }).published_at = null;
+    const findMany = jest.fn().mockResolvedValue([old, nodate, row('new', 0.5)]);
+    const res = await fetchMorningCardsWithShortage(
+      { video_pool_domain_tags: { findMany } },
+      'ai_tools',
+      5,
+      new Date('2026-11-07T00:00:00Z')
+    );
+    expect(res.cards.map((c) => c.video_id)).toEqual(['new']);
+    expect(res.shortage).toBe(true);
+    const where = findMany.mock.calls[0][0].where.video_pool;
+    expect(where.published_at.gte).toEqual(new Date('2026-01-01T00:00:00Z'));
+  });
+
+  it('returns zero cards and shortage true for an empty domain', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const res = await fetchMorningCardsWithShortage(
+      { video_pool_domain_tags: { findMany } },
+      'ai_tools'
+    );
+    expect(res).toEqual({ cards: [], shortage: true });
   });
 
   it('returns no cards for an empty domain', async () => {

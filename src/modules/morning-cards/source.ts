@@ -58,15 +58,41 @@ function buildSimpleReason(row: TagRow): string {
   return `관련도 ${row.relevance_score.toFixed(2)} (${row.source})`;
 }
 
+export interface MorningCardsResult {
+  cards: MorningCard[];
+  /** True when fewer in-window cards exist than requested; never padded. */
+  shortage: boolean;
+}
+
+/** Start of the upload window: Jan 1 (UTC) of the current year. */
+export function uploadWindowStart(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+}
+
 export async function fetchMorningCards(
   db: MorningCardsDb,
   domain: MorningCardDomainKey,
-  limit: number = MORNING_CARDS_DEFAULT_LIMIT
+  limit: number = MORNING_CARDS_DEFAULT_LIMIT,
+  now: Date = new Date()
 ): Promise<MorningCard[]> {
+  return (await fetchMorningCardsWithShortage(db, domain, limit, now)).cards;
+}
+
+export async function fetchMorningCardsWithShortage(
+  db: MorningCardsDb,
+  domain: MorningCardDomainKey,
+  limit: number = MORNING_CARDS_DEFAULT_LIMIT,
+  now: Date = new Date()
+): Promise<MorningCardsResult> {
+  const windowStart = uploadWindowStart(now);
   const rows = await db.video_pool_domain_tags.findMany({
     where: {
       domain: { in: poolDomainLabels(domain) },
-      video_pool: { is_active: true, is_short: { not: true } },
+      video_pool: {
+        is_active: true,
+        is_short: { not: true },
+        published_at: { gte: windowStart },
+      },
     },
     orderBy: { relevance_score: 'desc' },
     take: limit * FETCH_MULTIPLIER,
@@ -90,6 +116,8 @@ export async function fetchMorningCards(
   for (const row of rows) {
     const v = row.video_pool;
     if (seen.has(v.video_id)) continue;
+    // Re-check the window in code in case the db layer ignores the filter.
+    if (!v.published_at || v.published_at < windowStart) continue;
     seen.add(v.video_id);
     cards.push({
       video_id: v.video_id,
@@ -101,5 +129,5 @@ export async function fetchMorningCards(
     });
     if (cards.length >= limit) break;
   }
-  return cards;
+  return { cards, shortage: cards.length < limit };
 }

@@ -44,7 +44,7 @@
       "npx jest --maxWorkers=2 tests/smoke/morning-cards-source.test.ts passes a case where out-of-window fixtures are excluded",
       "the same test asserts an empty domain returns zero cards and shortage true"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
