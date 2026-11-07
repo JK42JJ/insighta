@@ -61,6 +61,19 @@ describe('MorningCardsPage', () => {
     );
   });
 
+  it('shows the honest message and zero cards for an empty domain', async () => {
+    mocks.fetchMorningCards.mockResolvedValue({
+      domain: 'work_practice',
+      shortage: true,
+      cards: [],
+    });
+    render(<MorningCardsPage />);
+    const msg = await screen.findByTestId('morning-cards-empty');
+    expect(msg.textContent).toContain('올해 올라온 영상이 적습니다');
+    expect(screen.queryByTestId('morning-card-swipe-area')).toBeNull();
+    expect(mocks.postJudgment).not.toHaveBeenCalled();
+  });
+
   it('opens the official youtube link on tap', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     render(<MorningCardsPage />);

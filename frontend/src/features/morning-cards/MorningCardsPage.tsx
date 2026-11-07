@@ -13,6 +13,8 @@ import { SWIPE_DISTANCE_THRESHOLD_PX, useCardSwipe } from '@/features/morning-ca
 import { buildYoutubeWatchUrl } from '@/features/morning-cards/youtube-url';
 
 const DEFAULT_DOMAIN: MorningCardDomainKey = 'work_practice';
+const EMPTY_MESSAGE = '올해 올라온 영상이 적습니다. 오래된 영상으로 채우지 않았습니다.';
+const DONE_MESSAGE = '오늘 카드를 모두 확인했습니다.';
 
 /**
  * Mobile morning cards: one card at a time, swipe right = useful, left = skip.
@@ -22,6 +24,7 @@ const DEFAULT_DOMAIN: MorningCardDomainKey = 'work_practice';
 export function MorningCardsPage() {
   const [domain, setDomain] = useState<MorningCardDomainKey>(DEFAULT_DOMAIN);
   const [cards, setCards] = useState<MorningCardDto[]>([]);
+  const [shortage, setShortage] = useState(false);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -35,7 +38,9 @@ export function MorningCardsPage() {
     setIndex(0);
     fetchMorningCards(domain)
       .then((res) => {
-        if (!cancelled) setCards(res.cards);
+        if (cancelled) return;
+        setCards(res.cards);
+        setShortage(res.shortage);
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -100,6 +105,15 @@ export function MorningCardsPage() {
         >
           <MorningCard card={current} onPlay={handlePlay} />
         </div>
+      ) : (
+        <p data-testid="morning-cards-empty" className="text-sm text-muted-foreground">
+          {cards.length === 0 ? EMPTY_MESSAGE : DONE_MESSAGE}
+        </p>
+      )}
+      {!loading && !failed && shortage && current ? (
+        <p data-testid="morning-cards-shortage" className="text-xs text-muted-foreground">
+          {EMPTY_MESSAGE}
+        </p>
       ) : null}
     </main>
   );

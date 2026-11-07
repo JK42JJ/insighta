@@ -173,7 +173,7 @@
       "cd frontend && npx vitest run src/__tests__/morning-cards-page.test.tsx passes an empty-domain case",
       "the test asserts the honest message is shown and zero card elements render"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
