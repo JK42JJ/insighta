@@ -4,3 +4,4 @@ Notes: frontend/index.html is 127 lines, so the cited swipe lines 6283-6330 do n
 First feature: src/config/morning-cards.ts flag + test-account allowlist with a Jest test.
 DONE: src/config/morning-cards.ts (MOBILE_MORNING_CARDS, MORNING_CARDS_TEST_USER_IDS) + tests/smoke/morning-cards-config.test.ts (4 pass, tsc clean).
 Next: domain constants (morning-cards-domains).
+DONE: src/modules/morning-cards/domains.ts (3 domains mapped to CURATION_DOMAINS) + tests/smoke/morning-cards-domains.test.ts (3 pass, tsc clean). Next: swipe-reuse decision doc.

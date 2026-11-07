@@ -16,7 +16,7 @@
       "npx jest --maxWorkers=2 tests/smoke/morning-cards-domains.test.ts passes and asserts exactly three domain keys",
       "the same test asserts every mapped value is a member of CURATION_DOMAINS"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "docs",
