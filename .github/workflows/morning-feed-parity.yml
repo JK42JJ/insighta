@@ -39,8 +39,8 @@ jobs:
       - name: Build the frontend (placeholder service addresses, nothing is called)
         run: cd frontend && npm run build
         env:
-          VITE_SUPABASE_URL: https://placeholder.invalid
-          VITE_SUPABASE_ANON_KEY: placeholder
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_PUBLISHABLE_KEY: verify-dummy-key
           VITE_API_URL: http://127.0.0.1:9
       - name: Run parity tests
         run: cd frontend && npx playwright test -c playwright.parity.config.ts
