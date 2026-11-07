@@ -36,6 +36,7 @@ prisma/migrations/*
 !prisma/migrations/ontology/
 !prisma/migrations/video_discover/
 !prisma/migrations/manual/
+!prisma/migrations/morning-feed/
 !prisma/migrations/video_chunk_embeddings/
 !prisma/migrations/mandala-timings/
 !prisma/migrations/video_rich_summaries/

@@ -44,6 +44,7 @@ import { youtubeRoutes } from './routes/youtube';
 import { sharingRoutes } from './routes/sharing';
 import { cardsRoutes } from './routes/cards';
 import { morningCardsRoutes } from './routes/morning-cards';
+import { morningFeedRoutes } from './routes/morning-feed';
 import { addCardsRoutes } from './routes/add-cards';
 import { skillRoutes } from './routes/skills';
 import { copilotKitRoutes } from './routes/copilotkit';
@@ -587,6 +588,9 @@ export async function buildServer() {
 
       // Register morning cards routes (PRD #1788, flag MOBILE_MORNING_CARDS, stg only)
       await instance.register(morningCardsRoutes, { prefix: '/morning-cards' });
+
+      // Morning feed (오늘의 픽): same flag and test-account gate, stg only
+      await instance.register(morningFeedRoutes, { prefix: '/morning-feed' });
 
       // Register Add Cards routes (CP466 — POST /mandalas/:id/add-cards)
       await instance.register(addCardsRoutes, { prefix: '/mandalas' });
