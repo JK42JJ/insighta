@@ -155,7 +155,7 @@
       "cd frontend && npx vitest run src/__tests__/use-card-swipe.test.ts passes",
       "the test asserts a drag past the threshold to the right yields useful, to the left yields skip, and a short drag yields nothing"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
