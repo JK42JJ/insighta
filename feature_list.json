@@ -82,7 +82,7 @@
       "npx jest --maxWorkers=2 tests/smoke/morning-cards-routes.test.ts passes using fastify inject",
       "the test asserts 404 with flag unset, 403 for a non-test user, 200 with cards for a test user"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "backend",
