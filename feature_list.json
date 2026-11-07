@@ -127,7 +127,7 @@
       "cd frontend && npx vitest run src/__tests__/morning-cards-youtube-url.test.ts passes",
       "the test asserts an invalid id returns null and a valid id yields a youtube.com URL"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",

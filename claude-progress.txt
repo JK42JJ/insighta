@@ -16,3 +16,4 @@ DONE: GET /review and PATCH /judgments/reason-tags in src/api/routes/morning-car
 DONE: morningCardsRoutes registered in src/api/server.ts under /morning-cards (api prefix) + tests/smoke/morning-cards-registration.test.ts (2 pass, tsc clean). Next: frontend API client (the schema feature stays with the owner: protected-path).
 WRITTEN (not run): frontend/src/features/morning-cards/api.ts + frontend/src/__tests__/morning-cards-api.test.ts; tsc clean, prettier applied; vitest and eslint could not run here (npx vitest not on allowlist, eslint plugin missing), so feature stays passes:false until the supervisor's vitest run. Next: youtube url builder.
 VERIFIED: morning-cards-api vitest 4 pass (run in frontend); feature passes:true. Next: youtube url builder.
+VERIFIED: frontend/src/features/morning-cards/youtube-url.ts + morning-cards-youtube-url vitest 2 pass; feature passes:true. Next: MorningCard component.
