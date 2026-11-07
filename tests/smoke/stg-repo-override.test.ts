@@ -160,8 +160,10 @@ describe('terraform: the staging build role', () => {
     expect(actions.sort()).toEqual(
       [
         'ecr:BatchCheckLayerAvailability',
+        'ecr:BatchGetImage',
         'ecr:CompleteLayerUpload',
         'ecr:GetAuthorizationToken',
+        'ecr:GetDownloadUrlForLayer',
         'ecr:InitiateLayerUpload',
         'ecr:PutImage',
         'ecr:UploadLayerPart',
