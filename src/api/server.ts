@@ -43,6 +43,7 @@ import { betaRoutes } from './routes/beta';
 import { youtubeRoutes } from './routes/youtube';
 import { sharingRoutes } from './routes/sharing';
 import { cardsRoutes } from './routes/cards';
+import { morningCardsRoutes } from './routes/morning-cards';
 import { addCardsRoutes } from './routes/add-cards';
 import { skillRoutes } from './routes/skills';
 import { copilotKitRoutes } from './routes/copilotkit';
@@ -583,6 +584,9 @@ export async function buildServer() {
 
       // Register card routes (pin/bookmark toggle — CP457+)
       await instance.register(cardsRoutes, { prefix: '/cards' });
+
+      // Register morning cards routes (PRD #1788, flag MOBILE_MORNING_CARDS, stg only)
+      await instance.register(morningCardsRoutes, { prefix: '/morning-cards' });
 
       // Register Add Cards routes (CP466 — POST /mandalas/:id/add-cards)
       await instance.register(addCardsRoutes, { prefix: '/mandalas' });

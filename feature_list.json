@@ -109,7 +109,7 @@
       "grep -n 'morningCardsRoutes' src/api/server.ts returns a match",
       "npm run typecheck exits 0"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "frontend",
