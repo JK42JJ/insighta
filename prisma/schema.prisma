@@ -2256,6 +2256,35 @@ model search_trace_candidate {
   @@schema("public")
 }
 
+/// Measurement record (SHADOW MODE) — one row per candidate video per run with
+/// source/video/reaction/channel/comment-signal features. Record only; never used
+/// for ranking or filtering. Comment text is never stored (counts only). 30d TTL.
+model candidate_features {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_id              String
+  branch              String
+  video_id            String   @db.VarChar(20)
+  cell                String?
+  source_kind         String?
+  keyword             String?
+  discovery_paths     Int?
+  video               Json?
+  reaction            Json?
+  channel             Json?
+  comment_signals     Json?
+  filter_trace        Json?
+  relevance_score     Float?
+  measurement_version Int      @default(1)
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  expires_at          DateTime @default(dbgenerated("(now() + interval '30 days')")) @db.Timestamptz(6)
+
+  @@unique([run_id, video_id], map: "uq_candidate_features_run_video")
+  @@index([run_id], map: "idx_candidate_features_run")
+  @@index([video_id], map: "idx_candidate_features_video")
+  @@index([expires_at], map: "idx_candidate_features_expires")
+  @@schema("public")
+}
+
 /// Observability Phase 2-B — daily rollup of the 5 quality axes + pool + quota +
 /// funnel, tagged with algorithm_version / flags. One row per metric_date,
 /// computed from search_trace(+candidate) + video_pool + the live key pool.

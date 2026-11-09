@@ -219,6 +219,10 @@ APPLY_FILES=(
   # curation-watched (2026-07-21): watched_at derived-only column for lineup row
   # meta (M/N listened / weekly complete). ADD COLUMN IF NOT EXISTS = idempotent.
   "prisma/migrations/curation-watched/001_watched_at.sql"
+  # Measurement record (shadow mode) — candidate_features per-candidate feature
+  # log, 30d TTL. CREATE TABLE/INDEX IF NOT EXISTS + NOTIFY pgrst — idempotent.
+  # Inert until MEASUREMENT_RECORD_ENABLED flips on.
+  "prisma/migrations/measurement-record/001_create_candidate_features.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "
