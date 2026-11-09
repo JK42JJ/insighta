@@ -358,7 +358,8 @@ export async function recordCandidates(input: RecordInput): Promise<RecordOutput
     const sheet = sheetAssertions(meta);
     const score = scoreByItem.get(item);
     const channelId = meta.snippet?.channelId ?? null;
-    const cached = channelId ? channelCache.get(channelId) ?? null : null;
+    const cachedEntry = channelId ? channelCache.get(channelId) : undefined;
+    const cached = cachedEntry ?? null;
     const reaction = computeReactionFeatures(meta, now);
     const video = computeVideoFeatures(meta, now);
     const channel = cached
