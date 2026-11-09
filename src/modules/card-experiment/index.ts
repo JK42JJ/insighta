@@ -7,3 +7,15 @@ export {
   type RelevanceDeps,
 } from './relevance';
 export { buildFunnel, runCardExperiment, type RunDeps, type RunInput } from './run';
+export {
+  recordCandidates,
+  writeMeasurementRecordsAwaited,
+  type RecordDeps,
+  type RecordInput,
+  type RecordItem,
+  type RecordOutput,
+  type RecordSkipped,
+  type RecordUnits,
+  type RecordedCandidate,
+  type RecordedMeasurement,
+} from './record';
