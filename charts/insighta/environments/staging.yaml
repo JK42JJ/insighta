@@ -53,7 +53,9 @@ worker:
   # worker that job stays "created" for ever. Schedulers stay off so that nothing
   # runs on a timer unattended; the creation-time summary chain is stopped by
   # V2_AUTO_ENRICH_ENABLED=false in the staging Secret (build-stg-secret.py).
-  replicaCount: 1
+  # 0 while users judge cards on the phone: the morning feed reads and writes the database only
+  # (no queue), and the node has ~400 MB free. Card summaries and add-cards queue until this is 1 again.
+  replicaCount: 0
   runSchedulers: false
   resources:
     requests:
