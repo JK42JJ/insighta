@@ -91,14 +91,27 @@ interface YouTubePlayerProps {
   controller?: { current: SoundController | null };
   /** Called whenever the sound state changes (button, or the control inside the player). */
   onSound?: (on: boolean) => void;
+  /** Called when playback cannot start. The screen shows its own notice BELOW the video: nothing is ever drawn over the player. */
+  onFailed?: (failed: boolean) => void;
 }
 
-export function YouTubePlayer({ videoId, active, controller, onSound }: YouTubePlayerProps) {
+export function YouTubePlayer({
+  videoId,
+  active,
+  controller,
+  onSound,
+  onFailed,
+}: YouTubePlayerProps) {
   const onSoundRef = useRef(onSound);
   onSoundRef.current = onSound;
+  const onFailedRef = useRef(onFailed);
+  onFailedRef.current = onFailed;
   const host = useRef<HTMLDivElement>(null);
   const player = useRef<YtPlayer | null>(null);
   const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    onFailedRef.current?.(failed);
+  }, [failed]);
 
   const ready = useRef(false);
   const loaded = useRef(videoId);
@@ -231,24 +244,6 @@ export function YouTubePlayer({ videoId, active, controller, onSound }: YouTubeP
   }, [active]);
 
   return (
-    <div ref={host} style={{ position: 'absolute', inset: 0, background: 'var(--mf-page)' }}>
-      {failed ? (
-        <a
-          href={'https://www.youtube.com/watch?v=' + videoId}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'grid',
-            placeItems: 'center',
-            color: 'var(--mf-white)',
-            font: '700 14px sans-serif',
-          }}
-        >
-          YouTube에서 열기
-        </a>
-      ) : null}
-    </div>
+    <div ref={host} style={{ position: 'absolute', inset: 0, background: 'var(--mf-page)' }}></div>
   );
 }

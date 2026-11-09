@@ -91,6 +91,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
   // Live cards get the physics-driven card motion; the fixed test screen keeps the reference motion.
   const smooth = cards.some((c) => !!c.videoId);
   const soundCtl = useRef<SoundController | null>(null);
+  const [playerFailed, setPlayerFailed] = useState(false);
   const [soundOn, setSoundOn] = useState(false);
   const fontText = useRef(
     [
@@ -783,6 +784,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                   active={!s.leaving && !s.picker && !done}
                   controller={soundCtl}
                   onSound={setSoundOn}
+                  onFailed={setPlayerFailed}
                 />
               ) : (
                 <>
@@ -803,6 +805,26 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                 </>
               )}
             </div>
+            {card.videoId && playerFailed ? (
+              <div
+                data-testid="mf-player-failed"
+                style={css(
+                  'display: flex; gap: 10px; align-items: center; justify-content: center; padding: 12px 20px 0; font-size: 13px; color: var(--mf-muted)'
+                )}
+              >
+                <span>재생할 수 없어요</span>
+                <a
+                  data-testid="mf-open-yt"
+                  href={'https://www.youtube.com/watch?v=' + card.videoId}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onPointerDown={(ev) => ev.stopPropagation()}
+                  style={css('color: var(--mf-fg); font-weight: 700; text-decoration: underline')}
+                >
+                  YouTube에서 열기
+                </a>
+              </div>
+            ) : null}
             <div
               style={css(
                 'position: relative; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 14px'

@@ -88,3 +88,25 @@ for (const [name, dx, dy, verdict] of [
     expect((await undone).status()).toBe(200);
   });
 }
+
+// YouTube developer policy (III.I.6): nothing may be drawn over the player. When playback cannot start, the
+// notice with the YouTube link sits BELOW the video area. The failure is forced by blocking the player script.
+test('morning feed: playback failure notice is below the player, nothing over it', async ({ page }, info) => {
+  expect(EMAIL, 'STG_TEST_EMAIL is not set').not.toBe('');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('https://www.youtube.com/iframe_api', (route) => route.abort());
+  await signIn(page);
+  await page.goto('/morning-cards?onboard=0');
+  await expect(page.getByTestId('mf-card')).toBeVisible({ timeout: 25_000 });
+  const notice = page.getByTestId('mf-player-failed');
+  await expect(notice).toBeVisible({ timeout: 15_000 });
+  const link = page.getByTestId('mf-open-yt');
+  await expect(link).toHaveAttribute('href', /youtube\.com\/watch\?v=/);
+  const player = (await page.getByTestId('mf-player').boundingBox())!;
+  const box = (await link.boundingBox())!;
+  // the link starts at or below the bottom edge of the player area
+  expect(box.y).toBeGreaterThanOrEqual(player.y + player.height - 0.5);
+  // and no link element exists inside the player area
+  expect(await page.getByTestId('mf-player').locator('a').count()).toBe(0);
+  await info.attach('playback-failed-screen', { body: await page.screenshot(), contentType: 'image/png' });
+});
