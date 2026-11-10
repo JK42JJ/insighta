@@ -3496,6 +3496,8 @@ model morning_card_judgments {
   cell           String?  @db.VarChar(50)
   focus          String[]
   canceled_at    DateTime? @db.Timestamptz(6)
+  /// NULL = swipe deck / other, 'watch' = watch screen. Raw SQL DDL: prisma/migrations/morning-feed/004_watch_batches.sql
+  surface        String?  @db.VarChar(16)
 
   @@index([user_id, created_at(sort: Desc)], map: "idx_mc_judgments_user_created")
   @@index([domain, video_id], map: "idx_mc_judgments_domain_video")
@@ -3541,5 +3543,17 @@ model morning_feed_watch {
   updated_at      DateTime @default(now()) @db.Timestamptz(6)
 
   @@id([user_id, video_id])
+  @@schema("public")
+}
+
+/// Watch screen daily batch per goal cell (KST day). Raw SQL DDL: prisma/migrations/morning-feed/004_watch_batches.sql
+model morning_watch_batches {
+  user_id    String   @db.Uuid
+  day        DateTime @db.Date
+  cell       String   @db.VarChar(50)
+  video_ids  String[]
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([user_id, day, cell])
   @@schema("public")
 }

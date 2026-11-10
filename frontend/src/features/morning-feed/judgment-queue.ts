@@ -12,6 +12,8 @@ export type QueueOp =
         cell: string;
         verdict: 'useful' | 'skip' | 'pass';
         shown_position: number;
+        /** 'watch' from the watch screen; the swipe deck leaves it out. */
+        surface?: 'watch';
       };
     }
   | { kind: 'undo' };

@@ -1,6 +1,7 @@
 /*
- * Watch screen (/morning-cards?view=watch): pure helpers for the goal list, today's videos of a
- * goal, the top bar and the meta line. No React here, so all of it is unit tested.
+ * Watch screen (/morning-cards?view=watch): pure helpers for the goal list, the goal chips from
+ * today's server batches, the batch videos still to answer, the top bar and the meta line.
+ * No React here, so all of it is unit tested.
  */
 import { formatMinutes } from '@/features/morning-feed/insight-summary';
 import type { FeedCard, FeedCell } from '@/features/morning-feed/MorningFeed';
@@ -19,76 +20,104 @@ export function goalCells(cells: readonly FeedCell[]): FeedCell[] {
   return cells.filter((c) => c.dom !== CENTRE_DOM);
 }
 
-/**
- * Today's videos for a goal: the first `n` cards of that cell in feed order that have a video
- * and were not judged yet (judged = in this visit; the server already leaves out earlier ones).
- */
-export function pickTodaysVideos<T extends Pick<FeedCard, 'cell' | 'videoId'>>(
-  cards: readonly T[],
-  cell: string,
-  n: number,
-  judgedIds: ReadonlySet<string> = new Set()
-): T[] {
-  if (!(n > 0)) return [];
-  const out: T[] = [];
-  for (const c of cards) {
-    if (out.length >= n) break;
-    if (c.cell !== cell || !c.videoId || judgedIds.has(c.videoId)) continue;
-    out.push(c);
-  }
-  return out;
-}
-
 /** The server's per-day count. Anything but a positive whole number is treated as missing. */
 export function parseWatchDaily(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
 }
 
-/** Videos judged today per cell label, as the server counted them. */
-export type WatchToday = Readonly<Record<string, number>>;
+/** One goal today, as GET /morning-feed/watch/today sends it. */
+export interface WatchTodayCell {
+  /** Videos in today's batch; null = no batch yet. */
+  issued: number | null;
+  /** Batch videos answered on this screen. */
+  judged: number;
+  /** Videos a new batch would get. */
+  available: number;
+}
 
-/**
- * The server's per-cell count of today's judged videos. Missing, not an object, or any value that
- * is not a whole number >= 0 -> null (treated as an older server: no daily limit is applied).
- */
-export function parseWatchToday(value: unknown): WatchToday | null {
+/** Per goal cell label. */
+export type WatchTodayMap = Readonly<Record<string, WatchTodayCell>>;
+
+const isCount = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0;
+
+/** The server's per-goal map. Not an object, or any entry with a malformed field -> null. */
+export function parseWatchTodayMap(value: unknown): WatchTodayMap | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const out: Record<string, number> = {};
-  for (const [cell, n] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) return null;
-    out[cell] = n;
+  const out: Record<string, WatchTodayCell> = {};
+  for (const [cell, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw !== 'object' || raw === null) return null;
+    const e = raw as Record<string, unknown>;
+    const issued = e['issued'];
+    const judged = e['judged'];
+    const available = e['available'];
+    if (!(issued === null || isCount(issued)) || !isCount(judged) || !isCount(available)) {
+      return null;
+    }
+    out[cell] = { issued, judged, available };
   }
   return out;
 }
 
+export type GoalChipKind = 'open' | 'done' | 'none';
+
+export interface GoalChipState {
+  kind: GoalChipKind;
+  /** Videos the CTA hands out now: unanswered batch videos, or a new batch's size. */
+  count: number;
+}
+
 /**
- * How many more videos the goal may show today: daily minus what was judged today in that cell,
- * never below 0. Without the server's count (null) the whole daily number is used, as before.
+ * A goal chip from today's state: no batch and no candidates -> 'none' (disabled, 오늘 영상 없음);
+ * a batch whose videos are all answered -> 'done' (오늘은 끝, opens the insight); otherwise 'open'
+ * with count = unanswered batch videos, or what a new batch would get. Unknown goal = 'none'.
  */
-export function remainingToday(daily: number, watchToday: WatchToday | null, cell: string): number {
-  if (watchToday === null) return daily;
-  return Math.max(0, daily - (watchToday[cell] ?? 0));
+export function goalChipState(cell: WatchTodayCell | undefined): GoalChipState {
+  if (!cell) return { kind: 'none', count: 0 };
+  if (cell.issued === null) {
+    return cell.available > 0
+      ? { kind: 'open', count: cell.available }
+      : { kind: 'none', count: 0 };
+  }
+  const left = Math.max(0, cell.issued - cell.judged);
+  return left > 0 ? { kind: 'open', count: left } : { kind: 'done', count: 0 };
 }
 
-/** '오늘은 끝': the server's count is known and the goal has used up today's videos. */
-export function isGoalDoneToday(
-  daily: number,
-  watchToday: WatchToday | null,
-  cell: string
-): boolean {
-  return watchToday !== null && remainingToday(daily, watchToday, cell) === 0;
-}
-
-/** The goal row's right-hand text. */
+/** The goal's text under its chip: '오늘은 끝', '오늘 n편' or '오늘 영상 없음'. */
 export function goalRowText(count: number, doneToday: boolean): string {
   if (doneToday) return '오늘은 끝';
   return count > 0 ? '오늘 ' + count + '편' : '오늘 영상 없음';
 }
 
-/** The count after one more judgment in `cell` this visit; null (unknown) stays null. */
-export function addJudgedToday(watchToday: WatchToday | null, cell: string): WatchToday | null {
-  if (watchToday === null) return null;
-  return { ...watchToday, [cell]: (watchToday[cell] ?? 0) + 1 };
+/** After a batch arrived: its size and answered count are now known for the goal. */
+export function withBatch(
+  today: WatchTodayMap,
+  cell: string,
+  issued: number,
+  judged: number
+): WatchTodayMap {
+  return { ...today, [cell]: { issued, judged, available: 0 } };
+}
+
+/** One more batch video of `cell` answered in this visit. */
+export function withOneJudged(today: WatchTodayMap, cell: string): WatchTodayMap {
+  const e = today[cell];
+  if (!e) return today;
+  return { ...today, [cell]: { ...e, judged: e.judged + 1 } };
+}
+
+/**
+ * The batch videos still to answer, in batch order, each with its index in the batch (the
+ * judgment's shown_position). Videos without a video id or already answered are left out.
+ */
+export function unansweredInBatch<T extends Pick<FeedCard, 'videoId'>>(
+  items: readonly T[],
+  answered: ReadonlySet<string>
+): Array<{ video: T; position: number }> {
+  const out: Array<{ video: T; position: number }> = [];
+  items.forEach((video, position) => {
+    if (video.videoId && !answered.has(video.videoId)) out.push({ video, position });
+  });
+  return out;
 }
 
 export type SegmentState = 'done' | 'current' | 'rest';

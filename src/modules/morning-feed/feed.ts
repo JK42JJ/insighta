@@ -121,6 +121,24 @@ function buildInfo(r: FeedRow): FeedCardInfo | undefined {
   return Object.keys(info).length > 0 ? info : undefined;
 }
 
+/** One card in the shape GET /morning-feed sends (the watch batch uses the same shape). */
+function cardFromRow(r: FeedRow): FeedCard {
+  const info = buildInfo(r);
+  return {
+    video_id: r.video_id,
+    title: r.title,
+    channel: r.channel_name,
+    published_at: new Date(r.published_at).toISOString(),
+    duration: r.duration_seconds,
+    view_count: r.view_count == null ? null : Number(r.view_count),
+    thumbnail_url: r.thumbnail_url,
+    cell: r.cell,
+    focus: r.focus ?? [],
+    why: r.why,
+    ...(info ? { info } : {}),
+  };
+}
+
 function viewsPerDay(row: FeedRow, now: Date): number {
   const views = Number(row.view_count ?? 0);
   const days = Math.max(1, (now.getTime() - new Date(row.published_at).getTime()) / MS_PER_DAY);
@@ -183,22 +201,7 @@ export async function fetchFeed(
           new Date(b.published_at).getTime() - new Date(a.published_at).getTime()
       )
       .slice(0, FEED_MAX_CARDS_PER_CELL);
-    for (const r of mine) {
-      const info = buildInfo(r);
-      cards.push({
-        video_id: r.video_id,
-        title: r.title,
-        channel: r.channel_name,
-        published_at: new Date(r.published_at).toISOString(),
-        duration: r.duration_seconds,
-        view_count: r.view_count == null ? null : Number(r.view_count),
-        thumbnail_url: r.thumbnail_url,
-        cell: r.cell,
-        focus: r.focus ?? [],
-        why: r.why,
-        ...(info ? { info } : {}),
-      });
-    }
+    for (const r of mine) cards.push(cardFromRow(r));
   }
   return {
     cells: [...FEED_CELLS],
@@ -214,7 +217,8 @@ interface WatchTodayRow {
 }
 
 /**
- * Watch screen daily limit: per goal cell, how many distinct videos this user judged today
+ * GET /morning-feed `watch_today` (kept for compatibility; the watch screen now reads
+ * GET /watch/today instead): per goal cell, how many distinct videos this user judged today
  * (KST calendar day containing `now`, live judgments with a cell, any verdict; a video counts
  * once, under the cell of its latest judgment). Every goal cell is present, 0 when none.
  */
@@ -250,7 +254,7 @@ export interface FeedHistoryItem {
   cell: string;
   /** KST calendar day, 'YYYY-MM-DD'. */
   day: string;
-  /** Distinct videos judged in that cell on that day. */
+  /** Videos handed out in that cell's watch batch on that day. */
   count: number;
 }
 
@@ -260,9 +264,15 @@ interface HistoryRow {
   count: number | bigint;
 }
 
+/** The 8 goal cells (the centre cell is not a goal). */
+function goalCellLabels(): string[] {
+  return FEED_CELLS.filter((c) => c.dom !== -1).map((c) => c.label);
+}
+
 /**
  * Watch screen "이전 주제" / "어제에 이어서": per goal cell, the most recent KST day before today
- * (the KST day containing `now`) with live judgments, and the distinct videos judged that day.
+ * (the KST day containing `now`) on which the watch screen handed out a batch, and that batch's
+ * size. Only morning_watch_batches is read, so the swipe deck's judgments never appear here.
  * Newest day first, then cell label; at most FEED_HISTORY_MAX. Read only.
  */
 export async function fetchHistory(
@@ -271,22 +281,17 @@ export async function fetchHistory(
   now: Date = new Date()
 ): Promise<FeedHistoryItem[]> {
   if (!userId) throw new FeedValidationError('user_id required');
-  const { start } = kstDayBounds(now);
-  const goalCells = FEED_CELLS.filter((c) => c.dom !== -1).map((c) => c.label);
   const rows = await db.$queryRawUnsafe<HistoryRow[]>(
     `SELECT x.cell, x.day, x.count FROM (
-       SELECT DISTINCT ON (t.cell) t.cell, t.day, t.count FROM (
-         SELECT j.cell, to_char((j.created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS day,
-                COUNT(DISTINCT j.video_id)::int AS count
-           FROM public.morning_card_judgments j
-          WHERE j.user_id = $1::uuid AND j.canceled_at IS NULL AND j.cell IS NOT NULL
-            AND j.cell = ANY($2::text[]) AND j.created_at < $3
-          GROUP BY j.cell, day
-       ) t ORDER BY t.cell, t.day DESC
+       SELECT DISTINCT ON (b.cell) b.cell, to_char(b.day, 'YYYY-MM-DD') AS day,
+              cardinality(b.video_ids)::int AS count
+         FROM public.morning_watch_batches b
+        WHERE b.user_id = $1::uuid AND b.cell = ANY($2::text[]) AND b.day < $3::date
+        ORDER BY b.cell, b.day DESC
      ) x ORDER BY x.day DESC, x.cell LIMIT $4`,
     userId,
-    goalCells,
-    start,
+    goalCellLabels(),
+    kstDayString(now),
     FEED_HISTORY_MAX
   );
   return rows
@@ -301,9 +306,23 @@ export interface FeedJudgmentInput {
   cell: string;
   verdict: string;
   shown_position: number;
+  /** Which screen wrote it: absent = the swipe deck (stored NULL), 'watch' = the watch screen. */
+  surface?: unknown;
 }
 
-export function validateFeedJudgment(input: FeedJudgmentInput): FeedJudgmentInput {
+/** The only accepted judgment surface (column morning_card_judgments.surface). */
+export const WATCH_SURFACE = 'watch';
+
+export interface ValidFeedJudgment {
+  user_id: string;
+  video_id: string;
+  cell: string;
+  verdict: string;
+  shown_position: number;
+  surface: typeof WATCH_SURFACE | null;
+}
+
+export function validateFeedJudgment(input: FeedJudgmentInput): ValidFeedJudgment {
   if (!input.user_id) throw new FeedValidationError('user_id required');
   if (!YOUTUBE_VIDEO_ID_RE.test(input.video_id ?? ''))
     throw new FeedValidationError('invalid video_id');
@@ -315,22 +334,33 @@ export function validateFeedJudgment(input: FeedJudgmentInput): FeedJudgmentInpu
   if (!Number.isInteger(pos) || pos < 0 || pos > FEED_MAX_POSITION) {
     throw new FeedValidationError('invalid shown_position');
   }
-  return input;
+  if (input.surface !== undefined && input.surface !== WATCH_SURFACE) {
+    throw new FeedValidationError('unknown surface');
+  }
+  return {
+    user_id: input.user_id,
+    video_id: input.video_id,
+    cell: input.cell,
+    verdict: input.verdict,
+    shown_position: pos,
+    surface: input.surface === WATCH_SURFACE ? WATCH_SURFACE : null,
+  };
 }
 
 /** Exactly one new row; the video's focus tags are copied from its annotation. */
 export async function saveFeedJudgment(db: FeedDb, input: FeedJudgmentInput): Promise<void> {
   const v = validateFeedJudgment(input);
   await db.$executeRawUnsafe(
-    `INSERT INTO public.morning_card_judgments (user_id, video_id, domain, cell, focus, verdict, shown_position)
+    `INSERT INTO public.morning_card_judgments (user_id, video_id, domain, cell, focus, verdict, shown_position, surface)
      VALUES ($1::uuid, $2, $3, $3,
              COALESCE((SELECT focus FROM public.morning_feed_annotations WHERE video_id = $2), '{}'::text[]),
-             $4, $5)`,
+             $4, $5, $6)`,
     v.user_id,
     v.video_id,
     v.cell,
     v.verdict,
-    v.shown_position
+    v.shown_position,
+    v.surface
   );
 }
 
@@ -359,6 +389,11 @@ function kstDayBounds(now: Date): { kst: Date; start: Date; end: Date } {
     Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) - KST_OFFSET_MS
   );
   return { kst, start, end: new Date(start.getTime() + MS_PER_DAY) };
+}
+
+/** The KST calendar day containing `now` as 'YYYY-MM-DD' (the batch table's `day`). */
+function kstDayString(now: Date): string {
+  return kstDayBounds(now).kst.toISOString().slice(0, 10);
 }
 
 export interface FeedWatchInput {
@@ -429,6 +464,8 @@ export interface InsightCellStat {
 
 export interface FeedInsight {
   date_kst: string;
+  /** Watch screen insight only: videos handed out in today's batch of the goal. */
+  received?: number;
   reacted: number;
   liked: number;
   disliked: number;
@@ -482,6 +519,14 @@ export async function fetchInsight(
       ORDER BY j.video_id, j.created_at DESC`,
     ...params
   );
+  return summariseInsight(rows, kst);
+}
+
+/**
+ * Totals, per-cell stats and the answer order from the latest live judgment per video.
+ * Passed videos are counted apart and never add to reacted or watched time.
+ */
+function summariseInsight(rows: InsightRow[], kst: Date): FeedInsight {
   const sorted = [...rows].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
@@ -522,4 +567,278 @@ export async function fetchInsight(
       at: new Date(r.created_at).toISOString(),
     })),
   };
+}
+
+// ── Watch screen daily batch (morning_watch_batches) ──
+
+/** Watch screen candidates: only annotations from this gate-passed review pass. */
+export const WATCH_CANDIDATE_SOURCE = 'review_v3';
+
+export type FeedVerdict = (typeof FEED_VERDICTS)[number];
+
+export interface WatchBatch {
+  cell: string;
+  /** KST calendar day, 'YYYY-MM-DD'. */
+  day: string;
+  /** Batch order; the index is the judgment's shown_position. */
+  items: FeedCard[];
+  /** Latest live watch-screen verdict per batch video; videos not answered yet are absent. */
+  judged: Record<string, FeedVerdict>;
+}
+
+export interface WatchTodayCell {
+  /** Videos in today's batch; null = no batch yet today. */
+  issued: number | null;
+  /** Distinct batch videos with a live watch-screen judgment. */
+  judged: number;
+  /** Videos a new batch would get (0..WATCH_DAILY_VIDEOS); 0 once today's batch exists. */
+  available: number;
+}
+
+export interface WatchToday {
+  day: string;
+  daily: number;
+  cells: FeedCellDef[];
+  /** One entry per goal cell (8). */
+  today: Record<string, WatchTodayCell>;
+}
+
+interface BatchIdsRow {
+  video_ids: string[];
+}
+
+interface CandidateRow {
+  video_id: string;
+}
+
+interface JudgedRow {
+  video_id: string;
+  verdict: string;
+}
+
+interface TodayBatchRow {
+  cell: string;
+  issued: number | bigint;
+  judged: number | bigint;
+}
+
+interface AvailableRow {
+  cell: string;
+  available: number | bigint;
+}
+
+/**
+ * Candidate filter shared by batch creation and the per-cell "available" count. Parameters:
+ * $1 user, $2 duration floor, $3 source. Excludes videos with any live judgment by the user
+ * (any surface) and videos in any of the user's batches.
+ */
+const WATCH_CANDIDATE_WHERE = `
+       FROM public.morning_feed_annotations a
+       JOIN public.video_pool v ON v.video_id = a.video_id
+      WHERE a.source = $3 AND a.why IS NOT NULL
+        AND v.is_active = true AND v.duration_seconds >= $2
+        AND NOT EXISTS (
+          SELECT 1 FROM public.morning_card_judgments j
+           WHERE j.user_id = $1::uuid AND j.video_id = a.video_id AND j.canceled_at IS NULL)
+        AND NOT EXISTS (
+          SELECT 1 FROM public.morning_watch_batches b
+           WHERE b.user_id = $1::uuid AND a.video_id = ANY(b.video_ids))`;
+
+function assertGoalCell(userId: string, cell: unknown): asserts cell is string {
+  if (!userId) throw new FeedValidationError('user_id required');
+  if (!isFeedCell(cell)) throw new FeedValidationError('unknown cell');
+}
+
+async function selectBatchIds(
+  db: FeedDb,
+  userId: string,
+  day: string,
+  cell: string
+): Promise<string[] | null> {
+  const rows = await db.$queryRawUnsafe<BatchIdsRow[]>(
+    `SELECT b.video_ids FROM public.morning_watch_batches b
+      WHERE b.user_id = $1::uuid AND b.day = $2::date AND b.cell = $3`,
+    userId,
+    day,
+    cell
+  );
+  return rows[0] ? [...rows[0].video_ids] : null;
+}
+
+/** The batch videos as feed cards, in batch order. */
+async function selectBatchCards(db: FeedDb, ids: string[], cell: string): Promise<FeedCard[]> {
+  if (ids.length === 0) return [];
+  const rows = await db.$queryRawUnsafe<FeedRow[]>(
+    `SELECT COALESCE(a.cell, $2) AS cell, a.focus, COALESCE(a.why, '') AS why, a.judge_score,
+            v.video_id, v.title, v.channel_name, v.published_at, v.duration_seconds,
+            v.thumbnail_url, v.view_count,
+            COALESCE(NULLIF(i.one_liner, ''), NULLIF(r.one_liner, '')) AS info_one_liner,
+            i.reason AS info_reason, i.audio_language AS info_audio_language,
+            i.link_count AS info_link_count, i.chapters AS info_chapters
+       FROM unnest($1::text[]) WITH ORDINALITY AS u(video_id, ord)
+       JOIN public.video_pool v ON v.video_id = u.video_id
+       LEFT JOIN public.morning_feed_annotations a ON a.video_id = u.video_id
+       LEFT JOIN public.morning_feed_card_info i ON i.video_id = u.video_id AND i.expires_at > now()
+       LEFT JOIN public.video_rich_summaries r ON r.video_id = u.video_id
+      ORDER BY u.ord`,
+    ids,
+    cell
+  );
+  return rows.map(cardFromRow);
+}
+
+/** Latest live watch-screen verdict per video, for this user and these videos. */
+async function selectWatchVerdicts(
+  db: FeedDb,
+  userId: string,
+  ids: string[]
+): Promise<Record<string, FeedVerdict>> {
+  const out: Record<string, FeedVerdict> = {};
+  if (ids.length === 0) return out;
+  const rows = await db.$queryRawUnsafe<JudgedRow[]>(
+    `SELECT DISTINCT ON (j.video_id) j.video_id, j.verdict
+       FROM public.morning_card_judgments j
+      WHERE j.user_id = $1::uuid AND j.canceled_at IS NULL AND j.surface = $2
+        AND j.video_id = ANY($3::text[])
+      ORDER BY j.video_id, j.created_at DESC`,
+    userId,
+    WATCH_SURFACE,
+    ids
+  );
+  for (const r of rows) {
+    if ((FEED_VERDICTS as readonly string[]).includes(r.verdict)) {
+      out[r.video_id] = r.verdict as FeedVerdict;
+    }
+  }
+  return out;
+}
+
+/**
+ * POST /morning-feed/watch/batch: today's batch (KST day) for one goal cell. An existing batch is
+ * returned as stored. Otherwise up to WATCH_DAILY_VIDEOS candidates (judge score desc, nulls last,
+ * then video_id) are stored with ON CONFLICT DO NOTHING and the stored row is read back, so two
+ * concurrent requests answer the same batch. No candidates -> items [] and nothing is stored.
+ */
+export async function getOrCreateWatchBatch(
+  db: FeedDb,
+  userId: string,
+  cell: unknown,
+  now: Date = new Date()
+): Promise<WatchBatch> {
+  assertGoalCell(userId, cell);
+  const day = kstDayString(now);
+  let ids = await selectBatchIds(db, userId, day, cell);
+  if (ids === null) {
+    const candidates = await db.$queryRawUnsafe<CandidateRow[]>(
+      `SELECT a.video_id${WATCH_CANDIDATE_WHERE}
+        AND a.cell = $4
+      ORDER BY a.judge_score DESC NULLS LAST, a.video_id
+      LIMIT $5`,
+      userId,
+      FEED_MIN_DURATION_SEC,
+      WATCH_CANDIDATE_SOURCE,
+      cell,
+      WATCH_DAILY_VIDEOS
+    );
+    const picked = candidates.map((c) => c.video_id);
+    if (picked.length === 0) return { cell, day, items: [], judged: {} };
+    await db.$executeRawUnsafe(
+      `INSERT INTO public.morning_watch_batches (user_id, day, cell, video_ids)
+       VALUES ($1::uuid, $2::date, $3, $4::text[])
+       ON CONFLICT (user_id, day, cell) DO NOTHING`,
+      userId,
+      day,
+      cell,
+      picked
+    );
+    // the stored row wins (a concurrent request may have inserted first)
+    ids = (await selectBatchIds(db, userId, day, cell)) ?? picked;
+  }
+  const [items, judged] = await Promise.all([
+    selectBatchCards(db, ids, cell),
+    selectWatchVerdicts(db, userId, ids),
+  ]);
+  return { cell, day, items, judged };
+}
+
+/**
+ * GET /morning-feed/watch/today: per goal cell, today's batch size and how many of its videos were
+ * answered on the watch screen, or (no batch yet) how many videos a new batch would get.
+ */
+export async function fetchWatchTodayBatches(
+  db: FeedDb,
+  userId: string,
+  now: Date = new Date()
+): Promise<WatchToday> {
+  if (!userId) throw new FeedValidationError('user_id required');
+  const day = kstDayString(now);
+  const cells = goalCellLabels();
+  const batchesP = db.$queryRawUnsafe<TodayBatchRow[]>(
+    `SELECT b.cell, cardinality(b.video_ids)::int AS issued,
+            (SELECT COUNT(DISTINCT j.video_id)::int FROM public.morning_card_judgments j
+              WHERE j.user_id = b.user_id AND j.canceled_at IS NULL AND j.surface = $3
+                AND j.video_id = ANY(b.video_ids)) AS judged
+       FROM public.morning_watch_batches b
+      WHERE b.user_id = $1::uuid AND b.day = $2::date`,
+    userId,
+    day,
+    WATCH_SURFACE
+  );
+  const availableP = db.$queryRawUnsafe<AvailableRow[]>(
+    `SELECT a.cell, COUNT(*)::int AS available${WATCH_CANDIDATE_WHERE}
+        AND a.cell = ANY($4::text[])
+      GROUP BY a.cell`,
+    userId,
+    FEED_MIN_DURATION_SEC,
+    WATCH_CANDIDATE_SOURCE,
+    cells
+  );
+  const [batches, available] = await Promise.all([batchesP, availableP]);
+  const today: Record<string, WatchTodayCell> = {};
+  for (const c of cells) today[c] = { issued: null, judged: 0, available: 0 };
+  for (const a of available) {
+    const entry = today[a.cell];
+    if (entry) entry.available = Math.min(WATCH_DAILY_VIDEOS, Number(a.available));
+  }
+  for (const b of batches) {
+    const entry = today[b.cell];
+    if (entry) {
+      entry.issued = Number(b.issued);
+      entry.judged = Number(b.judged);
+      entry.available = 0;
+    }
+  }
+  return { day, daily: WATCH_DAILY_VIDEOS, cells: [...FEED_CELLS], today };
+}
+
+/**
+ * GET /morning-feed/watch/insight?cell=: the insight of today's batch of one goal. received = batch
+ * size; verdicts from live watch-screen judgments on the batch videos (swipe-deck judgments are
+ * not read); watched time from morning_feed_watch for those videos. No batch -> all zero.
+ */
+export async function fetchWatchInsight(
+  db: FeedDb,
+  userId: string,
+  cell: unknown,
+  now: Date = new Date()
+): Promise<FeedInsight> {
+  assertGoalCell(userId, cell);
+  const { kst } = kstDayBounds(now);
+  const day = kstDayString(now);
+  const ids = await selectBatchIds(db, userId, day, cell);
+  if (ids === null || ids.length === 0) return { ...summariseInsight([], kst), received: 0 };
+  const rows = await db.$queryRawUnsafe<InsightRow[]>(
+    `SELECT DISTINCT ON (j.video_id) j.video_id, j.verdict, j.cell, j.created_at,
+            v.title, v.duration_seconds, w.watched_seconds
+       FROM public.morning_card_judgments j
+       LEFT JOIN public.video_pool v ON v.video_id = j.video_id
+       LEFT JOIN public.morning_feed_watch w ON w.user_id = j.user_id AND w.video_id = j.video_id
+      WHERE j.user_id = $1::uuid AND j.canceled_at IS NULL AND j.surface = $2
+        AND j.video_id = ANY($3::text[])
+      ORDER BY j.video_id, j.created_at DESC`,
+    userId,
+    WATCH_SURFACE,
+    ids
+  );
+  return { ...summariseInsight(rows, kst), received: ids.length };
 }

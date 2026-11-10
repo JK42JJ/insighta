@@ -1,15 +1,18 @@
 import { test, expect, type Page, type Request } from '@playwright/test';
 
-// 시청 flow (/morning-cards?view=watch) on the deployed staging site: on 02 입력 pick a goal chip,
-// a level and take the CTA, answer one video with 좋아, exactly one judgment is saved through the
-// feed API and the counter moves on. The screen
-// has no undo; the test cancels its own row afterwards through the API so the staging account keeps
-// its cards. The rows belong to the staging test account.
+// 시청 flow (/morning-cards?view=watch) on the deployed staging site: on 02 입력 pick a goal chip
+// that is neither done nor disabled, a level and take the CTA (the server issues today's batch),
+// answer one video with 좋아: exactly one judgment is saved with surface 'watch' and the batch
+// index as shown_position, and the counter moves on. The chips come from GET /watch/today only, so
+// judgments made in the swipe deck do not change what this test sees. The screen has no undo; the
+// test cancels its own row afterwards through the API. The staging test account keeps one batch
+// per goal per day (accepted).
 
 const EMAIL = process.env.STG_TEST_EMAIL ?? '';
 const PASSWORD = process.env.STG_TEST_PASSWORD ?? '';
 const JUDGMENTS_PATH = '/api/v1/morning-feed/judgments';
-const INSIGHT_PATH = '/api/v1/morning-feed/insight';
+const INSIGHT_PATH = '/api/v1/morning-feed/watch/insight';
+const BATCH_PATH = '/api/v1/morning-feed/watch/batch';
 /** watch-design.ts WATCH_ONB_SEEN_KEY */
 const ONB_SEEN_KEY = 'mf_watch_onb_seen';
 const LOAD_TIMEOUT_MS = 25_000;
@@ -66,7 +69,20 @@ test('morning watch: pick a goal chip, level, CTA, 좋아 saves one useful judgm
   await expect(page.getByTestId('mf-w-branch')).toHaveAttribute('aria-pressed', 'true');
   const cta = page.getByTestId('mf-w-cta');
   await expect(cta).toHaveText(`영상 ${total}편 받기`);
+  const batchRes = page.waitForResponse(
+    (r) => r.url().includes(BATCH_PATH) && r.request().method() === 'POST'
+  );
   await cta.click();
+  const batch = await batchRes;
+  expect(batch.status()).toBe(200);
+  const batchData = (await batch.json()).data as {
+    cell: string;
+    items: Array<{ video_id: string }>;
+    judged: Record<string, string>;
+  };
+  // the first unanswered batch video comes first; its batch index is the shown_position
+  const firstOpen = batchData.items.findIndex((v) => !(v.video_id in batchData.judged));
+  expect(firstOpen).toBeGreaterThanOrEqual(0);
 
   await expect(page.getByTestId('mf-w-watch')).toBeVisible();
   await expect(page.getByTestId('mf-watch-counter')).toHaveText(`1 / ${total}`);
@@ -121,10 +137,21 @@ test('morning watch: pick a goal chip, level, CTA, 좋아 saves one useful judgm
     cell: string;
     verdict: string;
     shown_position: number;
+    surface: string;
   };
   expect(body.verdict).toBe('useful');
-  expect(body.shown_position).toBe(0);
-  expect(Object.keys(body).sort()).toEqual(['cell', 'shown_position', 'verdict', 'video_id']);
+  expect(body.surface).toBe('watch');
+  expect(body.cell).toBe(batchData.cell);
+  // a batch nobody answered yet (or whose answers were cancelled) starts at index 0
+  expect(body.shown_position).toBe(firstOpen);
+  expect(body.video_id).toBe(batchData.items[firstOpen]!.video_id);
+  expect(Object.keys(body).sort()).toEqual([
+    'cell',
+    'shown_position',
+    'surface',
+    'verdict',
+    'video_id',
+  ]);
 
   if (total > 1) {
     await expect(page.getByTestId('mf-watch-counter')).toHaveText(`2 / ${total}`);

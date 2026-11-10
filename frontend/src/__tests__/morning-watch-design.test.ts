@@ -55,6 +55,19 @@ describe('watch flow: date header and history text', () => {
     expect(carryCandidate([], now)).toBeNull();
   });
 
+  it('어제에 이어서 takes the first yesterday row whose goal can continue today', () => {
+    const now = new Date('2026-11-10T03:00:00Z'); // 11-10 KST
+    const rows = [
+      { cell: '기술/개발', day: '2026-11-09', count: 5 },
+      { cell: '학습/교육', day: '2026-11-09', count: 3 },
+      { cell: '건강/피트니스', day: '2026-11-01', count: 5 },
+    ];
+    expect(carryCandidate(rows, now, (c) => c !== '기술/개발')).toEqual(rows[1]);
+    expect(carryCandidate(rows, now, () => false)).toBeNull();
+    // an older row never qualifies, even when its goal can continue
+    expect(carryCandidate(rows.slice(2), now, () => true)).toBeNull();
+  });
+
   it("chapter stamps take two-digit minutes like the handoff ('3:10' -> '03:10')", () => {
     expect(chapterStamp('3:10')).toBe('03:10');
     expect(chapterStamp('12:05')).toBe('12:05');
@@ -74,7 +87,7 @@ describe('watch flow: insight paragraph', () => {
         skips: 1,
       })
     ).toBe(
-      '오늘 받은 5편 가운데 4편을 봤고 42분을 썼습니다. 가장 오래 본 갈래는 "채권 직접 사 보기"입니다. 좋다고 한 영상은 3편입니다. 넘긴 1편은 내일 목록에서 빼고 비슷한 다른 영상으로 바꿉니다.'
+      '오늘 받은 5편 가운데 4편을 봤고 42분을 썼습니다. 가장 오래 본 갈래는 "채권 직접 사 보기"입니다. 좋다고 한 영상은 3편입니다. 넘긴 영상은 1편입니다.'
     );
   });
 
@@ -89,6 +102,17 @@ describe('watch flow: insight paragraph', () => {
         skips: 0,
       })
     ).toBe('오늘 받은 2편 가운데 2편을 봤습니다. 넘긴 영상은 없습니다.');
+  });
+
+  it('the passed sentence states the fact only (nothing claims to replace passed videos)', () => {
+    const base = { received: 5, watched: 3, minutes: null, topBranch: null, likes: 0 };
+    expect(buildWatchSummary({ ...base, skips: 2 })).toBe(
+      '오늘 받은 5편 가운데 3편을 봤습니다. 넘긴 영상은 2편입니다.'
+    );
+    expect(buildWatchSummary({ ...base, skips: 0 })).toBe(
+      '오늘 받은 5편 가운데 3편을 봤습니다. 넘긴 영상은 없습니다.'
+    );
+    expect(buildWatchSummary({ ...base, skips: 2 })).not.toContain('내일');
   });
 
   it('whole minutes from seconds; unknown stays null', () => {
@@ -143,7 +167,7 @@ describe('watch flow: insight paragraph', () => {
   it('live insight: received = answered incl. passed, watched = not passed, time and bars from watch data', () => {
     const v = insightViewFromData(data({}), shortOf);
     expect(v.paragraph).toBe(
-      '오늘 받은 4편 가운데 3편을 봤고 21분을 썼습니다. 가장 오래 본 갈래는 "기술·개발"입니다. 좋다고 한 영상은 2편입니다. 넘긴 1편은 내일 목록에서 빼고 비슷한 다른 영상으로 바꿉니다.'
+      '오늘 받은 4편 가운데 3편을 봤고 21분을 썼습니다. 가장 오래 본 갈래는 "기술·개발"입니다. 좋다고 한 영상은 2편입니다. 넘긴 영상은 1편입니다.'
     );
     expect(v.stats).toEqual([
       { k: '본 영상', v: 3, u: '편' },
@@ -156,6 +180,16 @@ describe('watch flow: insight paragraph', () => {
       ['C', '넘김', 'pass'],
     ]);
     expect(v.bars).toEqual([{ label: '기술·개발', min: 21, pct: 100 }]);
+  });
+
+  it('watch insight: received is the batch size the server sends (unanswered videos included)', () => {
+    const v = insightViewFromData(data({ received: 5 }), shortOf);
+    expect(v.paragraph.startsWith('오늘 받은 5편 가운데 3편을 봤고 21분을 썼습니다.')).toBe(true);
+    // 본 영상 / 본 시간 leave the passed video out
+    expect(v.stats.slice(0, 2)).toEqual([
+      { k: '본 영상', v: 3, u: '편' },
+      { k: '본 시간', v: 21, u: '분' },
+    ]);
   });
 
   it('live insight without watch data: no time chip, no minutes, no bars', () => {
@@ -235,7 +269,7 @@ describe('watch flow: fixture data (prototype example, copied)', () => {
     expect(vids).toHaveLength(5);
     const v = fixtureInsight(goal, vids, FIXTURE_DEFAULT_REACTS.slice(0, vids.length));
     expect(v.paragraph).toBe(
-      '오늘 받은 5편 가운데 4편을 봤고 42분을 썼습니다. 가장 오래 본 갈래는 "채권 직접 사 보기"입니다. 좋다고 한 영상은 3편입니다. 넘긴 1편은 내일 목록에서 빼고 비슷한 다른 영상으로 바꿉니다.'
+      '오늘 받은 5편 가운데 4편을 봤고 42분을 썼습니다. 가장 오래 본 갈래는 "채권 직접 사 보기"입니다. 좋다고 한 영상은 3편입니다. 넘긴 영상은 1편입니다.'
     );
     expect(v.stats.map((s) => s.v)).toEqual([4, 42, 3]);
     expect(v.rows.map((r) => r.tag)).toEqual([

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  fetchMorningFeedInsight,
+  fetchWatchInsight,
   type FeedHistoryItem,
   type InsightData,
 } from '@/features/morning-cards/api';
@@ -18,13 +18,15 @@ import {
   type WatchReaction,
 } from '@/features/morning-feed/watch-design';
 import {
-  addJudgedToday,
   goalCells,
-  isGoalDoneToday,
+  goalChipState,
+  goalRowText,
   metaLine,
-  pickTodaysVideos,
-  remainingToday,
-  type WatchToday,
+  unansweredInBatch,
+  withBatch,
+  withOneJudged,
+  type GoalChipState,
+  type WatchTodayMap,
   type WatchVerdict,
   type WatchVideo,
 } from '@/features/morning-feed/watch-list';
@@ -43,9 +45,12 @@ import './watch.css';
  * 시청 flow (/morning-cards?view=watch), design handoff "design_handoff_insighta_mobile":
  * 01 온보딩 (first visit on this device) -> 02 입력 -> 03 시청 -> 04 인사이트.
  * Live data: the 8 feed cells are the "요즘 많이 고르는 것" chips; a cell is one goal with one branch
- * (the cell itself). Each goal shows at most `daily` videos per KST day (server count); a goal that
- * used them up opens its insight. Free text and the level are kept on screen only: no server turns
- * them into branches or videos, so the 갈래 section and the CTA stay hidden for typed text.
+ * (the cell itself). The videos of a goal are today's batch issued by the server (POST
+ * /watch/batch); the chips follow GET /watch/today: no batch and no candidates -> disabled, a batch
+ * answered in full -> '오늘은 끝' (opens its insight), otherwise level -> 갈래 -> CTA. Only answers
+ * given on this screen count (surface 'watch'). Free text and the level are kept on screen only:
+ * no server turns them into branches or videos, so the 갈래 section and the CTA stay hidden for
+ * typed text.
  */
 
 /** The answered video leaves for this long, then the next one replaces it (README 03 동작). */
@@ -66,17 +71,22 @@ const VERDICT_OF: Record<WatchReaction, WatchVerdict> = {
 export interface WatchJudgeEvent {
   video: WatchVideo;
   verdict: WatchVerdict;
-  /** Index within today's list of the goal. */
+  /** Index within today's batch of the goal. */
   shownPosition: number;
 }
 
+/** Today's batch of one goal: the videos in batch order and the ones already answered here. */
+export interface WatchBatchView {
+  items: WatchVideo[];
+  judged: Readonly<Record<string, WatchVerdict>>;
+}
+
 export interface MorningWatchProps {
-  cards: WatchVideo[];
   cells: FeedCell[];
-  /** Videos per day, from the server. */
-  daily: number;
-  /** Videos judged today per goal (cell label), from the server; null = not sent (no limit applied). */
-  watchToday: WatchToday | null;
+  /** Per goal: today's batch size and answers, or what a new batch would get (server). */
+  today: WatchTodayMap;
+  /** Creates (first call of the day) or reads today's batch of the goal. */
+  loadBatch: (cellLabel: string) => Promise<WatchBatchView>;
   /** 이전 주제, newest first (server). Empty = the section is not drawn. */
   history: FeedHistoryItem[];
   onJudge: (e: WatchJudgeEvent) => void;
@@ -89,7 +99,14 @@ export interface MorningWatchProps {
 type Screen =
   | { kind: 'onb'; step: number }
   | { kind: 'input' }
-  | { kind: 'watch'; goal: FeedCell; list: WatchVideo[]; index: number }
+  | {
+      kind: 'watch';
+      goal: FeedCell;
+      list: WatchVideo[];
+      /** Index of each list entry in the batch (shown_position). */
+      positions: number[];
+      index: number;
+    }
   | { kind: 'insight'; goal: FeedCell };
 
 /** What is chosen on 02 입력: a cell chip, or typed text (no cell). */
@@ -128,10 +145,9 @@ function itemView(video: WatchVideo, cellShort: string): WatchItemView {
 }
 
 export function MorningWatch({
-  cards,
   cells,
-  daily,
-  watchToday,
+  today: todayFromServer,
+  loadBatch,
   history,
   onJudge,
   whenSaved,
@@ -141,10 +157,12 @@ export function MorningWatch({
     readOnboardingSeen() ? { kind: 'input' } : { kind: 'onb', step: 0 }
   );
   const [connecting, setConnecting] = useState(false);
-  // today's count per goal, moved on locally with each answer so no reload is needed
-  const [today, setToday] = useState<WatchToday | null>(watchToday);
-  // videos answered in this visit; the server leaves out the ones answered before
+  // today's state per goal, moved on locally with each batch and answer so no reload is needed
+  const [today, setToday] = useState<WatchTodayMap>(todayFromServer);
+  // batch videos answered in this visit (the batch itself tells the earlier ones)
   const [judged, setJudged] = useState<ReadonlySet<string>>(() => new Set());
+  // a batch request is on its way: further presses are ignored
+  const starting = useRef(false);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [level, setLevel] = useState<number | null>(null);
   const [sel, setSel] = useState<number[]>([]);
@@ -167,17 +185,15 @@ export function MorningWatch({
   const goals = useMemo(() => goalCells(cells), [cells]);
   const cellOf = (label: string): FeedCell | undefined => goals.find((g) => g.label === label);
   const shortOf = (label: string): string => cellOf(label)?.short ?? label;
-  const available = (cell: FeedCell): number =>
-    pickTodaysVideos(cards, cell.label, remainingToday(daily, today, cell.label), judged).length;
-  const doneToday = (cell: FeedCell): boolean => isGoalDoneToday(daily, today, cell.label);
+  const chipOf = (cell: FeedCell): GoalChipState => goalChipState(today[cell.label]);
 
-  // 어제에 이어서: decided once at load, so the question row keeps its wording for the visit
+  // 어제에 이어서: a goal with yesterday's batch that still has videos today (a new batch or an
+  // unfinished one). Decided once at load, so the question row keeps its wording for the visit.
   const [carryCell] = useState<FeedCell | null>(() => {
-    const c = carryCandidate(history, now);
-    const cell = c ? goals.find((g) => g.label === c.cell) : undefined;
-    if (!cell || isGoalDoneToday(daily, watchToday, cell.label)) return null;
-    const n = pickTodaysVideos(cards, cell.label, remainingToday(daily, watchToday, cell.label));
-    return n.length > 0 ? cell : null;
+    const open = (label: string): boolean =>
+      goals.some((g) => g.label === label) && goalChipState(todayFromServer[label]).kind === 'open';
+    const c = carryCandidate(history, now, open);
+    return c ? (goals.find((g) => g.label === c.cell) ?? null) : null;
   });
 
   const finishOnboarding = (): void => {
@@ -199,22 +215,51 @@ export function MorningWatch({
     });
   };
 
-  /** Straight to the goal's videos (or its insight when today's are used up). */
+  /**
+   * Today's batch of the goal (issued by the server on the first call of the day), then straight
+   * to its unanswered videos in batch order; the insight when all of them are answered.
+   */
   const openGoal = (cell: FeedCell): void => {
-    if (doneToday(cell)) {
+    const state = chipOf(cell);
+    if (state.kind === 'done') {
       setScreen({ kind: 'insight', goal: cell });
       return;
     }
-    const list = pickTodaysVideos(
-      cards,
-      cell.label,
-      remainingToday(daily, today, cell.label),
-      judged
-    );
-    if (list.length === 0) return;
-    setCarryOff(true);
-    setFailedVideo(null);
-    setScreen({ kind: 'watch', goal: cell, list, index: 0 });
+    if (state.kind === 'none' || starting.current) return;
+    starting.current = true;
+    loadBatch(cell.label)
+      .then((batch) => {
+        if (!alive.current) return;
+        const answered = new Set([...Object.keys(batch.judged), ...judged]);
+        const rest = unansweredInBatch(batch.items, answered);
+        if (batch.items.length === 0) {
+          // no candidates left (nothing was stored): the chip turns disabled
+          setToday((t) => ({ ...t, [cell.label]: { issued: null, judged: 0, available: 0 } }));
+          return;
+        }
+        setToday((t) =>
+          withBatch(t, cell.label, batch.items.length, batch.items.length - rest.length)
+        );
+        if (rest.length === 0) {
+          setScreen({ kind: 'insight', goal: cell });
+          return;
+        }
+        setCarryOff(true);
+        setFailedVideo(null);
+        setScreen({
+          kind: 'watch',
+          goal: cell,
+          list: rest.map((r) => r.video),
+          positions: rest.map((r) => r.position),
+          index: 0,
+        });
+      })
+      .catch(() => {
+        /* not loaded: stay on 02 입력, the chip can be pressed again */
+      })
+      .finally(() => {
+        starting.current = false;
+      });
   };
 
   const pickGoal = (next: Picked): void => {
@@ -237,14 +282,15 @@ export function MorningWatch({
 
   const react = (kind: WatchReaction): void => {
     if (busy.current || screen.kind !== 'watch') return;
-    const { list, index } = screen;
+    const { list, positions, index } = screen;
     const video = list[index];
     if (!video?.videoId) return;
     busy.current = true;
-    onJudge({ video, verdict: VERDICT_OF[kind], shownPosition: index });
+    onJudge({ video, verdict: VERDICT_OF[kind], shownPosition: positions[index] ?? index });
     const id = video.videoId;
+    const goalLabel = screen.goal.label;
     setJudged((prev) => new Set(prev).add(id));
-    setToday((prev) => addJudgedToday(prev, video.cell));
+    setToday((prev) => withOneJudged(prev, goalLabel));
     const advance = (): void => {
       timer.current = null;
       busy.current = false;
@@ -270,10 +316,11 @@ export function MorningWatch({
   } else if (screen.kind === 'input') {
     const pickedCell = picked?.cell ?? null;
     const showBranches = !!picked && level !== null && picked.goal.branches.length > 0;
-    const n = pickedCell ? available(pickedCell) : 0;
+    const n = pickedCell ? chipOf(pickedCell).count : 0;
+    const carryState = carryCell ? chipOf(carryCell) : null;
     const carry =
-      carryCell && !carryOff && !doneToday(carryCell) && available(carryCell) > 0
-        ? { title: carryCell.short, count: available(carryCell), onGo: () => openGoal(carryCell) }
+      carryCell && carryState && !carryOff && carryState.kind === 'open'
+        ? { title: carryCell.short, count: carryState.count, onGo: () => openGoal(carryCell) }
         : null;
     body = (
       <WatchInputScreen
@@ -281,16 +328,17 @@ export function MorningWatch({
         carry={carry}
         askTitle={carryCell ? ASK_AGAIN : ASK_FIRST}
         chips={goals.map((g): WatchChipView => {
-          const done = doneToday(g);
-          const count = available(g);
+          const c = chipOf(g);
           return {
             key: g.label,
             title: g.short,
             on: pickedCell?.label === g.label,
-            state: done ? 'done' : undefined,
-            count,
-            disabled: !done && count === 0,
-            onPick: () => (done ? openGoal(g) : pickGoal({ goal: cellGoal(g), cell: g })),
+            state: c.kind === 'open' ? undefined : c.kind,
+            count: c.count,
+            note: c.kind === 'open' ? undefined : goalRowText(c.count, c.kind === 'done'),
+            disabled: c.kind === 'none',
+            onPick: () =>
+              c.kind === 'done' ? openGoal(g) : pickGoal({ goal: cellGoal(g), cell: g }),
           };
         })}
         onSubmitText={(t) => pickGoal({ goal: textGoal(t), cell: null })}
@@ -312,7 +360,7 @@ export function MorningWatch({
         })}
         cta={showBranches && pickedCell && sel.length > 0 && n > 0 ? '영상 ' + n + '편 받기' : null}
         onStart={() => {
-          if (pickedCell) openGoal(pickedCell);
+          if (pickedCell && chipOf(pickedCell).kind === 'open') openGoal(pickedCell);
         }}
       />
     );
@@ -392,7 +440,7 @@ function LiveInsight({
   useEffect(() => {
     let on = true;
     void whenSaved()
-      .then(() => fetchMorningFeedInsight(goal.label))
+      .then(() => fetchWatchInsight(goal.label))
       .then((d) => on && setData(d))
       .catch(() => on && setData(null));
     return () => {

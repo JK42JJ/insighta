@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  fetchMorningFeed,
   fetchMorningFeedHistory,
+  fetchWatchToday,
   postFeedJudgment,
+  postWatchBatch,
   undoFeedJudgment,
   type FeedHistoryItem,
 } from '@/features/morning-cards/api';
@@ -11,11 +12,17 @@ import { toFeedCard } from '@/features/morning-feed/feed-format';
 import { JudgmentQueue } from '@/features/morning-feed/judgment-queue';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
 import fixture from '@/features/morning-feed/morning-feed.fixture.json';
-import { MorningWatch, type WatchJudgeEvent } from '@/features/morning-feed/MorningWatch';
 import {
-  parseWatchDaily,
-  parseWatchToday,
-  type WatchToday,
+  MorningWatch,
+  type WatchBatchView,
+  type WatchJudgeEvent,
+} from '@/features/morning-feed/MorningWatch';
+import {
+  goalCells,
+  goalChipState,
+  parseWatchTodayMap,
+  type WatchTodayMap,
+  type WatchVerdict,
   type WatchVideo,
 } from '@/features/morning-feed/watch-list';
 import {
@@ -36,10 +43,8 @@ type LoadState =
   | { status: 'empty' }
   | {
       status: 'ready';
-      cards: WatchVideo[];
       cells: FeedCell[];
-      daily: number;
-      watchToday: WatchToday | null;
+      today: WatchTodayMap;
       history: FeedHistoryItem[];
     };
 
@@ -53,10 +58,12 @@ const MESSAGE_STYLE = {
   font: '500 15px var(--w-font)',
 } as const;
 
+const WATCH_SURFACE = 'watch';
+
 /**
- * Live data for the watch screen: the same feed API and the same judgment write queue as the
- * deck (POST /judgments body is identical). The number of videos per day and today's judged count
- * per goal come from the server (a server without the count: no per-goal limit, as before).
+ * Live data for the watch screen: the goals and their state today from GET /watch/today, each
+ * goal's videos from its daily batch (POST /watch/batch), and the deck's judgment write queue with
+ * surface 'watch' on every judgment so only this screen's answers count here.
  */
 export function MorningWatchLive(): JSX.Element {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
@@ -71,29 +78,19 @@ export function MorningWatchLive(): JSX.Element {
     let alive = true;
     // 이전 주제 is optional: when it cannot be read the section is simply not drawn
     const historyP = fetchMorningFeedHistory().catch((): FeedHistoryItem[] => []);
-    Promise.all([fetchMorningFeed(), historyP])
-      .then(([feed, history]) => {
+    Promise.all([fetchWatchToday(), historyP])
+      .then(([t, history]) => {
         if (!alive) return;
-        const daily = parseWatchDaily(feed.watch_daily);
-        if (daily === null) {
+        const today = parseWatchTodayMap(t.today);
+        if (today === null || !Array.isArray(t.cells)) {
           setState({ status: 'error' });
           return;
         }
-        const cards: WatchVideo[] = feed.cards.map((c) => ({
-          ...toFeedCard(c, PALETTE),
-          durationSec: c.duration,
-        }));
+        const anyGoal = goalCells(t.cells).some(
+          (c) => goalChipState(today[c.label]).kind !== 'none'
+        );
         setState(
-          cards.length === 0
-            ? { status: 'empty' }
-            : {
-                status: 'ready',
-                cards,
-                cells: feed.cells,
-                daily,
-                watchToday: parseWatchToday(feed.watch_today),
-                history,
-              }
+          anyGoal ? { status: 'ready', cells: t.cells, today, history } : { status: 'empty' }
         );
       })
       .catch(() => alive && setState({ status: 'error' }));
@@ -123,8 +120,19 @@ export function MorningWatchLive(): JSX.Element {
         cell: e.video.cell,
         verdict: e.verdict,
         shown_position: e.shownPosition,
+        surface: WATCH_SURFACE,
       },
     });
+  }, []);
+
+  const loadBatch = useCallback(async (cellLabel: string): Promise<WatchBatchView> => {
+    const batch = await postWatchBatch(cellLabel);
+    const items: WatchVideo[] = batch.items.map((c) => ({
+      ...toFeedCard(c, PALETTE),
+      durationSec: c.duration,
+    }));
+    const judged: Record<string, WatchVerdict> = { ...batch.judged };
+    return { items, judged };
   }, []);
 
   const whenSaved = useCallback(
@@ -173,10 +181,9 @@ export function MorningWatchLive(): JSX.Element {
     );
   return (
     <MorningWatch
-      cards={state.cards}
       cells={state.cells}
-      daily={state.daily}
-      watchToday={state.watchToday}
+      today={state.today}
+      loadBatch={loadBatch}
       history={state.history}
       onJudge={onJudge}
       whenSaved={whenSaved}

@@ -10,6 +10,9 @@ import {
   fetchFeed,
   fetchHistory,
   fetchInsight,
+  fetchWatchInsight,
+  fetchWatchTodayBatches,
+  getOrCreateWatchBatch,
   recordWatch,
   FeedValidationError,
   isFeedCell,
@@ -31,6 +34,12 @@ interface JudgmentBody {
   cell?: unknown;
   verdict?: unknown;
   shown_position?: unknown;
+  /** Optional: 'watch' from the watch screen; the swipe deck sends nothing. */
+  surface?: unknown;
+}
+
+interface WatchBatchBody {
+  cell?: unknown;
 }
 
 interface InsightQuery {
@@ -85,6 +94,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
             cell: String(body.cell ?? ''),
             verdict: String(body.verdict ?? ''),
             shown_position: body.shown_position as number,
+            ...(body.surface === undefined ? {} : { surface: body.surface }),
           });
           return reply.code(201).send({ status: 'ok' });
         } catch (err) {
@@ -151,7 +161,51 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
       }
     );
 
-    // 이전 주제: per goal, the latest earlier KST day with judgments and that day's video count
+    // Watch screen: today's batch of one goal (created on first request, then returned as stored)
+    fastify.post<{ Body: WatchBatchBody }>(
+      '/watch/batch',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const cell: unknown = (request.body ?? {}).cell;
+        if (!isFeedCell(cell)) {
+          return reply.code(400).send({ status: 'error', error: 'invalid_batch' });
+        }
+        const data = await getOrCreateWatchBatch(deps.getDb(), userId, cell, new Date());
+        return reply.send({ status: 'ok', data });
+      }
+    );
+
+    // Watch screen chips: per goal, today's batch size and answers, or what a new batch would get
+    fastify.get(
+      '/watch/today',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const data = await fetchWatchTodayBatches(deps.getDb(), userId, new Date());
+        return reply.send({ status: 'ok', data });
+      }
+    );
+
+    // Watch screen insight: today's batch of one goal only (the deck's GET /insight is unchanged)
+    fastify.get<{ Querystring: InsightQuery }>(
+      '/watch/insight',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const cell: unknown = request.query?.cell;
+        if (!isFeedCell(cell)) {
+          return reply.code(400).send({ status: 'error', error: 'invalid_insight' });
+        }
+        const data = await fetchWatchInsight(deps.getDb(), userId, cell, new Date());
+        return reply.send({ status: 'ok', data });
+      }
+    );
+
+    // 이전 주제: per goal, the latest earlier KST day with a watch batch and that batch's size
     fastify.get(
       '/history',
       { onRequest: [flagGate, fastify.authenticate] },

@@ -93,15 +93,16 @@ export function historyMetaText(day: string, count: number): string {
 }
 
 /**
- * "어제에 이어서": the newest history row, when it is yesterday (KST) — otherwise null.
- * Whether that goal still has videos today is the caller's check.
+ * "어제에 이어서": the first history row (newest first) from yesterday (KST) whose goal can
+ * continue today (`canContinue`, default: any) — otherwise null.
  */
 export function carryCandidate(
   history: readonly FeedHistoryItem[],
-  now: Date
+  now: Date,
+  canContinue: (cellLabel: string) => boolean = () => true
 ): FeedHistoryItem | null {
-  const first = history[0];
-  return first && first.day === kstDay(now, -1) ? first : null;
+  const yesterday = kstDay(now, -1);
+  return history.find((h) => h.day === yesterday && canContinue(h.cell)) ?? null;
 }
 
 /** Chapter time as the handoff writes it: two-digit minutes ('3:10' -> '03:10'). */
@@ -119,13 +120,15 @@ export interface WatchSummaryInput {
   /** The branch with the most watched time; null when unknown. */
   topBranch: string | null;
   likes: number;
+  /** Videos passed (넘기기). */
   skips: number;
 }
 
 /**
  * The 04 인사이트 paragraph, the handoff formula: "오늘 받은 n편 가운데 m편을 봤고 t분을 썼습니다.
- * 가장 오래 본 갈래는 "…"입니다. 좋다고 한 영상은 k편입니다. 넘긴 j편은 …" A part is left out only
- * when its data is missing (no minutes -> "…m편을 봤습니다."; no top branch / no likes -> no sentence).
+ * 가장 오래 본 갈래는 "…"입니다. 좋다고 한 영상은 k편입니다. 넘긴 영상은 j편입니다." A part is left
+ * out only when its data is missing (no minutes -> "…m편을 봤습니다."; no top branch / no likes ->
+ * no sentence). The last sentence states the fact only: nothing replaces passed videos.
  */
 export function buildWatchSummary(s: WatchSummaryInput): string {
   const head = '오늘 받은 ' + s.received + '편 가운데 ' + s.watched + '편을 ';
@@ -135,9 +138,7 @@ export function buildWatchSummary(s: WatchSummaryInput): string {
     first +
     (s.topBranch ? '가장 오래 본 갈래는 "' + s.topBranch + '"입니다. ' : '') +
     (s.likes ? '좋다고 한 영상은 ' + s.likes + '편입니다. ' : '') +
-    (s.skips
-      ? '넘긴 ' + s.skips + '편은 내일 목록에서 빼고 비슷한 다른 영상으로 바꿉니다.'
-      : '넘긴 영상은 없습니다.')
+    (s.skips ? '넘긴 영상은 ' + s.skips + '편입니다.' : '넘긴 영상은 없습니다.')
   );
 }
 
@@ -154,9 +155,10 @@ const VERDICT_KIND: Record<string, WatchReaction> = {
 };
 
 /**
- * 04 인사이트 from the server's per-goal summary. received = every video answered today (pass
- * included), watched = the ones not passed (the server's `reacted`), minutes = watched seconds of
- * those. The time chip, the minutes and the bars are left out when the server has no watch data.
+ * 04 인사이트 from the server's per-goal summary. received = the batch size when the server sends
+ * it (watch screen), else every video answered today (pass included); watched = the ones not
+ * passed (the server's `reacted`), minutes = watched seconds of those (passed videos never count).
+ * The time chip, the minutes and the bars are left out when the server has no watch data.
  */
 export function insightViewFromData(
   d: InsightData,
@@ -174,7 +176,7 @@ export function insightViewFromData(
   stats.push({ k: '좋아', v: d.liked, u: '편' });
   return {
     paragraph: buildWatchSummary({
-      received: d.reacted + d.passed,
+      received: d.received ?? d.reacted + d.passed,
       watched: d.reacted,
       minutes,
       topBranch: timed[0] ? shortOf(timed[0].cell) : null,

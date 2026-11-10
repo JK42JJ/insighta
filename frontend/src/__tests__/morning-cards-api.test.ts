@@ -12,7 +12,11 @@ import {
   fetchMorningCards,
   fetchMorningCardsReview,
   fetchMorningFeedHistory,
+  fetchWatchInsight,
+  fetchWatchToday,
   patchReasonTags,
+  postFeedJudgment,
+  postWatchBatch,
   postJudgment,
   MorningCardsApiError,
 } from '@/features/morning-cards/api';
@@ -87,5 +91,44 @@ describe('morning cards api client', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/api\/v1\/morning-feed\/history$/);
     expect(init.method).toBeUndefined();
+  });
+
+  it('feed judgment: the deck body keeps its four fields, the watch screen adds surface', async () => {
+    fetchMock.mockResolvedValue(okResponse({ status: 'ok' }));
+    const deck = {
+      video_id: 'abcdefghijk',
+      cell: '기술/개발',
+      verdict: 'useful' as const,
+      shown_position: 1,
+    };
+    await postFeedJudgment(deck);
+    await postFeedJudgment({ ...deck, surface: 'watch' });
+    const bodyOf = (i: number): Record<string, unknown> =>
+      JSON.parse((fetchMock.mock.calls[i] as [string, RequestInit])[1].body as string);
+    expect(Object.keys(bodyOf(0)).sort()).toEqual([
+      'cell',
+      'shown_position',
+      'verdict',
+      'video_id',
+    ]);
+    expect(bodyOf(1).surface).toBe('watch');
+    const url = (fetchMock.mock.calls[1] as [string])[0];
+    expect(url).toMatch(/\/api\/v1\/morning-feed\/judgments$/);
+  });
+
+  it('watch endpoints: GET /watch/today, POST /watch/batch, GET /watch/insight?cell=', async () => {
+    fetchMock.mockResolvedValue(okResponse({ status: 'ok', data: {} }));
+    await fetchWatchToday();
+    await postWatchBatch('기술/개발');
+    await fetchWatchInsight('기술/개발');
+    const calls = fetchMock.mock.calls as Array<[string, RequestInit]>;
+    expect(calls[0]![0]).toMatch(/\/api\/v1\/morning-feed\/watch\/today$/);
+    expect(calls[0]![1].method).toBeUndefined();
+    expect(calls[1]![0]).toMatch(/\/api\/v1\/morning-feed\/watch\/batch$/);
+    expect(calls[1]![1].method).toBe('POST');
+    expect(JSON.parse(calls[1]![1].body as string)).toEqual({ cell: '기술/개발' });
+    expect(calls[2]![0]).toContain(
+      '/api/v1/morning-feed/watch/insight?cell=' + encodeURIComponent('기술/개발')
+    );
   });
 });

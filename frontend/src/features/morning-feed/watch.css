@@ -458,6 +458,18 @@
 
 .mf-w-chip:disabled {
   cursor: default;
+  color: var(--w-muted);
+}
+
+.mf-w-chip-note {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--w-muted);
+}
+
+.mf-w-chip[data-on] .mf-w-chip-note {
+  color: var(--w-navy-body);
 }
 
 .mf-w-section {

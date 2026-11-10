@@ -158,10 +158,12 @@ export interface WatchChipView {
   title: string;
   on: boolean;
   disabled?: boolean;
-  /** 'done' = today's videos of this goal are used up (opens its insight). */
-  state?: 'done';
-  /** Videos available today (live), for tests. */
+  /** 'done' = today's batch is answered (opens its insight); 'none' = no videos today. */
+  state?: 'done' | 'none';
+  /** Videos the CTA would hand out now (live), for tests. */
   count?: number;
+  /** Small text under the title ('오늘은 끝' / '오늘 영상 없음'); absent = title only. */
+  note?: string;
   onPick: () => void;
 }
 
@@ -316,6 +318,11 @@ export function WatchInputScreen(p: WatchInputScreenProps): JSX.Element {
               }}
             >
               {c.title}
+              {c.note ? (
+                <span className="mf-w-chip-note" data-testid="mf-w-chip-note">
+                  {c.note}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>

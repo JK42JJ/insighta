@@ -204,15 +204,27 @@ export async function fetchMorningFeed(): Promise<FeedApiResponse> {
   return res.data;
 }
 
+/** Judgment surface of the watch screen; the swipe deck sends none (stored NULL). */
+export type FeedJudgmentSurface = 'watch';
+
 export async function postFeedJudgment(input: {
   video_id: string;
   cell: string;
   verdict: MorningCardVerdict | 'pass';
   shown_position: number;
+  surface?: FeedJudgmentSurface;
 }): Promise<void> {
+  // field by field: the deck's body keeps exactly its four fields
+  const body: Record<string, string | number> = {
+    video_id: input.video_id,
+    cell: input.cell,
+    verdict: input.verdict,
+    shown_position: input.shown_position,
+  };
+  if (input.surface !== undefined) body.surface = input.surface;
   await call<unknown>(
     '/judgments',
-    { method: 'POST', body: JSON.stringify(input) },
+    { method: 'POST', body: JSON.stringify(body) },
     MORNING_FEED_PATH
   );
 }
@@ -271,6 +283,8 @@ export interface InsightByCell {
 }
 export interface InsightData {
   date_kst: string;
+  /** Watch screen insight only: the size of today's batch of the goal. */
+  received?: number;
   reacted: number;
   liked: number;
   disliked: number;
@@ -307,5 +321,61 @@ export async function fetchMorningFeedHistory(): Promise<FeedHistoryItem[]> {
 export async function fetchMorningFeedInsight(cell?: string): Promise<InsightData> {
   const query = cell === undefined ? '' : '?cell=' + encodeURIComponent(cell);
   const res = await call<InsightResponse>('/insight' + query, {}, MORNING_FEED_PATH);
+  return res.data;
+}
+
+/** Watch screen chips: one goal's state today (GET /morning-feed/watch/today). */
+export interface WatchTodayCellDto {
+  /** Videos in today's batch; null = no batch yet today. */
+  issued: number | null;
+  /** Batch videos answered on the watch screen. */
+  judged: number;
+  /** Videos a new batch would get (0..daily); 0 once today's batch exists. */
+  available: number;
+}
+
+export interface WatchTodayDto {
+  /** KST day, 'YYYY-MM-DD'. */
+  day: string;
+  daily: number;
+  cells: FeedApiCell[];
+  /** Per goal cell label (8). */
+  today: Record<string, WatchTodayCellDto>;
+}
+
+export async function fetchWatchToday(): Promise<WatchTodayDto> {
+  const res = await call<{ status: 'ok'; data: WatchTodayDto }>(
+    '/watch/today',
+    {},
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
+/** Today's batch of one goal, in batch order; created by the server on the first call of the day. */
+export interface WatchBatchDto {
+  cell: string;
+  day: string;
+  items: FeedApiCard[];
+  /** Watch-screen verdict per batch video already answered. */
+  judged: Record<string, InsightVerdict>;
+}
+
+export async function postWatchBatch(cell: string): Promise<WatchBatchDto> {
+  const res = await call<{ status: 'ok'; data: WatchBatchDto }>(
+    '/watch/batch',
+    { method: 'POST', body: JSON.stringify({ cell }) },
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
+/** 04 인사이트 of the watch screen: today's batch of the goal only (deck judgments excluded). */
+export async function fetchWatchInsight(cell: string): Promise<InsightData> {
+  const res = await call<InsightResponse>(
+    '/watch/insight?cell=' + encodeURIComponent(cell),
+    {},
+    MORNING_FEED_PATH
+  );
   return res.data;
 }
