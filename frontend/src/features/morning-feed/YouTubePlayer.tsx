@@ -35,11 +35,20 @@ interface YtApi {
     }
   ) => YtPlayer;
 }
-declare global {
-  interface Window {
-    YT?: YtApi;
-    onYouTubeIframeAPIReady?: () => void;
-  }
+/*
+ * The IFrame API lives on window. It is read through these accessors instead of a global Window
+ * augmentation: widgets/video-player declares window.YT with a different shape, and two global
+ * declarations of the same property must match (TS2687).
+ */
+interface YtWindow {
+  YT?: YtApi;
+  onYouTubeIframeAPIReady?: () => void;
+}
+function ytWindow(): YtWindow {
+  return window as unknown as YtWindow;
+}
+function ytApi(): YtApi | undefined {
+  return ytWindow().YT;
 }
 
 const API_SRC = 'https://www.youtube.com/iframe_api';
@@ -66,13 +75,16 @@ function rememberSound(on: boolean): void {
 let apiPromise: Promise<YtApi> | null = null;
 
 function loadYouTubeApi(): Promise<YtApi> {
-  if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+  const ready = ytApi();
+  if (ready && ready.Player) return Promise.resolve(ready);
   if (apiPromise) return apiPromise;
   apiPromise = new Promise<YtApi>((resolve, reject) => {
-    const prev = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
+    const w = ytWindow();
+    const prev = w.onYouTubeIframeAPIReady;
+    w.onYouTubeIframeAPIReady = () => {
       prev?.();
-      if (window.YT) resolve(window.YT);
+      const yt = ytApi();
+      if (yt) resolve(yt);
     };
     const s = document.createElement('script');
     s.src = API_SRC;

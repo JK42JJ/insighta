@@ -326,6 +326,91 @@ describe('morning feed', () => {
     expect(res.has_watch_data).toBe(false);
   });
 
+  it('fetchInsight with a cell filters in SQL with a parameter; without one the query is unchanged', async () => {
+    const { db, queries } = fakeDb([]);
+    await fetchInsight(db, USER, NOW, { cell: '학습/교육' });
+    expect(queries[0]!.sql).toContain('AND j.cell = $4');
+    expect(queries[0]!.sql).not.toContain('학습/교육');
+    expect(queries[0]!.params).toHaveLength(4);
+    expect(queries[0]!.params[3]).toBe('학습/교육');
+    await fetchInsight(db, USER, NOW);
+    expect(queries[1]!.sql).not.toContain('j.cell = $');
+    expect(queries[1]!.params).toHaveLength(3);
+    await expect(fetchInsight(db, USER, NOW, { cell: '오늘 전체' })).rejects.toBeInstanceOf(
+      FeedValidationError
+    );
+    expect(queries).toHaveLength(2);
+  });
+
+  it('GET /insight?cell= passes a known cell, answers 400 for an unknown one, no cell = all cells', async () => {
+    const { db, queries } = fakeDb([]);
+    const app = await build(db);
+    const ok = await app.inject({
+      method: 'GET',
+      url: `${BASE}/insight?cell=${encodeURIComponent('기술/개발')}`,
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(queries[0]!.params[3]).toBe('기술/개발');
+    for (const bad of ['없는칸', '오늘 전체', '']) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `${BASE}/insight?cell=${encodeURIComponent(bad)}`,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe('invalid_insight');
+    }
+    expect(queries).toHaveLength(1);
+    const all = await app.inject({ method: 'GET', url: `${BASE}/insight` });
+    expect(all.statusCode).toBe(200);
+    expect(queries[1]!.params).toHaveLength(3);
+    expect(queries[1]!.sql).not.toContain('j.cell = $');
+    await app.close();
+  });
+
+  it('GET answers watch_today: distinct videos judged today per goal cell (KST day, live, latest per video)', async () => {
+    const judged = [
+      { video_id: 'aaaaaaaaaaa', cell: '기술/개발' },
+      { video_id: 'bbbbbbbbbbb', cell: '기술/개발' },
+      { video_id: 'ccccccccccc', cell: '학습/교육' },
+      { video_id: 'ddddddddddd', cell: '오늘 전체' },
+      { video_id: 'eeeeeeeeeee', cell: '없는칸' },
+    ];
+    const queries: Array<{ sql: string; params: unknown[] }> = [];
+    const db: FeedDb = {
+      $queryRawUnsafe: jest.fn(async (sql: string, ...params: unknown[]) => {
+        queries.push({ sql, params });
+        return (
+          sql.includes('morning_feed_annotations') ? [row({ video_id: 'fffffffffff' })] : judged
+        ) as never;
+      }),
+      $executeRawUnsafe: jest.fn(async () => 1),
+    };
+    // 2026-11-07T20:00Z is already 11-08 in KST
+    const feed = await fetchFeed(db, USER, new Date('2026-11-07T20:00:00Z'));
+    expect(feed.watch_today['기술/개발']).toBe(2);
+    expect(feed.watch_today['학습/교육']).toBe(1);
+    expect(feed.watch_today['건강/피트니스']).toBe(0);
+    expect(Object.keys(feed.watch_today)).toHaveLength(8);
+    expect('오늘 전체' in feed.watch_today).toBe(false);
+    const q = queries.find((x) => !x.sql.includes('morning_feed_annotations'))!;
+    expect(q.sql).toContain('DISTINCT ON (j.video_id)');
+    expect(q.sql).toContain('j.canceled_at IS NULL');
+    expect(q.sql).toContain('j.cell IS NOT NULL');
+    expect(q.sql).not.toContain('verdict');
+    expect(q.params).toEqual([
+      USER,
+      new Date('2026-11-07T15:00:00Z'),
+      new Date('2026-11-08T15:00:00Z'),
+    ]);
+    // the existing fields are unchanged
+    expect(feed.watch_daily).toBe(WATCH_DAILY_VIDEOS);
+    expect(feed.cards.map((c) => c.video_id)).toEqual(['fffffffffff']);
+    const app = await build(db);
+    const res = await app.inject({ method: 'GET', url: `${BASE}/` });
+    expect(res.json().data.watch_today['기술/개발']).toBe(2);
+    await app.close();
+  });
+
   it('new endpoints: 404 flag off, 403 non test user, watch 400 on bad input', async () => {
     const { db } = fakeDb();
     const app = await build(db);

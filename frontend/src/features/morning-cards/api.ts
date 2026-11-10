@@ -195,6 +195,8 @@ export interface FeedApiResponse {
   cards: FeedApiCard[];
   /** Watch screen: videos per day for the chosen cell, decided by the server. */
   watch_daily?: number;
+  /** Watch screen: distinct videos judged today (KST) per cell label. Missing on older servers. */
+  watch_today?: Record<string, number>;
 }
 
 export async function fetchMorningFeed(): Promise<FeedApiResponse> {
@@ -283,7 +285,9 @@ export interface InsightResponse {
   data: InsightData;
 }
 
-export async function fetchMorningFeedInsight(): Promise<InsightData> {
-  const res = await call<InsightResponse>('/insight', {}, MORNING_FEED_PATH);
+/** Today's summary; with `cell` only that cell's (goal's) judgments are counted. */
+export async function fetchMorningFeedInsight(cell?: string): Promise<InsightData> {
+  const query = cell === undefined ? '' : '?cell=' + encodeURIComponent(cell);
+  const res = await call<InsightResponse>('/insight' + query, {}, MORNING_FEED_PATH);
   return res.data;
 }

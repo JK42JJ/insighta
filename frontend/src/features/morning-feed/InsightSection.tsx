@@ -21,22 +21,25 @@ const SECTION_LABEL = 'font-size: 13px; font-weight: 700; color: var(--mf-muted)
 export function InsightSection({
   enabled,
   showTitle = true,
+  cell,
 }: {
   enabled: boolean;
   /** False when the screen draws its own 오늘 본 것 heading (watch screen). */
   showTitle?: boolean;
+  /** Watch screen: only this goal's (cell label's) judgments. Omitted = all cells (deck). */
+  cell?: string;
 }) {
   const [data, setData] = useState<InsightData | null>(null);
   useEffect(() => {
     if (!enabled) return undefined;
     let alive = true;
-    fetchMorningFeedInsight()
+    fetchMorningFeedInsight(cell)
       .then((d) => alive && setData(d))
       .catch(() => alive && setData(null));
     return () => {
       alive = false;
     };
-  }, [enabled]);
+  }, [enabled, cell]);
 
   if (!enabled || !data || !(data.reacted > 0)) return null;
   const summary = buildInsightSummary(data);

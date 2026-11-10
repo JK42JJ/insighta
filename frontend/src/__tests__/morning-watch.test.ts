@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  addJudgedToday,
   counterText,
   goalCells,
+  goalRowText,
+  isGoalDoneToday,
   metaLine,
   parseWatchDaily,
+  parseWatchToday,
   pickTodaysVideos,
+  remainingToday,
   segmentStates,
 } from '@/features/morning-feed/watch-list';
 
@@ -55,6 +60,58 @@ describe('watch screen helpers', () => {
     expect(parseWatchDaily(0)).toBeNull();
     expect(parseWatchDaily(2.5)).toBeNull();
     expect(parseWatchDaily('5')).toBeNull();
+  });
+
+  it("today's judged count is used only when the server sent whole numbers >= 0 per cell", () => {
+    expect(parseWatchToday({ '기술/개발': 2, '학습/교육': 0 })).toEqual({
+      '기술/개발': 2,
+      '학습/교육': 0,
+    });
+    expect(parseWatchToday({})).toEqual({});
+    expect(parseWatchToday(undefined)).toBeNull();
+    expect(parseWatchToday(null)).toBeNull();
+    expect(parseWatchToday([1, 2])).toBeNull();
+    expect(parseWatchToday({ '기술/개발': -1 })).toBeNull();
+    expect(parseWatchToday({ '기술/개발': 1.5 })).toBeNull();
+    expect(parseWatchToday({ '기술/개발': '2' })).toBeNull();
+  });
+
+  it('remaining per goal: daily minus judged today, never below 0; unknown count = daily', () => {
+    const today = { '기술/개발': 2, '학습/교육': 5, '건강/피트니스': 7 };
+    expect(remainingToday(5, today, '기술/개발')).toBe(3);
+    expect(remainingToday(5, today, '학습/교육')).toBe(0);
+    expect(remainingToday(5, today, '건강/피트니스')).toBe(0);
+    // a cell missing from the count has judged nothing today
+    expect(remainingToday(5, today, '창작/예술')).toBe(5);
+    // older server without the count: as before
+    expect(remainingToday(5, null, '학습/교육')).toBe(5);
+    // the list is the first `remaining` unjudged cards of the goal
+    const cards = ['a', 'b', 'c', 'd', 'e', 'f'].map((x) => card(x.repeat(11), '기술/개발'));
+    expect(
+      pickTodaysVideos(cards, '기술/개발', remainingToday(5, today, '기술/개발')).map(
+        (c) => c.videoId
+      )
+    ).toEqual(['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc']);
+    expect(pickTodaysVideos(cards, '학습/교육', remainingToday(5, today, '학습/교육'))).toEqual([]);
+  });
+
+  it("'오늘은 끝' only when the count is known and used up; one answer moves the local count", () => {
+    expect(isGoalDoneToday(5, { '기술/개발': 5 }, '기술/개발')).toBe(true);
+    expect(isGoalDoneToday(5, { '기술/개발': 4 }, '기술/개발')).toBe(false);
+    expect(isGoalDoneToday(5, {}, '기술/개발')).toBe(false);
+    expect(isGoalDoneToday(5, null, '기술/개발')).toBe(false);
+    const after = addJudgedToday({ '기술/개발': 4 }, '기술/개발');
+    expect(after).toEqual({ '기술/개발': 5 });
+    expect(isGoalDoneToday(5, after, '기술/개발')).toBe(true);
+    expect(addJudgedToday({}, '학습/교육')).toEqual({ '학습/교육': 1 });
+    expect(addJudgedToday(null, '학습/교육')).toBeNull();
+  });
+
+  it("goal row text: '오늘은 끝', '오늘 n편' or '오늘 영상 없음'", () => {
+    expect(goalRowText(0, true)).toBe('오늘은 끝');
+    expect(goalRowText(3, true)).toBe('오늘은 끝');
+    expect(goalRowText(3, false)).toBe('오늘 3편');
+    expect(goalRowText(0, false)).toBe('오늘 영상 없음');
   });
 
   it('segments: passed, current, rest; counter counts from 1', () => {

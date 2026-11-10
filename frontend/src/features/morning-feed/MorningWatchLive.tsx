@@ -8,7 +8,12 @@ import { JudgmentQueue } from '@/features/morning-feed/judgment-queue';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
 import fixture from '@/features/morning-feed/morning-feed.fixture.json';
 import { MorningWatch, type WatchJudgeEvent } from '@/features/morning-feed/MorningWatch';
-import { parseWatchDaily, type WatchVideo } from '@/features/morning-feed/watch-list';
+import {
+  parseWatchDaily,
+  parseWatchToday,
+  type WatchToday,
+  type WatchVideo,
+} from '@/features/morning-feed/watch-list';
 
 const PALETTE = (fixture.cards as Array<{ bg: string }>).map((c) => c.bg);
 /** How often the queue is checked before the insight is read. */
@@ -20,7 +25,13 @@ type LoadState =
   | { status: 'loading' }
   | { status: 'error' }
   | { status: 'empty' }
-  | { status: 'ready'; cards: WatchVideo[]; cells: FeedCell[]; daily: number };
+  | {
+      status: 'ready';
+      cards: WatchVideo[];
+      cells: FeedCell[];
+      daily: number;
+      watchToday: WatchToday | null;
+    };
 
 const MESSAGE_STYLE = {
   position: 'fixed',
@@ -34,7 +45,8 @@ const MESSAGE_STYLE = {
 
 /**
  * Live data for the watch screen: the same feed API and the same judgment write queue as the
- * deck (POST /judgments body is identical). The number of videos per day comes from the server.
+ * deck (POST /judgments body is identical). The number of videos per day and today's judged count
+ * per goal come from the server (a server without the count: no per-goal limit, as before).
  */
 export function MorningWatchLive() {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
@@ -62,7 +74,13 @@ export function MorningWatchLive() {
         setState(
           cards.length === 0
             ? { status: 'empty' }
-            : { status: 'ready', cards, cells: feed.cells, daily }
+            : {
+                status: 'ready',
+                cards,
+                cells: feed.cells,
+                daily,
+                watchToday: parseWatchToday(feed.watch_today),
+              }
         );
       })
       .catch(() => alive && setState({ status: 'error' }));
@@ -128,6 +146,7 @@ export function MorningWatchLive() {
       cards={state.cards}
       cells={state.cells}
       daily={state.daily}
+      watchToday={state.watchToday}
       onJudge={onJudge}
       whenSaved={whenSaved}
     />

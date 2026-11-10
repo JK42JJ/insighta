@@ -8,6 +8,7 @@ import { test, expect, type Page, type Request } from '@playwright/test';
 const EMAIL = process.env.STG_TEST_EMAIL ?? '';
 const PASSWORD = process.env.STG_TEST_PASSWORD ?? '';
 const JUDGMENTS_PATH = '/api/v1/morning-feed/judgments';
+const INSIGHT_PATH = '/api/v1/morning-feed/insight';
 const LOAD_TIMEOUT_MS = 25_000;
 /** Longer than the 480ms exit, so a second POST would have been sent by then. */
 const SETTLE_MS = 1500;
@@ -35,7 +36,10 @@ test('morning watch: pick a goal, 좋아 saves one useful judgment and the count
 
   const goals = page.getByTestId('mf-watch-goal');
   expect(await goals.count()).toBe(8);
-  const goal = page.locator('[data-testid="mf-watch-goal"]:not([disabled])').first();
+  // a goal in the '오늘은 끝' state (data-state="done") opens its insight, not videos
+  const goal = page
+    .locator('[data-testid="mf-watch-goal"]:not([disabled]):not([data-state="done"])')
+    .first();
   await expect(goal, 'no goal has cards today on the staging account').toBeVisible();
   const total = Number(await goal.getAttribute('data-count'));
   expect(total).toBeGreaterThan(0);
@@ -82,6 +86,9 @@ test('morning watch: pick a goal, 좋아 saves one useful judgment and the count
     if (isJudgmentPost(r)) posts.push(r);
   });
   const saved = page.waitForResponse((r) => isJudgmentPost(r.request()));
+  // a one-video batch ends on the insight: it must be read for this goal only
+  const insightRequest =
+    total === 1 ? page.waitForRequest((r) => r.url().includes(INSIGHT_PATH)) : null;
   await page.getByTestId('mf-watch-like').click();
   const res = await saved;
   expect(res.status()).toBe(201);
@@ -99,6 +106,10 @@ test('morning watch: pick a goal, 좋아 saves one useful judgment and the count
     await expect(page.getByTestId('mf-watch-counter')).toHaveText(`2 / ${total}`);
   } else {
     await expect(page.getByTestId('mf-watch-insight')).toBeVisible();
+  }
+  if (insightRequest) {
+    const insightUrl = new URL((await insightRequest).url());
+    expect(insightUrl.searchParams.get('cell')).toBe(body.cell);
   }
   await page.waitForTimeout(SETTLE_MS);
   expect(posts).toHaveLength(1);

@@ -5,11 +5,16 @@ import { cssText as css } from '@/features/morning-feed/css-text';
 import { InsightSection } from '@/features/morning-feed/InsightSection';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
 import {
+  addJudgedToday,
   counterText,
   goalCells,
+  goalRowText,
+  isGoalDoneToday,
   metaLine,
   pickTodaysVideos,
+  remainingToday,
   segmentStates,
+  type WatchToday,
   type WatchVerdict,
   type WatchVideo,
 } from '@/features/morning-feed/watch-list';
@@ -21,6 +26,8 @@ import './watch.css';
  * 시청 (/morning-cards?view=watch): pick one of the 8 goals, then watch today's videos of that
  * goal one at a time and answer each with 별로 / 넘기기 / 좋아. A plain vertical scroll page: no
  * swipe gestures. After the last video the day's insight is shown.
+ * Each goal shows at most `daily` videos per KST day (the server counts today's judgments per
+ * goal); a goal that used them up is '오늘은 끝' and opens its insight instead of a new batch.
  */
 
 /** The answered content leaves for this long, then the next video replaces it. */
@@ -42,6 +49,8 @@ export interface MorningWatchProps {
   cells: FeedCell[];
   /** Videos per day, from the server. */
   daily: number;
+  /** Videos judged today per goal (cell label), from the server; null = not sent (no limit applied). */
+  watchToday: WatchToday | null;
   onJudge: (e: WatchJudgeEvent) => void;
   /** Resolves once the queued judgments are written (or the wait gave up), so the insight counts them. */
   whenSaved: () => Promise<void>;
@@ -60,8 +69,17 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-export function MorningWatch({ cards, cells, daily, onJudge, whenSaved }: MorningWatchProps) {
+export function MorningWatch({
+  cards,
+  cells,
+  daily,
+  watchToday,
+  onJudge,
+  whenSaved,
+}: MorningWatchProps) {
   const [screen, setScreen] = useState<Screen>({ kind: 'goals' });
+  // today's count per goal, moved on locally with each answer so no reload is needed
+  const [today, setToday] = useState<WatchToday | null>(watchToday);
   // videos answered in this visit; the server leaves out the ones answered before
   const [judged, setJudged] = useState<ReadonlySet<string>>(() => new Set());
   const [exit, setExit] = useState<WatchVerdict | null>(null);
@@ -76,7 +94,12 @@ export function MorningWatch({ cards, cells, daily, onJudge, whenSaved }: Mornin
   );
 
   const openGoal = (goal: FeedCell) => {
-    const list = pickTodaysVideos(cards, goal.label, daily, judged);
+    if (isGoalDoneToday(daily, today, goal.label)) {
+      setScreen({ kind: 'insight', goal });
+      return;
+    }
+    const remaining = remainingToday(daily, today, goal.label);
+    const list = pickTodaysVideos(cards, goal.label, remaining, judged);
     if (list.length === 0) return;
     setScreen({ kind: 'watch', goal, list, index: 0 });
   };
@@ -95,6 +118,7 @@ export function MorningWatch({ cards, cells, daily, onJudge, whenSaved }: Mornin
     onJudge({ video, verdict, shownPosition: index });
     const id = video.videoId;
     setJudged((prev) => new Set(prev).add(id));
+    setToday((prev) => addJudgedToday(prev, video.cell));
     const advance = () => {
       timer.current = null;
       busy.current = false;
@@ -119,10 +143,14 @@ export function MorningWatch({ cards, cells, daily, onJudge, whenSaved }: Mornin
       <div className="mf-watch-app" lang="ko" data-testid="mf-watch-root">
         {screen.kind === 'goals' ? (
           <GoalList
-            goals={goalCells(cells).map((g) => ({
-              goal: g,
-              count: pickTodaysVideos(cards, g.label, daily, judged).length,
-            }))}
+            goals={goalCells(cells).map((g) => {
+              const remaining = remainingToday(daily, today, g.label);
+              return {
+                goal: g,
+                count: pickTodaysVideos(cards, g.label, remaining, judged).length,
+                done: isGoalDoneToday(daily, today, g.label),
+              };
+            })}
             onPick={openGoal}
           />
         ) : screen.kind === 'watch' ? (
@@ -146,7 +174,7 @@ function GoalList({
   goals,
   onPick,
 }: {
-  goals: Array<{ goal: FeedCell; count: number }>;
+  goals: Array<{ goal: FeedCell; count: number; done: boolean }>;
   onPick: (goal: FeedCell) => void;
 }) {
   return (
@@ -165,19 +193,20 @@ function GoalList({
         <div className="mf-watch-kicker" style={css('margin-bottom: 6px')}>
           목표
         </div>
-        {goals.map(({ goal, count }) => (
+        {goals.map(({ goal, count, done }) => (
           <button
             key={goal.label}
             type="button"
             className="mf-watch-goal"
             data-testid="mf-watch-goal"
             data-count={count}
-            disabled={count === 0}
+            data-state={done ? 'done' : undefined}
+            disabled={count === 0 && !done}
             onClick={() => onPick(goal)}
           >
             <span style={css('font-size: 14.5px; font-weight: 700')}>{goal.short}</span>
             <span style={css('flex: none; font-size: 12px; color: var(--mf-caption)')}>
-              {count > 0 ? '오늘 ' + count + '편' : '오늘 영상 없음'}
+              {goalRowText(count, done)}
             </span>
           </button>
         ))}
@@ -435,7 +464,7 @@ function InsightView({
           {goal.short}
         </div>
       </div>
-      <InsightSection enabled={ready} showTitle={false} />
+      <InsightSection enabled={ready} showTitle={false} cell={goal.label} />
       <button
         type="button"
         className="mf-watch-primary"

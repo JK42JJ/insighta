@@ -11,6 +11,7 @@ import {
   fetchInsight,
   recordWatch,
   FeedValidationError,
+  isFeedCell,
   saveFeedJudgment,
   type FeedDb,
 } from '@/modules/morning-feed/feed';
@@ -29,6 +30,10 @@ interface JudgmentBody {
   cell?: unknown;
   verdict?: unknown;
   shown_position?: unknown;
+}
+
+interface InsightQuery {
+  cell?: unknown;
 }
 
 interface WatchBody {
@@ -113,14 +118,35 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
       }
     );
 
-    fastify.get(
+    fastify.get<{ Querystring: InsightQuery }>(
       '/insight',
       { onRequest: [flagGate, fastify.authenticate] },
       async (request, reply) => {
         const userId = guard(request, reply);
         if (!userId) return reply;
-        const data = await fetchInsight(deps.getDb(), userId);
-        return reply.send({ status: 'ok', data });
+        // ?cell=<cell label>: only that goal's judgments (watch screen). Absent = all cells.
+        const rawCell: unknown = request.query?.cell;
+        let cell: string | undefined;
+        if (rawCell !== undefined) {
+          if (!isFeedCell(rawCell)) {
+            return reply.code(400).send({ status: 'error', error: 'invalid_insight' });
+          }
+          cell = rawCell;
+        }
+        try {
+          const data = await fetchInsight(
+            deps.getDb(),
+            userId,
+            new Date(),
+            cell === undefined ? {} : { cell }
+          );
+          return reply.send({ status: 'ok', data });
+        } catch (err) {
+          if (err instanceof FeedValidationError) {
+            return reply.code(400).send({ status: 'error', error: 'invalid_insight' });
+          }
+          throw err;
+        }
       }
     );
 

@@ -137,7 +137,12 @@ export async function fetchFeed(
   db: FeedDb,
   userId: string,
   now: Date = new Date()
-): Promise<{ cells: FeedCellDef[]; cards: FeedCard[]; watch_daily: number }> {
+): Promise<{
+  cells: FeedCellDef[];
+  cards: FeedCard[];
+  watch_daily: number;
+  watch_today: Record<string, number>;
+}> {
   const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const earliest = new Date(
     Math.min(
@@ -145,7 +150,7 @@ export async function fetchFeed(
       ...FEED_CELLS.filter((c) => c.windowDays !== null).map((c) => windowStart(c, now).getTime())
     )
   );
-  const rows = await db.$queryRawUnsafe<FeedRow[]>(
+  const rowsP = db.$queryRawUnsafe<FeedRow[]>(
     `SELECT a.cell, a.focus, a.why, a.judge_score, v.video_id, v.title, v.channel_name, v.published_at,
             v.duration_seconds, v.thumbnail_url, v.view_count,
             COALESCE(NULLIF(i.one_liner, ''), NULLIF(r.one_liner, '')) AS info_one_liner,
@@ -164,6 +169,7 @@ export async function fetchFeed(
     earliest,
     userId
   );
+  const [rows, watchToday] = await Promise.all([rowsP, fetchWatchToday(db, userId, now)]);
   const cards: FeedCard[] = [];
   for (const cell of FEED_CELLS) {
     if (cell.dom === -1) continue;
@@ -194,7 +200,46 @@ export async function fetchFeed(
       });
     }
   }
-  return { cells: [...FEED_CELLS], cards, watch_daily: WATCH_DAILY_VIDEOS };
+  return {
+    cells: [...FEED_CELLS],
+    cards,
+    watch_daily: WATCH_DAILY_VIDEOS,
+    watch_today: watchToday,
+  };
+}
+
+interface WatchTodayRow {
+  video_id: string;
+  cell: string;
+}
+
+/**
+ * Watch screen daily limit: per goal cell, how many distinct videos this user judged today
+ * (KST calendar day containing `now`, live judgments with a cell, any verdict; a video counts
+ * once, under the cell of its latest judgment). Every goal cell is present, 0 when none.
+ */
+export async function fetchWatchToday(
+  db: FeedDb,
+  userId: string,
+  now: Date = new Date()
+): Promise<Record<string, number>> {
+  const { start, end } = kstDayBounds(now);
+  const rows = await db.$queryRawUnsafe<WatchTodayRow[]>(
+    `SELECT DISTINCT ON (j.video_id) j.video_id, j.cell
+       FROM public.morning_card_judgments j
+      WHERE j.user_id = $1::uuid AND j.canceled_at IS NULL AND j.cell IS NOT NULL
+        AND j.created_at >= $2 AND j.created_at < $3
+      ORDER BY j.video_id, j.created_at DESC`,
+    userId,
+    start,
+    end
+  );
+  const counts: Record<string, number> = {};
+  for (const c of FEED_CELLS) if (c.dom !== -1) counts[c.label] = 0;
+  for (const r of rows) {
+    if (isFeedCell(r.cell)) counts[r.cell] = (counts[r.cell] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export interface FeedJudgmentInput {
@@ -253,6 +298,15 @@ export const MAX_WATCH_SECONDS = 86400;
 /** Korea Standard Time offset (UTC+9). */
 const KST_OFFSET_HOURS = 9;
 const KST_OFFSET_MS = KST_OFFSET_HOURS * MS_PER_HOUR;
+
+/** The KST calendar day containing `now`: the shifted clock and the day's UTC bounds [start, end). */
+function kstDayBounds(now: Date): { kst: Date; start: Date; end: Date } {
+  const kst = new Date(now.getTime() + KST_OFFSET_MS);
+  const start = new Date(
+    Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) - KST_OFFSET_MS
+  );
+  return { kst, start, end: new Date(start.getTime() + MS_PER_DAY) };
+}
 
 export interface FeedWatchInput {
   video_id: string;
@@ -337,22 +391,33 @@ function sumOrNull(values: Array<number | null>): number | null {
   return known.length === 0 ? null : known.reduce((a, b) => a + b, 0);
 }
 
+export interface FetchInsightOptions {
+  /** Only this cell's judgments (watch screen: the chosen goal). Omitted = all cells. */
+  cell?: string;
+}
+
 /**
  * Today's summary for the user: the KST calendar day containing `now`, the latest live judgment
  * per video. by_cell and the totals count reacted videos (useful + skip); pass is counted apart.
- * Unknown values are null, never invented.
+ * With `opts.cell` only that cell's judgments are read. Unknown values are null, never invented.
  */
 export async function fetchInsight(
   db: FeedDb,
   userId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  opts: FetchInsightOptions = {}
 ): Promise<FeedInsight> {
   if (!userId) throw new FeedValidationError('user_id required');
-  const kst = new Date(now.getTime() + KST_OFFSET_MS);
-  const dayStartUtc = new Date(
-    Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) - KST_OFFSET_MS
-  );
-  const dayEndUtc = new Date(dayStartUtc.getTime() + MS_PER_DAY);
+  if (opts.cell !== undefined && !isFeedCell(opts.cell)) {
+    throw new FeedValidationError('unknown cell');
+  }
+  const { kst, start: dayStartUtc, end: dayEndUtc } = kstDayBounds(now);
+  const params: unknown[] = [userId, dayStartUtc, dayEndUtc];
+  let cellFilter = '';
+  if (opts.cell !== undefined) {
+    params.push(opts.cell);
+    cellFilter = ` AND j.cell = $${params.length}`;
+  }
   const rows = await db.$queryRawUnsafe<InsightRow[]>(
     `SELECT DISTINCT ON (j.video_id) j.video_id, j.verdict, j.cell, j.created_at,
             v.title, v.duration_seconds, w.watched_seconds
@@ -360,11 +425,9 @@ export async function fetchInsight(
        LEFT JOIN public.video_pool v ON v.video_id = j.video_id
        LEFT JOIN public.morning_feed_watch w ON w.user_id = j.user_id AND w.video_id = j.video_id
       WHERE j.user_id = $1::uuid AND j.canceled_at IS NULL AND j.cell IS NOT NULL
-        AND j.created_at >= $2 AND j.created_at < $3
+        AND j.created_at >= $2 AND j.created_at < $3${cellFilter}
       ORDER BY j.video_id, j.created_at DESC`,
-    userId,
-    dayStartUtc,
-    dayEndUtc
+    ...params
   );
   const sorted = [...rows].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()

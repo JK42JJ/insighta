@@ -44,6 +44,53 @@ export function parseWatchDaily(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
 }
 
+/** Videos judged today per cell label, as the server counted them. */
+export type WatchToday = Readonly<Record<string, number>>;
+
+/**
+ * The server's per-cell count of today's judged videos. Missing, not an object, or any value that
+ * is not a whole number >= 0 -> null (treated as an older server: no daily limit is applied).
+ */
+export function parseWatchToday(value: unknown): WatchToday | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const out: Record<string, number> = {};
+  for (const [cell, n] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) return null;
+    out[cell] = n;
+  }
+  return out;
+}
+
+/**
+ * How many more videos the goal may show today: daily minus what was judged today in that cell,
+ * never below 0. Without the server's count (null) the whole daily number is used, as before.
+ */
+export function remainingToday(daily: number, watchToday: WatchToday | null, cell: string): number {
+  if (watchToday === null) return daily;
+  return Math.max(0, daily - (watchToday[cell] ?? 0));
+}
+
+/** '오늘은 끝': the server's count is known and the goal has used up today's videos. */
+export function isGoalDoneToday(
+  daily: number,
+  watchToday: WatchToday | null,
+  cell: string
+): boolean {
+  return watchToday !== null && remainingToday(daily, watchToday, cell) === 0;
+}
+
+/** The goal row's right-hand text. */
+export function goalRowText(count: number, doneToday: boolean): string {
+  if (doneToday) return '오늘은 끝';
+  return count > 0 ? '오늘 ' + count + '편' : '오늘 영상 없음';
+}
+
+/** The count after one more judgment in `cell` this visit; null (unknown) stays null. */
+export function addJudgedToday(watchToday: WatchToday | null, cell: string): WatchToday | null {
+  if (watchToday === null) return null;
+  return { ...watchToday, [cell]: (watchToday[cell] ?? 0) + 1 };
+}
+
 export type SegmentState = 'done' | 'current' | 'rest';
 
 /** Progress segments of the top bar: passed, the one on screen, the ones still to come. */
