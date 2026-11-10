@@ -53,6 +53,21 @@ export interface FeedCard {
   cell: string;
   focus: string[];
   why: string;
+  info?: FeedCardInfo;
+}
+
+export interface FeedChapter {
+  sec: number;
+  title: string;
+}
+
+/** Optional info items for a card; every field is present only when known. */
+export interface FeedCardInfo {
+  one_liner?: string;
+  reason?: string;
+  audio_language?: string;
+  link_count?: number;
+  chapters?: FeedChapter[];
 }
 
 interface FeedRow {
@@ -67,6 +82,11 @@ interface FeedRow {
   duration_seconds: number;
   thumbnail_url: string | null;
   view_count: bigint | number | null;
+  info_one_liner?: string | null;
+  info_reason?: string | null;
+  info_audio_language?: string | null;
+  info_link_count?: number | null;
+  info_chapters?: unknown;
 }
 
 export class FeedValidationError extends Error {}
@@ -79,6 +99,24 @@ function windowStart(cell: FeedCellDef, now: Date): Date {
   return cell.windowDays === null
     ? new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
     : new Date(now.getTime() - cell.windowDays * MS_PER_DAY);
+}
+
+function buildInfo(r: FeedRow): FeedCardInfo | undefined {
+  const info: FeedCardInfo = {};
+  if (r.info_one_liner) info.one_liner = r.info_one_liner;
+  if (r.info_reason) info.reason = r.info_reason;
+  if (r.info_audio_language) info.audio_language = r.info_audio_language;
+  if (typeof r.info_link_count === 'number') info.link_count = r.info_link_count;
+  if (Array.isArray(r.info_chapters)) {
+    const chapters: FeedChapter[] = [];
+    for (const c of r.info_chapters as Array<Record<string, unknown>>) {
+      if (c && Number.isInteger(c['sec']) && typeof c['title'] === 'string' && c['title']) {
+        chapters.push({ sec: c['sec'] as number, title: c['title'] });
+      }
+    }
+    if (chapters.length > 0) info.chapters = chapters;
+  }
+  return Object.keys(info).length > 0 ? info : undefined;
 }
 
 function viewsPerDay(row: FeedRow, now: Date): number {
@@ -107,9 +145,14 @@ export async function fetchFeed(
   );
   const rows = await db.$queryRawUnsafe<FeedRow[]>(
     `SELECT a.cell, a.focus, a.why, a.judge_score, v.video_id, v.title, v.channel_name, v.published_at,
-            v.duration_seconds, v.thumbnail_url, v.view_count
+            v.duration_seconds, v.thumbnail_url, v.view_count,
+            COALESCE(NULLIF(i.one_liner, ''), NULLIF(r.one_liner, '')) AS info_one_liner,
+            i.reason AS info_reason, i.audio_language AS info_audio_language,
+            i.link_count AS info_link_count, i.chapters AS info_chapters
        FROM public.morning_feed_annotations a
        JOIN public.video_pool v ON v.video_id = a.video_id
+       LEFT JOIN public.morning_feed_card_info i ON i.video_id = a.video_id AND i.expires_at > now()
+       LEFT JOIN public.video_rich_summaries r ON r.video_id = a.video_id
       WHERE v.is_active = true AND a.why IS NOT NULL AND v.duration_seconds >= $1
         AND v.published_at >= $2
         AND NOT EXISTS (
@@ -133,6 +176,7 @@ export async function fetchFeed(
       )
       .slice(0, FEED_MAX_CARDS_PER_CELL);
     for (const r of mine) {
+      const info = buildInfo(r);
       cards.push({
         video_id: r.video_id,
         title: r.title,
@@ -144,6 +188,7 @@ export async function fetchFeed(
         cell: r.cell,
         focus: r.focus ?? [],
         why: r.why,
+        ...(info ? { info } : {}),
       });
     }
   }
@@ -199,4 +244,163 @@ export async function cancelLastFeedJudgment(db: FeedDb, userId: string): Promis
                    ORDER BY created_at DESC LIMIT 1)`,
     userId
   );
+}
+
+/** Watch time is capped at one day per video; anything larger is a client error. */
+export const MAX_WATCH_SECONDS = 86400;
+/** Korea Standard Time offset (UTC+9). */
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+export interface FeedWatchInput {
+  video_id: string;
+  watched_seconds: number;
+  last_position: number;
+}
+
+function isSecondsInRange(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= MAX_WATCH_SECONDS;
+}
+
+/** Upsert: keeps the larger watched_seconds, replaces last_position. */
+export async function recordWatch(
+  db: FeedDb,
+  userId: string,
+  input: FeedWatchInput
+): Promise<void> {
+  if (!userId) throw new FeedValidationError('user_id required');
+  if (!YOUTUBE_VIDEO_ID_RE.test(input.video_id ?? '')) {
+    throw new FeedValidationError('invalid video_id');
+  }
+  if (!isSecondsInRange(input.watched_seconds)) {
+    throw new FeedValidationError('invalid watched_seconds');
+  }
+  if (!isSecondsInRange(input.last_position)) {
+    throw new FeedValidationError('invalid last_position');
+  }
+  await db.$executeRawUnsafe(
+    `INSERT INTO public.morning_feed_watch (user_id, video_id, watched_seconds, last_position)
+     VALUES ($1::uuid, $2, $3, $4)
+     ON CONFLICT (user_id, video_id) DO UPDATE SET
+       watched_seconds = GREATEST(public.morning_feed_watch.watched_seconds, EXCLUDED.watched_seconds),
+       last_position = EXCLUDED.last_position,
+       updated_at = now()`,
+    userId,
+    input.video_id,
+    input.watched_seconds,
+    input.last_position
+  );
+}
+
+interface InsightRow {
+  video_id: string;
+  verdict: string;
+  cell: string;
+  created_at: Date;
+  title: string | null;
+  duration_seconds: number | null;
+  watched_seconds: number | null;
+}
+
+export interface InsightOrderItem {
+  video_id: string;
+  title: string | null;
+  verdict: string;
+  cell: string;
+  duration_seconds: number | null;
+  watched_seconds: number | null;
+  at: string;
+}
+
+export interface InsightCellStat {
+  cell: string;
+  count: number;
+  watched_seconds: number | null;
+}
+
+export interface FeedInsight {
+  date_kst: string;
+  reacted: number;
+  liked: number;
+  disliked: number;
+  passed: number;
+  watched_seconds_total: number | null;
+  has_watch_data: boolean;
+  by_cell: InsightCellStat[];
+  order: InsightOrderItem[];
+}
+
+function sumOrNull(values: Array<number | null>): number | null {
+  const known = values.filter((v): v is number => v !== null);
+  return known.length === 0 ? null : known.reduce((a, b) => a + b, 0);
+}
+
+/**
+ * Today's summary for the user: the KST calendar day containing `now`, the latest live judgment
+ * per video. by_cell and the totals count reacted videos (useful + skip); pass is counted apart.
+ * Unknown values are null, never invented.
+ */
+export async function fetchInsight(
+  db: FeedDb,
+  userId: string,
+  now: Date = new Date()
+): Promise<FeedInsight> {
+  if (!userId) throw new FeedValidationError('user_id required');
+  const kst = new Date(now.getTime() + KST_OFFSET_MS);
+  const dayStartUtc = new Date(
+    Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) - KST_OFFSET_MS
+  );
+  const dayEndUtc = new Date(dayStartUtc.getTime() + MS_PER_DAY);
+  const rows = await db.$queryRawUnsafe<InsightRow[]>(
+    `SELECT DISTINCT ON (j.video_id) j.video_id, j.verdict, j.cell, j.created_at,
+            v.title, v.duration_seconds, w.watched_seconds
+       FROM public.morning_card_judgments j
+       LEFT JOIN public.video_pool v ON v.video_id = j.video_id
+       LEFT JOIN public.morning_feed_watch w ON w.user_id = j.user_id AND w.video_id = j.video_id
+      WHERE j.user_id = $1::uuid AND j.canceled_at IS NULL AND j.cell IS NOT NULL
+        AND j.created_at >= $2 AND j.created_at < $3
+      ORDER BY j.video_id, j.created_at DESC`,
+    userId,
+    dayStartUtc,
+    dayEndUtc
+  );
+  const sorted = [...rows].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  const reacted = sorted.filter((r) => r.verdict !== 'pass');
+  const watchOf = (r: InsightRow): number | null =>
+    r.watched_seconds == null ? null : Number(r.watched_seconds);
+  const cells = new Map<string, InsightRow[]>();
+  for (const r of reacted) cells.set(r.cell, [...(cells.get(r.cell) ?? []), r]);
+  const byCell: InsightCellStat[] = [...cells.entries()]
+    .map(([cell, list]) => ({
+      cell,
+      count: list.length,
+      watched_seconds: sumOrNull(list.map(watchOf)),
+    }))
+    .sort(
+      (a, b) =>
+        (b.watched_seconds ?? -1) - (a.watched_seconds ?? -1) ||
+        b.count - a.count ||
+        a.cell.localeCompare(b.cell)
+    );
+  const total = sumOrNull(reacted.map(watchOf));
+  return {
+    date_kst: kst.toISOString().slice(0, 10),
+    reacted: reacted.length,
+    liked: reacted.filter((r) => r.verdict === 'useful').length,
+    disliked: reacted.filter((r) => r.verdict === 'skip').length,
+    passed: sorted.length - reacted.length,
+    watched_seconds_total: total,
+    has_watch_data: total !== null,
+    by_cell: byCell,
+    order: sorted.map((r) => ({
+      video_id: r.video_id,
+      title: r.title,
+      verdict: r.verdict,
+      cell: r.cell,
+      duration_seconds: r.duration_seconds,
+      watched_seconds: watchOf(r),
+      at: new Date(r.created_at).toISOString(),
+    })),
+  };
 }

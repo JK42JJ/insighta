@@ -16,6 +16,8 @@ import {
   stepSpring,
   type SpringState,
 } from '@/features/morning-feed/card-motion';
+import { CardDetail, hasCardDetail } from '@/features/morning-feed/CardDetail';
+import { InsightSection } from '@/features/morning-feed/InsightSection';
 import { YouTubePlayer, type SoundController } from '@/features/morning-feed/YouTubePlayer';
 import './mf.css';
 
@@ -41,6 +43,20 @@ export interface FeedCard {
   videoId?: string;
   thumbUrl?: string;
   fresh?: boolean;
+  /** Live data only, each present only when the server sent it. */
+  oneLiner?: string;
+  reasonLines?: string[];
+  checks?: FeedCheck[];
+  chapters?: FeedChapter[];
+}
+
+export interface FeedCheck {
+  text: string;
+}
+export interface FeedChapter {
+  /** m:ss or h:mm:ss */
+  at: string;
+  title: string;
 }
 
 export interface FeedCell {
@@ -93,10 +109,24 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
   const soundCtl = useRef<SoundController | null>(null);
   const [playerFailed, setPlayerFailed] = useState(false);
   const [soundOn, setSoundOn] = useState(false);
+  // the detail panel is tied to the card position it was opened on, so any card change closes it
+  const [detailAt, setDetailAt] = useState<string | null>(null);
   const fontText = useRef(
     [
-      '오늘 전체 목표 칸 고르기 담았어요 넘겼어요 되돌리기 담기 어디부터 볼까요 새 영상 개 담았어요 지금 하나 보기 다른 칸 고르기 일 전 주 전 개월 전',
-      ...cards.flatMap((c) => [c.thumb, c.title, c.ch, c.chMeta, c.cell, c.why, c.ini]),
+      '오늘 전체 목표 칸 고르기 담았어요 넘겼어요 되돌리기 담기 어디부터 볼까요 새 영상 개 담았어요 지금 하나 보기 다른 칸 고르기 일 전 주 전 개월 전 자세히 닫기 한 줄 요약 이 영상을 고른 이유 영상 설명란에서 추린 순서 오늘 본 것 본 영상 본 시간 좋아 별로 넘김 본 순서 어디에 시간을 썼나',
+      ...cards.flatMap((c) => [
+        c.thumb,
+        c.title,
+        c.ch,
+        c.chMeta,
+        c.cell,
+        c.why,
+        c.ini,
+        c.oneLiner ?? '',
+        ...(c.reasonLines ?? []),
+        ...(c.checks ?? []).map((k) => k.text),
+        ...(c.chapters ?? []).map((k) => k.title),
+      ]),
       ...grid.map((g) => g.short + g.label),
     ].join(' ')
   ).current;
@@ -662,6 +692,8 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
   };
 
   const showToastNow = !!s.toast && !done;
+  const cardKey = s.c + ':' + s.i;
+  const detailOpen = !done && !s.picker && detailAt === cardKey && hasCardDetail(card);
   const keptKeys = deck.filter((key) => s.res[key] === 'keep');
 
   // text is laid out once, with the final font metrics (offline: shown after a timeout)
@@ -936,6 +968,19 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
                   <span style={css('font-size: 13px; font-weight: 700; color: var(--mf-butter)')}>
                     {card.cell}
                   </span>
+                  {hasCardDetail(card) ? (
+                    <button
+                      type="button"
+                      data-testid="mf-detail-open"
+                      onPointerDown={(ev) => ev.stopPropagation()}
+                      onClick={() => setDetailAt(cardKey)}
+                      style={css(
+                        'margin-left: auto; height: 26px; padding: 0 10px; border-radius: 999px; border: none; background: var(--mf-surface); color: var(--mf-fg); font-size: 12px; font-weight: 700; cursor: pointer'
+                      )}
+                    >
+                      자세히
+                    </button>
+                  ) : null}
                 </div>
                 <div style={css('font-size: 14px; line-height: 1.55; color: var(--mf-why)')}>
                   {card.why}
@@ -1069,10 +1114,12 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
           </div>
         </div>
 
+        {detailOpen ? <CardDetail card={card} onClose={() => setDetailAt(null)} /> : null}
+
         <div
           data-testid="mf-done"
           style={css(
-            'position: absolute; top: calc(60px + env(safe-area-inset-top, 0px)); left: 0; right: 0; bottom: 0; padding: 28px 20px 28px; flex-direction: column; gap: 22px; display: ' +
+            'position: absolute; top: calc(60px + env(safe-area-inset-top, 0px)); left: 0; right: 0; bottom: 0; overflow-y: auto; overscroll-behavior: contain; padding: 28px 20px 28px; flex-direction: column; gap: 22px; display: ' +
               (done ? 'flex' : 'none')
           )}
         >
@@ -1119,6 +1166,7 @@ export function MorningFeed({ cards, grid, onJudge, onUndo }: MorningFeedProps) 
               );
             })}
           </div>
+          <InsightSection enabled={done && smooth} />
           <div style={css('margin-top: auto; display: flex; flex-direction: column; gap: 10px')}>
             <button
               type="button"

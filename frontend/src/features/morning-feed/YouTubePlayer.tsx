@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { useWatchReporter } from '@/features/morning-feed/use-watch-reporter';
+
 /*
  * The video area of a live card: one YouTube IFrame player (16:9), muted autoplay once the card
  * is on screen, one player at a time (it is rebuilt per card and destroyed on the way out).
@@ -12,6 +14,7 @@ interface YtPlayer {
   unMute(): void;
   isMuted(): boolean;
   getPlayerState(): number;
+  getCurrentTime(): number;
   playVideo(): void;
   pauseVideo(): void;
   destroy(): void;
@@ -24,7 +27,11 @@ interface YtApi {
       width: string;
       height: string;
       playerVars: Record<string, string | number>;
-      events: { onReady: (e: { target: YtPlayer }) => void; onError: () => void };
+      events: {
+        onReady: (e: { target: YtPlayer }) => void;
+        onError: () => void;
+        onStateChange: (e: { data: number }) => void;
+      };
     }
   ) => YtPlayer;
 }
@@ -113,6 +120,8 @@ export function YouTubePlayer({
     onFailedRef.current?.(failed);
   }, [failed]);
 
+  const { reporter, positionRef } = useWatchReporter(videoId);
+
   const ready = useRef(false);
   const loaded = useRef(videoId);
   const wantSound = useRef(soundPreferred());
@@ -146,6 +155,7 @@ export function YouTubePlayer({
             onReady: (e) => {
               const p = e.target;
               ready.current = true;
+              positionRef.current = () => p.getCurrentTime();
               if (controller) {
                 controller.current = {
                   toggleSound: () => {
@@ -202,6 +212,9 @@ export function YouTubePlayer({
               }
             },
             onError: () => alive && setFailed(true),
+            onStateChange: (e) => {
+              if (alive) reporter.onState(e.data);
+            },
           },
         });
       })

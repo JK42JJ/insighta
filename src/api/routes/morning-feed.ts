@@ -8,6 +8,8 @@ import { isMorningCardsEnabled, isMorningCardsTestUser } from '@/config/morning-
 import {
   cancelLastFeedJudgment,
   fetchFeed,
+  fetchInsight,
+  recordWatch,
   FeedValidationError,
   saveFeedJudgment,
   type FeedDb,
@@ -27,6 +29,12 @@ interface JudgmentBody {
   cell?: unknown;
   verdict?: unknown;
   shown_position?: unknown;
+}
+
+interface WatchBody {
+  video_id?: unknown;
+  watched_seconds?: unknown;
+  last_position?: unknown;
 }
 
 async function flagGate(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -79,6 +87,40 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
           }
           throw err;
         }
+      }
+    );
+
+    fastify.post<{ Body: WatchBody }>(
+      '/watch',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const body = request.body ?? {};
+        try {
+          await recordWatch(deps.getDb(), userId, {
+            video_id: String(body.video_id ?? ''),
+            watched_seconds: body.watched_seconds as number,
+            last_position: body.last_position as number,
+          });
+          return reply.code(201).send({ status: 'ok' });
+        } catch (err) {
+          if (err instanceof FeedValidationError) {
+            return reply.code(400).send({ status: 'error', error: 'invalid_watch' });
+          }
+          throw err;
+        }
+      }
+    );
+
+    fastify.get(
+      '/insight',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const data = await fetchInsight(deps.getDb(), userId);
+        return reply.send({ status: 'ok', data });
       }
     );
 

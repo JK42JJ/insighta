@@ -3516,3 +3516,30 @@ model morning_feed_annotations {
   @@index([cell], map: "idx_mf_annotations_cell")
   @@schema("public")
 }
+
+/// Morning feed card info items. Raw SQL DDL: prisma/migrations/morning-feed/003_card_info_watch.sql
+model morning_feed_card_info {
+  video_id       String    @id @db.VarChar(20)
+  one_liner      String?
+  reason         String?
+  audio_language String?   @db.VarChar(12)
+  link_count     Int?
+  chapters       Json?
+  refreshed_at   DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at     DateTime  @default(dbgenerated("(now() + '30 days'::interval)")) @db.Timestamptz(6)
+
+  @@index([expires_at], map: "idx_mf_card_info_expires")
+  @@schema("public")
+}
+
+/// Morning feed per-user watch progress. Raw SQL DDL: prisma/migrations/morning-feed/003_card_info_watch.sql
+model morning_feed_watch {
+  user_id         String   @db.Uuid
+  video_id        String   @db.VarChar(20)
+  watched_seconds Int      @default(0)
+  last_position   Int      @default(0)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([user_id, video_id])
+  @@schema("public")
+}

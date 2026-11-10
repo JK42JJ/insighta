@@ -172,6 +172,17 @@ export interface FeedApiCard {
   cell: string;
   focus: string[];
   why: string;
+  /** Optional facts about the video; every field may be missing. */
+  info?: FeedApiCardInfo;
+}
+export interface FeedApiCardInfo {
+  one_liner?: string;
+  /** Reason lines joined by \n. */
+  reason?: string;
+  /** BCP-47-ish language code, e.g. 'ko', 'en'. */
+  audio_language?: string;
+  link_count?: number;
+  chapters?: { sec: number; title: string }[];
 }
 export interface FeedApiCell {
   label: string;
@@ -207,4 +218,69 @@ export async function undoFeedJudgment(): Promise<void> {
     { method: 'DELETE', body: JSON.stringify({}) },
     MORNING_FEED_PATH
   );
+}
+
+export interface WatchProgressBody {
+  video_id: string;
+  /** Whole seconds actually played so far (cumulative for this card view). */
+  watched_seconds: number;
+  /** Whole seconds: where the playhead is. */
+  last_position: number;
+}
+
+/** Fire-and-forget progress write. Never throws: the screen must not depend on it. */
+export async function postWatchProgress(body: WatchProgressBody): Promise<void> {
+  try {
+    await call<unknown>(
+      '/watch',
+      {
+        method: 'POST',
+        keepalive: true,
+        body: JSON.stringify({
+          video_id: body.video_id,
+          watched_seconds: body.watched_seconds,
+          last_position: body.last_position,
+        }),
+      },
+      MORNING_FEED_PATH
+    );
+  } catch {
+    /* progress is best effort */
+  }
+}
+
+export type InsightVerdict = 'useful' | 'skip' | 'pass';
+export interface InsightOrderItem {
+  video_id: string;
+  title: string;
+  verdict: InsightVerdict;
+  cell: string;
+  duration_seconds: number;
+  watched_seconds: number | null;
+  at: string;
+}
+export interface InsightByCell {
+  cell: string;
+  count: number;
+  watched_seconds: number | null;
+}
+export interface InsightData {
+  date_kst: string;
+  reacted: number;
+  liked: number;
+  disliked: number;
+  passed: number;
+  watched_seconds_total: number | null;
+  has_watch_data: boolean;
+  by_cell: InsightByCell[];
+  order: InsightOrderItem[];
+}
+export interface InsightResponse {
+  status: 'ok';
+  data: InsightData;
+}
+
+export async function fetchMorningFeedInsight(): Promise<InsightData> {
+  const res = await call<InsightResponse>('/insight', {}, MORNING_FEED_PATH);
+  return res.data;
 }

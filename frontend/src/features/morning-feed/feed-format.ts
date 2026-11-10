@@ -1,5 +1,5 @@
-import type { FeedApiCard } from '@/features/morning-cards/api';
-import type { FeedCard } from '@/features/morning-feed/MorningFeed';
+import type { FeedApiCard, FeedApiCardInfo } from '@/features/morning-cards/api';
+import type { FeedCard, FeedCheck, FeedChapter } from '@/features/morning-feed/MorningFeed';
 
 const MS_PER_DAY = 86_400_000;
 
@@ -42,6 +42,43 @@ export function channelColor(name: string, palette: readonly string[]): string {
   return palette[h % palette.length];
 }
 
+const MIN_CHAPTERS = 3;
+const KOREAN_AUDIO_PREFIX = 'ko';
+const AUDIO_LANGUAGE_NAMES: Record<string, string> = { en: '영어', ja: '일본어', zh: '중국어' };
+
+/** The only facts shown under "이 영상을 고른 이유". Host or speaker counts are never shown. */
+export function buildChecks(info: FeedApiCardInfo | undefined): FeedCheck[] {
+  if (!info) return [];
+  const out: FeedCheck[] = [];
+  const lang = (info.audio_language ?? '').trim().toLowerCase();
+  if (lang) {
+    if (lang.startsWith(KOREAN_AUDIO_PREFIX)) out.push({ text: '✓ 한국어 음성' });
+    else out.push({ text: '음성 언어 ' + (AUDIO_LANGUAGE_NAMES[lang.split('-')[0]] ?? lang) });
+  }
+  if (typeof info.link_count === 'number' && info.link_count >= 1) {
+    out.push({ text: '✓ 설명란 링크 ' + Math.floor(info.link_count) + '건' });
+  }
+  return out;
+}
+
+/** Lines split on \n, trimmed, empty ones dropped. */
+export function splitReasonLines(reason: string | undefined): string[] {
+  return (reason ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+}
+
+/** Chapters shown only when there are at least three valid entries. */
+export function buildChapters(chapters: FeedApiCardInfo['chapters']): FeedChapter[] {
+  const list = (chapters ?? []).filter(
+    (c) =>
+      c && Number.isFinite(c.sec) && c.sec >= 0 && typeof c.title === 'string' && c.title.trim()
+  );
+  if (list.length < MIN_CHAPTERS) return [];
+  return list.map((c) => ({ at: formatDuration(c.sec), title: c.title.trim() }));
+}
+
 export function toFeedCard(
   c: FeedApiCard,
   palette: readonly string[],
@@ -64,5 +101,20 @@ export function toFeedCard(
     why: c.why,
     videoId: c.video_id,
     thumbUrl: c.thumbnail_url ?? undefined,
+    ...infoFields(c.info),
   };
+}
+
+function infoFields(info: FeedApiCardInfo | undefined): Partial<FeedCard> {
+  if (!info) return {};
+  const out: Partial<FeedCard> = {};
+  const one = (info.one_liner ?? '').trim();
+  if (one) out.oneLiner = one;
+  const lines = splitReasonLines(info.reason);
+  if (lines.length) out.reasonLines = lines;
+  const checks = buildChecks(info);
+  if (checks.length) out.checks = checks;
+  const chapters = buildChapters(info.chapters);
+  if (chapters.length) out.chapters = chapters;
+  return out;
 }

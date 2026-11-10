@@ -23,6 +23,7 @@
   --mf-fill: rgba(118, 118, 128, 0.24);
   --mf-handle: rgba(235, 235, 245, 0.3);
   --mf-tile: #1c1c1e;
+  --mf-ok: #7fcf9a;
   /* values the reference uses besides the SPEC list (shadows, washes, dots) */
   --mf-shadow-toast: rgba(0, 0, 0, 0.4);
   --mf-shadow-cell: rgba(0, 0, 0, 0.6);

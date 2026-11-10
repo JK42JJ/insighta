@@ -85,6 +85,8 @@ APPLY_FILES=(
   "prisma/migrations/morning-feed/001_morning_feed.sql"
   # Morning feed: third verdict "pass". DROP/ADD CONSTRAINT -- idempotent.
   "prisma/migrations/morning-feed/002_pass_verdict.sql"
+  # Morning feed: card info items + watch progress. IF NOT EXISTS -- idempotent.
+  "prisma/migrations/morning-feed/003_card_info_watch.sql"
   "prisma/migrations/mandala_embeddings/001_add_ivfflat_index.sql"
   # CP462+ Issue #649 — Card preference signal (heart/archive/delete) +
   # mandala_relevance_pct 0-100 single fit score. Both files use
