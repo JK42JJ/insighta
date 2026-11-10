@@ -50,10 +50,14 @@ export function parseWatchTodayMap(value: unknown): WatchTodayMap | null {
     const issued = e['issued'];
     const judged = e['judged'];
     const available = e['available'];
-    if (!(issued === null || isCount(issued)) || !isCount(judged) || !isCount(available)) {
+    if (!isCount(judged) || !isCount(available)) return null;
+    if (issued === null) {
+      out[cell] = { issued: null, judged, available };
+    } else if (isCount(issued)) {
+      out[cell] = { issued, judged, available };
+    } else {
       return null;
     }
-    out[cell] = { issued, judged, available };
   }
   return out;
 }
