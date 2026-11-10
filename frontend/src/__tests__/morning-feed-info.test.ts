@@ -213,9 +213,16 @@ describe('WatchReporter', () => {
     sent.length = 0;
   });
   afterEach(() => vi.useRealTimers());
+  // Move the fake clock and the fake timers together, one poll interval at a time, so every
+  // interval callback sees the time it fires at (a single jump would give all of them the end time).
   const advance = async (ms: number) => {
-    t += ms;
-    await vi.advanceTimersByTimeAsync(ms);
+    let left = ms;
+    while (left > 0) {
+      const step = Math.min(left, WATCH_POLL_MS);
+      t += step;
+      await vi.advanceTimersByTimeAsync(step);
+      left -= step;
+    }
   };
 
   it('never sends when nothing was watched', () => {
