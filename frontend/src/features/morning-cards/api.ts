@@ -190,12 +190,15 @@ export interface FeedApiCell {
   dom: number;
 }
 
-export async function fetchMorningFeed(): Promise<{ cells: FeedApiCell[]; cards: FeedApiCard[] }> {
-  const res = await call<{ data: { cells: FeedApiCell[]; cards: FeedApiCard[] } }>(
-    '/',
-    {},
-    MORNING_FEED_PATH
-  );
+export interface FeedApiResponse {
+  cells: FeedApiCell[];
+  cards: FeedApiCard[];
+  /** Watch screen: videos per day for the chosen cell, decided by the server. */
+  watch_daily?: number;
+}
+
+export async function fetchMorningFeed(): Promise<FeedApiResponse> {
+  const res = await call<{ data: FeedApiResponse }>('/', {}, MORNING_FEED_PATH);
   return res.data;
 }
 

@@ -1,0 +1,278 @@
+/*
+ * Watch screen (/morning-cards?view=watch). Values from the mobile design handoff
+ * (design_handoff_insighta_mobile, screens 03 시청 / 04 인사이트). The shared --mf-* tokens are
+ * remapped to the handoff's light palette inside this screen only, so the reused blocks
+ * (CardDetailBlocks, InsightSection) take the same colours. The deck keeps mf.css as it is.
+ */
+.mf-page.mf-watch {
+  --mf-navy: #16273f;
+  --mf-paper: #f7f5f0;
+  --mf-card: #ffffff;
+  --mf-steel: #3a6ea5;
+  --mf-green: #2e6e4e;
+  --mf-text: #141a24;
+  --mf-sub: #5b6472;
+  --mf-caption: #8a93a3;
+  --mf-line: #e2dfd6;
+  --mf-dislike-dot: #b7b2a6;
+
+  /* shared tokens, light */
+  --mf-page: var(--mf-paper);
+  --mf-bg: var(--mf-paper);
+  --mf-fg: var(--mf-text);
+  --mf-muted: var(--mf-sub);
+  --mf-surface: var(--mf-line);
+  --mf-fit: var(--mf-card);
+  --mf-accent: var(--mf-steel);
+  --mf-accent-soft: var(--mf-steel);
+  --mf-why: var(--mf-text);
+  --mf-ok: var(--mf-green);
+  --mf-white: var(--mf-card);
+  --mf-ink: var(--mf-navy);
+  --mf-dot-skip: var(--mf-dislike-dot);
+
+  /* height of the fixed bottom bar: top border + padding + 60px buttons + bottom padding */
+  --mf-watch-bar-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+  --mf-watch-bar-h: calc(1px + 12px + 60px + var(--mf-watch-bar-bottom));
+}
+
+.mf-watch-app {
+  position: relative;
+  width: min(100%, 430px);
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--mf-bg);
+  color: var(--mf-fg);
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', Arial, sans-serif;
+  font-size: 15px;
+  line-height: normal;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mf-watch-app *,
+.mf-watch-app *::before,
+.mf-watch-app *::after {
+  box-sizing: border-box;
+}
+
+.mf-watch-app button {
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* plain vertical scroll: no gesture handling, the browser scrolls it */
+.mf-watch-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+.mf-watch-kicker {
+  font: 700 11px Arial, sans-serif;
+  letter-spacing: 0.12em;
+  color: var(--mf-caption);
+}
+
+.mf-watch-tick {
+  width: 36px;
+  height: 7px;
+  background: var(--mf-steel);
+}
+
+/* goal list */
+.mf-watch-goal {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--mf-line);
+  padding: 0;
+  text-align: left;
+  color: var(--mf-fg);
+  cursor: pointer;
+}
+
+.mf-watch-goal:disabled {
+  cursor: default;
+  color: var(--mf-caption);
+}
+
+/* top bar */
+.mf-watch-top {
+  flex: none;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 22px 12px;
+  background: var(--mf-bg);
+}
+
+.mf-watch-back {
+  width: 44px;
+  height: 44px;
+  margin-left: -12px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mf-watch-seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--mf-line);
+  transition: background 0.3s;
+}
+
+.mf-watch-seg[data-state='done'] {
+  background: var(--mf-steel);
+}
+
+.mf-watch-seg[data-state='current'] {
+  background: var(--mf-navy);
+}
+
+/* the content of one video; it leaves in the direction of the answer */
+.mf-watch-content {
+  transform: none;
+  opacity: 1;
+  transition: none;
+}
+
+.mf-watch-content[data-exit] {
+  opacity: 0;
+  transition:
+    transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mf-watch-content[data-exit='useful'] {
+  transform: translateX(70px) rotate(4deg);
+}
+
+.mf-watch-content[data-exit='skip'] {
+  transform: translateX(-70px) rotate(-4deg);
+}
+
+.mf-watch-content[data-exit='pass'] {
+  transform: translateY(-36px);
+}
+
+.mf-watch-player {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  /* the player's own backdrop (it paints var(--mf-page)) is navy here, not paper */
+  --mf-page: var(--mf-navy);
+  background: var(--mf-navy);
+  /* iOS Safari: keeps the rounded clip on the iframe */
+  isolation: isolate;
+}
+
+/* fixed answer bar */
+.mf-watch-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  width: min(100%, 430px);
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 26px;
+  padding: 12px 22px var(--mf-watch-bar-bottom);
+  border-top: 1px solid var(--mf-line);
+  background: var(--mf-bg);
+}
+
+.mf-watch-btn {
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--mf-line);
+  background: var(--mf-card);
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+
+.mf-watch-btn:active {
+  transform: scale(0.9);
+}
+
+.mf-watch-btn[data-size='large'] {
+  width: 60px;
+  height: 60px;
+}
+
+.mf-watch-btn[data-size='small'] {
+  width: 50px;
+  height: 50px;
+}
+
+.mf-watch-btn[data-tone='accent'] {
+  border: 0;
+  background: var(--mf-steel);
+}
+
+.mf-watch-btn[data-pop] {
+  animation: mf-watch-pop 0.45s ease;
+}
+
+@keyframes mf-watch-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.28);
+  }
+  70% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.mf-watch-primary {
+  width: 100%;
+  height: 54px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--mf-navy);
+  color: var(--mf-card);
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mf-watch-primary:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-watch-content[data-exit],
+  .mf-watch-btn,
+  .mf-watch-btn:active,
+  .mf-watch-btn[data-pop],
+  .mf-watch-primary:active,
+  .mf-watch-seg {
+    transform: none;
+    transition: none;
+    animation: none;
+  }
+}

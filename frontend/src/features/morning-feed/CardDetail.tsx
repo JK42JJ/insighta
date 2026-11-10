@@ -16,7 +16,6 @@ const BLOCK_LABEL = 'font-size: 12px; font-weight: 700; color: var(--mf-muted)';
  * here never reaches the card's pointer handlers. Each block shows only when its data exists.
  */
 export function CardDetail({ card, onClose }: { card: FeedCard; onClose: () => void }) {
-  const hasReason = !!(card.reasonLines?.length || card.checks?.length);
   return (
     <div
       data-testid="mf-detail"
@@ -37,6 +36,26 @@ export function CardDetail({ card, onClose }: { card: FeedCard; onClose: () => v
           닫기
         </button>
       </div>
+      <CardDetailBlocks card={card} />
+    </div>
+  );
+}
+
+/**
+ * The three info blocks (한 줄 요약, 이 영상을 고른 이유, 설명란에서 추린 순서), each only when its
+ * data exists. Shared by the deck's detail panel and the watch screen. `blockCss` replaces the
+ * card style of the two boxed blocks; left out, the deck's style is used.
+ */
+export function CardDetailBlocks({
+  card,
+  blockCss = BLOCK_CARD,
+}: {
+  card: FeedCard;
+  blockCss?: string;
+}) {
+  const hasReason = !!(card.reasonLines?.length || card.checks?.length);
+  return (
+    <>
       {card.oneLiner ? (
         <div
           data-testid="mf-oneliner"
@@ -51,7 +70,7 @@ export function CardDetail({ card, onClose }: { card: FeedCard; onClose: () => v
         </div>
       ) : null}
       {hasReason ? (
-        <div data-testid="mf-reason" style={css(BLOCK_CARD)}>
+        <div data-testid="mf-reason" style={css(blockCss)}>
           <span style={css(BLOCK_LABEL)}>이 영상을 고른 이유</span>
           {card.reasonLines?.map((line, k) => (
             <div
@@ -75,7 +94,7 @@ export function CardDetail({ card, onClose }: { card: FeedCard; onClose: () => v
         </div>
       ) : null}
       {card.chapters?.length ? (
-        <div data-testid="mf-chapters" style={css(BLOCK_CARD)}>
+        <div data-testid="mf-chapters" style={css(blockCss)}>
           <span style={css(BLOCK_LABEL)}>영상 설명란에서 추린 순서</span>
           {card.chapters.map((ch, k) => (
             <div key={k} style={css('display: flex; gap: 12px; font-size: 14px; line-height: 1.5')}>
@@ -91,6 +110,6 @@ export function CardDetail({ card, onClose }: { card: FeedCard; onClose: () => v
           ))}
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

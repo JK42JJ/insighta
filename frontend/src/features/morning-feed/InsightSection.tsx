@@ -18,7 +18,14 @@ const SECTION_LABEL = 'font-size: 13px; font-weight: 700; color: var(--mf-muted)
  * 오늘 본 것. Loaded when the done screen shows; while loading and on failure nothing is drawn,
  * so the done screen is never blocked or left with an error.
  */
-export function InsightSection({ enabled }: { enabled: boolean }) {
+export function InsightSection({
+  enabled,
+  showTitle = true,
+}: {
+  enabled: boolean;
+  /** False when the screen draws its own 오늘 본 것 heading (watch screen). */
+  showTitle?: boolean;
+}) {
   const [data, setData] = useState<InsightData | null>(null);
   useEffect(() => {
     if (!enabled) return undefined;
@@ -45,7 +52,7 @@ export function InsightSection({ enabled }: { enabled: boolean }) {
       data-testid="mf-insight"
       style={css('display: flex; flex-direction: column; gap: 18px; padding-top: 6px')}
     >
-      <div style={css('font-size: 18px; font-weight: 700')}>오늘 본 것</div>
+      {showTitle ? <div style={css('font-size: 18px; font-weight: 700')}>오늘 본 것</div> : null}
       {summary ? <div style={css('font-size: 15px; line-height: 1.7')}>{summary}</div> : null}
       <div style={css('display: flex; gap: 10px')}>
         {chips.map((c) => (

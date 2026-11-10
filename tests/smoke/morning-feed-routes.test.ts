@@ -6,6 +6,7 @@ import {
   fetchInsight,
   recordWatch,
   FeedValidationError,
+  WATCH_DAILY_VIDEOS,
   type FeedDb,
 } from '@/modules/morning-feed/feed';
 
@@ -120,6 +121,21 @@ describe('morning feed', () => {
     const { db } = fakeDb(rows);
     const feed = await fetchFeed(db, USER, NOW);
     expect(feed.cards.length).toBe(FEED_MAX_CARDS_PER_CELL);
+  });
+
+  it('GET answers the per-day watch count decided by the server (additive field)', async () => {
+    expect(WATCH_DAILY_VIDEOS).toBe(5);
+    const { db } = fakeDb([row({ video_id: 'aaaaaaaaaaa' })]);
+    expect((await fetchFeed(db, USER, NOW)).watch_daily).toBe(WATCH_DAILY_VIDEOS);
+    const app = await build(db);
+    const res = await app.inject({ method: 'GET', url: `${BASE}/` });
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data.watch_daily).toBe(WATCH_DAILY_VIDEOS);
+    // the existing fields are unchanged
+    expect(Array.isArray(data.cells)).toBe(true);
+    expect(data.cards.map((c: { video_id: string }) => c.video_id)).toEqual(['aaaaaaaaaaa']);
+    await app.close();
   });
 
   it('POST writes exactly one row; undo only sets the cancel marker and never deletes', async () => {

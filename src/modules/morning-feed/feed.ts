@@ -29,6 +29,8 @@ export const FEED_CELLS: readonly FeedCellDef[] = Object.freeze([
 ]);
 
 export const FEED_MAX_CARDS_PER_CELL = 15;
+/** Watch screen: how many videos of the chosen cell are shown per day. Decided here, not by the client. */
+export const WATCH_DAILY_VIDEOS = 5;
 export const FEED_MIN_DURATION_SEC = 180;
 export const FEED_MAX_POSITION = 1000;
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -135,7 +137,7 @@ export async function fetchFeed(
   db: FeedDb,
   userId: string,
   now: Date = new Date()
-): Promise<{ cells: FeedCellDef[]; cards: FeedCard[] }> {
+): Promise<{ cells: FeedCellDef[]; cards: FeedCard[]; watch_daily: number }> {
   const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const earliest = new Date(
     Math.min(
@@ -192,7 +194,7 @@ export async function fetchFeed(
       });
     }
   }
-  return { cells: [...FEED_CELLS], cards };
+  return { cells: [...FEED_CELLS], cards, watch_daily: WATCH_DAILY_VIDEOS };
 }
 
 export interface FeedJudgmentInput {
