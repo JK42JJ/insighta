@@ -8,6 +8,7 @@ import { isMorningCardsEnabled, isMorningCardsTestUser } from '@/config/morning-
 import {
   cancelLastFeedJudgment,
   fetchFeed,
+  fetchHistory,
   fetchInsight,
   recordWatch,
   FeedValidationError,
@@ -147,6 +148,18 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
           }
           throw err;
         }
+      }
+    );
+
+    // 이전 주제: per goal, the latest earlier KST day with judgments and that day's video count
+    fastify.get(
+      '/history',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const data = await fetchHistory(deps.getDb(), userId, new Date());
+        return reply.send({ status: 'ok', data });
       }
     );
 

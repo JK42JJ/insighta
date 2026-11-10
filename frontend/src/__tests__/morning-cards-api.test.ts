@@ -11,6 +11,7 @@ vi.mock('@/shared/integrations/supabase/client', () => ({
 import {
   fetchMorningCards,
   fetchMorningCardsReview,
+  fetchMorningFeedHistory,
   patchReasonTags,
   postJudgment,
   MorningCardsApiError,
@@ -77,5 +78,14 @@ describe('morning cards api client', () => {
   it('throws a typed error on non-ok responses', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 403, json: async () => ({}) });
     await expect(fetchMorningCards('ai_tools')).rejects.toBeInstanceOf(MorningCardsApiError);
+  });
+
+  it('reads the watch history from GET /api/v1/morning-feed/history', async () => {
+    const rows = [{ cell: '기술/개발', day: '2026-10-28', count: 12 }];
+    fetchMock.mockResolvedValue(okResponse({ status: 'ok', data: rows }));
+    expect(await fetchMorningFeedHistory()).toEqual(rows);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/api\/v1\/morning-feed\/history$/);
+    expect(init.method).toBeUndefined();
   });
 });

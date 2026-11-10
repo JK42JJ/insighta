@@ -242,6 +242,59 @@ export async function fetchWatchToday(
   return counts;
 }
 
+/** Watch screen "이전 주제": at most this many goals are listed. */
+export const FEED_HISTORY_MAX = 5;
+
+export interface FeedHistoryItem {
+  /** Goal cell label. */
+  cell: string;
+  /** KST calendar day, 'YYYY-MM-DD'. */
+  day: string;
+  /** Distinct videos judged in that cell on that day. */
+  count: number;
+}
+
+interface HistoryRow {
+  cell: string;
+  day: string;
+  count: number | bigint;
+}
+
+/**
+ * Watch screen "이전 주제" / "어제에 이어서": per goal cell, the most recent KST day before today
+ * (the KST day containing `now`) with live judgments, and the distinct videos judged that day.
+ * Newest day first, then cell label; at most FEED_HISTORY_MAX. Read only.
+ */
+export async function fetchHistory(
+  db: FeedDb,
+  userId: string,
+  now: Date = new Date()
+): Promise<FeedHistoryItem[]> {
+  if (!userId) throw new FeedValidationError('user_id required');
+  const { start } = kstDayBounds(now);
+  const goalCells = FEED_CELLS.filter((c) => c.dom !== -1).map((c) => c.label);
+  const rows = await db.$queryRawUnsafe<HistoryRow[]>(
+    `SELECT x.cell, x.day, x.count FROM (
+       SELECT DISTINCT ON (t.cell) t.cell, t.day, t.count FROM (
+         SELECT j.cell, to_char((j.created_at AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD') AS day,
+                COUNT(DISTINCT j.video_id)::int AS count
+           FROM public.morning_card_judgments j
+          WHERE j.user_id = $1::uuid AND j.canceled_at IS NULL AND j.cell IS NOT NULL
+            AND j.cell = ANY($2::text[]) AND j.created_at < $3
+          GROUP BY j.cell, day
+       ) t ORDER BY t.cell, t.day DESC
+     ) x ORDER BY x.day DESC, x.cell LIMIT $4`,
+    userId,
+    goalCells,
+    start,
+    FEED_HISTORY_MAX
+  );
+  return rows
+    .filter((r) => isFeedCell(r.cell))
+    .map((r) => ({ cell: r.cell, day: String(r.day), count: Number(r.count) }))
+    .slice(0, FEED_HISTORY_MAX);
+}
+
 export interface FeedJudgmentInput {
   user_id: string;
   video_id: string;

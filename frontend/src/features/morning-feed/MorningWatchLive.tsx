@@ -1,8 +1,12 @@
-import '@/features/morning-feed/fonts';
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { fetchMorningFeed, postFeedJudgment, undoFeedJudgment } from '@/features/morning-cards/api';
+import {
+  fetchMorningFeed,
+  fetchMorningFeedHistory,
+  postFeedJudgment,
+  undoFeedJudgment,
+  type FeedHistoryItem,
+} from '@/features/morning-cards/api';
 import { toFeedCard } from '@/features/morning-feed/feed-format';
 import { JudgmentQueue } from '@/features/morning-feed/judgment-queue';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
@@ -14,6 +18,11 @@ import {
   type WatchToday,
   type WatchVideo,
 } from '@/features/morning-feed/watch-list';
+import {
+  fetchYouTubeAuthStatus,
+  useYouTubeConnect,
+} from '@/features/youtube-sync/model/useYouTubeAuth';
+import './watch.css';
 
 const PALETTE = (fixture.cards as Array<{ bg: string }>).map((c) => c.bg);
 /** How often the queue is checked before the insight is read. */
@@ -31,6 +40,7 @@ type LoadState =
       cells: FeedCell[];
       daily: number;
       watchToday: WatchToday | null;
+      history: FeedHistoryItem[];
     };
 
 const MESSAGE_STYLE = {
@@ -38,9 +48,9 @@ const MESSAGE_STYLE = {
   inset: 0,
   display: 'grid',
   placeItems: 'center',
-  background: 'var(--mf-page)',
-  color: 'var(--mf-muted)',
-  font: "500 15px 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif",
+  background: 'var(--w-paper)',
+  color: 'var(--w-sub)',
+  font: '500 15px var(--w-font)',
 } as const;
 
 /**
@@ -48,7 +58,7 @@ const MESSAGE_STYLE = {
  * deck (POST /judgments body is identical). The number of videos per day and today's judged count
  * per goal come from the server (a server without the count: no per-goal limit, as before).
  */
-export function MorningWatchLive() {
+export function MorningWatchLive(): JSX.Element {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const queue = useRef<JudgmentQueue | null>(null);
   if (queue.current === null) {
@@ -59,8 +69,10 @@ export function MorningWatchLive() {
 
   useEffect(() => {
     let alive = true;
-    fetchMorningFeed()
-      .then((feed) => {
+    // 이전 주제 is optional: when it cannot be read the section is simply not drawn
+    const historyP = fetchMorningFeedHistory().catch((): FeedHistoryItem[] => []);
+    Promise.all([fetchMorningFeed(), historyP])
+      .then(([feed, history]) => {
         if (!alive) return;
         const daily = parseWatchDaily(feed.watch_daily);
         if (daily === null) {
@@ -80,6 +92,7 @@ export function MorningWatchLive() {
                 cells: feed.cells,
                 daily,
                 watchToday: parseWatchToday(feed.watch_today),
+                history,
               }
         );
       })
@@ -128,16 +141,33 @@ export function MorningWatchLive() {
     []
   );
 
-  if (state.status === 'loading') return <div className="mf-page mf-watch" style={MESSAGE_STYLE} />;
+  // 01 온보딩 step 3: the app's existing YouTube OAuth flow (settings YouTube tab, same edge
+  // function). Already connected -> nothing to do. Any failure (popup blocked, declined, timeout)
+  // ends the onboarding as well; the account can be connected later in settings.
+  const { mutateAsync: connectMutate } = useYouTubeConnect();
+  const connectYouTube = useCallback(async (): Promise<void> => {
+    try {
+      if ((await fetchYouTubeAuthStatus()).isConnected) return;
+    } catch {
+      /* status unknown: try the connection */
+    }
+    try {
+      await connectMutate();
+    } catch {
+      /* not connected: the onboarding still ends */
+    }
+  }, [connectMutate]);
+
+  if (state.status === 'loading') return <div className="mf-w" style={MESSAGE_STYLE} />;
   if (state.status === 'error')
     return (
-      <div className="mf-page mf-watch" style={MESSAGE_STYLE}>
+      <div className="mf-w" style={MESSAGE_STYLE}>
         영상을 불러오지 못했습니다
       </div>
     );
   if (state.status === 'empty')
     return (
-      <div className="mf-page mf-watch" style={MESSAGE_STYLE}>
+      <div className="mf-w" style={MESSAGE_STYLE}>
         오늘 볼 영상이 아직 없습니다
       </div>
     );
@@ -147,8 +177,10 @@ export function MorningWatchLive() {
       cells={state.cells}
       daily={state.daily}
       watchToday={state.watchToday}
+      history={state.history}
       onJudge={onJudge}
       whenSaved={whenSaved}
+      connectYouTube={connectYouTube}
     />
   );
 }

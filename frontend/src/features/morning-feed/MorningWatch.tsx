@@ -1,41 +1,67 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { CardDetailBlocks, hasCardDetail } from '@/features/morning-feed/CardDetail';
-import { cssText as css } from '@/features/morning-feed/css-text';
-import { InsightSection } from '@/features/morning-feed/InsightSection';
+import {
+  fetchMorningFeedInsight,
+  type FeedHistoryItem,
+  type InsightData,
+} from '@/features/morning-cards/api';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
 import {
+  carryCandidate,
+  historyMetaText,
+  insightViewFromData,
+  kstDateLabel,
+  readOnboardingSeen,
+  writeOnboardingSeen,
+  type WatchGoal,
+  type WatchItemView,
+  type WatchReaction,
+} from '@/features/morning-feed/watch-design';
+import {
   addJudgedToday,
-  counterText,
   goalCells,
-  goalRowText,
   isGoalDoneToday,
   metaLine,
   pickTodaysVideos,
   remainingToday,
-  segmentStates,
   type WatchToday,
   type WatchVerdict,
   type WatchVideo,
 } from '@/features/morning-feed/watch-list';
+import {
+  ONB_LAST_STEP,
+  WatchInputScreen,
+  WatchInsightScreen,
+  WatchOnboarding,
+  WatchScreen,
+  type WatchChipView,
+} from '@/features/morning-feed/watch-screens';
 import { YouTubePlayer } from '@/features/morning-feed/YouTubePlayer';
-import './mf.css';
 import './watch.css';
 
 /*
- * 시청 (/morning-cards?view=watch): pick one of the 8 goals, then watch today's videos of that
- * goal one at a time and answer each with 별로 / 넘기기 / 좋아. A plain vertical scroll page: no
- * swipe gestures. After the last video the day's insight is shown.
- * Each goal shows at most `daily` videos per KST day (the server counts today's judgments per
- * goal); a goal that used them up is '오늘은 끝' and opens its insight instead of a new batch.
+ * 시청 flow (/morning-cards?view=watch), design handoff "design_handoff_insighta_mobile":
+ * 01 온보딩 (first visit on this device) -> 02 입력 -> 03 시청 -> 04 인사이트.
+ * Live data: the 8 feed cells are the "요즘 많이 고르는 것" chips; a cell is one goal with one branch
+ * (the cell itself). Each goal shows at most `daily` videos per KST day (server count); a goal that
+ * used them up opens its insight. Free text and the level are kept on screen only: no server turns
+ * them into branches or videos, so the 갈래 section and the CTA stay hidden for typed text.
  */
 
-/** The answered content leaves for this long, then the next video replaces it. */
+/** The answered video leaves for this long, then the next one replaces it (README 03 동작). */
 export const WATCH_EXIT_MS = 480;
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
-/** The boxed info blocks in the handoff style: card face, 1px line, radius 10. */
-const WATCH_BLOCK_CSS =
-  'border-radius: 10px; padding: 14px 16px; background: var(--mf-fit); border: 1px solid var(--mf-line); display: flex; flex-direction: column; gap: 8px';
+const ASK_FIRST = '오늘은 뭘 알아볼까요?';
+const ASK_AGAIN = '다른 걸 알아보고 싶다면';
+/** A cell goal has one branch, the cell; every level preselects it. */
+const CELL_GOAL_REC: number[][] = [[0], [0], [0]];
+const NO_BRANCH_REC: number[][] = [[], [], []];
+
+const VERDICT_OF: Record<WatchReaction, WatchVerdict> = {
+  like: 'useful',
+  dislike: 'skip',
+  pass: 'pass',
+};
 
 export interface WatchJudgeEvent {
   video: WatchVideo;
@@ -51,15 +77,26 @@ export interface MorningWatchProps {
   daily: number;
   /** Videos judged today per goal (cell label), from the server; null = not sent (no limit applied). */
   watchToday: WatchToday | null;
+  /** 이전 주제, newest first (server). Empty = the section is not drawn. */
+  history: FeedHistoryItem[];
   onJudge: (e: WatchJudgeEvent) => void;
   /** Resolves once the queued judgments are written (or the wait gave up), so the insight counts them. */
   whenSaved: () => Promise<void>;
+  /** 01 온보딩 step 3. Resolves when done, whatever the outcome; the onboarding then ends. */
+  connectYouTube: () => Promise<void>;
 }
 
 type Screen =
-  | { kind: 'goals' }
+  | { kind: 'onb'; step: number }
+  | { kind: 'input' }
   | { kind: 'watch'; goal: FeedCell; list: WatchVideo[]; index: number }
   | { kind: 'insight'; goal: FeedCell };
+
+/** What is chosen on 02 입력: a cell chip, or typed text (no cell). */
+interface Picked {
+  goal: WatchGoal;
+  cell: FeedCell | null;
+}
 
 function prefersReducedMotion(): boolean {
   try {
@@ -69,57 +106,146 @@ function prefersReducedMotion(): boolean {
   }
 }
 
+function cellGoal(cell: FeedCell): WatchGoal {
+  return { key: cell.label, title: cell.short, branches: [cell.short], rec: CELL_GOAL_REC };
+}
+
+function textGoal(text: string): WatchGoal {
+  return { key: 'text:' + text, title: text, branches: [], rec: NO_BRANCH_REC };
+}
+
+/** One live video as 03 시청 draws it: the info blocks only when their data exists. */
+function itemView(video: WatchVideo, cellShort: string): WatchItemView {
+  return {
+    key: video.videoId ?? video.title,
+    title: video.title,
+    meta: metaLine(video.ch, video.durationSec, cellShort),
+    summary: video.oneLiner ?? '',
+    reasonLines: video.reasonLines ?? [],
+    checks: (video.checks ?? []).map((c) => ({ text: c.text, ok: c.text.startsWith('✓') })),
+    chapters: video.chapters ?? [],
+  };
+}
+
 export function MorningWatch({
   cards,
   cells,
   daily,
   watchToday,
+  history,
   onJudge,
   whenSaved,
-}: MorningWatchProps) {
-  const [screen, setScreen] = useState<Screen>({ kind: 'goals' });
+  connectYouTube,
+}: MorningWatchProps): JSX.Element {
+  const [screen, setScreen] = useState<Screen>(() =>
+    readOnboardingSeen() ? { kind: 'input' } : { kind: 'onb', step: 0 }
+  );
+  const [connecting, setConnecting] = useState(false);
   // today's count per goal, moved on locally with each answer so no reload is needed
   const [today, setToday] = useState<WatchToday | null>(watchToday);
   // videos answered in this visit; the server leaves out the ones answered before
   const [judged, setJudged] = useState<ReadonlySet<string>>(() => new Set());
-  const [exit, setExit] = useState<WatchVerdict | null>(null);
+  const [picked, setPicked] = useState<Picked | null>(null);
+  const [level, setLevel] = useState<number | null>(null);
+  const [sel, setSel] = useState<number[]>([]);
+  const [carryOff, setCarryOff] = useState(false);
+  const [exit, setExit] = useState<WatchReaction | null>(null);
+  const [failedVideo, setFailedVideo] = useState<string | null>(null);
   const busy = useRef(false);
   const timer = useRef<number | null>(null);
+  const alive = useRef(true);
+  const [now] = useState(() => new Date());
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
       if (timer.current != null) window.clearTimeout(timer.current);
-    },
-    []
-  );
+    };
+  }, []);
 
-  const openGoal = (goal: FeedCell) => {
-    if (isGoalDoneToday(daily, today, goal.label)) {
-      setScreen({ kind: 'insight', goal });
+  const goals = useMemo(() => goalCells(cells), [cells]);
+  const cellOf = (label: string): FeedCell | undefined => goals.find((g) => g.label === label);
+  const shortOf = (label: string): string => cellOf(label)?.short ?? label;
+  const available = (cell: FeedCell): number =>
+    pickTodaysVideos(cards, cell.label, remainingToday(daily, today, cell.label), judged).length;
+  const doneToday = (cell: FeedCell): boolean => isGoalDoneToday(daily, today, cell.label);
+
+  // 어제에 이어서: decided once at load, so the question row keeps its wording for the visit
+  const [carryCell] = useState<FeedCell | null>(() => {
+    const c = carryCandidate(history, now);
+    const cell = c ? goals.find((g) => g.label === c.cell) : undefined;
+    if (!cell || isGoalDoneToday(daily, watchToday, cell.label)) return null;
+    const n = pickTodaysVideos(cards, cell.label, remainingToday(daily, watchToday, cell.label));
+    return n.length > 0 ? cell : null;
+  });
+
+  const finishOnboarding = (): void => {
+    writeOnboardingSeen();
+    setScreen({ kind: 'input' });
+  };
+
+  const onbNext = (): void => {
+    if (screen.kind !== 'onb' || connecting) return;
+    if (screen.step < ONB_LAST_STEP) {
+      setScreen({ kind: 'onb', step: screen.step + 1 });
       return;
     }
-    const remaining = remainingToday(daily, today, goal.label);
-    const list = pickTodaysVideos(cards, goal.label, remaining, judged);
+    setConnecting(true);
+    void connectYouTube().finally(() => {
+      if (!alive.current) return;
+      setConnecting(false);
+      finishOnboarding();
+    });
+  };
+
+  /** Straight to the goal's videos (or its insight when today's are used up). */
+  const openGoal = (cell: FeedCell): void => {
+    if (doneToday(cell)) {
+      setScreen({ kind: 'insight', goal: cell });
+      return;
+    }
+    const list = pickTodaysVideos(
+      cards,
+      cell.label,
+      remainingToday(daily, today, cell.label),
+      judged
+    );
     if (list.length === 0) return;
-    setScreen({ kind: 'watch', goal, list, index: 0 });
+    setCarryOff(true);
+    setFailedVideo(null);
+    setScreen({ kind: 'watch', goal: cell, list, index: 0 });
   };
 
-  const toGoals = () => {
+  const pickGoal = (next: Picked): void => {
+    setPicked(next);
+    setLevel(null);
+    setSel([]);
+  };
+
+  const toInput = (): void => {
     if (busy.current) return; // input is ignored while an answer is leaving
-    setScreen({ kind: 'goals' });
+    setScreen({ kind: 'input' });
   };
 
-  const react = (verdict: WatchVerdict) => {
+  const closeInsight = (): void => {
+    setPicked(null);
+    setLevel(null);
+    setSel([]);
+    setScreen({ kind: 'input' });
+  };
+
+  const react = (kind: WatchReaction): void => {
     if (busy.current || screen.kind !== 'watch') return;
     const { list, index } = screen;
     const video = list[index];
     if (!video?.videoId) return;
     busy.current = true;
-    onJudge({ video, verdict, shownPosition: index });
+    onJudge({ video, verdict: VERDICT_OF[kind], shownPosition: index });
     const id = video.videoId;
     setJudged((prev) => new Set(prev).add(id));
     setToday((prev) => addJudgedToday(prev, video.cell));
-    const advance = () => {
+    const advance = (): void => {
       timer.current = null;
       busy.current = false;
       setExit(null);
@@ -134,346 +260,145 @@ export function MorningWatch({
       advance();
       return;
     }
-    setExit(verdict);
+    setExit(kind);
     timer.current = window.setTimeout(advance, WATCH_EXIT_MS);
   };
 
-  return (
-    <div className="mf-page mf-watch">
-      <div className="mf-watch-app" lang="ko" data-testid="mf-watch-root">
-        {screen.kind === 'goals' ? (
-          <GoalList
-            goals={goalCells(cells).map((g) => {
-              const remaining = remainingToday(daily, today, g.label);
-              return {
-                goal: g,
-                count: pickTodaysVideos(cards, g.label, remaining, judged).length,
-                done: isGoalDoneToday(daily, today, g.label),
-              };
-            })}
-            onPick={openGoal}
-          />
-        ) : screen.kind === 'watch' ? (
-          <WatchView
-            goal={screen.goal}
-            list={screen.list}
-            index={screen.index}
-            exit={exit}
-            onBack={toGoals}
-            onReact={react}
-          />
-        ) : (
-          <InsightView goal={screen.goal} whenSaved={whenSaved} onDone={toGoals} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function GoalList({
-  goals,
-  onPick,
-}: {
-  goals: Array<{ goal: FeedCell; count: number; done: boolean }>;
-  onPick: (goal: FeedCell) => void;
-}) {
-  return (
-    <div
-      className="mf-watch-scroll"
-      data-testid="mf-watch-goals"
-      style={css(
-        'padding: calc(env(safe-area-inset-top, 0px) + 44px) 22px max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px))'
-      )}
-    >
-      <div className="mf-watch-tick" style={css('margin-bottom: 10px')} />
-      <div style={css('font-size: 22px; font-weight: 800; line-height: 1.35')}>
-        오늘 볼 목표를 고르세요
-      </div>
-      <div style={css('margin-top: 26px; border-top: 1px solid var(--mf-line); padding-top: 16px')}>
-        <div className="mf-watch-kicker" style={css('margin-bottom: 6px')}>
-          목표
-        </div>
-        {goals.map(({ goal, count, done }) => (
-          <button
-            key={goal.label}
-            type="button"
-            className="mf-watch-goal"
-            data-testid="mf-watch-goal"
-            data-count={count}
-            data-state={done ? 'done' : undefined}
-            disabled={count === 0 && !done}
-            onClick={() => onPick(goal)}
-          >
-            <span style={css('font-size: 14.5px; font-weight: 700')}>{goal.short}</span>
-            <span style={css('flex: none; font-size: 12px; color: var(--mf-caption)')}>
-              {goalRowText(count, done)}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function WatchView({
-  goal,
-  list,
-  index,
-  exit,
-  onBack,
-  onReact,
-}: {
-  goal: FeedCell;
-  list: WatchVideo[];
-  index: number;
-  exit: WatchVerdict | null;
-  onBack: () => void;
-  onReact: (verdict: WatchVerdict) => void;
-}) {
-  const video = list[index];
-  const scroller = useRef<HTMLDivElement>(null);
-  const [playerFailed, setPlayerFailed] = useState(false);
-
-  // the next video starts at the top of the page
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    if (!el) return undefined;
-    el.scrollTop = 0;
-    // iOS Safari: a scroll still coasting can overwrite the first reset
-    const frame = window.requestAnimationFrame(() => {
-      el.scrollTop = 0;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [index]);
-
-  if (!video) return null;
-  const meta = metaLine(video.ch, video.durationSec, goal.short);
-  return (
-    <>
-      <div className="mf-watch-top">
-        <div style={css('display: flex; align-items: center; gap: 10px')}>
-          <button
-            type="button"
-            className="mf-watch-back"
-            data-testid="mf-watch-back"
-            aria-label="뒤로"
-            onClick={onBack}
-            style={css('color: var(--mf-fg)')}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 4l-6 6 6 6" />
-            </svg>
-          </button>
-          <div
-            data-testid="mf-watch-goal-name"
-            style={css(
-              'flex: 1; min-width: 0; font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis'
-            )}
-          >
-            {goal.short}
-          </div>
-          <div
-            data-testid="mf-watch-counter"
-            style={css('flex: none; font: 700 13px Arial, sans-serif; color: var(--mf-sub)')}
-          >
-            {counterText(index, list.length)}
-          </div>
-        </div>
-        <div style={css('display: flex; gap: 4px; margin-top: 4px')}>
-          {segmentStates(list.length, index).map((state, k) => (
-            <div key={k} className="mf-watch-seg" data-testid="mf-watch-seg" data-state={state} />
-          ))}
-        </div>
-      </div>
-      <div
-        ref={scroller}
-        className="mf-watch-scroll"
-        data-testid="mf-watch-scroll"
-        style={css('padding: 0 22px calc(var(--mf-watch-bar-h) + 20px)')}
-      >
-        <div
-          className="mf-watch-content"
-          data-testid="mf-watch-content"
-          data-exit={exit ?? undefined}
-        >
-          <div className="mf-watch-player" data-testid="mf-watch-player">
-            {video.videoId ? (
-              <YouTubePlayer
-                videoId={video.videoId}
-                active={exit === null}
-                onFailed={setPlayerFailed}
-              />
-            ) : null}
-          </div>
-          {video.videoId && playerFailed ? (
-            <div
-              data-testid="mf-watch-player-failed"
-              style={css(
-                'display: flex; gap: 10px; align-items: center; justify-content: center; padding-top: 12px; font-size: 13px; color: var(--mf-sub)'
-              )}
-            >
+  let body: JSX.Element;
+  if (screen.kind === 'onb') {
+    body = <WatchOnboarding step={screen.step} busy={connecting} onNext={onbNext} />;
+  } else if (screen.kind === 'input') {
+    const pickedCell = picked?.cell ?? null;
+    const showBranches = !!picked && level !== null && picked.goal.branches.length > 0;
+    const n = pickedCell ? available(pickedCell) : 0;
+    const carry =
+      carryCell && !carryOff && !doneToday(carryCell) && available(carryCell) > 0
+        ? { title: carryCell.short, count: available(carryCell), onGo: () => openGoal(carryCell) }
+        : null;
+    body = (
+      <WatchInputScreen
+        dateLabel={kstDateLabel(now)}
+        carry={carry}
+        askTitle={carryCell ? ASK_AGAIN : ASK_FIRST}
+        chips={goals.map((g): WatchChipView => {
+          const done = doneToday(g);
+          const count = available(g);
+          return {
+            key: g.label,
+            title: g.short,
+            on: pickedCell?.label === g.label,
+            state: done ? 'done' : undefined,
+            count,
+            disabled: !done && count === 0,
+            onPick: () => (done ? openGoal(g) : pickGoal({ goal: cellGoal(g), cell: g })),
+          };
+        })}
+        onSubmitText={(t) => pickGoal({ goal: textGoal(t), cell: null })}
+        goal={picked?.goal ?? null}
+        level={level}
+        onLevel={(i) => {
+          setLevel(i);
+          setSel([...(picked?.goal.rec[i] ?? [])]);
+        }}
+        showBranches={showBranches}
+        sel={sel}
+        onToggle={(i) => setSel((s) => (s.includes(i) ? s.filter((k) => k !== i) : [...s, i]))}
+        history={history.flatMap((h) => {
+          const cell = cellOf(h.cell);
+          const meta = historyMetaText(h.day, h.count);
+          return cell && meta
+            ? [{ key: h.cell, title: cell.short, meta, onPick: () => openGoal(cell) }]
+            : [];
+        })}
+        cta={showBranches && pickedCell && sel.length > 0 && n > 0 ? '영상 ' + n + '편 받기' : null}
+        onStart={() => {
+          if (pickedCell) openGoal(pickedCell);
+        }}
+      />
+    );
+  } else if (screen.kind === 'watch') {
+    const video = screen.list[screen.index];
+    const vid = video?.videoId;
+    body = video ? (
+      <WatchScreen
+        goalTitle={screen.goal.short}
+        item={itemView(video, screen.goal.short)}
+        index={screen.index}
+        total={screen.list.length}
+        exit={exit}
+        onBack={toInput}
+        onReact={react}
+        player={
+          vid ? (
+            <YouTubePlayer
+              videoId={vid}
+              active={exit === null}
+              onFailed={(f) => setFailedVideo(f ? vid : null)}
+            />
+          ) : null
+        }
+        belowPlayer={
+          vid && failedVideo === vid ? (
+            <div className="mf-w-player-failed" data-testid="mf-watch-player-failed">
               <span>재생할 수 없습니다</span>
               <a
                 data-testid="mf-watch-open-yt"
-                href={'https://www.youtube.com/watch?v=' + video.videoId}
+                href={'https://www.youtube.com/watch?v=' + vid}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={css('color: var(--mf-fg); font-weight: 700; text-decoration: underline')}
               >
                 YouTube에서 열기
               </a>
             </div>
-          ) : null}
-          <div
-            data-testid="mf-watch-title"
-            style={css('margin-top: 14px; font-size: 19px; font-weight: 800; line-height: 1.35')}
-          >
-            {video.title}
-          </div>
-          {meta ? (
-            <div
-              data-testid="mf-watch-meta"
-              style={css('margin-top: 5px; font-size: 13px; color: var(--mf-sub)')}
-            >
-              {meta}
-            </div>
-          ) : null}
-          {hasCardDetail(video) ? (
-            <div
-              data-testid="mf-watch-info"
-              style={css('margin-top: 16px; display: flex; flex-direction: column; gap: 14px')}
-            >
-              <CardDetailBlocks card={video} blockCss={WATCH_BLOCK_CSS} />
-            </div>
-          ) : null}
-        </div>
+          ) : null
+        }
+      />
+    ) : (
+      <div className="mf-w-screen" data-testid="mf-w-watch" />
+    );
+  } else {
+    body = (
+      <LiveInsight
+        goal={screen.goal}
+        shortOf={shortOf}
+        whenSaved={whenSaved}
+        onClose={closeInsight}
+      />
+    );
+  }
+
+  return (
+    <div className="mf-w">
+      <div className="mf-w-app" lang="ko" data-testid="mf-watch-root">
+        {body}
       </div>
-      <div className="mf-watch-bar" data-testid="mf-watch-actions">
-        <button
-          type="button"
-          className="mf-watch-btn"
-          data-testid="mf-watch-skip"
-          data-size="large"
-          data-pop={exit === 'skip' ? '' : undefined}
-          aria-label="별로"
-          onClick={() => onReact('skip')}
-          style={css('color: var(--mf-sub)')}
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="mf-watch-btn"
-          data-testid="mf-watch-pass"
-          data-size="small"
-          data-pop={exit === 'pass' ? '' : undefined}
-          aria-label="넘기기"
-          onClick={() => onReact('pass')}
-          style={css('color: var(--mf-caption)')}
-        >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M5 6l6 6-6 6M13 6l6 6-6 6" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="mf-watch-btn"
-          data-testid="mf-watch-like"
-          data-size="large"
-          data-tone="accent"
-          data-pop={exit === 'useful' ? '' : undefined}
-          aria-label="좋아"
-          onClick={() => onReact('useful')}
-          style={css('color: var(--mf-card)')}
-        >
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 20.5s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 7.5 2.5c0 5.4-7.5 10-7.5 10z" />
-          </svg>
-        </button>
-      </div>
-    </>
+    </div>
   );
 }
 
-function InsightView({
+/** 04 인사이트 for one goal, read after today's answers are written so it counts them. */
+function LiveInsight({
   goal,
+  shortOf,
   whenSaved,
-  onDone,
+  onClose,
 }: {
   goal: FeedCell;
+  shortOf: (label: string) => string;
   whenSaved: () => Promise<void>;
-  onDone: () => void;
-}) {
-  // the summary is read only after today's answers are written, so it counts them
-  const [ready, setReady] = useState(false);
+  onClose: () => void;
+}): JSX.Element {
+  const [data, setData] = useState<InsightData | null>(null);
   useEffect(() => {
-    let alive = true;
-    void whenSaved().then(() => alive && setReady(true));
+    let on = true;
+    void whenSaved()
+      .then(() => fetchMorningFeedInsight(goal.label))
+      .then((d) => on && setData(d))
+      .catch(() => on && setData(null));
     return () => {
-      alive = false;
+      on = false;
     };
-  }, [whenSaved]);
-  return (
-    <div
-      className="mf-watch-scroll"
-      data-testid="mf-watch-insight"
-      style={css(
-        'padding: calc(env(safe-area-inset-top, 0px) + 52px) 22px max(30px, calc(env(safe-area-inset-bottom, 0px) + 16px)); display: flex; flex-direction: column; gap: 18px'
-      )}
-    >
-      <div>
-        <div className="mf-watch-tick" style={css('margin-bottom: 10px')} />
-        <div className="mf-watch-kicker" style={css('color: var(--mf-steel)')}>
-          오늘 본 것
-        </div>
-        <div
-          data-testid="mf-watch-insight-goal"
-          style={css('margin-top: 6px; font-size: 24px; font-weight: 800; line-height: 1.3')}
-        >
-          {goal.short}
-        </div>
-      </div>
-      <InsightSection enabled={ready} showTitle={false} cell={goal.label} />
-      <button
-        type="button"
-        className="mf-watch-primary"
-        data-testid="mf-watch-to-goals"
-        onClick={onDone}
-        style={css('margin-top: 8px')}
-      >
-        목표 목록으로
-      </button>
-    </div>
-  );
+  }, [whenSaved, goal.label]);
+  const view = data && data.reacted + data.passed > 0 ? insightViewFromData(data, shortOf) : null;
+  return <WatchInsightScreen goalTitle={goal.short} view={view} onClose={onClose} />;
 }

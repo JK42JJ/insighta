@@ -1,7 +1,8 @@
 import { test, expect, type Page, type Request } from '@playwright/test';
 
-// 시청 screen (/morning-cards?view=watch) on the deployed staging site: pick a goal, answer one video
-// with 좋아, exactly one judgment is saved through the feed API and the counter moves on. The screen
+// 시청 flow (/morning-cards?view=watch) on the deployed staging site: on 02 입력 pick a goal chip,
+// a level and take the CTA, answer one video with 좋아, exactly one judgment is saved through the
+// feed API and the counter moves on. The screen
 // has no undo; the test cancels its own row afterwards through the API so the staging account keeps
 // its cards. The rows belong to the staging test account.
 
@@ -9,6 +10,8 @@ const EMAIL = process.env.STG_TEST_EMAIL ?? '';
 const PASSWORD = process.env.STG_TEST_PASSWORD ?? '';
 const JUDGMENTS_PATH = '/api/v1/morning-feed/judgments';
 const INSIGHT_PATH = '/api/v1/morning-feed/insight';
+/** watch-design.ts WATCH_ONB_SEEN_KEY */
+const ONB_SEEN_KEY = 'mf_watch_onb_seen';
 const LOAD_TIMEOUT_MS = 25_000;
 /** Longer than the 480ms exit, so a second POST would have been sent by then. */
 const SETTLE_MS = 1500;
@@ -23,28 +26,49 @@ async function signIn(page: Page): Promise<void> {
 
 const isJudgmentPost = (r: Request) => r.url().includes(JUDGMENTS_PATH) && r.method() === 'POST';
 
-test('morning watch: pick a goal, 좋아 saves one useful judgment and the counter advances (phone 390x844)', async ({
+test('morning watch: pick a goal chip, level, CTA, 좋아 saves one useful judgment and the counter advances (phone 390x844)', async ({
   page,
 }, info) => {
   expect(EMAIL, 'STG_TEST_EMAIL is not set').not.toBe('');
   await page.setViewportSize({ width: 390, height: 844 });
+  // the 01 온보딩 has been seen on this device: the flow starts on 02 입력
+  await page.addInitScript((key) => {
+    try {
+      window.localStorage.setItem(key, '1');
+    } catch {
+      /* storage blocked: the onboarding would show */
+    }
+  }, ONB_SEEN_KEY);
   await signIn(page);
   await page.goto('/morning-cards?view=watch');
-  await expect(page.getByTestId('mf-watch-goals')).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
+  await expect(page.getByTestId('mf-w-input')).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
+  await expect(page.getByTestId('mf-w-onb')).toHaveCount(0);
   // the deck is not on this screen
   await expect(page.getByTestId('mf-card')).toHaveCount(0);
 
-  const goals = page.getByTestId('mf-watch-goal');
-  expect(await goals.count()).toBe(8);
-  // a goal in the '오늘은 끝' state (data-state="done") opens its insight, not videos
-  const goal = page
-    .locator('[data-testid="mf-watch-goal"]:not([disabled]):not([data-state="done"])')
+  // the 8 goals are the "요즘 많이 고르는 것" chips
+  const chips = page.getByTestId('mf-w-chip');
+  expect(await chips.count()).toBe(8);
+  // a chip in the '오늘은 끝' state (data-state="done") opens its insight, not videos
+  const chip = page
+    .locator('[data-testid="mf-w-chip"]:not([disabled]):not([data-state="done"])')
     .first();
-  await expect(goal, 'no goal has cards today on the staging account').toBeVisible();
-  const total = Number(await goal.getAttribute('data-count'));
+  await expect(chip, 'no goal has cards today on the staging account').toBeVisible();
+  const total = Number(await chip.getAttribute('data-count'));
   expect(total).toBeGreaterThan(0);
-  await goal.click();
+  await chip.click();
+  await expect(chip).toHaveAttribute('data-on', '');
 
+  // 수준 appears; picking one shows the 갈래 with the goal's one branch preselected
+  await expect(page.getByTestId('mf-w-level')).toHaveCount(3);
+  await page.getByTestId('mf-w-level').first().click();
+  await expect(page.getByTestId('mf-w-branch')).toHaveCount(1);
+  await expect(page.getByTestId('mf-w-branch')).toHaveAttribute('aria-pressed', 'true');
+  const cta = page.getByTestId('mf-w-cta');
+  await expect(cta).toHaveText(`영상 ${total}편 받기`);
+  await cta.click();
+
+  await expect(page.getByTestId('mf-w-watch')).toBeVisible();
   await expect(page.getByTestId('mf-watch-counter')).toHaveText(`1 / ${total}`);
   await expect(page.getByTestId('mf-watch-seg')).toHaveCount(total);
   await expect(page.getByTestId('mf-watch-title')).not.toHaveText('');
@@ -105,7 +129,7 @@ test('morning watch: pick a goal, 좋아 saves one useful judgment and the count
   if (total > 1) {
     await expect(page.getByTestId('mf-watch-counter')).toHaveText(`2 / ${total}`);
   } else {
-    await expect(page.getByTestId('mf-watch-insight')).toBeVisible();
+    await expect(page.getByTestId('mf-w-insight')).toBeVisible();
   }
   if (insightRequest) {
     const insightUrl = new URL((await insightRequest).url());

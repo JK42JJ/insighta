@@ -285,6 +285,24 @@ export interface InsightResponse {
   data: InsightData;
 }
 
+/** Watch screen "이전 주제": per goal cell, its latest earlier KST day and that day's video count. */
+export interface FeedHistoryItem {
+  cell: string;
+  /** KST day, 'YYYY-MM-DD'. */
+  day: string;
+  count: number;
+}
+
+/** Newest first, at most 5 rows (decided by the server). */
+export async function fetchMorningFeedHistory(): Promise<FeedHistoryItem[]> {
+  const res = await call<{ status: 'ok'; data: FeedHistoryItem[] }>(
+    '/history',
+    {},
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
 /** Today's summary; with `cell` only that cell's (goal's) judgments are counted. */
 export async function fetchMorningFeedInsight(cell?: string): Promise<InsightData> {
   const query = cell === undefined ? '' : '?cell=' + encodeURIComponent(cell);

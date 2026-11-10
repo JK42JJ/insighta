@@ -1,8 +1,10 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { createMorningFeedRoutes } from '@/api/routes/morning-feed';
 import {
+  FEED_HISTORY_MAX,
   FEED_MAX_CARDS_PER_CELL,
   fetchFeed,
+  fetchHistory,
   fetchInsight,
   recordWatch,
   FeedValidationError,
@@ -409,6 +411,62 @@ describe('morning feed', () => {
     const res = await app.inject({ method: 'GET', url: `${BASE}/` });
     expect(res.json().data.watch_today['기술/개발']).toBe(2);
     await app.close();
+  });
+
+  it('fetchHistory: one row per goal before today (KST), parameterised, newest first, max 5', async () => {
+    const rows = [
+      { cell: '학습/교육', day: '2026-11-07', count: 3 },
+      { cell: '기술/개발', day: '2026-10-28', count: BigInt(12) },
+      { cell: '없는칸', day: '2026-10-20', count: 1 },
+    ];
+    const { db, queries } = fakeDb(rows);
+    // 2026-11-07T20:00Z is 11-08 in KST: today starts at 2026-11-07T15:00Z
+    const history = await fetchHistory(db, USER, new Date('2026-11-07T20:00:00Z'));
+    expect(history).toEqual([
+      { cell: '학습/교육', day: '2026-11-07', count: 3 },
+      { cell: '기술/개발', day: '2026-10-28', count: 12 },
+    ]);
+    expect(queries).toHaveLength(1);
+    const q = queries[0]!;
+    expect(q.sql).toContain('DISTINCT ON (t.cell)');
+    expect(q.sql).toContain('COUNT(DISTINCT j.video_id)');
+    expect(q.sql).toContain('j.canceled_at IS NULL');
+    expect(q.sql).toContain('j.cell IS NOT NULL');
+    expect(q.sql).toContain("AT TIME ZONE 'Asia/Seoul'");
+    expect(q.sql).toContain('j.created_at < $3');
+    expect(q.sql).toContain('LIMIT $4');
+    expect(q.sql).not.toContain(USER);
+    expect(q.params[0]).toBe(USER);
+    expect(q.params[1]).toHaveLength(8);
+    expect(q.params[1]).not.toContain('오늘 전체');
+    expect(q.params[2]).toEqual(new Date('2026-11-07T15:00:00Z'));
+    expect(q.params[3]).toBe(FEED_HISTORY_MAX);
+    expect(FEED_HISTORY_MAX).toBe(5);
+    await expect(fetchHistory(db, '', NOW)).rejects.toThrow(FeedValidationError);
+  });
+
+  it('GET /history answers the rows; 401 without a user, 403 non test user, 404 flag off', async () => {
+    const { db } = fakeDb([{ cell: '기술/개발', day: '2026-10-28', count: 12 }]);
+    const app = await build(db);
+    const ok = await app.inject({ method: 'GET', url: `${BASE}/history` });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toEqual({
+      status: 'ok',
+      data: [{ cell: '기술/개발', day: '2026-10-28', count: 12 }],
+    });
+    process.env['MORNING_CARDS_TEST_USER_IDS'] = '22222222-2222-4222-8222-222222222222';
+    expect((await app.inject({ method: 'GET', url: `${BASE}/history` })).statusCode).toBe(403);
+    process.env['MOBILE_MORNING_CARDS'] = 'false';
+    expect((await app.inject({ method: 'GET', url: `${BASE}/history` })).statusCode).toBe(404);
+    await app.close();
+
+    process.env['MOBILE_MORNING_CARDS'] = 'true';
+    process.env['MORNING_CARDS_TEST_USER_IDS'] = USER;
+    const anon = Fastify();
+    anon.decorate('authenticate', async () => undefined);
+    await anon.register(createMorningFeedRoutes({ getDb: () => db }), { prefix: BASE });
+    expect((await anon.inject({ method: 'GET', url: `${BASE}/history` })).statusCode).toBe(401);
+    await anon.close();
   });
 
   it('new endpoints: 404 flag off, 403 non test user, watch 400 on bad input', async () => {
