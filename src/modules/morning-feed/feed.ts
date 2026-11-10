@@ -35,7 +35,7 @@ const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 /** useful = like, skip = dislike (X), pass = the card was replaced without a judgment. */
 export const FEED_VERDICTS = ['useful', 'skip', 'pass'] as const;
 
-import { MS_PER_DAY } from '@/utils/time-constants';
+import { MS_PER_DAY, MS_PER_HOUR } from '@/utils/time-constants';
 
 export interface FeedDb {
   $queryRawUnsafe<T = unknown>(sql: string, ...params: unknown[]): Promise<T>;
@@ -249,7 +249,8 @@ export async function cancelLastFeedJudgment(db: FeedDb, userId: string): Promis
 /** Watch time is capped at one day per video; anything larger is a client error. */
 export const MAX_WATCH_SECONDS = 86400;
 /** Korea Standard Time offset (UTC+9). */
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const KST_OFFSET_HOURS = 9;
+const KST_OFFSET_MS = KST_OFFSET_HOURS * MS_PER_HOUR;
 
 export interface FeedWatchInput {
   video_id: string;
