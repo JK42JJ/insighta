@@ -45,6 +45,8 @@ export interface InsightRowView {
 export interface InsightBarView {
   label: string;
   min: number;
+  /** The bar's time as written ('9분', '1분 미만'). */
+  minText: string;
   /** 0..100 */
   pct: number;
 }
@@ -117,6 +119,8 @@ export interface WatchSummaryInput {
   watched: number;
   /** Minutes watched; null when unknown. */
   minutes: number | null;
+  /** Watched time as written ('42분', '1분 미만'); overrides `minutes` in the sentence when set. */
+  minutesText?: string | null;
   /** The branch with the most watched time; null when unknown. */
   topBranch: string | null;
   likes: number;
@@ -133,7 +137,9 @@ export interface WatchSummaryInput {
 export function buildWatchSummary(s: WatchSummaryInput): string {
   const head = '오늘 받은 ' + s.received + '편 가운데 ' + s.watched + '편을 ';
   const first =
-    s.minutes === null ? head + '봤습니다. ' : head + '봤고 ' + s.minutes + '분을 썼습니다. ';
+    s.minutes === null
+      ? head + '봤습니다. '
+      : head + '봤고 ' + (s.minutesText ?? s.minutes + '분') + '을 썼습니다. ';
   return (
     first +
     (s.topBranch ? '가장 오래 본 갈래는 "' + s.topBranch + '"입니다. ' : '') +
@@ -142,10 +148,30 @@ export function buildWatchSummary(s: WatchSummaryInput): string {
   );
 }
 
+const UNDER_A_MINUTE = '1분 미만';
+
+/**
+ * Watched time as text: under a minute (but some) -> '1분 미만', otherwise rounded minutes. Never
+ * rounds a few seconds up to '1분'. null/0/invalid -> null.
+ */
+export function minutesText(seconds: number | null | undefined): string | null {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return null;
+  if (seconds < SECONDS_IN_MINUTE) return UNDER_A_MINUTE;
+  return Math.round(seconds / SECONDS_IN_MINUTE) + '분';
+}
+
 /** Whole minutes from seconds, null stays null. */
 export function wholeMinutes(seconds: number | null | undefined): number | null {
   if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
   return Math.round(seconds / SECONDS_IN_MINUTE);
+}
+
+/** A 본 순서 row's right text: the verdict label, then the watched time unless passed or unknown. */
+export function watchRowText(o: InsightData['order'][number]): string {
+  const label = orderRowText({ ...o, watched_seconds: null });
+  if (o.verdict === 'pass') return label;
+  const t = minutesText(o.watched_seconds);
+  return t ? label + ' · ' + t : label;
 }
 
 const VERDICT_KIND: Record<string, WatchReaction> = {
@@ -172,13 +198,17 @@ export function insightViewFromData(
     : [];
   const max = Math.max(1, ...timed.map((c) => c.watched_seconds ?? 0));
   const stats: InsightStatView[] = [{ k: '본 영상', v: d.reacted, u: '편' }];
-  if (minutes !== null) stats.push({ k: '본 시간', v: minutes, u: '분' });
+  const total = d.has_watch_data ? d.watched_seconds_total : null;
+  const underMinute = total != null && total > 0 && total < SECONDS_IN_MINUTE;
+  if (minutes !== null)
+    stats.push({ k: '본 시간', v: underMinute ? 1 : minutes, u: underMinute ? '분 미만' : '분' });
   stats.push({ k: '좋아', v: d.liked, u: '편' });
   return {
     paragraph: buildWatchSummary({
       received: d.received ?? d.reacted + d.passed,
       watched: d.reacted,
       minutes,
+      minutesText: minutesText(total),
       topBranch: timed[0] ? shortOf(timed[0].cell) : null,
       likes: d.liked,
       skips: d.passed,
@@ -187,12 +217,13 @@ export function insightViewFromData(
     rows: d.order.map((o, k) => ({
       key: o.video_id + k,
       title: o.title ?? '',
-      tag: orderRowText(o),
+      tag: watchRowText(o),
       kind: VERDICT_KIND[o.verdict] ?? 'pass',
     })),
     bars: timed.map((c) => ({
       label: shortOf(c.cell),
       min: wholeMinutes(c.watched_seconds) ?? 0,
+      minText: minutesText(c.watched_seconds) ?? '0분',
       pct: Math.round(((c.watched_seconds ?? 0) / max) * PERCENT),
     })),
   };

@@ -10,6 +10,7 @@ import {
   insightViewFromData,
   kstDateLabel,
   kstDay,
+  minutesText,
   readOnboardingSeen,
   WATCH_LEVELS,
   WATCH_ONB_SEEN_KEY,
@@ -179,7 +180,38 @@ describe('watch flow: insight paragraph', () => {
       ['B', '별로', 'dislike'],
       ['C', '넘김', 'pass'],
     ]);
-    expect(v.bars).toEqual([{ label: '기술·개발', min: 21, pct: 100 }]);
+    expect(v.bars).toEqual([{ label: '기술·개발', min: 21, minText: '21분', pct: 100 }]);
+  });
+
+  it('under a minute of watching is written as 1분 미만, never rounded up to 1분 (regression: 15s showed 1분)', () => {
+    const order = data({}).order.map((o) => ({
+      ...o,
+      watched_seconds: o.video_id === 'a' ? 15 : o.watched_seconds,
+    }));
+    const v = insightViewFromData(
+      data({
+        watched_seconds_total: 45,
+        by_cell: [{ cell: '기술/개발', count: 3, watched_seconds: 45 }],
+        order,
+      }),
+      shortOf
+    );
+    expect(v.paragraph.startsWith('오늘 받은 4편 가운데 3편을 봤고 1분 미만을 썼습니다. ')).toBe(
+      true
+    );
+    expect(v.stats[1]).toEqual({ k: '본 시간', v: 1, u: '분 미만' });
+    expect(v.rows[0].tag).toBe('좋아 · 1분 미만');
+    expect(v.rows[2].tag).toBe('넘김');
+    expect(v.bars[0].minText).toBe('1분 미만');
+  });
+
+  it('minutesText: none for nothing watched, 1분 미만 under 60s, rounded minutes otherwise', () => {
+    expect(minutesText(null)).toBeNull();
+    expect(minutesText(0)).toBeNull();
+    expect(minutesText(15)).toBe('1분 미만');
+    expect(minutesText(59)).toBe('1분 미만');
+    expect(minutesText(60)).toBe('1분');
+    expect(minutesText(1260)).toBe('21분');
   });
 
   it('watch insight: received is the batch size the server sends (unanswered videos included)', () => {

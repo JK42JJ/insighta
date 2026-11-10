@@ -680,7 +680,7 @@ export function WatchInsightScreen({
                       <div key={b.label}>
                         <div className="mf-w-bar-head">
                           <span>{b.label}</span>
-                          <span className="mf-w-bar-min">{b.min}분</span>
+                          <span className="mf-w-bar-min">{b.minText}</span>
                         </div>
                         <div className="mf-w-bar-track">
                           <div className="mf-w-bar-fill" style={{ width: b.pct + '%' }} />

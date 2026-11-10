@@ -304,6 +304,7 @@ export function fixtureInsight(
     bars: keys.map((k) => ({
       label: goal.branches[k] ?? '',
       min: minsOf(k),
+      minText: minsOf(k) + '분',
       pct: Math.round((minsOf(k) / maxB) * PERCENT),
     })),
   };
