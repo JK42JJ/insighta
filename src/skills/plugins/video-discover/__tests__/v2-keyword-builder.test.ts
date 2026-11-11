@@ -7,12 +7,16 @@
  */
 
 import {
+  buildRuleBasedQueriesSync,
   buildSearchQueries,
   extractCoreKeyphrase,
   MAX_QUERIES,
   MAX_QUERY_LENGTH,
+  resolveTargetLevelKeyword,
   type KeywordBuilderInput,
+  type SearchQuery,
 } from '../v2/keyword-builder';
+import { DEFAULT_TARGET_LEVEL, TARGET_LEVELS } from '@/modules/mandala/target-level';
 
 const baseInput: KeywordBuilderInput = {
   centerGoal: '영어말하기 100일 훈련',
@@ -108,6 +112,61 @@ describe('buildSearchQueries — rule-based path (no LLM)', () => {
     });
     const lvl = queries.find((q) => q.source === 'level');
     expect(lvl?.query).toContain('beginner');
+  });
+
+  // Regression: the wizard stores foundation | standard | advanced
+  // (TARGET_LEVELS). `foundation` used to miss the keyword map and was
+  // dropped without a level query.
+  describe('wizard target levels (TARGET_LEVELS)', () => {
+    const levelQuery = (qs: SearchQuery[]): string | undefined =>
+      qs.find((q) => q.source === 'level')?.query;
+
+    test('wizard values are exactly foundation/standard/advanced', () => {
+      expect([...TARGET_LEVELS]).toEqual(['foundation', 'standard', 'advanced']);
+      expect(DEFAULT_TARGET_LEVEL).toBe('standard');
+    });
+
+    test('foundation (ko) → centerGoal + 입문', () => {
+      const qs = buildRuleBasedQueriesSync({ ...baseInput, targetLevel: 'foundation' });
+      expect(levelQuery(qs)).toBe(`${baseInput.centerGoal} 입문`);
+    });
+
+    test('foundation (en) → centerGoal + beginner', () => {
+      const qs = buildRuleBasedQueriesSync({
+        ...baseInput,
+        language: 'en',
+        centerGoal: 'learn data analysis with python',
+        targetLevel: 'foundation',
+      });
+      expect(levelQuery(qs)).toBe('learn data analysis with python beginner');
+    });
+
+    test('standard → no level query', () => {
+      const qs = buildRuleBasedQueriesSync({ ...baseInput, targetLevel: 'standard' });
+      expect(levelQuery(qs)).toBeUndefined();
+    });
+
+    test('advanced (ko) → centerGoal + 심화 (unchanged)', () => {
+      const qs = buildRuleBasedQueriesSync({ ...baseInput, targetLevel: 'advanced' });
+      expect(levelQuery(qs)).toBe(`${baseInput.centerGoal} 심화`);
+    });
+
+    test('case/whitespace tolerant: " Foundation " → 입문', () => {
+      expect(resolveTargetLevelKeyword(' Foundation ', 'ko')).toBe('입문');
+    });
+
+    test('legacy keys keep their previous words', () => {
+      expect(resolveTargetLevelKeyword('beginner', 'ko')).toBe('입문');
+      expect(resolveTargetLevelKeyword('intermediate', 'ko')).toBe('중급');
+      expect(resolveTargetLevelKeyword('expert', 'en')).toBe('expert');
+    });
+
+    test('unset / empty / unknown / prototype keys → no level query', () => {
+      expect(resolveTargetLevelKeyword(undefined, 'ko')).toBeNull();
+      expect(resolveTargetLevelKeyword('', 'ko')).toBeNull();
+      expect(resolveTargetLevelKeyword('master', 'ko')).toBeNull();
+      expect(resolveTargetLevelKeyword('constructor', 'ko')).toBeNull();
+    });
   });
 
   test('subgoal queries use shortest sub_goals first', async () => {

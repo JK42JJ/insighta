@@ -28,6 +28,11 @@ import {
   SEARCH_QUERY_MAX_TOKENS,
 } from '@/prompts/search-query-generator';
 import { OpenRouterGenerationProvider } from '@/modules/llm/openrouter';
+import {
+  DEFAULT_TARGET_LEVEL,
+  type LegacyTargetLevel,
+  type TargetLevel,
+} from '@/modules/mandala/target-level';
 import { recordTrace } from '@/modules/discover-tracing';
 import { logger } from '@/utils/logger';
 
@@ -101,12 +106,43 @@ export interface SearchQuery {
 export const MAX_QUERIES = 20;
 export const MAX_QUERY_LENGTH = 100;
 
-const TARGET_LEVEL_KEYWORDS: Record<string, Record<KeywordLanguage, string>> = {
+/**
+ * Level word appended to the centerGoal for the `level` query.
+ *
+ * Keys = values stored in `user_mandalas.target_level`. The wizard writes
+ * `TARGET_LEVELS` (foundation | standard | advanced); the map was originally
+ * keyed beginner/intermediate/advanced/expert, so `foundation` matched
+ * nothing and was dropped silently.
+ *
+ * - foundation → the beginner wording (입문 / beginner).
+ * - standard   → no entry. The default level adds no level query (the
+ *   builder has always skipped it); appending 중급/intermediate would
+ *   narrow every default mandala's recall.
+ * - advanced   → unchanged.
+ * - beginner / intermediate / expert → legacy keys, kept so rows written
+ *   with them keep their previous queries.
+ */
+const TARGET_LEVEL_KEYWORDS: Readonly<
+  Partial<Record<TargetLevel | LegacyTargetLevel, Record<KeywordLanguage, string>>>
+> = {
+  foundation: { ko: '입문', en: 'beginner' },
+  advanced: { ko: '심화', en: 'advanced' },
   beginner: { ko: '입문', en: 'beginner' },
   intermediate: { ko: '중급', en: 'intermediate' },
-  advanced: { ko: '심화', en: 'advanced' },
   expert: { ko: '전문가', en: 'expert' },
 };
+
+/** Level word for a stored target_level, or null when no level query applies. */
+export function resolveTargetLevelKeyword(
+  targetLevel: string | undefined,
+  language: KeywordLanguage
+): string | null {
+  const key = targetLevel?.toLowerCase().trim();
+  if (!key || key === DEFAULT_TARGET_LEVEL) return null;
+  if (!Object.prototype.hasOwnProperty.call(TARGET_LEVEL_KEYWORDS, key)) return null;
+  const entry = TARGET_LEVEL_KEYWORDS[key as TargetLevel | LegacyTargetLevel];
+  return entry ? entry[language] : null;
+}
 
 /**
  * Build 3-5 search queries for a mandala. Always returns at least 1 (the
@@ -273,12 +309,9 @@ function buildRuleBasedQueries(input: KeywordBuilderInput, center: string): Sear
       source: 'focus',
     });
   }
-  const lvlKey = input.targetLevel?.toLowerCase().trim();
-  if (lvlKey && lvlKey !== 'standard') {
-    const map = TARGET_LEVEL_KEYWORDS[lvlKey];
-    if (map) {
-      out.push({ query: clip(`${center} ${map[input.language]}`), source: 'level' });
-    }
+  const levelWord = resolveTargetLevelKeyword(input.targetLevel, input.language);
+  if (levelWord) {
+    out.push({ query: clip(`${center} ${levelWord}`), source: 'level' });
   }
   // 4 → 8 sub_goals (2026-04-16). With the 9-axis mandala filter, the
   // candidate distribution across cells is only as balanced as the query

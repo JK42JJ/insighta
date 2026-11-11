@@ -7,6 +7,8 @@
  * @see docs/design/wizard-redesign-v2.md Phase 2
  */
 
+import { DEFAULT_TARGET_LEVEL } from '@/modules/mandala/target-level';
+
 export const STRUCTURE_MODEL = 'anthropic/claude-haiku-4.5';
 export const STRUCTURE_TEMPERATURE = 0.7;
 /**
@@ -41,7 +43,7 @@ export interface StructurePromptInput {
 
 export function buildStructurePrompt(input: StructurePromptInput): string {
   const { goal, domain, language, focusTags, targetLevel, reference } = input;
-  const level = targetLevel ?? 'standard';
+  const level = targetLevel ?? DEFAULT_TARGET_LEVEL;
   const focusLine = focusTags?.length ? `- Focus areas: ${focusTags.join(', ')}` : '';
   const example = reference ? `${reference}\n` : '';
 

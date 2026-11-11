@@ -45,6 +45,7 @@ import { randomUUID } from 'node:crypto';
 import { loadDomainFitShadowConfig } from '@/config/domain-fit-shadow';
 import { applyDomainFitSyncConsume } from '@/modules/domain-fit-shadow/sync-consume';
 import { createPrismaDomainFitSyncConsumeCache } from '@/modules/domain-fit-shadow/serve-cache';
+import { DEFAULT_TARGET_LEVEL } from '@/modules/mandala/target-level';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -283,7 +284,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           });
 
           const focusTags = buildEphemeralFocusTags(mandalaMeta?.focus_tags, extraKeywords);
-          const targetLevel = mandalaMeta?.target_level ?? 'standard';
+          const targetLevel = mandalaMeta?.target_level ?? DEFAULT_TARGET_LEVEL;
 
           // CP494 ④-1 full-cell skip — don't search cells the user already
           // filled (≥ threshold). flag-gated; off → undefined → search all.
@@ -543,7 +544,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           const mandalaMetaOut = {
             title: mandalaMeta?.title ?? '',
             focusTags: mandalaMeta?.focus_tags ?? [],
-            targetLevel: mandalaMeta?.target_level ?? 'standard',
+            targetLevel: mandalaMeta?.target_level ?? DEFAULT_TARGET_LEVEL,
             language,
           };
 

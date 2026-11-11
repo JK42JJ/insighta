@@ -480,6 +480,9 @@ model user_mandalas {
   source_template_id String?  @db.Uuid
   focus_tags         String[] @default([])
   target_level       String   @default("standard") @db.VarChar(20)
+  /// Per-mandala learner context (shape TBD). NULL = no context recorded.
+  /// Column only; no reader/writer yet. DDL: prisma/migrations/mandala-context/001_context.sql
+  context            Json?    @db.JsonB
 
   /// CP488 — per-mandala search algorithm override. NULL = use global active
   /// row from search_algorithm_versions. FK ON DELETE SET NULL so removing

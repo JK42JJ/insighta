@@ -89,6 +89,8 @@ APPLY_FILES=(
   "prisma/migrations/morning-feed/003_card_info_watch.sql"
   # Morning feed: watch-screen daily batches + judgment surface column. IF NOT EXISTS -- idempotent.
   "prisma/migrations/morning-feed/004_watch_batches.sql"
+  # Per-mandala learner context column (nullable jsonb, no reader/writer yet). IF NOT EXISTS -- idempotent.
+  "prisma/migrations/mandala-context/001_context.sql"
   "prisma/migrations/mandala_embeddings/001_add_ivfflat_index.sql"
   # CP462+ Issue #649 — Card preference signal (heart/archive/delete) +
   # mandala_relevance_pct 0-100 single fit score. Both files use

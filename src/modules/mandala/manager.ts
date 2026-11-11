@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import { DEFAULT_TIER, getMandalaLimit, type Tier } from '@/config/quota';
 import { detectLanguage } from '@/utils/detect-language';
 import { loadRelevanceRubricConfig } from '@/config/relevance-rubric';
+import { DEFAULT_TARGET_LEVEL } from './target-level';
 import {
   EXPLORE_PAGE_LIMIT,
   EXPLORE_DEFAULT_PAGE_SIZE,
@@ -229,7 +230,7 @@ export class MandalaManager {
       shareSlug: mandala.share_slug,
       position: mandala.position,
       focusTags: mandala.focus_tags ?? [],
-      targetLevel: mandala.target_level ?? 'standard',
+      targetLevel: mandala.target_level ?? DEFAULT_TARGET_LEVEL,
       language: mandala.language ?? 'ko',
       cardCount: cardCount ?? 0,
       fillPendingCells: fillPendingCells ?? [],
@@ -1394,7 +1395,7 @@ export class MandalaManager {
         is_public: false,
         source_template_id: options?.sourceTemplateId ?? null,
         focus_tags: options?.focusTags ?? [],
-        target_level: options?.targetLevel ?? 'standard',
+        target_level: options?.targetLevel ?? DEFAULT_TARGET_LEVEL,
       },
     });
 

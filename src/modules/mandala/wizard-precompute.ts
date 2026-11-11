@@ -40,6 +40,7 @@ import {
   ATTACH_POLL_INTERVAL_MS,
 } from '@/config/precompute-attach';
 import { isT11InflowJudgeEnabled } from '@/config/t11-inflow-judge';
+import { DEFAULT_TARGET_LEVEL } from './target-level';
 import { randomUUID } from 'crypto';
 
 const log = logger.child({ module: 'wizard-precompute' });
@@ -134,7 +135,7 @@ export async function startPrecompute(input: StartPrecomputeInput): Promise<void
       subGoals: input.subGoals,
       language: input.language,
       focusTags: input.focusTags,
-      targetLevel: input.targetLevel ?? 'standard',
+      targetLevel: input.targetLevel ?? DEFAULT_TARGET_LEVEL,
       env: process.env,
       // CP500+ B-1 — exclude ALREADY-OWNED videos at recruitment. uvs has a
       // GLOBAL @@unique(user_id, videoId), so picks overlapping ANY existing

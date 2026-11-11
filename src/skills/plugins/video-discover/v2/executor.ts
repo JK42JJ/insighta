@@ -35,6 +35,7 @@ import {
   type SearchQuery,
 } from './keyword-builder';
 import { totalAssigned, type CellAssignment } from './cell-assigner';
+import { DEFAULT_TARGET_LEVEL } from '@/modules/mandala/target-level';
 import {
   searchVideos,
   videosBatch,
@@ -161,7 +162,7 @@ export const executor: SkillExecutor = {
       subGoalEmbeddings,
       language,
       focusTags: mandala.focus_tags ?? [],
-      targetLevel: mandala.target_level ?? 'standard',
+      targetLevel: mandala.target_level ?? DEFAULT_TARGET_LEVEL,
     };
     return { ok: true, hydrated: hydrated as unknown as Record<string, unknown> };
   },
