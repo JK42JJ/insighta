@@ -83,6 +83,7 @@ import {
 } from '../v2/youtube-client';
 import { RedisProvider } from './providers/redis-provider';
 import type { CellDefinition } from './providers/types';
+import { DEFAULT_TARGET_LEVEL } from '@/modules/mandala/target-level';
 
 const log = logger.child({ module: 'video-discover/v3/executor' });
 
@@ -238,7 +239,7 @@ export const executor: SkillExecutor = {
       subGoalEmbeddings,
       language,
       focusTags: mandala.focus_tags ?? [],
-      targetLevel: mandala.target_level ?? 'standard',
+      targetLevel: mandala.target_level ?? DEFAULT_TARGET_LEVEL,
     };
     return { ok: true, hydrated: hydrated as unknown as Record<string, unknown> };
   },
