@@ -45,7 +45,7 @@ import { randomUUID } from 'node:crypto';
 import { loadDomainFitShadowConfig } from '@/config/domain-fit-shadow';
 import { applyDomainFitSyncConsume } from '@/modules/domain-fit-shadow/sync-consume';
 import { createPrismaDomainFitSyncConsumeCache } from '@/modules/domain-fit-shadow/serve-cache';
-import { DEFAULT_TARGET_LEVEL } from '@/modules/mandala/target-level';
+import { DEFAULT_TARGET_LEVEL, isTargetLevel } from '@/modules/mandala/target-level';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -109,6 +109,9 @@ interface AddCardsBody {
   extraKeywords?: string[];
   excludeVideoIds?: string[];
   filters?: AddCardsFilters;
+  /** Level chosen in the panel for this search (one of TARGET_LEVELS). Overrides the mandala's
+   *  stored target_level for this request only; absent or unknown -> the mandala's level. */
+  targetLevel?: string;
 }
 
 // CP466 amendment — durationBucket bounds in seconds.
@@ -173,6 +176,7 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           .filter((s) => s.length > 0 && s.length <= MAX_KEYWORD_LEN)
           .slice(0, MAX_EXTRA_KEYWORDS)
       : [];
+    const requestTargetLevel = isTargetLevel(body.targetLevel) ? body.targetLevel : undefined;
     const excludeVideoIds = Array.isArray(body.excludeVideoIds)
       ? body.excludeVideoIds
           .filter((s): s is string => typeof s === 'string' && YOUTUBE_VIDEO_ID_RE.test(s))
@@ -284,7 +288,8 @@ export const addCardsRoutes: FastifyPluginCallback = (fastify, _opts, done) => {
           });
 
           const focusTags = buildEphemeralFocusTags(mandalaMeta?.focus_tags, extraKeywords);
-          const targetLevel = mandalaMeta?.target_level ?? DEFAULT_TARGET_LEVEL;
+          const targetLevel =
+            requestTargetLevel ?? mandalaMeta?.target_level ?? DEFAULT_TARGET_LEVEL;
 
           // CP494 ④-1 full-cell skip — don't search cells the user already
           // filled (≥ threshold). flag-gated; off → undefined → search all.

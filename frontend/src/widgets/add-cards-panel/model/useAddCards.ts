@@ -41,6 +41,8 @@ interface AddCardsRequest {
   extraKeywords: string[];
   excludeVideoIds: string[];
   filters?: AddCardsFilters;
+  /** Level chip value; sent as its own field (never appended to the keywords). */
+  targetLevel?: string;
 }
 
 export interface AddCardsMandalaMeta {
@@ -72,10 +74,18 @@ interface AddCardsResponseData {
 
 export function useAddCards() {
   return useMutation<AddCardsResponseData, Error, AddCardsRequest>({
-    mutationFn: async ({ mandalaId, extraKeywords, excludeVideoIds, filters, searchLanguage }) => {
+    mutationFn: async ({
+      mandalaId,
+      extraKeywords,
+      excludeVideoIds,
+      filters,
+      searchLanguage,
+      targetLevel,
+    }) => {
       const result = await apiClient.addCards(mandalaId, {
         extraKeywords,
         excludeVideoIds,
+        ...(targetLevel && { targetLevel }),
         ...(searchLanguage && { searchLanguage }),
         ...(filters && { filters }),
       });

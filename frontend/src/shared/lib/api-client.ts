@@ -2027,6 +2027,9 @@ class ApiClient {
        *  'en' = this search fetches English cards only (한/영 chip).
        *  Absent = server falls back to the persisted config (DB-set mandalas). */
       searchLanguage?: 'ko' | 'en';
+      /** Level chosen in the panel (foundation | standard | advanced). Overrides the mandala's
+       *  stored level for this search; the server builds the level query from it. */
+      targetLevel?: string;
       filters?: {
         minViewCount?: number;
         durationBucket?: 'short' | 'medium' | 'long' | 'xlong';
