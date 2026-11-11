@@ -9,6 +9,10 @@
 import { supabase } from '@/shared/integrations/supabase/client';
 import { subscribeAuth } from './auth-event-bus';
 import type { ExploreListResponse } from '@/shared/types/explore';
+
+/** The `{ status, data, error? }` envelope the API returns (used by the brief methods; callers
+ *  read `error` when status is not 'ok'). */
+type ApiResponse<T> = { status: string; data: T; error?: string };
 // The published-issue shape lives beside the note converter that consumes it;
 // re-exported here so callers name it once.
 import type { IssueDocument as NewsletterIssueDocument } from '@/features/newsletter-note/lib/issue-types';
@@ -2057,6 +2061,9 @@ class ApiClient {
         targetLevel: string;
         language: 'ko' | 'en';
       };
+      /** Search round id (the trace runId) and the time the response was produced. */
+      roundId: string;
+      roundAt: string;
       trace?: {
         layer1_count: number;
         tier2_count: number;
