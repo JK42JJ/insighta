@@ -18,6 +18,8 @@
  * @see src/config/wizard-merged-gen.ts (WIZARD_MERGED_GEN flag)
  */
 
+import { DEFAULT_TARGET_LEVEL } from '@/modules/mandala/target-level';
+
 export const MERGED_GEN_MODEL = 'anthropic/claude-haiku-4.5';
 export const MERGED_GEN_TEMPERATURE = 0.7;
 /**
@@ -39,7 +41,7 @@ export interface MergedGenPromptInput {
 
 export function buildMandalaWithQueriesPrompt(input: MergedGenPromptInput): string {
   const { goal, domain, language, focusTags, targetLevel, reference } = input;
-  const level = targetLevel ?? 'standard';
+  const level = targetLevel ?? DEFAULT_TARGET_LEVEL;
   const example = reference ? `${reference}\n` : '';
 
   if (language === 'ko') {

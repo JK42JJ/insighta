@@ -7,6 +7,8 @@
  * @see docs/design/wizard-redesign-v2.md Phase 2
  */
 
+import { DEFAULT_TARGET_LEVEL } from '@/modules/mandala/target-level';
+
 export const ACTIONS_MODEL = 'anthropic/claude-haiku-4.5';
 export const ACTIONS_TEMPERATURE = 0.7;
 export const ACTIONS_MAX_TOKENS = 4096;
@@ -21,7 +23,7 @@ export interface ActionsPromptInput {
 
 export function buildActionsPrompt(input: ActionsPromptInput): string {
   const { centerGoal, subGoals, language, focusTags, targetLevel } = input;
-  const level = targetLevel ?? 'standard';
+  const level = targetLevel ?? DEFAULT_TARGET_LEVEL;
   const subList = subGoals.map((g, i) => `  ${i}. ${g}`).join('\n');
 
   if (language === 'ko') {

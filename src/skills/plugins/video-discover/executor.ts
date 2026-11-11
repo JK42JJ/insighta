@@ -49,6 +49,7 @@ import {
 } from '@/prompts/search-query-generator';
 import { rerankBatch, type RerankCandidate } from './sources/llm-reranker';
 import { MS_PER_DAY } from '@/utils/time-constants';
+import { DEFAULT_TARGET_LEVEL } from '@/modules/mandala/target-level';
 import { SHORTS_MAX_DURATION_SEC } from './v2/youtube-client';
 
 const log = logger.child({ module: 'video-discover' });
@@ -532,7 +533,7 @@ export const executor: SkillExecutor = {
       youtubeApiKey,
       cacheReuseDisabled,
       focusTags: mandala.focus_tags ?? [],
-      targetLevel: mandala.target_level ?? 'standard',
+      targetLevel: mandala.target_level ?? DEFAULT_TARGET_LEVEL,
     };
     return { ok: true, hydrated: hydrated as unknown as Record<string, unknown> };
   },
