@@ -59,6 +59,9 @@ APPLY_FILES=(
   "prisma/migrations/ontology/016_mentions_similar_to_relation_types.sql"
   "prisma/migrations/ontology/017_fix_sync_mandala_seqscan.sql"
   "prisma/migrations/ontology/020_ontology_conversations.sql"
+  # User context: object types user_context/format/channel + relations WANTS/AVOIDS/JUDGED.
+  # Dictionary INSERT ... ON CONFLICT (code) DO NOTHING -- idempotent.
+  "prisma/migrations/ontology/021_user_context_types.sql"
   "prisma/migrations/youtube/001_youtube_cache_epochs.sql"
   "prisma/migrations/error-events/001_create_error_events.sql"
   "prisma/migrations/mandala-timings/001_create_table.sql"
