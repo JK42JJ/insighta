@@ -1,0 +1,124 @@
+name: Promote to production (skeleton)
+
+# Manual, gated promotion of one commit to production. This file is the
+# skeleton from PRD v1.2 section 3 (PR-A): the gate is real, the three
+# production steps are stubs that only echo. PR-D wires them to the real
+# migrate, Edge Function and image-pin steps, and PR-E removes those steps
+# from deploy.yml.
+#
+#   gate     staging proved this exact commit (scripts/ci/promote-gate.sh)
+#   approve  waits on the Production environment; its required reviewer is the
+#            approval (set in repo settings, PR-B). Until a reviewer is set
+#            this job passes immediately. Nothing below it touches production.
+#   stubs    migrate / edge / pin-images: echo only. No secrets, no checkout,
+#            no cloud or cluster access.
+#
+# Concurrency is its own group, not `deploy-production`: a run waiting for
+# approval must not hold up deploy.yml or rollback.yml. Whether rollback also
+# needs an approval gate is an open question (PRD v1.2 Q16).
+#
+# There is deliberately no input that skips the gate.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full 40-character commit sha on main to promote
+        required: true
+        type: string
+      reason:
+        description: Why this commit is being promoted
+        required: true
+        type: string
+      components:
+        description: Which production steps to run
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - schema
+          - edge
+          - images
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: promote
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Gate (staging proved this commit)
+    # A dispatch from any other branch would run that branch's copy of this
+    # file and script. Only main's copy is trusted.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          # The script checks ancestry against origin/main, which needs history.
+          fetch-depth: 0
+
+      - name: Check the staging result for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GATE_REPO: ${{ github.repository }}
+          PROMOTE_SHA: ${{ inputs.sha }}
+        run: bash scripts/ci/promote-gate.sh "$PROMOTE_SHA"
+
+  approve:
+    name: Approval (Production environment)
+    needs: [gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: Production
+    steps:
+      - name: Approved
+        env:
+          PROMOTE_SHA: ${{ inputs.sha }}
+          PROMOTE_REASON: ${{ inputs.reason }}
+        run: echo "Approved promotion of $PROMOTE_SHA ($PROMOTE_REASON)"
+
+  migrate:
+    name: Database schema sync (stub)
+    needs: [approve]
+    if: inputs.components == 'all' || inputs.components == 'schema'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Stub
+        env:
+          PROMOTE_SHA: ${{ inputs.sha }}
+        run: |
+          echo "STUB: would sync the production database schema for $PROMOTE_SHA"
+
+  edge:
+    name: Deploy Edge Functions (stub)
+    needs: [approve]
+    if: inputs.components == 'all' || inputs.components == 'edge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Stub
+        env:
+          PROMOTE_SHA: ${{ inputs.sha }}
+        run: |
+          echo "STUB: would deploy the production Edge Functions for $PROMOTE_SHA"
+
+  pin-images:
+    name: Pin production images (stub)
+    needs: [approve]
+    if: inputs.components == 'all' || inputs.components == 'images'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Stub
+        env:
+          PROMOTE_SHA: ${{ inputs.sha }}
+        run: |
+          echo "STUB: would open the production image-tag pin PR for $PROMOTE_SHA"
