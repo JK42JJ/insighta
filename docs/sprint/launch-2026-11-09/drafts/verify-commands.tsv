@@ -1,0 +1,30 @@
+# id<TAB>expect<TAB>command    expect: green = must pass on main now / red = must fail now (new test or file not written yet) / skip
+# Run from the root of the insighta clone. LOCAL_DATABASE_URL points at the container's local Postgres (not a secret).
+BASE-1	green	npm ci
+BASE-2	green	npm run lint
+BASE-3	green	npx prisma generate && npm run typecheck
+BASE-4	green	ENCRYPTION_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef npx jest --testPathPattern='tests/(smoke|unit/keel|unit/modules/chatbot-rag|unit/modules/newsletter)' --maxWorkers=3
+BASE-5	green	npx tsx scripts/audit/hardcode-audit.ts
+BASE-6	green	bash scripts/ci/check-config-ssot.sh && bash scripts/ci/check-card-chokepoint.sh && bash scripts/ci/check-sql-allowlist.sh origin/main
+BASE-7	green	cd frontend && npm install --no-package-lock --no-audit && npx tsc --noEmit && npx vitest run
+BASE-8	green	cd frontend && VITE_API_URL=/api VITE_SUPABASE_URL=https://placeholder.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=placeholder npm run build
+BASE-9	green	cd frontend && npx playwright install --with-deps chromium && npx playwright test tests/a11y.spec.ts --project=no-auth
+DB-1	green	psql "$LOCAL_DATABASE_URL" -c 'select 1'
+DB-2	green	psql "$LOCAL_DATABASE_URL" -c '\dx' | grep -q vector
+DB-3	green	npx prisma db push && psql "$LOCAL_DATABASE_URL" -c '\d user_video_states' | grep -q auto_added
+DB-4	green	psql "$LOCAL_DATABASE_URL" -c '\d user_subscriptions' | grep -q tier
+SCH-1	red	psql -v ON_ERROR_STOP=1 "$LOCAL_DATABASE_URL" -f prisma/migrations/recommendation-provenance/001_user_video_states_origin.sql
+SCH-1b	red	psql -v ON_ERROR_STOP=1 "$LOCAL_DATABASE_URL" -f prisma/migrations/feature-flags/001_user_feature_flags.sql
+PRV-2a	green	npx jest tests/unit/modules/auto-add-recommendations.test.ts tests/smoke/cards-pin-routes.test.ts
+PRV-2b	green	bash scripts/ci/check-card-chokepoint.sh
+FB-2a	green	cd frontend && npx vitest run src/__tests__/smoke
+FB-1	red	npx jest tests/smoke/rec-feedback.test.ts
+FLG-2	red	npx jest tests/smoke/feature-flags.test.ts
+FLG-3	red	npx jest tests/smoke/feature-flags-route.test.ts
+INV-3	red	npx jest tests/smoke/beta-modes.test.ts
+INV-4	red	npx jest tests/smoke/invite-tier.test.ts
+ERR-1	red	npx jest tests/smoke/error-handler-events.test.ts
+ERR-2	red	npx jest tests/smoke/client-errors.test.ts
+ERR-4a	green	npx jest tests/unit/keel
+ERR-3	red	cd frontend && npx vitest run src/__tests__/error-report
+FLG-4	red	cd frontend && npx vitest run src/__tests__/feature-flag
