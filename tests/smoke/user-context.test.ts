@@ -211,13 +211,31 @@ describe('user context — scoring', () => {
     expect(selectTop(g, [F, E, Cc], 3).map((s) => s.videoId)).toEqual(['C', 'E', 'F']);
   });
 
-  test('AVOIDS at the threshold excludes; below it penalises', () => {
+  test('concept AVOIDS never excludes, it only lowers the score by AVOID_CONCEPT_PENALTY per unit', () => {
+    const base = scoreCandidate(fixture(), A).score;
     const hard = withContextEdge(fixture(), 'AVOIDS', 'concept', 'Pandas', C.AVOID_EXCLUDE);
     const s = scoreCandidate(hard, A);
-    expect(s.excluded).toBe(true);
-    expect(s.reasons[0]).toContain("회피 개념 'Pandas'");
+    expect(s.excluded).toBe(false);
+    expect(s.score).toBeCloseTo(base - C.AVOID_EXCLUDE * C.AVOID_CONCEPT_PENALTY, 6);
+    expect(s.reasons.join(' ')).toContain("회피 개념 'Pandas'");
     const soft = withContextEdge(fixture(), 'AVOIDS', 'concept', 'Pandas', 0.5);
-    expect(scoreCandidate(soft, A)).toMatchObject({ score: 3.5, excluded: false });
+    expect(scoreCandidate(soft, A).score).toBeCloseTo(base - 0.5 * C.AVOID_CONCEPT_PENALTY, 6);
+  });
+
+  test('format or channel AVOIDS at the threshold excludes; below it penalises', () => {
+    const fmt: Candidate = { ...A, format: 'lecture' };
+    const g = withVideos(fixture());
+    const hard = withContextEdge(g, 'AVOIDS', 'format', 'lecture', C.AVOID_EXCLUDE);
+    const s = scoreCandidate(hard, fmt);
+    expect(s.excluded).toBe(true);
+    expect(s.reasons[0]).toContain("회피 형식 'lecture'");
+    const ch: Candidate = { ...A, channelId: 'UC_A' };
+    const hardCh = withContextEdge(g, 'AVOIDS', 'channel', 'UC_A', C.AVOID_EXCLUDE);
+    expect(scoreCandidate(hardCh, ch).excluded).toBe(true);
+    const soft = withContextEdge(g, 'AVOIDS', 'format', 'lecture', 0.5);
+    const r = scoreCandidate(soft, fmt);
+    expect(r.excluded).toBe(false);
+    expect(r.score).toBeCloseTo(scoreCandidate(g, fmt).score - 0.5 * C.AVOID_PENALTY_WEIGHT, 6);
   });
 });
 
@@ -306,6 +324,34 @@ describe('user context — judgments', () => {
     );
     expect(third.diff.avoidsRaised.map((c) => c.edge.targetTitle)).toEqual(['Pandas']);
     expect(third.diff.versionAfter).toBe(3);
+  });
+
+  test('AVOIDS is released once likes ≥ skips; the release is in the diff and deleted on persist', async () => {
+    const g0 = withVideos(fixture());
+    const step = applyJudgments(g0, [
+      { videoId: 'vid00000001', verdict: 'skip', day: DAY },
+      { videoId: 'vid00000002', verdict: 'skip', day: DAY },
+    ]);
+    expect(ctxWeight(step.graph, 'AVOIDS', 'concept', 'Pandas')).toBe(C.AVOID_INITIAL_WEIGHT);
+    // the second video is re-judged as a like: history becomes 1 skip, 1 like
+    const next = applyJudgments(step.graph, [
+      { videoId: 'vid00000002', verdict: 'useful', day: DAY },
+    ]);
+    expect(ctxWeight(next.graph, 'AVOIDS', 'concept', 'Pandas')).toBeUndefined();
+    expect(ctxWeight(next.graph, 'AVOIDS', 'format', 'lecture')).toBeUndefined();
+    expect(ctxWeight(next.graph, 'AVOIDS', 'channel', 'UC_A')).toBeUndefined();
+    const removed = next.diff.avoidsRemoved.map((c) => c.edge.targetTitle).sort();
+    expect(removed).toEqual(['Pandas', 'lecture', '채널A']);
+    for (const c of next.diff.avoidsRemoved) {
+      expect(c.before).toBe(C.AVOID_INITIAL_WEIGHT);
+      expect(c.after).toBeNull();
+    }
+    const { db, queries } = fakeDb();
+    const res = await persistGraph(db, next.graph, { previous: step.graph });
+    expect(res.edgesDeleted).toBe(3);
+    const deletes = queries.filter((q) => q.sql.includes('DELETE FROM ontology.edges'));
+    expect(deletes).toHaveLength(3);
+    for (const d of deletes) expect(d.params[3]).toBe('AVOIDS');
   });
 
   test('a like in the history blocks AVOIDS', () => {
@@ -463,6 +509,7 @@ describe('user context — persistGraph SQL shape', () => {
     expect(res).toEqual({
       nodesWritten: g.nodes.size,
       edgesWritten: g.edges.size,
+      edgesDeleted: 0,
       mandalaLinked: true,
     });
     expect(db.$transaction).toHaveBeenCalledTimes(1);
@@ -506,7 +553,12 @@ describe('user context — persistGraph SQL shape', () => {
     const { db, queries } = fakeDb();
     const res = await persistGraph(db, graph, { previous: g0 });
     // context node (version) + the JUDGED edge
-    expect(res).toEqual({ nodesWritten: 1, edgesWritten: 1, mandalaLinked: false });
+    expect(res).toEqual({
+      nodesWritten: 1,
+      edgesWritten: 1,
+      edgesDeleted: 0,
+      mandalaLinked: false,
+    });
     const edge = queries.find((q) => q.sql.includes('INSERT INTO ontology.edges'));
     expect(edge?.params[3]).toBe('JUDGED');
   });

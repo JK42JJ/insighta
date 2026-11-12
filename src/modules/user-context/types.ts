@@ -141,7 +141,8 @@ export interface EdgeWeightChange {
   edge: EdgeRef;
   /** null = the edge did not exist before. */
   before: number | null;
-  after: number;
+  /** null = the edge was removed (an AVOIDS released). */
+  after: number | null;
 }
 
 export interface BranchRankChange {
@@ -162,6 +163,8 @@ export interface GraphDiff {
   edges: EdgeWeightChange[];
   avoidsAdded: EdgeWeightChange[];
   avoidsRaised: EdgeWeightChange[];
+  /** AVOIDS removed because likes caught up with skips. */
+  avoidsRemoved: EdgeWeightChange[];
   branchRanks: BranchRankChange[];
   depthPref: { before: DepthPref; after: DepthPref };
 }

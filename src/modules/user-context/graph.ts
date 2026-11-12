@@ -340,6 +340,16 @@ export function setEdge(
   return edge;
 }
 
+/** Removes the edge if present; returns whether it existed. */
+export function removeEdge(
+  g: MutableGraph,
+  sourceId: string,
+  relation: ContextRelation,
+  targetId: string
+): boolean {
+  return g.edges.delete(edgeKey(sourceId, relation, targetId));
+}
+
 export function freeze(g: MutableGraph): ContextGraph {
   return { userId: g.userId, contextId: g.contextId, nodes: g.nodes, edges: g.edges };
 }

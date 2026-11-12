@@ -48,6 +48,8 @@ export const SQL = Object.freeze({
     SET weight = EXCLUDED.weight,
         properties = ontology.edges.properties || EXCLUDED.properties
     WHERE ontology.edges.user_id = EXCLUDED.user_id`,
+  deleteEdge: `DELETE FROM ontology.edges
+  WHERE user_id = $1::uuid AND source_id = $2::uuid AND target_id = $3::uuid AND relation = $4`,
   linkMandala: `UPDATE public.user_mandalas
   SET context = COALESCE(context, '{}'::jsonb) || jsonb_build_object('context_node_id', $1::text, 'version', $2::int)
   WHERE id = $3::uuid AND user_id = $4::uuid`,
@@ -165,7 +167,7 @@ function stableStringify(v: unknown): string {
 export function changedElements(
   next: ContextGraph,
   previous?: ContextGraph
-): { nodes: ContextNode[]; edges: ContextEdge[] } {
+): { nodes: ContextNode[]; edges: ContextEdge[]; removedEdges: ContextEdge[] } {
   const nodes = [...next.nodes.values()].filter((n) => {
     const p = previous?.nodes.get(n.id);
     return (
@@ -182,11 +184,18 @@ export function changedElements(
       );
     })
     .map(([, e]) => e);
+  const removedEdges = previous
+    ? [...previous.edges.entries()].filter(([k]) => !next.edges.has(k)).map(([, e]) => e)
+    : [];
+  const byKey = (a: ContextEdge, b: ContextEdge): number =>
+    cmpStr(
+      edgeKey(a.sourceId, a.relation, a.targetId),
+      edgeKey(b.sourceId, b.relation, b.targetId)
+    );
   nodes.sort((a, b) => cmpStr(a.id, b.id));
-  edges.sort((a, b) =>
-    cmpStr(edgeKey(a.sourceId, a.relation, a.targetId), edgeKey(b.sourceId, b.relation, b.targetId))
-  );
-  return { nodes, edges };
+  edges.sort(byKey);
+  removedEdges.sort(byKey);
+  return { nodes, edges, removedEdges };
 }
 
 function assertOwnership(graph: ContextGraph): void {
@@ -234,6 +243,8 @@ export interface PersistOptions {
 export interface PersistResult {
   nodesWritten: number;
   edgesWritten: number;
+  /** Edges deleted because they are gone from the graph (an AVOIDS released). */
+  edgesDeleted: number;
   mandalaLinked: boolean;
 }
 
@@ -244,7 +255,7 @@ export async function persistGraph(
   opts: PersistOptions = {}
 ): Promise<PersistResult> {
   assertOwnership(graph);
-  const { nodes, edges } = changedElements(graph, opts.previous);
+  const { nodes, edges, removedEdges } = changedElements(graph, opts.previous);
   const touchedIds = [
     ...new Set([...nodes.map((n) => n.id), ...edges.flatMap((e) => [e.sourceId, e.targetId])]),
   ].sort(cmpStr);
@@ -287,6 +298,9 @@ export async function persistGraph(
         USER_CONTEXT_DOMAIN
       );
     }
+    for (const e of removedEdges) {
+      await tx.$executeRawUnsafe(SQL.deleteEdge, graph.userId, e.sourceId, e.targetId, e.relation);
+    }
     let mandalaLinked = false;
     if (opts.mandalaId) {
       const n = await linkMandalaContext(tx, {
@@ -297,6 +311,11 @@ export async function persistGraph(
       });
       mandalaLinked = n > 0;
     }
-    return { nodesWritten: nodes.length, edgesWritten: edges.length, mandalaLinked };
+    return {
+      nodesWritten: nodes.length,
+      edgesWritten: edges.length,
+      edgesDeleted: removedEdges.length,
+      mandalaLinked,
+    };
   });
 }

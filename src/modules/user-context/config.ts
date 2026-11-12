@@ -38,8 +38,12 @@ export const USER_CONTEXT_CONFIG = Object.freeze({
   WEIGHT_FLOOR: 0,
 
   // --- scoring ---
-  /** A candidate is excluded when any AVOIDS on its concept/format/channel is ≥ this. */
+  /** A candidate is excluded when an AVOIDS on its FORMAT or CHANNEL is ≥ this (James 2026-11-12).
+   *  Concepts are never excluded; see AVOID_CONCEPT_PENALTY. */
   AVOID_EXCLUDE: 1.0,
+  /** Score subtracted per unit of AVOIDS weight on a concept the candidate covers (draft value;
+   *  one concept AVOIDS at 1.0 outweighs one liked concept at LIKE_CONCEPT_DELTA). */
+  AVOID_CONCEPT_PENALTY: 1.5,
   /** Multiplier for AVOIDS weights below AVOID_EXCLUDE (subtracted from the score). */
   AVOID_PENALTY_WEIGHT: 1.0,
   CONCEPT_SCORE_WEIGHT: 1.0,

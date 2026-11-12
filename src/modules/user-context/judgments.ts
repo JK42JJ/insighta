@@ -24,6 +24,7 @@ import {
   setEdge,
   videoProps,
   type MutableGraph,
+  removeEdge,
 } from './graph';
 import { branchOrder } from './search';
 import type {
@@ -90,10 +91,19 @@ function historyFor(g: MutableGraph, targetId: string): { likes: number; skips: 
   return { likes, skips };
 }
 
-function maybeAvoid(g: MutableGraph, targetId: string): void {
+/**
+ * AVOIDS for one target (concept, format or channel), from its judgment history:
+ * created / raised after AVOID_MIN_SKIPS skips with at most AVOID_MAX_LIKES likes, and removed
+ * once likes ≥ skips (James 2026-11-12). Passes never count.
+ */
+function updateAvoid(g: MutableGraph, targetId: string): void {
   const h = historyFor(g, targetId);
-  if (h.skips < C.AVOID_MIN_SKIPS || h.likes > C.AVOID_MAX_LIKES) return;
   const prev = getEdge(g, g.contextId, 'AVOIDS', targetId);
+  if (prev && h.likes >= h.skips) {
+    removeEdge(g, g.contextId, 'AVOIDS', targetId);
+    return;
+  }
+  if (h.skips < C.AVOID_MIN_SKIPS || h.likes > C.AVOID_MAX_LIKES) return;
   setEdge(
     g,
     g.contextId,
@@ -142,9 +152,15 @@ function applyOne(g: MutableGraph, j: Judgment, depthPref: DepthPref): void {
 
   if (j.verdict === 'useful') {
     const mult = watchedMultiplier(j.watchedSeconds, vp.durationSeconds);
-    for (const id of conceptIds) addWeight(g, 'WANTS', id, C.LIKE_CONCEPT_DELTA * mult);
+    for (const id of conceptIds) {
+      addWeight(g, 'WANTS', id, C.LIKE_CONCEPT_DELTA * mult);
+      updateAvoid(g, id);
+    }
     if (branchId) addWeight(g, 'CONTAINS', branchId, C.LIKE_BRANCH_DELTA);
-    for (const id of tagIds) addWeight(g, 'WANTS', id, C.LIKE_FORMAT_CHANNEL_DELTA);
+    for (const id of tagIds) {
+      addWeight(g, 'WANTS', id, C.LIKE_FORMAT_CHANNEL_DELTA);
+      updateAvoid(g, id);
+    }
     if (vp.depth) depthPref[vp.depth].likes += 1;
     return;
   }
@@ -152,12 +168,12 @@ function applyOne(g: MutableGraph, j: Judgment, depthPref: DepthPref): void {
   // skip
   for (const id of conceptIds) {
     lowerWeight(g, 'WANTS', id, C.SKIP_CONCEPT_DELTA);
-    maybeAvoid(g, id);
+    updateAvoid(g, id);
   }
   if (branchId) lowerWeight(g, 'CONTAINS', branchId, C.SKIP_BRANCH_DELTA);
   for (const id of tagIds) {
     lowerWeight(g, 'WANTS', id, C.SKIP_FORMAT_CHANNEL_DELTA);
-    maybeAvoid(g, id);
+    updateAvoid(g, id);
   }
   if (vp.depth) depthPref[vp.depth].dislikes += 1;
 }
@@ -193,6 +209,22 @@ export function diffGraphs(
       },
       before: prev ? prev.weight : null,
       after: e.weight,
+    });
+  }
+  // Edges that existed before and are gone now (an AVOIDS released).
+  for (const [k, e] of b) {
+    if (a.has(k)) continue;
+    const target = before.nodes.get(e.targetId);
+    edges.push({
+      edge: {
+        sourceId: e.sourceId,
+        targetId: e.targetId,
+        relation: e.relation,
+        targetType: target?.type ?? null,
+        targetTitle: target?.title ?? null,
+      },
+      before: e.weight,
+      after: null,
     });
   }
   edges.sort(
@@ -231,8 +263,10 @@ export function diffGraphs(
     edges,
     avoidsAdded: edges.filter((c) => c.edge.relation === 'AVOIDS' && c.before === null),
     avoidsRaised: edges.filter(
-      (c) => c.edge.relation === 'AVOIDS' && c.before !== null && c.after > c.before
+      (c) =>
+        c.edge.relation === 'AVOIDS' && c.before !== null && c.after !== null && c.after > c.before
     ),
+    avoidsRemoved: edges.filter((c) => c.edge.relation === 'AVOIDS' && c.after === null),
     branchRanks,
     depthPref: { before: ctxBefore.depth_pref, after: ctxAfter.depth_pref },
   };

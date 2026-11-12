@@ -138,6 +138,15 @@ export function scoreCandidate(graph: ContextGraph, candidate: Candidate): Candi
 
   for (const t of avoidTargets) {
     const avoid = edgeWeight(graph, ctxId, 'AVOIDS', t.node.id);
+    if (t.node.type === 'concept') {
+      // Concepts are never excluded, only penalised (James 2026-11-12).
+      if (avoid > 0) {
+        const p = avoid * C.AVOID_CONCEPT_PENALTY;
+        score -= p;
+        reasons.push(`회피 ${t.label} '${t.node.title}' ${signed(-p)}`);
+      }
+      continue;
+    }
     if (avoid >= C.AVOID_EXCLUDE) {
       return excludedResult(
         `회피 ${t.label} '${t.node.title}' ${f(avoid)} ≥ ${f(C.AVOID_EXCLUDE)}`
