@@ -96,6 +96,8 @@ export interface YouTubeVideoFullMetadata {
       allowed?: string[];
       blocked?: string[];
     };
+    /** e.g. { ytRating: 'ytAgeRestricted' } — present only when rated. */
+    contentRating?: Record<string, string>;
   };
   statistics?: {
     viewCount?: string;
@@ -109,6 +111,8 @@ export interface YouTubeVideoFullMetadata {
   status?: {
     uploadStatus?: string;
     privacyStatus?: string;
+    embeddable?: boolean;
+    madeForKids?: boolean;
   };
 }
 

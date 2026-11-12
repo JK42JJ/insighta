@@ -25,6 +25,9 @@ const ALLOWED_MOBILE_PATH_PREFIXES = [
   // reader to /landing. Only the reading surface: the sidebar and the card
   // grid still need the desktop shell, and `/brief` itself now redirects home.
   '/brief',
+  // Morning cards test screen (PRD #1788). The path passes the gate, but the
+  // route renders nothing unless the server flag reports on.
+  '/morning-cards',
 ] as const;
 
 export function isPathAllowedOnMobile(pathname: string): boolean {

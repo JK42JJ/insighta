@@ -251,6 +251,13 @@ const envSchema = z.object({
     .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
     .default(false),
 
+  // Measurement record (SHADOW MODE) — per-candidate feature rows in
+  // `candidate_features`. Record only; never used for ranking/filtering.
+  // Unset = no-op. Constants live in ./measurement-record.
+  MEASUREMENT_RECORD_ENABLED: z
+    .preprocess((v) => String(v).toLowerCase() === 'true', z.boolean())
+    .default(false),
+
   // The credit breaker (cost-gate L6). Default true: without it a provider that
   // answers 402 to everything is called again on every scheduler window — 54
   // futile calls on 2026-09-01, 163 in one minute on 08-30. Kill-switch only —
@@ -523,6 +530,11 @@ export const config = {
     enabled: env.SEARCH_TRACE_ENABLED,
   },
 
+  // Measurement record — shadow-mode candidate feature log (default off).
+  measurementRecord: {
+    enabled: env.MEASUREMENT_RECORD_ENABLED,
+  },
+
   // Weekly curation schedule — KST calendar instead of UTC wall-clock (2026-07-27).
   curationSchedule: {
     kstEnabled: env.CURATION_SCHED_KST_ENABLED,
@@ -642,6 +654,8 @@ export const config = {
     channels: 1,
   },
 } as const;
+
+export * from './measurement-record';
 
 /**
  * Validate required API credentials

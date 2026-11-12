@@ -2256,6 +2256,35 @@ model search_trace_candidate {
   @@schema("public")
 }
 
+/// Measurement record (SHADOW MODE) — one row per candidate video per run with
+/// source/video/reaction/channel/comment-signal features. Record only; never used
+/// for ranking or filtering. Comment text is never stored (counts only). 30d TTL.
+model candidate_features {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_id              String
+  branch              String
+  video_id            String   @db.VarChar(20)
+  cell                String?
+  source_kind         String?
+  keyword             String?
+  discovery_paths     Int?
+  video               Json?
+  reaction            Json?
+  channel             Json?
+  comment_signals     Json?
+  filter_trace        Json?
+  relevance_score     Float?
+  measurement_version Int      @default(1)
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  expires_at          DateTime @default(dbgenerated("(now() + interval '30 days')")) @db.Timestamptz(6)
+
+  @@unique([run_id, video_id], map: "uq_candidate_features_run_video")
+  @@index([run_id], map: "idx_candidate_features_run")
+  @@index([video_id], map: "idx_candidate_features_video")
+  @@index([expires_at], map: "idx_candidate_features_expires")
+  @@schema("public")
+}
+
 /// Observability Phase 2-B — daily rollup of the 5 quality axes + pool + quota +
 /// funnel, tagged with algorithm_version / flags. One row per metric_date,
 /// computed from search_trace(+candidate) + video_pool + the live key pool.
@@ -3452,5 +3481,38 @@ model nl_eval {
   issue       nl_issue @relation(fields: [issue_id], references: [id], onDelete: Cascade)
 
   @@id([issue_id, axis, at])
+  @@schema("public")
+}
+
+model morning_card_judgments {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  video_id       String   @db.VarChar(20)
+  domain         String   @db.VarChar(50)
+  verdict        String   @db.VarChar(10)
+  reason_tags    String[]
+  shown_position Int
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  cell           String?  @db.VarChar(50)
+  focus          String[]
+  canceled_at    DateTime? @db.Timestamptz(6)
+
+  @@index([user_id, created_at(sort: Desc)], map: "idx_mc_judgments_user_created")
+  @@index([domain, video_id], map: "idx_mc_judgments_domain_video")
+  @@schema("public")
+}
+
+/// Morning feed (오늘의 픽) per-video annotation. Raw SQL DDL: prisma/migrations/morning-feed/001_morning_feed.sql
+model morning_feed_annotations {
+  video_id    String    @id @db.VarChar(20)
+  cell        String    @db.VarChar(50)
+  focus       String[]
+  why         String?   @db.VarChar(80)
+  judge_score Int?
+  judged_at   DateTime? @db.Timestamptz(6)
+  source      String    @default("manual") @db.VarChar(30)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([cell], map: "idx_mf_annotations_cell")
   @@schema("public")
 }
