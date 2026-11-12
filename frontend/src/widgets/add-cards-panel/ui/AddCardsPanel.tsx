@@ -399,8 +399,6 @@ export function AddCardsPanel() {
 
   const runSearch = useCallback(() => {
     if (!mandalaId) return;
-    const keywords =
-      targetLevel && targetLevel !== 'standard' ? [...extraKeywords, targetLevel] : extraKeywords;
     // Snapshot the options this search runs with — attached to the resulting
     // round so its tab can show the applied filters (2026-07-02).
     lastSearchSnapshotRef.current = {
@@ -413,7 +411,10 @@ export function AddCardsPanel() {
     };
     mutation.mutate({
       mandalaId,
-      extraKeywords: keywords,
+      // The level goes as its own field; the server turns it into the 입문/심화 level query.
+      // It used to be appended to the keywords as the raw value ('foundation'/'advanced').
+      extraKeywords,
+      targetLevel,
       excludeVideoIds: surfacedVideoIds,
       // explicit override every time the chips are visible — 'ko' keeps a
       // DB-toggled mandala deterministic from the UI (chip state wins).

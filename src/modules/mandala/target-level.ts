@@ -23,3 +23,8 @@ export const DEFAULT_TARGET_LEVEL: TargetLevel = 'standard';
 export const LEGACY_TARGET_LEVELS = ['beginner', 'intermediate', 'expert'] as const;
 
 export type LegacyTargetLevel = (typeof LEGACY_TARGET_LEVELS)[number];
+
+/** True when the value is one of the canonical wizard levels (exact match). */
+export function isTargetLevel(value: unknown): value is TargetLevel {
+  return typeof value === 'string' && (TARGET_LEVELS as readonly string[]).includes(value);
+}
