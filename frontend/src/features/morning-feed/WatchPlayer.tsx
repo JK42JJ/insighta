@@ -3,20 +3,22 @@ import { useEffect, useRef, useState } from 'react';
 import { useWatchReporter } from '@/features/morning-feed/use-watch-reporter';
 
 /*
- * The one YouTube IFrame player of the watch screen (수정 3). The swipe deck keeps its own
- * YouTubePlayer (sound carries over there); this one always starts a new video muted. It is created once and kept for the whole
- * visit: feed ↔ immersive playback and every card change reuse the same iframe (cueVideoById),
- * so the node is never rebuilt or moved (design README "플레이어 위치 고정"). Nothing is drawn
- * over it (YouTube policy). Every new video starts muted (README §3: the next card plays without
- * sound again, in both modes).
+ * The one YouTube IFrame player of the watch screen (design 수정 4). It is created once and kept
+ * for the whole visit: feed ↔ immersive playback and every card change reuse the same iframe, so
+ * the node is never rebuilt or moved. Nothing is drawn over it (YouTube policy).
  *
- * Autoplay order (YouTube Required Minimum Functionality: no automatic playback before the
- * player is visible): a video is only CUED while the layer is hidden; the screen shows the layer
- * once the player reports it (onShown) and then sets `play`, which starts muted playback.
+ * The screen drives it with one command, `load(videoId, startSeconds, withSound)`, and calls it
+ * only once the player layer is more than half visible (YouTube Required Minimum Functionality:
+ * "an API Client must not initiate an automatic playback until the player is visible").
+ *
+ * Sound (README "음소거 단추 — 소리 상태 유지"): the screen asks for sound when the session's
+ * setting is on. When the browser refuses playback with sound (onAutoplayBlocked, or no PLAYING
+ * with sound within SOUND_CHECK_MS), the player goes back to muted playback and reports the
+ * muted state — the button then shows it, nothing else (James 2026-11-13).
  */
 
 interface YtPlayer {
-  cueVideoById(videoId: string): void;
+  loadVideoById(arg: { videoId: string; startSeconds?: number }): void;
   mute(): void;
   unMute(): void;
   isMuted(): boolean;
@@ -31,7 +33,6 @@ interface YtApi {
   Player: new (
     el: HTMLElement,
     opts: {
-      videoId: string;
       width: string;
       height: string;
       playerVars: Record<string, string | number>;
@@ -39,6 +40,7 @@ interface YtApi {
         onReady: (e: { target: YtPlayer }) => void;
         onError: () => void;
         onStateChange: (e: { data: number }) => void;
+        onAutoplayBlocked: () => void;
       };
     }
   ) => YtPlayer;
@@ -62,10 +64,10 @@ function ytApi(): YtApi | undefined {
 const API_SRC = 'https://www.youtube.com/iframe_api';
 /** YT.PlayerState */
 export const YT_PLAYING = 1;
-export const YT_PAUSED = 2;
-export const YT_CUED = 5;
 /** How often the sound state (the player's own control) and the time are read. */
 export const PLAYER_POLL_MS = 250;
+/** No PLAYING with sound by then = the browser refused sound (same grace as the deck player). */
+export const SOUND_CHECK_MS = 1500;
 let apiPromise: Promise<YtApi> | null = null;
 
 function loadYouTubeApi(): Promise<YtApi> {
@@ -92,158 +94,175 @@ function loadYouTubeApi(): Promise<YtApi> {
   return apiPromise;
 }
 
-/** Lets the screen's buttons (outside the player) drive it. */
+/** Lets the screen drive the player. Every call is a no-op until the player is ready. */
 export interface PlayerController {
-  /** Turns the sound on and plays (the mute button in its muted state). */
+  /** Starts the video (muted or with sound). Call only when the layer is more than half visible. */
+  load: (videoId: string, startSeconds: number, withSound: boolean) => void;
+  /** Sound on and play (the mute button in its muted state — runs inside the tap). */
   soundOn: () => void;
-  /** Turns the sound off only. */
+  /** Sound off only. */
   soundOff: () => void;
+  pause: () => void;
 }
 
 export interface PlayerTick {
   videoId: string;
   seconds: number;
   duration: number;
+  playing: boolean;
 }
 
 interface WatchPlayerProps {
-  videoId: string;
-  /** False while the card is leaving or no card is current: playback is paused. */
-  active: boolean;
-  /** The layer is visible: start (muted) playback of the cued video. */
-  play: boolean;
-  controller?: { current: PlayerController | null };
-  /** The player shows the video (playing, paused or cued) — the thumbnail can give way. */
-  onShown?: (videoId: string) => void;
-  /** Every sound change, from the screen's button or the control inside the player. */
+  controller: { current: PlayerController | null };
+  /** The player can take commands (the first `load` may follow right away). */
+  onReady?: () => void;
+  /** The video given to `load` is playing (the thumbnail can give way, the line shows progress). */
+  onPlaying?: (videoId: string) => void;
+  /** Every sound change: the screen's button, YouTube's own control, or the blocked-sound fallback. */
   onMuted?: (muted: boolean) => void;
-  /** Playback position while the player has a video. */
+  /** Playback position of the loaded video. */
   onTick?: (t: PlayerTick) => void;
   /** Called when playback cannot start. Nothing is ever drawn over the player. */
   onFailed?: (failed: boolean) => void;
 }
 
 export function WatchPlayer({
-  videoId,
-  active,
-  play,
   controller,
-  onShown,
+  onReady,
+  onPlaying,
   onMuted,
   onTick,
   onFailed,
 }: WatchPlayerProps) {
-  const cb = useRef({ onShown, onMuted, onTick, onFailed });
-  cb.current = { onShown, onMuted, onTick, onFailed };
+  const cb = useRef({ onReady, onPlaying, onMuted, onTick, onFailed });
+  cb.current = { onReady, onPlaying, onMuted, onTick, onFailed };
   const host = useRef<HTMLDivElement>(null);
-  const player = useRef<YtPlayer | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     cb.current.onFailed?.(failed);
   }, [failed]);
 
-  const { reporter, positionRef } = useWatchReporter(videoId);
+  const [currentId, setCurrentId] = useState('');
+  const { reporter, positionRef } = useWatchReporter(currentId);
   const reporterRef = useRef(reporter);
   reporterRef.current = reporter;
-
-  const ready = useRef(false);
-  const playRef = useRef(play && active);
-  playRef.current = play && active;
-  const loaded = useRef(videoId);
-  const first = useRef(videoId);
-  const lastMuted = useRef(true);
-  // set by cueVideoById: state events of the previous video are ignored until the new one is cued
-  const pendingLoad = useRef(false);
 
   useEffect(() => {
     let alive = true;
     let poll: number | null = null;
+    let soundCheck: number | null = null;
+    let loaded = '';
+    let lastMuted = true;
     const mount = document.createElement('div');
     host.current?.appendChild(mount);
     const report = (p: YtPlayer): void => {
       const muted = p.isMuted();
-      if (muted !== lastMuted.current) {
-        lastMuted.current = muted;
+      if (muted !== lastMuted) {
+        lastMuted = muted;
         cb.current.onMuted?.(muted);
       }
     };
+    /** The browser refused playback with sound: muted playback, the button shows it. */
+    const fallBackToMuted = (p: YtPlayer): void => {
+      try {
+        p.mute();
+        p.playVideo();
+        report(p);
+      } catch {
+        /* player gone */
+      }
+    };
+    let instance: YtPlayer | null = null;
     loadYouTubeApi()
       .then((yt) => {
         if (!alive) return;
-        player.current = new yt.Player(mount, {
-          videoId: first.current,
+        instance = new yt.Player(mount, {
           width: '100%',
           height: '100%',
           playerVars: {
             playsinline: 1,
             rel: 0,
-            modestbranding: 1,
             controls: 1,
-            mute: 1,
             autoplay: 0,
             origin: window.location.origin,
           },
           events: {
             onReady: (e) => {
               const p = e.target;
-              ready.current = true;
               positionRef.current = () => p.getCurrentTime();
-              if (controller) {
-                controller.current = {
-                  soundOn: () => {
-                    try {
-                      p.unMute();
-                      p.playVideo();
-                      report(p);
-                    } catch {
-                      /* player gone */
-                    }
-                  },
-                  soundOff: () => {
-                    try {
-                      p.mute();
-                      report(p);
-                    } catch {
-                      /* player gone */
-                    }
-                  },
-                };
-              }
               p.mute();
-              lastMuted.current = true;
-              // the card may have changed while the player was starting
-              if (loaded.current !== first.current) {
-                pendingLoad.current = true;
-                p.cueVideoById(loaded.current);
-              } else {
-                cb.current.onShown?.(first.current);
-                // the layer may already be visible (fallback timer): start now
-                if (playRef.current) p.playVideo();
-              }
+              controller.current = {
+                load: (videoId, startSeconds, withSound) => {
+                  try {
+                    setFailed(false);
+                    // report the previous video while the player is still on it (its position)
+                    reporterRef.current.setVideo(videoId);
+                    loaded = videoId;
+                    setCurrentId(videoId);
+                    if (soundCheck != null) window.clearTimeout(soundCheck);
+                    if (withSound) p.unMute();
+                    else p.mute();
+                    p.loadVideoById({ videoId, startSeconds: Math.max(0, startSeconds) });
+                    report(p);
+                    if (!withSound) return;
+                    soundCheck = window.setTimeout(() => {
+                      soundCheck = null;
+                      if (!alive || loaded !== videoId) return;
+                      if (p.getPlayerState() !== YT_PLAYING || p.isMuted()) fallBackToMuted(p);
+                    }, SOUND_CHECK_MS);
+                  } catch {
+                    setFailed(true);
+                  }
+                },
+                soundOn: () => {
+                  try {
+                    p.unMute();
+                    p.playVideo();
+                    report(p);
+                  } catch {
+                    /* player gone */
+                  }
+                },
+                soundOff: () => {
+                  try {
+                    p.mute();
+                    report(p);
+                  } catch {
+                    /* player gone */
+                  }
+                },
+                pause: () => {
+                  try {
+                    p.pauseVideo();
+                  } catch {
+                    /* player gone */
+                  }
+                },
+              };
               poll = window.setInterval(() => {
                 try {
                   report(p);
-                  const id = loaded.current;
+                  if (!loaded) return;
                   cb.current.onTick?.({
-                    videoId: id,
+                    videoId: loaded,
                     seconds: p.getCurrentTime(),
                     duration: p.getDuration(),
+                    playing: p.getPlayerState() === YT_PLAYING,
                   });
                 } catch {
                   /* player gone */
                 }
               }, PLAYER_POLL_MS);
+              cb.current.onReady?.();
             },
             onError: () => alive && setFailed(true),
             onStateChange: (e) => {
               if (!alive) return;
               reporterRef.current.onState(e.data);
-              if (e.data === YT_CUED) pendingLoad.current = false;
-              if (pendingLoad.current) return;
-              if (e.data === YT_PLAYING || e.data === YT_PAUSED || e.data === YT_CUED) {
-                cb.current.onShown?.(loaded.current);
-              }
-              if (e.data === YT_CUED && playRef.current) player.current?.playVideo();
+              if (e.data === YT_PLAYING && loaded) cb.current.onPlaying?.(loaded);
+            },
+            onAutoplayBlocked: () => {
+              if (alive && instance) fallBackToMuted(instance);
             },
           },
         });
@@ -251,47 +270,19 @@ export function WatchPlayer({
       .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
-      ready.current = false;
-      if (controller) controller.current = null;
+      controller.current = null;
       if (poll != null) window.clearInterval(poll);
+      if (soundCheck != null) window.clearTimeout(soundCheck);
       try {
-        player.current?.destroy();
+        instance?.destroy();
       } catch {
         /* the iframe may already be gone */
       }
-      player.current = null;
       mount.remove();
     };
+    // the player is built once for the whole visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    setFailed(false);
-    if (videoId === loaded.current) return;
-    loaded.current = videoId;
-    const p = player.current;
-    if (!ready.current || !p) return; // onReady loads it
-    try {
-      // README §3: the next card starts without sound, in the feed and in immersive playback
-      p.mute();
-      pendingLoad.current = true;
-      p.cueVideoById(videoId);
-      if (!lastMuted.current) {
-        lastMuted.current = true;
-        cb.current.onMuted?.(true);
-      }
-    } catch {
-      setFailed(true);
-    }
-  }, [videoId]);
-
-  useEffect(() => {
-    try {
-      if (!active) player.current?.pauseVideo();
-      else if (play && ready.current) player.current?.playVideo();
-    } catch {
-      /* not ready yet */
-    }
-  }, [active, play, videoId]);
 
   return <div ref={host} className="mf-w3-yt" />;
 }

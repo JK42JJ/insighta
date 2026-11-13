@@ -27,11 +27,7 @@ import {
   type WatchVerdict,
   type WatchVideo,
 } from '@/features/morning-feed/watch-list';
-import {
-  WatchFeed,
-  type R3SoundControl,
-  type R3Verdict,
-} from '@/features/morning-feed/watch-r3-feed';
+import { WatchFeed, type R3Verdict } from '@/features/morning-feed/watch-r3-feed';
 import { r3VideoOf } from '@/features/morning-feed/watch-r3-video';
 import {
   WatchDoneR3,
@@ -39,7 +35,7 @@ import {
   type R3InputState,
 } from '@/features/morning-feed/watch-r3-screens';
 import { ONB_LAST_STEP, WatchOnboarding } from '@/features/morning-feed/watch-screens';
-import { WatchPlayer } from '@/features/morning-feed/WatchPlayer';
+import { WatchPlayer, type PlayerController } from '@/features/morning-feed/WatchPlayer';
 import './watch.css';
 import './watch-r3.css';
 
@@ -123,7 +119,11 @@ export function MorningWatch({
   const starting = useRef(false);
   const [carryOff, setCarryOff] = useState(false);
   const alive = useRef(true);
-  const sound = useRef<R3SoundControl | null>(null);
+  const player = useRef<PlayerController | null>(null);
+  /** README 수정 4: the sound setting is kept for the session (this visit), across cards and goals. */
+  const [sound, setSound] = useState(false);
+  /** Videos answered in this visit, read synchronously so a changed verdict is not counted twice. */
+  const answered = useRef(new Set<string>());
   const [now] = useState(() => new Date());
 
   useEffect(() => {
@@ -222,6 +222,9 @@ export function MorningWatch({
     const id = video.videoId;
     const goalLabel = screen.goal.label;
     setJudged((prev) => new Set(prev).add(id));
+    // a passed card changed to 좋아/별로 later is still one answered video
+    if (answered.current.has(id)) return;
+    answered.current.add(id);
     setToday((prev) => withOneJudged(prev, goalLabel));
   };
 
@@ -251,6 +254,9 @@ export function MorningWatch({
     // shortOf reads `goals`, which is stable for the visit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen.kind, doneLabel, whenSaved]);
+
+  const watchList = screen.kind === 'watch' ? screen.list : null;
+  const watchVideos = useMemo(() => (watchList ?? []).map(r3VideoOf), [watchList]);
 
   let body: JSX.Element;
   if (screen.kind === 'onb') {
@@ -303,28 +309,27 @@ export function MorningWatch({
       />
     );
   } else if (screen.kind === 'watch') {
-    const list = screen.list ?? [];
     body = (
       <WatchFeed
         key={screen.goal.label}
         goalTitle={screen.goal.short}
-        videos={list.map(r3VideoOf)}
+        videos={watchVideos}
         frame={frame}
         loading={screen.list === null}
         onVerdict={verdict}
         onFinish={() => setScreen({ kind: 'insight', goal: screen.goal })}
         onBack={() => setScreen({ kind: 'input' })}
         sound={sound}
-        renderPlayer={(api) => (
+        onSound={setSound}
+        player={player}
+        renderPlayer={(events) => (
           <WatchPlayer
-            videoId={api.videoId}
-            active={api.active}
-            play={api.play}
-            controller={sound}
-            onShown={api.onShown}
-            onMuted={api.onMuted}
-            onTick={api.onTick}
-            onFailed={api.onFailed}
+            controller={player}
+            onReady={events.onReady}
+            onPlaying={events.onPlaying}
+            onMuted={events.onMuted}
+            onTick={events.onTick}
+            onFailed={events.onFailed}
           />
         )}
       />

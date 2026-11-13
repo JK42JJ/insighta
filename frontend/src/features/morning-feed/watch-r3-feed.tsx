@@ -10,25 +10,33 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from 'react';
 
+import type { PlayerController, PlayerTick } from '@/features/morning-feed/WatchPlayer';
+import { chapterStamp } from '@/features/morning-feed/watch-design';
 import {
   ambientOrDefault,
-  channelMetaText,
-  clockText,
+  CHANNEL_ROW_H,
   feedBlocks,
   HEADER_H,
   immersiveBlocks,
   immersiveHeight,
-  topBlockHeight,
+  sheetTop,
+  viewsLengthText,
   type Frame,
 } from '@/features/morning-feed/watch-r3-layout';
-import { chapterStamp } from '@/features/morning-feed/watch-design';
-import { counterText, segmentStates } from '@/features/morning-feed/watch-list';
+import {
+  CARD_MOVE_MS,
+  progressPercent,
+  revealDelayMs,
+} from '@/features/morning-feed/watch-r3-motion';
 
 /*
- * 시청 screen of design handoff "design_handoff_insighta_watch_v2" (수정 3, A안): one card per
- * video, swipe up for the next one; turning the sound on switches the same card to immersive
- * playback. The player is ONE node in a layer above the current card's player slot (README
- * "플레이어 위치 고정"): it is never rebuilt or moved in the DOM, only shown, hidden and translated.
+ * 시청 screen of design handoff "design_handoff_insighta_watch_v2" (수정 4). One card per video;
+ * swipe up for the next, down for the previous. Turning the sound on switches the same card to
+ * immersive playback. The player is ONE node in a layer above the current card's player slot:
+ * never rebuilt or moved in the DOM, only shown, hidden and translated. When the cards move, the
+ * layer slides in with the arriving card and the video is started once more than half of the
+ * layer is visible (YouTube: no automatic playback before the player is visible). README §4
+ * ("keep the thumbnail until PLAYING") is not built: it would start playback hidden.
  */
 
 /** One video as this screen draws it. Optional blocks are empty when the server sent nothing. */
@@ -42,6 +50,11 @@ export interface R3Video {
   altIcon: boolean;
   durationSec: number | null;
   publishedAt?: string;
+  /** '3일 전' / '2개월 전'; `fresh` (under 7 days) draws it as a filled pill. */
+  ageText: string;
+  fresh: boolean;
+  /** '조회수 1.2만회'; '' when unknown. */
+  viewsText: string;
   thumbUrl?: string;
   /** '#rrggbb' from the server, or undefined. */
   ambient?: string;
@@ -54,23 +67,16 @@ export interface R3Video {
 }
 
 export type R3Verdict = 'useful' | 'skip' | 'pass';
-type Reaction = 'like' | 'dislike' | 'skip';
+/** Per card: 'skip' = passed (swiped on without a verdict). */
+export type R3Reaction = 'like' | 'dislike' | 'skip';
 
 /** What the player layer needs from the screen; the live screen renders the YouTube player. */
-export interface R3PlayerApi {
-  videoId: string;
-  active: boolean;
-  /** The layer is visible: playback may start (never before; YouTube autoplay rule). */
-  play: boolean;
-  onShown: (videoId: string) => void;
+export interface R3PlayerEvents {
+  onReady: () => void;
+  onPlaying: (videoId: string) => void;
   onMuted: (muted: boolean) => void;
-  onTick: (t: { videoId: string; seconds: number; duration: number }) => void;
+  onTick: (t: PlayerTick) => void;
   onFailed: (failed: boolean) => void;
-}
-
-export interface R3SoundControl {
-  soundOn: () => void;
-  soundOff: () => void;
 }
 
 export interface WatchFeedProps {
@@ -79,40 +85,42 @@ export interface WatchFeedProps {
   frame: Frame;
   /** First entry: the batch is on its way (skeleton). */
   loading: boolean;
-  /** Records a judgment: 좋아 / 별로 when pressed, 넘김 when swiped up without one. */
+  /** Records a judgment: 좋아 / 별로 when pressed, 넘김 when swiped on without one. */
   onVerdict: (index: number, verdict: R3Verdict) => void;
   /** The last card was passed: the 다 본 뒤 screen. */
   onFinish: () => void;
   onBack: () => void;
-  renderPlayer: (api: R3PlayerApi) => ReactNode;
-  sound: { current: R3SoundControl | null };
+  /** The session's sound setting (README: kept for the session) and its setter. */
+  sound: boolean;
+  onSound: (on: boolean) => void;
+  player: { current: PlayerController | null };
+  renderPlayer: (events: R3PlayerEvents) => ReactNode;
   /** Test hook (fixture): start in this state. */
   initial?: Partial<{
     idx: number;
+    maxIdx: number;
     mode: 'feed' | 'imm';
-    muted: boolean;
     phase: 'thumb' | 'player';
-    reacts: Reaction[];
+    reacts: R3Reaction[];
     reacting: 'like' | 'dislike' | null;
     sheet: boolean;
     dragFrac: number;
-    playing: boolean;
   }>;
 }
 
-/** README §7. */
+/** README §3. */
 export const SWIPE_THRESHOLD_PX = 70;
 const DRAG_START_PX = 8;
-const DOWN_FOLLOW = 0.15;
-export const SETTLE_MS = 460;
+const DOWN_FOLLOW_FIRST = 0.15;
+/** A little longer than the move itself, then input is taken again. */
+export const SETTLE_MS = CARD_MOVE_MS + 40;
 const LIKE_CONFIRM_MS = 1400;
 const DISLIKE_ADVANCE_MS = 800;
 const WHEEL_MIN_DELTA = 40;
 const WHEEL_GAP_MS = 1100;
 const CLICK_GUARD_MS = 60;
-/** When the player never reports a state (autoplay refused), it is shown anyway after this long. */
+/** When the player never reports PLAYING (autoplay refused), the line stops running after this. */
 export const PLAYER_SHOW_FALLBACK_MS = 2500;
-const PERCENT = 100;
 
 const VERDICT_OF: Record<'like' | 'dislike', R3Verdict> = { like: 'useful', dislike: 'skip' };
 
@@ -154,33 +162,59 @@ const UpArrow = (): JSX.Element => (
   </span>
 );
 
+/** The playback part of the line: width from the last position read, advanced every frame. */
+function ProgressFill({
+  timeRef,
+  videoId,
+}: {
+  timeRef: { current: (PlayerTick & { at: number }) | null };
+  videoId: string;
+}): JSX.Element {
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const frame = (): void => {
+      const t = timeRef.current;
+      if (el.current) {
+        const pct = t && t.videoId === videoId ? progressPercent(t, performance.now()) : 0;
+        el.current.style.width = pct + '%';
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [timeRef, videoId]);
+  return <div ref={el} className="mf-w3-line-fill" data-testid="mf-w3-progress" />;
+}
+
 export function WatchFeed(p: WatchFeedProps): JSX.Element {
   const init = p.initial ?? {};
   const n = p.videos.length;
   const [idx, setIdx] = useState(init.idx ?? 0);
+  const [maxIdx, setMaxIdx] = useState(init.maxIdx ?? init.idx ?? 0);
   const [mode, setMode] = useState<'feed' | 'imm'>(init.mode ?? 'feed');
   const [drag, setDrag] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [settling, setSettling] = useState(false);
   const [phase, setPhase] = useState<'thumb' | 'player'>(init.phase ?? 'thumb');
-  const [muted, setMuted] = useState(init.muted ?? true);
-  const [time, setTime] = useState<{ id: string; s: number; d: number } | null>(null);
+  const [playerMuted, setPlayerMuted] = useState(!p.sound);
   const [sheet, setSheet] = useState(init.sheet ?? false);
-  const [reacts, setReacts] = useState<Reaction[]>(init.reacts ?? []);
+  const [reacts, setReacts] = useState<R3Reaction[]>(init.reacts ?? []);
   const [reacting, setReacting] = useState<'like' | 'dislike' | null>(init.reacting ?? null);
   const [failed, setFailed] = useState(false);
+  /** Player layer: offset from its resting place, animated or not, shown or not. */
+  const [layer, setLayer] = useState({ y: 0, anim: false, shown: init.phase === 'player' });
+  const [ready, setReady] = useState(false);
+
   const timers = useRef<number[]>([]);
-  const st = useRef({ idx, settling, mode, reacts, reacting, phase });
-  st.current = { idx, settling, mode, reacts, reacting, phase };
-  const gesture = useRef<{ y0: number; down: boolean; drag: boolean; at: number }>({
-    y0: 0,
-    down: false,
-    drag: false,
-    at: 0,
-  });
+  const st = useRef({ idx, settling, mode, reacts, reacting, sound: p.sound });
+  st.current = { idx, settling, mode, reacts, reacting, sound: p.sound };
+  const gesture = useRef({ y0: 0, down: false, drag: false, at: 0 });
   const wheelAt = useRef(0);
-  // the video the player last reported as shown (it may arrive while the cards are still moving)
-  const shownId = useRef<string | null>(null);
+  /** Last position read per video: a card you come back to resumes there (James 2026-11-13). */
+  const positions = useRef(new Map<string, number>());
+  const timeRef = useRef<(PlayerTick & { at: number }) | null>(null);
+  const loadSeq = useRef(0);
 
   const later = useCallback((fn: () => void, ms: number) => {
     timers.current.push(window.setTimeout(fn, ms));
@@ -190,33 +224,67 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
     return () => t.forEach((x) => window.clearTimeout(x));
   }, []);
 
+  const f = p.frame;
+  const imm = mode === 'imm';
+  const immH = immersiveHeight(f);
   const cur = p.videos[Math.min(idx, n - 1)];
-  const curId = cur?.videoId ?? '';
 
-  // the player may never report (autoplay refused): it is shown anyway, the YouTube play button then shows
-  useEffect(() => {
-    if (p.loading || settling || phase === 'player' || !curId) return undefined;
-    const t = window.setTimeout(() => setPhase('player'), PLAYER_SHOW_FALLBACK_MS);
-    return () => window.clearTimeout(t);
-  }, [p.loading, settling, phase, curId, idx]);
+  const cards = useMemo(
+    () =>
+      p.videos.map((v, i) => {
+        const fb = feedBlocks(f, {
+          why: !!v.why,
+          summary: !!v.summary,
+          checks: v.checks.length > 0,
+          points: v.chapters.length,
+        });
+        const ib = immersiveBlocks(f, {
+          why: !!v.why,
+          summary: !!v.summary,
+          next: i + 1 < n,
+          afterNext: i + 2 < n,
+          chapters: v.chapters.length,
+        });
+        return { fb, ib, h: imm ? immH : fb.height };
+      }),
+    [p.videos, f, imm, immH, n]
+  );
 
-  const advance = useCallback(
-    (kind: Reaction) => {
+  /** Starts card i's video in the layer (muted in the feed, the session's sound when immersive). */
+  const startVideo = useCallback(
+    (i: number) => {
+      const v = p.videos[i];
+      const ctl = p.player.current;
+      if (!v?.videoId || !ctl) return;
       const s = st.current;
-      if (s.settling || p.loading || s.idx >= n) return;
-      const nextReacts = s.reacts.slice();
-      if (kind === 'skip') {
-        // swiped up: 넘김 only for a card without a verdict (좋아 then swipe stays 좋아)
-        if (!nextReacts[s.idx]) {
-          nextReacts[s.idx] = 'skip';
-          p.onVerdict(s.idx, 'pass');
-        }
-      } else {
-        nextReacts[s.idx] = kind;
-      }
-      const next = s.idx + 1;
-      setReacts(nextReacts);
+      setLayer((l) => ({ ...l, shown: true }));
+      ctl.load(v.videoId, positions.current.get(v.videoId) ?? 0, s.mode === 'imm' && s.sound);
+      const seq = ++loadSeq.current;
+      later(() => {
+        if (loadSeq.current === seq) setPhase('player');
+      }, PLAYER_SHOW_FALLBACK_MS);
+    },
+    [p.videos, p.player, later]
+  );
+
+  // first video: once the player is ready and the batch is here, the current card is visible
+  useEffect(() => {
+    if (!ready || p.loading || n === 0) return;
+    startVideo(st.current.idx);
+    // only on readiness, not on every card change (moves start their own video)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, p.loading, n]);
+
+  const viewportH = f.vh - f.safeTop - HEADER_H - (imm ? f.safeBottom : 0);
+
+  /** Moves to card `next` (forward or back); the layer comes with the arriving card. */
+  const move = useCallback(
+    (next: number, dir: 1 | -1, reactsAfter: R3Reaction[]) => {
+      const s = st.current;
+      p.player.current?.pause();
+      setReacts(reactsAfter);
       setIdx(next);
+      setMaxIdx((m) => Math.max(m, next));
       setDrag(0);
       setDragging(false);
       setSettling(true);
@@ -224,37 +292,92 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
       setSheet(false);
       setReacting(null);
       setFailed(false);
+      loadSeq.current++;
+      const arriving = next < n;
+      const distance = dir === 1 ? (cards[s.idx]?.h ?? 0) : (cards[next]?.h ?? 0);
+      // the layer jumps to the arriving card's slot, hidden, then rides along with it
+      setLayer({ y: dir * distance, anim: false, shown: false });
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => setLayer((l) => ({ ...l, y: 0, anim: true })))
+      );
+      if (arriving) {
+        const delay = revealDelayMs({
+          dir,
+          distance,
+          viewportH,
+          slotTop: CHANNEL_ROW_H,
+          playerH: f.playerH,
+        });
+        later(() => {
+          if (st.current.idx === next) startVideo(next);
+        }, delay);
+      }
       later(() => {
         setSettling(false);
-        if (next >= n) p.onFinish();
-        else if (shownId.current && shownId.current === p.videos[next]?.videoId) setPhase('player');
+        if (!arriving) p.onFinish();
       }, SETTLE_MS);
     },
-    [n, p, later]
+    [cards, f.playerH, later, n, p, startVideo, viewportH]
   );
 
+  const advance = useCallback(
+    (kind: R3Reaction) => {
+      const s = st.current;
+      if (s.settling || p.loading || s.idx >= n) return;
+      const r = s.reacts.slice();
+      if (kind === 'skip') {
+        // swiped on: 넘김 only for a card without a verdict (좋아/별로 stay as they are)
+        if (!r[s.idx]) {
+          r[s.idx] = 'skip';
+          p.onVerdict(s.idx, 'pass');
+        }
+      } else {
+        r[s.idx] = kind;
+      }
+      move(s.idx + 1, 1, r);
+    },
+    [move, n, p]
+  );
+
+  const back = useCallback(() => {
+    const s = st.current;
+    if (s.settling || p.loading) return;
+    if (s.idx === 0) {
+      setDrag(0);
+      setDragging(false);
+      return;
+    }
+    move(s.idx - 1, -1, s.reacts);
+  }, [move, p.loading]);
+
+  /** 좋아·별로 can't be changed; a passed card can still get one (README §3). */
   const react = (kind: 'like' | 'dislike'): void => {
     const s = st.current;
-    if (s.settling || s.reacting || s.reacts[s.idx]) return;
-    const r = s.reacts.slice();
-    r[s.idx] = kind;
-    setReacts(r);
+    const r = s.reacts[s.idx];
+    if (s.settling || s.reacting || r === 'like' || r === 'dislike') return;
+    const next = s.reacts.slice();
+    next[s.idx] = kind;
+    setReacts(next);
     setReacting(kind);
     p.onVerdict(s.idx, VERDICT_OF[kind]);
     if (kind === 'like') later(() => setReacting(null), LIKE_CONFIRM_MS);
     else later(() => advance('dislike'), DISLIKE_ADVANCE_MS);
   };
 
-  // keyboard (desktop): ↓ = next
+  // keyboard (desktop): ↓ next, ↑ previous
   useEffect(() => {
     const kd = (e: KeyboardEvent): void => {
-      if (e.key !== 'ArrowDown') return;
-      e.preventDefault();
-      advance('skip');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        advance('skip');
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        back();
+      }
     };
     window.addEventListener('keydown', kd);
     return () => window.removeEventListener('keydown', kd);
-  }, [advance]);
+  }, [advance, back]);
 
   const onPointerDown = (e: ReactPointerEvent): void => {
     if (st.current.settling || p.loading) return;
@@ -267,7 +390,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
     if (!g.drag && Math.abs(dy) < DRAG_START_PX) return;
     g.drag = true;
     setDragging(true);
-    setDrag(dy < 0 ? dy : dy * DOWN_FOLLOW);
+    setDrag(dy < 0 || st.current.idx > 0 ? dy : dy * DOWN_FOLLOW_FIRST);
   };
   const onPointerUp = (e: ReactPointerEvent): void => {
     const g = gesture.current;
@@ -277,6 +400,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
     g.at = Date.now();
     const dy = e.clientY - g.y0;
     if (dy < -SWIPE_THRESHOLD_PX) advance('skip');
+    else if (dy > SWIPE_THRESHOLD_PX && st.current.idx > 0) back();
     else {
       setDrag(0);
       setDragging(false);
@@ -284,9 +408,10 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
   };
   const onWheel = (e: ReactWheelEvent): void => {
     const now = Date.now();
-    if (e.deltaY < WHEEL_MIN_DELTA || now - wheelAt.current < WHEEL_GAP_MS) return;
+    if (Math.abs(e.deltaY) < WHEEL_MIN_DELTA || now - wheelAt.current < WHEEL_GAP_MS) return;
     wheelAt.current = now;
-    advance('skip');
+    if (e.deltaY > 0) advance('skip');
+    else back();
   };
   /** A drag that just ended is not also a tap. */
   const tap = (fn: () => void) => (): void => {
@@ -295,69 +420,63 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
   };
 
   // ── player events ──
-  const playerApi: R3PlayerApi = {
-    videoId: curId,
-    active: !settling && !p.loading && idx < n,
-    play: phase === 'player' && !settling && !p.loading && idx < n,
-    onShown: (id) => {
-      shownId.current = id;
-      if (id === curId && !st.current.settling) setPhase('player');
-    },
-    onMuted: (m) => {
-      setMuted(m);
-      // README §3: the sound turning on (the button, or YouTube's own control) = immersive playback
-      if (!m && st.current.mode === 'feed') {
-        setMode('imm');
-        setSheet(false);
+  const events: R3PlayerEvents = {
+    onReady: () => setReady(true),
+    onPlaying: (id) => {
+      if (id === p.videos[st.current.idx]?.videoId) {
+        loadSeq.current++;
+        setPhase('player');
       }
     },
-    onTick: (t) => setTime({ id: t.videoId, s: t.seconds, d: t.duration }),
+    onMuted: (m) => {
+      setPlayerMuted(m);
+      if (st.current.mode === 'feed') {
+        // YouTube's own control turned the sound on in the feed = immersive playback
+        if (!m) {
+          setMode('imm');
+          setSheet(false);
+          p.onSound(true);
+        }
+        return;
+      }
+      // immersive: the setting follows the player (our button, YouTube's control, or blocked sound)
+      p.onSound(!m);
+    },
+    onTick: (t) => {
+      timeRef.current = { ...t, at: performance.now() };
+      if (t.seconds > 0) positions.current.set(t.videoId, t.seconds);
+    },
     onFailed: setFailed,
   };
 
+  /** The button shows the state now: the feed always plays without sound. */
+  const shownMuted = !imm || playerMuted;
   const tapMute = tap(() => {
-    if (muted) {
+    if (shownMuted) {
       setMode('imm');
       setSheet(false);
-      setMuted(false);
-      p.sound.current?.soundOn();
+      setPlayerMuted(false);
+      p.onSound(true);
+      p.player.current?.soundOn();
     } else {
-      setMuted(true);
-      p.sound.current?.soundOff();
+      setPlayerMuted(true);
+      p.onSound(false);
+      p.player.current?.soundOff();
     }
   });
+  const closeImmersive = (): void => {
+    setMode('feed');
+    setSheet(false);
+    p.player.current?.soundOff();
+  };
 
-  const imm = mode === 'imm';
-  const f = p.frame;
-  const immH = immersiveHeight(f);
-  const top = topBlockHeight(f.playerH);
   const dragFrac = init.dragFrac ?? 0;
-  const moving = dragging || dragFrac > 0;
-
-  const cards = useMemo(
-    () =>
-      p.videos.map((v, i) => {
-        const fb = feedBlocks(f, {
-          why: !!v.why,
-          summary: !!v.summary,
-          checks: v.checks.length > 0,
-          points: v.chapters.length > 0,
-        });
-        const ib = immersiveBlocks(f, {
-          chapters: v.chapters.length,
-          why: !!v.why,
-          summary: !!v.summary,
-          next: i + 1 < n,
-        });
-        return { fb, ib, h: imm ? immH : fb.height };
-      }),
-    [p.videos, f, imm, immH, n]
-  );
+  const moving = dragging || dragFrac !== 0;
   const offs = cards.reduce<number[]>((a, c) => (a.push(a[a.length - 1] + c.h), a), [0]);
   const curH = cards[Math.min(idx, n - 1)]?.h ?? 0;
-  const dy = dragFrac > 0 ? -dragFrac * curH : drag;
+  const dy = dragFrac !== 0 ? -dragFrac * curH : drag;
   const stackY = Math.round(-offs[Math.min(idx, n)] + dy);
-  const showPlayer = phase === 'player' && !settling && !p.loading && idx < n;
+  const playing = phase === 'player' && !settling && !p.loading && idx < n;
   const curAmb = ambientOrDefault(cur?.ambient);
   const endH = f.vh - f.safeTop - HEADER_H;
 
@@ -375,37 +494,24 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
     <div className="mf-w3-root" data-mode={mode} data-testid="mf-w3-watch" style={rootStyle}>
       <div className="mf-w3-watch">
         <div className="mf-w3-head">
-          <div className="mf-w3-head-row">
-            <button
-              type="button"
-              className="mf-w3-icon-btn"
-              data-testid="mf-watch-back"
-              aria-label={imm ? '닫기' : '뒤로'}
-              onClick={tap(() => {
-                if (imm) {
-                  setMode('feed');
-                  setSheet(false);
-                } else p.onBack();
-              })}
-            >
-              <Svg size={20}>
-                <path d={imm ? 'M4 7l6 6 6-6' : 'M12 4l-6 6 6 6'} />
-              </Svg>
-            </button>
-            <div className="mf-w3-goal" data-testid="mf-watch-goal-name">
-              {p.goalTitle}
-            </div>
-            {n > 0 ? (
-              <div className="mf-w3-counter" data-testid="mf-watch-counter">
-                {counterText(Math.min(idx, n - 1), n)}
-              </div>
-            ) : null}
+          <button
+            type="button"
+            className="mf-w3-icon-btn"
+            data-testid="mf-watch-back"
+            aria-label={imm ? '닫기' : '뒤로'}
+            onClick={tap(() => (imm ? closeImmersive() : p.onBack()))}
+          >
+            <Svg size={20}>
+              <path d={imm ? 'M4 7l6 6 6-6' : 'M12 4l-6 6 6 6'} />
+            </Svg>
+          </button>
+          <div className="mf-w3-goal" data-testid="mf-watch-goal-name">
+            {p.goalTitle}
           </div>
           {n > 0 ? (
-            <div className="mf-w3-segs">
-              {segmentStates(n, idx).map((s, i) => (
-                <div key={i} className="mf-w3-seg" data-state={s} data-testid="mf-watch-seg" />
-              ))}
+            <div className="mf-w3-counter" data-testid="mf-watch-counter">
+              <b>{Math.min(idx, n - 1) + 1}</b>
+              <span>{' / ' + n}</span>
             </div>
           ) : null}
         </div>
@@ -432,13 +538,14 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
               const liked = r === 'like';
               const dis = r === 'dislike';
               const rx = isCur ? reacting : null;
+              const kind: R3Reaction | null = rx ?? (i < maxIdx ? (r ?? 'skip') : null);
               const nx = p.videos[i + 1];
-              const slotPlayer = isCur && showPlayer;
-              const secs = time && time.id === v.videoId ? time.s : 0;
-              const dur =
-                time && time.id === v.videoId && time.d > 0 ? time.d : (v.durationSec ?? 0);
-              const prog = dur > 0 ? Math.min(PERCENT, (secs / dur) * PERCENT) : 0;
+              const nx2 = p.videos[i + 2];
               const lowHidden = imm && (i < idx || (isCur && moving));
+              const meta = viewsLengthText(v.viewsText, v.durationSec);
+              const showWhy = imm ? ib.showWhy : fb.showWhy;
+              const showSum = imm ? ib.showSummary : fb.showSummary;
+              const ptRows = imm ? ib.chapterRows : fb.pointRows;
               const style = {
                 height: h + 'px',
                 '--w3-card-amb': ambientOrDefault(v.ambient),
@@ -458,14 +565,19 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                       {v.initial}
                     </div>
                     <div className="mf-w3-ch">{v.channel}</div>
-                    <div className="mf-w3-ch-meta">
-                      {channelMetaText(v.durationSec, v.publishedAt)}
-                    </div>
-                    {slotPlayer ? (
+                    {v.ageText ? (
+                      <div
+                        className={v.fresh ? 'mf-w3-age-pill' : 'mf-w3-age'}
+                        data-testid="mf-w3-age"
+                      >
+                        {v.ageText}
+                      </div>
+                    ) : null}
+                    {isCur ? (
                       <button
                         type="button"
                         className="mf-w3-mute"
-                        data-muted={muted ? '' : undefined}
+                        data-muted={shownMuted ? '' : undefined}
                         data-testid="mf-w3-mute"
                         aria-label="음소거"
                         onClick={tapMute}
@@ -475,7 +587,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                             <path d="M11 5L6 9H3v6h3l5 4z" />
                             <path
                               d={
-                                muted
+                                shownMuted
                                   ? 'M15 9l6 6M21 9l-6 6'
                                   : 'M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13'
                               }
@@ -500,7 +612,10 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                     {v.thumbUrl ? <img src={v.thumbUrl} alt="" draggable={false} /> : null}
                   </div>
                   <div className="mf-w3-line">
-                    {isCur && phase === 'thumb' ? <div className="mf-w3-line-run" /> : null}
+                    {isCur && !playing ? <div className="mf-w3-line-run" /> : null}
+                    {isCur && playing && v.videoId ? (
+                      <ProgressFill timeRef={timeRef} videoId={v.videoId} />
+                    ) : null}
                   </div>
                   {isCur && failed ? (
                     <div className="mf-w3-failed" data-testid="mf-watch-player-failed">
@@ -517,85 +632,48 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                     </div>
                   ) : null}
 
-                  {!imm ? (
-                    <div className="mf-w3-info">
-                      {fb.showWhy ? (
-                        <div className="mf-w3-why" data-testid="mf-reason">
-                          <div className="mf-w3-why-k">이 영상을 고른 이유</div>
-                          <div className="mf-w3-why-t">{v.why}</div>
-                          {fb.showChecks ? (
-                            <div className="mf-w3-checks">
-                              {v.checks.map((k) => (
-                                <div key={k} className="mf-w3-check">
-                                  ✓ {k}
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      <div className="mf-w3-pad">
-                        <div className="mf-w3-title" data-testid="mf-watch-title">
-                          {v.title}
-                        </div>
-                        {fb.showSummary ? (
-                          <div className="mf-w3-sum" data-testid="mf-oneliner">
-                            <div className="mf-w3-label">한 줄 요약</div>
-                            <div className="mf-w3-sum-t">{v.summary}</div>
-                          </div>
-                        ) : null}
-                        {fb.showPoints ? (
-                          <div className="mf-w3-pts" data-testid="mf-chapters">
-                            <div className="mf-w3-label">영상 설명란에서 추린 순서</div>
-                            {v.chapters.slice(0, 2).map((c, k) => (
-                              <div key={k} className="mf-w3-pt">
-                                <span className="mf-w3-pt-at">{chapterStamp(c.at)}</span>
-                                <span>{c.title}</span>
+                  <div className="mf-w3-info">
+                    {showWhy ? (
+                      <div className="mf-w3-why" data-testid="mf-reason">
+                        <div className="mf-w3-why-k">이 영상을 고른 이유</div>
+                        <div className="mf-w3-why-t">{v.why}</div>
+                        {!imm && fb.showChecks ? (
+                          <div className="mf-w3-checks">
+                            {v.checks.map((k) => (
+                              <div key={k} className="mf-w3-check">
+                                ✓ {k}
                               </div>
                             ))}
                           </div>
                         ) : null}
                       </div>
-                    </div>
-                  ) : (
-                    <div className="mf-w3-info">
-                      <div className="mf-w3-imm-title" data-testid="mf-watch-title">
+                    ) : null}
+                    <div className="mf-w3-pad">
+                      <div className="mf-w3-title" data-testid="mf-watch-title">
                         {v.title}
                       </div>
-                      <div className="mf-w3-prog">
-                        <div className="mf-w3-prog-track">
-                          <div className="mf-w3-prog-fill" style={{ width: prog + '%' }} />
-                        </div>
-                        <div className="mf-w3-prog-time">
-                          <span>{clockText(secs)}</span>
-                          <span>{clockText(dur)}</span>
-                        </div>
+                      <div className="mf-w3-meta" data-testid="mf-w3-meta">
+                        {meta}
                       </div>
-                      {ib.chapterRows > 0 ? (
-                        <div className="mf-w3-chaps" data-testid="mf-chapters">
+                      {showSum ? (
+                        <div className="mf-w3-sum" data-testid="mf-oneliner">
+                          <div className="mf-w3-label">한 줄 요약</div>
+                          <div className="mf-w3-sum-t">{v.summary}</div>
+                        </div>
+                      ) : null}
+                      {ptRows > 0 ? (
+                        <div className="mf-w3-pts" data-testid="mf-chapters">
                           <div className="mf-w3-label">영상 설명란에서 추린 순서</div>
-                          {v.chapters.slice(0, ib.chapterRows).map((c, k) => (
-                            <div key={k} className="mf-w3-chap">
-                              <span className="mf-w3-chap-at">{chapterStamp(c.at)}</span>
+                          {v.chapters.slice(0, ptRows).map((c, k) => (
+                            <div key={k} className="mf-w3-pt">
+                              <span className="mf-w3-pt-at">{chapterStamp(c.at)}</span>
                               <span>{c.title}</span>
                             </div>
                           ))}
                         </div>
                       ) : null}
-                      {ib.showWhy ? (
-                        <div className="mf-w3-imm-why" data-testid="mf-reason">
-                          <div className="mf-w3-why-k">이 영상을 고른 이유</div>
-                          <div className="mf-w3-why-t">{v.why}</div>
-                        </div>
-                      ) : null}
-                      {ib.showSummary ? (
-                        <div className="mf-w3-imm-sum" data-testid="mf-oneliner">
-                          <div className="mf-w3-label">한 줄 요약</div>
-                          <div className="mf-w3-sum-t">{v.summary}</div>
-                        </div>
-                      ) : null}
                     </div>
-                  )}
+                  </div>
 
                   <div className="mf-w3-icons" data-testid="mf-watch-actions">
                     <button
@@ -660,12 +738,14 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                         <path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6" />
                       </Svg>
                     </button>
-                    {rx ? (
-                      <div className="mf-w3-confirm" data-kind={rx} data-testid="mf-w3-confirm">
-                        <Svg size={14} sw={2.6}>
-                          <path d="M4 10.5l4 4 8-9" />
-                        </Svg>
-                        {rx === 'like' ? '좋아' : '별로'}
+                    {kind ? (
+                      <div className="mf-w3-confirm" data-kind={kind} data-testid="mf-w3-confirm">
+                        {kind !== 'skip' ? (
+                          <Svg size={14} sw={2.6}>
+                            <path d="M4 10.5l4 4 8-9" />
+                          </Svg>
+                        ) : null}
+                        {kind === 'like' ? '좋아' : kind === 'dislike' ? '별로' : '넘김'}
                       </div>
                     ) : null}
                     <div className="mf-w3-grow" />
@@ -684,29 +764,32 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                     ) : null}
                   </div>
                   {!imm ? <div className="mf-w3-gap" /> : null}
-                  {imm && ib.nextBig && nx ? (
-                    <div
-                      className="mf-w3-next mf-w3-next-big"
-                      data-hidden={lowHidden ? '' : undefined}
-                      data-testid="mf-w3-next"
-                    >
-                      <div
-                        className="mf-w3-next-thumb"
-                        style={
-                          {
-                            '--w3-next-bg': nx.slotBg ?? ambientOrDefault(nx.ambient),
-                          } as CSSProperties
-                        }
-                      >
-                        {nx.thumbUrl ? <img src={nx.thumbUrl} alt="" draggable={false} /> : null}
-                      </div>
-                      <div className="mf-w3-next-body">
-                        <div className="mf-w3-next-ch">{nx.channel}</div>
-                        <div className="mf-w3-next-t">{nx.title}</div>
-                      </div>
-                      <UpArrow />
-                    </div>
-                  ) : null}
+                  {imm && ib.nextBig && nx
+                    ? [nx, ...(ib.nextSecond && nx2 ? [nx2] : [])].map((x, k) => (
+                        <div
+                          key={x.key}
+                          className="mf-w3-next mf-w3-next-big"
+                          data-hidden={lowHidden ? '' : undefined}
+                          data-testid="mf-w3-next"
+                        >
+                          <div
+                            className="mf-w3-next-thumb"
+                            style={
+                              {
+                                '--w3-next-bg': x.slotBg ?? ambientOrDefault(x.ambient),
+                              } as CSSProperties
+                            }
+                          >
+                            {x.thumbUrl ? <img src={x.thumbUrl} alt="" draggable={false} /> : null}
+                          </div>
+                          <div className="mf-w3-next-body">
+                            <div className="mf-w3-next-ch">{x.channel}</div>
+                            <div className="mf-w3-next-t">{x.title}</div>
+                          </div>
+                          {k === 0 ? <UpArrow /> : null}
+                        </div>
+                      ))
+                    : null}
                   {imm && !ib.nextBig ? (
                     <div
                       className="mf-w3-next mf-w3-next-line"
@@ -715,12 +798,9 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                     >
                       <UpArrow />
                       {nx ? (
-                        <>
-                          <div className="mf-w3-next-av">{nx.initial}</div>
-                          <div className="mf-w3-next-text">
-                            {[nx.channel, nx.title].filter((x) => x).join(' · ')}
-                          </div>
-                        </>
+                        <div className="mf-w3-next-text">
+                          {[nx.channel, nx.title].filter((x) => x).join(' · ')}
+                        </div>
                       ) : (
                         <div className="mf-w3-next-kick">오늘 본 것</div>
                       )}
@@ -738,15 +818,15 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
 
           <div
             className="mf-w3-player-layer"
-            data-shown={showPlayer ? '' : undefined}
-            data-anim={dragging ? undefined : ''}
+            data-shown={layer.shown && idx < n && !p.loading ? '' : undefined}
+            data-anim={layer.anim && !dragging ? '' : undefined}
             data-testid="mf-watch-player"
             style={{
               height: f.playerH + 'px',
-              transform: 'translateY(' + (showPlayer ? Math.round(dy) : 0) + 'px)',
+              transform: 'translateY(' + Math.round(layer.y + (dragging ? dy : 0)) + 'px)',
             }}
           >
-            {curId ? p.renderPlayer(playerApi) : null}
+            {p.renderPlayer(events)}
           </div>
 
           {p.loading ? (
@@ -770,11 +850,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
       </div>
 
       {sheet && hasSheet && sheetVideo ? (
-        <div
-          className="mf-w3-sheet"
-          data-testid="mf-w3-sheet"
-          style={{ top: f.safeTop + HEADER_H + top + 'px' }}
-        >
+        <div className="mf-w3-sheet" data-testid="mf-w3-sheet" style={{ top: sheetTop(f) + 'px' }}>
           <div className="mf-w3-sheet-head">
             <div className="mf-w3-sheet-kick">더 보기</div>
             <button
@@ -790,6 +866,11 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
           </div>
           <div className="mf-w3-sheet-body">
             <div className="mf-w3-sheet-title">{sheetVideo.title}</div>
+            <div className="mf-w3-sheet-meta">
+              {[sheetVideo.ageText, viewsLengthText(sheetVideo.viewsText, sheetVideo.durationSec)]
+                .filter((x) => x)
+                .join(' · ')}
+            </div>
             {sheetVideo.why ? (
               <div className="mf-w3-sheet-sec" data-first="">
                 <div className="mf-w3-sheet-k" data-why="">

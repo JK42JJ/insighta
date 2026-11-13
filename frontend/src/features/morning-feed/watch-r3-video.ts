@@ -14,6 +14,10 @@ export function r3VideoOf(v: WatchVideo, i: number): R3Video {
     altIcon: i % 2 === 1,
     durationSec: v.durationSec,
     publishedAt: v.publishedAt,
+    // README 수정 4: within 7 days a filled pill with the relative age, older as 'n개월 전' (James)
+    ageText: v.ago,
+    fresh: v.fresh === true,
+    viewsText: v.chMeta,
     thumbUrl: v.thumbUrl,
     ambient: v.ambient,
     why: (v.reasonLines ?? []).join(' '),

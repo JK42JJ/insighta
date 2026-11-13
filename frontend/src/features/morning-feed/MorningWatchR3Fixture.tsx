@@ -4,11 +4,11 @@ import { parseSafeOverride, useWatchFrame } from '@/features/morning-feed/use-wa
 import { buildWatchSummary, type InsightView } from '@/features/morning-feed/watch-design';
 import {
   WatchFeed,
-  type R3PlayerApi,
-  type R3SoundControl,
+  type R3PlayerEvents,
   type R3Video,
   type WatchFeedProps,
 } from '@/features/morning-feed/watch-r3-feed';
+import type { PlayerController } from '@/features/morning-feed/WatchPlayer';
 import {
   WatchDoneR3,
   WatchInputR3,
@@ -30,7 +30,10 @@ interface FixtureVid {
   t: string;
   ch: string;
   min: number;
-  day: string;
+  up: string;
+  fresh?: boolean;
+  views: string;
+  img?: string;
   ph: string;
   amb: string;
   why?: string;
@@ -39,12 +42,16 @@ interface FixtureVid {
   pts?: Array<[string, string]>;
 }
 
+/** WatchPhone.dc.html (수정 4) B5, copied. `img` is the index into `&thumbs=` (not stored here). */
 const VIDS: FixtureVid[] = [
   {
     t: 'Figma Agent로 완벽한 디자인 만들기',
     ch: '코드팩토리',
     min: 6,
-    day: '2026-11-09',
+    up: '3일 전',
+    fresh: true,
+    views: '1.2만회',
+    img: '0',
     ph: '#201E32',
     amb: '#201E32',
     why: "좋아요한 영상이 있는 채널 '코드팩토리'의 영상입니다.",
@@ -60,7 +67,10 @@ const VIDS: FixtureVid[] = [
     t: 'Kling 4.0(클링) vs Seedance 2.5(시댄스) 포함 AI 영상 모델 9개, 한국어 대사 장면 점수 공개 | Higgsfield 힉스필드',
     ch: 'AI 겸임교수 이종범',
     min: 13,
-    day: '2026-11-07',
+    up: '5일 전',
+    fresh: true,
+    views: '8.4천회',
+    img: '1',
     ph: '#2B2419',
     amb: '#2B2419',
     why: '[고른 이유]',
@@ -68,27 +78,31 @@ const VIDS: FixtureVid[] = [
     checks: ['진행자 1명', '한국어 음성'],
   },
   {
-    t: '코딩 몰라도 바이브코딩을 배워야 하는 이유 | 이제 누구나 만드는 시대입니다',
-    ch: '[채널명]',
-    min: 9,
-    day: '2026-11-06',
-    ph: '#6B5876',
-    amb: '#2A2230',
-  },
-  {
-    t: 'AI 브라우저에 일을 맡겼더니 게임까지 혼자 깼습니다 | Aside 실전 6가지',
-    ch: '[채널명]',
-    min: 11,
-    day: '2026-11-05',
+    t: 'I Built an Auto Router for Local LLMs with LiteLLM + Pi Coding Agent',
+    ch: 'Execute Automation',
+    min: 20,
+    up: '9월 11일',
+    views: '4.1천회',
     ph: '#4C6E66',
     amb: '#1C2A27',
+  },
+  {
+    t: '(1부) 챗GPT vs 제미나이 vs 클로드, AI 승자 답 나왔습니다',
+    ch: '언더스탠딩 : 세상의 모든 지식',
+    min: 48,
+    up: '10월 30일',
+    views: '31만회',
+    img: '2',
+    ph: '#2F2318',
+    amb: '#2F2318',
     why: '[고른 이유]',
   },
   {
     t: '직장인 야근 탈출 치트키? PPT 뼈대 제대로 만들어주는 미친 오픈소스.. ㄷㄷ',
     ch: '[채널명]',
     min: 8,
-    day: '2026-11-02',
+    up: '11월 2일',
+    views: '2.6만회',
     ph: '#8A6F4A',
     amb: '#30271A',
     why: '[고른 이유]',
@@ -108,74 +122,75 @@ const DONE_R: Reaction[] = ['like', 'dislike', 'skip', 'skip', 'skip'];
 interface Preset {
   screen: 'input' | 'feed' | 'done';
   idx?: number;
+  maxIdx?: number;
   mode?: 'feed' | 'imm';
   phase?: 'thumb' | 'player';
   playing?: boolean;
-  muted?: boolean;
+  sound?: boolean;
   prog?: number;
   sheet?: boolean;
   loading?: boolean;
   dragFrac?: number;
+  count?: number;
   reacts?: Reaction[];
   reacting?: 'like' | 'dislike';
   doneToday?: boolean;
   carry?: boolean;
 }
-const PLAY = { playing: true, muted: true, prog: 4 };
-const SOUND = { playing: true, muted: false, prog: 12 };
 const F = 'feed' as const;
-/** WatchPhone.dc.html PRESETS, same names. */
+const SND = { screen: F, mode: 'imm' as const, sound: true, prog: 34 };
+/** WatchPhone.dc.html (수정 4) PRESETS, same names (watch screen; input/done unchanged here). */
 const R3_PRESETS: Record<string, Preset> = {
   input: { screen: 'input' },
   'input-done': { screen: 'input', doneToday: true, reacts: DONE_R },
   'input-carry': { screen: 'input', carry: true },
-  feed: { screen: F, ...PLAY },
-  'feed-paused': { screen: F },
-  'feed-mid': { screen: F, ...PLAY, dragFrac: 0.45 },
-  'feed-after': { screen: F, idx: 1, phase: 'thumb', reacts: ['skip'] },
+  feed: { screen: F, prog: 4 },
+  'feed-mid': { screen: F, prog: 4, dragFrac: 0.45 },
+  'feed-after': { screen: F, idx: 1, maxIdx: 1, phase: 'thumb', prog: 0, reacts: ['skip'] },
   'feed-loading': { screen: F, loading: true, phase: 'thumb' },
-  'feed-last': { screen: F, ...PLAY, idx: 4, reacts: ['like', 'skip', 'skip', 'dislike'] },
-  'feed-noinfo': { screen: F, ...PLAY, idx: 2, reacts: ['like', 'skip'] },
-  'feed-more': { screen: F, ...PLAY, sheet: true },
-  'feed-liked': { screen: F, ...PLAY, reacts: ['like'], reacting: 'like' },
-  'feed-disliked': { screen: F, ...PLAY, reacts: ['dislike'], reacting: 'dislike' },
-  imm: { screen: F, ...SOUND, mode: 'imm' },
-  'imm-mid': { screen: F, ...SOUND, mode: 'imm', dragFrac: 0.45 },
-  'imm-after': { screen: F, mode: 'imm', idx: 1, phase: 'thumb', reacts: ['skip'] },
-  'imm-muted': { screen: F, ...PLAY, mode: 'imm', idx: 1, reacts: ['skip'] },
-  'imm-nochap': { screen: F, ...SOUND, mode: 'imm', idx: 1, reacts: ['skip'] },
-  'imm-noinfo': { screen: F, ...SOUND, mode: 'imm', idx: 2, reacts: ['skip', 'skip'] },
-  'imm-paused': { screen: F, mode: 'imm', muted: false, prog: 38 },
-  'imm-more': { screen: F, ...SOUND, mode: 'imm', sheet: true },
-  'imm-last': {
-    screen: F,
-    ...SOUND,
-    mode: 'imm',
-    idx: 4,
-    reacts: ['like', 'skip', 'skip', 'dislike'],
-  },
-  'imm-liked': { screen: F, ...SOUND, mode: 'imm', reacts: ['like'], reacting: 'like' },
+  'feed-more': { screen: F, prog: 4, sheet: true },
+  'feed-liked': { screen: F, prog: 4, reacts: ['like'], reacting: 'like' },
+  'feed-34': { screen: F, prog: 4, count: 34, idx: 7, maxIdx: 7 },
+  imm: { ...SND },
+  'imm-paused': { ...SND, playing: false },
+  'imm-min': { ...SND, idx: 2, maxIdx: 2, reacts: ['like', 'skip'] },
+  'imm-muted': { ...SND, sound: false },
+  'imm-next': { ...SND, idx: 1, maxIdx: 1, prog: 3, reacts: ['like'] },
+  'imm-mid': { ...SND, dragFrac: 0.45 },
+  'imm-after': { ...SND, idx: 1, maxIdx: 1, phase: 'thumb', prog: 0, reacts: ['skip'] },
+  'imm-back-mid': { ...SND, idx: 1, maxIdx: 1, dragFrac: -0.45, reacts: ['skip'] },
+  'imm-rev-like': { ...SND, idx: 0, maxIdx: 2, prog: 0, reacts: ['like', 'skip'] },
+  'imm-rev-dislike': { ...SND, idx: 1, maxIdx: 3, prog: 0, reacts: ['like', 'dislike', 'skip'] },
+  'imm-rev-skip': { ...SND, idx: 1, maxIdx: 2, prog: 0, reacts: ['like', 'skip'] },
+  'imm-more': { ...SND, sheet: true },
+  'imm-34': { ...SND, count: 34, idx: 13, maxIdx: 13 },
+  'imm-liked': { ...SND, reacts: ['like'], reacting: 'like' },
   done: { screen: 'done', reacts: DONE_R },
 };
 
-function toVideos(thumbs: string[]): R3Video[] {
-  return VIDS.map((v, i) => ({
-    key: 'fx' + i,
-    videoId: 'fx' + i,
-    title: v.t,
-    channel: v.ch,
-    initial: v.ch.replace('[', '')[0] ?? '',
-    altIcon: i % 2 === 1,
-    durationSec: v.min * 60,
-    publishedAt: v.day + 'T03:00:00Z',
-    thumbUrl: thumbs[i],
-    ambient: v.amb,
-    slotBg: v.ph,
-    why: v.why ?? '',
-    summary: v.sum ?? '',
-    checks: v.checks ?? [],
-    chapters: (v.pts ?? []).map(([at, title]) => ({ at, title })),
-  }));
+function toVideos(thumbs: string[], count: number): R3Video[] {
+  return Array.from({ length: count }, (_x, i) => {
+    const v = VIDS[i % VIDS.length];
+    return {
+      key: 'fx' + i,
+      videoId: 'fx' + i,
+      title: v.t,
+      channel: v.ch,
+      initial: v.ch.replace('[', '')[0] ?? '',
+      altIcon: i % 2 === 1,
+      durationSec: v.min * 60,
+      ageText: v.up,
+      fresh: !!v.fresh,
+      viewsText: '조회수 ' + v.views,
+      thumbUrl: v.img !== undefined ? thumbs[Number(v.img)] : undefined,
+      ambient: v.amb,
+      slotBg: v.ph,
+      why: v.why ?? '',
+      summary: v.sum ?? '',
+      checks: v.checks ?? [],
+      chapters: (v.pts ?? []).map(([at, title]) => ({ at, title })),
+    };
+  });
 }
 
 function tagOf(v: FixtureVid, r: Reaction | undefined): string {
@@ -212,35 +227,49 @@ function insightOf(reacts: readonly Reaction[]): InsightView {
   };
 }
 
-/** The player layer's stand-in: the thumbnail colour and, when stopped, YouTube's own play button. */
+/**
+ * The player layer's stand-in: the loaded video's thumbnail colour (and image) and, when stopped,
+ * a play mark where YouTube's own button would be. Implements the player commands: a load
+ * reports PLAYING right away (unless the preset is paused or still on the thumbnail).
+ */
 function FakePlayer({
-  api,
-  video,
+  events,
+  controller,
+  videos,
   playing,
+  holdThumb,
   prog,
-  sound,
 }: {
-  api: R3PlayerApi;
-  video: R3Video | undefined;
+  events: R3PlayerEvents;
+  controller: { current: PlayerController | null };
+  videos: R3Video[];
   playing: boolean;
+  holdThumb: boolean;
   prog: number;
-  sound: { current: R3SoundControl | null };
 }): JSX.Element {
-  const apiRef = useRef(api);
-  apiRef.current = api;
+  const ev = useRef(events);
+  ev.current = events;
+  const [id, setId] = useState('');
   useEffect(() => {
-    sound.current = {
-      soundOn: () => apiRef.current.onMuted(false),
-      soundOff: () => apiRef.current.onMuted(true),
+    controller.current = {
+      load: (videoId, _start, withSound) => {
+        setId(videoId);
+        ev.current.onMuted(!withSound);
+        const v = videos.find((x) => x.videoId === videoId);
+        const dur = v?.durationSec ?? 0;
+        ev.current.onTick({ videoId, seconds: (dur * prog) / 100, duration: dur, playing: false });
+        if (!holdThumb) window.setTimeout(() => ev.current.onPlaying(videoId), 0);
+      },
+      soundOn: () => ev.current.onMuted(false),
+      soundOff: () => ev.current.onMuted(true),
+      pause: () => undefined,
     };
+    ev.current.onReady();
     return () => {
-      sound.current = null;
+      controller.current = null;
     };
-  }, [sound]);
-  useEffect(() => {
-    const dur = video?.durationSec ?? 0;
-    apiRef.current.onTick({ videoId: api.videoId, seconds: (dur * prog) / 100, duration: dur });
-  }, [api.videoId, prog, video?.durationSec]);
+  }, [controller, videos, prog, holdThumb]);
+  const video = videos.find((v) => v.videoId === id);
   return (
     <div
       style={{
@@ -305,8 +334,9 @@ export function MorningWatchR3Fixture({
     () => (thumbs ?? '').split(',').filter((t) => /^https?:\/\//.test(t)),
     [thumbs]
   );
-  const videos = useMemo(() => toVideos(thumbList), [thumbList]);
-  const sound = useRef<R3SoundControl | null>(null);
+  const videos = useMemo(() => toVideos(thumbList, pr.count ?? VIDS.length), [thumbList, pr.count]);
+  const player = useRef<PlayerController | null>(null);
+  const [sound, setSound] = useState(!!pr.sound);
   const [screen, setScreen] = useState(pr.screen);
   const [reacts, setReacts] = useState<Reaction[]>(pr.reacts ?? []);
 
@@ -346,8 +376,8 @@ export function MorningWatchR3Fixture({
   } else if (screen === 'feed') {
     const initial: WatchFeedProps['initial'] = {
       idx: pr.idx ?? 0,
+      maxIdx: pr.maxIdx ?? pr.idx ?? 0,
       mode: pr.mode ?? 'feed',
-      muted: pr.muted ?? true,
       phase: pr.phase ?? 'player',
       reacts: pr.reacts ?? [],
       reacting: pr.reacting ?? null,
@@ -371,13 +401,16 @@ export function MorningWatchR3Fixture({
         onFinish={() => setScreen('done')}
         onBack={() => setScreen('input')}
         sound={sound}
-        renderPlayer={(api) => (
+        onSound={setSound}
+        player={player}
+        renderPlayer={(events) => (
           <FakePlayer
-            api={api}
-            video={videos.find((v) => v.videoId === api.videoId)}
-            playing={!!pr.playing}
+            events={events}
+            controller={player}
+            videos={videos}
+            playing={pr.playing !== false}
+            holdThumb={pr.phase === 'thumb'}
             prog={pr.prog ?? 0}
-            sound={sound}
           />
         )}
       />

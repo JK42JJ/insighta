@@ -7,29 +7,33 @@
  */
 import { formatMinutes } from '@/features/morning-feed/insight-summary';
 
-export const HEADER_H = 48;
+/** README 수정 4: the header is 44 (the progress segments are gone; a counter only). */
+export const HEADER_H = 44;
 export const CHANNEL_ROW_H = 52;
+/** The one line at the player's bottom edge: loading run, then playback progress. */
 export const LOAD_LINE_H = 3;
 export const ICON_ROW_H = 56;
 export const CARD_GAP_H = 8;
-/** Below the gap band at least this much of the next card shows (prototype budget). */
-export const NEXT_PEEK_H = 44;
-/** Title block (top 10 + 42) and the bottom padding of the info area. */
-export const FEED_TITLE_H = 52;
-export const FEED_INFO_PAD_H = 10;
+/** Below the gap band at least this much of the next card shows. */
+export const NEXT_PEEK_H = 50;
+/** Title (top 8 + 40) and the views · length line (18): always shown. */
+export const TITLE_META_H = 66;
 export const WHY_H = 80;
 export const SUMMARY_H = 64;
 export const CHECKS_H = 24;
+/** Feed: table of contents, top 12 + label 16 + 2 rows × 26. */
 export const POINTS_H = 80;
-/** Immersive playback: title (8 + 46), progress (36), the next-video line (48) or preview (92). */
-export const IMM_TITLE_H = 54;
-export const IMM_PROGRESS_H = 36;
+export const FEED_POINT_ROWS = 2;
+/** Immersive: the next-video line (48), grown to the preview (92), a second preview (+92). */
 export const NEXT_LINE_H = 48;
 export const NEXT_BIG_H = 92;
-/** Table of contents: top 6 + label 16, then 44 per row, at most 4 rows. */
+export const NEXT_SECOND_H = 92;
+/** Immersive table of contents: top 6 + label 16, then 44 per row; only when 66 or more is left. */
 export const CHAPTER_HEAD_H = 22;
 export const CHAPTER_ROW_H = 44;
-export const CHAPTER_MAX_ROWS = 4;
+export const CHAPTER_MIN_H = 66;
+/** Immersive line area: 3 (YouTube controls stay, 1b) or 64 (our controls, 1a — not built yet). */
+export const IMM_LINE_H = LOAD_LINE_H;
 
 const ASPECT_W = 16;
 const ASPECT_H = 9;
@@ -63,23 +67,24 @@ export interface FeedBlocks {
   showWhy: boolean;
   showSummary: boolean;
   showChecks: boolean;
-  showPoints: boolean;
-  /** Card height: fixed part + title + the blocks that went in + bottom padding. */
+  /** Table-of-contents rows shown in the feed (0 or FEED_POINT_ROWS at most). */
+  pointRows: number;
+  /** Card height: fixed part + title/meta + the blocks that went in. */
   height: number;
 }
 
 /**
- * Feed card info blocks, README "정보 블록": only blocks with data, in the order 고른 이유 →
- * 한 줄 요약 → 확인 항목 (inside the 고른 이유 band, so only with it) → 설명란 순서, until the
- * height runs out; the rest goes to 더 보기.
+ * Feed card blocks, README 수정 4 §1: title + views/length (66) always; then 고른 이유 → 한 줄
+ * 요약 → 확인 항목 (inside the 고른 이유 band, so only with it) → 설명란 순서 2 rows, each only
+ * with data and only while the height lasts.
  */
 export function feedBlocks(
   f: Frame,
-  has: { why: boolean; summary: boolean; checks: boolean; points: boolean }
+  has: { why: boolean; summary: boolean; checks: boolean; points: number }
 ): FeedBlocks {
   const base = feedBaseHeight(f.playerH);
   const budget = f.vh - f.safeTop - f.safeBottom - HEADER_H - NEXT_PEEK_H - base;
-  let used = FEED_TITLE_H + FEED_INFO_PAD_H;
+  let used = TITLE_META_H;
   const fit = (h: number): boolean => {
     if (used + h > budget) return false;
     used += h;
@@ -88,48 +93,43 @@ export function feedBlocks(
   const showWhy = has.why && fit(WHY_H);
   const showSummary = has.summary && fit(SUMMARY_H);
   const showChecks = showWhy && has.checks && fit(CHECKS_H);
-  const showPoints = has.points && fit(POINTS_H);
-  return { showWhy, showSummary, showChecks, showPoints, height: base + used };
+  const pointRows = has.points > 0 && fit(POINTS_H) ? Math.min(has.points, FEED_POINT_ROWS) : 0;
+  return { showWhy, showSummary, showChecks, pointRows, height: base + used };
 }
 
-/** Immersive card height: the app area minus the safe areas and the header (594 / 715). */
+/** Immersive card height: the app area minus the safe areas and the header (598 / 719). */
 export function immersiveHeight(f: Frame): number {
   return f.vh - f.safeTop - f.safeBottom - HEADER_H;
 }
 
 export interface ImmersiveBlocks {
-  /** Table-of-contents rows shown (0 = no table of contents). */
-  chapterRows: number;
   showWhy: boolean;
   /** The next-video line grows into the 92 px preview. */
   nextBig: boolean;
   showSummary: boolean;
+  /** A second preview (the video after next) under the first. */
+  nextSecond: boolean;
+  /** Table-of-contents rows shown (0 = none). */
+  chapterRows: number;
 }
 
 /**
- * Immersive playback below the progress bar, README §4. With a table of contents: as many rows
- * as fit (at most 4). Without one (decision 4c): 고른 이유 → large next-video preview → 한 줄
- * 요약, each only with data and only while the height lasts.
+ * Immersive playback, README 수정 4 §2: title + views/length (66), the icon row (56) and the
+ * next-video line (48) are fixed; the rest is filled in this order while it lasts: 고른 이유 →
+ * next preview (+44) → 한 줄 요약 → second preview (+92) → 설명란 순서 (22 + 44 per row).
  */
 export function immersiveBlocks(
   f: Frame,
-  has: { chapters: number; why: boolean; summary: boolean; next: boolean }
+  has: { why: boolean; summary: boolean; next: boolean; afterNext: boolean; chapters: number }
 ): ImmersiveBlocks {
   let free =
     immersiveHeight(f) -
-    topBlockHeight(f.playerH) -
-    IMM_TITLE_H -
-    IMM_PROGRESS_H -
+    CHANNEL_ROW_H -
+    f.playerH -
+    IMM_LINE_H -
+    TITLE_META_H -
     ICON_ROW_H -
     NEXT_LINE_H;
-  if (has.chapters > 0) {
-    const rows = Math.min(
-      has.chapters,
-      CHAPTER_MAX_ROWS,
-      Math.max(0, Math.floor((free - CHAPTER_HEAD_H) / CHAPTER_ROW_H))
-    );
-    if (rows > 0) return { chapterRows: rows, showWhy: false, nextBig: false, showSummary: false };
-  }
   const fit = (h: number): boolean => {
     if (free < h) return false;
     free -= h;
@@ -138,7 +138,12 @@ export function immersiveBlocks(
   const showWhy = has.why && fit(WHY_H);
   const nextBig = has.next && fit(NEXT_BIG_H - NEXT_LINE_H);
   const showSummary = has.summary && fit(SUMMARY_H);
-  return { chapterRows: 0, showWhy, nextBig, showSummary };
+  const nextSecond = nextBig && has.afterNext && fit(NEXT_SECOND_H);
+  const chapterRows =
+    has.chapters > 0 && free >= CHAPTER_MIN_H
+      ? Math.min(has.chapters, Math.floor((free - CHAPTER_HEAD_H) / CHAPTER_ROW_H))
+      : 0;
+  return { showWhy, nextBig, showSummary, nextSecond, chapterRows };
 }
 
 const SECONDS_IN_MINUTE = 60;
@@ -150,20 +155,14 @@ export function clockText(seconds: number): string {
   return Math.floor(s / SECONDS_IN_MINUTE) + ':' + String(s % SECONDS_IN_MINUTE).padStart(PAD, '0');
 }
 
-const KST_OFFSET_MS = 9 * 3_600_000;
-
-/** Upload day in KST: '11월 9일'. '' when the time is missing or invalid. */
-export function uploadDayText(iso: string | undefined): string {
-  if (!iso) return '';
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return '';
-  const k = new Date(t + KST_OFFSET_MS);
-  return k.getUTCMonth() + 1 + '월 ' + k.getUTCDate() + '일';
+/** The views · length line under the title: '조회수 1.2만회 · 6분'; a part without data is left out. */
+export function viewsLengthText(viewsText: string, durationSec: number | null | undefined): string {
+  return [viewsText, formatMinutes(durationSec)].filter((p) => p.length > 0).join(' · ');
 }
 
-/** Channel row right text: '6분 · 11월 9일'; a part without data is left out. */
-export function channelMetaText(durationSec: number | null | undefined, iso?: string): string {
-  return [formatMinutes(durationSec), uploadDayText(iso)].filter((p) => p.length > 0).join(' · ');
+/** The player's bottom edge in the immersive sheet position (README §5): safe top + header + top block. */
+export function sheetTop(f: Frame): number {
+  return f.safeTop + HEADER_H + topBlockHeight(f.playerH);
 }
 
 /** Ink Navy (README §5) as its token: the background when the thumbnail colour is unknown. */

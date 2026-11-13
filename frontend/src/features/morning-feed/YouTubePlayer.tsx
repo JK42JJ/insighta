@@ -157,7 +157,6 @@ export function YouTubePlayer({
           playerVars: {
             playsinline: 1,
             rel: 0,
-            modestbranding: 1,
             controls: 1,
             mute: 1,
             autoplay: 1,
