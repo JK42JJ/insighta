@@ -25,6 +25,7 @@ export {
 export { branchOrder, buildSearchInput } from './search';
 export { levelFit, levelFitTerm, scoreCandidate, selectTop } from './score';
 export { applyJudgments, diffGraphs } from './judgments';
+export { WEIGHT_RULE, ratioWeight, recomputeWeights, tallyHistory } from './recompute';
 export {
   changedElements,
   linkMandalaContext,

@@ -37,9 +37,19 @@ export const USER_CONTEXT_CONFIG = Object.freeze({
   /** WANTS / CONTAINS never go below this. */
   WEIGHT_FLOOR: 0,
 
+  // --- order-independent recompute (recompute.ts; James 2026-11-13) ---
+  /** concept / format WANTS = RATIO_SCALE·(L + RATIO_PRIOR_LIKES)/(L + S + RATIO_PRIOR_TOTAL). */
+  RATIO_SCALE: 2,
+  RATIO_PRIOR_LIKES: 1,
+  RATIO_PRIOR_TOTAL: 2,
+  /** Seed weight of the channels listed at context creation (James 2026-11-13: not counted). */
+  RECOMPUTE_CHANNEL_SEED_BASE: 0,
+  /** The branches the user stated never drop below this (James 2026-11-13 approved). */
+  BRANCH_WEIGHT_FLOOR: 0.5,
+
   // --- scoring ---
-  /** A candidate is excluded when an AVOIDS on its FORMAT or CHANNEL is ≥ this (James 2026-11-12).
-   *  Concepts are never excluded; see AVOID_CONCEPT_PENALTY. */
+  /** A candidate is excluded when an AVOIDS on its CHANNEL is ≥ this (James 2026-11-12/13).
+   *  Concepts and formats are never excluded; see AVOID_CONCEPT_PENALTY. */
   AVOID_EXCLUDE: 1.0,
   /** Score subtracted per unit of AVOIDS weight on a concept the candidate covers (draft value;
    *  one concept AVOIDS at 1.0 outweighs one liked concept at LIKE_CONCEPT_DELTA). */

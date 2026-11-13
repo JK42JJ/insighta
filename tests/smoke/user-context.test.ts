@@ -222,20 +222,21 @@ describe('user context — scoring', () => {
     expect(scoreCandidate(soft, A).score).toBeCloseTo(base - 0.5 * C.AVOID_CONCEPT_PENALTY, 6);
   });
 
-  test('format or channel AVOIDS at the threshold excludes; below it penalises', () => {
-    const fmt: Candidate = { ...A, format: 'lecture' };
+  test('channel AVOIDS at the threshold excludes, below it penalises; a format AVOIDS is ignored', () => {
     const g = withVideos(fixture());
-    const hard = withContextEdge(g, 'AVOIDS', 'format', 'lecture', C.AVOID_EXCLUDE);
-    const s = scoreCandidate(hard, fmt);
-    expect(s.excluded).toBe(true);
-    expect(s.reasons[0]).toContain("회피 형식 'lecture'");
     const ch: Candidate = { ...A, channelId: 'UC_A' };
     const hardCh = withContextEdge(g, 'AVOIDS', 'channel', 'UC_A', C.AVOID_EXCLUDE);
-    expect(scoreCandidate(hardCh, ch).excluded).toBe(true);
-    const soft = withContextEdge(g, 'AVOIDS', 'format', 'lecture', 0.5);
-    const r = scoreCandidate(soft, fmt);
+    const s = scoreCandidate(hardCh, ch);
+    expect(s.excluded).toBe(true);
+    expect(s.reasons[0]).toContain('회피 채널');
+    const softCh = withContextEdge(g, 'AVOIDS', 'channel', 'UC_A', 0.5);
+    const r = scoreCandidate(softCh, ch);
     expect(r.excluded).toBe(false);
-    expect(r.score).toBeCloseTo(scoreCandidate(g, fmt).score - 0.5 * C.AVOID_PENALTY_WEIGHT, 6);
+    expect(r.score).toBeCloseTo(scoreCandidate(g, ch).score - 0.5 * C.AVOID_PENALTY_WEIGHT, 6);
+    // formats are never avoided (James 2026-11-13): same score with or without the edge
+    const fmt: Candidate = { ...A, format: 'lecture' };
+    const fmtAvoid = withContextEdge(g, 'AVOIDS', 'format', 'lecture', C.AVOID_EXCLUDE);
+    expect(scoreCandidate(fmtAvoid, fmt)).toEqual(scoreCandidate(g, fmt));
   });
 });
 

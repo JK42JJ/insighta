@@ -2,9 +2,11 @@
  * Candidate scoring against a context graph (pure).
  *
  * excluded when: base filters fail | already judged (EXCLUDE_JUDGED_VERDICTS) |
- *                any AVOIDS on its concept / format / channel ≥ AVOID_EXCLUDE.
- * score = Σ WANTS(concept)·cover·CONCEPT_SCORE_WEIGHT − Σ AVOIDS(<threshold)·AVOID_PENALTY_WEIGHT
+ *                an AVOIDS on its channel ≥ AVOID_EXCLUDE.
+ * score = Σ WANTS(concept)·cover·CONCEPT_SCORE_WEIGHT − Σ AVOIDS(concept)·AVOID_CONCEPT_PENALTY
+ *       − AVOIDS(channel < threshold)·AVOID_PENALTY_WEIGHT
  *       + BRANCH_MATCH_WEIGHT·CONTAINS(branch) + level fit + FORMAT/CHANNEL_PREF_WEIGHT·WANTS.
+ * Formats are never avoided (James 2026-11-13): a format AVOIDS edge, if any, is ignored.
  * reasons are short Korean facts for the ledger only.
  */
 
@@ -130,7 +132,6 @@ export function scoreCandidate(graph: ContextGraph, candidate: Candidate): Candi
   const formatNode = candidate.format
     ? findNodeByKey(graph, 'format', candidate.format)
     : undefined;
-  if (formatNode) avoidTargets.push({ node: formatNode, label: '형식' });
   const channelNode = candidate.channelId
     ? findNodeByKey(graph, 'channel', candidate.channelId)
     : undefined;
