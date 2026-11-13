@@ -101,6 +101,8 @@ export function toFeedCard(
     why: c.why,
     videoId: c.video_id,
     thumbUrl: c.thumbnail_url ?? undefined,
+    publishedAt: c.published_at,
+    ...(c.ambient ? { ambient: c.ambient } : {}),
     ...infoFields(c.info),
   };
 }

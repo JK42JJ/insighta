@@ -19,14 +19,18 @@ import {
   saveFeedJudgment,
   type FeedDb,
 } from '@/modules/morning-feed/feed';
+import { withAmbient } from '@/modules/morning-feed/thumb-ambient';
 import { userIdOf } from '@/api/utils/request-user';
 
 export interface MorningFeedRouteDeps {
   getDb: () => FeedDb;
+  /** Adds the immersive-playback background colour to the batch cards (thumbnail, server side). */
+  addAmbient?: typeof withAmbient;
 }
 
 const defaultDeps: MorningFeedRouteDeps = {
   getDb: () => getPrismaClient(),
+  addAmbient: withAmbient,
 };
 
 interface JudgmentBody {
@@ -172,8 +176,16 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         if (!isFeedCell(cell)) {
           return reply.code(400).send({ status: 'error', error: 'invalid_batch' });
         }
-        const data = await getOrCreateWatchBatch(deps.getDb(), userId, cell, new Date());
-        return reply.send({ status: 'ok', data });
+        const started = Date.now();
+        const batch = await getOrCreateWatchBatch(deps.getDb(), userId, cell, new Date());
+        const batchMs = Date.now() - started;
+        // the colour is added after the batch is read; the batch itself is not changed
+        const items = deps.addAmbient ? await deps.addAmbient(batch.items) : batch.items;
+        request.log.info(
+          { batchMs, ambientMs: Date.now() - started - batchMs, items: items.length },
+          'watch batch timing'
+        );
+        return reply.send({ status: 'ok', data: { ...batch, items } });
       }
     );
 

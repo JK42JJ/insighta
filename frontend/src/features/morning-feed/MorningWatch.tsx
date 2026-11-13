@@ -6,6 +6,7 @@ import {
   type InsightData,
 } from '@/features/morning-cards/api';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
+import { useViewportFitCover, useWatchFrame } from '@/features/morning-feed/use-watch-frame';
 import {
   carryCandidate,
   historyMetaText,
@@ -13,15 +14,11 @@ import {
   kstDateLabel,
   readOnboardingSeen,
   writeOnboardingSeen,
-  type WatchGoal,
-  type WatchItemView,
-  type WatchReaction,
+  type InsightView,
 } from '@/features/morning-feed/watch-design';
 import {
   goalCells,
   goalChipState,
-  goalRowText,
-  metaLine,
   unansweredInBatch,
   withBatch,
   withOneJudged,
@@ -31,42 +28,30 @@ import {
   type WatchVideo,
 } from '@/features/morning-feed/watch-list';
 import {
-  ONB_LAST_STEP,
-  WatchInputScreen,
-  WatchInsightScreen,
-  WatchOnboarding,
-  WatchScreen,
-  type WatchChipView,
-} from '@/features/morning-feed/watch-screens';
-import { YouTubePlayer } from '@/features/morning-feed/YouTubePlayer';
+  WatchFeed,
+  type R3SoundControl,
+  type R3Verdict,
+} from '@/features/morning-feed/watch-r3-feed';
+import { r3VideoOf } from '@/features/morning-feed/watch-r3-video';
+import {
+  WatchDoneR3,
+  WatchInputR3,
+  type R3InputState,
+} from '@/features/morning-feed/watch-r3-screens';
+import { ONB_LAST_STEP, WatchOnboarding } from '@/features/morning-feed/watch-screens';
+import { WatchPlayer } from '@/features/morning-feed/WatchPlayer';
 import './watch.css';
+import './watch-r3.css';
 
 /*
- * 시청 flow (/morning-cards?view=watch), design handoff "design_handoff_insighta_mobile":
- * 01 온보딩 (first visit on this device) -> 02 입력 -> 03 시청 -> 04 인사이트.
- * Live data: the 8 feed cells are the "요즘 많이 고르는 것" chips; a cell is one goal with one branch
- * (the cell itself). The videos of a goal are today's batch issued by the server (POST
- * /watch/batch); the chips follow GET /watch/today: no batch and no candidates -> disabled, a batch
- * answered in full -> '오늘은 끝' (opens its insight), otherwise level -> 갈래 -> CTA. Only answers
- * given on this screen count (surface 'watch'). Free text and the level are kept on screen only:
- * no server turns them into branches or videos, so the 갈래 section and the CTA stay hidden for
- * typed text.
+ * 시청 flow (/morning-cards?view=watch), design handoff "design_handoff_insighta_watch_v2" (수정 3):
+ * 온보딩 (unchanged, first visit on this device) -> 입력 -> 카드 피드 / 몰입 재생 -> 다 본 뒤.
+ * Live data: the 8 feed cells are the "요즘 많이 고르는 것" chips; pressing one opens today's
+ * batch of that cell (POST /watch/batch) straight away. Chips follow GET /watch/today: no batch
+ * and no candidates -> disabled, a batch answered in full -> done (opens its summary). Verdicts:
+ * 좋아 = useful, 별로 = skip, swiping up without a verdict = pass (surface 'watch'); a liked card
+ * that is swiped up stays 좋아.
  */
-
-/** The answered video leaves for this long, then the next one replaces it (README 03 동작). */
-export const WATCH_EXIT_MS = 480;
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
-const ASK_FIRST = '오늘은 뭘 알아볼까요?';
-const ASK_AGAIN = '다른 걸 알아보고 싶다면';
-/** A cell goal has one branch, the cell; every level preselects it. */
-const CELL_GOAL_REC: number[][] = [[0], [0], [0]];
-const NO_BRANCH_REC: number[][] = [[], [], []];
-
-const VERDICT_OF: Record<WatchReaction, WatchVerdict> = {
-  like: 'useful',
-  dislike: 'skip',
-  pass: 'pass',
-};
 
 export interface WatchJudgeEvent {
   video: WatchVideo;
@@ -92,7 +77,7 @@ export interface MorningWatchProps {
   onJudge: (e: WatchJudgeEvent) => void;
   /** Resolves once the queued judgments are written (or the wait gave up), so the insight counts them. */
   whenSaved: () => Promise<void>;
-  /** 01 온보딩 step 3. Resolves when done, whatever the outcome; the onboarding then ends. */
+  /** 온보딩 step 3. Resolves when done, whatever the outcome; the onboarding then ends. */
   connectYouTube: () => Promise<void>;
 }
 
@@ -102,47 +87,18 @@ type Screen =
   | {
       kind: 'watch';
       goal: FeedCell;
-      list: WatchVideo[];
+      /** null = the batch is on its way (skeleton). */
+      list: WatchVideo[] | null;
       /** Index of each list entry in the batch (shown_position). */
       positions: number[];
-      index: number;
     }
   | { kind: 'insight'; goal: FeedCell };
 
-/** What is chosen on 02 입력: a cell chip, or typed text (no cell). */
-interface Picked {
-  goal: WatchGoal;
-  cell: FeedCell | null;
-}
-
-function prefersReducedMotion(): boolean {
-  try {
-    return window.matchMedia?.(REDUCED_MOTION_QUERY).matches === true;
-  } catch {
-    return false;
-  }
-}
-
-function cellGoal(cell: FeedCell): WatchGoal {
-  return { key: cell.label, title: cell.short, branches: [cell.short], rec: CELL_GOAL_REC };
-}
-
-function textGoal(text: string): WatchGoal {
-  return { key: 'text:' + text, title: text, branches: [], rec: NO_BRANCH_REC };
-}
-
-/** One live video as 03 시청 draws it: the info blocks only when their data exists. */
-function itemView(video: WatchVideo, cellShort: string): WatchItemView {
-  return {
-    key: video.videoId ?? video.title,
-    title: video.title,
-    meta: metaLine(video.ch, video.durationSec, cellShort),
-    summary: video.oneLiner ?? '',
-    reasonLines: video.reasonLines ?? [],
-    checks: (video.checks ?? []).map((c) => ({ text: c.text, ok: c.text.startsWith('✓') })),
-    chapters: video.chapters ?? [],
-  };
-}
+const R3_TO_VERDICT: Record<R3Verdict, WatchVerdict> = {
+  useful: 'useful',
+  skip: 'skip',
+  pass: 'pass',
+};
 
 export function MorningWatch({
   cells,
@@ -153,6 +109,9 @@ export function MorningWatch({
   whenSaved,
   connectYouTube,
 }: MorningWatchProps): JSX.Element {
+  useViewportFitCover();
+  const app = useRef<HTMLDivElement>(null);
+  const frame = useWatchFrame(app);
   const [screen, setScreen] = useState<Screen>(() =>
     readOnboardingSeen() ? { kind: 'input' } : { kind: 'onb', step: 0 }
   );
@@ -161,24 +120,16 @@ export function MorningWatch({
   const [today, setToday] = useState<WatchTodayMap>(todayFromServer);
   // batch videos answered in this visit (the batch itself tells the earlier ones)
   const [judged, setJudged] = useState<ReadonlySet<string>>(() => new Set());
-  // a batch request is on its way: further presses are ignored
   const starting = useRef(false);
-  const [picked, setPicked] = useState<Picked | null>(null);
-  const [level, setLevel] = useState<number | null>(null);
-  const [sel, setSel] = useState<number[]>([]);
   const [carryOff, setCarryOff] = useState(false);
-  const [exit, setExit] = useState<WatchReaction | null>(null);
-  const [failedVideo, setFailedVideo] = useState<string | null>(null);
-  const busy = useRef(false);
-  const timer = useRef<number | null>(null);
   const alive = useRef(true);
+  const sound = useRef<R3SoundControl | null>(null);
   const [now] = useState(() => new Date());
 
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
-      if (timer.current != null) window.clearTimeout(timer.current);
     };
   }, []);
 
@@ -187,8 +138,7 @@ export function MorningWatch({
   const shortOf = (label: string): string => cellOf(label)?.short ?? label;
   const chipOf = (cell: FeedCell): GoalChipState => goalChipState(today[cell.label]);
 
-  // 어제에 이어서: a goal with yesterday's batch that still has videos today (a new batch or an
-  // unfinished one). Decided once at load, so the question row keeps its wording for the visit.
+  // 어제에 이어서: a goal with yesterday's batch that still has videos today. Decided once at load.
   const [carryCell] = useState<FeedCell | null>(() => {
     const open = (label: string): boolean =>
       goals.some((g) => g.label === label) && goalChipState(todayFromServer[label]).kind === 'open';
@@ -215,10 +165,7 @@ export function MorningWatch({
     });
   };
 
-  /**
-   * Today's batch of the goal (issued by the server on the first call of the day), then straight
-   * to its unanswered videos in batch order; the insight when all of them are answered.
-   */
+  /** Chip / 이어서 보기: today's batch of the goal, straight to its unanswered videos. */
   const openGoal = (cell: FeedCell): void => {
     const state = chipOf(cell);
     if (state.kind === 'done') {
@@ -227,6 +174,8 @@ export function MorningWatch({
     }
     if (state.kind === 'none' || starting.current) return;
     starting.current = true;
+    setCarryOff(true);
+    setScreen({ kind: 'watch', goal: cell, list: null, positions: [] });
     loadBatch(cell.label)
       .then((batch) => {
         if (!alive.current) return;
@@ -235,6 +184,7 @@ export function MorningWatch({
         if (batch.items.length === 0) {
           // no candidates left (nothing was stored): the chip turns disabled
           setToday((t) => ({ ...t, [cell.label]: { issued: null, judged: 0, available: 0 } }));
+          setScreen({ kind: 'input' });
           return;
         }
         setToday((t) =>
@@ -244,113 +194,105 @@ export function MorningWatch({
           setScreen({ kind: 'insight', goal: cell });
           return;
         }
-        setCarryOff(true);
-        setFailedVideo(null);
         setScreen({
           kind: 'watch',
           goal: cell,
           list: rest.map((r) => r.video),
           positions: rest.map((r) => r.position),
-          index: 0,
         });
       })
       .catch(() => {
-        /* not loaded: stay on 02 입력, the chip can be pressed again */
+        /* not loaded: back to 입력, the chip can be pressed again */
+        if (alive.current) setScreen({ kind: 'input' });
       })
       .finally(() => {
         starting.current = false;
       });
   };
 
-  const pickGoal = (next: Picked): void => {
-    setPicked(next);
-    setLevel(null);
-    setSel([]);
-  };
-
-  const toInput = (): void => {
-    if (busy.current) return; // input is ignored while an answer is leaving
-    setScreen({ kind: 'input' });
-  };
-
-  const closeInsight = (): void => {
-    setPicked(null);
-    setLevel(null);
-    setSel([]);
-    setScreen({ kind: 'input' });
-  };
-
-  const react = (kind: WatchReaction): void => {
-    if (busy.current || screen.kind !== 'watch') return;
-    const { list, positions, index } = screen;
-    const video = list[index];
+  const verdict = (index: number, v: R3Verdict): void => {
+    if (screen.kind !== 'watch' || !screen.list) return;
+    const video = screen.list[index];
     if (!video?.videoId) return;
-    busy.current = true;
-    onJudge({ video, verdict: VERDICT_OF[kind], shownPosition: positions[index] ?? index });
+    onJudge({
+      video,
+      verdict: R3_TO_VERDICT[v],
+      shownPosition: screen.positions[index] ?? index,
+    });
     const id = video.videoId;
     const goalLabel = screen.goal.label;
     setJudged((prev) => new Set(prev).add(id));
     setToday((prev) => withOneJudged(prev, goalLabel));
-    const advance = (): void => {
-      timer.current = null;
-      busy.current = false;
-      setExit(null);
-      setScreen((s) => {
-        if (s.kind !== 'watch') return s;
-        return s.index + 1 >= s.list.length
-          ? { kind: 'insight', goal: s.goal }
-          : { ...s, index: s.index + 1 };
-      });
-    };
-    if (prefersReducedMotion()) {
-      advance();
-      return;
-    }
-    setExit(kind);
-    timer.current = window.setTimeout(advance, WATCH_EXIT_MS);
   };
+
+  // 오늘 다 봄 card on 입력: the first goal answered in full today, with its summary
+  const doneCell = goals.find((g) => chipOf(g).kind === 'done') ?? null;
+  const doneLabel = doneCell?.label ?? null;
+  const [doneView, setDoneView] = useState<{ label: string; view: InsightView | null } | null>(
+    null
+  );
+  useEffect(() => {
+    if (screen.kind !== 'input' || !doneLabel) return undefined;
+    let on = true;
+    void whenSaved()
+      .then(() => fetchWatchInsight(doneLabel))
+      .then(
+        (d) =>
+          on &&
+          setDoneView({
+            label: doneLabel,
+            view: d.reacted + d.passed > 0 ? insightViewFromData(d, shortOf) : null,
+          })
+      )
+      .catch(() => on && setDoneView({ label: doneLabel, view: null }));
+    return () => {
+      on = false;
+    };
+    // shortOf reads `goals`, which is stable for the visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen.kind, doneLabel, whenSaved]);
 
   let body: JSX.Element;
   if (screen.kind === 'onb') {
     body = <WatchOnboarding step={screen.step} busy={connecting} onNext={onbNext} />;
   } else if (screen.kind === 'input') {
-    const pickedCell = picked?.cell ?? null;
-    const showBranches = !!picked && level !== null && picked.goal.branches.length > 0;
-    const n = pickedCell ? chipOf(pickedCell).count : 0;
     const carryState = carryCell ? chipOf(carryCell) : null;
-    const carry =
-      carryCell && carryState && !carryOff && carryState.kind === 'open'
-        ? { title: carryCell.short, count: carryState.count, onGo: () => openGoal(carryCell) }
-        : null;
+    let state: R3InputState = { kind: 'hero' };
+    if (carryCell && carryState && !carryOff && carryState.kind === 'open') {
+      state = {
+        kind: 'carry',
+        goal: carryCell.short,
+        count: carryState.count,
+        // today's thumbnails would need the batch, and reading it creates it: not drawn
+        thumbs: [],
+        onGo: () => openGoal(carryCell),
+      };
+    } else if (doneCell) {
+      const v = doneView && doneView.label === doneCell.label ? doneView.view : null;
+      state = {
+        kind: 'done',
+        goal: doneCell.short,
+        stats: v ? v.stats : null,
+        rows: v ? v.rows : [],
+        onOpen: () => setScreen({ kind: 'insight', goal: doneCell }),
+      };
+    }
     body = (
-      <WatchInputScreen
+      <WatchInputR3
+        frame={frame}
         dateLabel={kstDateLabel(now)}
-        carry={carry}
-        askTitle={carryCell ? ASK_AGAIN : ASK_FIRST}
-        chips={goals.map((g): WatchChipView => {
+        state={state}
+        chips={goals.map((g) => {
           const c = chipOf(g);
           return {
             key: g.label,
             title: g.short,
-            on: pickedCell?.label === g.label,
-            state: c.kind === 'open' ? undefined : c.kind,
-            count: c.count,
-            note: c.kind === 'open' ? undefined : goalRowText(c.count, c.kind === 'done'),
+            done: c.kind === 'done',
             disabled: c.kind === 'none',
-            onPick: () =>
-              c.kind === 'done' ? openGoal(g) : pickGoal({ goal: cellGoal(g), cell: g }),
+            count: c.count,
+            onPick: () => openGoal(g),
           };
         })}
-        onSubmitText={(t) => pickGoal({ goal: textGoal(t), cell: null })}
-        goal={picked?.goal ?? null}
-        level={level}
-        onLevel={(i) => {
-          setLevel(i);
-          setSel([...(picked?.goal.rec[i] ?? [])]);
-        }}
-        showBranches={showBranches}
-        sel={sel}
-        onToggle={(i) => setSel((s) => (s.includes(i) ? s.filter((k) => k !== i) : [...s, i]))}
         history={history.flatMap((h) => {
           const cell = cellOf(h.cell);
           const meta = historyMetaText(h.day, h.count);
@@ -358,79 +300,65 @@ export function MorningWatch({
             ? [{ key: h.cell, title: cell.short, meta, onPick: () => openGoal(cell) }]
             : [];
         })}
-        cta={showBranches && pickedCell && sel.length > 0 && n > 0 ? '영상 ' + n + '편 받기' : null}
-        onStart={() => {
-          if (pickedCell && chipOf(pickedCell).kind === 'open') openGoal(pickedCell);
-        }}
       />
     );
   } else if (screen.kind === 'watch') {
-    const video = screen.list[screen.index];
-    const vid = video?.videoId;
-    body = video ? (
-      <WatchScreen
+    const list = screen.list ?? [];
+    body = (
+      <WatchFeed
+        key={screen.goal.label}
         goalTitle={screen.goal.short}
-        item={itemView(video, screen.goal.short)}
-        index={screen.index}
-        total={screen.list.length}
-        exit={exit}
-        onBack={toInput}
-        onReact={react}
-        player={
-          vid ? (
-            <YouTubePlayer
-              videoId={vid}
-              active={exit === null}
-              onFailed={(f) => setFailedVideo(f ? vid : null)}
-            />
-          ) : null
-        }
-        belowPlayer={
-          vid && failedVideo === vid ? (
-            <div className="mf-w-player-failed" data-testid="mf-watch-player-failed">
-              <span>재생할 수 없습니다</span>
-              <a
-                data-testid="mf-watch-open-yt"
-                href={'https://www.youtube.com/watch?v=' + vid}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                YouTube에서 열기
-              </a>
-            </div>
-          ) : null
-        }
+        videos={list.map(r3VideoOf)}
+        frame={frame}
+        loading={screen.list === null}
+        onVerdict={verdict}
+        onFinish={() => setScreen({ kind: 'insight', goal: screen.goal })}
+        onBack={() => setScreen({ kind: 'input' })}
+        sound={sound}
+        renderPlayer={(api) => (
+          <WatchPlayer
+            videoId={api.videoId}
+            active={api.active}
+            play={api.play}
+            controller={sound}
+            onShown={api.onShown}
+            onMuted={api.onMuted}
+            onTick={api.onTick}
+            onFailed={api.onFailed}
+          />
+        )}
       />
-    ) : (
-      <div className="mf-w-screen" data-testid="mf-w-watch" />
     );
   } else {
     body = (
-      <LiveInsight
+      <LiveDone
+        frame={frame}
         goal={screen.goal}
         shortOf={shortOf}
         whenSaved={whenSaved}
-        onClose={closeInsight}
+        onClose={() => setScreen({ kind: 'input' })}
       />
     );
   }
 
   return (
     <div className="mf-w">
-      <div className="mf-w-app" lang="ko" data-testid="mf-watch-root">
+      <div ref={app} className="mf-w-app" lang="ko" data-testid="mf-watch-root">
         {body}
       </div>
     </div>
   );
 }
 
-/** 04 인사이트 for one goal, read after today's answers are written so it counts them. */
-function LiveInsight({
+/** 다 본 뒤 for one goal, read after today's answers are written so it counts them. */
+function LiveDone({
+  frame,
   goal,
   shortOf,
   whenSaved,
   onClose,
 }: {
+  frame: ReturnType<typeof useWatchFrame>;
   goal: FeedCell;
   shortOf: (label: string) => string;
   whenSaved: () => Promise<void>;
@@ -448,5 +376,5 @@ function LiveInsight({
     };
   }, [whenSaved, goal.label]);
   const view = data && data.reacted + data.passed > 0 ? insightViewFromData(data, shortOf) : null;
-  return <WatchInsightScreen goalTitle={goal.short} view={view} onClose={onClose} />;
+  return <WatchDoneR3 frame={frame} goalTitle={goal.short} view={view} onClose={onClose} />;
 }

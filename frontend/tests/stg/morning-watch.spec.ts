@@ -1,9 +1,10 @@
 import { test, expect, type Page, type Request } from '@playwright/test';
 
-// 시청 flow (/morning-cards?view=watch) on the deployed staging site: on 02 입력 pick a goal chip
-// that is neither done nor disabled, a level and take the CTA (the server issues today's batch),
-// answer one video with 좋아: exactly one judgment is saved with surface 'watch' and the batch
-// index as shown_position, and the counter moves on. The chips come from GET /watch/today only, so
+// 시청 flow (/morning-cards?view=watch, design 수정 3) on the deployed staging site: on 입력 press a
+// goal chip that is neither done nor disabled (the server issues today's batch and the feed opens
+// straight away), answer the first video with 좋아 and swipe on: exactly one judgment is saved with
+// surface 'watch' and the batch index as shown_position (a liked card swiped up stays 좋아, no
+// 넘김 is sent), and the counter moves on. The chips come from GET /watch/today only, so
 // judgments made in the swipe deck do not change what this test sees. The screen has no undo; the
 // test cancels its own row afterwards through the API. The staging test account keeps one batch
 // per goal per day (accepted).
@@ -16,8 +17,9 @@ const BATCH_PATH = '/api/v1/morning-feed/watch/batch';
 /** watch-design.ts WATCH_ONB_SEEN_KEY */
 const ONB_SEEN_KEY = 'mf_watch_onb_seen';
 const LOAD_TIMEOUT_MS = 25_000;
-/** Longer than the 480ms exit, so a second POST would have been sent by then. */
+/** Longer than the 460ms card change, so a second POST would have been sent by then. */
 const SETTLE_MS = 1500;
+const CURRENT = '[data-testid="mf-w3-card"][data-current]';
 
 async function signIn(page: Page): Promise<void> {
   await page.goto('/login');
@@ -29,7 +31,7 @@ async function signIn(page: Page): Promise<void> {
 
 const isJudgmentPost = (r: Request) => r.url().includes(JUDGMENTS_PATH) && r.method() === 'POST';
 
-test('morning watch: pick a goal chip, level, CTA, 좋아 saves one useful judgment and the counter advances (phone 390x844)', async ({
+test('morning watch: a goal chip opens the feed, 좋아 then swipe saves one useful judgment and the counter advances (phone 390x844)', async ({
   page,
 }, info) => {
   expect(EMAIL, 'STG_TEST_EMAIL is not set').not.toBe('');
@@ -59,20 +61,11 @@ test('morning watch: pick a goal chip, level, CTA, 좋아 saves one useful judgm
   await expect(chip, 'no goal has cards today on the staging account').toBeVisible();
   const total = Number(await chip.getAttribute('data-count'));
   expect(total).toBeGreaterThan(0);
-  await chip.click();
-  await expect(chip).toHaveAttribute('data-on', '');
-
-  // 수준 appears; picking one shows the 갈래 with the goal's one branch preselected
-  await expect(page.getByTestId('mf-w-level')).toHaveCount(3);
-  await page.getByTestId('mf-w-level').first().click();
-  await expect(page.getByTestId('mf-w-branch')).toHaveCount(1);
-  await expect(page.getByTestId('mf-w-branch')).toHaveAttribute('aria-pressed', 'true');
-  const cta = page.getByTestId('mf-w-cta');
-  await expect(cta).toHaveText(`영상 ${total}편 받기`);
   const batchRes = page.waitForResponse(
     (r) => r.url().includes(BATCH_PATH) && r.request().method() === 'POST'
   );
-  await cta.click();
+  // no level, branch or CTA step any more: the chip starts the feed
+  await chip.click();
   const batch = await batchRes;
   expect(batch.status()).toBe(200);
   const batchData = (await batch.json()).data as {
@@ -84,18 +77,19 @@ test('morning watch: pick a goal chip, level, CTA, 좋아 saves one useful judgm
   const firstOpen = batchData.items.findIndex((v) => !(v.video_id in batchData.judged));
   expect(firstOpen).toBeGreaterThanOrEqual(0);
 
-  await expect(page.getByTestId('mf-w-watch')).toBeVisible();
+  await expect(page.getByTestId('mf-w3-watch')).toBeVisible();
   await expect(page.getByTestId('mf-watch-counter')).toHaveText(`1 / ${total}`);
   await expect(page.getByTestId('mf-watch-seg')).toHaveCount(total);
-  await expect(page.getByTestId('mf-watch-title')).not.toHaveText('');
+  const card = page.locator(CURRENT);
+  await expect(card.getByTestId('mf-watch-title')).not.toHaveText('');
 
-  // three round buttons with labels and no text
+  // three round buttons with labels and no text (별로 = thumbs down, 좋아 = heart, 공유)
   for (const [id, label] of [
     ['mf-watch-skip', '별로'],
-    ['mf-watch-pass', '넘기기'],
     ['mf-watch-like', '좋아'],
+    ['mf-watch-share', '공유'],
   ] as const) {
-    const btn = page.getByTestId(id);
+    const btn = card.getByTestId(id);
     await expect(btn).toBeVisible();
     await expect(btn).toHaveAttribute('aria-label', label);
     expect((await btn.innerText()).trim()).toBe('');
@@ -105,11 +99,11 @@ test('morning watch: pick a goal chip, level, CTA, 좋아 saves one useful judgm
   await expect(page.getByTestId('mf-undo')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /되돌리기|실행 취소/ })).toHaveCount(0);
 
-  // the info blocks are open from the start: no button to open them, each visible when present
+  // the info blocks show only with data (the reason band is empty during the context experiment)
   await expect(page.getByTestId('mf-detail-open')).toHaveCount(0);
   const present: string[] = [];
   for (const id of ['mf-oneliner', 'mf-reason', 'mf-chapters']) {
-    const block = page.getByTestId(id);
+    const block = card.getByTestId(id);
     if ((await block.count()) > 0) {
       await expect(block).toBeVisible();
       present.push(id);
@@ -129,7 +123,7 @@ test('morning watch: pick a goal chip, level, CTA, 좋아 saves one useful judgm
   // a one-video batch ends on the insight: it must be read for this goal only
   const insightRequest =
     total === 1 ? page.waitForRequest((r) => r.url().includes(INSIGHT_PATH)) : null;
-  await page.getByTestId('mf-watch-like').click();
+  await card.getByTestId('mf-watch-like').click();
   const res = await saved;
   expect(res.status()).toBe(201);
   const body = res.request().postDataJSON() as {
@@ -153,6 +147,10 @@ test('morning watch: pick a goal chip, level, CTA, 좋아 saves one useful judgm
     'video_id',
   ]);
 
+  // 좋아 stays on the card with its confirmation; swiping on (↓) keeps the verdict 좋아
+  await expect(card.getByTestId('mf-watch-like')).toHaveAttribute('data-on', '');
+  await expect(page.getByTestId('mf-watch-counter')).toHaveText(`1 / ${total}`);
+  await page.keyboard.press('ArrowDown');
   if (total > 1) {
     await expect(page.getByTestId('mf-watch-counter')).toHaveText(`2 / ${total}`);
   } else {

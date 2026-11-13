@@ -174,6 +174,8 @@ export interface FeedApiCard {
   why: string;
   /** Optional facts about the video; every field may be missing. */
   info?: FeedApiCardInfo;
+  /** Watch batch only: immersive-playback background from the thumbnail ('#rrggbb'); null = not computed. */
+  ambient?: string | null;
 }
 export interface FeedApiCardInfo {
   one_liner?: string;

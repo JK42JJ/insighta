@@ -43,6 +43,9 @@ export interface FeedCard {
   videoId?: string;
   thumbUrl?: string;
   fresh?: boolean;
+  /** Live data only: upload time (ISO) and the thumbnail's background colour, when the server sent them. */
+  publishedAt?: string;
+  ambient?: string;
   /** Live data only, each present only when the server sent it. */
   oneLiner?: string;
   reasonLines?: string[];
