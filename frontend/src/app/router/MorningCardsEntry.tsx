@@ -43,6 +43,7 @@ export function MorningCardsEntry() {
           preset={q.get('preset')}
           safe={q.get('safe')}
           thumbs={q.get('thumbs')}
+          real={q.get('real') === '1'}
         />
       </Suspense>
     );

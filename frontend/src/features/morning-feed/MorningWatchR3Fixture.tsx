@@ -8,7 +8,8 @@ import {
   type R3Video,
   type WatchFeedProps,
 } from '@/features/morning-feed/watch-r3-feed';
-import type { PlayerController } from '@/features/morning-feed/WatchPlayer';
+import { LAB_DEFAULT_VIDEOS } from '@/features/morning-feed/player-lab';
+import { WatchPlayer, type PlayerController } from '@/features/morning-feed/WatchPlayer';
 import {
   WatchDoneR3,
   WatchInputR3,
@@ -327,10 +328,13 @@ export function MorningWatchR3Fixture({
   preset,
   safe,
   thumbs,
+  real = false,
 }: {
   preset: string | null;
   safe: string | null;
   thumbs: string | null;
+  /** Measurement only: the real YouTube player with the player lab's public videos. */
+  real?: boolean;
 }): JSX.Element {
   const pr = R3_PRESETS[preset ?? ''] ?? R3_PRESETS.input;
   const override = useMemo(() => parseSafeOverride(safe), [safe]);
@@ -340,7 +344,12 @@ export function MorningWatchR3Fixture({
     () => (thumbs ?? '').split(',').filter((t) => /^https?:\/\//.test(t)),
     [thumbs]
   );
-  const videos = useMemo(() => toVideos(thumbList, pr.count ?? VIDS.length), [thumbList, pr.count]);
+  const videos = useMemo(() => {
+    const v = toVideos(thumbList, pr.count ?? VIDS.length);
+    return real
+      ? v.map((x, i) => ({ ...x, videoId: LAB_DEFAULT_VIDEOS[i % LAB_DEFAULT_VIDEOS.length] }))
+      : v;
+  }, [thumbList, pr.count, real]);
   const player = useRef<PlayerController | null>(null);
   const [sound, setSound] = useState(!!pr.sound);
   const [screen, setScreen] = useState(pr.screen);
@@ -417,16 +426,27 @@ export function MorningWatchR3Fixture({
         sound={sound}
         onSound={setSound}
         player={player}
-        renderPlayer={(events) => (
-          <FakePlayer
-            events={events}
-            controller={player}
-            videos={videos}
-            playing={pr.playing !== false}
-            holdThumb={pr.phase === 'thumb'}
-            prog={pr.prog ?? 0}
-          />
-        )}
+        renderPlayer={(events) =>
+          real ? (
+            <WatchPlayer
+              controller={player}
+              onReady={events.onReady}
+              onPlaying={events.onPlaying}
+              onMuted={events.onMuted}
+              onTick={events.onTick}
+              onFailed={events.onFailed}
+            />
+          ) : (
+            <FakePlayer
+              events={events}
+              controller={player}
+              videos={videos}
+              playing={pr.playing !== false}
+              holdThumb={pr.phase === 'thumb'}
+              prog={pr.prog ?? 0}
+            />
+          )
+        }
       />
     );
   } else {
