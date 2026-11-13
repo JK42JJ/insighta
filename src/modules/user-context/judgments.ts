@@ -293,3 +293,16 @@ export function applyJudgments(
   const judged = judgments.map((j) => ({ videoId: j.videoId, verdict: j.verdict }));
   return { graph: next, diff: diffGraphs(graph, next, judged) };
 }
+
+/**
+ * Removes the JUDGED edge of each video whose verdict was canceled (no live verdict left), so a
+ * following recomputeWeights no longer counts it. Pure; unknown ids are ignored.
+ */
+export function dropJudgments(graph: ContextGraph, videoIds: readonly string[]): ContextGraph {
+  const g = cloneGraph(graph);
+  for (const id of videoIds) {
+    const video = findVideoNode(g, id);
+    if (video) removeEdge(g, g.contextId, 'JUDGED', video.id);
+  }
+  return freeze(g);
+}

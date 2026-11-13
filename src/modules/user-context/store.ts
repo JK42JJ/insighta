@@ -50,6 +50,26 @@ export const SQL = Object.freeze({
     WHERE ontology.edges.user_id = EXCLUDED.user_id`,
   deleteEdge: `DELETE FROM ontology.edges
   WHERE user_id = $1::uuid AND source_id = $2::uuid AND target_id = $3::uuid AND relation = $4`,
+  /** Batched forms (one round trip each; see persistGraph). Same conflict rules as the single-row forms. */
+  upsertNodes: `INSERT INTO ontology.nodes (id, user_id, type, title, properties, source_ref, domain)
+  SELECT r.id::uuid, $1::uuid, r.type, r.title, r.properties, r.source_ref, $2
+    FROM jsonb_to_recordset($3::jsonb) AS r(id text, type text, title text, properties jsonb, source_ref jsonb)
+  ON CONFLICT (id) DO UPDATE
+    SET title = EXCLUDED.title,
+        properties = ontology.nodes.properties || EXCLUDED.properties,
+        updated_at = now()
+    WHERE ontology.nodes.user_id = EXCLUDED.user_id`,
+  upsertEdges: `INSERT INTO ontology.edges (user_id, source_id, target_id, relation, weight, properties, domain)
+  SELECT $1::uuid, r.source_id::uuid, r.target_id::uuid, r.relation, r.weight, r.properties, $2
+    FROM jsonb_to_recordset($3::jsonb) AS r(source_id text, target_id text, relation text, weight double precision, properties jsonb)
+  ON CONFLICT (source_id, target_id, relation) DO UPDATE
+    SET weight = EXCLUDED.weight,
+        properties = ontology.edges.properties || EXCLUDED.properties
+    WHERE ontology.edges.user_id = EXCLUDED.user_id`,
+  deleteEdges: `DELETE FROM ontology.edges e
+  USING jsonb_to_recordset($2::jsonb) AS r(source_id text, target_id text, relation text)
+  WHERE e.user_id = $1::uuid AND e.source_id = r.source_id::uuid AND e.target_id = r.target_id::uuid
+    AND e.relation = r.relation`,
   linkMandala: `UPDATE public.user_mandalas
   SET context = COALESCE(context, '{}'::jsonb) || jsonb_build_object('context_node_id', $1::text, 'version', $2::int)
   WHERE id = $3::uuid AND user_id = $4::uuid`,
@@ -274,32 +294,52 @@ export async function persistGraph(
         );
       }
     }
-    for (const n of nodes) {
+    // One statement per kind (not per row): a save of a day's judgments is ~350 rows, and one round
+    // trip per row to a remote DB ran past the transaction timeout (2026-11-13: 353 rows × 141 ms).
+    if (nodes.length > 0) {
       await tx.$executeRawUnsafe(
-        SQL.upsertNode,
-        n.id,
+        SQL.upsertNodes,
         graph.userId,
-        n.type,
-        n.title,
-        JSON.stringify(n.properties),
-        n.sourceRef === null ? null : JSON.stringify(n.sourceRef),
-        USER_CONTEXT_DOMAIN
+        USER_CONTEXT_DOMAIN,
+        JSON.stringify(
+          nodes.map((n) => ({
+            id: n.id,
+            type: n.type,
+            title: n.title,
+            properties: n.properties,
+            source_ref: n.sourceRef,
+          }))
+        )
       );
     }
-    for (const e of edges) {
+    if (edges.length > 0) {
       await tx.$executeRawUnsafe(
-        SQL.upsertEdge,
+        SQL.upsertEdges,
         graph.userId,
-        e.sourceId,
-        e.targetId,
-        e.relation,
-        e.weight,
-        JSON.stringify(e.properties),
-        USER_CONTEXT_DOMAIN
+        USER_CONTEXT_DOMAIN,
+        JSON.stringify(
+          edges.map((e) => ({
+            source_id: e.sourceId,
+            target_id: e.targetId,
+            relation: e.relation,
+            weight: e.weight,
+            properties: e.properties,
+          }))
+        )
       );
     }
-    for (const e of removedEdges) {
-      await tx.$executeRawUnsafe(SQL.deleteEdge, graph.userId, e.sourceId, e.targetId, e.relation);
+    if (removedEdges.length > 0) {
+      await tx.$executeRawUnsafe(
+        SQL.deleteEdges,
+        graph.userId,
+        JSON.stringify(
+          removedEdges.map((e) => ({
+            source_id: e.sourceId,
+            target_id: e.targetId,
+            relation: e.relation,
+          }))
+        )
+      );
     }
     let mandalaLinked = false;
     if (opts.mandalaId) {

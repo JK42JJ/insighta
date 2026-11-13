@@ -14,6 +14,7 @@ import {
   addVideoToGraph,
   applyJudgments,
   diffGraphs,
+  dropJudgments,
   persistGraph,
   recomputeWeights,
   restoreGraph,
@@ -41,6 +42,8 @@ interface JudgmentRow {
   verdict: 'useful' | 'skip' | 'pass';
   watched_seconds: number | null;
   at: string;
+  /** set on a canceled row; such rows are never applied */
+  canceled_at?: string | null;
 }
 
 const TX_TIMEOUT_MS = 120_000;
@@ -56,9 +59,18 @@ const details = JSON.parse(fs.readFileSync(detailsPath, 'utf-8')) as Record<
   string,
   { channelId: string; channelTitle: string }
 >;
-const judgments = (JSON.parse(fs.readFileSync(judgPath, 'utf-8')) as JudgmentRow[]).sort((a, b) =>
-  a.at.localeCompare(b.at)
-);
+// James 2026-11-13: one verdict per video — the latest live (not canceled) row. A video whose rows
+// are all canceled loses its JUDGED edge (dropJudgments), so a canceled verdict is never counted.
+const allRows = JSON.parse(fs.readFileSync(judgPath, 'utf-8')) as JudgmentRow[];
+const latestLive = new Map<string, JudgmentRow>();
+const seenIds = new Set<string>();
+for (const r of [...allRows].sort((a, b) => a.at.localeCompare(b.at))) {
+  seenIds.add(r.video_id);
+  if (r.canceled_at) continue;
+  latestLive.set(r.video_id, r);
+}
+const canceledOnly = [...seenIds].filter((id) => !latestLive.has(id));
+const judgments = [...latestLive.values()].sort((a, b) => a.at.localeCompare(b.at));
 
 const byId = new Map(rows.map((r) => [r.videoId, r]));
 let g = v1;
@@ -79,7 +91,7 @@ for (const r of rows) {
     branchId: branchNode?.id ?? null,
   });
 }
-const withVideos = g;
+const withVideos = canceledOnly.length > 0 ? dropJudgments(g, canceledOnly) : g;
 
 const js: Judgment[] = judgments
   .filter((j) => byId.has(j.video_id))
@@ -117,7 +129,7 @@ fs.writeFileSync(
 );
 fs.writeFileSync(path.join(outDir, `diff_v1_v2_${armFilter}.json`), JSON.stringify(diff, null, 1));
 process.stdout.write(
-  `arm=${armFilter} judgments applied ${js.length} | version ${diff.versionBefore} -> ${diff.versionAfter} | edge changes ${diff.edges.length} | avoids +${diff.avoidsAdded.length} ^${diff.avoidsRaised.length} -${diff.avoidsRemoved.length}\n`
+  `arm=${armFilter} judgments applied ${js.length} (rows ${allRows.length}, canceled-only ${canceledOnly.length}) | version ${diff.versionBefore} -> ${diff.versionAfter} | edge changes ${diff.edges.length} | avoids +${diff.avoidsAdded.length} ^${diff.avoidsRaised.length} -${diff.avoidsRemoved.length}\n`
 );
 
 async function main(): Promise<void> {

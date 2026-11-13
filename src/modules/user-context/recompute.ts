@@ -1,7 +1,9 @@
 /**
  * Order-independent weights (James 2026-11-13): every WANTS / AVOIDS / CONTAINS weight out of the
  * context is derived from the judgment history as a whole, so the same judgments give the same
- * weights in any order. JUDGED edges and depth counts are left as they are. 넘김 is not counted.
+ * weights in any order. The history is the JUDGED edges: one per video (setEdge keys on the video),
+ * so a video judged again counts once, with its latest verdict. depth_pref is recomputed from the
+ * same edges. 넘김 is not counted.
  *
  * Formula (constants in USER_CONTEXT_CONFIG):
  *   concept WANTS = RATIO_SCALE · (L + RATIO_PRIOR_LIKES) / (L + S + RATIO_PRIOR_TOTAL)
@@ -15,8 +17,10 @@
  * `base` (branches, channels) is the creation value, stored on the edge as base_weight.
  */
 import { USER_CONTEXT_CONFIG as C } from './config';
+import { emptyDepthPref } from './depth';
 import {
   cloneGraph,
+  depthPrefToJson,
   freeze,
   getEdge,
   judgedProps,
@@ -26,7 +30,7 @@ import {
   videoProps,
   type MutableGraph,
 } from './graph';
-import type { ContextGraph, ContextNode, ContextRelation } from './types';
+import type { ContextGraph, ContextNode, ContextRelation, DepthPref } from './types';
 
 export const WEIGHT_RULE = 'ratio-v1';
 
@@ -79,9 +83,11 @@ function baseWeight(g: MutableGraph, relation: ContextRelation, target: ContextN
 export function tallyHistory(graph: ContextGraph): {
   targets: Map<string, Tally>;
   branches: Map<string, Tally>;
+  depth: DepthPref;
 } {
   const targets = new Map<string, Tally>();
   const branches = new Map<string, Tally>();
+  const depth = emptyDepthPref();
   const bump = (
     m: Map<string, Tally>,
     id: string,
@@ -107,14 +113,18 @@ export function tallyHistory(graph: ContextGraph): {
     for (const e of outEdges(graph, video.id, 'TAGGED_WITH'))
       bump(targets, e.targetId, jp.verdict, mult);
     if (vp.branchId) bump(branches, vp.branchId, jp.verdict, mult);
+    if (vp.depth) {
+      if (jp.verdict === 'useful') depth[vp.depth].likes += 1;
+      else depth[vp.depth].dislikes += 1;
+    }
   }
-  return { targets, branches };
+  return { targets, branches, depth };
 }
 
 /** Rewrites the context's WANTS / AVOIDS / CONTAINS from the whole judgment history. Pure. */
 export function recomputeWeights(graph: ContextGraph): ContextGraph {
   const g = cloneGraph(graph);
-  const { targets, branches } = tallyHistory(graph);
+  const { targets, branches, depth } = tallyHistory(graph);
   const ctx = g.contextId;
 
   // Branches: every CONTAINS target, judged or not.
@@ -166,6 +176,12 @@ export function recomputeWeights(graph: ContextGraph): ContextGraph {
     }
   }
   const ctxNode = g.nodes.get(ctx);
-  if (ctxNode) ctxNode.properties = { ...ctxNode.properties, weight_rule: WEIGHT_RULE };
+  // depth counts are recomputed too, so a changed verdict replaces the old one instead of adding to it
+  if (ctxNode)
+    ctxNode.properties = {
+      ...ctxNode.properties,
+      weight_rule: WEIGHT_RULE,
+      depth_pref: depthPrefToJson(depth),
+    };
   return freeze(g);
 }

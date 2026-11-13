@@ -7,7 +7,9 @@ import {
   USER_CONTEXT_CONFIG as C,
   addVideoToGraph,
   applyJudgments,
+  contextProps,
   createContextGraph,
+  dropJudgments,
   ratioWeight,
   recomputeWeights,
   type ContextGraph,
@@ -219,5 +221,44 @@ describe('recomputeWeights', () => {
     const props = getEdge(once, once.contextId, 'WANTS', a.id)?.properties ?? {};
     expect(props['likes']).toBe(1);
     expect(props['skips']).toBe(2);
+  });
+
+  test('a video judged again counts once, with its latest verdict (weights and depth counts)', () => {
+    // v1 was 좋아, then changed to 별로; v6 was 넘김, then changed to 좋아
+    const changed: Judgment[] = [
+      ...J,
+      { videoId: 'v1', verdict: 'skip', day: DAY },
+      { videoId: 'v6', verdict: 'useful', day: DAY },
+    ];
+    const finalOnly: Judgment[] = J.map((j) =>
+      j.videoId === 'v1'
+        ? { videoId: 'v1', verdict: 'skip', day: DAY }
+        : j.videoId === 'v6'
+          ? { videoId: 'v6', verdict: 'useful', day: DAY }
+          : j
+    );
+    const a = recomputeWeights(applyJudgments(seeded(), changed).graph);
+    const b = recomputeWeights(applyJudgments(seeded(), finalOnly).graph);
+    for (const [rel, type, key] of [
+      ['WANTS', 'concept', 'A'],
+      ['WANTS', 'concept', 'C'],
+      ['CONTAINS', 'mandala_sector', '만드는 법'],
+      ['CONTAINS', 'mandala_sector', '업계 동향'],
+      ['WANTS', 'format', 'talk'],
+      ['WANTS', 'channel', 'ch1'],
+    ] as const) {
+      expect(w(a, rel, type, key)).toBe(w(b, rel, type, key));
+    }
+    expect(w(a, 'WANTS', 'concept', 'A')).toBeCloseTo(ratioWeight(0, 3), 4); // v1 now a skip
+    // depth: 7 judged, all intermediate → 1 like (v6), 6 skips (v1 now a skip)
+    expect(contextProps(a).depth_pref.standard).toEqual({ likes: 1, dislikes: 6 });
+    expect(contextProps(a).depth_pref).toEqual(contextProps(b).depth_pref);
+  });
+
+  test('a canceled verdict (no live row left) is dropped from the history', () => {
+    const g = applyJudgments(seeded(), J).graph;
+    const r = recomputeWeights(dropJudgments(g, ['v1']));
+    expect(w(r, 'WANTS', 'concept', 'A')).toBeCloseTo(ratioWeight(0, 2), 4);
+    expect(contextProps(r).depth_pref.standard).toEqual({ likes: 0, dislikes: 5 });
   });
 });

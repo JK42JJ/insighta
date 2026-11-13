@@ -24,7 +24,7 @@ export {
 } from './graph';
 export { branchOrder, buildSearchInput } from './search';
 export { levelFit, levelFitTerm, scoreCandidate, selectTop } from './score';
-export { applyJudgments, diffGraphs } from './judgments';
+export { applyJudgments, diffGraphs, dropJudgments } from './judgments';
 export { WEIGHT_RULE, ratioWeight, recomputeWeights, tallyHistory } from './recompute';
 export {
   changedElements,

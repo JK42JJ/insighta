@@ -45,6 +45,9 @@ interface Label {
 }
 
 const PER_BRANCH = 5;
+/** Optional English share cap per arm (James 2026-11-13: language share cap, e.g. --en-cap 0.3). */
+const EN_CAP_ARG = process.argv.indexOf('--en-cap');
+const EN_CAP = EN_CAP_ARG > 0 ? Number(process.argv[EN_CAP_ARG + 1]) : 1;
 const CURRENT_N = 20;
 const CHANNEL_CAP = 1;
 
@@ -116,6 +119,12 @@ for (const s of scored) {
   const list = perBranch.get(s.branch) ?? [];
   if (list.length >= PER_BRANCH) continue;
   if (usedChannels.has(s.c.channelId)) continue;
+  if (
+    s.c.lang === 'en' &&
+    ctxSelected.filter((x) => x.c.lang === 'en').length >=
+      Math.floor(EN_CAP * PER_BRANCH * branchConcepts.size)
+  )
+    continue;
   list.push(s);
   perBranch.set(s.branch, list);
   usedChannels.add(s.c.channelId);
@@ -150,6 +159,11 @@ while (curSelected.length < CURRENT_N && progressed) {
       curSeen.add(x.c.id);
       if (curUsedChannels.has(x.c.channelId)) break;
       if (usedChannelsAcrossArms(x.c.channelId)) break;
+      if (
+        x.c.lang === 'en' &&
+        curSelected.filter((y) => y.c.lang === 'en').length >= Math.floor(EN_CAP * CURRENT_N)
+      )
+        continue;
       curUsedChannels.add(x.c.channelId);
       curSelected.push({ c: x.c, h: x.h, position: ++position });
       break;

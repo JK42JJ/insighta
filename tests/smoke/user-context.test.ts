@@ -351,8 +351,10 @@ describe('user context — judgments', () => {
     const res = await persistGraph(db, next.graph, { previous: step.graph });
     expect(res.edgesDeleted).toBe(3);
     const deletes = queries.filter((q) => q.sql.includes('DELETE FROM ontology.edges'));
-    expect(deletes).toHaveLength(3);
-    for (const d of deletes) expect(d.params[3]).toBe('AVOIDS');
+    // one batched DELETE carrying the three released AVOIDS edges
+    expect(deletes).toHaveLength(1);
+    const rows = JSON.parse(String(deletes[0]?.params[1])) as Array<{ relation: string }>;
+    expect(rows.map((r) => r.relation)).toEqual(['AVOIDS', 'AVOIDS', 'AVOIDS']);
   });
 
   test('a like in the history blocks AVOIDS', () => {
@@ -517,25 +519,24 @@ describe('user context — persistGraph SQL shape', () => {
 
     expect(queries[0]?.sql).toContain('user_id <> $2::uuid');
     expect(queries[0]?.params[1]).toBe(U);
+    // one batched statement per kind, rows passed as one JSON parameter
     const nodeQs = queries.filter((q) => q.sql.includes('INSERT INTO ontology.nodes'));
     const edgeQs = queries.filter((q) => q.sql.includes('INSERT INTO ontology.edges'));
-    expect(nodeQs).toHaveLength(g.nodes.size);
-    expect(edgeQs).toHaveLength(g.edges.size);
-    for (const q of nodeQs) {
-      expect(q.sql).toContain('ON CONFLICT (id) DO UPDATE');
-      expect(q.sql).toContain('ontology.nodes.properties || EXCLUDED.properties');
-      expect(q.params[1]).toBe(U);
-      expect(q.params[6]).toBe('service');
-    }
-    for (const q of edgeQs) {
-      expect(q.sql).toContain('ON CONFLICT (source_id, target_id, relation) DO UPDATE');
-      expect(q.sql).toContain('ontology.edges.properties || EXCLUDED.properties');
-      expect(q.params[0]).toBe(U);
-    }
+    expect(nodeQs).toHaveLength(1);
+    expect(edgeQs).toHaveLength(1);
+    const nodeRows = JSON.parse(String(nodeQs[0]?.params[2])) as Array<{ id: string }>;
+    const edgeRows = JSON.parse(String(edgeQs[0]?.params[2])) as Array<{ relation: string }>;
+    expect(nodeRows).toHaveLength(g.nodes.size);
+    expect(edgeRows).toHaveLength(g.edges.size);
+    expect(nodeQs[0]?.sql).toContain('ON CONFLICT (id) DO UPDATE');
+    expect(nodeQs[0]?.sql).toContain('ontology.nodes.properties || EXCLUDED.properties');
+    expect(nodeQs[0]?.params[0]).toBe(U);
+    expect(nodeQs[0]?.params[1]).toBe('service');
+    expect(edgeQs[0]?.sql).toContain('ON CONFLICT (source_id, target_id, relation) DO UPDATE');
+    expect(edgeQs[0]?.sql).toContain('ontology.edges.properties || EXCLUDED.properties');
+    expect(edgeQs[0]?.params[0]).toBe(U);
     // node writes precede edge writes (FK)
-    const lastNode = queries.lastIndexOf(nodeQs[nodeQs.length - 1] as Q);
-    const firstEdge = queries.indexOf(edgeQs[0] as Q);
-    expect(lastNode).toBeLessThan(firstEdge);
+    expect(queries.indexOf(nodeQs[0] as Q)).toBeLessThan(queries.indexOf(edgeQs[0] as Q));
 
     const link = queries[queries.length - 1];
     expect(link?.sql).toContain('UPDATE public.user_mandalas');
@@ -561,7 +562,8 @@ describe('user context — persistGraph SQL shape', () => {
       mandalaLinked: false,
     });
     const edge = queries.find((q) => q.sql.includes('INSERT INTO ontology.edges'));
-    expect(edge?.params[3]).toBe('JUDGED');
+    const rows = JSON.parse(String(edge?.params[2])) as Array<{ relation: string }>;
+    expect(rows.map((r) => r.relation)).toEqual(['JUDGED']);
   });
 
   test('refuses to write when a touched node belongs to another user', async () => {
