@@ -79,7 +79,8 @@ test('morning watch: a goal chip opens the feed, 좋아 then swipe saves one use
 
   await expect(page.getByTestId('mf-w3-watch')).toBeVisible();
   await expect(page.getByTestId('mf-watch-counter')).toHaveText(`1 / ${total}`);
-  await expect(page.getByTestId('mf-watch-seg')).toHaveCount(total);
+  // design 수정 4: the per-card progress segments are gone, the counter is the only position cue
+  await expect(page.getByTestId('mf-watch-seg')).toHaveCount(0);
   const card = page.locator(CURRENT);
   await expect(card.getByTestId('mf-watch-title')).not.toHaveText('');
 
