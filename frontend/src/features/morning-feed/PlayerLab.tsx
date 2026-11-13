@@ -98,6 +98,13 @@ export function PlayerLab(): JSX.Element {
   const autoRef = useRef(autoOnPause);
   autoRef.current = autoOnPause;
   const lastMuted = useRef(true);
+  /** Sound wanted, remembered the moment a button is pressed (James 2026-11-13: isMuted() lags on iOS). */
+  const wantSound = useRef(false);
+  /** Our own command just changed the sound: the polled state is ignored until then. */
+  const quietUntil = useRef(0);
+  /** The one pending sound check; cancelled on every swap and tied to a video id. */
+  const check = useRef<number | null>(null);
+  const loadedId = useRef('');
   const [width, setWidth] = useState(() => Math.min(window.innerWidth, 430));
 
   const add = useCallback((line: string) => {
@@ -111,12 +118,15 @@ export function PlayerLab(): JSX.Element {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  /** Checks shortly after a sound-on attempt whether it really plays with sound. */
+  /** Checks shortly after a sound-on attempt whether it really plays with sound (log only). */
   const checkSound = useCallback(
     (label: string) => {
-      window.setTimeout(() => {
+      if (check.current != null) window.clearTimeout(check.current);
+      const id = loadedId.current;
+      check.current = window.setTimeout(() => {
+        check.current = null;
         const p = player.current;
-        if (!p) return;
+        if (!p || loadedId.current !== id) return;
         const st = p.getPlayerState();
         const m = p.isMuted();
         add(label + ' → ' + stateName(st) + (m ? ', 음소거' : ', 소리 켜짐'));
@@ -142,17 +152,22 @@ export function PlayerLab(): JSX.Element {
           events: {
             onReady: (e) => {
               const p = e.target;
+              loadedId.current = videos[0];
               p.mute();
               p.playVideo();
               add('onReady → mute + playVideo (음소거 자동 재생)');
               poll = window.setInterval(() => {
                 try {
                   const m = p.isMuted();
+                  setMuted(m);
+                  // right after our own command the reading can lag: don't take it as a change
+                  if (performance.now() < quietUntil.current) return;
                   if (m !== lastMuted.current) {
                     lastMuted.current = m;
+                    // YouTube's own control (or the browser) changed it
+                    wantSound.current = !m;
                     add(m ? '음소거됨' : '소리 켜짐 (감지)');
                   }
-                  setMuted(m);
                 } catch {
                   /* player gone */
                 }
@@ -163,7 +178,10 @@ export function PlayerLab(): JSX.Element {
               setState(stateName(s));
               add('상태: ' + stateName(s));
               // check 4 (automatic): YouTube paused it after a tap -> sound on and play, no gesture
-              if (s === PAUSED && autoRef.current && e.target.isMuted()) {
+              if (s === PAUSED && autoRef.current && !wantSound.current) {
+                wantSound.current = true;
+                lastMuted.current = false;
+                quietUntil.current = performance.now() + SOUND_CHECK_MS;
                 e.target.unMute();
                 e.target.playVideo();
                 add('일시정지 감지 → 자동 unMute + playVideo (사용자 제스처 아님)');
@@ -194,12 +212,18 @@ export function PlayerLab(): JSX.Element {
   const soundOn = (): void => {
     const p = player.current;
     if (!p) return;
+    wantSound.current = true;
+    lastMuted.current = false;
+    quietUntil.current = performance.now() + SOUND_CHECK_MS;
     p.unMute();
     p.playVideo();
     add('우리 단추: unMute + playVideo (사용자 탭 안에서)');
     checkSound('우리 단추');
   };
   const soundOff = (): void => {
+    wantSound.current = false;
+    lastMuted.current = true;
+    quietUntil.current = performance.now() + SOUND_CHECK_MS;
     player.current?.mute();
     add('우리 단추: mute');
   };
@@ -207,21 +231,35 @@ export function PlayerLab(): JSX.Element {
     const p = player.current;
     if (!p) return;
     const next = (idx + step + videos.length) % videos.length;
+    const id = videos[next];
     setIdx(next);
-    const withSound = keepSound && !p.isMuted();
-    if (!withSound) p.mute();
-    p.loadVideoById(videos[next]);
-    add('영상 교체 → ' + videos[next] + (withSound ? ' (소리 유지 시도)' : ' (음소거)'));
+    // the previous swap's check must not judge this video
+    if (check.current != null) {
+      window.clearTimeout(check.current);
+      check.current = null;
+    }
+    // the sound wanted as remembered when the button was pressed, not a fresh isMuted() read
+    const withSound = keepSound && wantSound.current;
+    lastMuted.current = !withSound;
+    quietUntil.current = performance.now() + SOUND_CHECK_MS;
+    if (withSound) p.unMute();
+    else p.mute();
+    loadedId.current = id;
+    p.loadVideoById(id);
+    add('영상 교체 → ' + id + (withSound ? ' (소리 유지 시도)' : ' (음소거)'));
     if (!withSound) return;
-    window.setTimeout(() => {
+    check.current = window.setTimeout(() => {
+      check.current = null;
       const cur = player.current;
-      if (!cur) return;
+      if (!cur || loadedId.current !== id) return;
       const st = cur.getPlayerState();
       if (st === PLAYING && !cur.isMuted()) {
-        add('소리 유지 성공 → playing, 소리 켜짐');
+        add('소리 유지 성공 → ' + id + ' playing, 소리 켜짐');
         return;
       }
-      add('소리 유지 실패 (' + stateName(st) + ') → 음소거로 되돌리고 재생');
+      add('소리 유지 실패 → ' + id + ' (' + stateName(st) + ') → 음소거로 되돌리고 재생');
+      wantSound.current = false;
+      lastMuted.current = true;
       cur.mute();
       cur.playVideo();
     }, SOUND_CHECK_MS);
