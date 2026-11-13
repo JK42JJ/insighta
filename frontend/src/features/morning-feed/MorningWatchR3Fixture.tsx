@@ -348,7 +348,12 @@ export function MorningWatchR3Fixture({
 
   let body: JSX.Element;
   if (screen === 'boot') {
-    body = <WatchBoot fixed={pr.boot} />;
+    body = (
+      <WatchBoot
+        fixed={pr.boot}
+        safe={override ? { top: override.safeTop, bottom: override.safeBottom } : undefined}
+      />
+    );
   } else if (screen === 'input') {
     const state: R3InputState = pr.carry
       ? { kind: 'carry', goal: GOAL, count: VIDS.length, thumbs: [], onGo: () => setScreen('feed') }

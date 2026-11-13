@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+
+import { useViewportFitCover } from '@/features/morning-feed/use-watch-frame';
 
 import {
   bootStage,
@@ -21,9 +23,15 @@ const pageStart = typeof performance !== 'undefined' ? performance.now() : 0;
 
 export function WatchBoot({
   fixed,
+  safe,
 }: {
-  /** Fixture only: hold this stage. */ fixed?: BootStage;
+  /** Fixture only: hold this stage. */
+  fixed?: BootStage;
+  /** Fixture only: safe areas a desktop browser does not have. */
+  safe?: { top: number; bottom: number };
 }): JSX.Element {
+  // env(safe-area-inset-*) is 0 until the viewport covers the screen (same as the watch screen)
+  useViewportFitCover();
   const [timed, setStage] = useState<BootStage>(() => bootStage(performance.now() - pageStart));
   const stage = fixed ?? timed;
   useEffect(() => {
@@ -38,7 +46,20 @@ export function WatchBoot({
   }, [stage, fixed]);
 
   return (
-    <div className="mf-boot" data-testid="mf-w-boot" data-stage={stage} aria-busy="true">
+    <div
+      className="mf-boot"
+      data-testid="mf-w-boot"
+      data-stage={stage}
+      aria-busy="true"
+      style={
+        safe
+          ? ({
+              '--boot-safe-top': safe.top + 'px',
+              '--boot-safe-bottom': safe.bottom + 'px',
+            } as CSSProperties)
+          : undefined
+      }
+    >
       {stage !== 'skeleton' ? (
         <div className="mf-boot-logo">
           <div className="mf-boot-char" aria-hidden="true">
