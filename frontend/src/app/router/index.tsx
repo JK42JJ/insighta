@@ -4,6 +4,8 @@ import { PageLoader } from '@/shared/ui/PageLoader';
 import { ProtectedRoute } from './ProtectedRoute';
 import { AdminRoute } from './AdminRoute';
 import { MobileGateNotice } from './MobileGateNotice';
+import { MobileAuthReturn } from './MobileAuthReturn';
+import { mobileReturnTarget, readAuthReturn } from './mobile-auth-return';
 import {
   isMobileDevice,
   isPathAllowedOnMobile,
@@ -73,6 +75,9 @@ export function AppRouter() {
   // Closed-beta mobile gate: app routes are desktop-only until the mobile
   // redesign — mobile devices land on the marketing pages instead.
   if (isMobileDevice() && !isPathAllowedOnMobile(pathname)) {
+    // back from Google sign-in on a phone: go where the person was going (e.g. the watch screen)
+    const back = mobileReturnTarget(pathname, readAuthReturn());
+    if (back) return <MobileAuthReturn target={back} />;
     try {
       sessionStorage.setItem(MOBILE_GATE_FLAG_KEY, '1');
     } catch {
