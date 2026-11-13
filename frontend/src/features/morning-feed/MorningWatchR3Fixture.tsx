@@ -14,6 +14,8 @@ import {
   WatchInputR3,
   type R3InputState,
 } from '@/features/morning-feed/watch-r3-screens';
+import type { BootStage } from '@/features/morning-feed/watch-boot-stage';
+import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 import './watch.css';
 import './watch-r3.css';
 
@@ -120,7 +122,8 @@ type Reaction = 'like' | 'dislike' | 'skip';
 const DONE_R: Reaction[] = ['like', 'dislike', 'skip', 'skip', 'skip'];
 
 interface Preset {
-  screen: 'input' | 'feed' | 'done';
+  screen: 'input' | 'feed' | 'done' | 'boot';
+  boot?: BootStage;
   idx?: number;
   maxIdx?: number;
   mode?: 'feed' | 'imm';
@@ -141,6 +144,9 @@ const F = 'feed' as const;
 const SND = { screen: F, mode: 'imm' as const, sound: true, prog: 34 };
 /** WatchPhone.dc.html (수정 4) PRESETS, same names (watch screen; input/done unchanged here). */
 const R3_PRESETS: Record<string, Preset> = {
+  'boot-logo': { screen: 'boot', boot: 'logo' },
+  'boot-load': { screen: 'boot', boot: 'line' },
+  'boot-skel': { screen: 'boot', boot: 'skeleton' },
   input: { screen: 'input' },
   'input-done': { screen: 'input', doneToday: true, reacts: DONE_R },
   'input-carry': { screen: 'input', carry: true },
@@ -341,7 +347,9 @@ export function MorningWatchR3Fixture({
   const [reacts, setReacts] = useState<Reaction[]>(pr.reacts ?? []);
 
   let body: JSX.Element;
-  if (screen === 'input') {
+  if (screen === 'boot') {
+    body = <WatchBoot fixed={pr.boot} />;
+  } else if (screen === 'input') {
     const state: R3InputState = pr.carry
       ? { kind: 'carry', goal: GOAL, count: VIDS.length, thumbs: [], onGo: () => setScreen('feed') }
       : pr.doneToday

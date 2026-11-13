@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  fetchMorningFeedHistory,
-  fetchWatchToday,
   postFeedJudgment,
   postWatchBatch,
   undoFeedJudgment,
   type FeedHistoryItem,
 } from '@/features/morning-cards/api';
 import { toFeedCard } from '@/features/morning-feed/feed-format';
+import { takeWatchStart } from '@/features/morning-feed/watch-prefetch';
+import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 import { JudgmentQueue } from '@/features/morning-feed/judgment-queue';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
 import fixture from '@/features/morning-feed/morning-feed.fixture.json';
@@ -76,9 +76,7 @@ export function MorningWatchLive(): JSX.Element {
 
   useEffect(() => {
     let alive = true;
-    // 이전 주제 is optional: when it cannot be read the section is simply not drawn
-    const historyP = fetchMorningFeedHistory().catch((): FeedHistoryItem[] => []);
-    Promise.all([fetchWatchToday(), historyP])
+    takeWatchStart()
       .then(([t, history]) => {
         if (!alive) return;
         const today = parseWatchTodayMap(t.today);
@@ -166,7 +164,7 @@ export function MorningWatchLive(): JSX.Element {
     }
   }, [connectMutate]);
 
-  if (state.status === 'loading') return <div className="mf-w" style={MESSAGE_STYLE} />;
+  if (state.status === 'loading') return <WatchBoot />;
   if (state.status === 'error')
     return (
       <div className="mf-w" style={MESSAGE_STYLE}>

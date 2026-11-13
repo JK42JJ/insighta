@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { parseFixtureScreen } from '@/features/morning-feed/fixture-screen';
+import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 
 import { ProtectedRoute } from './ProtectedRoute';
 
@@ -60,9 +61,11 @@ export function MorningCardsEntry() {
       </Suspense>
     );
   }
+  // the watch screen shows its first-open screen instead of a blank page while it starts
+  const boot = q.get('view') === 'watch' ? <WatchBoot /> : null;
   return (
-    <ProtectedRoute>
-      <Suspense fallback={null}>
+    <ProtectedRoute fallback={boot}>
+      <Suspense fallback={boot}>
         <MorningFeedRoute />
       </Suspense>
     </ProtectedRoute>
