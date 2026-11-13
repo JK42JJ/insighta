@@ -133,6 +133,8 @@ interface Preset {
   sound?: boolean;
   prog?: number;
   sheet?: boolean;
+  /** 다 본 뒤: how many other goals still have videos (chips under the summary). */
+  rest?: number;
   loading?: boolean;
   dragFrac?: number;
   count?: number;
@@ -173,6 +175,7 @@ const R3_PRESETS: Record<string, Preset> = {
   'imm-34': { ...SND, count: 34, idx: 13, maxIdx: 13 },
   'imm-liked': { ...SND, reacts: ['like'], reacting: 'like' },
   done: { screen: 'done', reacts: DONE_R },
+  'done-rest': { screen: 'done', reacts: DONE_R, rest: 5 },
 };
 
 function toVideos(thumbs: string[], count: number): R3Video[] {
@@ -455,6 +458,14 @@ export function MorningWatchR3Fixture({
         frame={frame}
         goalTitle={GOAL}
         view={insightOf(reacts)}
+        rest={CHIPS.slice(1, 1 + (pr.rest ?? 0)).map((t, i) => ({
+          key: t,
+          title: t,
+          done: false,
+          disabled: false,
+          count: 5 - (i % 3),
+          onPick: () => setScreen('feed'),
+        }))}
         onClose={() => setScreen('input')}
       />
     );

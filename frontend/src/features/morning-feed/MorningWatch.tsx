@@ -9,7 +9,6 @@ import { useAuth } from '@/features/auth/model/useAuth';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
 import { useViewportFitCover, useWatchFrame } from '@/features/morning-feed/use-watch-frame';
 import {
-  carryCandidate,
   historyMetaText,
   insightViewFromData,
   kstDateLabel,
@@ -33,6 +32,7 @@ import { r3VideoOf } from '@/features/morning-feed/watch-r3-video';
 import {
   WatchDoneR3,
   WatchInputR3,
+  type R3ChipView,
   type R3InputState,
 } from '@/features/morning-feed/watch-r3-screens';
 import { ONB_LAST_STEP, WatchOnboarding } from '@/features/morning-feed/watch-screens';
@@ -119,7 +119,6 @@ export function MorningWatch({
   // batch videos answered in this visit (the batch itself tells the earlier ones)
   const [judged, setJudged] = useState<ReadonlySet<string>>(() => new Set());
   const starting = useRef(false);
-  const [carryOff, setCarryOff] = useState(false);
   const alive = useRef(true);
   const player = useRef<PlayerController | null>(null);
   /** README 수정 4: the sound setting is kept for the session (this visit), across cards and goals. */
@@ -140,13 +139,8 @@ export function MorningWatch({
   const shortOf = (label: string): string => cellOf(label)?.short ?? label;
   const chipOf = (cell: FeedCell): GoalChipState => goalChipState(today[cell.label]);
 
-  // 어제에 이어서: a goal with yesterday's batch that still has videos today. Decided once at load.
-  const [carryCell] = useState<FeedCell | null>(() => {
-    const open = (label: string): boolean =>
-      goals.some((g) => g.label === label) && goalChipState(todayFromServer[label]).kind === 'open';
-    const c = carryCandidate(history, now, open);
-    return c ? (goals.find((g) => g.label === c.cell) ?? null) : null;
-  });
+  // 어제에 이어서 is not shown (2026-11-14): picking one of yesterday's goals had no basis
+  // (newest day, then label order), so the first screen keeps the hero until it is redesigned.
 
   const finishOnboarding = (): void => {
     writeOnboardingSeen();
@@ -176,7 +170,6 @@ export function MorningWatch({
     }
     if (state.kind === 'none' || starting.current) return;
     starting.current = true;
-    setCarryOff(true);
     setScreen({ kind: 'watch', goal: cell, list: null, positions: [] });
     loadBatch(cell.label)
       .then((batch) => {
@@ -264,18 +257,8 @@ export function MorningWatch({
   if (screen.kind === 'onb') {
     body = <WatchOnboarding step={screen.step} busy={connecting} onNext={onbNext} />;
   } else if (screen.kind === 'input') {
-    const carryState = carryCell ? chipOf(carryCell) : null;
     let state: R3InputState = { kind: 'hero' };
-    if (carryCell && carryState && !carryOff && carryState.kind === 'open') {
-      state = {
-        kind: 'carry',
-        goal: carryCell.short,
-        count: carryState.count,
-        // today's thumbnails would need the batch, and reading it creates it: not drawn
-        thumbs: [],
-        onGo: () => openGoal(carryCell),
-      };
-    } else if (doneCell) {
+    if (doneCell) {
       const v = doneView && doneView.label === doneCell.label ? doneView.view : null;
       state = {
         kind: 'done',
@@ -344,12 +327,29 @@ export function MorningWatch({
       />
     );
   } else {
+    // 다 본 뒤: the goals with videos left today, in the home's chip order, nothing highlighted
+    const rest = goals.flatMap((g) => {
+      const c = chipOf(g);
+      return c.kind === 'open' && g.label !== screen.goal.label
+        ? [
+            {
+              key: g.label,
+              title: g.short,
+              done: false,
+              disabled: false,
+              count: c.count,
+              onPick: () => openGoal(g),
+            },
+          ]
+        : [];
+    });
     body = (
       <LiveDone
         frame={frame}
         goal={screen.goal}
         shortOf={shortOf}
         whenSaved={whenSaved}
+        rest={rest}
         onClose={() => setScreen({ kind: 'input' })}
       />
     );
@@ -370,12 +370,15 @@ function LiveDone({
   goal,
   shortOf,
   whenSaved,
+  rest,
   onClose,
 }: {
   frame: ReturnType<typeof useWatchFrame>;
   goal: FeedCell;
   shortOf: (label: string) => string;
   whenSaved: () => Promise<void>;
+  /** Goals with videos left today, home chip order. */
+  rest: R3ChipView[];
   onClose: () => void;
 }): JSX.Element {
   const [data, setData] = useState<InsightData | null>(null);
@@ -390,5 +393,7 @@ function LiveDone({
     };
   }, [whenSaved, goal.label]);
   const view = data && data.reacted + data.passed > 0 ? insightViewFromData(data, shortOf) : null;
-  return <WatchDoneR3 frame={frame} goalTitle={goal.short} view={view} onClose={onClose} />;
+  return (
+    <WatchDoneR3 frame={frame} goalTitle={goal.short} view={view} rest={rest} onClose={onClose} />
+  );
 }

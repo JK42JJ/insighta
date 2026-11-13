@@ -7,6 +7,8 @@
 .mf-w-app {
   --w3-navy: #16273f;
   --w3-paper: #f7f5f0;
+  /* behind the player when the phone is sideways (letterbox) */
+  --w3-video-bg: #000000;
   --w3-card: #ffffff;
   --w3-steel: #3a6ea5;
   --w3-why: #eaf0f7;
@@ -1405,4 +1407,67 @@ button.mf-w3-navy-card {
 }
 .mf-w3-close:active {
   transform: scale(0.98);
+}
+.mf-w3-close-quiet {
+  width: 100%;
+  height: 40px;
+  margin-top: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--w3-sub);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 다 본 뒤: goals with videos left, the home's chips plus the count under the name */
+.mf-w3-done-rest {
+  margin-bottom: 8px;
+}
+.mf-w3-done-rest-k {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.mf-w3-done-rest .mf-w3-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.15;
+}
+.mf-w3-chip-n {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--w3-sub);
+}
+
+/* Phone held sideways (2026-11-14): only the player, filling the screen. Nothing is drawn over it
+   (YouTube: no overlays); the cards, header and sheet are hidden, not moved, so turning the phone
+   back shows the screen exactly as it was. The YouTube fullscreen button stays as it is. */
+.mf-w3-root[data-land] {
+  background: var(--w3-video-bg);
+}
+.mf-w3-root[data-land] .mf-w3-head,
+.mf-w3-root[data-land] .mf-w3-stack,
+.mf-w3-root[data-land] .mf-w3-sheet,
+.mf-w3-root[data-land] .mf-w3-loading {
+  visibility: hidden;
+}
+.mf-w3-root[data-land] .mf-w3-player-layer {
+  position: fixed;
+  inset: 0;
+  height: auto !important;
+  transform: none !important;
+  transition: none;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  background: var(--w3-video-bg);
+  visibility: visible;
+  z-index: 5;
+}
+.mf-w3-root[data-land] .mf-w3-yt {
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
 }

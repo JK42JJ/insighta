@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import type { PlayerController, PlayerTick } from '@/features/morning-feed/WatchPlayer';
+import { usePhoneLandscape } from '@/features/morning-feed/use-phone-landscape';
 import { chapterStamp } from '@/features/morning-feed/watch-design';
 import {
   ambientOrDefault,
@@ -191,6 +192,9 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
   const init = p.initial ?? {};
   const n = p.videos.length;
   const [idx, setIdx] = useState(init.idx ?? 0);
+  // sideways phone on a video: the player alone fills the screen, no card moves until upright
+  const sideways = usePhoneLandscape();
+  const land = sideways && idx < n && !p.loading;
   const [maxIdx, setMaxIdx] = useState(init.maxIdx ?? init.idx ?? 0);
   const [mode, setMode] = useState<'feed' | 'imm'>(init.mode ?? 'feed');
   const [drag, setDrag] = useState(0);
@@ -380,7 +384,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
   }, [advance, back]);
 
   const onPointerDown = (e: ReactPointerEvent): void => {
-    if (st.current.settling || p.loading) return;
+    if (st.current.settling || p.loading || land) return;
     gesture.current = { ...gesture.current, y0: e.clientY, down: true, drag: false };
   };
   const onPointerMove = (e: ReactPointerEvent): void => {
@@ -408,6 +412,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
   };
   const onWheel = (e: ReactWheelEvent): void => {
     const now = Date.now();
+    if (land) return;
     if (Math.abs(e.deltaY) < WHEEL_MIN_DELTA || now - wheelAt.current < WHEEL_GAP_MS) return;
     wheelAt.current = now;
     if (e.deltaY > 0) advance('skip');
@@ -491,7 +496,13 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
     !!sheetVideo && (!!sheetVideo.why || !!sheetVideo.summary || sheetVideo.chapters.length > 0);
 
   return (
-    <div className="mf-w3-root" data-mode={mode} data-testid="mf-w3-watch" style={rootStyle}>
+    <div
+      className="mf-w3-root"
+      data-mode={mode}
+      data-land={land ? '' : undefined}
+      data-testid="mf-w3-watch"
+      style={rootStyle}
+    >
       <div className="mf-w3-watch">
         <div className="mf-w3-head">
           <button

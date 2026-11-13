@@ -323,12 +323,15 @@ export function WatchDoneR3({
   frame,
   goalTitle,
   view,
+  rest = [],
   onClose,
 }: {
   frame: Frame;
   goalTitle: string;
   /** null while loading or unreadable: the heading, the guide and the close bar only. */
   view: InsightView | null;
+  /** Goals with videos left today, in the home's chip order; the area is hidden when empty. */
+  rest?: R3ChipView[];
   onClose: () => void;
 }): JSX.Element {
   return (
@@ -399,7 +402,32 @@ export function WatchDoneR3({
           </div>
         </div>
         <div className="mf-w3-done-foot">
-          <button type="button" className="mf-w3-close" data-testid="mf-w-close" onClick={onClose}>
+          {rest.length > 0 ? (
+            <div className="mf-w3-done-rest" data-testid="mf-w-done-rest">
+              <div className="mf-w3-done-rest-k">다른 걸 알아보고 싶다면</div>
+              <div className="mf-w3-chips">
+                {rest.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    className="mf-w3-chip"
+                    data-testid="mf-w-done-chip"
+                    data-count={c.count}
+                    onClick={c.onPick}
+                  >
+                    {c.title}
+                    <span className="mf-w3-chip-n">{c.count + '편'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className={rest.length > 0 ? 'mf-w3-close-quiet' : 'mf-w3-close'}
+            data-testid="mf-w-close"
+            onClick={onClose}
+          >
             닫기
           </button>
         </div>
