@@ -365,6 +365,7 @@ export function MorningWatchR3Fixture({
       <WatchInputR3
         frame={frame}
         dateLabel="11월 11일 수요일"
+        account={{ name: '[이름]', email: '[이메일]', onLogout: () => undefined }}
         state={state}
         chips={CHIPS.map((t, i) => ({
           key: t,

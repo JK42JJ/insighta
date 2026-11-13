@@ -5,6 +5,7 @@ import {
   type FeedHistoryItem,
   type InsightData,
 } from '@/features/morning-cards/api';
+import { useAuth } from '@/features/auth/model/useAuth';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
 import { useViewportFitCover, useWatchFrame } from '@/features/morning-feed/use-watch-frame';
 import {
@@ -106,6 +107,7 @@ export function MorningWatch({
   connectYouTube,
 }: MorningWatchProps): JSX.Element {
   useViewportFitCover();
+  const { userName, userEmail, userAvatar, signOut } = useAuth();
   const app = useRef<HTMLDivElement>(null);
   const frame = useWatchFrame(app);
   const [screen, setScreen] = useState<Screen>(() =>
@@ -287,6 +289,13 @@ export function MorningWatch({
       <WatchInputR3
         frame={frame}
         dateLabel={kstDateLabel(now)}
+        account={{
+          name: userName ?? '',
+          email: userEmail ?? '',
+          avatarUrl: userAvatar,
+          // signed out: the route's sign-in check sends the person to sign in again
+          onLogout: () => void signOut(),
+        }}
         state={state}
         chips={goals.map((g) => {
           const c = chipOf(g);

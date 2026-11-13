@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 
 import type { InsightView, WatchReaction } from '@/features/morning-feed/watch-design';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
@@ -62,9 +62,54 @@ export interface R3HistoryView {
   onPick: () => void;
 }
 
+/** The signed-in account for the header avatar and the account sheet (README 수정 4 §6). */
+export interface R3AccountView {
+  name: string;
+  email: string;
+  /** Profile image; absent = the person icon. */
+  avatarUrl?: string | null;
+  onLogout: () => void;
+}
+
+function PersonIcon({ size }: { size: number }): JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="9" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </svg>
+  );
+}
+
+function Avatar({
+  url,
+  size,
+  icon,
+}: {
+  url?: string | null;
+  size: number;
+  icon: number;
+}): JSX.Element {
+  return (
+    <span className="mf-w3-avatar" style={{ width: size, height: size }}>
+      {url ? <img src={url} alt="" referrerPolicy="no-referrer" /> : <PersonIcon size={icon} />}
+    </span>
+  );
+}
+
 export interface WatchInputR3Props {
   frame: Frame;
   dateLabel: string;
+  /** Absent = no avatar (fixture without an account). */
+  account?: R3AccountView;
   state: R3InputState;
   chips: R3ChipView[];
   history: R3HistoryView[];
@@ -84,6 +129,8 @@ export function WatchInputR3(p: WatchInputR3Props): JSX.Element {
   const s = p.state;
   const hero = s.kind === 'hero';
   const showHistory = p.history.length > 0 && (tall || hero);
+  const [acct, setAcct] = useState(false);
+  const account = p.account;
   return (
     <div className="mf-w3-root" data-testid="mf-w-input" style={safeVars(p.frame)}>
       <div className="mf-w3-input">
@@ -93,6 +140,17 @@ export function WatchInputR3(p: WatchInputR3Props): JSX.Element {
             <div className="mf-w3-date" data-testid="mf-w-date">
               {p.dateLabel}
             </div>
+            {account ? (
+              <button
+                type="button"
+                className="mf-w3-acct-btn"
+                data-testid="mf-w3-acct-open"
+                aria-label="계정"
+                onClick={() => setAcct(true)}
+              >
+                <Avatar url={account.avatarUrl} size={32} icon={18} />
+              </button>
+            ) : null}
           </div>
           <div className="mf-w3-state">
             {s.kind === 'hero' ? (
@@ -214,6 +272,49 @@ export function WatchInputR3(p: WatchInputR3Props): JSX.Element {
           ) : null}
         </div>
       </div>
+      {acct && account ? (
+        <>
+          <div className="mf-w3-acct-scrim" onClick={() => setAcct(false)} />
+          <div className="mf-w3-acct" data-testid="mf-w3-acct" role="dialog" aria-label="계정">
+            <div className="mf-w3-acct-top">
+              <button
+                type="button"
+                className="mf-w3-icon-btn"
+                aria-label="닫기"
+                onClick={() => setAcct(false)}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+            <div className="mf-w3-acct-who">
+              <Avatar url={account.avatarUrl} size={44} icon={24} />
+              <div className="mf-w3-acct-text">
+                <div className="mf-w3-acct-name">{account.name}</div>
+                <div className="mf-w3-acct-email">{account.email}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="mf-w3-logout"
+              data-testid="mf-w3-logout"
+              onClick={account.onLogout}
+            >
+              로그아웃
+            </button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
