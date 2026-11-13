@@ -823,7 +823,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
             data-testid="mf-watch-player"
             style={{
               height: f.playerH + 'px',
-              transform: 'translateY(' + Math.round(layer.y + (dragging ? dy : 0)) + 'px)',
+              transform: 'translateY(' + Math.round(layer.y + (moving ? dy : 0)) + 'px)',
             }}
           >
             {p.renderPlayer(events)}
