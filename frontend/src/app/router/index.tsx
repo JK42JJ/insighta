@@ -34,6 +34,9 @@ import BriefCategoryPage from '@/pages/brief/ui/BriefCategoryPage';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
+const PlayerLab = lazy(() =>
+  import('@/features/morning-feed/PlayerLab').then((m) => ({ default: m.PlayerLab }))
+);
 // MandalaSettingsPage moved to -legacy/ in Phase 5 — replaced by MandalaEditorPage
 const MandalaWizardPage = lazy(() => import('@/pages/mandala-wizard'));
 const MandalaDashboardPage = lazy(() => import('@/pages/mandala-dashboard'));
@@ -163,6 +166,15 @@ export function AppRouter() {
             <ProtectedRoute>
               <MorningCardsRoute />
             </ProtectedRoute>
+          }
+        />
+        {/* stg device test for the watch screen's player: no sign-in, no server calls */}
+        <Route
+          path="/morning-cards/player-lab"
+          element={
+            <Suspense fallback={null}>
+              <PlayerLab />
+            </Suspense>
           }
         />
         <Route
