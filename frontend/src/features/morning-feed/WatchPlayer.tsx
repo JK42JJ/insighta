@@ -153,9 +153,20 @@ export function WatchPlayer({
     let soundCheck: number | null = null;
     let loaded = '';
     let lastMuted = true;
+    /** Right after our own command isMuted() can lag (iOS, 2026-11-13 device log): readings are ignored until then. */
+    let quietUntil = 0;
+    /** Our command set the sound: remember it as the state and don't re-read it at once. */
+    const intend = (muted: boolean): void => {
+      quietUntil = performance.now() + SOUND_CHECK_MS;
+      if (muted !== lastMuted) {
+        lastMuted = muted;
+        cb.current.onMuted?.(muted);
+      }
+    };
     const mount = document.createElement('div');
     host.current?.appendChild(mount);
     const report = (p: YtPlayer): void => {
+      if (performance.now() < quietUntil) return;
       const muted = p.isMuted();
       if (muted !== lastMuted) {
         lastMuted = muted;
@@ -167,7 +178,7 @@ export function WatchPlayer({
       try {
         p.mute();
         p.playVideo();
-        report(p);
+        intend(true);
       } catch {
         /* player gone */
       }
@@ -203,7 +214,7 @@ export function WatchPlayer({
                     if (withSound) p.unMute();
                     else p.mute();
                     p.loadVideoById({ videoId, startSeconds: Math.max(0, startSeconds) });
-                    report(p);
+                    intend(!withSound);
                     if (!withSound) return;
                     soundCheck = window.setTimeout(() => {
                       soundCheck = null;
@@ -218,7 +229,7 @@ export function WatchPlayer({
                   try {
                     p.unMute();
                     p.playVideo();
-                    report(p);
+                    intend(false);
                   } catch {
                     /* player gone */
                   }
@@ -226,7 +237,7 @@ export function WatchPlayer({
                 soundOff: () => {
                   try {
                     p.mute();
-                    report(p);
+                    intend(true);
                   } catch {
                     /* player gone */
                   }
