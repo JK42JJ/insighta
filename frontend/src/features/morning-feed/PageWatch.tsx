@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { WatchVerdict, WatchVideo } from '@/features/morning-feed/watch-list';
 import { WatchFeed, type R3Reaction, type R3Verdict } from '@/features/morning-feed/watch-r3-feed';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
+import { MOTION } from '@/features/morning-feed/motion-tokens';
 import { r3VideoOf } from '@/features/morning-feed/watch-r3-video';
 import { WatchPlayer, type PlayerController } from '@/features/morning-feed/WatchPlayer';
 import './page-watch.css';
@@ -12,8 +13,8 @@ import './page-watch.css';
  * in its order, starting at the tapped video (at the source's second when it has one), moved
  * through up and down with the same cards and player as the daily watch screen. Swiping on
  * records nothing; 좋아/별로 are recorded as on the watch screen. The page stays mounted under
- * this layer, so its scroll position and the note's open state are kept. Step 1 motion: the
- * layer slides in from the right; it closes at once.
+ * this layer, so its scroll position and the note's open state are kept. The slide in and out
+ * is PageWithWatch's.
  */
 
 export interface PageWatchCards {
@@ -44,8 +45,8 @@ const VERDICT_OF: Record<R3Verdict, WatchVerdict> = {
   skip: 'skip',
   pass: 'pass',
 };
-/** The slide-in (page-watch.css); the feed and its player start only after it, never mid-slide. */
-const SLIDE_MS = 300;
+/** The slide-in (PageWithWatch); the feed and its player start only after it, never mid-slide. */
+const SLIDE_MS = MOTION.push.ms;
 
 export function PageWatch(p: PageWatchProps): JSX.Element {
   const [cards, setCards] = useState<PageWatchCards | null>(null);
@@ -75,7 +76,7 @@ export function PageWatch(p: PageWatchProps): JSX.Element {
   const videos = useMemo(() => (cards?.items ?? []).map(r3VideoOf), [cards]);
   const startIdx = Math.max(0, cards?.items.findIndex((v) => v.videoId === p.start.videoId) ?? 0);
   return (
-    <div className="mf-pw" data-testid="mf-page-watch">
+    <div className="mf-pw-body" data-testid="mf-page-watch">
       {cards && entered ? (
         <WatchFeed
           goalTitle={p.goalTitle}

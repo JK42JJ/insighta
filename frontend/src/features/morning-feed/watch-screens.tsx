@@ -9,6 +9,7 @@ import {
   type WatchReaction,
 } from '@/features/morning-feed/watch-design';
 import { counterText, segmentStates } from '@/features/morning-feed/watch-list';
+import { MOTION } from '@/features/morning-feed/motion-tokens';
 
 const CHECK_MARK = '✓';
 
@@ -84,6 +85,22 @@ export function PauseIcon(): JSX.Element {
 
 // ── 01 온보딩 ──
 
+/** A button's label, with a turning ring once the answer takes longer than the busy wait. */
+function BusyLabel({ label }: { label: string }): JSX.Element {
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setLate(true), MOTION.wait.busyAfterMs);
+    return () => window.clearTimeout(t);
+  }, []);
+  return late ? (
+    <span className="mf-busy" data-testid="mf-busy">
+      <span className="mf-busy-ring" aria-hidden="true" /> {label}
+    </span>
+  ) : (
+    <>{label}</>
+  );
+}
+
 const ONB_STEPS: ReadonlyArray<readonly [string, string, string, string, string]> = [
   [
     '안녕하세요',
@@ -113,11 +130,14 @@ export function WatchOnboarding({
   step,
   busy = false,
   onNext,
+  onSkip,
 }: {
   step: number;
   /** The last step's button is working (YouTube connection). */
   busy?: boolean;
   onNext: () => void;
+  /** The last step: go on without connecting YouTube (decision 2026-11-14 user test). */
+  onSkip?: () => void;
 }): JSX.Element {
   const s = Math.min(Math.max(0, step), ONB_LAST_STEP);
   const [kick, title, body, cta, note] = ONB_STEPS[s];
@@ -140,12 +160,25 @@ export function WatchOnboarding({
       <button
         type="button"
         className="mf-w-onb-btn"
+        data-press="fill"
         data-testid="mf-w-onb-next"
         disabled={busy}
         onClick={onNext}
       >
-        {cta}
+        {busy ? <BusyLabel label={cta} /> : cta}
       </button>
+      {onSkip && s === ONB_LAST_STEP ? (
+        <button
+          type="button"
+          className="mf-w-onb-skip"
+          data-press="link"
+          data-testid="mf-w-onb-skip"
+          disabled={busy}
+          onClick={onSkip}
+        >
+          건너뛰기
+        </button>
+      ) : null}
       <div className="mf-w-onb-note">{note}</div>
     </div>
   );

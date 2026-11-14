@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 
-import { pastHeadlinePx, seenDateLabel } from '@/features/morning-feed/watch-home-model';
+import { BackButton } from '@/features/morning-feed/BackButton';
+import { briefDateLabel, pastHeadlinePx } from '@/features/morning-feed/watch-home-model';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
 import {
   AccountButton,
@@ -11,7 +12,7 @@ import './watch-home.css';
 import './watch-page.css';
 
 /*
- * 지난 장 목록 (design handoff "design_handoff_insighta_page", PastPhone.dc.html): one domain's
+ * 지난 브리프 목록 (was 지난 장) (design handoff "design_handoff_insighta_page", PastPhone.dc.html): one domain's
  * pages newest first, the eight domain chips fixed at the bottom. A domain without pages shows
  * its name and an empty list (no empty-state screen, decision 2026-11-14).
  */
@@ -23,15 +24,16 @@ export interface PastRow {
 
 export interface WatchPastProps {
   frame: Frame & { width: number };
-  /** The user's goal in the top row; null = empty. */
-  goal?: string | null;
   account?: R3AccountView;
   chips: Array<{ cell: string; title: string }>;
   initial: string;
   /** The pages of a domain, newest first. */
   load: (cell: string) => Promise<PastRow[]>;
   onOpen: (cell: string, seenDate: string) => void;
-  onHome: () => void;
+  /** Top left: back to the screen this came from ("‹ 홈"). */
+  back: { label: string; onBack: () => void };
+  /** Today ('YYYY-MM-DD'): a brief of that date reads '오늘 · …'. */
+  today: string;
 }
 
 const NARROW_W = 360;
@@ -68,21 +70,7 @@ export function WatchPast(p: WatchPastProps): JSX.Element {
     >
       <div className="mf-home-col">
         <div className="mf-page-top">
-          <button
-            type="button"
-            className="mf-w3-brand mf-page-brand"
-            data-testid="mf-past-home"
-            onClick={p.onHome}
-          >
-            Insighta
-          </button>
-          <div
-            className="mf-home-today mf-home-goal"
-            data-testid="mf-past-goal"
-            title={p.goal ?? ''}
-          >
-            {p.goal ?? ''}
-          </div>
+          <BackButton label={p.back.label} onBack={p.back.onBack} testId="mf-past-home" />
           {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
         </div>
         <div className="mf-past-list">
@@ -94,10 +82,11 @@ export function WatchPast(p: WatchPastProps): JSX.Element {
               key={r.seen_date}
               type="button"
               className="mf-past-row"
+              data-press="row"
               data-testid="mf-past-row"
               onClick={() => p.onOpen(sel, r.seen_date)}
             >
-              <div className="mf-past-date">{seenDateLabel(r.seen_date)}</div>
+              <div className="mf-past-date">{briefDateLabel(r.seen_date, p.today)}</div>
               <div className="mf-past-head" style={{ fontSize: fs + 'px' }}>
                 {r.headline}
               </div>
@@ -110,6 +99,7 @@ export function WatchPast(p: WatchPastProps): JSX.Element {
               key={c.cell}
               type="button"
               className="mf-home-chip"
+              data-press="btn"
               data-testid="mf-past-chip"
               data-on={c.cell === sel ? '' : undefined}
               onClick={() => setSel(c.cell)}

@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import type { PlayerController, PlayerTick } from '@/features/morning-feed/WatchPlayer';
+import { haptic } from '@/features/morning-feed/motion-tokens';
 import { usePhoneLandscape } from '@/features/morning-feed/use-phone-landscape';
 import { cutInside, leftOut } from '@/features/morning-feed/watch-r3-clip';
 import { chapterStamp } from '@/features/morning-feed/watch-design';
@@ -382,6 +383,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
     next[s.idx] = kind;
     setReacts(next);
     setReacting(kind);
+    haptic();
     p.onVerdict(s.idx, VERDICT_OF[kind]);
     if (kind === 'like') later(() => setReacting(null), LIKE_CONFIRM_MS);
     else later(() => advance('dislike'), DISLIKE_ADVANCE_MS);
@@ -527,6 +529,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
           <button
             type="button"
             className="mf-w3-icon-btn"
+            data-press="icon"
             data-testid="mf-watch-back"
             aria-label={imm ? '닫기' : '뒤로'}
             onClick={tap(() => (imm ? closeImmersive() : p.onBack()))}
@@ -608,6 +611,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                       <button
                         type="button"
                         className="mf-w3-mute"
+                        data-press="icon"
                         data-muted={shownMuted ? '' : undefined}
                         data-testid="mf-w3-mute"
                         aria-label="음소거"
@@ -653,6 +657,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                       <span>재생할 수 없습니다</span>
                       {v.videoId ? (
                         <a
+                          data-press="link"
                           href={'https://www.youtube.com/watch?v=' + v.videoId}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -665,6 +670,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
 
                   <div
                     className="mf-w3-info"
+                    data-press="row"
                     data-testid="mf-w3-info"
                     onClick={(e) => {
                       const el = e.currentTarget;
@@ -730,6 +736,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                     <button
                       type="button"
                       className="mf-w3-react"
+                      data-press="icon"
                       data-kind="dislike"
                       data-on={dis ? '' : undefined}
                       data-off={liked ? '' : undefined}
@@ -746,6 +753,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                     <button
                       type="button"
                       className="mf-w3-react"
+                      data-press="icon"
                       data-kind="like"
                       data-on={liked ? '' : undefined}
                       data-off={dis ? '' : undefined}
@@ -770,6 +778,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                     <button
                       type="button"
                       className="mf-w3-react"
+                      data-press="icon"
                       data-kind="share"
                       data-testid="mf-watch-share"
                       aria-label="공유"
@@ -892,6 +901,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
             <button
               type="button"
               className="mf-w3-icon-btn"
+              data-press="icon"
               aria-label="닫기"
               onClick={() => setSheet(false)}
             >

@@ -333,7 +333,11 @@ export interface MorningPage {
   core: Array<{ text: string; sources: PageSource[] }>;
   note: Array<{ heading: string; paragraphs: Array<{ text: string; sources: PageSource[] }> }>;
   videos: Array<{ video_id: string; title: string; channel: string; useful_for: string }>;
+  /** Single page read only (GET /pages): this viewer's answer on the brief, or null. */
+  feedback?: BriefFeedbackValue | null;
 }
+
+export type BriefFeedbackValue = 'useful' | 'not_useful';
 
 export interface MorningPageSummary {
   domain: string;
@@ -350,6 +354,10 @@ export interface MorningHomePages {
   goal?: string | null;
   /** "Today" as the server decided it (KST, or the account's virtual day on stg). */
   today?: string;
+  /** Goal cells, same shape and order as /watch/today `cells` (readable without that route). */
+  cells?: FeedApiCell[];
+  /** True for accounts that keep the experiment UI (video batches, viewing order). */
+  experiment?: boolean;
 }
 
 export async function fetchMorningPagesHome(): Promise<MorningHomePages> {
@@ -496,4 +504,57 @@ export async function fetchWatchInsight(cell: string): Promise<InsightData> {
     MORNING_FEED_PATH
   );
   return res.data;
+}
+
+/** Saves (or changes) the viewer's answer on one brief; resolves with the saved row. */
+export async function postBriefFeedback(input: {
+  cell: string;
+  date: string;
+  value: BriefFeedbackValue;
+}): Promise<{ cell: string; seen_date: string; value: BriefFeedbackValue }> {
+  const res = await call<{
+    status: 'ok';
+    data: { cell: string; seen_date: string; value: BriefFeedbackValue };
+  }>(
+    '/pages/feedback',
+    {
+      method: 'POST',
+      body: JSON.stringify({ cell: input.cell, date: input.date, value: input.value }),
+    },
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
+export type UsageEventKind = 'home_open' | 'brief_open' | 'evidence_open' | 'video_reaction';
+
+/** Fire-and-forget usage event. Never throws: the screen must not depend on it. */
+export async function postUsageEvent(input: {
+  kind: UsageEventKind;
+  cell?: string;
+  date?: string;
+  video_id?: string;
+  value?: string;
+}): Promise<void> {
+  try {
+    const body: Record<string, string> = { kind: input.kind };
+    if (input.cell !== undefined) body.cell = input.cell;
+    if (input.date !== undefined) body.date = input.date;
+    if (input.video_id !== undefined) body.video_id = input.video_id;
+    if (input.value !== undefined) body.value = input.value;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+    // 204 has no body, so this does not go through call() (which parses JSON)
+    await fetch(`${API_BASE_URL}${MORNING_FEED_PATH}/events`, {
+      method: 'POST',
+      keepalive: true,
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch {
+    /* usage events are best effort */
+  }
 }

@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 
+import { BottomSheet } from '@/features/morning-feed/BottomSheet';
 import type { InsightView, WatchReaction } from '@/features/morning-feed/watch-design';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
 
@@ -116,48 +117,51 @@ export function AccountSheet({
   onClose: () => void;
 }): JSX.Element {
   return (
-    <>
-      <div className="mf-w3-acct-scrim" onClick={() => onClose()} />
-      <div className="mf-w3-acct" data-testid="mf-w3-acct" role="dialog" aria-label="계정">
-        <div className="mf-w3-acct-top">
+    <BottomSheet onClose={onClose} className="mf-w3-acct" testId="mf-w3-acct" label="계정">
+      {(close) => (
+        <>
+          <div className="mf-w3-acct-top">
+            <button
+              type="button"
+              className="mf-w3-icon-btn"
+              data-press="icon"
+              aria-label="닫기"
+              onClick={close}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+          <div className="mf-w3-acct-who">
+            <Avatar url={account.avatarUrl} size={44} icon={24} />
+            <div className="mf-w3-acct-text">
+              <div className="mf-w3-acct-name">{account.name}</div>
+              <div className="mf-w3-acct-email">{account.email}</div>
+            </div>
+          </div>
+          {account.extra}
           <button
             type="button"
-            className="mf-w3-icon-btn"
-            aria-label="닫기"
-            onClick={() => onClose()}
+            className="mf-w3-logout"
+            data-press="btn"
+            data-testid="mf-w3-logout"
+            onClick={account.onLogout}
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
+            로그아웃
           </button>
-        </div>
-        <div className="mf-w3-acct-who">
-          <Avatar url={account.avatarUrl} size={44} icon={24} />
-          <div className="mf-w3-acct-text">
-            <div className="mf-w3-acct-name">{account.name}</div>
-            <div className="mf-w3-acct-email">{account.email}</div>
-          </div>
-        </div>
-        {account.extra}
-        <button
-          type="button"
-          className="mf-w3-logout"
-          data-testid="mf-w3-logout"
-          onClick={account.onLogout}
-        >
-          로그아웃
-        </button>
-      </div>
-    </>
+        </>
+      )}
+    </BottomSheet>
   );
 }
 
@@ -173,6 +177,7 @@ export function AccountButton({
     <button
       type="button"
       className="mf-w3-acct-btn"
+      data-press="icon"
       data-testid="mf-w3-acct-open"
       aria-label="계정"
       onClick={onOpen}

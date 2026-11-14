@@ -1,24 +1,25 @@
-/* A page's videos over the page (decision 2026-11-14, step 1): slide in from the right. */
+/*
+ * A brief's videos over the brief (decision 2026-11-14). The slide itself is run by
+ * PageWithWatch with the shared values (motion-tokens.ts); nothing animates here.
+ */
+.mf-pw-host {
+  position: absolute;
+  inset: 0;
+}
+.mf-pw-under {
+  position: absolute;
+  inset: 0;
+}
+.mf-pw-under[data-covered] {
+  visibility: hidden;
+  pointer-events: none;
+}
 .mf-pw {
   position: absolute;
   inset: 0;
   z-index: 6;
-  animation: mf-pw-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-@keyframes mf-pw-in {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .mf-pw {
-    animation: none;
-  }
-}
-.mf-pw-host {
+.mf-pw-body {
   position: absolute;
   inset: 0;
 }

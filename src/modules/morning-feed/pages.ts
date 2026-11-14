@@ -5,6 +5,7 @@
  */
 import {
   FEED_CELLS,
+  type FeedCellDef,
   FeedValidationError,
   goalCellLabels,
   isFeedCell,
@@ -55,6 +56,8 @@ export interface PageSummary {
   headline: string;
 }
 export interface HomePages {
+  /** Goal cells in /watch/today order (FEED_CELLS), so a reader without that route still has the list. */
+  cells: FeedCellDef[];
   current: Page | null;
   lastDomain: string | null;
   others: PageSummary[];
@@ -194,12 +197,14 @@ const PAGE_COLUMNS = `p.cell, to_char(p.seen_date, 'YYYY-MM-DD') AS seen_date, p
  * newest page of any domain (newest seen date, then goal cell order). So a user with at least one
  * page always gets the new home; `current` is null only when there is no page at all. `others` is
  * the newest page of every other domain, headline and date only, goal cell order. "Today" is the
- * KST day containing `now`; pages after it are not shown.
+ * KST day containing `now`; pages after it are not shown. `ownerId` (default: the user) is whose
+ * pages are read; lastDomain and goal always belong to `userId`.
  */
 export async function readHomePages(
   db: FeedDb,
   userId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  ownerId: string = userId
 ): Promise<HomePages> {
   if (!userId) throw new FeedValidationError('user_id required');
   const today = kstDayString(now);
@@ -219,7 +224,7 @@ export async function readHomePages(
        FROM public.morning_pages p
       WHERE p.user_id = $1::uuid AND p.seen_date <= $2::date AND p.cell = ANY($3::text[])
       ORDER BY p.cell, p.seen_date DESC`,
-    userId,
+    ownerId,
     today,
     goalCellLabels()
   );
@@ -241,6 +246,7 @@ export async function readHomePages(
     if (r) others.push({ domain: r.cell, seen_date: String(r.seen_date), headline: r.headline });
   }
   return {
+    cells: [...FEED_CELLS],
     current: currentRow ? rowToPage(currentRow) : null,
     lastDomain,
     others,
@@ -274,7 +280,8 @@ export async function readPage(
   userId: string,
   cell: string,
   date: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  ownerId: string = userId
 ): Promise<Page | null> {
   if (!userId) throw new FeedValidationError('user_id required');
   if (!isFeedCell(cell)) throw new FeedValidationError('unknown cell');
@@ -283,7 +290,7 @@ export async function readPage(
     `SELECT ${PAGE_COLUMNS} FROM public.morning_pages p
       WHERE p.user_id = $1::uuid AND p.cell = $2 AND p.seen_date = $3::date
         AND p.seen_date <= $4::date`,
-    userId,
+    ownerId,
     cell,
     date,
     kstDayString(now)
@@ -296,7 +303,8 @@ export async function listPages(
   db: FeedDb,
   userId: string,
   cell: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  ownerId: string = userId
 ): Promise<Array<{ seen_date: string; headline: string }>> {
   if (!userId) throw new FeedValidationError('user_id required');
   if (!isFeedCell(cell)) throw new FeedValidationError('unknown cell');
@@ -305,7 +313,7 @@ export async function listPages(
        FROM public.morning_pages p
       WHERE p.user_id = $1::uuid AND p.cell = $2 AND p.seen_date <= $4::date
       ORDER BY p.seen_date DESC LIMIT $3`,
-    userId,
+    ownerId,
     cell,
     PAGES_LIST_MAX,
     kstDayString(now)
@@ -331,9 +339,12 @@ export async function readPageCards(
   userId: string,
   cell: string,
   date: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  ownerId: string = userId
 ): Promise<PageCards | null> {
-  const page = await readPage(db, userId, cell, date, now);
+  // the page belongs to the owner; selectBatchCards is not per user (video_pool + annotations);
+  // verdicts are the viewer's own (empty for a participant who judged nothing)
+  const page = await readPage(db, ownerId, cell, date, now);
   if (!page) return null;
   const ids = page.videos.map((v) => v.video_id);
   const [cards, judged] = await Promise.all([

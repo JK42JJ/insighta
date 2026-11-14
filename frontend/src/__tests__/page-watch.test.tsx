@@ -129,12 +129,13 @@ const card = (i: number): WatchVideo => ({
   durationSec: 360,
 });
 
-describe('page -> its videos -> back (step 1)', () => {
+describe('brief -> its videos -> back', () => {
   it('a source opens the layer at that video and pushes history; back closes it and the page keeps its state', async () => {
     const pushState = vi.spyOn(window.history, 'pushState');
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
+    const onEvidence = vi.fn();
     const load = vi.fn(() =>
       Promise.resolve({
         items: [card(0), card(1), card(2)],
@@ -148,8 +149,10 @@ describe('page -> its videos -> back (step 1)', () => {
         domainTitle="기술·개발"
         order={[]}
         rest={[]}
-        onHome={() => undefined}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
+        onEvidence={onEvidence}
         loadCards={load}
         sound={false}
         onSound={() => undefined}
@@ -164,17 +167,22 @@ describe('page -> its videos -> back (step 1)', () => {
       await Promise.resolve();
     });
     expect(pushState).toHaveBeenCalledTimes(1);
+    expect(onEvidence).toHaveBeenCalledWith(ID[1]);
     expect(screen.getByTestId('mf-page-watch')).toBeTruthy();
     // during the slide-in the feed (and its player) is not mounted yet: no playback mid-slide
     expect(screen.queryByTestId('mf-watch-counter')).toBeNull();
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 350));
+      await new Promise((r) => setTimeout(r, 400));
     });
     expect(screen.getByTestId('mf-watch-counter').textContent).toBe('2 / 3');
     // the page is still mounted under the layer
     expect(screen.getByTestId('mf-page')).toBeTruthy();
     fireEvent.click(screen.getByTestId('mf-watch-back'));
     expect(back).toHaveBeenCalledTimes(1);
+    // the exact reverse of the slide-in, then the layer is gone
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 450));
+    });
     expect(screen.queryByTestId('mf-page-watch')).toBeNull();
     expect(screen.getByTestId('mf-page-note').hasAttribute('data-open')).toBe(true);
     pushState.mockRestore();

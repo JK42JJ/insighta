@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { WatchInputR3 } from '@/features/morning-feed/watch-r3-screens';
@@ -27,7 +27,7 @@ describe('watch 수정 4: input header account', () => {
     expect(onLogout).toHaveBeenCalledTimes(1);
   });
 
-  it('the sheet closes with its X', () => {
+  it('the sheet closes with its X', async () => {
     render(
       <WatchInputR3
         frame={FRAME}
@@ -40,6 +40,7 @@ describe('watch 수정 4: input header account', () => {
     );
     fireEvent.click(screen.getByLabelText('계정'));
     fireEvent.click(screen.getByLabelText('닫기'));
-    expect(screen.queryByTestId('mf-w3-acct')).toBeNull();
+    // it slides down first (motion-tokens sheet.ms), then it is gone
+    await waitFor(() => expect(screen.queryByTestId('mf-w3-acct')).toBeNull());
   });
 });

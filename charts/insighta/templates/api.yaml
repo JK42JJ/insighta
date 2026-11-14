@@ -103,6 +103,10 @@ spec:
               value: {{ .Values.morningCards.testUserIds | default "" | quote }}
             - name: MORNING_VIRTUAL_DAY_USER_IDS
               value: {{ .Values.morningCards.virtualDayUserIds | default "" | quote }}
+            - name: MORNING_BRIEF_OWNER_ID
+              value: {{ .Values.morningCards.briefOwnerId | default "" | quote }}
+            - name: MORNING_EXPERIMENT_USER_IDS
+              value: {{ .Values.morningCards.experimentUserIds | default "" | quote }}
 {{- end }}
           envFrom:
             - secretRef:

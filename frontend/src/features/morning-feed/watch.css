@@ -256,8 +256,16 @@
   cursor: pointer;
 }
 
-.mf-w-onb-btn:active {
-  transform: scale(0.98);
+.mf-w-onb-skip {
+  flex: none;
+  height: 40px;
+  margin-top: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--w-navy-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .mf-w-onb-note {
@@ -1158,14 +1166,16 @@
   margin-top: 14px;
 }
 
-/* README 모션 is off for people who asked for less motion: no transforms, no animations */
+/* README 모션 is off for people who asked for less motion: no transforms, no animations; only
+   opacity still changes gradually (decision 2026-11-14, 동작 줄이기 = 투명도만) */
 @media (prefers-reduced-motion: reduce) {
   .mf-w-app *,
   .mf-w-app *:hover,
   .mf-w-app *:active {
     animation: none !important;
     transform: none !important;
-    transition: none !important;
+    scale: none !important;
+    transition-property: opacity !important;
   }
 }
 

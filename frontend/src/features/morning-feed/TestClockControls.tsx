@@ -28,6 +28,7 @@ export function TestClockControls({ clock }: { clock: TestClockDto }): JSX.Eleme
         <button
           type="button"
           className="mf-clock-btn"
+          data-press="btn"
           data-testid="mf-test-clock-next"
           disabled={busy}
           onClick={() => go('next')}
@@ -37,6 +38,7 @@ export function TestClockControls({ clock }: { clock: TestClockDto }): JSX.Eleme
         <button
           type="button"
           className="mf-clock-btn"
+          data-press="btn"
           data-testid="mf-test-clock-reset"
           disabled={busy || !clock.day}
           onClick={() => go('reset')}

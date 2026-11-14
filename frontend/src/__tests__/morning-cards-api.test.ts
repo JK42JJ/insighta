@@ -19,7 +19,9 @@ import {
   fetchWatchInsight,
   fetchWatchToday,
   patchReasonTags,
+  postBriefFeedback,
   postFeedJudgment,
+  postUsageEvent,
   postWatchBatch,
   postJudgment,
   MorningCardsApiError,
@@ -154,5 +156,41 @@ describe('morning cards api client', () => {
     expect(calls[2]![0]).toContain(
       '/api/v1/morning-feed/watch/insight?cell=' + encodeURIComponent('기술/개발')
     );
+  });
+
+  it('posts brief feedback to /pages/feedback with exactly cell, date, value', async () => {
+    fetchMock.mockResolvedValue(
+      okResponse({ status: 'ok', data: { cell: 'c', seen_date: '2026-11-13', value: 'useful' } })
+    );
+    const out = await postBriefFeedback({
+      cell: 'c',
+      date: '2026-11-13',
+      value: 'useful',
+      // @ts-expect-error extra field must not be forwarded
+      extra: 1,
+    });
+    expect(out.value).toBe('useful');
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/v1/morning-feed/pages/feedback');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      cell: 'c',
+      date: '2026-11-13',
+      value: 'useful',
+    });
+  });
+
+  it('posts a usage event to /events with only the given fields and never throws', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 204, json: async () => ({}) });
+    await postUsageEvent({ kind: 'brief_open', cell: 'c', date: '2026-11-13' });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/v1/morning-feed/events');
+    expect(JSON.parse(init.body as string)).toEqual({
+      kind: 'brief_open',
+      cell: 'c',
+      date: '2026-11-13',
+    });
+    fetchMock.mockRejectedValue(new Error('offline'));
+    await expect(postUsageEvent({ kind: 'home_open' })).resolves.toBeUndefined();
   });
 });

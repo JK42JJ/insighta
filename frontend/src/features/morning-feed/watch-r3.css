@@ -48,15 +48,13 @@
     transform: none;
   }
 }
+/* the 1.15x pop of a pressed reaction (values: motion-tokens.ts) */
 @keyframes mf-w3-pop {
   0% {
     transform: scale(1);
   }
-  35% {
-    transform: scale(1.28);
-  }
-  70% {
-    transform: scale(0.92);
+  50% {
+    transform: scale(var(--mo-pop-scale, 1.15));
   }
   100% {
     transform: scale(1);
@@ -507,15 +505,12 @@
   justify-content: center;
   flex: none;
 }
-.mf-w3-react:active {
-  transform: scale(0.9);
-}
 .mf-w3-react[data-off] {
   opacity: 0.35;
   pointer-events: none;
 }
 .mf-w3-react[data-pop] {
-  animation: mf-w3-pop 0.45s ease;
+  animation: mf-w3-pop var(--mo-pop-ms, 250ms) ease-out;
 }
 .mf-w3-react[data-kind='like'][data-on] {
   border-color: var(--w3-steel);
@@ -972,9 +967,6 @@
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-}
-.mf-w3-logout:active {
-  transform: scale(0.98);
 }
 .mf-w3-brand {
   font: 800 15px var(--w3-num);

@@ -367,3 +367,46 @@
   font-variant-numeric: lining-nums;
   font-synthesis: none;
 }
+
+/* top-left back, the video screen's way (decision 2026-11-14 user test): arrow + where it goes */
+.mf-back {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  height: 44px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  background: var(--h-clear);
+  color: var(--h-fg);
+  font: 600 15px var(--w3-num, inherit);
+  cursor: pointer;
+}
+.mf-back-label {
+  line-height: 20px;
+}
+
+/* 이 브리프가 쓸모 있었나요 (decision 2026-11-14 user test): the video card's buttons */
+.mf-page-fb {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid var(--h-line);
+}
+.mf-page-fb-q {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--h-fg);
+}
+.mf-page-fb-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.mf-page-fb-err {
+  font-size: 13px;
+  color: var(--h-sub);
+}

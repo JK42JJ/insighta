@@ -5,10 +5,19 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPrismaClient } from '@/modules/database/client';
 import {
+  briefOwnerFor,
+  isBriefReader,
+  isExperimentUser,
   isMorningCardsEnabled,
   isMorningCardsTestUser,
   isVirtualDayUser,
 } from '@/config/morning-cards';
+import {
+  readBriefFeedback,
+  recordUsageEvent,
+  saveBriefFeedback,
+  validateUsageEvent,
+} from '@/modules/morning-feed/brief-usage';
 import { effectiveNow, moveTestClock, readTestClock } from '@/modules/morning-feed/virtual-day';
 import {
   cancelLastFeedJudgment,
@@ -84,6 +93,20 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
       }
       if (!isMorningCardsTestUser(userId)) {
         void reply.code(403).send({ status: 'error', error: 'forbidden' });
+        return null;
+      }
+      return userId;
+    };
+
+    // Brief readers: any signed-in user while the flag is on (the pages are shared, see MORNING_BRIEF_OWNER_ID)
+    const readerGuard = (request: FastifyRequest, reply: FastifyReply): string | null => {
+      const userId = userIdOf(request);
+      if (!userId) {
+        void reply.code(401).send({ status: 'error', error: 'unauthenticated' });
+        return null;
+      }
+      if (!isBriefReader(userId)) {
+        void reply.code(404).send({ status: 'error', error: 'not_found' });
         return null;
       }
       return userId;
@@ -264,14 +287,18 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
       '/pages/home',
       { onRequest: [flagGate, fastify.authenticate] },
       async (request, reply) => {
-        const userId = guard(request, reply);
+        const userId = readerGuard(request, reply);
         if (!userId) return reply;
         const data = await readHomePages(
           deps.getDb(),
           userId,
-          await effectiveNow(deps.getDb(), userId)
+          await effectiveNow(deps.getDb(), userId),
+          briefOwnerFor(userId)
         );
-        return reply.send({ status: 'ok', data });
+        return reply.send({
+          status: 'ok',
+          data: { ...data, experiment: isExperimentUser(userId) },
+        });
       }
     );
 
@@ -280,7 +307,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
       '/pages/cards',
       { onRequest: [flagGate, fastify.authenticate] },
       async (request, reply) => {
-        const userId = guard(request, reply);
+        const userId = readerGuard(request, reply);
         if (!userId) return reply;
         const { cell, date } = request.query;
         if (!isFeedCell(cell) || !isRealDate(date)) {
@@ -291,7 +318,8 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
           userId,
           cell,
           date,
-          await effectiveNow(deps.getDb(), userId)
+          await effectiveNow(deps.getDb(), userId),
+          briefOwnerFor(userId)
         );
         return reply.send({ status: 'ok', data });
       }
@@ -301,7 +329,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
       '/pages/list',
       { onRequest: [flagGate, fastify.authenticate] },
       async (request, reply) => {
-        const userId = guard(request, reply);
+        const userId = readerGuard(request, reply);
         if (!userId) return reply;
         const { cell } = request.query;
         if (!isFeedCell(cell)) {
@@ -311,7 +339,8 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
           deps.getDb(),
           userId,
           cell,
-          await effectiveNow(deps.getDb(), userId)
+          await effectiveNow(deps.getDb(), userId),
+          briefOwnerFor(userId)
         );
         return reply.send({ status: 'ok', data });
       }
@@ -321,7 +350,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
       '/pages',
       { onRequest: [flagGate, fastify.authenticate] },
       async (request, reply) => {
-        const userId = guard(request, reply);
+        const userId = readerGuard(request, reply);
         if (!userId) return reply;
         const { cell, date } = request.query;
         if (!isFeedCell(cell)) {
@@ -330,14 +359,60 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         if (!isRealDate(date)) {
           return reply.code(400).send({ status: 'error', error: 'invalid_page' });
         }
-        const data = await readPage(
+        const page = await readPage(
           deps.getDb(),
-          userId,
+          briefOwnerFor(userId),
           cell,
           date,
           await effectiveNow(deps.getDb(), userId)
         );
+        const data = page
+          ? { ...page, feedback: await readBriefFeedback(deps.getDb(), userId, cell, date) }
+          : null;
         return reply.send({ status: 'ok', data });
+      }
+    );
+
+    fastify.post<{ Body: { cell?: unknown; date?: unknown; value?: unknown } }>(
+      '/pages/feedback',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = readerGuard(request, reply);
+        if (!userId) return reply;
+        const body = request.body ?? {};
+        try {
+          const data = await saveBriefFeedback(
+            deps.getDb(),
+            userId,
+            briefOwnerFor(userId),
+            { cell: body.cell, date: body.date, value: body.value },
+            await effectiveNow(deps.getDb(), userId)
+          );
+          return reply.send({ status: 'ok', data });
+        } catch (err) {
+          if (err instanceof FeedValidationError) {
+            return reply.code(400).send({ status: 'error', error: 'invalid_feedback' });
+          }
+          throw err;
+        }
+      }
+    );
+
+    fastify.post(
+      '/events',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = readerGuard(request, reply);
+        if (!userId) return reply;
+        try {
+          await recordUsageEvent(deps.getDb(), userId, validateUsageEvent(request.body));
+          return reply.code(204).send();
+        } catch (err) {
+          if (err instanceof FeedValidationError) {
+            return reply.code(400).send({ status: 'error', error: 'invalid_event' });
+          }
+          throw err;
+        }
       }
     );
 

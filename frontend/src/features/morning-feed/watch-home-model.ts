@@ -53,16 +53,18 @@ export function pastHeadlinePx(width: number): number {
   return Math.round((w - SIDE_PX) / PAST_PER_LINE / ROUND_STEP) * ROUND_STEP;
 }
 
+/** The home's one button (decision 2026-11-14 user test): always the shown brief. */
+export const HOME_BUTTON_LABEL = '브리프 읽기';
+
 /**
- * The one button (decision 2026-11-14, always shown): today's page of the shown domain, else its
- * videos left today, else the shown page.
+ * A brief's date (decision 2026-11-14 user test): the date only, '11월 13일'; a brief of today
+ * reads '오늘 · 11월 16일'. '' if invalid.
  */
-export function homeButtonOf(
-  seenDate: string | undefined,
-  today: string,
-  count: number
-): { label: string; target: 'page' | 'videos' } {
-  if (seenDate === today) return { label: '오늘의 장 읽기', target: 'page' };
-  if (count > 0) return { label: '오늘의 영상 ' + count + '편 보기', target: 'videos' };
-  return { label: '이 장 읽기', target: 'page' };
+export function briefDateLabel(day: string, today: string): string {
+  const m = DAY_RE.exec(day);
+  if (!m) return '';
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (Number.isNaN(d.getTime()) || d.getUTCDate() !== Number(m[3])) return '';
+  const label = d.getUTCMonth() + 1 + '월 ' + d.getUTCDate() + '일';
+  return day === today ? '오늘 · ' + label : label;
 }

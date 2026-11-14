@@ -7,7 +7,7 @@ import {
   readPageCards,
   validatePage,
 } from '@/modules/morning-feed/pages';
-import { FeedValidationError, type FeedDb } from '@/modules/morning-feed/feed';
+import { FEED_CELLS, FeedValidationError, type FeedDb } from '@/modules/morning-feed/feed';
 
 export {};
 
@@ -69,7 +69,10 @@ function fakeDb(handler: (sql: string, params: unknown[]) => unknown[]) {
       queries.push({ sql, params });
       return handler(sql, params) as never;
     }),
-    $executeRawUnsafe: jest.fn(async () => 0),
+    $executeRawUnsafe: jest.fn(async (sql: string, ...params: unknown[]) => {
+      queries.push({ sql, params });
+      return 1;
+    }),
   };
   return { db, queries };
 }
@@ -234,7 +237,15 @@ describe('page routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       status: 'ok',
-      data: { current: null, lastDomain: null, others: [], goal: null, today: expect.any(String) },
+      data: {
+        cells: expect.any(Array),
+        current: null,
+        lastDomain: null,
+        others: [],
+        goal: null,
+        today: expect.any(String),
+        experiment: false,
+      },
     });
     await app.close();
   });
@@ -267,7 +278,7 @@ describe('page routes', () => {
     await app.close();
   });
 
-  it('guards: unauthenticated 401, flag off 404, unlisted account 403', async () => {
+  it('guards: unauthenticated 401, flag off 404; an unlisted account may read pages', async () => {
     const { db } = fakeDb(() => []);
     const anon = await build(db, false);
     for (const u of ['/pages/home', '/pages?cell=x&date=2026-11-13', '/pages/list?cell=x']) {
@@ -276,9 +287,201 @@ describe('page routes', () => {
     await anon.close();
     const app = await build(db);
     process.env['MORNING_CARDS_TEST_USER_IDS'] = '22222222-2222-4222-8222-222222222222';
-    expect((await app.inject({ method: 'GET', url: `${BASE}/pages/home` })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: `${BASE}/pages/home` })).statusCode).toBe(200);
     process.env['MOBILE_MORNING_CARDS'] = 'false';
     expect((await app.inject({ method: 'GET', url: `${BASE}/pages/home` })).statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+describe('shared brief: owner vs viewer, participants, feedback, events', () => {
+  const OWNER = '33333333-3333-4333-8333-333333333333';
+  const PARTICIPANT = '44444444-4444-4444-8444-444444444444';
+  const ENV = [
+    'MOBILE_MORNING_CARDS',
+    'MORNING_CARDS_TEST_USER_IDS',
+    'MORNING_BRIEF_OWNER_ID',
+    'MORNING_EXPERIMENT_USER_IDS',
+  ] as const;
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    for (const k of ENV) saved[k] = process.env[k];
+    process.env['MOBILE_MORNING_CARDS'] = 'true';
+    process.env['MORNING_CARDS_TEST_USER_IDS'] = OWNER;
+    process.env['MORNING_BRIEF_OWNER_ID'] = OWNER;
+    process.env['MORNING_EXPERIMENT_USER_IDS'] = OWNER;
+  });
+  afterEach(() => {
+    for (const k of ENV) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  async function build(db: FeedDb, viewer: string): Promise<FastifyInstance> {
+    const app = Fastify();
+    app.decorate('authenticate', async (request: any) => {
+      request.user = { userId: viewer };
+    });
+    await app.register(createMorningFeedRoutes({ getDb: () => db }), { prefix: BASE });
+    return app;
+  }
+  const get = (app: FastifyInstance, u: string) => app.inject({ method: 'GET', url: BASE + u });
+  const post = (app: FastifyInstance, u: string, payload: unknown) =>
+    app.inject({ method: 'POST', url: BASE + u, payload: payload as any });
+  const q = `cell=${encodeURIComponent(CELL)}&date=2026-11-13`;
+
+  it('home: pages read with the owner, lastDomain and goal with the viewer; cells and experiment', async () => {
+    const { db, queries } = fakeDb((sql) =>
+      sql.includes('morning_card_judgments') ? [] : [pageRow(CELL, '2026-11-13', 'tech')]
+    );
+    const app = await build(db, PARTICIPANT);
+    const res = await get(app, '/pages/home');
+    expect(res.statusCode).toBe(200);
+    const d = res.json().data;
+    expect(d.current.headline).toBe('tech');
+    expect(d.experiment).toBe(false);
+    expect(d.cells).toEqual(JSON.parse(JSON.stringify(FEED_CELLS)));
+    const judg = queries.find((x) => x.sql.includes('morning_card_judgments'))!;
+    expect(judg.params[0]).toBe(PARTICIPANT);
+    const pages = queries.find((x) => x.sql.includes('FROM public.morning_pages'))!;
+    expect(pages.params[0]).toBe(OWNER);
+    expect(queries.find((x) => x.sql.includes('ontology.nodes'))!.params[0]).toBe(PARTICIPANT);
+    await app.close();
+    const own = await build(fakeDb(() => []).db, OWNER);
+    expect((await get(own, '/pages/home')).json().data.experiment).toBe(true);
+    await own.close();
+  });
+
+  it('owner unset: each viewer reads their own rows, experiment false without the lists', async () => {
+    delete process.env['MORNING_BRIEF_OWNER_ID'];
+    delete process.env['MORNING_EXPERIMENT_USER_IDS'];
+    const { db, queries } = fakeDb(() => []);
+    const app = await build(db, OWNER);
+    const res = await get(app, '/pages/home');
+    expect(res.json().data.experiment).toBe(false);
+    expect(queries.find((x) => x.sql.includes('FROM public.morning_pages'))!.params[0]).toBe(OWNER);
+    await app.close();
+  });
+
+  it('participant: pages, list, cards and feedback work; verdict routes stay 403', async () => {
+    const { db, queries } = fakeDb((sql) => {
+      if (sql.includes('FROM public.morning_pages')) return [pageRow(CELL, '2026-11-13', 'tech')];
+      return [];
+    });
+    const app = await build(db, PARTICIPANT);
+    expect((await get(app, `/pages?${q}`)).statusCode).toBe(200);
+    expect((await get(app, `/pages/list?cell=${encodeURIComponent(CELL)}`)).statusCode).toBe(200);
+    const cards = await get(app, `/pages/cards?${q}`);
+    expect(cards.statusCode).toBe(200);
+    expect(cards.json().data.judged).toEqual({});
+    // page by owner, verdicts by the viewer
+    expect(queries.find((x) => x.sql.includes('FROM public.morning_pages'))!.params[0]).toBe(OWNER);
+    expect(queries.find((x) => x.sql.includes('morning_card_judgments'))!.params[0]).toBe(
+      PARTICIPANT
+    );
+    expect(
+      (
+        await post(app, '/judgments', {
+          video_id: VID,
+          cell: CELL,
+          verdict: 'useful',
+          shown_position: 0,
+        })
+      ).statusCode
+    ).toBe(403);
+    expect((await get(app, '/watch/today')).statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('GET /pages adds the viewer feedback (null when none)', async () => {
+    const { db } = fakeDb((sql) => {
+      if (sql.includes('morning_brief_feedback')) return [{ value: 'not_useful' }];
+      return [pageRow(CELL, '2026-11-13', 'tech')];
+    });
+    const app = await build(db, PARTICIPANT);
+    expect((await get(app, `/pages?${q}`)).json().data.feedback).toBe('not_useful');
+    await app.close();
+    const none = fakeDb((sql) =>
+      sql.includes('morning_brief_feedback') ? [] : [pageRow(CELL, '2026-11-13', 'tech')]
+    );
+    const app2 = await build(none.db, PARTICIPANT);
+    expect((await get(app2, `/pages?${q}`)).json().data.feedback).toBeNull();
+    await app2.close();
+  });
+
+  it('POST /pages/feedback upserts for the viewer; refuses bad input, a missing brief, a future date', async () => {
+    const { db, queries } = fakeDb((sql) =>
+      sql.includes('FROM public.morning_pages') ? [{ one: 1 }] : []
+    );
+    const app = await build(db, PARTICIPANT);
+    const ok = await post(app, '/pages/feedback', {
+      cell: CELL,
+      date: '2026-11-13',
+      value: 'useful',
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().data).toEqual({ cell: CELL, seen_date: '2026-11-13', value: 'useful' });
+    const exists = queries.find((x) => x.sql.includes('FROM public.morning_pages'))!;
+    expect(exists.params[0]).toBe(OWNER);
+    const ins = queries.find((x) => x.sql.includes('INSERT INTO public.morning_brief_feedback'))!;
+    expect(ins.sql).toContain('ON CONFLICT (user_id, cell, seen_date)');
+    expect(ins.params).toEqual([PARTICIPANT, CELL, '2026-11-13', 'useful']);
+    for (const bad of [
+      { cell: 'x', date: '2026-11-13', value: 'useful' },
+      { cell: CELL, date: '2026-13-40', value: 'useful' },
+      { cell: CELL, date: '2026-11-13', value: 'great' },
+      { cell: CELL, date: '2999-01-01', value: 'useful' },
+      {},
+    ]) {
+      expect((await post(app, '/pages/feedback', bad)).statusCode).toBe(400);
+    }
+    await app.close();
+    const missing = fakeDb(() => []);
+    const app2 = await build(missing.db, PARTICIPANT);
+    const res = await post(app2, '/pages/feedback', {
+      cell: CELL,
+      date: '2026-11-13',
+      value: 'useful',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(missing.queries.some((x) => x.sql.includes('INSERT'))).toBe(false);
+    await app2.close();
+  });
+
+  it('POST /events validates kinds and fields, inserts one row, 204', async () => {
+    const { db, queries } = fakeDb(() => []);
+    const app = await build(db, PARTICIPANT);
+    const ok = await post(app, '/events', { kind: 'brief_open', cell: CELL, date: '2026-11-13' });
+    expect(ok.statusCode).toBe(204);
+    expect(queries).toHaveLength(1);
+    expect(queries[0]!.params).toEqual([PARTICIPANT, 'brief_open', CELL, '2026-11-13', null, null]);
+    expect((await post(app, '/events', { kind: 'home_open' })).statusCode).toBe(204);
+    expect(
+      (await post(app, '/events', { kind: 'video_reaction', video_id: VID, value: 'useful' }))
+        .statusCode
+    ).toBe(204);
+    const before = queries.length;
+    for (const bad of [
+      {},
+      { kind: 'nope' },
+      { kind: 'home_open', cell: 'x' },
+      { kind: 'home_open', date: '2026-02-30' },
+      { kind: 'video_reaction', video_id: 'short' },
+      { kind: 'video_reaction', value: 'x'.repeat(17) },
+      { kind: 'video_reaction', value: 'a b' },
+    ]) {
+      expect((await post(app, '/events', bad)).statusCode).toBe(400);
+    }
+    expect(queries.length).toBe(before);
+    await app.close();
+  });
+
+  it('flag off 404 and no user 401 on the new routes', async () => {
+    process.env['MOBILE_MORNING_CARDS'] = 'false';
+    const app = await build(fakeDb(() => []).db, PARTICIPANT);
+    expect((await post(app, '/events', { kind: 'home_open' })).statusCode).toBe(404);
+    expect((await post(app, '/pages/feedback', {})).statusCode).toBe(404);
     await app.close();
   });
 });

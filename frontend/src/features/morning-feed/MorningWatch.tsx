@@ -4,6 +4,8 @@ import {
   fetchMorningPage,
   fetchMorningPageList,
   fetchTestClock,
+  postBriefFeedback,
+  postUsageEvent,
   type TestClockDto,
   fetchWatchInsight,
   type FeedHistoryItem,
@@ -47,7 +49,13 @@ import { ONB_LAST_STEP, WatchOnboarding } from '@/features/morning-feed/watch-sc
 import { WatchPlayer, type PlayerController } from '@/features/morning-feed/WatchPlayer';
 import { WatchHome, type HomeHeadline } from '@/features/morning-feed/WatchHome';
 import { useScreenHistory } from '@/features/morning-feed/use-screen-history';
-import { type PageRestChip } from '@/features/morning-feed/WatchPage';
+import { motionStyleVars } from '@/features/morning-feed/motion-tokens';
+import { ScreenStack } from '@/features/morning-feed/ScreenStack';
+import { usePressFeedback } from '@/features/morning-feed/use-press';
+import { useAppShell } from '@/features/morning-feed/use-app-shell';
+import './motion.css';
+import { type BriefFeedbackProps, type PageRestChip } from '@/features/morning-feed/WatchPage';
+import { PageSkeleton } from '@/features/morning-feed/PageSkeleton';
 import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
 import { TestClockControls } from '@/features/morning-feed/TestClockControls';
 import type { PageWatchCards } from '@/features/morning-feed/PageWatch';
@@ -97,6 +105,11 @@ export interface MorningWatchProps {
   whenSaved: () => Promise<void>;
   /** 온보딩 step 3. Resolves when done, whatever the outcome; the onboarding then ends. */
   connectYouTube: () => Promise<void>;
+  /**
+   * The main account's experiment UI (decision 2026-11-14 user test): today's videos and the
+   * viewing order. Everyone else reads briefs and opens videos only from their evidence.
+   */
+  experiment?: boolean;
 }
 
 type Screen =
@@ -134,13 +147,15 @@ export function MorningWatch({
   onJudge,
   whenSaved,
   connectYouTube,
+  experiment = true,
 }: MorningWatchProps): JSX.Element {
   useViewportFitCover();
+  useAppShell();
   const { userName, userEmail, userAvatar, signOut } = useAuth();
   const app = useRef<HTMLDivElement>(null);
   const frame = useWatchFrame(app);
   // every screen change is a browser history entry (back returns to the previous screen)
-  const [screen, setScreen] = useScreenHistory<Screen>(
+  const [screen, setScreen, stack] = useScreenHistory<Screen>(
     () => (readOnboardingSeen() ? { kind: 'input' } : { kind: 'onb', step: 0 }),
     sameScreen
   );
@@ -184,9 +199,20 @@ export function MorningWatch({
   // 어제에 이어서 is not shown (2026-11-14): picking one of yesterday's goals had no basis
   // (newest day, then label order), so the first screen keeps the hero until it is redesigned.
 
+  usePressFeedback(app);
+
+  // usage counts (decision 2026-11-14 user test): the home once per visit
+  const homeLogged = useRef(false);
+  useEffect(() => {
+    if (screen.kind !== 'input' || homeLogged.current) return;
+    homeLogged.current = true;
+    void postUsageEvent({ kind: 'home_open' });
+  }, [screen.kind]);
+
   const finishOnboarding = (): void => {
     writeOnboardingSeen();
-    setScreen({ kind: 'input' });
+    // the onboarding is not a place to go back to
+    setScreen({ kind: 'input' }, { replace: true });
   };
 
   const onbNext = (): void => {
@@ -306,11 +332,11 @@ export function MorningWatch({
     extra: testControls,
   };
   const home = homeHeadlines(pages, goals);
-  const goalText = pages?.goal ?? null;
   /** Chips everywhere (decision 2026-11-14): only domains with a page. */
   const pageChips = goals.filter((g) => !!home?.pages[g.label]);
   /** Videos of a domain left today (0 = none or not a goal). */
   const todayCount = (cell: string): number => {
+    if (!experiment) return 0;
     const g = cellOf(cell);
     const c = g ? chipOf(g) : null;
     return c && c.kind === 'open' ? c.count : 0;
@@ -338,188 +364,242 @@ export function MorningWatch({
     load: (cell, date) => (loadPageCards ? loadPageCards(cell, date) : Promise.resolve(null)),
     sound,
     onSound: setSound,
-    onJudge: (video, verdict, index) => onJudge({ video, verdict, shownPosition: index }),
+    // participants' 좋아/별로 are usage, never the experiment's judgments
+    onJudge: (video, verdict, index) =>
+      experiment
+        ? onJudge({ video, verdict, shownPosition: index })
+        : void postUsageEvent({
+            kind: 'video_reaction',
+            cell: video.cell,
+            video_id: video.videoId ?? undefined,
+            value: verdict,
+          }),
+    onEvidence: (cell, date, videoId) =>
+      void postUsageEvent({ kind: 'evidence_open', cell, date, video_id: videoId }),
   };
 
-  let body: JSX.Element;
-  if (screen.kind === 'onb') {
-    body = <WatchOnboarding step={screen.step} busy={connecting} onNext={onbNext} />;
-  } else if (screen.kind === 'input') {
-    let state: R3InputState = { kind: 'hero' };
-    if (doneCell) {
-      const v = doneView && doneView.label === doneCell.label ? doneView.view : null;
-      state = {
-        kind: 'done',
-        goal: doneCell.short,
-        stats: v ? v.stats : null,
-        rows: v ? v.rows : [],
-        onOpen: () => setScreen({ kind: 'insight', goal: doneCell }),
-      };
-    }
-    const account = {
-      name: userName ?? '',
-      email: userEmail ?? '',
-      avatarUrl: userAvatar,
-      // signed out: the route's sign-in check sends the person to sign in again
-      onLogout: () => void signOut(),
-      extra: testControls,
+  /** Where the screen under this one is, by name ("‹ 홈"); none = the home. */
+  const entries = stack.entries;
+  const backOf = (depth: number, fallback: Screen): { label: string; onBack: () => void } => {
+    const under = depth > 0 ? entries[depth - 1]?.screen : undefined;
+    const label =
+      !under || under.kind === 'input'
+        ? '홈'
+        : under.kind === 'page'
+          ? '브리프'
+          : under.kind === 'past'
+            ? '지난 브리프'
+            : '홈';
+    return {
+      label,
+      onBack: () => (under ? window.history.back() : setScreen(fallback)),
     };
-    const focus = screen.focus && home?.pages[screen.focus] ? screen.focus : home?.initial;
-    body = home ? (
-      <WatchHome
-        key={'home-' + focus}
-        frame={frame}
-        goal={goalText}
-        account={account}
-        // decision 2026-11-14: chips only change the headline; only domains with a page
-        chips={pageChips.map((g) => ({ cell: g.label, title: g.short }))}
-        pages={home.pages}
-        initial={focus ?? home.initial}
-        today={dayToday}
-        todayCount={todayCount}
-        onOpen={(cell) => {
-          const g = cellOf(cell);
-          if (g) openGoal(g);
-        }}
-        onOpenPage={(cell) => {
-          const h = home.pages[cell];
-          if (h) setScreen({ kind: 'page', cell, date: h.seenDate });
-        }}
-        onPast={(cell) => setScreen({ kind: 'past', cell })}
-      />
-    ) : (
-      <WatchInputR3
-        frame={frame}
-        dateLabel={kstDateLabel(now)}
-        account={account}
-        state={state}
-        chips={goals.map((g) => {
-          const c = chipOf(g);
-          return {
-            key: g.label,
-            title: g.short,
-            done: c.kind === 'done',
-            disabled: c.kind === 'none',
-            count: c.count,
-            onPick: () => openGoal(g),
-          };
-        })}
-        history={history.flatMap((h) => {
-          const cell = cellOf(h.cell);
-          const meta = historyMetaText(h.day, h.count);
-          return cell && meta
-            ? [{ key: h.cell, title: cell.short, meta, onPick: () => openGoal(cell) }]
-            : [];
-        })}
-      />
-    );
-  } else if (screen.kind === 'watch') {
-    body = (
-      <WatchFeed
-        key={screen.goal.label}
-        goalTitle={screen.goal.short}
-        videos={watchVideos}
-        frame={frame}
-        loading={screen.list === null}
-        onVerdict={verdict}
-        onFinish={() => setScreen({ kind: 'insight', goal: screen.goal })}
-        onBack={() => setScreen({ kind: 'input' })}
-        sound={sound}
-        onSound={setSound}
-        player={player}
-        renderPlayer={(events) => (
-          <WatchPlayer
-            controller={player}
-            onReady={events.onReady}
-            onPlaying={events.onPlaying}
-            onMuted={events.onMuted}
-            onTick={events.onTick}
-            onFailed={events.onFailed}
-          />
-        )}
-      />
-    );
-  } else if (screen.kind === 'page') {
-    const known = pages?.current;
-    body = (
-      <LivePage
-        key={screen.cell + screen.date}
-        frame={frame}
-        account={pageAccount}
-        cell={screen.cell}
-        title={shortOf(screen.cell)}
-        date={screen.date}
-        known={
-          known && known.domain === screen.cell && known.seen_date === screen.date ? known : null
-        }
-        today={dayToday}
-        goal={goalText}
-        shortOf={shortOf}
-        rest={pageRest(screen.cell)}
-        onHome={() => setScreen({ kind: 'input', focus: screen.cell })}
-        onPast={() => setScreen({ kind: 'past', cell: screen.cell })}
-        pageWatch={pageWatch}
-        todayVideos={todayVideosOf(screen.cell)}
-      />
-    );
-  } else if (screen.kind === 'past') {
-    body = (
-      <WatchPast
-        frame={frame}
-        account={pageAccount}
-        goal={goalText}
-        chips={pageChips.map((g) => ({ cell: g.label, title: g.short }))}
-        initial={screen.cell}
-        load={fetchMorningPageList}
-        onOpen={(cell, date) => setScreen({ kind: 'page', cell, date })}
-        onHome={() => setScreen({ kind: 'input' })}
-      />
-    );
-  } else {
-    // 다 본 뒤: the goals with videos left today, in the home's chip order, nothing highlighted
-    const rest = goals.flatMap((g) => {
-      const c = chipOf(g);
-      return c.kind === 'open' && g.label !== screen.goal.label
-        ? [
-            {
+  };
+
+  const renderScreen = (screen: Screen, depth: number): JSX.Element => {
+    let body: JSX.Element;
+    if (screen.kind === 'onb') {
+      body = (
+        <WatchOnboarding
+          step={screen.step}
+          busy={connecting}
+          onNext={onbNext}
+          onSkip={finishOnboarding}
+        />
+      );
+    } else if (screen.kind === 'input') {
+      let state: R3InputState = { kind: 'hero' };
+      if (doneCell) {
+        const v = doneView && doneView.label === doneCell.label ? doneView.view : null;
+        state = {
+          kind: 'done',
+          goal: doneCell.short,
+          stats: v ? v.stats : null,
+          rows: v ? v.rows : [],
+          onOpen: () => setScreen({ kind: 'insight', goal: doneCell }),
+        };
+      }
+      const account = {
+        name: userName ?? '',
+        email: userEmail ?? '',
+        avatarUrl: userAvatar,
+        // signed out: the route's sign-in check sends the person to sign in again
+        onLogout: () => void signOut(),
+        extra: testControls,
+      };
+      const focus = screen.focus && home?.pages[screen.focus] ? screen.focus : home?.initial;
+      body = home ? (
+        <WatchHome
+          key={'home-' + focus}
+          frame={frame}
+          account={account}
+          // decision 2026-11-14: chips only change the headline; only domains with a page
+          chips={pageChips.map((g) => ({ cell: g.label, title: g.short }))}
+          pages={home.pages}
+          initial={focus ?? home.initial}
+          today={dayToday}
+          onOpen={(cell) => {
+            const g = cellOf(cell);
+            if (g) openGoal(g);
+          }}
+          onOpenPage={(cell) => {
+            const h = home.pages[cell];
+            if (h) setScreen({ kind: 'page', cell, date: h.seenDate });
+          }}
+          onPast={(cell) => setScreen({ kind: 'past', cell })}
+        />
+      ) : (
+        <WatchInputR3
+          frame={frame}
+          dateLabel={kstDateLabel(now)}
+          account={account}
+          state={state}
+          chips={goals.map((g) => {
+            const c = chipOf(g);
+            return {
               key: g.label,
               title: g.short,
-              done: false,
-              disabled: false,
+              done: c.kind === 'done',
+              disabled: c.kind === 'none',
               count: c.count,
               onPick: () => openGoal(g),
-            },
-          ]
-        : [];
-    });
-    body = (
-      <LiveDone
-        frame={frame}
-        goal={screen.goal}
-        shortOf={shortOf}
-        whenSaved={whenSaved}
-        rest={rest}
-        onClose={() => setScreen({ kind: 'input', focus: screen.goal.label }, { replace: true })}
-        today={dayToday}
-        goalText={goalText}
-        account={pageAccount}
-        pageRest={pageRest(screen.goal.label)}
-        onPast={() => setScreen({ kind: 'past', cell: screen.goal.label })}
-        pageWatch={pageWatch}
-        todayVideos={todayVideosOf(screen.goal.label)}
-        hasPages={hasPages}
-      />
-    );
-  }
+            };
+          })}
+          history={history.flatMap((h) => {
+            const cell = cellOf(h.cell);
+            const meta = historyMetaText(h.day, h.count);
+            return cell && meta
+              ? [{ key: h.cell, title: cell.short, meta, onPick: () => openGoal(cell) }]
+              : [];
+          })}
+        />
+      );
+    } else if (screen.kind === 'watch') {
+      body = (
+        <WatchFeed
+          key={screen.goal.label}
+          goalTitle={screen.goal.short}
+          videos={watchVideos}
+          frame={frame}
+          loading={screen.list === null}
+          onVerdict={verdict}
+          onFinish={() => setScreen({ kind: 'insight', goal: screen.goal })}
+          onBack={() => setScreen({ kind: 'input' })}
+          sound={sound}
+          onSound={setSound}
+          player={player}
+          renderPlayer={(events) => (
+            <WatchPlayer
+              controller={player}
+              onReady={events.onReady}
+              onPlaying={events.onPlaying}
+              onMuted={events.onMuted}
+              onTick={events.onTick}
+              onFailed={events.onFailed}
+            />
+          )}
+        />
+      );
+    } else if (screen.kind === 'page') {
+      const known = pages?.current;
+      body = (
+        <LivePage
+          key={screen.cell + screen.date}
+          frame={frame}
+          account={pageAccount}
+          cell={screen.cell}
+          title={shortOf(screen.cell)}
+          date={screen.date}
+          known={
+            known && known.domain === screen.cell && known.seen_date === screen.date ? known : null
+          }
+          today={dayToday}
+          shortOf={shortOf}
+          rest={pageRest(screen.cell)}
+          back={backOf(depth, { kind: 'input', focus: screen.cell })}
+          onPast={() => setScreen({ kind: 'past', cell: screen.cell })}
+          pageWatch={pageWatch}
+          todayVideos={todayVideosOf(screen.cell)}
+          experiment={experiment}
+        />
+      );
+    } else if (screen.kind === 'past') {
+      body = (
+        <WatchPast
+          frame={frame}
+          account={pageAccount}
+          chips={pageChips.map((g) => ({ cell: g.label, title: g.short }))}
+          initial={screen.cell}
+          today={dayToday}
+          load={fetchMorningPageList}
+          onOpen={(cell, date) => setScreen({ kind: 'page', cell, date })}
+          back={backOf(depth, { kind: 'input' })}
+        />
+      );
+    } else {
+      // 다 본 뒤: the goals with videos left today, in the home's chip order, nothing highlighted
+      const rest = goals.flatMap((g) => {
+        const c = chipOf(g);
+        return c.kind === 'open' && g.label !== screen.goal.label
+          ? [
+              {
+                key: g.label,
+                title: g.short,
+                done: false,
+                disabled: false,
+                count: c.count,
+                onPick: () => openGoal(g),
+              },
+            ]
+          : [];
+      });
+      body = (
+        <LiveDone
+          frame={frame}
+          goal={screen.goal}
+          shortOf={shortOf}
+          whenSaved={whenSaved}
+          rest={rest}
+          onClose={() => setScreen({ kind: 'input', focus: screen.goal.label }, { replace: true })}
+          experiment={experiment}
+          today={dayToday}
+          account={pageAccount}
+          pageRest={pageRest(screen.goal.label)}
+          onPast={() => setScreen({ kind: 'past', cell: screen.goal.label })}
+          pageWatch={pageWatch}
+          todayVideos={todayVideosOf(screen.goal.label)}
+          hasPages={hasPages}
+        />
+      );
+    }
+    return body;
+  };
 
+  // screens under the top stay mounted only when going back to them should not read them again
+  // (home, brief, past briefs); the video and summary screens are drawn only on top
+  const layers = entries.flatMap((e, d) =>
+    d === entries.length - 1 || KEPT.has(e.screen.kind)
+      ? [{ id: e.id, node: renderScreen(e.screen, d) }]
+      : []
+  );
   return (
     <div className="mf-w">
-      <div ref={app} className="mf-w-app" lang="ko" data-testid="mf-watch-root">
-        {body}
+      <div
+        ref={app}
+        className="mf-w-app"
+        lang="ko"
+        data-testid="mf-watch-root"
+        data-experiment={experiment ? '' : undefined}
+        style={motionStyleVars()}
+      >
+        <ScreenStack layers={layers} move={stack.move} />
       </div>
     </div>
   );
 }
+
+/** Screens kept mounted under the top (decision 2026-11-14 "앱처럼 반응"). */
+const KEPT: ReadonlySet<Screen['kind']> = new Set(['input', 'page', 'past']);
 
 /** The same screen updated (a batch arriving, the onboarding's next step): no new history entry. */
 function sameScreen(a: Screen, b: Screen): boolean {
@@ -533,6 +613,8 @@ interface PageWatchBridge {
   sound: boolean;
   onSound: (on: boolean) => void;
   onJudge: (video: WatchVideo, verdict: WatchVerdict, index: number) => void;
+  /** A source link or an evidence row opened a video (usage count). */
+  onEvidence: (cell: string, date: string, videoId: string) => void;
 }
 
 /**
@@ -571,7 +653,7 @@ function LiveDone({
   pageWatch,
   todayVideos,
   hasPages,
-  goalText,
+  experiment,
 }: {
   frame: ReturnType<typeof useWatchFrame>;
   goal: FeedCell;
@@ -589,8 +671,7 @@ function LiveDone({
   todayVideos?: { count: number; onGo: () => void };
   /** The user has a page: without today's page, back to the home instead of 다 본 뒤. */
   hasPages: boolean;
-  /** The user's goal for the page's top row. */
-  goalText: string | null;
+  experiment: boolean;
 }): JSX.Element {
   const [data, setData] = useState<InsightData | null>(null);
   /** undefined = still reading; null = no page today (the done screen as it was). */
@@ -632,14 +713,16 @@ function LiveDone({
         domainTitle={goal.short}
         order={(view?.rows ?? []).map((r) => ({ key: r.key, title: r.title }))}
         rest={pageRest}
-        onHome={onClose}
+        today={today}
+        back={{ label: '홈', onBack: onClose }}
         onPast={onPast}
-        todayVideos={todayVideos}
-        goal={goalText}
+        todayVideos={experiment ? todayVideos : undefined}
+        feedback={briefFeedbackOf(goal.label, page)}
         loadCards={() => pageWatch.load(goal.label, page.seen_date)}
         sound={pageWatch.sound}
         onSound={pageWatch.onSound}
         onJudge={pageWatch.onJudge}
+        onEvidence={(id) => pageWatch.onEvidence(goal.label, page.seen_date, id)}
       />
     );
   }
@@ -659,11 +742,11 @@ function LivePage({
   today,
   shortOf,
   rest,
-  onHome,
+  back,
   onPast,
   pageWatch,
   todayVideos,
-  goal,
+  experiment,
 }: {
   frame: ReturnType<typeof useWatchFrame>;
   account: R3AccountView;
@@ -675,22 +758,22 @@ function LivePage({
   today: string;
   shortOf: (label: string) => string;
   rest: PageRestChip[];
-  onHome: () => void;
+  back: { label: string; onBack: () => void };
   onPast: () => void;
   pageWatch: PageWatchBridge;
   todayVideos?: { count: number; onGo: () => void };
-  goal: string | null;
+  experiment: boolean;
 }): JSX.Element {
   const [page, setPage] = useState<MorningPage | null | undefined>(known ?? undefined);
   const [order, setOrder] = useState<Array<{ key: string; title: string }>>([]);
   useEffect(() => {
     let on = true;
-    if (!known) {
-      fetchMorningPage(cell, date)
-        .then((pg) => on && setPage(pg))
-        .catch(() => on && setPage(null));
-    }
-    if (date === today) {
+    void postUsageEvent({ kind: 'brief_open', cell, date });
+    // read even when the home had it: the single read carries this viewer's reaction
+    fetchMorningPage(cell, date)
+      .then((pg) => on && (pg || !known) && setPage(pg))
+      .catch(() => on && !known && setPage(null));
+    if (experiment && date === today) {
       fetchWatchInsight(cell)
         .then((d) => {
           if (!on || d.reacted + d.passed === 0) return;
@@ -706,11 +789,12 @@ function LivePage({
     // one page per mount (keyed by cell and date)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // not found: back to the home (the link that led here is stale)
+  // not found: back (the link that led here is stale)
   useEffect(() => {
-    if (page === null) onHome();
-  }, [page, onHome]);
-  if (!page) return <div className="mf-w3-root" data-testid="mf-page-wait" />;
+    if (page === null) back.onBack();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+  if (!page) return <PageSkeleton />;
   return (
     <PageWithWatch
       frame={frame}
@@ -719,14 +803,25 @@ function LivePage({
       domainTitle={title}
       order={order}
       rest={rest}
-      onHome={onHome}
+      today={today}
+      back={back}
       onPast={onPast}
-      todayVideos={todayVideos}
-      goal={goal}
+      todayVideos={experiment ? todayVideos : undefined}
+      feedback={briefFeedbackOf(cell, page)}
       loadCards={() => pageWatch.load(cell, page.seen_date)}
       sound={pageWatch.sound}
       onSound={pageWatch.onSound}
       onJudge={pageWatch.onJudge}
+      onEvidence={(id) => pageWatch.onEvidence(cell, page.seen_date, id)}
     />
   );
+}
+
+/** 이 브리프가 쓸모 있었나요: saved with the viewer, domain and date (decision 2026-11-14). */
+function briefFeedbackOf(cell: string, page: MorningPage): BriefFeedbackProps {
+  return {
+    value: page.feedback ?? null,
+    onPick: (value) =>
+      postBriefFeedback({ cell, date: page.seen_date, value }).then(() => undefined),
+  };
 }

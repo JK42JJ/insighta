@@ -29,7 +29,7 @@ const PAGE: MorningPage = {
   ],
 };
 
-describe('한 장 page (2026-11-14)', () => {
+describe('브리프 page (2026-11-14 user test copy)', () => {
   it('sources follow the text after one space, core sentences and note paragraphs alike (revised handoff)', () => {
     render(
       <WatchPage
@@ -38,7 +38,8 @@ describe('한 장 page (2026-11-14)', () => {
         domainTitle="기술·개발"
         order={[]}
         rest={[]}
-        onHome={() => undefined}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
       />
     );
@@ -75,18 +76,23 @@ describe('한 장 page (2026-11-14)', () => {
         domainTitle="기술·개발"
         order={Array.from({ length: 25 }, (_x, i) => ({ key: 'k' + i, title: '영상 ' + i }))}
         rest={[{ cell: '재테크/투자', title: '재테크', onPick: () => undefined }]}
-        onHome={() => undefined}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
         todayVideos={{ count: 3, onGo }}
       />
     );
     expect(document.body.textContent).not.toContain('[문구]');
-    expect(screen.getByTestId('mf-page-note-toggle').textContent).toContain('전체 노트 읽기');
+    for (const old of ['지난 장', '이 장', '노트 읽기', '노트 접기'])
+      expect(document.body.textContent).not.toContain(old);
+    expect(screen.getByTestId('mf-page-note-toggle').textContent).toContain('이어서 읽기');
     fireEvent.click(screen.getByTestId('mf-page-note-toggle'));
-    expect(screen.getByTestId('mf-page-note-toggle').textContent).toContain('노트 접기');
-    expect(screen.getByTestId('mf-page-videos').textContent).toContain('이 장의 영상');
+    expect(screen.getByTestId('mf-page-note-toggle').textContent).toContain('접기');
+    expect(screen.getByTestId('mf-page-videos').textContent).toContain('근거가 된 영상');
     expect(screen.getByTestId('mf-page-rest').textContent).toContain('다른 도메인');
-    expect(screen.getByTestId('mf-page-past').textContent).toContain('지난 장 모두 보기');
+    expect(screen.getByTestId('mf-page-past').textContent).toContain('지난 브리프');
+    expect(screen.getByTestId('mf-page-home').textContent).toBe('홈');
+    expect(screen.getByTestId('mf-page-seen').textContent).toBe('오늘 · 11월 14일');
     const groups = Array.from(
       screen.getByTestId('mf-page-core').querySelectorAll('[data-testid="mf-page-cite-group"]')
     );
@@ -111,7 +117,8 @@ describe('한 장 page (2026-11-14)', () => {
         domainTitle="기술·개발"
         order={[]}
         rest={[]}
-        onHome={() => undefined}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
       />
     );
@@ -125,7 +132,8 @@ describe('한 장 page (2026-11-14)', () => {
         domainTitle="기술·개발"
         order={[{ key: 'a', title: '영상 제목' }]}
         rest={[{ cell: '재테크/투자', title: '재테크', onPick }]}
-        onHome={() => undefined}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
       />
     );
@@ -136,54 +144,92 @@ describe('한 장 page (2026-11-14)', () => {
 });
 
 describe('daily home routing', () => {
-  it('a chip with a page changes the headline; one without opens its videos; the headline opens the page', () => {
+  it('a chip changes the headline; the button is always 브리프 읽기 and opens the shown brief', () => {
     const onOpen = vi.fn();
     const onOpenPage = vi.fn();
     render(
       <WatchHome
         frame={FRAME}
-        goal="AI Agent 서비스 출시"
         chips={[
           { cell: '기술/개발', title: '기술·개발' },
           { cell: '재테크/투자', title: '재테크' },
           { cell: '학습/교육', title: '학습' },
         ]}
         pages={{
-          '기술/개발': { headline: '첫 헤드라인', seenDate: '2026-11-13' },
+          '기술/개발': { headline: '첫 헤드라인', seenDate: '2026-11-14' },
           '재테크/투자': { headline: '둘째 헤드라인', seenDate: '2026-11-12' },
         }}
         initial="기술/개발"
         today="2026-11-14"
-        todayCount={(c) => (c === '기술/개발' ? 5 : 0)}
         onOpen={onOpen}
         onOpenPage={onOpenPage}
         onPast={() => undefined}
       />
     );
     expect(screen.getByTestId('mf-home-headline').textContent).toBe('첫 헤드라인');
-    expect(screen.getByTestId('mf-home-meta').textContent).toContain('최근 장');
-    expect(screen.getByTestId('mf-home-past').textContent).toBe('지난 장');
-    // no page today, 5 videos left: the button goes to the videos
-    expect(screen.getByTestId('mf-home-enter').textContent).toContain('오늘의 영상 5편 보기');
+    // the date only; a brief of today reads 오늘 ·
+    expect(screen.getByTestId('mf-home-meta').textContent).toContain('오늘 · 11월 14일');
+    expect(screen.getByTestId('mf-home-past').textContent).toBe('지난 브리프');
+    // no goal in the top row: the brand only
+    expect(screen.queryByTestId('mf-home-goal')).toBeNull();
+    expect(screen.getByTestId('mf-home-enter').textContent).toContain('브리프 읽기');
     fireEvent.click(screen.getByTestId('mf-home-enter'));
-    expect(onOpen).toHaveBeenLastCalledWith('기술/개발');
+    expect(onOpenPage).toHaveBeenLastCalledWith('기술/개발');
     const chips = screen.getAllByTestId('mf-home-chip');
     fireEvent.click(chips[2]!);
     expect(onOpen).toHaveBeenCalledWith('학습/교육');
     // jsdom: fonts never arrive, so the switch is immediate (no motion before ready)
     fireEvent.click(chips[1]!);
     expect(screen.getByTestId('mf-home-headline').textContent).toBe('둘째 헤드라인');
-    expect(screen.getByTestId('mf-home-seen').textContent).toBe('11월 12일 목요일');
-    // no page today and no videos left for that domain: the button reads the shown page
-    expect(screen.getByTestId('mf-home-enter').textContent).toContain('이 장 읽기');
+    expect(screen.getByTestId('mf-home-seen').textContent).toBe('11월 12일');
+    expect(screen.getByTestId('mf-home-enter').textContent).toContain('브리프 읽기');
     fireEvent.click(screen.getByTestId('mf-home-enter'));
     expect(onOpenPage).toHaveBeenLastCalledWith('재테크/투자');
     fireEvent.click(screen.getByTestId('mf-home-headline'));
-    expect(onOpenPage).toHaveBeenCalledTimes(2);
+    expect(onOpenPage).toHaveBeenCalledTimes(3);
+    // every pressable on the home has a pressed look
+    for (const b of Array.from(document.querySelectorAll('button'))) {
+      expect(b.hasAttribute('data-press')).toBe(true);
+    }
   });
 });
 
-describe('지난 장 목록', () => {
+describe('brief reaction (이 브리프가 쓸모 있었나요)', () => {
+  it('shows at once, saves behind, goes back and says so when the save fails', async () => {
+    let fail = true;
+    const onPick = vi.fn(() => (fail ? Promise.reject(new Error('x')) : Promise.resolve()));
+    render(
+      <WatchPage
+        frame={FRAME}
+        page={PAGE}
+        domainTitle="기술·개발"
+        order={[]}
+        rest={[]}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => undefined }}
+        onPast={() => undefined}
+        feedback={{ value: null, onPick }}
+      />
+    );
+    const yes = screen.getByTestId('mf-page-feedback-yes');
+    fireEvent.click(yes);
+    expect(yes.hasAttribute('data-on')).toBe(true);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('mf-page-feedback-yes').hasAttribute('data-on')).toBe(false);
+    expect(screen.getByTestId('mf-page-feedback-error')).toBeTruthy();
+    fail = false;
+    fireEvent.click(screen.getByTestId('mf-page-feedback-no'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('mf-page-feedback-no').hasAttribute('data-on')).toBe(true);
+    expect(onPick).toHaveBeenLastCalledWith('not_useful');
+  });
+});
+
+describe('지난 브리프 목록', () => {
   it('loads the chosen domain newest first; a domain without pages shows its name and no rows', async () => {
     const load = vi.fn((cell: string) =>
       Promise.resolve(
@@ -206,14 +252,15 @@ describe('지난 장 목록', () => {
         initial="기술/개발"
         load={load}
         onOpen={onOpen}
-        onHome={() => undefined}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => undefined }}
       />
     );
     await act(async () => {
       await Promise.resolve();
     });
     const rows = screen.getAllByTestId('mf-past-row');
-    expect(rows.map((r) => r.textContent)).toEqual(['11월 14일 토요일가', '11월 13일 금요일나']);
+    expect(rows.map((r) => r.textContent)).toEqual(['오늘 · 11월 14일가', '11월 13일나']);
     fireEvent.click(rows[1]!);
     expect(onOpen).toHaveBeenCalledWith('기술/개발', '2026-11-13');
     fireEvent.click(screen.getAllByTestId('mf-past-chip')[1]!);

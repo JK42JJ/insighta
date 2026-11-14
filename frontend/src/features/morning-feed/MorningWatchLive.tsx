@@ -42,7 +42,8 @@ const SAVE_WAIT_MAX_MS = 4000;
 type LoadState =
   | { status: 'loading' }
   | { status: 'error' }
-  | { status: 'empty' }
+  /** brief = a participant without any brief (the experiment's empty state otherwise). */
+  | { status: 'empty'; brief?: boolean }
   | {
       status: 'ready';
       cells: FeedCell[];
@@ -51,6 +52,8 @@ type LoadState =
       pages: MorningHomePages | null;
       /** /watch/today's day: the KST day, or the virtual day on stg. */
       day: string | undefined;
+      /** The main account's experiment UI (decision 2026-11-14 user test). */
+      experiment: boolean;
     };
 
 const MESSAGE_STYLE = {
@@ -84,6 +87,23 @@ export function MorningWatchLive(): JSX.Element {
     takeWatchStart()
       .then(([t, history, pages]) => {
         if (!alive) return;
+        if (t === null) {
+          // a participant: the shared briefs only
+          setState(
+            pages?.current && pages.cells
+              ? {
+                  status: 'ready',
+                  cells: pages.cells,
+                  today: {},
+                  history: [],
+                  pages,
+                  day: pages.today,
+                  experiment: false,
+                }
+              : { status: 'empty', brief: true }
+          );
+          return;
+        }
         const today = parseWatchTodayMap(t.today);
         if (today === null || !Array.isArray(t.cells)) {
           setState({ status: 'error' });
@@ -94,7 +114,15 @@ export function MorningWatchLive(): JSX.Element {
         );
         setState(
           anyGoal
-            ? { status: 'ready', cells: t.cells, today, history, pages, day: t.day }
+            ? {
+                status: 'ready',
+                cells: t.cells,
+                today,
+                history,
+                pages,
+                day: t.day,
+                experiment: pages?.experiment !== false,
+              }
             : { status: 'empty' }
         );
       })
@@ -192,7 +220,7 @@ export function MorningWatchLive(): JSX.Element {
   if (state.status === 'empty')
     return (
       <div className="mf-w" style={MESSAGE_STYLE}>
-        오늘 볼 영상이 아직 없습니다
+        {state.brief ? '아직 준비된 브리프가 없습니다' : '오늘 볼 영상이 아직 없습니다'}
       </div>
     );
   return (
@@ -207,6 +235,7 @@ export function MorningWatchLive(): JSX.Element {
       onJudge={onJudge}
       whenSaved={whenSaved}
       connectYouTube={connectYouTube}
+      experiment={state.experiment}
     />
   );
 }

@@ -1,0 +1,201 @@
+/*
+ * Shared touch and motion rules for the new screens (decision 2026-11-14 "앱처럼 반응").
+ * Values come from motion-tokens.ts as custom properties on the app root; no number is written
+ * here twice. Only transform and opacity move.
+ *
+ * Pressed look: use-press.ts sets [data-pressed] at pointerdown and removes it on release, when
+ * the finger leaves or when a scroll takes over. Kinds ([data-press]):
+ *   fill  filled button     scale + dark layer
+ *   btn   outlined / chip   scale + faint layer (default for any button)
+ *   row   whole row         faint layer, no scale
+ *   link  text link         opacity
+ *   icon  icon button       scale
+ */
+
+.mf-w-app {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+.mf-w-app [data-press] {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  /* scale (not transform) so an element's own transform is left alone; colours keep the chip's
+     200 ms so a selection still moves as before */
+  transition:
+    scale var(--mo-press-out) ease-out,
+    opacity var(--mo-press-out) ease-out,
+    background-color var(--mo-chip-ms) ease,
+    color var(--mo-chip-ms) ease,
+    border-color var(--mo-chip-ms) ease;
+}
+.mf-w-app [data-pressed] {
+  transition-duration: var(--mo-press-in);
+}
+
+/* the layer of fill / btn / row */
+.mf-w-app [data-press='fill'],
+.mf-w-app [data-press='btn'],
+.mf-w-app [data-press='row'] {
+  position: relative;
+}
+.mf-w-app [data-press='fill']::after,
+.mf-w-app [data-press='btn']::after,
+.mf-w-app [data-press='row']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--mo-press-out) ease-out;
+}
+.mf-w-app [data-press='fill']::after {
+  background: #000;
+}
+.mf-w-app [data-press='btn']::after,
+.mf-w-app [data-press='row']::after {
+  background: var(--mo-press-fill);
+}
+.mf-w-app [data-press='fill'][data-pressed]::after {
+  opacity: var(--mo-press-dark);
+  transition-duration: var(--mo-press-in);
+}
+.mf-w-app [data-press='btn'][data-pressed]::after,
+.mf-w-app [data-press='row'][data-pressed]::after {
+  opacity: 1;
+  transition-duration: var(--mo-press-in);
+}
+
+.mf-w-app [data-press='fill'][data-pressed],
+.mf-w-app [data-press='btn'][data-pressed] {
+  scale: var(--mo-press-btn-scale);
+}
+.mf-w-app [data-press='icon'][data-pressed] {
+  scale: var(--mo-press-icon-scale);
+}
+.mf-w-app [data-press='link'][data-pressed] {
+  opacity: var(--mo-press-link-opacity);
+}
+
+/* Reduced motion: no scale, no slide; a pressed element only fades. */
+@media (prefers-reduced-motion: reduce) {
+  .mf-w-app [data-pressed] {
+    scale: none !important;
+    opacity: var(--mo-press-reduced-opacity) !important;
+  }
+}
+
+/* ── Web feel: no selection or long-press menu on controls, the brief text stays selectable ── */
+.mf-w-app {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mf-w-app [data-selectable],
+.mf-w-app [data-selectable] * {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* ── Screen stack: one level in or out ── */
+.mf-stack {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.mf-stack-layer {
+  position: absolute;
+  inset: 0;
+  background: var(--w-paper);
+}
+.mf-stack-layer[data-covered] {
+  visibility: hidden;
+  pointer-events: none;
+}
+.mf-stack-layer[data-moving] {
+  visibility: visible;
+  will-change: transform, opacity;
+}
+.mf-stack-dim {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* ── Sheet rising from the bottom ── */
+.mf-sheet-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: #000;
+  opacity: 0;
+}
+.mf-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
+  touch-action: none;
+  will-change: transform;
+}
+
+/* ── Waiting: placeholder lines in place of the headline and the text ── */
+.mf-skel {
+  display: grid;
+  gap: 12px;
+}
+.mf-skel-line {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--mo-press-fill);
+}
+.mf-skel-line[data-big] {
+  height: 30px;
+  border-radius: 8px;
+}
+
+/* A button whose answer takes longer than the busy wait shows a small turning ring inside. */
+.mf-busy-ring {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: mf-busy-turn 0.8s linear infinite;
+  vertical-align: middle;
+}
+@keyframes mf-busy-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-busy-ring {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* the account sheet rides the shared sheet (its own rise animation and scrim give way) */
+.mf-w-app .mf-sheet.mf-w3-acct {
+  animation: none;
+  z-index: 41;
+}
+
+.mf-page-skel {
+  margin-top: 28px;
+}
+/* placeholder lines drawn over a block that keeps its place (hidden) until its fonts are in */
+.mf-skel-over {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+}

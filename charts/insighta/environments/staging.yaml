@@ -76,6 +76,10 @@ morningCards:
   # Virtual "today" for repeat tests (2026-11-14): jamesjk4242 and the scenario-test account
   # (jkim0420, STG_JAMES_*). Not set in prod.
   virtualDayUserIds: "bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c,7285aac0-9011-4475-8081-64b74f1c0fff"
+  # Shared brief (2026-11-14): every signed-in user reads this account's morning_pages rows.
+  briefOwnerId: "bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c"
+  # Accounts that keep the experiment UI (video batches, viewing order). Needs the test list too.
+  experimentUserIds: "bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c"
 
 keel:
   enabled: false

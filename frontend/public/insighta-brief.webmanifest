@@ -1,0 +1,16 @@
+{
+  "name": "Insighta",
+  "short_name": "Insighta",
+  "lang": "ko",
+  "id": "/morning-cards?view=watch",
+  "start_url": "/morning-cards?view=watch",
+  "scope": "/morning-cards",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f5f0",
+  "theme_color": "#f7f5f0",
+  "icons": [
+    { "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pwa-512x512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -3586,3 +3586,31 @@ model morning_pages {
   @@id([user_id, cell, seen_date])
   @@schema("public")
 }
+
+/// Viewer's answer on a shared brief. Raw SQL DDL: prisma/migrations/morning-feed/007_brief_feedback.sql
+model morning_brief_feedback {
+  user_id    String   @db.Uuid
+  cell       String   @db.VarChar(50)
+  seen_date  DateTime @db.Date
+  value      String   @db.VarChar(16)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([user_id, cell, seen_date])
+  @@schema("public")
+}
+
+/// Append-only usage events of the brief screens. Raw SQL DDL: prisma/migrations/morning-feed/008_usage_events.sql
+model morning_usage_events {
+  id         BigInt    @id @default(autoincrement())
+  user_id    String    @db.Uuid
+  kind       String    @db.VarChar(32)
+  cell       String?   @db.VarChar(50)
+  seen_date  DateTime? @db.Date
+  video_id   String?   @db.VarChar(32)
+  value      String?   @db.VarChar(16)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([user_id, created_at], map: "morning_usage_events_user_created_idx")
+  @@schema("public")
+}

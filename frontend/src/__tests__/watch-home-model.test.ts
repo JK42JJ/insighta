@@ -4,7 +4,8 @@ import {
   headlineSize,
   pastHeadlinePx,
   seenDateLabel,
-  homeButtonOf,
+  briefDateLabel,
+  HOME_BUTTON_LABEL,
 } from '@/features/morning-feed/watch-home-model';
 
 const S21 = '에이전트의 성패는 모델보다 평가 체계에서 갈린다';
@@ -42,18 +43,12 @@ describe('past list headline size', () => {
 });
 
 describe('home button (decision 2026-11-14: always one)', () => {
-  it("today's page first, then today's videos, else the shown page", () => {
-    expect(homeButtonOf('2026-11-14', '2026-11-14', 5)).toEqual({
-      label: '오늘의 장 읽기',
-      target: 'page',
-    });
-    expect(homeButtonOf('2026-11-13', '2026-11-14', 5)).toEqual({
-      label: '오늘의 영상 5편 보기',
-      target: 'videos',
-    });
-    expect(homeButtonOf('2026-11-13', '2026-11-14', 0)).toEqual({
-      label: '이 장 읽기',
-      target: 'page',
-    });
+  it('always 브리프 읽기 (decision 2026-11-14 user test)', () => {
+    expect(HOME_BUTTON_LABEL).toBe('브리프 읽기');
+  });
+  it('brief date: the date only, today reads 오늘 · (decision 2026-11-14 user test)', () => {
+    expect(briefDateLabel('2026-11-16', '2026-11-16')).toBe('오늘 · 11월 16일');
+    expect(briefDateLabel('2026-11-13', '2026-11-16')).toBe('11월 13일');
+    expect(briefDateLabel('2026-02-30', '2026-11-16')).toBe('');
   });
 });

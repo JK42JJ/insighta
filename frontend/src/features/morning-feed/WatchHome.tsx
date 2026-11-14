@@ -9,9 +9,9 @@ import {
 
 import { ensureHomeFonts, waitHomeFonts } from '@/features/morning-feed/watch-home-fonts';
 import {
+  briefDateLabel,
   headlineSize,
-  homeButtonOf,
-  seenDateLabel,
+  HOME_BUTTON_LABEL,
 } from '@/features/morning-feed/watch-home-model';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
 import {
@@ -19,6 +19,8 @@ import {
   AccountSheet,
   type R3AccountView,
 } from '@/features/morning-feed/watch-r3-screens';
+import { SkeletonLines } from '@/features/morning-feed/SkeletonLines';
+import { useSkeleton } from '@/features/morning-feed/use-skeleton';
 import './watch-home.css';
 
 /*
@@ -47,8 +49,6 @@ export interface HomeHeadline {
 
 export interface WatchHomeProps {
   frame: Frame & { width: number };
-  /** The user's goal in the top row (decision 2026-11-14: in place of the date); null = empty. */
-  goal: string | null;
   account?: R3AccountView;
   chips: HomeChip[];
   /** Domains with a page: their newest headline and seen date. */
@@ -57,13 +57,11 @@ export interface WatchHomeProps {
   initial: string;
   /** Today in KST ('YYYY-MM-DD'): a page of that date is "today's page". */
   today: string;
-  /** Today's videos left for the domain (0 = none). */
-  todayCount: (cell: string) => number;
-  /** The button, or a chip of a domain without a page: today's videos of that domain. */
+  /** A chip of a domain without a brief (none are shown to participants). */
   onOpen: (cell: string) => void;
-  /** Tapping the headline: that domain's page (absent = not tappable). */
-  onOpenPage?: (cell: string) => void;
-  /** The link at the right end of the seen-date row: past pages (absent = not drawn). */
+  /** The button and the headline: that domain's brief. */
+  onOpenPage: (cell: string) => void;
+  /** The link at the right end of the date row: past briefs (absent = not drawn). */
   onPast?: (cell: string) => void;
 }
 
@@ -74,8 +72,7 @@ const SLIDE_MS = 300;
 const SLIDE_EASE = 'cubic-bezier(.2,.8,.2,1)';
 /** Below this width the chips use 12.5 px (README §배치 5). */
 const NARROW_W = 360;
-const UI_TEXT =
-  '오늘의 장 최근 장 지난 장 읽기 이 장 읽기 오늘의 영상 편 보기 →0123456789월일요화수목금토';
+const UI_TEXT = '오늘 · 지난 브리프 브리프 읽기 →0123456789월일';
 
 function reducedMotion(): boolean {
   return (
@@ -115,7 +112,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     UI_TEXT +
     p.chips.map((c) => c.title).join('') +
     Object.values(p.pages)
-      .map((x) => seenDateLabel(x.seenDate))
+      .map((x) => briefDateLabel(x.seenDate, p.today))
       .join('');
   useEffect(() => {
     let alive = true;
@@ -209,11 +206,10 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
   );
 
   const page = p.pages[shown];
-  // the button follows the shown headline (it changes with the text, not before the fade)
-  const button = homeButtonOf(page?.seenDate, p.today, p.todayCount(shown));
   const text = page?.headline ?? '';
   const size = headlineSize(p.frame.width, text);
   const vis = ready ? 'visible' : 'hidden';
+  const skeleton = useSkeleton(ready);
   const rootStyle = {
     '--w3-safe-top': p.frame.safeTop + 'px',
     '--w3-safe-bottom': p.frame.safeBottom + 'px',
@@ -230,60 +226,56 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
       <div className="mf-home-col">
         <div className="mf-home-top">
           <div className="mf-w3-brand mf-home-brand">Insighta</div>
-          <div
-            className="mf-home-today mf-home-goal"
-            data-testid="mf-home-goal"
-            title={p.goal ?? ''}
-          >
-            {p.goal ?? ''}
-          </div>
           {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
         </div>
         <div className="mf-home-gap-top" />
-        <div className="mf-home-block" style={{ visibility: vis }}>
-          <div className="mf-home-meta" ref={meta} data-testid="mf-home-meta">
-            <span className="mf-home-meta-k">
-              {page && page.seenDate === p.today ? '오늘의 장' : '최근 장'}
-            </span>
-            <span className="mf-home-meta-d" data-testid="mf-home-seen">
-              {page ? seenDateLabel(page.seenDate) : ''}
-            </span>
-            {p.onPast ? (
+        <div className="mf-home-block" style={{ position: 'relative' }}>
+          {skeleton ? <SkeletonLines testId="mf-home-skeleton" /> : null}
+          <div style={{ visibility: vis }}>
+            <div className="mf-home-meta" ref={meta} data-testid="mf-home-meta">
+              <span className="mf-home-meta-d" data-testid="mf-home-seen">
+                {page ? briefDateLabel(page.seenDate, p.today) : ''}
+              </span>
+              {p.onPast ? (
+                <button
+                  type="button"
+                  className="mf-home-past"
+                  data-press="link"
+                  data-testid="mf-home-past"
+                  onClick={() => p.onPast?.(sel)}
+                >
+                  지난 브리프
+                </button>
+              ) : null}
+            </div>
+            <h1
+              ref={head}
+              className="mf-home-headline"
+              data-testid="mf-home-headline"
+              data-link=""
+              data-press="row"
+              onClick={() => p.onOpenPage(shown)}
+              style={{
+                fontSize: size.fontPx + 'px',
+                letterSpacing: size.trackEm + 'em',
+                lineHeight: size.lineHeight,
+              }}
+            >
+              {text}
+            </h1>
+            <div className="mf-home-btn-row" ref={btn}>
               <button
                 type="button"
-                className="mf-home-past"
-                data-testid="mf-home-past"
-                onClick={() => p.onPast?.(sel)}
+                className="mf-home-btn"
+                data-press="fill"
+                data-testid="mf-home-enter"
+                data-target="page"
+                onClick={() => p.onOpenPage(shown)}
               >
-                지난 장
+                <span>{HOME_BUTTON_LABEL}</span>
+                <span className="mf-home-arrow">→</span>
               </button>
-            ) : null}
-          </div>
-          <h1
-            ref={head}
-            className="mf-home-headline"
-            data-testid="mf-home-headline"
-            data-link={p.onOpenPage ? '' : undefined}
-            onClick={p.onOpenPage ? () => p.onOpenPage?.(shown) : undefined}
-            style={{
-              fontSize: size.fontPx + 'px',
-              letterSpacing: size.trackEm + 'em',
-              lineHeight: size.lineHeight,
-            }}
-          >
-            {text}
-          </h1>
-          <div className="mf-home-btn-row" ref={btn}>
-            <button
-              type="button"
-              className="mf-home-btn"
-              data-testid="mf-home-enter"
-              data-target={button.target}
-              onClick={() => (button.target === 'videos' ? p.onOpen(shown) : p.onOpenPage?.(shown))}
-            >
-              <span>{button.label}</span>
-              <span className="mf-home-arrow">→</span>
-            </button>
+            </div>
           </div>
         </div>
         <div className="mf-home-gap-bottom" />
@@ -293,6 +285,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
               key={c.cell}
               type="button"
               className="mf-home-chip"
+              data-press="btn"
               data-testid="mf-home-chip"
               data-on={c.cell === sel ? '' : undefined}
               data-page={p.pages[c.cell] ? '' : undefined}
