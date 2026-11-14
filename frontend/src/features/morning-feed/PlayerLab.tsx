@@ -55,6 +55,11 @@ const PAUSED = 2;
 const POLL_MS = 250;
 /** Same grace as the deck player: no PLAYING with sound by then = blocked. */
 const SOUND_CHECK_MS = 1500;
+/** Swap check: keep looking this long for the first PLAYING, so slow loading is told apart from refused sound. */
+const SWAP_WAIT_MAX_MS = 6000;
+/** The watch screen's two delays before it loads the next video (2026-11-14 sound-loss test). */
+const DELAY_REVEAL_MS = 30;
+const DELAY_DISLIKE_MS = 800;
 const MAX_LOG = 200;
 
 let apiPromise: Promise<LabApi> | null = null;
@@ -227,7 +232,7 @@ export function PlayerLab(): JSX.Element {
     player.current?.mute();
     add('우리 단추: mute');
   };
-  const swap = (step: 1 | -1): void => {
+  const swap = (step: 1 | -1, delayMs = 0): void => {
     const p = player.current;
     if (!p) return;
     const next = (idx + step + videos.length) % videos.length;
@@ -246,23 +251,62 @@ export function PlayerLab(): JSX.Element {
     else p.mute();
     loadedId.current = id;
     p.loadVideoById(id);
-    add('영상 교체 → ' + id + (withSound ? ' (소리 유지 시도)' : ' (음소거)'));
+    const how = delayMs > 0 ? ', 누른 뒤 ' + delayMs + 'ms 지연' : ', 누른 순간';
+    add('영상 교체 → ' + id + (withSound ? ' (소리 유지 시도' : ' (음소거') + how + ')');
     if (!withSound) return;
-    check.current = window.setTimeout(() => {
+    // Sound test 2026-11-14: read the state at 1.5 s as the watch screen does, but only give up
+    // on sound once the video is PLAYING muted or never plays within 6 s. "느린 로딩" lines show
+    // where the watch screen's 1.5 s check would have muted a video that kept its sound.
+    const started = performance.now();
+    let early = true;
+    const look = (): void => {
       check.current = null;
       const cur = player.current;
       if (!cur || loadedId.current !== id) return;
       const st = cur.getPlayerState();
-      if (st === PLAYING && !cur.isMuted()) {
-        add('소리 유지 성공 → ' + id + ' playing, 소리 켜짐');
+      const m = cur.isMuted();
+      const at = Math.round(performance.now() - started) + 'ms';
+      if (st === PLAYING && !m) {
+        add(
+          (early
+            ? '소리 유지 성공 → '
+            : '소리 유지 성공 (느린 로딩, 1.5초 검사였다면 음소거됨) → ') +
+            id +
+            ' ' +
+            at
+        );
         return;
       }
-      add('소리 유지 실패 → ' + id + ' (' + stateName(st) + ') → 음소거로 되돌리고 재생');
-      wantSound.current = false;
-      lastMuted.current = true;
-      cur.mute();
-      cur.playVideo();
-    }, SOUND_CHECK_MS);
+      if (st === PLAYING || performance.now() - started >= SWAP_WAIT_MAX_MS) {
+        add(
+          '소리 유지 실패 → ' +
+            id +
+            ' (' +
+            stateName(st) +
+            (m ? ', 음소거 상태' : '') +
+            ', ' +
+            at +
+            ') → 음소거로 되돌리고 재생'
+        );
+        wantSound.current = false;
+        lastMuted.current = true;
+        cur.mute();
+        cur.playVideo();
+        return;
+      }
+      if (early)
+        add(
+          '1.5초 시점: ' + id + ' ' + stateName(st) + (m ? ', 음소거 상태' : '') + ' → 더 기다림'
+        );
+      early = false;
+      check.current = window.setTimeout(look, POLL_MS);
+    };
+    check.current = window.setTimeout(look, SOUND_CHECK_MS);
+  };
+  /** The same swap started outside the tap, as the watch screen does (reveal wait, 별로 wait). */
+  const swapLater = (delayMs: number): void => {
+    add('단추 누름 → ' + delayMs + 'ms 뒤 교체');
+    window.setTimeout(() => swap(1, delayMs), delayMs);
   };
 
   const otherControls = controls === 1 ? 0 : 1;
@@ -304,6 +348,18 @@ export function PlayerLab(): JSX.Element {
         </button>
         <button type="button" onClick={() => swap(1)} data-testid="lab-next">
           다음 영상
+        </button>
+      </div>
+      <div className="mf-lab-row">
+        <button type="button" onClick={() => swapLater(DELAY_REVEAL_MS)} data-testid="lab-next-30">
+          다음 영상 (30ms 뒤)
+        </button>
+        <button
+          type="button"
+          onClick={() => swapLater(DELAY_DISLIKE_MS)}
+          data-testid="lab-next-800"
+        >
+          다음 영상 (0.8초 뒤)
         </button>
       </div>
       <label className="mf-lab-check">
