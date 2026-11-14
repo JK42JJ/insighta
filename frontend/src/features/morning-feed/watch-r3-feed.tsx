@@ -116,7 +116,6 @@ const DOWN_FOLLOW_FIRST = 0.15;
 /** A little longer than the move itself, then input is taken again. */
 export const SETTLE_MS = CARD_MOVE_MS + 40;
 const LIKE_CONFIRM_MS = 1400;
-const DISLIKE_ADVANCE_MS = 800;
 const WHEEL_MIN_DELTA = 40;
 const WHEEL_GAP_MS = 1100;
 const CLICK_GUARD_MS = 60;
@@ -365,7 +364,8 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
     setReacting(kind);
     p.onVerdict(s.idx, VERDICT_OF[kind]);
     if (kind === 'like') later(() => setReacting(null), LIKE_CONFIRM_MS);
-    else later(() => advance('dislike'), DISLIKE_ADVANCE_MS);
+    // 별로 moves on at once (2026-11-14): no wait outside the tap before the next video
+    else advance('dislike');
   };
 
   // keyboard (desktop): ↓ next, ↑ previous

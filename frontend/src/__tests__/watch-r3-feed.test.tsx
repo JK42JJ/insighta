@@ -72,19 +72,15 @@ describe('watch 수정 4: feed reactions and moves', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('별로 fades the card content only; the player layer is never dimmed', () => {
+  it('별로 moves to the next card at once (2026-11-14); the player layer is never dimmed', () => {
     const { verdicts, current, counter } = setup();
-    const card = current();
-    fireEvent.click(card.querySelector('[data-testid="mf-watch-skip"]')!);
+    fireEvent.click(current().querySelector('[data-testid="mf-watch-skip"]')!);
     expect(verdicts).toEqual([[0, 'skip']]);
-    expect(card.hasAttribute('data-dim')).toBe(true);
+    // no wait: the move starts inside the tap
+    expect(counter()).toBe('2 / 3');
     const layer = screen.getByTestId('mf-watch-player');
     expect(layer.hasAttribute('data-dim')).toBe(false);
     expect(layer.style.opacity).toBe('');
-    act(() => {
-      vi.advanceTimersByTime(800);
-    });
-    expect(counter()).toBe('2 / 3');
   });
 
   it('좋아 stays on the card; swiping on afterwards sends no 넘김 (stays 좋아)', () => {
