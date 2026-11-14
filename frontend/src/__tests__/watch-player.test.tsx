@@ -111,12 +111,51 @@ describe('WatchPlayer sound kept across swaps (device log 2026-11-13)', () => {
     expect(yt.muted).toBe(false);
   });
 
-  it('really refused sound: back to muted playback after the check, the screen is told', async () => {
+  it('really refused sound: stopped without playing -> muted playback at the check, the screen is told', async () => {
     const { controller, yt, muted } = await mount();
     act(() => controller.current!.load('ddddddddddd', 0, true));
-    // the browser never starts it with sound
+    // the browser does not start it (unstarted, not loading)
+    yt.state = -1;
     act(() => {
       vi.advanceTimersByTime(1600);
+    });
+    expect(yt.muted).toBe(true);
+    expect(muted[muted.length - 1]).toBe(true);
+  });
+
+  it('slow load keeps the sound: still buffering at 1.5 s, PLAYING with sound at 4 s (2026-11-14)', async () => {
+    const { controller, yt, muted } = await mount();
+    act(() => controller.current!.load('eeeeeeeeeee', 0, true));
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    // the fixed 1.5 s check muted here
+    expect(yt.muted).toBe(false);
+    yt.state = PLAYING;
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(yt.muted).toBe(false);
+    expect(muted).not.toContain(true);
+  });
+
+  it('PLAYING but muted by the browser: back to muted state', async () => {
+    const { controller, yt, muted } = await mount();
+    act(() => controller.current!.load('fffffffffff', 0, true));
+    yt.state = PLAYING;
+    yt.lagMuted = true;
+    act(() => {
+      vi.advanceTimersByTime(1600);
+    });
+    expect(yt.muted).toBe(true);
+    expect(muted[muted.length - 1]).toBe(true);
+  });
+
+  it('still loading after 6 s: gives up on sound for this video', async () => {
+    const { controller, yt, muted } = await mount();
+    act(() => controller.current!.load('ggggggggggg', 0, true));
+    act(() => {
+      vi.advanceTimersByTime(6600);
     });
     expect(yt.muted).toBe(true);
     expect(muted[muted.length - 1]).toBe(true);

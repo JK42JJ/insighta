@@ -12,9 +12,12 @@ import { useWatchReporter } from '@/features/morning-feed/use-watch-reporter';
  * "an API Client must not initiate an automatic playback until the player is visible").
  *
  * Sound (README "음소거 단추 — 소리 상태 유지"): the screen asks for sound when the session's
- * setting is on. When the browser refuses playback with sound (onAutoplayBlocked, or no PLAYING
- * with sound within SOUND_CHECK_MS), the player goes back to muted playback and reports the
- * muted state — the button then shows it, nothing else (James 2026-11-13).
+ * setting is on. When the browser refuses playback with sound, the player goes back to muted
+ * playback and reports the muted state — the button then shows it, nothing else (James
+ * 2026-11-13). Refused means: onAutoplayBlocked, PLAYING but muted, stopped without playing
+ * (not loading), or still loading after SOUND_WAIT_MAX_MS. A video that is merely slow to load
+ * keeps its sound: a fixed 1.5 s check muted those (reproduced 2026-11-14, slow network:
+ * PLAYING at 4.7 s, muted at 1.5 s).
  */
 
 interface YtPlayer {
@@ -64,10 +67,13 @@ function ytApi(): YtApi | undefined {
 const API_SRC = 'https://www.youtube.com/iframe_api';
 /** YT.PlayerState */
 export const YT_PLAYING = 1;
+export const YT_BUFFERING = 3;
 /** How often the sound state (the player's own control) and the time are read. */
 export const PLAYER_POLL_MS = 250;
-/** No PLAYING with sound by then = the browser refused sound (same grace as the deck player). */
+/** The first sound check after a load (and the window in which isMuted() may lag on iOS). */
 export const SOUND_CHECK_MS = 1500;
+/** Still loading by then: give up on sound for this video. */
+export const SOUND_WAIT_MAX_MS = 6000;
 let apiPromise: Promise<YtApi> | null = null;
 
 function loadYouTubeApi(): Promise<YtApi> {
@@ -166,7 +172,8 @@ export function WatchPlayer({
     const mount = document.createElement('div');
     host.current?.appendChild(mount);
     const report = (p: YtPlayer): void => {
-      if (performance.now() < quietUntil) return;
+      // while a sound check is pending, the check decides (a reading during loading can lag)
+      if (performance.now() < quietUntil || soundCheck != null) return;
       const muted = p.isMuted();
       if (muted !== lastMuted) {
         lastMuted = muted;
@@ -216,11 +223,26 @@ export function WatchPlayer({
                     p.loadVideoById({ videoId, startSeconds: Math.max(0, startSeconds) });
                     intend(!withSound);
                     if (!withSound) return;
-                    soundCheck = window.setTimeout(() => {
+                    const started = performance.now();
+                    const check = (): void => {
                       soundCheck = null;
                       if (!alive || loaded !== videoId) return;
-                      if (p.getPlayerState() !== YT_PLAYING || p.isMuted()) fallBackToMuted(p);
-                    }, SOUND_CHECK_MS);
+                      const state = p.getPlayerState();
+                      if (state === YT_PLAYING) {
+                        if (p.isMuted()) fallBackToMuted(p);
+                        return;
+                      }
+                      // still loading: wait for PLAYING instead of muting a slow video
+                      if (
+                        state === YT_BUFFERING &&
+                        performance.now() - started < SOUND_WAIT_MAX_MS
+                      ) {
+                        soundCheck = window.setTimeout(check, PLAYER_POLL_MS);
+                        return;
+                      }
+                      fallBackToMuted(p);
+                    };
+                    soundCheck = window.setTimeout(check, SOUND_CHECK_MS);
                   } catch {
                     setFailed(true);
                   }
