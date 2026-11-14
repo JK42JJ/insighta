@@ -73,8 +73,9 @@ morningCards:
   enabled: true
   # Comma-separated staging test account user ids (jamesjk4242, jkim0420, stg-tester).
   testUserIds: "bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c,7285aac0-9011-4475-8081-64b74f1c0fff,0cd661ef-fd9d-4e87-89fe-65758ef4fc02"
-  # Virtual "today" for repeat tests (2026-11-14): jamesjk4242 only. Not set in prod.
-  virtualDayUserIds: "bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c"
+  # Virtual "today" for repeat tests (2026-11-14): jamesjk4242 and the scenario-test account
+  # (jkim0420, STG_JAMES_*). Not set in prod.
+  virtualDayUserIds: "bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c,7285aac0-9011-4475-8081-64b74f1c0fff"
 
 keel:
   enabled: false
