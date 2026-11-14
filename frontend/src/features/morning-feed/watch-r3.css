@@ -390,6 +390,10 @@
   color: var(--w3-text);
   max-height: 44px;
   overflow: hidden;
+  /* cut with "…" like the title, not mid-word (device feedback 2026-11-14) */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .mf-w3-checks {
   margin-top: 4px;
@@ -445,6 +449,12 @@
 .mf-w3-sum-t {
   font-size: 14px;
   line-height: 20px;
+  /* at most two lines on the card; the panel shows it whole */
+  max-height: 40px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .mf-w3-pts {
   margin-top: 12px;
@@ -575,22 +585,6 @@
 }
 .mf-w3-grow {
   flex: 1;
-}
-.mf-w3-more {
-  height: 44px;
-  padding: 0 4px 0 12px;
-  border: 0;
-  background: var(--w3-clear);
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--w3-steel);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  cursor: pointer;
-}
-.mf-w3-card[data-mode='imm'] .mf-w3-more {
-  color: var(--w3-on);
 }
 .mf-w3-gap {
   height: 8px;
