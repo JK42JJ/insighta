@@ -24,6 +24,7 @@ import './player-lab.css';
 
 interface LabPlayer {
   loadVideoById(id: string): void;
+  cueVideoById(id: string): void;
   playVideo(): void;
   pauseVideo(): void;
   mute(): void;
@@ -61,6 +62,22 @@ const SWAP_WAIT_MAX_MS = 6000;
 const DELAY_REVEAL_MS = 30;
 const DELAY_DISLIKE_MS = 800;
 const MAX_LOG = 200;
+/** Swap-method test (2026-11-14): when the arriving card's player is more than half visible. */
+const SWAP_REVEAL_MS = 20;
+const CUED = 5;
+
+/**
+ * How the next video replaces the current one (black-frame test, James 2026-11-14):
+ * - load: pause, then loadVideoById once the player is more than half visible (the watch screen)
+ * - cue: cueVideoById at the swipe (no playback), playVideo once more than half visible
+ * - cover: as load, but the next thumbnail is shown and the player is not displayed until PLAYING
+ * - cue-cover: cue + cover
+ */
+export type SwapMethod = 'load' | 'cue' | 'cover' | 'cue-cover';
+const SWAP_METHODS: readonly SwapMethod[] = ['load', 'cue', 'cover', 'cue-cover'];
+function parseSwapMethod(v: string | null): SwapMethod {
+  return (SWAP_METHODS as readonly string[]).includes(v ?? '') ? (v as SwapMethod) : 'load';
+}
 
 let apiPromise: Promise<LabApi> | null = null;
 function loadApi(): Promise<LabApi> {
@@ -111,6 +128,14 @@ export function PlayerLab(): JSX.Element {
   const check = useRef<number | null>(null);
   const loadedId = useRef('');
   const [width, setWidth] = useState(() => Math.min(window.innerWidth, 430));
+  const [method, setMethod] = useState<SwapMethod>(() => parseSwapMethod(q.get('swap')));
+  /** cover methods: the player is not displayed until the next video is PLAYING. */
+  const [covered, setCovered] = useState(false);
+  const coveredRef = useRef(false);
+  const swapStart = useRef(0);
+  /** cue methods: play as soon as both the reveal time has passed and the video is CUED. */
+  const playWhenCued = useRef<{ id: string; revealed: boolean; cued: boolean } | null>(null);
+  const [thumbId, setThumbId] = useState(videos[0] ?? '');
 
   const add = useCallback((line: string) => {
     const entry = stampText(performance.now() - t0.current) + '  ' + line;
@@ -182,6 +207,23 @@ export function PlayerLab(): JSX.Element {
               const s = Number(e.data);
               setState(stateName(s));
               add('상태: ' + stateName(s));
+              if (s === PLAYING && swapStart.current) {
+                add('교체 → 재생까지 ' + Math.round(performance.now() - swapStart.current) + 'ms');
+                swapStart.current = 0;
+              }
+              const pw = playWhenCued.current;
+              if (s === CUED && pw && pw.id === loadedId.current) {
+                pw.cued = true;
+                if (pw.revealed) {
+                  playWhenCued.current = null;
+                  e.target.playVideo();
+                  add('CUED → playVideo');
+                }
+              }
+              if (s === PLAYING && coveredRef.current) {
+                coveredRef.current = false;
+                setCovered(false);
+              }
               // check 4 (automatic): YouTube paused it after a tap -> sound on and play, no gesture
               if (s === PAUSED && autoRef.current && !wantSound.current) {
                 wantSound.current = true;
@@ -303,6 +345,51 @@ export function PlayerLab(): JSX.Element {
     };
     check.current = window.setTimeout(look, SOUND_CHECK_MS);
   };
+  /** Next video by the chosen method, muted (the feed), for the black-frame test. */
+  const swapByMethod = (): void => {
+    const p = player.current;
+    if (!p) return;
+    const next = (idx + 1) % videos.length;
+    const id = videos[next];
+    setIdx(next);
+    if (check.current != null) {
+      window.clearTimeout(check.current);
+      check.current = null;
+    }
+    wantSound.current = false;
+    lastMuted.current = true;
+    quietUntil.current = performance.now() + SOUND_CHECK_MS;
+    p.mute();
+    loadedId.current = id;
+    swapStart.current = performance.now();
+    setThumbId(id);
+    const cover = method === 'cover' || method === 'cue-cover';
+    if (cover) {
+      coveredRef.current = true;
+      setCovered(true);
+    }
+    add('방식 ' + method + ' → ' + id);
+    if (method === 'cue' || method === 'cue-cover') {
+      playWhenCued.current = { id, revealed: false, cued: false };
+      p.cueVideoById(id);
+      window.setTimeout(() => {
+        const pw = playWhenCued.current;
+        if (!pw || pw.id !== id) return;
+        pw.revealed = true;
+        if (pw.cued) {
+          playWhenCued.current = null;
+          p.playVideo();
+          add('reveal → playVideo');
+        }
+      }, SWAP_REVEAL_MS);
+    } else {
+      p.pauseVideo();
+      window.setTimeout(() => {
+        if (loadedId.current === id) p.loadVideoById(id);
+      }, SWAP_REVEAL_MS);
+    }
+  };
+
   /** The same swap started outside the tap, as the watch screen does (reveal wait, 별로 wait). */
   const swapLater = (delayMs: number): void => {
     add('단추 누름 → ' + delayMs + 'ms 뒤 교체');
@@ -333,7 +420,37 @@ export function PlayerLab(): JSX.Element {
           {muted ? '음소거' : '소리 켜짐'}
         </span>
       </div>
-      <div className="mf-lab-player" style={{ height: playerHeight(width) + 'px' }} ref={host} />
+      <div
+        className="mf-lab-player"
+        style={{ height: playerHeight(width) + 'px' }}
+        ref={host}
+        data-cover={covered ? '' : undefined}
+        data-testid="lab-player"
+      >
+        {thumbId ? (
+          <img
+            className="mf-lab-thumb"
+            src={'https://i.ytimg.com/vi/' + thumbId + '/hqdefault.jpg'}
+            alt=""
+          />
+        ) : null}
+      </div>
+      <div className="mf-lab-row">
+        {SWAP_METHODS.map((m) => (
+          <button
+            key={m}
+            type="button"
+            data-on={m === method ? '' : undefined}
+            onClick={() => setMethod(m)}
+            data-testid={'lab-method-' + m}
+          >
+            {m}
+          </button>
+        ))}
+        <button type="button" onClick={swapByMethod} data-testid="lab-next-method">
+          다음 영상 (방식)
+        </button>
+      </div>
       <div className="mf-lab-row">
         <button type="button" onClick={soundOn} data-testid="lab-sound-on">
           소리 켜기 (우리 단추)

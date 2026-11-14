@@ -30,6 +30,19 @@
   position: relative;
   background: var(--lab-player);
 }
+.mf-lab-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mf-lab-player[data-cover] iframe {
+  visibility: hidden;
+}
+.mf-lab-row button[data-on] {
+  outline: 2px solid currentColor;
+}
 .mf-lab-player iframe {
   position: absolute;
   inset: 0;
