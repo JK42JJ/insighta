@@ -1,6 +1,12 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { createMorningFeedRoutes } from '@/api/routes/morning-feed';
-import { listPages, readHomePages, readPage, validatePage } from '@/modules/morning-feed/pages';
+import {
+  listPages,
+  readHomePages,
+  readPage,
+  readPageCards,
+  validatePage,
+} from '@/modules/morning-feed/pages';
 import { FeedValidationError, type FeedDb } from '@/modules/morning-feed/feed';
 
 export {};
@@ -127,6 +133,46 @@ describe('page readers', () => {
     expect(home.others).toHaveLength(0);
     const none = fakeDb(() => []);
     expect((await readHomePages(none.db, USER, NOW)).current).toBeNull();
+  });
+  it('readPageCards: the page order, a card from the page for a video not in the pool, verdicts', async () => {
+    const page = {
+      ...pageRow(CELL, '2026-11-13', 'tech'),
+      videos: [
+        { video_id: VID, title: 'T', channel: 'C', useful_for: '' },
+        { video_id: 'zzzzzzzzzzz', title: 'not in pool', channel: 'C2', useful_for: '' },
+      ],
+    };
+    const ids = [VID, 'zzzzzzzzzzz'];
+    const { db, queries } = fakeDb((sql) => {
+      if (sql.includes('FROM public.morning_pages')) return [page];
+      if (sql.includes('video_pool'))
+        return [
+          {
+            cell: CELL,
+            focus: [],
+            why: 'w',
+            judge_score: null,
+            video_id: ids[0],
+            title: 'pool title',
+            channel_name: 'ch',
+            published_at: new Date('2026-11-01T00:00:00Z'),
+            duration_seconds: 300,
+            thumbnail_url: null,
+            view_count: 10,
+          },
+        ];
+      if (sql.includes('morning_card_judgments')) return [{ video_id: ids[0], verdict: 'useful' }];
+      return [];
+    });
+    const out = await readPageCards(db, USER, CELL, '2026-11-13');
+    expect(out?.items.map((c) => c.video_id)).toEqual(ids);
+    expect(out?.items[0]?.title).toBe('pool title');
+    expect(out?.items[1]).toMatchObject({ title: 'not in pool', channel: 'C2', duration: 0 });
+    expect(out?.judged).toEqual({ [ids[0]!]: 'useful' });
+    // read only
+    expect(queries.every((q) => /^\s*(SELECT|WITH)/i.test(q.sql))).toBe(true);
+    const none = fakeDb(() => []);
+    expect(await readPageCards(none.db, USER, CELL, '2026-11-13')).toBeNull();
   });
   it('readPage and listPages', async () => {
     const one = fakeDb(() => [pageRow(CELL, '2026-11-13', 'tech')]);

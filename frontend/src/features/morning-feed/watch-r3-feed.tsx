@@ -97,6 +97,13 @@ export interface WatchFeedProps {
   onSound: (on: boolean) => void;
   player: { current: PlayerController | null };
   renderPlayer: (events: R3PlayerEvents) => ReactNode;
+  /** The first video (initial.idx) starts at this second (a page's source link). */
+  startSeconds?: number;
+  /**
+   * false (a page's videos, 2026-11-14): swiping on records nothing and shows nothing; only
+   * 좋아/별로 are recorded, and only real verdicts are shown on cards.
+   */
+  recordPass?: boolean;
   /** Test hook (fixture): start in this state. */
   initial?: Partial<{
     idx: number;
@@ -227,7 +234,14 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
   const gesture = useRef({ y0: 0, down: false, drag: false, at: 0 });
   const wheelAt = useRef(0);
   /** Last position read per video: a card you come back to resumes there (James 2026-11-13). */
-  const positions = useRef(new Map<string, number>());
+  const positions = useRef(
+    new Map<string, number>(
+      p.startSeconds && p.videos[init.idx ?? 0]?.videoId
+        ? [[p.videos[init.idx ?? 0]!.videoId, p.startSeconds]]
+        : []
+    )
+  );
+  const recordPass = p.recordPass ?? true;
   const timeRef = useRef<(PlayerTick & { at: number }) | null>(null);
   const loadSeq = useRef(0);
 
@@ -366,7 +380,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
       const r = s.reacts.slice();
       if (kind === 'skip') {
         // swiped on: 넘김 only for a card without a verdict (좋아/별로 stay as they are)
-        if (!r[s.idx]) {
+        if (!r[s.idx] && recordPass) {
           r[s.idx] = 'skip';
           p.onVerdict(s.idx, 'pass');
         }
@@ -375,7 +389,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
       }
       move(s.idx + 1, 1, r);
     },
-    [move, n, p]
+    [move, n, p, recordPass]
   );
 
   const back = useCallback(() => {
@@ -585,7 +599,8 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
               const liked = r === 'like';
               const dis = r === 'dislike';
               const rx = isCur ? reacting : null;
-              const kind: R3Reaction | null = rx ?? (i < maxIdx ? (r ?? 'skip') : null);
+              const kind: R3Reaction | null =
+                rx ?? (recordPass ? (i < maxIdx ? (r ?? 'skip') : null) : (r ?? null));
               const nx = p.videos[i + 1];
               const nx2 = p.videos[i + 2];
               const lowHidden = imm && (i < idx || (isCur && moving));

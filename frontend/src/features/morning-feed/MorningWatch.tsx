@@ -44,7 +44,9 @@ import {
 import { ONB_LAST_STEP, WatchOnboarding } from '@/features/morning-feed/watch-screens';
 import { WatchPlayer, type PlayerController } from '@/features/morning-feed/WatchPlayer';
 import { WatchHome, type HomeHeadline } from '@/features/morning-feed/WatchHome';
-import { WatchPage, type PageRestChip } from '@/features/morning-feed/WatchPage';
+import { type PageRestChip } from '@/features/morning-feed/WatchPage';
+import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
+import type { PageWatchCards } from '@/features/morning-feed/PageWatch';
 import { WatchPast } from '@/features/morning-feed/WatchPast';
 import './watch.css';
 import './watch-r3.css';
@@ -78,6 +80,8 @@ export interface MorningWatchProps {
   today: WatchTodayMap;
   /** Creates (first call of the day) or reads today's batch of the goal. */
   loadBatch: (cellLabel: string) => Promise<WatchBatchView>;
+  /** A page's videos as watch cards with the existing verdicts (page -> watch screen). */
+  loadPageCards?: (cellLabel: string, date: string) => Promise<PageWatchCards | null>;
   /** 이전 주제, newest first (server). Empty = the section is not drawn. */
   history: FeedHistoryItem[];
   /** Daily home pages; with a page for the last watched domain the new home is shown. */
@@ -118,6 +122,7 @@ export function MorningWatch({
   loadBatch,
   history,
   pages = null,
+  loadPageCards,
   onJudge,
   whenSaved,
   connectYouTube,
@@ -283,6 +288,14 @@ export function MorningWatch({
         : []
     );
 
+  /** What a page needs to open its videos in the watch screen (session sound, judgments). */
+  const pageWatch: PageWatchBridge = {
+    load: (cell, date) => (loadPageCards ? loadPageCards(cell, date) : Promise.resolve(null)),
+    sound,
+    onSound: setSound,
+    onJudge: (video, verdict, index) => onJudge({ video, verdict, shownPosition: index }),
+  };
+
   let body: JSX.Element;
   if (screen.kind === 'onb') {
     body = <WatchOnboarding step={screen.step} busy={connecting} onNext={onbNext} />;
@@ -398,6 +411,7 @@ export function MorningWatch({
         rest={pageRest(screen.cell)}
         onHome={() => setScreen({ kind: 'input' })}
         onPast={() => setScreen({ kind: 'past', cell: screen.cell })}
+        pageWatch={pageWatch}
       />
     );
   } else if (screen.kind === 'past') {
@@ -441,6 +455,7 @@ export function MorningWatch({
         account={pageAccount}
         pageRest={pageRest(screen.goal.label)}
         onPast={() => setScreen({ kind: 'past', cell: screen.goal.label })}
+        pageWatch={pageWatch}
       />
     );
   }
@@ -452,6 +467,13 @@ export function MorningWatch({
       </div>
     </div>
   );
+}
+
+interface PageWatchBridge {
+  load: (cell: string, date: string) => Promise<PageWatchCards | null>;
+  sound: boolean;
+  onSound: (on: boolean) => void;
+  onJudge: (video: WatchVideo, verdict: WatchVerdict, index: number) => void;
 }
 
 /**
@@ -487,6 +509,7 @@ function LiveDone({
   account,
   pageRest,
   onPast,
+  pageWatch,
 }: {
   frame: ReturnType<typeof useWatchFrame>;
   goal: FeedCell;
@@ -500,6 +523,7 @@ function LiveDone({
   account: R3AccountView;
   pageRest: PageRestChip[];
   onPast: () => void;
+  pageWatch: PageWatchBridge;
 }): JSX.Element {
   const [data, setData] = useState<InsightData | null>(null);
   /** undefined = still reading; null = no page today (the done screen as it was). */
@@ -528,7 +552,7 @@ function LiveDone({
   if (page === undefined) return <div className="mf-w3-root" data-testid="mf-w-done-wait" />;
   if (page) {
     return (
-      <WatchPage
+      <PageWithWatch
         frame={frame}
         account={account}
         page={page}
@@ -537,6 +561,10 @@ function LiveDone({
         rest={pageRest}
         onHome={onClose}
         onPast={onPast}
+        loadCards={() => pageWatch.load(goal.label, page.seen_date)}
+        sound={pageWatch.sound}
+        onSound={pageWatch.onSound}
+        onJudge={pageWatch.onJudge}
       />
     );
   }
@@ -558,6 +586,7 @@ function LivePage({
   rest,
   onHome,
   onPast,
+  pageWatch,
 }: {
   frame: ReturnType<typeof useWatchFrame>;
   account: R3AccountView;
@@ -571,6 +600,7 @@ function LivePage({
   rest: PageRestChip[];
   onHome: () => void;
   onPast: () => void;
+  pageWatch: PageWatchBridge;
 }): JSX.Element {
   const [page, setPage] = useState<MorningPage | null | undefined>(known ?? undefined);
   const [order, setOrder] = useState<Array<{ key: string; title: string }>>([]);
@@ -603,7 +633,7 @@ function LivePage({
   }, [page, onHome]);
   if (!page) return <div className="mf-w3-root" data-testid="mf-page-wait" />;
   return (
-    <WatchPage
+    <PageWithWatch
       frame={frame}
       account={account}
       page={page}
@@ -612,6 +642,10 @@ function LivePage({
       rest={rest}
       onHome={onHome}
       onPast={onPast}
+      loadCards={() => pageWatch.load(cell, page.seen_date)}
+      sound={pageWatch.sound}
+      onSound={pageWatch.onSound}
+      onJudge={pageWatch.onJudge}
     />
   );
 }

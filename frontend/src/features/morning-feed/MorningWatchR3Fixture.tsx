@@ -18,7 +18,8 @@ import {
 import type { BootStage } from '@/features/morning-feed/watch-boot-stage';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 import { WatchHome } from '@/features/morning-feed/WatchHome';
-import { WatchPage } from '@/features/morning-feed/WatchPage';
+import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
+import { toFeedCard } from '@/features/morning-feed/feed-format';
 import { WatchPast } from '@/features/morning-feed/WatchPast';
 import pageFixture from '@/features/morning-feed/page-fixture.json';
 import type { MorningPage } from '@/features/morning-cards/api';
@@ -400,7 +401,7 @@ export function MorningWatchR3Fixture({
   if (screen === 'page') {
     const pg = pageFixture as MorningPage;
     body = (
-      <WatchPage
+      <PageWithWatch
         frame={frame}
         account={account}
         page={pg}
@@ -409,6 +410,33 @@ export function MorningWatchR3Fixture({
         rest={CHIPS.slice(1).map((c) => ({ cell: c, title: c, onPick: () => setScreen('feed') }))}
         onHome={() => setScreen('home')}
         onPast={() => setScreen('past')}
+        // fixture: the page's own titles as cards (the live screen reads /pages/cards)
+        loadCards={() =>
+          Promise.resolve({
+            items: pg.videos.map((v) => ({
+              ...toFeedCard(
+                {
+                  video_id: v.video_id,
+                  title: v.title,
+                  channel: v.channel,
+                  published_at: '2026-11-10T00:00:00Z',
+                  duration: 600,
+                  view_count: null,
+                  thumbnail_url: 'https://i.ytimg.com/vi/' + v.video_id + '/hqdefault.jpg',
+                  cell: '기술/개발',
+                  focus: [],
+                  why: v.useful_for,
+                } as never,
+                ['#16273f']
+              ),
+              durationSec: 600,
+            })),
+            judged: {},
+          })
+        }
+        sound={sound}
+        onSound={setSound}
+        onJudge={() => undefined}
       />
     );
   } else if (screen === 'past') {

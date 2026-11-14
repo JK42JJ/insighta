@@ -19,7 +19,13 @@ import {
   saveFeedJudgment,
   type FeedDb,
 } from '@/modules/morning-feed/feed';
-import { listPages, readHomePages, readPage, isRealDate } from '@/modules/morning-feed/pages';
+import {
+  listPages,
+  readHomePages,
+  readPage,
+  readPageCards,
+  isRealDate,
+} from '@/modules/morning-feed/pages';
 import { withAmbient } from '@/modules/morning-feed/thumb-ambient';
 import { userIdOf } from '@/api/utils/request-user';
 
@@ -238,6 +244,22 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         const userId = guard(request, reply);
         if (!userId) return reply;
         const data = await readHomePages(deps.getDb(), userId, new Date());
+        return reply.send({ status: 'ok', data });
+      }
+    );
+
+    // a page's videos as watch-screen cards with the existing verdicts (page -> watch screen)
+    fastify.get<{ Querystring: { cell?: unknown; date?: unknown } }>(
+      '/pages/cards',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const { cell, date } = request.query;
+        if (!isFeedCell(cell) || !isRealDate(date)) {
+          return reply.code(400).send({ status: 'error', error: 'invalid_page' });
+        }
+        const data = await readPageCards(deps.getDb(), userId, cell, date);
         return reply.send({ status: 'ok', data });
       }
     );

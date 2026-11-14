@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  fetchMorningPageCards,
   postFeedJudgment,
   postWatchBatch,
   undoFeedJudgment,
@@ -135,6 +136,17 @@ export function MorningWatchLive(): JSX.Element {
     return { items, judged };
   }, []);
 
+  const loadPageCards = useCallback(async (cellLabel: string, date: string) => {
+    const res = await fetchMorningPageCards(cellLabel, date);
+    if (!res) return null;
+    const items: WatchVideo[] = res.items.map((c) => ({
+      ...toFeedCard(c, PALETTE),
+      durationSec: c.duration,
+    }));
+    const judged: Record<string, WatchVerdict> = { ...res.judged };
+    return { items, judged };
+  }, []);
+
   const whenSaved = useCallback(
     () =>
       new Promise<void>((resolve) => {
@@ -186,6 +198,7 @@ export function MorningWatchLive(): JSX.Element {
       loadBatch={loadBatch}
       history={state.history}
       pages={state.pages}
+      loadPageCards={loadPageCards}
       onJudge={onJudge}
       whenSaved={whenSaved}
       connectYouTube={connectYouTube}

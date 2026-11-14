@@ -9,8 +9,12 @@ import {
   goalCellLabels,
   isFeedCell,
   kstDayString,
+  selectBatchCards,
+  selectWatchVerdicts,
   WATCH_SURFACE,
+  type FeedCard,
   type FeedDb,
+  type FeedVerdict,
 } from '@/modules/morning-feed/feed';
 
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -273,4 +277,49 @@ export async function listPages(
     PAGES_LIST_MAX
   );
   return rows.map((r) => ({ seen_date: String(r.seen_date), headline: r.headline }));
+}
+
+export interface PageCards {
+  /** The page's videos as watch-screen cards, in the page's list order. */
+  items: FeedCard[];
+  /** This user's latest live watch verdict per video; unanswered videos are absent. */
+  judged: Record<string, FeedVerdict>;
+}
+
+/**
+ * GET /pages/cards (decision 2026-11-14, page -> watch screen): the cards of one page's videos,
+ * read the same way as a daily batch (video_pool + card info + reason) plus the existing verdicts.
+ * A video missing from video_pool still gets a card from the page's own title and channel. Read only;
+ * null when the page does not exist.
+ */
+export async function readPageCards(
+  db: FeedDb,
+  userId: string,
+  cell: string,
+  date: string
+): Promise<PageCards | null> {
+  const page = await readPage(db, userId, cell, date);
+  if (!page) return null;
+  const ids = page.videos.map((v) => v.video_id);
+  const [cards, judged] = await Promise.all([
+    selectBatchCards(db, ids, cell),
+    selectWatchVerdicts(db, userId, ids),
+  ]);
+  const byId = new Map(cards.map((c) => [c.video_id, c]));
+  const items = page.videos.map(
+    (v): FeedCard =>
+      byId.get(v.video_id) ?? {
+        video_id: v.video_id,
+        title: v.title,
+        channel: v.channel,
+        published_at: '',
+        duration: 0,
+        view_count: null,
+        thumbnail_url: null,
+        cell,
+        focus: [],
+        why: '',
+      }
+  );
+  return { items, judged };
 }

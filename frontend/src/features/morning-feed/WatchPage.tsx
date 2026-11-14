@@ -40,6 +40,8 @@ export interface WatchPageProps {
   rest: PageRestChip[];
   onHome: () => void;
   onPast: () => void;
+  /** A source link or a source row: that video in the watch screen (absent = YouTube). */
+  onOpenVideo?: OpenVideo;
 }
 
 const FADE_IN_MS = 450;
@@ -52,7 +54,10 @@ function reducedMotion(): boolean {
   );
 }
 
-function Cites({ links }: { links: CiteLink[] }): JSX.Element {
+/** In the app (2026-11-14): a link opens the watch screen; the address stays as the fallback. */
+type OpenVideo = (videoId: string, t: number) => void;
+
+function Cites({ links, onOpen }: { links: CiteLink[]; onOpen?: OpenVideo }): JSX.Element {
   return (
     <>
       {links.map((c, i) => (
@@ -64,6 +69,14 @@ function Cites({ links }: { links: CiteLink[] }): JSX.Element {
           href={c.href}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={
+            onOpen
+              ? (e) => {
+                  e.preventDefault();
+                  onOpen(c.videoId, c.t);
+                }
+              : undefined
+          }
         >
           {c.label}
         </a>
@@ -162,7 +175,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                 data-cited={c.sources.length > 0 ? '' : undefined}
               >
                 {c.sources.length > 0 ? c.text + ' ' : c.text}
-                <Cites links={citeLinks(c.sources, channelOf)} />
+                <Cites links={citeLinks(c.sources, channelOf)} onOpen={p.onOpenVideo} />
               </p>
             ))}
           </div>
@@ -201,7 +214,10 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                               data-cited={q.sources.length > 0 ? '' : undefined}
                             >
                               {q.sources.length > 0 ? q.text + ' ' : q.text}
-                              <Cites links={citeLinks(q.sources, channelOf)} />
+                              <Cites
+                                links={citeLinks(q.sources, channelOf)}
+                                onOpen={p.onOpenVideo}
+                              />
                             </p>
                           ))}
                         </div>
@@ -223,6 +239,14 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                 href={youtubeAt(v.video_id)}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={
+                  p.onOpenVideo
+                    ? (e) => {
+                        e.preventDefault();
+                        p.onOpenVideo?.(v.video_id, 0);
+                      }
+                    : undefined
+                }
               >
                 <div className="mf-page-video-text">
                   <div className="mf-page-video-title">{v.title}</div>

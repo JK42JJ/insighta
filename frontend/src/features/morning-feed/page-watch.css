@@ -1,0 +1,24 @@
+/* A page's videos over the page (decision 2026-11-14, step 1): slide in from the right. */
+.mf-pw {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  animation: mf-pw-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes mf-pw-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-pw {
+    animation: none;
+  }
+}
+.mf-pw-host {
+  position: absolute;
+  inset: 0;
+}

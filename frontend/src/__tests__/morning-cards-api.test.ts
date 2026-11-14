@@ -13,6 +13,7 @@ import {
   fetchMorningCardsReview,
   fetchMorningFeedHistory,
   fetchMorningPage,
+  fetchMorningPageCards,
   fetchMorningPageList,
   fetchMorningPagesHome,
   fetchWatchInsight,
@@ -102,7 +103,11 @@ describe('morning cards api client', () => {
     expect(await fetchMorningPagesHome()).toEqual(home);
     await fetchMorningPage('기술/개발', '2026-11-14');
     await fetchMorningPageList('기술/개발');
+    await fetchMorningPageCards('기술/개발', '2026-11-14');
     const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(decodeURIComponent(urls[3]!)).toMatch(
+      /\/api\/v1\/morning-feed\/pages\/cards\?cell=기술\/개발&date=2026-11-14$/
+    );
     expect(urls[0]).toMatch(/\/api\/v1\/morning-feed\/pages\/home$/);
     expect(decodeURIComponent(urls[1]!)).toMatch(
       /\/api\/v1\/morning-feed\/pages\?cell=기술\/개발&date=2026-11-14$/

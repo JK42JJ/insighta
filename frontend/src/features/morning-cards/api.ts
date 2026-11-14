@@ -368,6 +368,25 @@ export async function fetchMorningPage(cell: string, date: string): Promise<Morn
   return res.data;
 }
 
+/** A page's videos as watch-screen cards, page order, with this user's existing verdicts. */
+export interface PageCardsDto {
+  items: FeedApiCard[];
+  judged: Record<string, InsightVerdict>;
+}
+
+export async function fetchMorningPageCards(
+  cell: string,
+  date: string
+): Promise<PageCardsDto | null> {
+  const q = '?cell=' + encodeURIComponent(cell) + '&date=' + encodeURIComponent(date);
+  const res = await call<{ status: 'ok'; data: PageCardsDto | null }>(
+    '/pages/cards' + q,
+    {},
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
 /** Past pages of one domain, newest first (seen date and headline). */
 export async function fetchMorningPageList(
   cell: string

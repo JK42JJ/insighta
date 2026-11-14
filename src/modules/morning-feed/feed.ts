@@ -665,8 +665,12 @@ async function selectBatchIds(
   return rows[0] ? [...rows[0].video_ids] : null;
 }
 
-/** The batch videos as feed cards, in batch order. */
-async function selectBatchCards(db: FeedDb, ids: string[], cell: string): Promise<FeedCard[]> {
+/** The batch videos as feed cards, in batch order (also the page's videos, pages.ts). */
+export async function selectBatchCards(
+  db: FeedDb,
+  ids: string[],
+  cell: string
+): Promise<FeedCard[]> {
   if (ids.length === 0) return [];
   const rows = await db.$queryRawUnsafe<FeedRow[]>(
     `SELECT COALESCE(a.cell, $2) AS cell, a.focus, COALESCE(a.why, '') AS why, a.judge_score,
@@ -688,7 +692,7 @@ async function selectBatchCards(db: FeedDb, ids: string[], cell: string): Promis
 }
 
 /** Latest live watch-screen verdict per video, for this user and these videos. */
-async function selectWatchVerdicts(
+export async function selectWatchVerdicts(
   db: FeedDb,
   userId: string,
   ids: string[]

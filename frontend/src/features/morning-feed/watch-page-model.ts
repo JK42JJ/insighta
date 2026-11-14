@@ -9,6 +9,9 @@ export interface PageSourceRef {
 }
 
 export interface CiteLink {
+  videoId: string;
+  /** Seconds into the video; 0 = from the start. */
+  t: number;
   /** 'AI Engineer 16:01' for the first time of a video, '· 3:55' for the next ones. */
   label: string;
   href: string;
@@ -66,11 +69,13 @@ export function citeLinks(
     const ts = times.get(id) ?? [];
     const timed = ts.filter((t) => t > 0);
     if (timed.length === 0) {
-      out.push({ label: ch || id, href: youtubeAt(id), gap: 2 });
+      out.push({ videoId: id, t: 0, label: ch || id, href: youtubeAt(id), gap: 2 });
       continue;
     }
     timed.forEach((t, i) =>
       out.push({
+        videoId: id,
+        t,
         label: i === 0 ? (ch ? ch + ' ' : '') + stampOf(t) : '· ' + stampOf(t),
         href: youtubeAt(id, t),
         gap: i === 0 ? 2 : 3,
