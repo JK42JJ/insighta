@@ -53,6 +53,9 @@ export function usePressFeedback(root: RefObject<HTMLElement>): void {
       if (pressed && e.pointerId === pressed.id) release();
     };
 
+    // a link or a picture is never dragged out of the screen
+    const noDrag = (e: DragEvent): void => e.preventDefault();
+    host.addEventListener('dragstart', noDrag, { capture: true });
     host.addEventListener('pointerdown', onDown, { capture: true, passive: true });
     window.addEventListener('pointermove', onMove, { capture: true, passive: true });
     window.addEventListener('pointerup', onEnd, { capture: true, passive: true });
@@ -62,6 +65,7 @@ export function usePressFeedback(root: RefObject<HTMLElement>): void {
     window.addEventListener('blur', release);
     return () => {
       release();
+      host.removeEventListener('dragstart', noDrag, { capture: true });
       host.removeEventListener('pointerdown', onDown, { capture: true });
       window.removeEventListener('pointermove', onMove, { capture: true });
       window.removeEventListener('pointerup', onEnd, { capture: true });

@@ -27,8 +27,17 @@ function readHomePages(): Promise<MorningHomePages | null> {
   return fetchMorningPagesHome().catch((): null => null);
 }
 
+/** One more try after a failed brief read before anything else is asked. */
+const HOME_RETRY_MS = 600;
+
 async function readStart(): Promise<WatchStart> {
-  const pages = await readHomePages();
+  // a participant may only read briefs: a failed read is tried again rather than falling back to
+  // the experiment's routes (which answer 403 for them)
+  let pages = await readHomePages();
+  if (!pages) {
+    await new Promise((r) => setTimeout(r, HOME_RETRY_MS));
+    pages = await readHomePages();
+  }
   if (pages && pages.experiment === false && pages.cells && pages.cells.length > 0) {
     return [null, [], pages];
   }

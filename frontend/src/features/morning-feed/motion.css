@@ -87,6 +87,13 @@
   }
 }
 
+/* ── Web feel: links and pictures are not dragged away (a press-and-move on an iPad or a Mac
+   started a link drag, and the browser then stopped sending the presses) ── */
+.mf-w-app a,
+.mf-w-app img {
+  -webkit-user-drag: none;
+}
+
 /* ── Web feel: no selection or long-press menu on controls, the brief text stays selectable ── */
 .mf-w-app {
   user-select: none;
