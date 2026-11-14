@@ -72,14 +72,6 @@
   line-height: 1.7;
   letter-spacing: -0.01em;
 }
-/* decision 2026-11-14: a core sentence's sources on a new line under it, 4 px above */
-.mf-page-core-src {
-  margin-top: 4px;
-  line-height: 1.7;
-}
-.mf-page-core-src .mf-page-cite[data-gap='6']:first-child {
-  margin-left: 0;
-}
 .mf-page-cite {
   font-family:
     'Pretendard Variable',
@@ -89,13 +81,14 @@
   font-weight: 500;
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
+  display: inline-block;
   white-space: nowrap;
   color: var(--h-sub);
   text-decoration: underline;
   text-decoration-color: var(--h-line);
   text-underline-offset: 3px;
   padding: 14px 2px;
-  margin: -14px 0 -14px 6px;
+  margin: -14px 0 -14px 2px;
 }
 .mf-page-cite[data-gap='3'] {
   margin-left: 3px;

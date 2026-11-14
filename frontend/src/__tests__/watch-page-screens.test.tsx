@@ -30,7 +30,7 @@ const PAGE: MorningPage = {
 };
 
 describe('한 장 page (2026-11-14)', () => {
-  it('core sources sit on their own line under the sentence; note sources end the paragraph', () => {
+  it('sources follow the text after one space, core sentences and note paragraphs alike (revised handoff)', () => {
     render(
       <WatchPage
         frame={FRAME}
@@ -43,11 +43,12 @@ describe('한 장 page (2026-11-14)', () => {
       />
     );
     const core = screen.getByTestId('mf-page-core');
-    const line = core.querySelector('.mf-page-core-src');
-    expect(line?.textContent).toBe('AI Engineer 16:01');
-    expect(core.querySelector('.mf-page-core-p')?.textContent).toBe('핵심 문장 하나.');
+    expect(core.querySelector('.mf-page-core-src')).toBeNull();
+    expect(core.querySelector('.mf-page-core-p')?.textContent).toBe(
+      '핵심 문장 하나. AI Engineer 16:01'
+    );
     const para = screen.getByTestId('mf-page-note').querySelector('.mf-page-para');
-    expect(para?.textContent).toBe('문단.AI Engineer 0:30');
+    expect(para?.textContent).toBe('문단. AI Engineer 0:30');
     const cite = screen.getAllByTestId('mf-page-cite')[0] as HTMLAnchorElement;
     expect(cite.href).toBe('https://www.youtube.com/watch?v=QHBjufYK8TA&t=961s');
     expect(cite.target).toBe('_blank');

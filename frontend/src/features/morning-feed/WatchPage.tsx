@@ -16,10 +16,10 @@ import './watch-page.css';
 /*
  * "한 장" (design handoff "design_handoff_insighta_page", PagePhone.dc.html is the reference):
  * one domain's day as one long scrolling page. Pretendard body, the source list with thumbnails,
- * light background only (decisions 2026-11-14). One change from the design: the source links of a
- * core sentence sit on a new line under it (4 px above) instead of at its end, where the last word
- * alone dropped to the next line; note paragraphs keep them at the end as designed. Every source
- * link and source row opens YouTube at that second in a new window (no in-app playback).
+ * light background only (decisions 2026-11-14). Source links follow the revised handoff: one space
+ * after the last character, then each link as an inline-block that does not wrap inside, so only
+ * the links move to the next line and the last word stays (core sentences and note paragraphs
+ * alike). Every source link and source row opens YouTube at that second in a new window.
  */
 
 export interface PageRestChip {
@@ -156,14 +156,10 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
 
           <div className="mf-page-core" data-testid="mf-page-core">
             {pg.core.map((c, i) => (
-              <div key={i}>
-                <p className="mf-page-core-p">{c.text}</p>
-                {c.sources.length > 0 ? (
-                  <div className="mf-page-core-src">
-                    <Cites links={citeLinks(c.sources, channelOf)} />
-                  </div>
-                ) : null}
-              </div>
+              <p key={i} className="mf-page-core-p">
+                {c.sources.length > 0 ? c.text + ' ' : c.text}
+                <Cites links={citeLinks(c.sources, channelOf)} />
+              </p>
             ))}
           </div>
 
@@ -196,7 +192,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                         <div className="mf-page-paras">
                           {s.paragraphs.map((q, k) => (
                             <p key={k} className="mf-page-para">
-                              {q.text}
+                              {q.sources.length > 0 ? q.text + ' ' : q.text}
                               <Cites links={citeLinks(q.sources, channelOf)} />
                             </p>
                           ))}

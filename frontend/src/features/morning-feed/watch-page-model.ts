@@ -12,8 +12,11 @@ export interface CiteLink {
   /** 'AI Engineer 16:01' for the first time of a video, '· 3:55' for the next ones. */
   label: string;
   href: string;
-  /** Space before the link: 6 px after the text, 3 px between times of one video. */
-  gap: 6 | 3;
+  /**
+   * Space before the link (README §출처 표시, revised): 2 px after the text's trailing space,
+   * 3 px between times of one video.
+   */
+  gap: 2 | 3;
 }
 
 const SEC_PER_MIN = 60;
@@ -63,14 +66,14 @@ export function citeLinks(
     const ts = times.get(id) ?? [];
     const timed = ts.filter((t) => t > 0);
     if (timed.length === 0) {
-      out.push({ label: ch || id, href: youtubeAt(id), gap: 6 });
+      out.push({ label: ch || id, href: youtubeAt(id), gap: 2 });
       continue;
     }
     timed.forEach((t, i) =>
       out.push({
         label: i === 0 ? (ch ? ch + ' ' : '') + stampOf(t) : '· ' + stampOf(t),
         href: youtubeAt(id, t),
-        gap: i === 0 ? 6 : 3,
+        gap: i === 0 ? 2 : 3,
       })
     );
   }

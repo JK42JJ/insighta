@@ -24,9 +24,9 @@ describe('page source links (README §출처 표시)', () => {
       (id) => CH[id] ?? ''
     );
     expect(l.map((x) => [x.label, x.gap])).toEqual([
-      ['Sean AI 3:30', 6],
+      ['Sean AI 3:30', 2],
       ['· 3:55', 3],
-      ['AI Engineer 16:01', 6],
+      ['AI Engineer 16:01', 2],
     ]);
     expect(l[1]!.href).toMatch(/t=235s$/);
   });
