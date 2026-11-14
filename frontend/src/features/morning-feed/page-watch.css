@@ -1,0 +1,25 @@
+/*
+ * A brief's videos over the brief (decision 2026-11-14). The slide itself is run by
+ * PageWithWatch with the shared values (motion-tokens.ts); nothing animates here.
+ */
+.mf-pw-host {
+  position: absolute;
+  inset: 0;
+}
+.mf-pw-under {
+  position: absolute;
+  inset: 0;
+}
+.mf-pw-under[data-covered] {
+  visibility: hidden;
+  pointer-events: none;
+}
+.mf-pw {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+}
+.mf-pw-body {
+  position: absolute;
+  inset: 0;
+}

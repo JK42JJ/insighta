@@ -1,0 +1,133 @@
+/* First open of the watch screen (design 수정 4 §8). Tokens defined here only. */
+.mf-boot {
+  --boot-paper: #f7f5f0;
+  --boot-navy: #16273f;
+  --boot-steel: #3a6ea5;
+  --boot-line: #e2dfd6;
+  --boot-white: #ffffff;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: var(--boot-paper);
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', Arial, sans-serif;
+}
+@keyframes mf-boot-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+.mf-boot-logo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.mf-boot-char {
+  width: 72px;
+  height: 72px;
+  border-radius: 36px 36px 36px 11px;
+  background: var(--boot-steel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.mf-boot-eye {
+  width: 9px;
+  height: 13px;
+  border-radius: 5px;
+  background: var(--boot-white);
+}
+.mf-boot-name {
+  font: 800 22px Arial, sans-serif;
+  color: var(--boot-navy);
+  letter-spacing: 0.02em;
+}
+/* the line's place is kept empty until the line stage */
+.mf-boot-line {
+  width: 120px;
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.mf-boot-line[data-on] {
+  background: var(--boot-line);
+}
+.mf-boot-run {
+  height: 100%;
+  width: 40%;
+  background: var(--boot-steel);
+  animation: mf-boot-slide 1s linear infinite;
+}
+.mf-boot-skel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--boot-safe-top, env(safe-area-inset-top, 0px)) + 10px) 22px
+    calc(var(--boot-safe-bottom, env(safe-area-inset-bottom, 0px)) + 18px);
+}
+.mf-boot-head {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mf-boot-brand {
+  font: 800 15px Arial, sans-serif;
+  color: var(--boot-navy);
+  letter-spacing: 0.02em;
+}
+.mf-boot-av {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background: var(--boot-line);
+}
+.mf-boot-wide-line {
+  height: 3px;
+  flex: none;
+  margin: 0 -22px;
+  background: var(--boot-line);
+  overflow: hidden;
+}
+.mf-boot-card {
+  height: 170px;
+  flex: none;
+  margin-top: 10px;
+  border-radius: 14px;
+  background: var(--boot-line);
+}
+.mf-boot-grow {
+  flex: 1;
+}
+.mf-boot-ask {
+  width: 60%;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--boot-line);
+}
+.mf-boot-chips {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 28px;
+}
+.mf-boot-chip {
+  height: 44px;
+  border-radius: 22px;
+  background: var(--boot-line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-boot-run {
+    animation: none;
+  }
+}

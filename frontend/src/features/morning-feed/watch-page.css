@@ -1,0 +1,412 @@
+/*
+ * "한 장" page, design handoff "design_handoff_insighta_page" (README §한 장 — 배치, 본문 글자
+ * 값 Pretendard, 출처 표시, 움직임). Colours come from the home tokens (.mf-home) plus the line.
+ */
+.mf-page {
+  --h-line: #e2dfd6;
+}
+.mf-page-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: calc(var(--w3-safe-top, 0px) + 4px) 22px calc(var(--w3-safe-bottom, 0px) + 28px);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+/* the top safe area is covered so text does not pass under the status bar */
+.mf-page-safe-top {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--w3-safe-top, 0px);
+  background: var(--h-bg);
+  z-index: 2;
+  pointer-events: none;
+}
+.mf-page-top {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mf-page-brand {
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: var(--h-clear);
+  text-align: left;
+  cursor: pointer;
+}
+.mf-page-meta {
+  height: 18px;
+  margin: 28px 0 14px;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  display: flex;
+  gap: 8px;
+}
+.mf-page-dom {
+  font-weight: 700;
+  color: var(--h-accent);
+}
+.mf-page-core {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.mf-page-core-p,
+.mf-page-para {
+  margin: 0;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+  font-synthesis: none;
+}
+/*
+ * With source links: plain wrapping (decision 2026-11-14, measured on the real page at 320/390/430
+ * in Chrome and WebKit): text-wrap: pretty pulled the last word down with the links in 2 to 4
+ * places at 390; wrap never did.
+ */
+.mf-page-core-p[data-cited],
+.mf-page-para[data-cited] {
+  text-wrap: wrap;
+}
+.mf-page-core-p {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.7;
+  letter-spacing: -0.01em;
+}
+.mf-page-cite {
+  font-family:
+    'Pretendard Variable',
+    Pretendard,
+    sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  white-space: nowrap;
+  color: var(--h-sub);
+  text-decoration: underline;
+  text-decoration-color: var(--h-line);
+  text-underline-offset: 3px;
+  padding: 14px 2px;
+  margin: -14px 0 -14px 2px;
+}
+.mf-page-cite-group {
+  display: inline-block;
+  white-space: nowrap;
+}
+.mf-page-cite[data-gap='3'] {
+  margin-left: 3px;
+}
+.mf-page-toggle {
+  margin-top: 28px;
+  height: 46px;
+  min-width: 58%;
+  padding: 0 18px 0 22px;
+  border: 1px solid var(--h-line);
+  border-radius: 23px;
+  background: var(--h-clear);
+  color: var(--h-fg);
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.mf-page-sign {
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--h-sub);
+}
+/* note: grid rows 0fr <-> 1fr (README §움직임, 전체 노트 펼치기) */
+.mf-page-note {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) 0.08s;
+}
+.mf-page-note[data-open] {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mf-page-note-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.mf-page-note-body {
+  padding-top: 4px;
+  opacity: 0;
+  transition: opacity 0.12s ease-in;
+}
+.mf-page-note[data-open] .mf-page-note-body {
+  opacity: 1;
+  transition: opacity 0.24s ease-out 0.08s;
+}
+.mf-page-note[data-still],
+.mf-page-note[data-still] .mf-page-note-body {
+  transition: none;
+}
+.mf-page-h2 {
+  margin: 32px 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+  font-synthesis: none;
+}
+.mf-page-paras {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.mf-page-para {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.78;
+  letter-spacing: -0.005em;
+}
+.mf-page-src {
+  margin-top: 48px;
+}
+.mf-page-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--h-sub);
+  margin-bottom: 12px;
+}
+.mf-page-video {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px 0;
+  border-top: 1px solid var(--h-line);
+  color: inherit;
+  text-decoration: none;
+}
+.mf-page-video-text {
+  flex: 1;
+  min-width: 0;
+}
+.mf-page-video-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.42;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mf-page-video-ch {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--h-sub);
+  margin-top: 5px;
+}
+.mf-page-video-use {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--h-sub);
+  margin-top: 6px;
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+.mf-page-thumb {
+  flex: none;
+  width: 80px;
+  height: 45px;
+  margin-top: 3px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--h-line);
+}
+.mf-page-order {
+  border-top: 1px solid var(--h-line);
+  border-bottom: 1px solid var(--h-line);
+}
+.mf-page-order-btn {
+  width: 100%;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  background: var(--h-clear);
+  color: var(--h-fg);
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mf-page-order-list {
+  padding-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mf-page-order-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+/* more than 20 rows: 20 rows tall (20 x 20 px + 19 gaps of 10 px), scrolling inside */
+.mf-page-order-list[data-capped] {
+  max-height: 590px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.mf-page-order-n {
+  flex: none;
+  width: 16px;
+  font: 700 12px Arial, sans-serif;
+  color: var(--h-sub);
+}
+.mf-page-order-t {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mf-page-rest {
+  margin-top: 40px;
+}
+/* 오늘의 영상 모두 보기: the same link as 지난 장 모두 보기, above 다른 도메인 */
+.mf-page-today {
+  margin-top: 40px;
+  display: flex;
+  width: fit-content;
+}
+.mf-page-today + .mf-page-rest {
+  margin-top: 20px;
+}
+.mf-page-past {
+  margin-top: 20px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: var(--h-clear);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--h-fg);
+  text-decoration: underline;
+  text-decoration-color: var(--h-line);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.mf-page-past-arrow {
+  font-weight: 500;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-page-note,
+  .mf-page-note .mf-page-note-body {
+    transition: none;
+  }
+}
+
+/* 지난 장 목록 (README §지난 장 목록) */
+.mf-past-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  margin-bottom: 16px;
+}
+.mf-past-dom {
+  margin: 22px 0 8px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: var(--h-fg);
+}
+.mf-past-row {
+  display: block;
+  width: 100%;
+  padding: 18px 0 20px;
+  border: 0;
+  border-bottom: 1px solid var(--h-line);
+  background: var(--h-clear);
+  color: inherit;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+.mf-past-date {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--h-sub);
+  margin-bottom: 7px;
+}
+.mf-past-head {
+  font-family: 'Noto Serif KR', serif;
+  font-weight: 500;
+  line-height: 1.38;
+  letter-spacing: -0.03em;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-wrap: balance;
+  font-variant-numeric: lining-nums;
+  font-synthesis: none;
+}
+
+/* top-left back, the video screen's way (decision 2026-11-14 user test): arrow + where it goes */
+.mf-back {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  height: 44px;
+  margin-left: -6px;
+  padding: 0;
+  border: 0;
+  background: var(--h-clear);
+  color: var(--h-fg);
+  font: 600 15px var(--w3-num, inherit);
+  cursor: pointer;
+}
+.mf-back-label {
+  line-height: 20px;
+}
+
+/* 이 브리프가 쓸모 있었나요 (decision 2026-11-14 user test): the video card's buttons */
+.mf-page-fb {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid var(--h-line);
+}
+.mf-page-fb-q {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--h-fg);
+}
+.mf-page-fb-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.mf-page-fb-err {
+  font-size: 13px;
+  color: var(--h-sub);
+}

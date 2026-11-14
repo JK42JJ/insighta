@@ -51,22 +51,25 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
+/** One read of the YouTube OAuth connection status (the query below uses it). */
+export async function fetchYouTubeAuthStatus(): Promise<YouTubeAuthStatus> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(getEdgeFunctionUrl('status'), { headers });
+
+  if (!response.ok) {
+    throw new Error('Failed to get auth status');
+  }
+
+  return response.json();
+}
+
 /**
  * Hook to check YouTube OAuth connection status
  */
 export function useYouTubeAuthStatus() {
   return useQuery({
     queryKey: youtubeAuthKeys.status,
-    queryFn: async (): Promise<YouTubeAuthStatus> => {
-      const headers = await getAuthHeaders();
-      const response = await fetch(getEdgeFunctionUrl('status'), { headers });
-
-      if (!response.ok) {
-        throw new Error('Failed to get auth status');
-      }
-
-      return response.json();
-    },
+    queryFn: fetchYouTubeAuthStatus,
     staleTime: 60 * 1000, // 1 minute
   });
 }
