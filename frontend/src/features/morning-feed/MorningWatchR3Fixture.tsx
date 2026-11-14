@@ -18,6 +18,10 @@ import {
 import type { BootStage } from '@/features/morning-feed/watch-boot-stage';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 import { WatchHome } from '@/features/morning-feed/WatchHome';
+import { WatchPage } from '@/features/morning-feed/WatchPage';
+import { WatchPast } from '@/features/morning-feed/WatchPast';
+import pageFixture from '@/features/morning-feed/page-fixture.json';
+import type { MorningPage } from '@/features/morning-cards/api';
 import './watch.css';
 import './watch-r3.css';
 
@@ -121,6 +125,20 @@ const HOME_SENTENCES = [
   '에이전트의 성패는 모델보다 평가 체계에서 갈린다',
   '2026년의 에이전트 서비스는 모델 크기가 아니라 기억과 검증의 설계로 나뉘고 있다',
 ];
+/** The page handoff's past-list samples (README: examples only). */
+const PAST_ROWS = [
+  { seen_date: '2026-11-14', headline: '값싼 모델이 비싼 모델보다 비용이 더 많이 들 수 있다' },
+  {
+    seen_date: '2026-11-13',
+    headline: 'AI Agent 서비스는 모델이 아니라 기억과 검증에서 승부가 난다',
+  },
+  { seen_date: '2026-11-12', headline: '에이전트의 성패는 모델보다 평가 체계에서 갈린다' },
+  {
+    seen_date: '2026-11-11',
+    headline: '2026년의 에이전트 서비스는 모델 크기가 아니라 기억과 검증의 설계로 나뉘고 있다',
+  },
+  { seen_date: '2026-11-10', headline: '실패 원인 설명은 에이전트 개선에 가장 중요한 정보다' },
+];
 /** Domains with a page in the home fixture: the first three chips. */
 const HOME_PAGE_CHIPS = 3;
 const GOAL = '기술·개발';
@@ -132,7 +150,7 @@ type Reaction = 'like' | 'dislike' | 'skip';
 const DONE_R: Reaction[] = ['like', 'dislike', 'skip', 'skip', 'skip'];
 
 interface Preset {
-  screen: 'input' | 'feed' | 'done' | 'boot' | 'home';
+  screen: 'input' | 'feed' | 'done' | 'boot' | 'home' | 'page' | 'past';
   /** home: index into HOME_SENTENCES for the first domain (s29 / s21 / s36 order). */
   homeFirst?: number;
   /** home: the button is hidden (no videos left today). */
@@ -168,6 +186,8 @@ const R3_PRESETS: Record<string, Preset> = {
   'home-s21': { screen: 'home', homeFirst: 1 },
   'home-s36': { screen: 'home', homeFirst: 2 },
   'home-noenter': { screen: 'home', homeNoEnter: true },
+  page: { screen: 'page' },
+  past: { screen: 'past' },
   'input-done': { screen: 'input', doneToday: true, reacts: DONE_R },
   'input-carry': { screen: 'input', carry: true },
   feed: { screen: F, prog: 4 },
@@ -376,7 +396,34 @@ export function MorningWatchR3Fixture({
   const [reacts, setReacts] = useState<Reaction[]>(pr.reacts ?? []);
 
   let body: JSX.Element;
-  if (screen === 'home') {
+  const account = { name: '[이름]', email: '[이메일]', onLogout: () => undefined };
+  if (screen === 'page') {
+    const pg = pageFixture as MorningPage;
+    body = (
+      <WatchPage
+        frame={frame}
+        account={account}
+        page={pg}
+        domainTitle={CHIPS[0]!}
+        order={pg.videos.map((v) => ({ key: v.video_id, title: v.title }))}
+        rest={CHIPS.slice(1).map((c) => ({ cell: c, title: c, onPick: () => setScreen('feed') }))}
+        onHome={() => setScreen('home')}
+        onPast={() => setScreen('past')}
+      />
+    );
+  } else if (screen === 'past') {
+    body = (
+      <WatchPast
+        frame={frame}
+        account={account}
+        chips={CHIPS.map((c) => ({ cell: c, title: c }))}
+        initial={CHIPS[0]!}
+        load={(cell) => Promise.resolve(cell === CHIPS[0] ? PAST_ROWS : [])}
+        onOpen={() => setScreen('page')}
+        onHome={() => setScreen('home')}
+      />
+    );
+  } else if (screen === 'home') {
     const first = pr.homeFirst ?? 0;
     const pages = Object.fromEntries(
       CHIPS.slice(0, HOME_PAGE_CHIPS).map((c, i) => [
@@ -397,8 +444,8 @@ export function MorningWatchR3Fixture({
         initial={CHIPS[0]!}
         canEnter={() => !pr.homeNoEnter}
         onOpen={() => setScreen('feed')}
-        onOpenPage={() => undefined}
-        onPast={() => undefined}
+        onOpenPage={() => setScreen('page')}
+        onPast={() => setScreen('past')}
       />
     );
   } else if (screen === 'boot') {

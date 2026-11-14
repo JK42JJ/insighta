@@ -45,3 +45,10 @@ export function seenDateLabel(day: string): string {
   if (Number.isNaN(d.getTime()) || d.getUTCDate() !== Number(m[3])) return '';
   return d.getUTCMonth() + 1 + '월 ' + d.getUTCDate() + '일 ' + WEEKDAYS[d.getUTCDay()];
 }
+
+/** 지난 장 목록 headline (page README): (width − 44) ÷ 16.5, to 0.5 px; 320 -> 16.5, 390 -> 21, 430 -> 23.5. */
+const PAST_PER_LINE = 16.5;
+export function pastHeadlinePx(width: number): number {
+  const w = Math.min(HOME_MAX_W, Math.max(HOME_MIN_W, width));
+  return Math.round((w - SIDE_PX) / PAST_PER_LINE / ROUND_STEP) * ROUND_STEP;
+}

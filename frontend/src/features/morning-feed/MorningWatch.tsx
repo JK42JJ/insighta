@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  fetchMorningPage,
+  fetchMorningPageList,
   fetchWatchInsight,
   type FeedHistoryItem,
   type InsightData,
   type MorningHomePages,
+  type MorningPage,
 } from '@/features/morning-cards/api';
 import { useAuth } from '@/features/auth/model/useAuth';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
@@ -13,6 +16,7 @@ import {
   historyMetaText,
   insightViewFromData,
   kstDateLabel,
+  kstDay,
   readOnboardingSeen,
   writeOnboardingSeen,
   type InsightView,
@@ -33,12 +37,15 @@ import { r3VideoOf } from '@/features/morning-feed/watch-r3-video';
 import {
   WatchDoneR3,
   WatchInputR3,
+  type R3AccountView,
   type R3ChipView,
   type R3InputState,
 } from '@/features/morning-feed/watch-r3-screens';
 import { ONB_LAST_STEP, WatchOnboarding } from '@/features/morning-feed/watch-screens';
 import { WatchPlayer, type PlayerController } from '@/features/morning-feed/WatchPlayer';
 import { WatchHome, type HomeHeadline } from '@/features/morning-feed/WatchHome';
+import { WatchPage, type PageRestChip } from '@/features/morning-feed/WatchPage';
+import { WatchPast } from '@/features/morning-feed/WatchPast';
 import './watch.css';
 import './watch-r3.css';
 
@@ -93,7 +100,11 @@ type Screen =
       /** Index of each list entry in the batch (shown_position). */
       positions: number[];
     }
-  | { kind: 'insight'; goal: FeedCell };
+  | { kind: 'insight'; goal: FeedCell }
+  /** 한 장 of a domain and seen date (from the home headline or the past list). */
+  | { kind: 'page'; cell: string; date: string }
+  /** 지난 장 목록, starting at a domain. */
+  | { kind: 'past'; cell: string };
 
 const R3_TO_VERDICT: Record<R3Verdict, WatchVerdict> = {
   useful: 'useful',
@@ -258,6 +269,20 @@ export function MorningWatch({
   const watchList = screen.kind === 'watch' ? screen.list : null;
   const watchVideos = useMemo(() => (watchList ?? []).map(r3VideoOf), [watchList]);
 
+  const pageAccount = {
+    name: userName ?? '',
+    email: userEmail ?? '',
+    avatarUrl: userAvatar,
+    onLogout: () => void signOut(),
+  };
+  /** 한 장's 남은 도메인: goals with videos left today, the page's own domain left out. */
+  const pageRest = (cell: string): PageRestChip[] =>
+    goals.flatMap((g) =>
+      g.label !== cell && chipOf(g).kind === 'open'
+        ? [{ cell: g.label, title: g.short, onPick: () => openGoal(g) }]
+        : []
+    );
+
   let body: JSX.Element;
   if (screen.kind === 'onb') {
     body = <WatchOnboarding step={screen.step} busy={connecting} onNext={onbNext} />;
@@ -297,6 +322,11 @@ export function MorningWatch({
           const g = cellOf(cell);
           if (g) openGoal(g);
         }}
+        onOpenPage={(cell) => {
+          const h = home.pages[cell];
+          if (h) setScreen({ kind: 'page', cell, date: h.seenDate });
+        }}
+        onPast={(cell) => setScreen({ kind: 'past', cell })}
       />
     ) : (
       <WatchInputR3
@@ -350,6 +380,38 @@ export function MorningWatch({
         )}
       />
     );
+  } else if (screen.kind === 'page') {
+    const known = pages?.current;
+    body = (
+      <LivePage
+        key={screen.cell + screen.date}
+        frame={frame}
+        account={pageAccount}
+        cell={screen.cell}
+        title={shortOf(screen.cell)}
+        date={screen.date}
+        known={
+          known && known.domain === screen.cell && known.seen_date === screen.date ? known : null
+        }
+        today={kstDay(now)}
+        shortOf={shortOf}
+        rest={pageRest(screen.cell)}
+        onHome={() => setScreen({ kind: 'input' })}
+        onPast={() => setScreen({ kind: 'past', cell: screen.cell })}
+      />
+    );
+  } else if (screen.kind === 'past') {
+    body = (
+      <WatchPast
+        frame={frame}
+        account={pageAccount}
+        chips={goals.map((g) => ({ cell: g.label, title: g.short }))}
+        initial={screen.cell}
+        load={fetchMorningPageList}
+        onOpen={(cell, date) => setScreen({ kind: 'page', cell, date })}
+        onHome={() => setScreen({ kind: 'input' })}
+      />
+    );
   } else {
     // 다 본 뒤: the goals with videos left today, in the home's chip order, nothing highlighted
     const rest = goals.flatMap((g) => {
@@ -375,6 +437,10 @@ export function MorningWatch({
         whenSaved={whenSaved}
         rest={rest}
         onClose={() => setScreen({ kind: 'input' })}
+        today={kstDay(now)}
+        account={pageAccount}
+        pageRest={pageRest(screen.goal.label)}
+        onPast={() => setScreen({ kind: 'past', cell: screen.goal.label })}
       />
     );
   }
@@ -417,6 +483,10 @@ function LiveDone({
   whenSaved,
   rest,
   onClose,
+  today,
+  account,
+  pageRest,
+  onPast,
 }: {
   frame: ReturnType<typeof useWatchFrame>;
   goal: FeedCell;
@@ -425,8 +495,15 @@ function LiveDone({
   /** Goals with videos left today, home chip order. */
   rest: R3ChipView[];
   onClose: () => void;
+  /** Today in KST ('YYYY-MM-DD'): the day whose page replaces this screen when it exists. */
+  today: string;
+  account: R3AccountView;
+  pageRest: PageRestChip[];
+  onPast: () => void;
 }): JSX.Element {
   const [data, setData] = useState<InsightData | null>(null);
+  /** undefined = still reading; null = no page today (the done screen as it was). */
+  const [page, setPage] = useState<MorningPage | null | undefined>(undefined);
   useEffect(() => {
     let on = true;
     void whenSaved()
@@ -437,8 +514,104 @@ function LiveDone({
       on = false;
     };
   }, [whenSaved, goal.label]);
+  useEffect(() => {
+    let on = true;
+    fetchMorningPage(goal.label, today)
+      .then((pg) => on && setPage(pg))
+      .catch(() => on && setPage(null));
+    return () => {
+      on = false;
+    };
+  }, [goal.label, today]);
   const view = data && data.reacted + data.passed > 0 ? insightViewFromData(data, shortOf) : null;
+  // a page for today replaces 다 본 뒤 (decision 2026-11-14); nothing is drawn while it is read
+  if (page === undefined) return <div className="mf-w3-root" data-testid="mf-w-done-wait" />;
+  if (page) {
+    return (
+      <WatchPage
+        frame={frame}
+        account={account}
+        page={page}
+        domainTitle={goal.short}
+        order={(view?.rows ?? []).map((r) => ({ key: r.key, title: r.title }))}
+        rest={pageRest}
+        onHome={onClose}
+        onPast={onPast}
+      />
+    );
+  }
   return (
     <WatchDoneR3 frame={frame} goalTitle={goal.short} view={view} rest={rest} onClose={onClose} />
+  );
+}
+
+/** 한 장 opened from the home or the past list; 본 순서 only for a page of today. */
+function LivePage({
+  frame,
+  account,
+  cell,
+  title,
+  date,
+  known,
+  today,
+  shortOf,
+  rest,
+  onHome,
+  onPast,
+}: {
+  frame: ReturnType<typeof useWatchFrame>;
+  account: R3AccountView;
+  cell: string;
+  title: string;
+  date: string;
+  /** Already read with the home (no second read). */
+  known: MorningPage | null;
+  today: string;
+  shortOf: (label: string) => string;
+  rest: PageRestChip[];
+  onHome: () => void;
+  onPast: () => void;
+}): JSX.Element {
+  const [page, setPage] = useState<MorningPage | null | undefined>(known ?? undefined);
+  const [order, setOrder] = useState<Array<{ key: string; title: string }>>([]);
+  useEffect(() => {
+    let on = true;
+    if (!known) {
+      fetchMorningPage(cell, date)
+        .then((pg) => on && setPage(pg))
+        .catch(() => on && setPage(null));
+    }
+    if (date === today) {
+      fetchWatchInsight(cell)
+        .then((d) => {
+          if (!on || d.reacted + d.passed === 0) return;
+          setOrder(
+            insightViewFromData(d, shortOf).rows.map((r) => ({ key: r.key, title: r.title }))
+          );
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      on = false;
+    };
+    // one page per mount (keyed by cell and date)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // not found: back to the home (the link that led here is stale)
+  useEffect(() => {
+    if (page === null) onHome();
+  }, [page, onHome]);
+  if (!page) return <div className="mf-w3-root" data-testid="mf-page-wait" />;
+  return (
+    <WatchPage
+      frame={frame}
+      account={account}
+      page={page}
+      domainTitle={title}
+      order={order}
+      rest={rest}
+      onHome={onHome}
+      onPast={onPast}
+    />
   );
 }

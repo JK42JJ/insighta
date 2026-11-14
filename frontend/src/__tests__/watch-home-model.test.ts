@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { headlineSize, seenDateLabel } from '@/features/morning-feed/watch-home-model';
+import {
+  headlineSize,
+  pastHeadlinePx,
+  seenDateLabel,
+} from '@/features/morning-feed/watch-home-model';
 
 const S21 = '에이전트의 성패는 모델보다 평가 체계에서 갈린다';
 const S29 = 'AI Agent 서비스는 모델이 아니라 기억과 검증에서 승부가 난다';
@@ -27,5 +31,11 @@ describe('seen date label', () => {
   it('empty for anything that is not a real date', () => {
     expect(seenDateLabel('2026-02-30')).toBe('');
     expect(seenDateLabel('11/13')).toBe('');
+  });
+});
+
+describe('past list headline size', () => {
+  it('(width − 44) ÷ 16.5: 16.5 / 21 / 23.5 px', () => {
+    expect([320, 390, 430].map(pastHeadlinePx)).toEqual([16.5, 21, 23.5]);
   });
 });
