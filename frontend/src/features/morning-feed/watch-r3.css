@@ -160,27 +160,26 @@
   touch-action: none;
 }
 .mf-w3-stack {
+  position: relative;
   will-change: transform;
 }
 .mf-w3-stack[data-anim] {
   transition: transform var(--w3-dur) var(--w3-ease);
 }
 
-/* the one player, above the current card's player slot; it never moves in the DOM */
+/*
+ * The one player, inside the card stack over the current card's slot (top set inline): the
+ * stack's transform moves it with the cards. It never moves to another parent.
+ */
 .mf-w3-player-layer {
   position: absolute;
   left: 0;
   right: 0;
-  top: 52px;
   z-index: 1;
   visibility: hidden;
-  will-change: transform;
 }
 .mf-w3-player-layer[data-shown] {
   visibility: visible;
-}
-.mf-w3-player-layer[data-anim] {
-  transition: transform var(--w3-dur) var(--w3-ease);
 }
 .mf-w3-yt {
   position: absolute;
@@ -1449,9 +1448,15 @@ button.mf-w3-navy-card {
 .mf-w3-root[data-land] .mf-w3-loading {
   visibility: hidden;
 }
+/* the stack's transform would make the fixed player relative to the stack: lifted while sideways */
+.mf-w3-root[data-land] .mf-w3-stack {
+  transform: none !important;
+  will-change: auto;
+}
 .mf-w3-root[data-land] .mf-w3-player-layer {
   position: fixed;
   inset: 0;
+  top: 0 !important;
   height: auto !important;
   transform: none !important;
   transition: none;

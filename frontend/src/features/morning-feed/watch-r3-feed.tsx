@@ -215,17 +215,14 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
   const [reacting, setReacting] = useState<'like' | 'dislike' | null>(init.reacting ?? null);
   const [failed, setFailed] = useState(false);
   /** Player layer: offset from its resting place, animated or not, shown or not. */
-  const [layer, setLayer] = useState({ y: 0, anim: false, shown: init.phase === 'player' });
   /**
-   * During a card move the layer follows the arriving card's player slot frame by frame
-   * (2026-11-14: a separate transition started two frames late and from a place that ignored the
-   * finger's drag, so the player showed up to 259 px below its slot). React leaves the transform
-   * alone meanwhile.
+   * The one player sits inside the card stack (scenario test 2026-11-14: the iPhone showed it
+   * shaking against its card). The stack's single transform moves the cards and the player
+   * together, so they cannot be drawn on different beats. The player is placed on the current
+   * card's slot (top = that card's offset in the stack + the channel row) and is never moved to
+   * another parent, so the YouTube iframe is never reloaded. Hidden while a move starts.
    */
-  const [following, setFollowing] = useState(false);
-  const viewportEl = useRef<HTMLDivElement>(null);
-  const layerEl = useRef<HTMLDivElement>(null);
-  const followRaf = useRef<number | null>(null);
+  const [layer, setLayer] = useState({ shown: init.phase === 'player' });
   const [ready, setReady] = useState(false);
 
   const timers = useRef<number[]>([]);
@@ -250,31 +247,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
   }, []);
   useEffect(() => {
     const t = timers.current;
-    return () => {
-      t.forEach((x) => window.clearTimeout(x));
-      if (followRaf.current != null) cancelAnimationFrame(followRaf.current);
-    };
-  }, []);
-
-  /** Puts the layer on card `i`'s player slot every frame until stopped. */
-  const followSlot = useCallback((i: number) => {
-    if (followRaf.current != null) cancelAnimationFrame(followRaf.current);
-    const step = (): void => {
-      const vp = viewportEl.current;
-      const el = layerEl.current;
-      const slot = vp?.querySelectorAll<HTMLElement>('[data-testid="mf-w3-slot"]')[i];
-      if (vp && el && slot) {
-        const y = slot.getBoundingClientRect().top - vp.getBoundingClientRect().top - el.offsetTop;
-        el.style.transform = 'translateY(' + Math.round(y) + 'px)';
-      }
-      followRaf.current = requestAnimationFrame(step);
-    };
-    step();
-  }, []);
-  const stopFollow = useCallback(() => {
-    if (followRaf.current != null) cancelAnimationFrame(followRaf.current);
-    followRaf.current = null;
-    setFollowing(false);
+    return () => t.forEach((x) => window.clearTimeout(x));
   }, []);
 
   const f = p.frame;
@@ -348,11 +321,9 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
       loadSeq.current++;
       const arriving = next < n;
       const distance = dir === 1 ? (cards[s.idx]?.h ?? 0) : (cards[next]?.h ?? 0);
-      // the layer rests at 0 when the move ends; until then it follows the arriving slot
-      setLayer({ y: 0, anim: false, shown: false });
+      // the player goes to the arriving card's slot inside the stack and moves with it
+      setLayer({ shown: false });
       if (arriving) {
-        setFollowing(true);
-        followSlot(next);
         const delay = revealDelayMs({
           dir,
           distance,
@@ -365,12 +336,11 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
         }, delay);
       }
       later(() => {
-        stopFollow();
         setSettling(false);
         if (!arriving) p.onFinish();
       }, SETTLE_MS);
     },
-    [cards, f.playerH, followSlot, later, n, p, startVideo, stopFollow, viewportH]
+    [cards, f.playerH, later, n, p, startVideo, viewportH]
   );
 
   const advance = useCallback(
@@ -577,7 +547,6 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
         </div>
 
         <div
-          ref={viewportEl}
           className="mf-w3-viewport"
           data-testid="mf-w3-viewport"
           onPointerDown={onPointerDown}
@@ -883,22 +852,17 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
               <div className="mf-w3-kick">오늘 본 것</div>
               <div className="mf-w3-end-goal">{p.goalTitle}</div>
             </div>
-          </div>
-
-          <div
-            className="mf-w3-player-layer"
-            data-shown={layer.shown && idx < n && !p.loading ? '' : undefined}
-            ref={layerEl}
-            data-anim={layer.anim && !dragging && !following ? '' : undefined}
-            data-testid="mf-watch-player"
-            style={{
-              height: f.playerH + 'px',
-              transform: following
-                ? undefined
-                : 'translateY(' + Math.round(layer.y + (moving ? dy : 0)) + 'px)',
-            }}
-          >
-            {p.renderPlayer(events)}
+            <div
+              className="mf-w3-player-layer"
+              data-shown={layer.shown && idx < n && !p.loading ? '' : undefined}
+              data-testid="mf-watch-player"
+              style={{
+                height: f.playerH + 'px',
+                top: offs[Math.min(idx, Math.max(0, n - 1))]! + CHANNEL_ROW_H + 'px',
+              }}
+            >
+              {p.renderPlayer(events)}
+            </div>
           </div>
 
           {p.loading ? (

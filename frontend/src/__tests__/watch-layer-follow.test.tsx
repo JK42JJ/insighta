@@ -2,9 +2,9 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SETTLE_MS, WatchFeed, type R3Video } from '@/features/morning-feed/watch-r3-feed';
+import { CHANNEL_ROW_H } from '@/features/morning-feed/watch-r3-layout';
 
 const FRAME = { vh: 642, safeTop: 0, safeBottom: 0, playerH: 219 };
-const FRAME_MS = 16;
 
 function video(i: number): R3Video {
   return {
@@ -25,14 +25,11 @@ function video(i: number): R3Video {
   };
 }
 
-describe('player layer follows the arriving slot during a move (2026-11-14)', () => {
+describe('the player moves with its card by one transform (scenario test 2026-11-14)', () => {
   beforeEach(() => vi.useFakeTimers());
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
+  afterEach(() => vi.useRealTimers());
 
-  it('every frame of the move the layer sits on the arriving slot, then rests at 0', () => {
+  it("the player is inside the card stack, on the current card's slot, and stays the same element", () => {
     render(
       <WatchFeed
         goalTitle="기술·개발"
@@ -46,34 +43,25 @@ describe('player layer follows the arriving slot during a move (2026-11-14)', ()
         sound={false}
         onSound={() => undefined}
         player={{ current: null }}
-        renderPlayer={() => <div />}
+        renderPlayer={() => <div data-testid="the-player" />}
       />
     );
-    const viewport = screen.getByTestId('mf-w3-viewport');
-    const slots = screen.getAllByTestId('mf-w3-slot');
-    // the arriving slot moves up while the card moves: 500 px, then 300 px below the viewport top
-    let slotTop = 500;
-    vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({ top: 100 } as DOMRect);
-    vi.spyOn(slots[1]!, 'getBoundingClientRect').mockImplementation(
-      () => ({ top: slotTop }) as DOMRect
-    );
     const layer = screen.getByTestId('mf-watch-player');
+    const node = screen.getByTestId('the-player');
+    // one transform for both: the layer is a child of the moving stack, with no transform of its own
+    expect(layer.parentElement?.classList.contains('mf-w3-stack')).toBe(true);
+    expect(layer.style.transform).toBe('');
+    expect(layer.style.top).toBe(CHANNEL_ROW_H + 'px');
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
     });
     act(() => {
-      vi.advanceTimersByTime(FRAME_MS * 2);
-    });
-    expect(layer.style.transform).toBe('translateY(400px)');
-    expect(layer.hasAttribute('data-anim')).toBe(false);
-    slotTop = 300;
-    act(() => {
-      vi.advanceTimersByTime(FRAME_MS * 2);
-    });
-    expect(layer.style.transform).toBe('translateY(200px)');
-    act(() => {
       vi.advanceTimersByTime(SETTLE_MS);
     });
-    expect(layer.style.transform).toBe('translateY(0px)');
+    // on the second card's slot: the first card's height + the channel row
+    expect(parseFloat(layer.style.top)).toBeGreaterThan(CHANNEL_ROW_H);
+    // the same layer and the same player element (never re-created, so YouTube never reloads)
+    expect(screen.getByTestId('mf-watch-player')).toBe(layer);
+    expect(screen.getByTestId('the-player')).toBe(node);
   });
 });
