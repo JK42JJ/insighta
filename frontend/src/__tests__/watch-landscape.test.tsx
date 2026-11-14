@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { PHONE_LANDSCAPE_QUERY } from '@/features/morning-feed/use-phone-landscape';
+import { COARSE_QUERY, SIDEWAYS_QUERY } from '@/features/morning-feed/use-phone-landscape';
 import { WatchFeed, type R3Video } from '@/features/morning-feed/watch-r3-feed';
 
 const FRAME = { vh: 642, safeTop: 0, safeBottom: 0, playerH: 219 };
@@ -27,7 +27,7 @@ function video(i: number): R3Video {
 
 function phone(sideways: boolean): void {
   vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: sideways && q === PHONE_LANDSCAPE_QUERY,
+    matches: (sideways && q === SIDEWAYS_QUERY) || q === COARSE_QUERY,
     media: q,
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
@@ -75,6 +75,24 @@ describe('phone held sideways (decision 2026-11-14): player only, no moving betw
     expect(s.root.hasAttribute('data-land')).toBe(false);
     s.scroll();
     expect(s.counter()).toBe('2 / 3');
+  });
+
+  it('touch points count as a touch device when the coarse pointer is not reported yet; a desktop stays off', () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({
+      matches: q === SIDEWAYS_QUERY,
+      media: q,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    const touch = vi.spyOn(navigator, 'maxTouchPoints', 'get').mockReturnValue(5);
+    const a = mount();
+    expect(a.root.hasAttribute('data-land')).toBe(true);
+    a.root.parentElement?.remove();
+    touch.mockReturnValue(0);
+    document.body.innerHTML = '';
+    const d = mount();
+    expect(d.root.hasAttribute('data-land')).toBe(false);
+    touch.mockRestore();
   });
 
   it('sideways while the videos are loading: nothing to show, the mode stays off', () => {

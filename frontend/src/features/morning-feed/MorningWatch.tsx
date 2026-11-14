@@ -46,6 +46,7 @@ import {
 import { ONB_LAST_STEP, WatchOnboarding } from '@/features/morning-feed/watch-screens';
 import { WatchPlayer, type PlayerController } from '@/features/morning-feed/WatchPlayer';
 import { WatchHome, type HomeHeadline } from '@/features/morning-feed/WatchHome';
+import { useScreenHistory } from '@/features/morning-feed/use-screen-history';
 import { type PageRestChip } from '@/features/morning-feed/WatchPage';
 import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
 import { TestClockControls } from '@/features/morning-feed/TestClockControls';
@@ -138,8 +139,10 @@ export function MorningWatch({
   const { userName, userEmail, userAvatar, signOut } = useAuth();
   const app = useRef<HTMLDivElement>(null);
   const frame = useWatchFrame(app);
-  const [screen, setScreen] = useState<Screen>(() =>
-    readOnboardingSeen() ? { kind: 'input' } : { kind: 'onb', step: 0 }
+  // every screen change is a browser history entry (back returns to the previous screen)
+  const [screen, setScreen] = useScreenHistory<Screen>(
+    () => (readOnboardingSeen() ? { kind: 'input' } : { kind: 'onb', step: 0 }),
+    sameScreen
   );
   const [connecting, setConnecting] = useState(false);
   // today's state per goal, moved on locally with each batch and answer so no reload is needed
@@ -496,7 +499,7 @@ export function MorningWatch({
         shortOf={shortOf}
         whenSaved={whenSaved}
         rest={rest}
-        onClose={() => setScreen({ kind: 'input', focus: screen.goal.label })}
+        onClose={() => setScreen({ kind: 'input', focus: screen.goal.label }, { replace: true })}
         today={dayToday}
         goalText={goalText}
         account={pageAccount}
@@ -516,6 +519,13 @@ export function MorningWatch({
       </div>
     </div>
   );
+}
+
+/** The same screen updated (a batch arriving, the onboarding's next step): no new history entry. */
+function sameScreen(a: Screen, b: Screen): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'watch' && b.kind === 'watch') return a.goal.label === b.goal.label;
+  return a.kind === 'onb';
 }
 
 interface PageWatchBridge {
