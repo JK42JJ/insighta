@@ -66,6 +66,15 @@
   text-wrap: pretty;
   font-synthesis: none;
 }
+/*
+ * With source links: plain wrapping (decision 2026-11-14, measured on the real page at 320/390/430
+ * in Chrome and WebKit): text-wrap: pretty pulled the last word down with the links in 2 to 4
+ * places at 390; wrap never did.
+ */
+.mf-page-core-p[data-cited],
+.mf-page-para[data-cited] {
+  text-wrap: wrap;
+}
 .mf-page-core-p {
   font-size: 17px;
   font-weight: 500;

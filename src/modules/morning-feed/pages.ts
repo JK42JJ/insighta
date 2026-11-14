@@ -9,6 +9,7 @@ import {
   goalCellLabels,
   isFeedCell,
   kstDayString,
+  WATCH_SURFACE,
   type FeedDb,
 } from '@/modules/morning-feed/feed';
 
@@ -179,8 +180,13 @@ function rowToPage(r: PageRow): Page {
 const PAGE_COLUMNS = `p.cell, to_char(p.seen_date, 'YYYY-MM-DD') AS seen_date, p.headline, p.core, p.note, p.videos`;
 
 /**
- * Watch home: the page of the user's most recent watch domain, plus the newest page of every
- * other domain (headline and date only, goal cell order). "Today" is the KST day containing `now`.
+ * Watch home (decision 2026-11-14): `lastDomain` is the domain of the user's most recent watch
+ * judgment (not the newest batch: batches can be created ahead of time, and a batch made earlier
+ * does not move when it is watched). `current` is that domain's newest page; when it has none, the
+ * newest page of any domain (newest seen date, then goal cell order). So a user with at least one
+ * page always gets the new home; `current` is null only when there is no page at all. `others` is
+ * the newest page of every other domain, headline and date only, goal cell order. "Today" is the
+ * KST day containing `now`; pages after it are not shown.
  */
 export async function readHomePages(
   db: FeedDb,
@@ -190,11 +196,12 @@ export async function readHomePages(
   if (!userId) throw new FeedValidationError('user_id required');
   const today = kstDayString(now);
   const last = await db.$queryRawUnsafe<Array<{ cell: string }>>(
-    `SELECT b.cell FROM public.morning_watch_batches b
-      WHERE b.user_id = $1::uuid AND b.day <= $2::date AND b.cell = ANY($3::text[])
-      ORDER BY b.day DESC, b.created_at DESC LIMIT 1`,
+    `SELECT j.cell FROM public.morning_card_judgments j
+      WHERE j.user_id = $1::uuid AND j.surface = $2 AND j.canceled_at IS NULL
+        AND j.cell = ANY($3::text[])
+      ORDER BY j.created_at DESC LIMIT 1`,
     userId,
-    today,
+    WATCH_SURFACE,
     goalCellLabels()
   );
   const lastDomain = last[0] && isFeedCell(last[0].cell) ? last[0].cell : null;
@@ -209,11 +216,20 @@ export async function readHomePages(
     goalCellLabels()
   );
   const byCell = new Map(newest.map((r) => [r.cell, r]));
-  const currentRow = lastDomain ? byCell.get(lastDomain) : undefined;
+  const order = FEED_CELLS.filter((c) => c.dom !== -1).map((c) => c.label);
+  // fallback: newest seen date; equal dates keep goal cell order
+  const newestAny = order
+    .map((label) => byCell.get(label))
+    .filter((r): r is PageRow => !!r)
+    .reduce<PageRow | undefined>(
+      (best, r) => (!best || String(r.seen_date) > String(best.seen_date) ? r : best),
+      undefined
+    );
+  const currentRow = (lastDomain ? byCell.get(lastDomain) : undefined) ?? newestAny;
   const others: PageSummary[] = [];
-  for (const c of FEED_CELLS) {
-    if (c.dom === -1 || c.label === lastDomain) continue;
-    const r = byCell.get(c.label);
+  for (const label of order) {
+    if (currentRow && label === currentRow.cell) continue;
+    const r = byCell.get(label);
     if (r) others.push({ domain: r.cell, seen_date: String(r.seen_date), headline: r.headline });
   }
   return { current: currentRow ? rowToPage(currentRow) : null, lastDomain, others };

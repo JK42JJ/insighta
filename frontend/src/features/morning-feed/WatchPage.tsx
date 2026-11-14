@@ -156,7 +156,11 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
 
           <div className="mf-page-core" data-testid="mf-page-core">
             {pg.core.map((c, i) => (
-              <p key={i} className="mf-page-core-p">
+              <p
+                key={i}
+                className="mf-page-core-p"
+                data-cited={c.sources.length > 0 ? '' : undefined}
+              >
                 {c.sources.length > 0 ? c.text + ' ' : c.text}
                 <Cites links={citeLinks(c.sources, channelOf)} />
               </p>
@@ -191,7 +195,11 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                         <h2 className="mf-page-h2">{s.heading}</h2>
                         <div className="mf-page-paras">
                           {s.paragraphs.map((q, k) => (
-                            <p key={k} className="mf-page-para">
+                            <p
+                              key={k}
+                              className="mf-page-para"
+                              data-cited={q.sources.length > 0 ? '' : undefined}
+                            >
                               {q.sources.length > 0 ? q.text + ' ' : q.text}
                               <Cites links={citeLinks(q.sources, channelOf)} />
                             </p>

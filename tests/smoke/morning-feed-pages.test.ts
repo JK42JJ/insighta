@@ -78,9 +78,9 @@ const pageRow = (cell: string, seen: string, headline: string) => ({
 });
 
 describe('page readers', () => {
-  it('home: current for the last domain, others in cell order, KST today', async () => {
+  it('home: current for the last judged domain, others in cell order, KST today', async () => {
     const { db, queries } = fakeDb((sql) => {
-      if (sql.includes('morning_watch_batches')) return [{ cell: '재테크/투자' }];
+      if (sql.includes('morning_card_judgments')) return [{ cell: '재테크/투자' }];
       return [
         pageRow('창작/예술', '2026-11-10', 'art'),
         pageRow('재테크/투자', '2026-11-12', 'money'),
@@ -95,16 +95,38 @@ describe('page readers', () => {
       { domain: '기술/개발', seen_date: '2026-11-13', headline: 'tech' },
       { domain: '창작/예술', seen_date: '2026-11-10', headline: 'art' },
     ]);
-    expect(queries[0]!.params[1]).toBe('2026-11-14'); // 03:00Z = 12:00 KST
+    // the last domain comes from watch judgments (not canceled), never from batches
+    expect(queries[0]!.sql).toContain('morning_card_judgments');
+    expect(queries[0]!.sql).toContain('canceled_at IS NULL');
+    expect(queries[0]!.params[1]).toBe('watch');
+    expect(queries.some((q) => q.sql.includes('morning_watch_batches'))).toBe(false);
+    expect(queries[1]!.params[1]).toBe('2026-11-14'); // 03:00Z = 12:00 KST
   });
-  it('home without a batch lists every page and no current', async () => {
-    const { db } = fakeDb((sql) =>
-      sql.includes('morning_watch_batches') ? [] : [pageRow('창작/예술', '2026-11-10', 'art')]
-    );
+  it('home: the last judged domain has no page -> the newest page of any domain', async () => {
+    const { db } = fakeDb((sql) => {
+      if (sql.includes('morning_card_judgments')) return [{ cell: '창작/예술' }];
+      return [
+        pageRow('재테크/투자', '2026-11-12', 'money'),
+        pageRow('기술/개발', '2026-11-14', 'tech'),
+      ];
+    });
     const home = await readHomePages(db, USER, NOW);
+    expect(home.lastDomain).toBe('창작/예술');
+    expect(home.current?.domain).toBe('기술/개발');
+    expect(home.others).toEqual([
+      { domain: '재테크/투자', seen_date: '2026-11-12', headline: 'money' },
+    ]);
+  });
+  it('home: no judgment yet -> still the newest page; no page at all -> no current', async () => {
+    const some = fakeDb((sql) =>
+      sql.includes('morning_card_judgments') ? [] : [pageRow('창작/예술', '2026-11-10', 'art')]
+    );
+    const home = await readHomePages(some.db, USER, NOW);
     expect(home.lastDomain).toBeNull();
-    expect(home.current).toBeNull();
-    expect(home.others).toHaveLength(1);
+    expect(home.current?.domain).toBe('창작/예술');
+    expect(home.others).toHaveLength(0);
+    const none = fakeDb(() => []);
+    expect((await readHomePages(none.db, USER, NOW)).current).toBeNull();
   });
   it('readPage and listPages', async () => {
     const one = fakeDb(() => [pageRow(CELL, '2026-11-13', 'tech')]);

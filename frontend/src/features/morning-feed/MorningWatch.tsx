@@ -455,8 +455,9 @@ export function MorningWatch({
 }
 
 /**
- * Daily home (2026-11-14): shown only when the last watched domain has a page. Its headline plus
- * the newest headline of every other goal with a page; null = the current input screen.
+ * Daily home (decision 2026-11-14): shown whenever the user has a page. The server picks the
+ * domain (last judged, or the newest page when that domain has none); the others give their
+ * newest headline. null = no page at all: the current input screen.
  */
 function homeHeadlines(
   pages: MorningHomePages | null,
@@ -464,8 +465,7 @@ function homeHeadlines(
 ): { initial: string; pages: Record<string, HomeHeadline> } | null {
   const cur = pages?.current;
   const isGoal = (label: string): boolean => goals.some((g) => g.label === label);
-  if (!pages || !cur || !pages.lastDomain || cur.domain !== pages.lastDomain || !isGoal(cur.domain))
-    return null;
+  if (!pages || !cur || !isGoal(cur.domain)) return null;
   const out: Record<string, HomeHeadline> = {
     [cur.domain]: { headline: cur.headline, seenDate: cur.seen_date },
   };
