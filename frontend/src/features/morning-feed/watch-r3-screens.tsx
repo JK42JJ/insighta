@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 
 import type { InsightView, WatchReaction } from '@/features/morning-feed/watch-design';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
@@ -69,6 +69,8 @@ export interface R3AccountView {
   /** Profile image; absent = the person icon. */
   avatarUrl?: string | null;
   onLogout: () => void;
+  /** stg test controls shown above 로그아웃 (virtual today); absent = nothing. */
+  extra?: ReactNode;
 }
 
 function PersonIcon({ size }: { size: number }): JSX.Element {
@@ -145,6 +147,7 @@ export function AccountSheet({
             <div className="mf-w3-acct-email">{account.email}</div>
           </div>
         </div>
+        {account.extra}
         <button
           type="button"
           className="mf-w3-logout"

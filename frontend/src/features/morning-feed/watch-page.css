@@ -99,6 +99,10 @@
   padding: 14px 2px;
   margin: -14px 0 -14px 2px;
 }
+.mf-page-cite-group {
+  display: inline-block;
+  white-space: nowrap;
+}
 .mf-page-cite[data-gap='3'] {
   margin-left: 3px;
 }
@@ -257,6 +261,13 @@
   gap: 10px;
   align-items: baseline;
   font-size: 13.5px;
+  line-height: 20px;
+}
+/* more than 20 rows: 20 rows tall (20 x 20 px + 19 gaps of 10 px), scrolling inside */
+.mf-page-order-list[data-capped] {
+  max-height: 590px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .mf-page-order-n {
   flex: none;
@@ -273,6 +284,15 @@
 }
 .mf-page-rest {
   margin-top: 40px;
+}
+/* 오늘의 영상 모두 보기: the same link as 지난 장 모두 보기, above 다른 도메인 */
+.mf-page-today {
+  margin-top: 40px;
+  display: flex;
+  width: fit-content;
+}
+.mf-page-today + .mf-page-rest {
+  margin-top: 20px;
 }
 .mf-page-past {
   margin-top: 20px;

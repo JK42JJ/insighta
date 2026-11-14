@@ -8,7 +8,11 @@ import {
 } from 'react';
 
 import { ensureHomeFonts, waitHomeFonts } from '@/features/morning-feed/watch-home-fonts';
-import { headlineSize, seenDateLabel } from '@/features/morning-feed/watch-home-model';
+import {
+  headlineSize,
+  homeButtonOf,
+  seenDateLabel,
+} from '@/features/morning-feed/watch-home-model';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
 import {
   AccountButton,
@@ -43,15 +47,18 @@ export interface HomeHeadline {
 
 export interface WatchHomeProps {
   frame: Frame & { width: number };
-  dateLabel: string;
+  /** The user's goal in the top row (decision 2026-11-14: in place of the date); null = empty. */
+  goal: string | null;
   account?: R3AccountView;
   chips: HomeChip[];
   /** Domains with a page: their newest headline and seen date. */
   pages: Record<string, HomeHeadline>;
   /** The last watched domain (it has a page). */
   initial: string;
-  /** Today's videos left for the domain: the button is shown only then. */
-  canEnter: (cell: string) => boolean;
+  /** Today in KST ('YYYY-MM-DD'): a page of that date is "today's page". */
+  today: string;
+  /** Today's videos left for the domain (0 = none). */
+  todayCount: (cell: string) => number;
   /** The button, or a chip of a domain without a page: today's videos of that domain. */
   onOpen: (cell: string) => void;
   /** Tapping the headline: that domain's page (absent = not tappable). */
@@ -67,7 +74,8 @@ const SLIDE_MS = 300;
 const SLIDE_EASE = 'cubic-bezier(.2,.8,.2,1)';
 /** Below this width the chips use 12.5 px (README §배치 5). */
 const NARROW_W = 360;
-const UI_TEXT = '[문구] →0123456789월일요화수목금토';
+const UI_TEXT =
+  '오늘의 장 최근 장 지난 장 읽기 이 장 읽기 오늘의 영상 편 보기 →0123456789월일요화수목금토';
 
 function reducedMotion(): boolean {
   return (
@@ -201,6 +209,8 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
   );
 
   const page = p.pages[shown];
+  // the button follows the shown headline (it changes with the text, not before the fade)
+  const button = homeButtonOf(page?.seenDate, p.today, p.todayCount(shown));
   const text = page?.headline ?? '';
   const size = headlineSize(p.frame.width, text);
   const vis = ready ? 'visible' : 'hidden';
@@ -220,15 +230,21 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
       <div className="mf-home-col">
         <div className="mf-home-top">
           <div className="mf-w3-brand mf-home-brand">Insighta</div>
-          <div className="mf-home-today" data-testid="mf-home-today">
-            {p.dateLabel}
+          <div
+            className="mf-home-today mf-home-goal"
+            data-testid="mf-home-goal"
+            title={p.goal ?? ''}
+          >
+            {p.goal ?? ''}
           </div>
           {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
         </div>
         <div className="mf-home-gap-top" />
         <div className="mf-home-block" style={{ visibility: vis }}>
           <div className="mf-home-meta" ref={meta} data-testid="mf-home-meta">
-            <span className="mf-home-meta-k">[문구]</span>
+            <span className="mf-home-meta-k">
+              {page && page.seenDate === p.today ? '오늘의 장' : '최근 장'}
+            </span>
             <span className="mf-home-meta-d" data-testid="mf-home-seen">
               {page ? seenDateLabel(page.seenDate) : ''}
             </span>
@@ -239,7 +255,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
                 data-testid="mf-home-past"
                 onClick={() => p.onPast?.(sel)}
               >
-                [문구]
+                지난 장
               </button>
             ) : null}
           </div>
@@ -257,19 +273,18 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
           >
             {text}
           </h1>
-          {p.canEnter(sel) ? (
-            <div className="mf-home-btn-row" ref={btn}>
-              <button
-                type="button"
-                className="mf-home-btn"
-                data-testid="mf-home-enter"
-                onClick={() => p.onOpen(sel)}
-              >
-                <span>[문구]</span>
-                <span className="mf-home-arrow">→</span>
-              </button>
-            </div>
-          ) : null}
+          <div className="mf-home-btn-row" ref={btn}>
+            <button
+              type="button"
+              className="mf-home-btn"
+              data-testid="mf-home-enter"
+              data-target={button.target}
+              onClick={() => (button.target === 'videos' ? p.onOpen(shown) : p.onOpenPage?.(shown))}
+            >
+              <span>{button.label}</span>
+              <span className="mf-home-arrow">→</span>
+            </button>
+          </div>
         </div>
         <div className="mf-home-gap-bottom" />
         <div className="mf-home-chips" ref={chipsEl} style={{ visibility: vis }}>

@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchMorningPage,
   fetchMorningPageList,
+  fetchTestClock,
+  type TestClockDto,
   fetchWatchInsight,
   type FeedHistoryItem,
   type InsightData,
@@ -46,6 +48,7 @@ import { WatchPlayer, type PlayerController } from '@/features/morning-feed/Watc
 import { WatchHome, type HomeHeadline } from '@/features/morning-feed/WatchHome';
 import { type PageRestChip } from '@/features/morning-feed/WatchPage';
 import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
+import { TestClockControls } from '@/features/morning-feed/TestClockControls';
 import type { PageWatchCards } from '@/features/morning-feed/PageWatch';
 import { WatchPast } from '@/features/morning-feed/WatchPast';
 import './watch.css';
@@ -80,6 +83,8 @@ export interface MorningWatchProps {
   today: WatchTodayMap;
   /** Creates (first call of the day) or reads today's batch of the goal. */
   loadBatch: (cellLabel: string) => Promise<WatchBatchView>;
+  /** "Today" as /watch/today decided it (KST, or the virtual day on stg). */
+  serverDay?: string;
   /** A page's videos as watch cards with the existing verdicts (page -> watch screen). */
   loadPageCards?: (cellLabel: string, date: string) => Promise<PageWatchCards | null>;
   /** 이전 주제, newest first (server). Empty = the section is not drawn. */
@@ -95,7 +100,8 @@ export interface MorningWatchProps {
 
 type Screen =
   | { kind: 'onb'; step: number }
-  | { kind: 'input' }
+  /** The home; `focus` = the domain whose headline to show (from a chip elsewhere or 다 본 뒤). */
+  | { kind: 'input'; focus?: string }
   | {
       kind: 'watch';
       goal: FeedCell;
@@ -122,6 +128,7 @@ export function MorningWatch({
   loadBatch,
   history,
   pages = null,
+  serverDay,
   loadPageCards,
   onJudge,
   whenSaved,
@@ -147,6 +154,17 @@ export function MorningWatch({
   /** Videos answered in this visit, read synchronously so a changed verdict is not counted twice. */
   const answered = useRef(new Set<string>());
   const [now] = useState(() => new Date());
+  /** stg virtual today, only for an allowed account (404 -> null: nothing is shown). */
+  const [clock, setClock] = useState<TestClockDto | null>(null);
+  useEffect(() => {
+    let on = true;
+    fetchTestClock()
+      .then((c) => on && setClock(c))
+      .catch(() => undefined);
+    return () => {
+      on = false;
+    };
+  }, []);
 
   useEffect(() => {
     alive.current = true;
@@ -274,19 +292,43 @@ export function MorningWatch({
   const watchList = screen.kind === 'watch' ? screen.list : null;
   const watchVideos = useMemo(() => (watchList ?? []).map(r3VideoOf), [watchList]);
 
+  // "today" as the server decided it (virtual day on stg), else the device's KST day
+  const dayToday = pages?.today ?? serverDay ?? kstDay(now);
+  const testControls = clock ? <TestClockControls clock={clock} /> : undefined;
   const pageAccount = {
     name: userName ?? '',
     email: userEmail ?? '',
     avatarUrl: userAvatar,
     onLogout: () => void signOut(),
+    extra: testControls,
   };
-  /** 한 장's 남은 도메인: goals with videos left today, the page's own domain left out. */
+  const home = homeHeadlines(pages, goals);
+  const goalText = pages?.goal ?? null;
+  /** Chips everywhere (decision 2026-11-14): only domains with a page. */
+  const pageChips = goals.filter((g) => !!home?.pages[g.label]);
+  /** Videos of a domain left today (0 = none or not a goal). */
+  const todayCount = (cell: string): number => {
+    const g = cellOf(cell);
+    const c = g ? chipOf(g) : null;
+    return c && c.kind === 'open' ? c.count : 0;
+  };
+  /** 한 장's "오늘의 영상 모두 보기": the page's own domain, while videos are left today. */
+  const todayVideosOf = (cell: string): { count: number; onGo: () => void } | undefined => {
+    const g = cellOf(cell);
+    const n = todayCount(cell);
+    return g && n > 0 ? { count: n, onGo: () => openGoal(g) } : undefined;
+  };
+  /** The user has at least one page: the old 다 본 뒤 screen gives way to the home. */
+  const hasPages = !!pages?.current;
+  /** 한 장's 다른 도메인: domains with a page; a chip shows that domain's headline on the home. */
   const pageRest = (cell: string): PageRestChip[] =>
-    goals.flatMap((g) =>
-      g.label !== cell && chipOf(g).kind === 'open'
-        ? [{ cell: g.label, title: g.short, onPick: () => openGoal(g) }]
-        : []
-    );
+    pageChips
+      .filter((g) => g.label !== cell)
+      .map((g) => ({
+        cell: g.label,
+        title: g.short,
+        onPick: () => setScreen({ kind: 'input', focus: g.label }),
+      }));
 
   /** What a page needs to open its videos in the watch screen (session sound, judgments). */
   const pageWatch: PageWatchBridge = {
@@ -317,20 +359,21 @@ export function MorningWatch({
       avatarUrl: userAvatar,
       // signed out: the route's sign-in check sends the person to sign in again
       onLogout: () => void signOut(),
+      extra: testControls,
     };
-    const home = homeHeadlines(pages, goals);
+    const focus = screen.focus && home?.pages[screen.focus] ? screen.focus : home?.initial;
     body = home ? (
       <WatchHome
+        key={'home-' + focus}
         frame={frame}
-        dateLabel={kstDateLabel(now)}
+        goal={goalText}
         account={account}
-        chips={goals.map((g) => ({ cell: g.label, title: g.short }))}
+        // decision 2026-11-14: chips only change the headline; only domains with a page
+        chips={pageChips.map((g) => ({ cell: g.label, title: g.short }))}
         pages={home.pages}
-        initial={home.initial}
-        canEnter={(cell) => {
-          const g = cellOf(cell);
-          return !!g && chipOf(g).kind === 'open';
-        }}
+        initial={focus ?? home.initial}
+        today={dayToday}
+        todayCount={todayCount}
         onOpen={(cell) => {
           const g = cellOf(cell);
           if (g) openGoal(g);
@@ -406,12 +449,14 @@ export function MorningWatch({
         known={
           known && known.domain === screen.cell && known.seen_date === screen.date ? known : null
         }
-        today={kstDay(now)}
+        today={dayToday}
+        goal={goalText}
         shortOf={shortOf}
         rest={pageRest(screen.cell)}
-        onHome={() => setScreen({ kind: 'input' })}
+        onHome={() => setScreen({ kind: 'input', focus: screen.cell })}
         onPast={() => setScreen({ kind: 'past', cell: screen.cell })}
         pageWatch={pageWatch}
+        todayVideos={todayVideosOf(screen.cell)}
       />
     );
   } else if (screen.kind === 'past') {
@@ -419,7 +464,8 @@ export function MorningWatch({
       <WatchPast
         frame={frame}
         account={pageAccount}
-        chips={goals.map((g) => ({ cell: g.label, title: g.short }))}
+        goal={goalText}
+        chips={pageChips.map((g) => ({ cell: g.label, title: g.short }))}
         initial={screen.cell}
         load={fetchMorningPageList}
         onOpen={(cell, date) => setScreen({ kind: 'page', cell, date })}
@@ -450,12 +496,15 @@ export function MorningWatch({
         shortOf={shortOf}
         whenSaved={whenSaved}
         rest={rest}
-        onClose={() => setScreen({ kind: 'input' })}
-        today={kstDay(now)}
+        onClose={() => setScreen({ kind: 'input', focus: screen.goal.label })}
+        today={dayToday}
+        goalText={goalText}
         account={pageAccount}
         pageRest={pageRest(screen.goal.label)}
         onPast={() => setScreen({ kind: 'past', cell: screen.goal.label })}
         pageWatch={pageWatch}
+        todayVideos={todayVideosOf(screen.goal.label)}
+        hasPages={hasPages}
       />
     );
   }
@@ -510,6 +559,9 @@ function LiveDone({
   pageRest,
   onPast,
   pageWatch,
+  todayVideos,
+  hasPages,
+  goalText,
 }: {
   frame: ReturnType<typeof useWatchFrame>;
   goal: FeedCell;
@@ -524,6 +576,11 @@ function LiveDone({
   pageRest: PageRestChip[];
   onPast: () => void;
   pageWatch: PageWatchBridge;
+  todayVideos?: { count: number; onGo: () => void };
+  /** The user has a page: without today's page, back to the home instead of 다 본 뒤. */
+  hasPages: boolean;
+  /** The user's goal for the page's top row. */
+  goalText: string | null;
 }): JSX.Element {
   const [data, setData] = useState<InsightData | null>(null);
   /** undefined = still reading; null = no page today (the done screen as it was). */
@@ -548,8 +605,14 @@ function LiveDone({
     };
   }, [goal.label, today]);
   const view = data && data.reacted + data.passed > 0 ? insightViewFromData(data, shortOf) : null;
+  // decision 2026-11-14: no page today but pages elsewhere -> the home, not the old stats screen
+  const toHome = page === null && hasPages;
+  useEffect(() => {
+    if (toHome) onClose();
+  }, [toHome, onClose]);
   // a page for today replaces 다 본 뒤 (decision 2026-11-14); nothing is drawn while it is read
-  if (page === undefined) return <div className="mf-w3-root" data-testid="mf-w-done-wait" />;
+  if (page === undefined || toHome)
+    return <div className="mf-w3-root" data-testid="mf-w-done-wait" />;
   if (page) {
     return (
       <PageWithWatch
@@ -561,6 +624,8 @@ function LiveDone({
         rest={pageRest}
         onHome={onClose}
         onPast={onPast}
+        todayVideos={todayVideos}
+        goal={goalText}
         loadCards={() => pageWatch.load(goal.label, page.seen_date)}
         sound={pageWatch.sound}
         onSound={pageWatch.onSound}
@@ -587,6 +652,8 @@ function LivePage({
   onHome,
   onPast,
   pageWatch,
+  todayVideos,
+  goal,
 }: {
   frame: ReturnType<typeof useWatchFrame>;
   account: R3AccountView;
@@ -601,6 +668,8 @@ function LivePage({
   onHome: () => void;
   onPast: () => void;
   pageWatch: PageWatchBridge;
+  todayVideos?: { count: number; onGo: () => void };
+  goal: string | null;
 }): JSX.Element {
   const [page, setPage] = useState<MorningPage | null | undefined>(known ?? undefined);
   const [order, setOrder] = useState<Array<{ key: string; title: string }>>([]);
@@ -642,6 +711,8 @@ function LivePage({
       rest={rest}
       onHome={onHome}
       onPast={onPast}
+      todayVideos={todayVideos}
+      goal={goal}
       loadCards={() => pageWatch.load(cell, page.seen_date)}
       sound={pageWatch.sound}
       onSound={pageWatch.onSound}

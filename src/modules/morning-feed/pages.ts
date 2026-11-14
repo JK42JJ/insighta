@@ -58,6 +58,10 @@ export interface HomePages {
   current: Page | null;
   lastDomain: string | null;
   others: PageSummary[];
+  /** The user's goal (newest user context goal_text), or null when none is stored. */
+  goal: string | null;
+  /** "Today" as the server decided it (KST, or the account's virtual day on stg). */
+  today: string;
 }
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -236,45 +240,75 @@ export async function readHomePages(
     const r = byCell.get(label);
     if (r) others.push({ domain: r.cell, seen_date: String(r.seen_date), headline: r.headline });
   }
-  return { current: currentRow ? rowToPage(currentRow) : null, lastDomain, others };
+  return {
+    current: currentRow ? rowToPage(currentRow) : null,
+    lastDomain,
+    others,
+    goal: await readGoal(db, userId),
+    today,
+  };
 }
 
-/** One page by key, or null. */
+/**
+ * The user's goal (decision 2026-11-14): the newest user context node's goal_text. That is where
+ * the watch screen's goal lives (the mandala's center goal belongs to the main app and is not
+ * read here). null when the user has none.
+ */
+async function readGoal(db: FeedDb, userId: string): Promise<string | null> {
+  const rows = await db.$queryRawUnsafe<Array<{ goal: string | null }>>(
+    `SELECT n.properties->>'goal_text' AS goal FROM ontology.nodes n
+      WHERE n.user_id = $1::uuid AND n.type = 'user_context'
+      ORDER BY n.updated_at DESC LIMIT 1`,
+    userId
+  );
+  const g = rows[0]?.goal?.trim();
+  return g ? g : null;
+}
+
+/**
+ * One page by key, or null. A page dated after today (KST) is not shown yet: pages can be
+ * imported the night before (decision 2026-11-14), so every reader stops at today.
+ */
 export async function readPage(
   db: FeedDb,
   userId: string,
   cell: string,
-  date: string
+  date: string,
+  now: Date = new Date()
 ): Promise<Page | null> {
   if (!userId) throw new FeedValidationError('user_id required');
   if (!isFeedCell(cell)) throw new FeedValidationError('unknown cell');
   if (!isRealDate(date)) throw new FeedValidationError('invalid date');
   const rows = await db.$queryRawUnsafe<PageRow[]>(
     `SELECT ${PAGE_COLUMNS} FROM public.morning_pages p
-      WHERE p.user_id = $1::uuid AND p.cell = $2 AND p.seen_date = $3::date`,
+      WHERE p.user_id = $1::uuid AND p.cell = $2 AND p.seen_date = $3::date
+        AND p.seen_date <= $4::date`,
     userId,
     cell,
-    date
+    date,
+    kstDayString(now)
   );
   return rows[0] ? rowToPage(rows[0]) : null;
 }
 
-/** Pages of one domain, newest first, at most PAGES_LIST_MAX. */
+/** Pages of one domain up to today (KST), newest first, at most PAGES_LIST_MAX. */
 export async function listPages(
   db: FeedDb,
   userId: string,
-  cell: string
+  cell: string,
+  now: Date = new Date()
 ): Promise<Array<{ seen_date: string; headline: string }>> {
   if (!userId) throw new FeedValidationError('user_id required');
   if (!isFeedCell(cell)) throw new FeedValidationError('unknown cell');
   const rows = await db.$queryRawUnsafe<PageRow[]>(
     `SELECT to_char(p.seen_date, 'YYYY-MM-DD') AS seen_date, p.headline
        FROM public.morning_pages p
-      WHERE p.user_id = $1::uuid AND p.cell = $2
+      WHERE p.user_id = $1::uuid AND p.cell = $2 AND p.seen_date <= $4::date
       ORDER BY p.seen_date DESC LIMIT $3`,
     userId,
     cell,
-    PAGES_LIST_MAX
+    PAGES_LIST_MAX,
+    kstDayString(now)
   );
   return rows.map((r) => ({ seen_date: String(r.seen_date), headline: r.headline }));
 }
@@ -296,9 +330,10 @@ export async function readPageCards(
   db: FeedDb,
   userId: string,
   cell: string,
-  date: string
+  date: string,
+  now: Date = new Date()
 ): Promise<PageCards | null> {
-  const page = await readPage(db, userId, cell, date);
+  const page = await readPage(db, userId, cell, date, now);
   if (!page) return null;
   const ids = page.videos.map((v) => v.video_id);
   const [cards, judged] = await Promise.all([

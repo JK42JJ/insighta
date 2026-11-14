@@ -101,6 +101,8 @@ spec:
               value: "true"
             - name: MORNING_CARDS_TEST_USER_IDS
               value: {{ .Values.morningCards.testUserIds | default "" | quote }}
+            - name: MORNING_VIRTUAL_DAY_USER_IDS
+              value: {{ .Values.morningCards.virtualDayUserIds | default "" | quote }}
 {{- end }}
           envFrom:
             - secretRef:

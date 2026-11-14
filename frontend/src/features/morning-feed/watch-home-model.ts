@@ -52,3 +52,17 @@ export function pastHeadlinePx(width: number): number {
   const w = Math.min(HOME_MAX_W, Math.max(HOME_MIN_W, width));
   return Math.round((w - SIDE_PX) / PAST_PER_LINE / ROUND_STEP) * ROUND_STEP;
 }
+
+/**
+ * The one button (decision 2026-11-14, always shown): today's page of the shown domain, else its
+ * videos left today, else the shown page.
+ */
+export function homeButtonOf(
+  seenDate: string | undefined,
+  today: string,
+  count: number
+): { label: string; target: 'page' | 'videos' } {
+  if (seenDate === today) return { label: '오늘의 장 읽기', target: 'page' };
+  if (count > 0) return { label: '오늘의 영상 ' + count + '편 보기', target: 'videos' };
+  return { label: '이 장 읽기', target: 'page' };
+}

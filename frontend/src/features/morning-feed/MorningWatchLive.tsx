@@ -49,6 +49,8 @@ type LoadState =
       today: WatchTodayMap;
       history: FeedHistoryItem[];
       pages: MorningHomePages | null;
+      /** /watch/today's day: the KST day, or the virtual day on stg. */
+      day: string | undefined;
     };
 
 const MESSAGE_STYLE = {
@@ -91,7 +93,9 @@ export function MorningWatchLive(): JSX.Element {
           (c) => goalChipState(today[c.label]).kind !== 'none'
         );
         setState(
-          anyGoal ? { status: 'ready', cells: t.cells, today, history, pages } : { status: 'empty' }
+          anyGoal
+            ? { status: 'ready', cells: t.cells, today, history, pages, day: t.day }
+            : { status: 'empty' }
         );
       })
       .catch(() => alive && setState({ status: 'error' }));
@@ -198,6 +202,7 @@ export function MorningWatchLive(): JSX.Element {
       loadBatch={loadBatch}
       history={state.history}
       pages={state.pages}
+      serverDay={state.day}
       loadPageCards={loadPageCards}
       onJudge={onJudge}
       whenSaved={whenSaved}

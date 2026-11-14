@@ -3562,6 +3562,15 @@ model morning_watch_batches {
 }
 
 /// Read-only page per (user, goal cell, seen date). Raw SQL DDL: prisma/migrations/morning-feed/005_pages.sql
+/// Virtual "today" per test account (stg repeat tests). Raw SQL DDL: prisma/migrations/morning-feed/006_virtual_day.sql
+model morning_virtual_day {
+  user_id    String   @id @db.Uuid
+  day        DateTime @db.Date
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
 model morning_pages {
   user_id    String   @db.Uuid
   cell       String   @db.VarChar(50)

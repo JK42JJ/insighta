@@ -21,19 +21,40 @@ const idListFromEnv = z.preprocess((v) => {
 export const morningCardsEnvSchema = z.object({
   MOBILE_MORNING_CARDS: flagFromEnv,
   MORNING_CARDS_TEST_USER_IDS: idListFromEnv,
+  /** stg only (chart staging values): accounts that may set a virtual "today" for repeat tests. */
+  MORNING_VIRTUAL_DAY_USER_IDS: idListFromEnv,
 });
 
 export interface MorningCardsConfig {
   enabled: boolean;
   testUserIds: readonly string[];
+  virtualDayUserIds: readonly string[];
 }
 
 export function getMorningCardsConfig(env: NodeJS.ProcessEnv = process.env): MorningCardsConfig {
   const parsed = morningCardsEnvSchema.parse({
     MOBILE_MORNING_CARDS: env['MOBILE_MORNING_CARDS'],
     MORNING_CARDS_TEST_USER_IDS: env['MORNING_CARDS_TEST_USER_IDS'],
+    MORNING_VIRTUAL_DAY_USER_IDS: env['MORNING_VIRTUAL_DAY_USER_IDS'],
   });
-  return { enabled: parsed.MOBILE_MORNING_CARDS, testUserIds: parsed.MORNING_CARDS_TEST_USER_IDS };
+  return {
+    enabled: parsed.MOBILE_MORNING_CARDS,
+    testUserIds: parsed.MORNING_CARDS_TEST_USER_IDS,
+    virtualDayUserIds: parsed.MORNING_VIRTUAL_DAY_USER_IDS,
+  };
+}
+
+/**
+ * Virtual today (decision 2026-11-14): only with the morning cards flag on, for a test user that
+ * is also on the virtual-day list. The list is set in the staging chart only, so prod never has it.
+ */
+export function isVirtualDayUser(
+  userId: string | null | undefined,
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  if (!userId) return false;
+  const cfg = getMorningCardsConfig(env);
+  return cfg.enabled && cfg.testUserIds.includes(userId) && cfg.virtualDayUserIds.includes(userId);
 }
 
 export function isMorningCardsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {

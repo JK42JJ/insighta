@@ -1465,3 +1465,35 @@ button.mf-w3-navy-card {
   left: env(safe-area-inset-left, 0px);
   right: env(safe-area-inset-right, 0px);
 }
+
+/* stg virtual today controls in the account sheet (test accounts only) */
+.mf-clock {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--w3-navy-line);
+}
+.mf-clock-day {
+  font-size: 13px;
+  color: var(--w3-navy-body);
+}
+.mf-clock-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.mf-clock-btn {
+  flex: 1;
+  height: 40px;
+  border: 1px solid var(--w3-navy-line);
+  border-radius: 10px;
+  background: var(--w3-clear);
+  color: var(--w3-on);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mf-clock-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

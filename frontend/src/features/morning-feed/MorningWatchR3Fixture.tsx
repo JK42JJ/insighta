@@ -156,6 +156,8 @@ interface Preset {
   homeFirst?: number;
   /** home: the button is hidden (no videos left today). */
   homeNoEnter?: boolean;
+  /** home: the first domain's page is today's. */
+  homeToday?: boolean;
   boot?: BootStage;
   idx?: number;
   maxIdx?: number;
@@ -187,6 +189,7 @@ const R3_PRESETS: Record<string, Preset> = {
   'home-s21': { screen: 'home', homeFirst: 1 },
   'home-s36': { screen: 'home', homeFirst: 2 },
   'home-noenter': { screen: 'home', homeNoEnter: true },
+  'home-today': { screen: 'home', homeToday: true },
   page: { screen: 'page' },
   past: { screen: 'past' },
   'input-done': { screen: 'input', doneToday: true, reacts: DONE_R },
@@ -458,19 +461,20 @@ export function MorningWatchR3Fixture({
         c,
         {
           headline: HOME_SENTENCES[(first + i) % HOME_SENTENCES.length]!,
-          seenDate: i === 0 ? '2026-11-13' : '2026-11-12',
+          seenDate: i === 0 ? (pr.homeToday ? '2026-11-14' : '2026-11-13') : '2026-11-12',
         },
       ])
     );
     body = (
       <WatchHome
         frame={frame}
-        dateLabel="11월 14일 토요일"
+        goal="AI Agent 서비스 출시"
         account={{ name: '[이름]', email: '[이메일]', onLogout: () => undefined }}
-        chips={CHIPS.map((c) => ({ cell: c, title: c }))}
+        chips={CHIPS.slice(0, HOME_PAGE_CHIPS).map((c) => ({ cell: c, title: c }))}
         pages={pages}
         initial={CHIPS[0]!}
-        canEnter={() => !pr.homeNoEnter}
+        today="2026-11-14"
+        todayCount={() => (pr.homeNoEnter ? 0 : VIDS.length)}
         onOpen={() => setScreen('feed')}
         onOpenPage={() => setScreen('page')}
         onPast={() => setScreen('past')}

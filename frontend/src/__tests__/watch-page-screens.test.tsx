@@ -54,6 +54,55 @@ describe('한 장 page (2026-11-14)', () => {
     expect(cite.target).toBe('_blank');
   });
 
+  it("copy is filled; one video's source links are one unit; today's videos link; a long order is capped", () => {
+    const two: MorningPage = {
+      ...PAGE,
+      core: [
+        {
+          text: '두 시점 문장.',
+          sources: [
+            { video_id: 'QHBjufYK8TA', t: 231 },
+            { video_id: 'QHBjufYK8TA', t: 379 },
+          ],
+        },
+      ],
+    };
+    const onGo = vi.fn();
+    render(
+      <WatchPage
+        frame={FRAME}
+        page={two}
+        domainTitle="기술·개발"
+        order={Array.from({ length: 25 }, (_x, i) => ({ key: 'k' + i, title: '영상 ' + i }))}
+        rest={[{ cell: '재테크/투자', title: '재테크', onPick: () => undefined }]}
+        onHome={() => undefined}
+        onPast={() => undefined}
+        todayVideos={{ count: 3, onGo }}
+      />
+    );
+    expect(document.body.textContent).not.toContain('[문구]');
+    expect(screen.getByTestId('mf-page-note-toggle').textContent).toContain('전체 노트 읽기');
+    fireEvent.click(screen.getByTestId('mf-page-note-toggle'));
+    expect(screen.getByTestId('mf-page-note-toggle').textContent).toContain('노트 접기');
+    expect(screen.getByTestId('mf-page-videos').textContent).toContain('이 장의 영상');
+    expect(screen.getByTestId('mf-page-rest').textContent).toContain('다른 도메인');
+    expect(screen.getByTestId('mf-page-past').textContent).toContain('지난 장 모두 보기');
+    const groups = Array.from(
+      screen.getByTestId('mf-page-core').querySelectorAll('[data-testid="mf-page-cite-group"]')
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.textContent).toBe('AI Engineer 3:51· 6:19');
+    expect(screen.getByTestId('mf-page-today').textContent).toContain(
+      '오늘의 영상 모두 보기 (3편)'
+    );
+    fireEvent.click(screen.getByTestId('mf-page-today'));
+    expect(onGo).toHaveBeenCalledTimes(1);
+    // 오늘 본 순서 starts folded; opened with more than 20 rows it is capped
+    expect(screen.queryByTestId('mf-page-order-list')).toBeNull();
+    fireEvent.click(screen.getByTestId('mf-page-order').querySelector('button')!);
+    expect(screen.getByTestId('mf-page-order-list').hasAttribute('data-capped')).toBe(true);
+  });
+
   it('본 순서 and 남은 도메인 are hidden when empty, shown when given', () => {
     const { rerender } = render(
       <WatchPage
@@ -93,7 +142,7 @@ describe('daily home routing', () => {
     render(
       <WatchHome
         frame={FRAME}
-        dateLabel="11월 14일 토요일"
+        goal="AI Agent 서비스 출시"
         chips={[
           { cell: '기술/개발', title: '기술·개발' },
           { cell: '재테크/투자', title: '재테크' },
@@ -104,14 +153,20 @@ describe('daily home routing', () => {
           '재테크/투자': { headline: '둘째 헤드라인', seenDate: '2026-11-12' },
         }}
         initial="기술/개발"
-        canEnter={(c) => c === '기술/개발'}
+        today="2026-11-14"
+        todayCount={(c) => (c === '기술/개발' ? 5 : 0)}
         onOpen={onOpen}
         onOpenPage={onOpenPage}
         onPast={() => undefined}
       />
     );
     expect(screen.getByTestId('mf-home-headline').textContent).toBe('첫 헤드라인');
-    expect(screen.getByTestId('mf-home-enter')).toBeTruthy();
+    expect(screen.getByTestId('mf-home-meta').textContent).toContain('최근 장');
+    expect(screen.getByTestId('mf-home-past').textContent).toBe('지난 장');
+    // no page today, 5 videos left: the button goes to the videos
+    expect(screen.getByTestId('mf-home-enter').textContent).toContain('오늘의 영상 5편 보기');
+    fireEvent.click(screen.getByTestId('mf-home-enter'));
+    expect(onOpen).toHaveBeenLastCalledWith('기술/개발');
     const chips = screen.getAllByTestId('mf-home-chip');
     fireEvent.click(chips[2]!);
     expect(onOpen).toHaveBeenCalledWith('학습/교육');
@@ -119,10 +174,12 @@ describe('daily home routing', () => {
     fireEvent.click(chips[1]!);
     expect(screen.getByTestId('mf-home-headline').textContent).toBe('둘째 헤드라인');
     expect(screen.getByTestId('mf-home-seen').textContent).toBe('11월 12일 목요일');
-    // no videos left today for that domain: the button is hidden
-    expect(screen.queryByTestId('mf-home-enter')).toBeNull();
+    // no page today and no videos left for that domain: the button reads the shown page
+    expect(screen.getByTestId('mf-home-enter').textContent).toContain('이 장 읽기');
+    fireEvent.click(screen.getByTestId('mf-home-enter'));
+    expect(onOpenPage).toHaveBeenLastCalledWith('재테크/투자');
     fireEvent.click(screen.getByTestId('mf-home-headline'));
-    expect(onOpenPage).toHaveBeenCalledWith('재테크/투자');
+    expect(onOpenPage).toHaveBeenCalledTimes(2);
   });
 });
 

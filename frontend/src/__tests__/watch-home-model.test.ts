@@ -4,6 +4,7 @@ import {
   headlineSize,
   pastHeadlinePx,
   seenDateLabel,
+  homeButtonOf,
 } from '@/features/morning-feed/watch-home-model';
 
 const S21 = '에이전트의 성패는 모델보다 평가 체계에서 갈린다';
@@ -37,5 +38,22 @@ describe('seen date label', () => {
 describe('past list headline size', () => {
   it('(width − 44) ÷ 16.5: 16.5 / 21 / 23.5 px', () => {
     expect([320, 390, 430].map(pastHeadlinePx)).toEqual([16.5, 21, 23.5]);
+  });
+});
+
+describe('home button (decision 2026-11-14: always one)', () => {
+  it("today's page first, then today's videos, else the shown page", () => {
+    expect(homeButtonOf('2026-11-14', '2026-11-14', 5)).toEqual({
+      label: '오늘의 장 읽기',
+      target: 'page',
+    });
+    expect(homeButtonOf('2026-11-13', '2026-11-14', 5)).toEqual({
+      label: '오늘의 영상 5편 보기',
+      target: 'videos',
+    });
+    expect(homeButtonOf('2026-11-13', '2026-11-14', 0)).toEqual({
+      label: '이 장 읽기',
+      target: 'page',
+    });
   });
 });

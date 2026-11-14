@@ -346,6 +346,10 @@ export interface MorningHomePages {
   current: MorningPage | null;
   lastDomain: string | null;
   others: MorningPageSummary[];
+  /** The user's goal (user context), or null. */
+  goal?: string | null;
+  /** "Today" as the server decided it (KST, or the account's virtual day on stg). */
+  today?: string;
 }
 
 export async function fetchMorningPagesHome(): Promise<MorningHomePages> {
@@ -382,6 +386,38 @@ export async function fetchMorningPageCards(
   const res = await call<{ status: 'ok'; data: PageCardsDto | null }>(
     '/pages/cards' + q,
     {},
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
+/** Virtual today for repeat tests (stg, allow-listed account only; 404 for anyone else). */
+export interface TestClockDto {
+  enabled: boolean;
+  /** Virtual day 'YYYY-MM-DD', or null when the real day is used. */
+  day: string | null;
+  real: string;
+}
+
+/** null when the account may not use it (404). */
+export async function fetchTestClock(): Promise<TestClockDto | null> {
+  try {
+    const res = await call<{ status: 'ok'; data: TestClockDto }>(
+      '/test-clock',
+      {},
+      MORNING_FEED_PATH
+    );
+    return res.data;
+  } catch (e) {
+    if (e instanceof MorningCardsApiError && e.statusCode === 404) return null;
+    throw e;
+  }
+}
+
+export async function postTestClock(action: 'next' | 'reset'): Promise<TestClockDto> {
+  const res = await call<{ status: 'ok'; data: TestClockDto }>(
+    '/test-clock',
+    { method: 'POST', body: JSON.stringify({ action }) },
     MORNING_FEED_PATH
   );
   return res.data;

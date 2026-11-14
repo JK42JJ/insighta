@@ -30,6 +30,8 @@ export interface PageRestChip {
 
 export interface WatchPageProps {
   frame: Frame & { width: number };
+  /** The user's goal in the top row; null = empty. */
+  goal?: string | null;
   account?: R3AccountView;
   page: MorningPage;
   /** The domain as the chips write it ('기술·개발'). */
@@ -42,7 +44,12 @@ export interface WatchPageProps {
   onPast: () => void;
   /** A source link or a source row: that video in the watch screen (absent = YouTube). */
   onOpenVideo?: OpenVideo;
+  /** Videos of this domain left today: the "오늘의 영상 모두 보기 (n편)" link (absent = hidden). */
+  todayVideos?: { count: number; onGo: () => void };
 }
+
+/** 오늘 본 순서 shows at most this many rows before it scrolls inside (decision 2026-11-14). */
+const ORDER_MAX_ROWS = 20;
 
 const FADE_IN_MS = 450;
 const NARROW_W = 360;
@@ -57,7 +64,30 @@ function reducedMotion(): boolean {
 /** In the app (2026-11-14): a link opens the watch screen; the address stays as the fallback. */
 type OpenVideo = (videoId: string, t: number) => void;
 
+/**
+ * One video's links (channel and its times) as one unit that does not wrap inside (decision
+ * 2026-11-14: a second time was left alone on the next line); units of different videos can
+ * still wrap between them.
+ */
 function Cites({ links, onOpen }: { links: CiteLink[]; onOpen?: OpenVideo }): JSX.Element {
+  const groups: CiteLink[][] = [];
+  for (const c of links) {
+    const last = groups[groups.length - 1];
+    if (last && last[0]!.videoId === c.videoId) last.push(c);
+    else groups.push([c]);
+  }
+  return (
+    <>
+      {groups.map((g, k) => (
+        <span key={k} className="mf-page-cite-group" data-testid="mf-page-cite-group">
+          <CiteLinks links={g} onOpen={onOpen} />
+        </span>
+      ))}
+    </>
+  );
+}
+
+function CiteLinks({ links, onOpen }: { links: CiteLink[]; onOpen?: OpenVideo }): JSX.Element {
   return (
     <>
       {links.map((c, i) => (
@@ -100,7 +130,10 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
     let alive = true;
     ensureHomeFonts();
     const heads = [pg.headline, ...pg.note.map((n) => n.heading)].join(' ');
-    const ui = p.domainTitle + ' [문구] ' + pg.core.map((c) => c.text).join(' ');
+    const ui =
+      p.domainTitle +
+      ' 전체 노트 읽기 노트 접기 이 장의 영상 오늘 본 순서 다른 도메인 지난 장 모두 보기 오늘의 영상 모두 보기 편 ' +
+      pg.core.map((c) => c.text).join(' ');
     void waitHomeFonts(heads, ui).then((r) => {
       if (!alive) return;
       fade.current = r === 'ready' && !reducedMotion();
@@ -145,6 +178,13 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
           >
             Insighta
           </button>
+          <div
+            className="mf-home-today mf-home-goal"
+            data-testid="mf-page-goal"
+            title={p.goal ?? ''}
+          >
+            {p.goal ?? ''}
+          </div>
           {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
         </div>
         <div style={{ visibility: ready ? 'visible' : 'hidden' }}>
@@ -192,7 +232,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                   setOpen((o) => !o);
                 }}
               >
-                <span>[문구]</span>
+                <span>{open ? '노트 접기' : '전체 노트 읽기'}</span>
                 <span className="mf-page-sign">{open ? '−' : '＋'}</span>
               </button>
               <div
@@ -230,7 +270,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
           ) : null}
 
           <div className="mf-page-src" data-testid="mf-page-videos">
-            <div className="mf-page-label">[문구]</div>
+            <div className="mf-page-label">이 장의 영상</div>
             {pg.videos.map((v) => (
               <a
                 key={v.video_id}
@@ -270,11 +310,15 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                 aria-expanded={orderOpen}
                 onClick={() => setOrderOpen((o) => !o)}
               >
-                <span>[문구]</span>
+                <span>오늘 본 순서</span>
                 <span className="mf-page-sign">{orderOpen ? '−' : '＋'}</span>
               </button>
               {orderOpen ? (
-                <div className="mf-page-order-list">
+                <div
+                  className="mf-page-order-list"
+                  data-testid="mf-page-order-list"
+                  data-capped={p.order.length > ORDER_MAX_ROWS ? '' : undefined}
+                >
                   {p.order.map((r, i) => (
                     <div key={r.key} className="mf-page-order-row">
                       <span className="mf-page-order-n">{i + 1}</span>
@@ -286,9 +330,21 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
             </div>
           ) : null}
 
+          {p.todayVideos && p.todayVideos.count > 0 ? (
+            <button
+              type="button"
+              className="mf-page-past mf-page-today"
+              data-testid="mf-page-today"
+              onClick={p.todayVideos.onGo}
+            >
+              <span>{'오늘의 영상 모두 보기 (' + p.todayVideos.count + '편)'}</span>
+              <span className="mf-page-past-arrow">→</span>
+            </button>
+          ) : null}
+
           {p.rest.length > 0 ? (
             <div className="mf-page-rest" data-testid="mf-page-rest">
-              <div className="mf-page-label">[문구]</div>
+              <div className="mf-page-label">다른 도메인</div>
               <div className="mf-home-chips">
                 {p.rest.map((c) => (
                   <button
@@ -311,7 +367,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
             data-testid="mf-page-past"
             onClick={p.onPast}
           >
-            <span>[문구]</span>
+            <span>지난 장 모두 보기</span>
             <span className="mf-page-past-arrow">→</span>
           </button>
         </div>

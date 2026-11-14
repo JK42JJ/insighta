@@ -174,6 +174,20 @@ describe('page readers', () => {
     const none = fakeDb(() => []);
     expect(await readPageCards(none.db, USER, CELL, '2026-11-13')).toBeNull();
   });
+  it('a page dated after today (KST) is not read anywhere: page, list and home stop at today', async () => {
+    const one = fakeDb(() => []);
+    await readPage(one.db, USER, CELL, '2026-11-15', NOW);
+    expect(one.queries[0]!.sql).toContain('p.seen_date <= $4::date');
+    expect(one.queries[0]!.params[3]).toBe('2026-11-14');
+    const list = fakeDb(() => []);
+    await listPages(list.db, USER, CELL, NOW);
+    expect(list.queries[0]!.sql).toContain('p.seen_date <= $4::date');
+    expect(list.queries[0]!.params[3]).toBe('2026-11-14');
+    const home = fakeDb(() => []);
+    await readHomePages(home.db, USER, NOW);
+    expect(home.queries[1]!.sql).toContain('p.seen_date <= $2::date');
+    expect(home.queries[1]!.params[1]).toBe('2026-11-14');
+  });
   it('readPage and listPages', async () => {
     const one = fakeDb(() => [pageRow(CELL, '2026-11-13', 'tech')]);
     expect((await readPage(one.db, USER, CELL, '2026-11-13'))?.domain).toBe(CELL);
@@ -220,7 +234,7 @@ describe('page routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       status: 'ok',
-      data: { current: null, lastDomain: null, others: [] },
+      data: { current: null, lastDomain: null, others: [], goal: null, today: expect.any(String) },
     });
     await app.close();
   });

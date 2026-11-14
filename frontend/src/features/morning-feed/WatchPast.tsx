@@ -23,6 +23,8 @@ export interface PastRow {
 
 export interface WatchPastProps {
   frame: Frame & { width: number };
+  /** The user's goal in the top row; null = empty. */
+  goal?: string | null;
   account?: R3AccountView;
   chips: Array<{ cell: string; title: string }>;
   initial: string;
@@ -74,6 +76,13 @@ export function WatchPast(p: WatchPastProps): JSX.Element {
           >
             Insighta
           </button>
+          <div
+            className="mf-home-today mf-home-goal"
+            data-testid="mf-past-goal"
+            title={p.goal ?? ''}
+          >
+            {p.goal ?? ''}
+          </div>
           {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
         </div>
         <div className="mf-past-list">

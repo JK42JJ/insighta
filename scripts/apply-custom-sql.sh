@@ -94,6 +94,7 @@ APPLY_FILES=(
   "prisma/migrations/morning-feed/004_watch_batches.sql"
   # Morning feed: read-only pages per (user, cell, date); imported by script only. IF NOT EXISTS -- idempotent.
   "prisma/migrations/morning-feed/005_pages.sql"
+  "prisma/migrations/morning-feed/006_virtual_day.sql"
   # Per-mandala learner context column (nullable jsonb, no reader/writer yet). IF NOT EXISTS -- idempotent.
   "prisma/migrations/mandala-context/001_context.sql"
   "prisma/migrations/mandala_embeddings/001_add_ivfflat_index.sql"
