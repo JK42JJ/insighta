@@ -19,6 +19,7 @@ import {
   saveFeedJudgment,
   type FeedDb,
 } from '@/modules/morning-feed/feed';
+import { listPages, readHomePages, readPage, isRealDate } from '@/modules/morning-feed/pages';
 import { withAmbient } from '@/modules/morning-feed/thumb-ambient';
 import { userIdOf } from '@/api/utils/request-user';
 
@@ -225,6 +226,51 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         const userId = guard(request, reply);
         if (!userId) return reply;
         const data = await fetchHistory(deps.getDb(), userId, new Date());
+        return reply.send({ status: 'ok', data });
+      }
+    );
+
+    // Pages: read-only domain pages (imported by script). Home = last domain's page + other domains.
+    fastify.get(
+      '/pages/home',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const data = await readHomePages(deps.getDb(), userId, new Date());
+        return reply.send({ status: 'ok', data });
+      }
+    );
+
+    fastify.get<{ Querystring: { cell?: unknown; date?: unknown } }>(
+      '/pages/list',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const { cell } = request.query;
+        if (!isFeedCell(cell)) {
+          return reply.code(400).send({ status: 'error', error: 'invalid_page' });
+        }
+        const data = await listPages(deps.getDb(), userId, cell);
+        return reply.send({ status: 'ok', data });
+      }
+    );
+
+    fastify.get<{ Querystring: { cell?: unknown; date?: unknown } }>(
+      '/pages',
+      { onRequest: [flagGate, fastify.authenticate] },
+      async (request, reply) => {
+        const userId = guard(request, reply);
+        if (!userId) return reply;
+        const { cell, date } = request.query;
+        if (!isFeedCell(cell)) {
+          return reply.code(400).send({ status: 'error', error: 'invalid_page' });
+        }
+        if (!isRealDate(date)) {
+          return reply.code(400).send({ status: 'error', error: 'invalid_page' });
+        }
+        const data = await readPage(deps.getDb(), userId, cell, date);
         return reply.send({ status: 'ok', data });
       }
     );

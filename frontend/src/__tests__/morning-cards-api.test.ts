@@ -12,6 +12,9 @@ import {
   fetchMorningCards,
   fetchMorningCardsReview,
   fetchMorningFeedHistory,
+  fetchMorningPage,
+  fetchMorningPageList,
+  fetchMorningPagesHome,
   fetchWatchInsight,
   fetchWatchToday,
   patchReasonTags,
@@ -91,6 +94,22 @@ describe('morning cards api client', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/api\/v1\/morning-feed\/history$/);
     expect(init.method).toBeUndefined();
+  });
+
+  it('pages: home, one page and the list hit the three read routes', async () => {
+    const home = { current: null, lastDomain: null, others: [] };
+    fetchMock.mockResolvedValue(okResponse({ status: 'ok', data: home }));
+    expect(await fetchMorningPagesHome()).toEqual(home);
+    await fetchMorningPage('기술/개발', '2026-11-14');
+    await fetchMorningPageList('기술/개발');
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls[0]).toMatch(/\/api\/v1\/morning-feed\/pages\/home$/);
+    expect(decodeURIComponent(urls[1]!)).toMatch(
+      /\/api\/v1\/morning-feed\/pages\?cell=기술\/개발&date=2026-11-14$/
+    );
+    expect(decodeURIComponent(urls[2]!)).toMatch(
+      /\/api\/v1\/morning-feed\/pages\/list\?cell=기술\/개발$/
+    );
   });
 
   it('feed judgment: the deck body keeps its four fields, the watch screen adds surface', async () => {

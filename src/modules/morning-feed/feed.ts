@@ -265,7 +265,7 @@ interface HistoryRow {
 }
 
 /** The 8 goal cells (the centre cell is not a goal). */
-function goalCellLabels(): string[] {
+export function goalCellLabels(): string[] {
   return FEED_CELLS.filter((c) => c.dom !== -1).map((c) => c.label);
 }
 
@@ -392,7 +392,7 @@ function kstDayBounds(now: Date): { kst: Date; start: Date; end: Date } {
 }
 
 /** The KST calendar day containing `now` as 'YYYY-MM-DD' (the batch table's `day`). */
-function kstDayString(now: Date): string {
+export function kstDayString(now: Date): string {
   return kstDayBounds(now).kst.toISOString().slice(0, 10);
 }
 

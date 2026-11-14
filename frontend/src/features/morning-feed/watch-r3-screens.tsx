@@ -105,6 +105,80 @@ function Avatar({
   );
 }
 
+/** The account sheet over the screen (README 수정 4 §6); also used by the daily home. */
+export function AccountSheet({
+  account,
+  onClose,
+}: {
+  account: R3AccountView;
+  onClose: () => void;
+}): JSX.Element {
+  return (
+    <>
+      <div className="mf-w3-acct-scrim" onClick={() => onClose()} />
+      <div className="mf-w3-acct" data-testid="mf-w3-acct" role="dialog" aria-label="계정">
+        <div className="mf-w3-acct-top">
+          <button
+            type="button"
+            className="mf-w3-icon-btn"
+            aria-label="닫기"
+            onClick={() => onClose()}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div className="mf-w3-acct-who">
+          <Avatar url={account.avatarUrl} size={44} icon={24} />
+          <div className="mf-w3-acct-text">
+            <div className="mf-w3-acct-name">{account.name}</div>
+            <div className="mf-w3-acct-email">{account.email}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="mf-w3-logout"
+          data-testid="mf-w3-logout"
+          onClick={account.onLogout}
+        >
+          로그아웃
+        </button>
+      </div>
+    </>
+  );
+}
+
+/** The header avatar button that opens the account sheet. */
+export function AccountButton({
+  account,
+  onOpen,
+}: {
+  account: R3AccountView;
+  onOpen: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="mf-w3-acct-btn"
+      data-testid="mf-w3-acct-open"
+      aria-label="계정"
+      onClick={onOpen}
+    >
+      <Avatar url={account.avatarUrl} size={32} icon={18} />
+    </button>
+  );
+}
+
 export interface WatchInputR3Props {
   frame: Frame;
   dateLabel: string;
@@ -272,49 +346,7 @@ export function WatchInputR3(p: WatchInputR3Props): JSX.Element {
           ) : null}
         </div>
       </div>
-      {acct && account ? (
-        <>
-          <div className="mf-w3-acct-scrim" onClick={() => setAcct(false)} />
-          <div className="mf-w3-acct" data-testid="mf-w3-acct" role="dialog" aria-label="계정">
-            <div className="mf-w3-acct-top">
-              <button
-                type="button"
-                className="mf-w3-icon-btn"
-                aria-label="닫기"
-                onClick={() => setAcct(false)}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  aria-hidden="true"
-                >
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
-            </div>
-            <div className="mf-w3-acct-who">
-              <Avatar url={account.avatarUrl} size={44} icon={24} />
-              <div className="mf-w3-acct-text">
-                <div className="mf-w3-acct-name">{account.name}</div>
-                <div className="mf-w3-acct-email">{account.email}</div>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="mf-w3-logout"
-              data-testid="mf-w3-logout"
-              onClick={account.onLogout}
-            >
-              로그아웃
-            </button>
-          </div>
-        </>
-      ) : null}
+      {acct && account ? <AccountSheet account={account} onClose={() => setAcct(false)} /> : null}
     </div>
   );
 }

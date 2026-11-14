@@ -5,6 +5,7 @@ import {
   postWatchBatch,
   undoFeedJudgment,
   type FeedHistoryItem,
+  type MorningHomePages,
 } from '@/features/morning-cards/api';
 import { toFeedCard } from '@/features/morning-feed/feed-format';
 import { takeWatchStart } from '@/features/morning-feed/watch-prefetch';
@@ -46,6 +47,7 @@ type LoadState =
       cells: FeedCell[];
       today: WatchTodayMap;
       history: FeedHistoryItem[];
+      pages: MorningHomePages | null;
     };
 
 const MESSAGE_STYLE = {
@@ -77,7 +79,7 @@ export function MorningWatchLive(): JSX.Element {
   useEffect(() => {
     let alive = true;
     takeWatchStart()
-      .then(([t, history]) => {
+      .then(([t, history, pages]) => {
         if (!alive) return;
         const today = parseWatchTodayMap(t.today);
         if (today === null || !Array.isArray(t.cells)) {
@@ -88,7 +90,7 @@ export function MorningWatchLive(): JSX.Element {
           (c) => goalChipState(today[c.label]).kind !== 'none'
         );
         setState(
-          anyGoal ? { status: 'ready', cells: t.cells, today, history } : { status: 'empty' }
+          anyGoal ? { status: 'ready', cells: t.cells, today, history, pages } : { status: 'empty' }
         );
       })
       .catch(() => alive && setState({ status: 'error' }));
@@ -183,6 +185,7 @@ export function MorningWatchLive(): JSX.Element {
       today={state.today}
       loadBatch={loadBatch}
       history={state.history}
+      pages={state.pages}
       onJudge={onJudge}
       whenSaved={whenSaved}
       connectYouTube={connectYouTube}

@@ -4,6 +4,7 @@ import {
   fetchWatchInsight,
   type FeedHistoryItem,
   type InsightData,
+  type MorningHomePages,
 } from '@/features/morning-cards/api';
 import { useAuth } from '@/features/auth/model/useAuth';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
@@ -37,6 +38,7 @@ import {
 } from '@/features/morning-feed/watch-r3-screens';
 import { ONB_LAST_STEP, WatchOnboarding } from '@/features/morning-feed/watch-screens';
 import { WatchPlayer, type PlayerController } from '@/features/morning-feed/WatchPlayer';
+import { WatchHome, type HomeHeadline } from '@/features/morning-feed/WatchHome';
 import './watch.css';
 import './watch-r3.css';
 
@@ -71,6 +73,8 @@ export interface MorningWatchProps {
   loadBatch: (cellLabel: string) => Promise<WatchBatchView>;
   /** 이전 주제, newest first (server). Empty = the section is not drawn. */
   history: FeedHistoryItem[];
+  /** Daily home pages; with a page for the last watched domain the new home is shown. */
+  pages?: MorningHomePages | null;
   onJudge: (e: WatchJudgeEvent) => void;
   /** Resolves once the queued judgments are written (or the wait gave up), so the insight counts them. */
   whenSaved: () => Promise<void>;
@@ -102,6 +106,7 @@ export function MorningWatch({
   today: todayFromServer,
   loadBatch,
   history,
+  pages = null,
   onJudge,
   whenSaved,
   connectYouTube,
@@ -268,17 +273,36 @@ export function MorningWatch({
         onOpen: () => setScreen({ kind: 'insight', goal: doneCell }),
       };
     }
-    body = (
+    const account = {
+      name: userName ?? '',
+      email: userEmail ?? '',
+      avatarUrl: userAvatar,
+      // signed out: the route's sign-in check sends the person to sign in again
+      onLogout: () => void signOut(),
+    };
+    const home = homeHeadlines(pages, goals);
+    body = home ? (
+      <WatchHome
+        frame={frame}
+        dateLabel={kstDateLabel(now)}
+        account={account}
+        chips={goals.map((g) => ({ cell: g.label, title: g.short }))}
+        pages={home.pages}
+        initial={home.initial}
+        canEnter={(cell) => {
+          const g = cellOf(cell);
+          return !!g && chipOf(g).kind === 'open';
+        }}
+        onOpen={(cell) => {
+          const g = cellOf(cell);
+          if (g) openGoal(g);
+        }}
+      />
+    ) : (
       <WatchInputR3
         frame={frame}
         dateLabel={kstDateLabel(now)}
-        account={{
-          name: userName ?? '',
-          email: userEmail ?? '',
-          avatarUrl: userAvatar,
-          // signed out: the route's sign-in check sends the person to sign in again
-          onLogout: () => void signOut(),
-        }}
+        account={account}
         state={state}
         chips={goals.map((g) => {
           const c = chipOf(g);
@@ -362,6 +386,27 @@ export function MorningWatch({
       </div>
     </div>
   );
+}
+
+/**
+ * Daily home (2026-11-14): shown only when the last watched domain has a page. Its headline plus
+ * the newest headline of every other goal with a page; null = the current input screen.
+ */
+function homeHeadlines(
+  pages: MorningHomePages | null,
+  goals: readonly FeedCell[]
+): { initial: string; pages: Record<string, HomeHeadline> } | null {
+  const cur = pages?.current;
+  const isGoal = (label: string): boolean => goals.some((g) => g.label === label);
+  if (!pages || !cur || !pages.lastDomain || cur.domain !== pages.lastDomain || !isGoal(cur.domain))
+    return null;
+  const out: Record<string, HomeHeadline> = {
+    [cur.domain]: { headline: cur.headline, seenDate: cur.seen_date },
+  };
+  for (const o of pages.others) {
+    if (isGoal(o.domain)) out[o.domain] = { headline: o.headline, seenDate: o.seen_date };
+  }
+  return { initial: cur.domain, pages: out };
 }
 
 /** 다 본 뒤 for one goal, read after today's answers are written so it counts them. */

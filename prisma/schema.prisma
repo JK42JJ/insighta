@@ -3560,3 +3560,20 @@ model morning_watch_batches {
   @@id([user_id, day, cell])
   @@schema("public")
 }
+
+/// Read-only page per (user, goal cell, seen date). Raw SQL DDL: prisma/migrations/morning-feed/005_pages.sql
+model morning_pages {
+  user_id    String   @db.Uuid
+  cell       String   @db.VarChar(50)
+  seen_date  DateTime @db.Date
+  headline   String
+  core       Json
+  note       Json
+  videos     Json
+  origin     String   @default("import") @db.VarChar(32)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([user_id, cell, seen_date])
+  @@schema("public")
+}

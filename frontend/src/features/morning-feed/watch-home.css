@@ -1,0 +1,155 @@
+/*
+ * Daily home, design handoff "design_handoff_insighta_home" (README §화면 값), light background
+ * only. Colours are tokens defined here; values are the README's.
+ */
+.mf-home {
+  --h-bg: #f7f5f0;
+  --h-fg: #141a24;
+  --h-sub: #5b6472;
+  --h-accent: #3a6ea5;
+  --h-solid: #16273f;
+  --h-on-solid: #ffffff;
+  --h-chip-line: #e2dfd6;
+  --h-chip-on-bg: #eaf0f7;
+  /* the past-pages link underline (page handoff, home proposal) */
+  --h-past-line: #c9c4b6;
+  --h-clear: transparent;
+  background: var(--h-bg);
+  color: var(--h-fg);
+  font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  font-synthesis: none;
+}
+.mf-home-col {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--w3-safe-top, 0px) + 4px) 22px calc(var(--w3-safe-bottom, 0px) + 12px);
+  overflow: hidden;
+}
+.mf-home-top {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mf-home-brand {
+  flex: 1;
+}
+.mf-home-today {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--h-sub);
+}
+.mf-home-gap-top {
+  flex: 5 1 0;
+  min-height: 0;
+}
+.mf-home-block {
+  flex: none;
+}
+.mf-home-meta {
+  height: 18px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  display: flex;
+  gap: 8px;
+}
+.mf-home-meta-k {
+  font-weight: 700;
+  color: var(--h-accent);
+}
+.mf-home-meta-d {
+  font-weight: 500;
+  color: var(--h-sub);
+}
+.mf-home-past {
+  margin: -13px 0 -13px auto;
+  padding: 13px 0 13px 12px;
+  border: 0;
+  background: var(--h-clear);
+  font: inherit;
+  font-weight: 500;
+  color: var(--h-sub);
+  text-decoration: underline;
+  text-decoration-color: var(--h-past-line);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.mf-home-headline[data-link] {
+  cursor: pointer;
+}
+.mf-home-headline {
+  margin: 0;
+  font-family: 'Noto Serif KR', serif;
+  font-weight: 500;
+  color: var(--h-fg);
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-wrap: balance;
+  font-variant-numeric: lining-nums;
+  font-synthesis: none;
+}
+.mf-home-btn-row {
+  margin-top: 26px;
+}
+.mf-home-btn {
+  height: 54px;
+  min-width: 58%;
+  padding: 0 22px 0 26px;
+  border: 0;
+  border-radius: 27px;
+  background: var(--h-solid);
+  color: var(--h-on-solid);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.mf-home-arrow {
+  font-size: 20px;
+  font-weight: 500;
+}
+.mf-home-gap-bottom {
+  flex: 6 1 0;
+  min-height: 20px;
+}
+.mf-home-chips {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.mf-home-chip {
+  height: 36px;
+  padding: 0;
+  border-radius: 18px;
+  border: 1px solid var(--h-chip-line);
+  background: var(--h-clear);
+  color: var(--h-sub);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+}
+.mf-home[data-narrow] .mf-home-chip {
+  font-size: 12.5px;
+}
+.mf-home-chip[data-on] {
+  background: var(--h-chip-on-bg);
+  border-color: var(--h-accent);
+  color: var(--h-accent);
+  font-weight: 700;
+}

@@ -319,6 +319,67 @@ export async function fetchMorningFeedHistory(): Promise<FeedHistoryItem[]> {
   return res.data;
 }
 
+/** A source of a page sentence: the video and the second in it. */
+export interface PageSource {
+  video_id: string;
+  t: number;
+}
+
+/** One "page" (한 장): what a domain's videos of one day were about. Imported, read only. */
+export interface MorningPage {
+  domain: string;
+  seen_date: string;
+  headline: string;
+  core: Array<{ text: string; sources: PageSource[] }>;
+  note: Array<{ heading: string; paragraphs: Array<{ text: string; sources: PageSource[] }> }>;
+  videos: Array<{ video_id: string; title: string; channel: string; useful_for: string }>;
+}
+
+export interface MorningPageSummary {
+  domain: string;
+  seen_date: string;
+  headline: string;
+}
+
+/** Daily home: the last watched domain's newest page, and the newest headline of the others. */
+export interface MorningHomePages {
+  current: MorningPage | null;
+  lastDomain: string | null;
+  others: MorningPageSummary[];
+}
+
+export async function fetchMorningPagesHome(): Promise<MorningHomePages> {
+  const res = await call<{ status: 'ok'; data: MorningHomePages }>(
+    '/pages/home',
+    {},
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
+/** The page of one domain and seen date, or null. */
+export async function fetchMorningPage(cell: string, date: string): Promise<MorningPage | null> {
+  const q = '?cell=' + encodeURIComponent(cell) + '&date=' + encodeURIComponent(date);
+  const res = await call<{ status: 'ok'; data: MorningPage | null }>(
+    '/pages' + q,
+    {},
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
+/** Past pages of one domain, newest first (seen date and headline). */
+export async function fetchMorningPageList(
+  cell: string
+): Promise<Array<{ seen_date: string; headline: string }>> {
+  const res = await call<{ status: 'ok'; data: Array<{ seen_date: string; headline: string }> }>(
+    '/pages/list?cell=' + encodeURIComponent(cell),
+    {},
+    MORNING_FEED_PATH
+  );
+  return res.data;
+}
+
 /** Today's summary; with `cell` only that cell's (goal's) judgments are counted. */
 export async function fetchMorningFeedInsight(cell?: string): Promise<InsightData> {
   const query = cell === undefined ? '' : '?cell=' + encodeURIComponent(cell);

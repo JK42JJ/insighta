@@ -17,6 +17,7 @@ import {
 } from '@/features/morning-feed/watch-r3-screens';
 import type { BootStage } from '@/features/morning-feed/watch-boot-stage';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
+import { WatchHome } from '@/features/morning-feed/WatchHome';
 import './watch.css';
 import './watch-r3.css';
 
@@ -114,6 +115,14 @@ const VIDS: FixtureVid[] = [
   },
 ];
 const CHIPS = ['기술·개발', '비즈니스', '재테크', '학습', '건강', '인간관계', '창작', '라이프'];
+/** The home handoff's three length samples (README: examples only). */
+const HOME_SENTENCES = [
+  'AI Agent 서비스는 모델이 아니라 기억과 검증에서 승부가 난다',
+  '에이전트의 성패는 모델보다 평가 체계에서 갈린다',
+  '2026년의 에이전트 서비스는 모델 크기가 아니라 기억과 검증의 설계로 나뉘고 있다',
+];
+/** Domains with a page in the home fixture: the first three chips. */
+const HOME_PAGE_CHIPS = 3;
 const GOAL = '기술·개발';
 const HISTORY = [
   { t: '영어 회의에서 말문 트기', meta: '10월 28일 · 12편' },
@@ -123,7 +132,11 @@ type Reaction = 'like' | 'dislike' | 'skip';
 const DONE_R: Reaction[] = ['like', 'dislike', 'skip', 'skip', 'skip'];
 
 interface Preset {
-  screen: 'input' | 'feed' | 'done' | 'boot';
+  screen: 'input' | 'feed' | 'done' | 'boot' | 'home';
+  /** home: index into HOME_SENTENCES for the first domain (s29 / s21 / s36 order). */
+  homeFirst?: number;
+  /** home: the button is hidden (no videos left today). */
+  homeNoEnter?: boolean;
   boot?: BootStage;
   idx?: number;
   maxIdx?: number;
@@ -151,6 +164,10 @@ const R3_PRESETS: Record<string, Preset> = {
   'boot-load': { screen: 'boot', boot: 'line' },
   'boot-skel': { screen: 'boot', boot: 'skeleton' },
   input: { screen: 'input' },
+  home: { screen: 'home' },
+  'home-s21': { screen: 'home', homeFirst: 1 },
+  'home-s36': { screen: 'home', homeFirst: 2 },
+  'home-noenter': { screen: 'home', homeNoEnter: true },
   'input-done': { screen: 'input', doneToday: true, reacts: DONE_R },
   'input-carry': { screen: 'input', carry: true },
   feed: { screen: F, prog: 4 },
@@ -359,7 +376,32 @@ export function MorningWatchR3Fixture({
   const [reacts, setReacts] = useState<Reaction[]>(pr.reacts ?? []);
 
   let body: JSX.Element;
-  if (screen === 'boot') {
+  if (screen === 'home') {
+    const first = pr.homeFirst ?? 0;
+    const pages = Object.fromEntries(
+      CHIPS.slice(0, HOME_PAGE_CHIPS).map((c, i) => [
+        c,
+        {
+          headline: HOME_SENTENCES[(first + i) % HOME_SENTENCES.length]!,
+          seenDate: i === 0 ? '2026-11-13' : '2026-11-12',
+        },
+      ])
+    );
+    body = (
+      <WatchHome
+        frame={frame}
+        dateLabel="11월 14일 토요일"
+        account={{ name: '[이름]', email: '[이메일]', onLogout: () => undefined }}
+        chips={CHIPS.map((c) => ({ cell: c, title: c }))}
+        pages={pages}
+        initial={CHIPS[0]!}
+        canEnter={() => !pr.homeNoEnter}
+        onOpen={() => setScreen('feed')}
+        onOpenPage={() => undefined}
+        onPast={() => undefined}
+      />
+    );
+  } else if (screen === 'boot') {
     body = (
       <WatchBoot
         fixed={pr.boot}
