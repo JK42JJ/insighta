@@ -12,6 +12,7 @@ import {
 
 import type { PlayerController, PlayerTick } from '@/features/morning-feed/WatchPlayer';
 import { usePhoneLandscape } from '@/features/morning-feed/use-phone-landscape';
+import { cutInside, leftOut } from '@/features/morning-feed/watch-r3-clip';
 import { chapterStamp } from '@/features/morning-feed/watch-design';
 import {
   ambientOrDefault,
@@ -643,7 +644,27 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                     </div>
                   ) : null}
 
-                  <div className="mf-w3-info">
+                  <div
+                    className="mf-w3-info"
+                    data-testid="mf-w3-info"
+                    onClick={(e) => {
+                      const el = e.currentTarget;
+                      tap(() => {
+                        if (!isCur) return;
+                        const hidden =
+                          leftOut({
+                            why: v.why,
+                            summary: v.summary,
+                            chapters: v.chapters.length,
+                            showWhy,
+                            showSummary: showSum,
+                            chapterRows: ptRows,
+                          }) || cutInside(el);
+                        // nothing cut off: the panel would repeat the card
+                        if (hidden) setSheet(true);
+                      })();
+                    }}
+                  >
                     {showWhy ? (
                       <div className="mf-w3-why" data-testid="mf-reason">
                         <div className="mf-w3-why-k">이 영상을 고른 이유</div>
@@ -760,19 +781,6 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                       </div>
                     ) : null}
                     <div className="mf-w3-grow" />
-                    {v.why || v.summary || v.chapters.length > 0 ? (
-                      <button
-                        type="button"
-                        className="mf-w3-more"
-                        data-testid="mf-w3-more"
-                        onClick={tap(() => isCur && setSheet(true))}
-                      >
-                        더 보기
-                        <Svg size={16}>
-                          <path d="M8 4l6 6-6 6" />
-                        </Svg>
-                      </button>
-                    ) : null}
                   </div>
                   {!imm ? <div className="mf-w3-gap" /> : null}
                   {imm && ib.nextBig && nx
