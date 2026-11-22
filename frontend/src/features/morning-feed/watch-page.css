@@ -81,6 +81,19 @@
   line-height: 1.7;
   letter-spacing: -0.01em;
 }
+/*
+ * Article format (decision 2026-11-22): the core is 1 to 2 paragraphs of 5 to 8 sentences. The
+ * size stays 17 px (never smaller than a note paragraph, 16 px); weight 500 was chosen for
+ * one-sentence lines and reads heavy over a whole paragraph, so a paragraph is 400 with a
+ * little more leading, and paragraphs sit as far apart as note paragraphs (20 px).
+ */
+.mf-page-core[data-article] {
+  gap: 20px;
+}
+.mf-page-core[data-article] .mf-page-core-p {
+  font-weight: 400;
+  line-height: 1.75;
+}
 .mf-page-cite {
   font-family:
     'Pretendard Variable',

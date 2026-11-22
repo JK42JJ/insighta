@@ -22,25 +22,43 @@ const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** listPages upper bound. */
 export const PAGES_LIST_MAX = 60;
+/**
+ * Article format (decision 2026-11-22): the core is 1 to 2 paragraphs of 5 to 8 sentences in
+ * all. One core item is one sentence and carries `para`; a page is in the article format when
+ * any core item has `para`. A page without it is the earlier format (six core sentences).
+ */
+export const PAGE_PARAS = [1, 2] as const;
+export const ARTICLE_CORE_MIN = 5;
+export const ARTICLE_CORE_MAX = 8;
+/** How a video relates to the headline (stored, not shown): only `support` counts as evidence. */
+export const PAGE_VIDEO_ROLES = ['support', 'condition', 'other'] as const;
+export type PagePara = (typeof PAGE_PARAS)[number];
+export type PageVideoRole = (typeof PAGE_VIDEO_ROLES)[number];
 
 export interface PageSource {
   video_id: string;
   /** Seconds into the video. */
   t: number;
 }
-export interface PageCoreItem {
+export interface PageText {
   text: string;
   sources: PageSource[];
 }
+export interface PageCoreItem extends PageText {
+  /** Article format only: the paragraph this sentence belongs to. */
+  para?: PagePara;
+}
 export interface PageNoteSection {
   heading: string;
-  paragraphs: PageCoreItem[];
+  paragraphs: PageText[];
 }
 export interface PageVideo {
   video_id: string;
   title: string;
   channel: string;
   useful_for: string;
+  /** Article format: stored with the page, not drawn. */
+  role?: PageVideoRole;
 }
 export interface Page {
   domain: string;
@@ -104,12 +122,46 @@ function validateSources(v: unknown, where: string, videoIds: Set<string>): Page
   });
 }
 
-function validateText(v: unknown, where: string, videoIds: Set<string>): PageCoreItem {
+function validateText(v: unknown, where: string, videoIds: Set<string>): PageText {
   if (!isObj(v)) throw new FeedValidationError(`${where} must be an object`);
   return {
     text: reqString(v['text'], `${where}.text`),
     sources: validateSources(v['sources'], where, videoIds),
   };
+}
+
+/** True when any core item carries `para`: the page is in the article format. */
+export function isArticleCore(core: ReadonlyArray<{ para?: unknown }>): boolean {
+  return core.some((c) => c.para !== undefined);
+}
+
+function isPagePara(v: unknown): v is PagePara {
+  return (PAGE_PARAS as readonly unknown[]).includes(v);
+}
+function isPageVideoRole(v: unknown): v is PageVideoRole {
+  return (PAGE_VIDEO_ROLES as readonly unknown[]).includes(v);
+}
+
+/**
+ * Article format core: every item is one sentence with `para` and at least one source, 5 to 8
+ * items. The earlier format never reaches this function.
+ */
+function validateArticleCore(rawCore: unknown[], texts: PageText[]): PageCoreItem[] {
+  if (rawCore.length < ARTICLE_CORE_MIN || rawCore.length > ARTICLE_CORE_MAX) {
+    throw new FeedValidationError(
+      `core must have ${ARTICLE_CORE_MIN} to ${ARTICLE_CORE_MAX} items when para is used`
+    );
+  }
+  return texts.map((c, i) => {
+    const para = (rawCore[i] as Record<string, unknown>)['para'];
+    if (!isPagePara(para)) {
+      throw new FeedValidationError(`core[${i}].para must be ${PAGE_PARAS.join(' or ')}`);
+    }
+    if (c.sources.length === 0) {
+      throw new FeedValidationError(`core[${i}].sources must have at least one source`);
+    }
+    return { text: c.text, sources: c.sources, para };
+  });
 }
 
 /**
@@ -141,7 +193,20 @@ export function validatePage(input: unknown): Page {
     if (typeof v['useful_for'] !== 'string') {
       throw new FeedValidationError(`${w}.useful_for must be a string`);
     }
-    return { video_id: id, title: v['title'], channel: v['channel'], useful_for: v['useful_for'] };
+    const video: PageVideo = {
+      video_id: id,
+      title: v['title'],
+      channel: v['channel'],
+      useful_for: v['useful_for'],
+    };
+    const role = v['role'];
+    if (role !== undefined) {
+      if (!isPageVideoRole(role)) {
+        throw new FeedValidationError(`${w}.role must be ${PAGE_VIDEO_ROLES.join(', ')}`);
+      }
+      video.role = role;
+    }
+    return video;
   });
   const videoIds = new Set(videos.map((v) => v.video_id));
 
@@ -149,7 +214,10 @@ export function validatePage(input: unknown): Page {
   if (!Array.isArray(rawCore) || rawCore.length === 0) {
     throw new FeedValidationError('core must be a non-empty array');
   }
-  const core = rawCore.map((c, i) => validateText(c, `core[${i}]`, videoIds));
+  const texts = rawCore.map((c, i) => validateText(c, `core[${i}]`, videoIds));
+  const core: PageCoreItem[] = isArticleCore(rawCore as Array<{ para?: unknown }>)
+    ? validateArticleCore(rawCore, texts)
+    : texts;
 
   const rawNote = input['note'];
   if (!Array.isArray(rawNote)) throw new FeedValidationError('note must be an array');

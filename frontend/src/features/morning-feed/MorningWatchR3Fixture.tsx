@@ -21,6 +21,7 @@ import { WatchHome } from '@/features/morning-feed/WatchHome';
 import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
 import { toFeedCard } from '@/features/morning-feed/feed-format';
 import { WatchPast } from '@/features/morning-feed/WatchPast';
+import articleFixture from '@/features/morning-feed/page-fixture-article.json';
 import pageFixture from '@/features/morning-feed/page-fixture.json';
 import type { MorningPage } from '@/features/morning-cards/api';
 import './watch.css';
@@ -158,6 +159,8 @@ interface Preset {
   homeNoEnter?: boolean;
   /** home: the first domain's page is today's. */
   homeToday?: boolean;
+  /** page: the article format example (2026-11-22, 재테크 11-22 sample; not in the DB). */
+  article?: boolean;
   boot?: BootStage;
   idx?: number;
   maxIdx?: number;
@@ -191,6 +194,7 @@ const R3_PRESETS: Record<string, Preset> = {
   'home-noenter': { screen: 'home', homeNoEnter: true },
   'home-today': { screen: 'home', homeToday: true },
   page: { screen: 'page' },
+  'page-article': { screen: 'page', article: true },
   past: { screen: 'past' },
   'input-done': { screen: 'input', doneToday: true, reacts: DONE_R },
   'input-carry': { screen: 'input', carry: true },
@@ -402,16 +406,17 @@ export function MorningWatchR3Fixture({
   let body: JSX.Element;
   const account = { name: '[이름]', email: '[이메일]', onLogout: () => undefined };
   if (screen === 'page') {
-    const pg = pageFixture as MorningPage;
+    const pg = (pr.article ? articleFixture : pageFixture) as MorningPage;
     body = (
       <PageWithWatch
         frame={frame}
         account={account}
         page={pg}
-        domainTitle={CHIPS[0]!}
+        domainTitle={pr.article ? CHIPS[2]! : CHIPS[0]!}
         order={pg.videos.map((v) => ({ key: v.video_id, title: v.title }))}
         rest={CHIPS.slice(1).map((c) => ({ cell: c, title: c, onPick: () => setScreen('feed') }))}
-        onHome={() => setScreen('home')}
+        today={pg.seen_date}
+        back={{ label: '홈', onBack: () => setScreen('home') }}
         onPast={() => setScreen('past')}
         // fixture: the page's own titles as cards (the live screen reads /pages/cards)
         loadCards={() =>

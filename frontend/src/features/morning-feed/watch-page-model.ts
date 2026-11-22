@@ -84,3 +84,40 @@ export function citeLinks(
   }
   return out;
 }
+
+export interface PageCoreRef {
+  text: string;
+  sources: readonly PageSourceRef[];
+  para?: number;
+}
+
+/** Article format (2026-11-22): any core item carries `para`. */
+export function isArticleCore(core: readonly PageCoreRef[]): boolean {
+  return core.some((c) => c.para !== undefined);
+}
+
+/**
+ * Article format: the core sentences grouped into paragraphs by `para`, in paragraph number
+ * order. A paragraph's text is its sentences in their order joined by one space; its sources
+ * are the sentences' sources in the same order (drawn once, after the paragraph).
+ */
+export function articleParagraphs(
+  core: readonly PageCoreRef[]
+): Array<{ text: string; sources: PageSourceRef[] }> {
+  const byPara = new Map<number, PageCoreRef[]>();
+  for (const c of core) {
+    const n = c.para ?? 1;
+    const list = byPara.get(n);
+    if (list) list.push(c);
+    else byPara.set(n, [c]);
+  }
+  return [...byPara.keys()]
+    .sort((a, b) => a - b)
+    .map((n) => {
+      const items = byPara.get(n) ?? [];
+      return {
+        text: items.map((c) => c.text.trim()).join(' '),
+        sources: items.flatMap((c) => [...c.sources]),
+      };
+    });
+}

@@ -5,7 +5,13 @@ import { ensureHomeFonts, waitHomeFonts } from '@/features/morning-feed/watch-ho
 import { BackButton } from '@/features/morning-feed/BackButton';
 import { haptic, popIcon } from '@/features/morning-feed/motion-tokens';
 import { briefDateLabel, headlineSize } from '@/features/morning-feed/watch-home-model';
-import { citeLinks, youtubeAt, type CiteLink } from '@/features/morning-feed/watch-page-model';
+import {
+  articleParagraphs,
+  citeLinks,
+  isArticleCore,
+  youtubeAt,
+  type CiteLink,
+} from '@/features/morning-feed/watch-page-model';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
 import {
   AccountButton,
@@ -207,17 +213,34 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
             {pg.headline}
           </h1>
 
-          <div className="mf-page-core" data-testid="mf-page-core" data-selectable="">
-            {pg.core.map((c, i) => (
-              <p
-                key={i}
-                className="mf-page-core-p"
-                data-cited={c.sources.length > 0 ? '' : undefined}
-              >
-                {c.sources.length > 0 ? c.text + ' ' : c.text}
-                <Cites links={citeLinks(c.sources, channelOf)} onOpen={p.onOpenVideo} />
-              </p>
-            ))}
+          <div
+            className="mf-page-core"
+            data-testid="mf-page-core"
+            data-selectable=""
+            data-article={isArticleCore(pg.core) ? '' : undefined}
+          >
+            {isArticleCore(pg.core)
+              ? // article format (2026-11-22): 1 to 2 paragraphs, the sources once after each
+                articleParagraphs(pg.core).map((q, i) => (
+                  <p
+                    key={i}
+                    className="mf-page-core-p"
+                    data-cited={q.sources.length > 0 ? '' : undefined}
+                  >
+                    {q.sources.length > 0 ? q.text + ' ' : q.text}
+                    <Cites links={citeLinks(q.sources, channelOf)} onOpen={p.onOpenVideo} />
+                  </p>
+                ))
+              : pg.core.map((c, i) => (
+                  <p
+                    key={i}
+                    className="mf-page-core-p"
+                    data-cited={c.sources.length > 0 ? '' : undefined}
+                  >
+                    {c.sources.length > 0 ? c.text + ' ' : c.text}
+                    <Cites links={citeLinks(c.sources, channelOf)} onOpen={p.onOpenVideo} />
+                  </p>
+                ))}
           </div>
 
           {pg.note.length > 0 ? (

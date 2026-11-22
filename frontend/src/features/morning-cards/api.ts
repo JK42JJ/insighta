@@ -330,9 +330,20 @@ export interface MorningPage {
   domain: string;
   seen_date: string;
   headline: string;
-  core: Array<{ text: string; sources: PageSource[] }>;
+  /**
+   * Article format (2026-11-22): one item is one sentence and carries `para` (paragraph 1 or 2);
+   * a page is in that format when any item has `para`. Without it: the earlier core sentences.
+   */
+  core: Array<{ text: string; sources: PageSource[]; para?: 1 | 2 }>;
   note: Array<{ heading: string; paragraphs: Array<{ text: string; sources: PageSource[] }> }>;
-  videos: Array<{ video_id: string; title: string; channel: string; useful_for: string }>;
+  /** `role` (article format) is stored with the page and not drawn. */
+  videos: Array<{
+    video_id: string;
+    title: string;
+    channel: string;
+    useful_for: string;
+    role?: 'support' | 'condition' | 'other';
+  }>;
   /** Single page read only (GET /pages): this viewer's answer on the brief, or null. */
   feedback?: BriefFeedbackValue | null;
 }
