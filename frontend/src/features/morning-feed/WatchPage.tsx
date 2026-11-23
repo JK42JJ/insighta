@@ -75,14 +75,24 @@ function reducedMotion(): boolean {
 }
 
 /** In the app (2026-11-14): a link opens the watch screen; the address stays as the fallback. */
-type OpenVideo = (videoId: string, t: number) => void;
+type OpenVideo = (videoId: string, t: number, from: OpenFrom) => void;
+/** Where on the page a video was opened from (usage records tell a body link from a list row). */
+export type OpenFrom = 'body' | 'note' | 'list';
 
 /**
  * One video's links (channel and its times) as one unit that does not wrap inside (decision
  * 2026-11-14: a second time was left alone on the next line); units of different videos can
  * still wrap between them.
  */
-function Cites({ links, onOpen }: { links: CiteLink[]; onOpen?: OpenVideo }): JSX.Element {
+function Cites({
+  links,
+  onOpen,
+  from,
+}: {
+  links: CiteLink[];
+  onOpen?: OpenVideo;
+  from: OpenFrom;
+}): JSX.Element {
   const groups: CiteLink[][] = [];
   for (const c of links) {
     const last = groups[groups.length - 1];
@@ -93,14 +103,22 @@ function Cites({ links, onOpen }: { links: CiteLink[]; onOpen?: OpenVideo }): JS
     <>
       {groups.map((g, k) => (
         <span key={k} className="mf-page-cite-group" data-testid="mf-page-cite-group">
-          <CiteLinks links={g} onOpen={onOpen} />
+          <CiteLinks links={g} onOpen={onOpen} from={from} />
         </span>
       ))}
     </>
   );
 }
 
-function CiteLinks({ links, onOpen }: { links: CiteLink[]; onOpen?: OpenVideo }): JSX.Element {
+function CiteLinks({
+  links,
+  onOpen,
+  from,
+}: {
+  links: CiteLink[];
+  onOpen?: OpenVideo;
+  from: OpenFrom;
+}): JSX.Element {
   return (
     <>
       {links.map((c, i) => (
@@ -117,7 +135,7 @@ function CiteLinks({ links, onOpen }: { links: CiteLink[]; onOpen?: OpenVideo })
             onOpen
               ? (e) => {
                   e.preventDefault();
-                  onOpen(c.videoId, c.t);
+                  onOpen(c.videoId, c.t, from);
                 }
               : undefined
           }
@@ -228,7 +246,11 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                     data-cited={q.sources.length > 0 ? '' : undefined}
                   >
                     {q.sources.length > 0 ? q.text + ' ' : q.text}
-                    <Cites links={citeLinks(q.sources, channelOf)} onOpen={p.onOpenVideo} />
+                    <Cites
+                      links={citeLinks(q.sources, channelOf)}
+                      onOpen={p.onOpenVideo}
+                      from="body"
+                    />
                   </p>
                 ))
               : pg.core.map((c, i) => (
@@ -238,7 +260,11 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                     data-cited={c.sources.length > 0 ? '' : undefined}
                   >
                     {c.sources.length > 0 ? c.text + ' ' : c.text}
-                    <Cites links={citeLinks(c.sources, channelOf)} onOpen={p.onOpenVideo} />
+                    <Cites
+                      links={citeLinks(c.sources, channelOf)}
+                      onOpen={p.onOpenVideo}
+                      from="body"
+                    />
                   </p>
                 ))}
           </div>
@@ -281,6 +307,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                               <Cites
                                 links={citeLinks(q.sources, channelOf)}
                                 onOpen={p.onOpenVideo}
+                                from="note"
                               />
                             </p>
                           ))}
@@ -308,7 +335,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                   p.onOpenVideo
                     ? (e) => {
                         e.preventDefault();
-                        p.onOpenVideo?.(v.video_id, 0);
+                        p.onOpenVideo?.(v.video_id, 0, 'list');
                       }
                     : undefined
                 }

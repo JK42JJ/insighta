@@ -54,7 +54,11 @@ import { ScreenStack } from '@/features/morning-feed/ScreenStack';
 import { usePressFeedback } from '@/features/morning-feed/use-press';
 import { useAppShell } from '@/features/morning-feed/use-app-shell';
 import './motion.css';
-import { type BriefFeedbackProps, type PageRestChip } from '@/features/morning-feed/WatchPage';
+import {
+  type BriefFeedbackProps,
+  type OpenFrom,
+  type PageRestChip,
+} from '@/features/morning-feed/WatchPage';
 import { PageSkeleton } from '@/features/morning-feed/PageSkeleton';
 import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
 import { TestClockControls } from '@/features/morning-feed/TestClockControls';
@@ -374,8 +378,8 @@ export function MorningWatch({
             video_id: video.videoId ?? undefined,
             value: verdict,
           }),
-    onEvidence: (cell, date, videoId) =>
-      void postUsageEvent({ kind: 'evidence_open', cell, date, video_id: videoId }),
+    onEvidence: (cell, date, videoId, from) =>
+      void postUsageEvent({ kind: 'evidence_open', cell, date, video_id: videoId, value: from }),
   };
 
   /** Where the screen under this one is, by name ("‹ 홈"); none = the home. */
@@ -614,7 +618,7 @@ interface PageWatchBridge {
   onSound: (on: boolean) => void;
   onJudge: (video: WatchVideo, verdict: WatchVerdict, index: number) => void;
   /** A source link or an evidence row opened a video (usage count). */
-  onEvidence: (cell: string, date: string, videoId: string) => void;
+  onEvidence: (cell: string, date: string, videoId: string, from: OpenFrom) => void;
 }
 
 /**
@@ -722,7 +726,7 @@ function LiveDone({
         sound={pageWatch.sound}
         onSound={pageWatch.onSound}
         onJudge={pageWatch.onJudge}
-        onEvidence={(id) => pageWatch.onEvidence(goal.label, page.seen_date, id)}
+        onEvidence={(id, from) => pageWatch.onEvidence(goal.label, page.seen_date, id, from)}
       />
     );
   }
@@ -812,7 +816,7 @@ function LivePage({
       sound={pageWatch.sound}
       onSound={pageWatch.onSound}
       onJudge={pageWatch.onJudge}
-      onEvidence={(id) => pageWatch.onEvidence(cell, page.seen_date, id)}
+      onEvidence={(id, from) => pageWatch.onEvidence(cell, page.seen_date, id, from)}
     />
   );
 }

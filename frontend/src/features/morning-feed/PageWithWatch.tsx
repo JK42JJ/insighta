@@ -4,7 +4,7 @@ import type { WatchVerdict, WatchVideo } from '@/features/morning-feed/watch-lis
 import { MOTION, prefersReducedMotion } from '@/features/morning-feed/motion-tokens';
 import { PageWatch, type PageWatchCards } from '@/features/morning-feed/PageWatch';
 import { popIsNative, trackEdgeSwipe } from '@/features/morning-feed/use-screen-history';
-import { WatchPage, type WatchPageProps } from '@/features/morning-feed/WatchPage';
+import { WatchPage, type OpenFrom, type WatchPageProps } from '@/features/morning-feed/WatchPage';
 
 /*
  * A brief with its videos one tap away (decision 2026-11-14). Opening pushes one history entry,
@@ -22,7 +22,7 @@ export interface PageWithWatchProps extends Omit<WatchPageProps, 'onOpenVideo'> 
   onSound: (on: boolean) => void;
   onJudge: (video: WatchVideo, verdict: WatchVerdict, index: number) => void;
   /** A source link or an evidence row was opened (usage count). */
-  onEvidence?: (videoId: string) => void;
+  onEvidence?: (videoId: string, from: OpenFrom) => void;
 }
 
 const HISTORY_KEY = 'mfPageWatch';
@@ -114,11 +114,11 @@ export function PageWithWatch({
   }, [phase, slide]);
 
   const open = useCallback(
-    (videoId: string, t: number) => {
+    (videoId: string, t: number, from: OpenFrom) => {
       seq.current += 1;
       setWatch({ videoId, t, key: seq.current });
       setPhase('in');
-      onEvidence?.(videoId);
+      onEvidence?.(videoId, from);
       if (!pushed.current) {
         window.history.pushState({ [HISTORY_KEY]: true }, '');
         pushed.current = true;

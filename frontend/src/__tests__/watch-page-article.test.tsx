@@ -60,7 +60,10 @@ const PAGE: MorningPage = {
   ],
 };
 
-function draw(page: MorningPage, onOpenVideo?: (id: string, t: number) => void): void {
+function draw(
+  page: MorningPage,
+  onOpenVideo?: (id: string, t: number, from: 'body' | 'note' | 'list') => void
+): void {
   render(
     <WatchPage
       frame={FRAME}
@@ -145,9 +148,24 @@ describe('article page (screen)', () => {
       `https://www.youtube.com/watch?v=${A}&t=360s`,
     ]);
     fireEvent.click(cites[1]!);
-    expect(open).toHaveBeenCalledWith(A, 220);
+    expect(open).toHaveBeenCalledWith(A, 220, 'body');
     fireEvent.click(cites[3]!);
-    expect(open).toHaveBeenCalledWith(B, 180);
+    expect(open).toHaveBeenCalledWith(B, 180, 'body');
+  });
+
+  it('tells a body link from a list row and a note link (usage records)', () => {
+    const open = vi.fn();
+    draw(PAGE, open);
+    fireEvent.click(screen.getAllByTestId('mf-page-video')[0]!);
+    expect(open).toHaveBeenLastCalledWith(PAGE.videos[0]!.video_id, 0, 'list');
+    fireEvent.click(screen.getByTestId('mf-page-note-toggle'));
+    const noteCite = screen
+      .getByTestId('mf-page-note')
+      .querySelector('[data-testid="mf-page-cite"]');
+    if (noteCite) {
+      fireEvent.click(noteCite);
+      expect(open.mock.calls[open.mock.calls.length - 1]![2]).toBe('note');
+    }
   });
 
   it('the earlier format is drawn as before: one paragraph per core sentence with its own links', () => {

@@ -167,7 +167,7 @@ describe('brief -> its videos -> back', () => {
       await Promise.resolve();
     });
     expect(pushState).toHaveBeenCalledTimes(1);
-    expect(onEvidence).toHaveBeenCalledWith(ID[1]);
+    expect(onEvidence).toHaveBeenCalledWith(ID[1], 'body');
     expect(screen.getByTestId('mf-page-watch')).toBeTruthy();
     // during the slide-in the feed (and its player) is not mounted yet: no playback mid-slide
     expect(screen.queryByTestId('mf-watch-counter')).toBeNull();
