@@ -21,6 +21,11 @@
  *     the play bar, dot and time label are a row below the thumbnail, in one hero card that is the
  *     same in scenes 2 and 5 (channel row with attribution included); the scan line runs behind the
  *     tiles; what would be over a moving thumbnail shows after it has arrived.
+ *   - the attribution row has no plate of its own (James 2026-11-25): the ground under it is one
+ *     solid colour instead (the hero card's white; `ground` in scenes 3, 4 and 5).
+ *   - scenes 4/5: the brief card, the chips and the attribution row are one group placed in the
+ *     free height by the card's laid-out height; the chips fill the content column.
+ *   - the dots move up in the last scene so they do not cross the sheet.
  */
 
 import {
@@ -102,6 +107,13 @@ export function fitStage(vw: number, vh: number): Fit {
   return { k, w: vw / k, h: vh / k };
 }
 
+/** landing.css: the header's height; the dots' row (DOT_COUNT buttons of 15px, one column). */
+const HEAD_H = 52;
+/** The last scene's dots (centre, design px): halfway between the header and the sheet's top. */
+export function dotsTopAbove(sheetH: number, stageH: number): number {
+  return (HEAD_H + stageH - sheetH) / 2;
+}
+
 /** The scene after `s` going `d` (+1 next, -1 previous), or null at an end. */
 export function nextScene(s: Scene, d: 1 | -1): Scene | null {
   const j = SEQ.indexOf(s) + d;
@@ -141,10 +153,10 @@ export const YT_ICON_BOX_W = (YT_ICON_BOX_H * YT_ICON_FILE_W) / YT_ICON_FILE_H;
 const CREDIT_TOP: Readonly<Partial<Record<Scene, number>>> = {
   0: 558,
   // 1, 5: in the hero card's channel row (creditTopIn); 2: under the tiles (card2CreditTop)
-  // 3, 4: under the chips (they end at 490)
-  3: 494,
-  4: 494,
+  // 3, 4: under the chips (readGroup)
 };
+/** The solid ground of scenes 3-5's attribution row starts this far above it (a soft edge). */
+export const GROUND_EDGE = 28;
 /** Scene 3's attribution row sits this far under the tiles' last row (design: 452 -> 458). */
 const CREDIT_UNDER_TILES = 6;
 /** Scenes whose attribution row carries the icon link (s=0 has it in the deck card instead). */
@@ -176,9 +188,9 @@ export const BAR_H = 16;
 const CHANNEL_GAP = 2;
 /** Channel row (landing.css .lv-band: height BAND_H, the part under the thumbnail's rounded end). */
 const CHANNEL_H = 48;
-const BAND_UNDER = 18;
-export const BAND_H = BAND_UNDER + BAR_GAP + BAR_H + CHANNEL_GAP + CHANNEL_H;
-const HERO_CARD_H = HERO_H + BAND_H - BAND_UNDER;
+const HERO_CARD_H = HERO_H + BAR_GAP + BAR_H + CHANNEL_GAP + CHANNEL_H;
+/** The card is behind the whole thumbnail, so the thumbnail casts no shadow on it. */
+export const BAND_H = HERO_CARD_H;
 /** Room kept at the right end of the bar row for the time label. */
 const BAR_LABEL_W = 58;
 /** Scene 5: the hero card ends here (the Google button starts at 588 on a 650 stage). */
@@ -249,7 +261,37 @@ const card2CreditTop = (n: number): number => {
   const rows = Math.ceil(n / g.cols);
   return TILES_TOP + (rows - 1) * g.dy + g.th + TILE_NAME_ROOM + CREDIT_UNDER_TILES;
 };
-const chip = (k: number): Box => ({ x: X + k * 56.8, y: 462, w: 50, h: 28.1 });
+/** Scenes 4/5: the chips share the content column (six: the design's 50x28.1). */
+const CHIP_GAP = 6.8;
+const chipW = (n: number): number => (HERO_W - (Math.max(n, 3) - 1) * CHIP_GAP) / Math.max(n, 3);
+const chipH = (n: number): number => (chipW(n) * 9) / 16;
+/** Scenes 4/5: the group's room: from the two text lines' end to above the Google button. */
+const READ_TOP = 120;
+const READ_BOTTOM = 582;
+const CARD_TO_CHIPS = 20;
+const CHIPS_TO_CREDIT = 4;
+/** Share of the free height above the group (the text above it is closer than the button). */
+const READ_ABOVE = 0.4;
+/** The card's height until it is measured (two headline lines, three text lines). */
+const CARD_H_NOMINAL = 202;
+/** Where scenes 4/5 put the card, the chips and the attribution row. */
+export function readGroup(
+  cardH: number,
+  n: number
+): { card: number; chips: number; credit: number } {
+  const ch = cardH > 0 ? cardH : CARD_H_NOMINAL;
+  const below = CARD_TO_CHIPS + chipH(n) + CHIPS_TO_CREDIT + YT_ICON_BOX_H;
+  const free = Math.max(0, READ_BOTTOM - READ_TOP - ch - below);
+  const card = READ_TOP + free * READ_ABOVE;
+  const chips = card + ch + CARD_TO_CHIPS;
+  return { card, chips, credit: chips + chipH(n) + CHIPS_TO_CREDIT };
+}
+const chipAt = (k: number, n: number, top: number): Box => ({
+  x: X + k * (chipW(n) + CHIP_GAP),
+  y: top,
+  w: chipW(n),
+  h: chipH(n),
+});
 const px = (v: number): string => Math.round(v * 10) / 10 + 'px';
 
 type Mode = 'grid' | 'card2' | 'chip' | 'big' | 'feed' | 'mini';
@@ -400,6 +442,8 @@ export interface SceneView {
     st: string;
   };
   scan: { o: number; t: string; tr: string };
+  /** The solid ground under scenes 3-5's attribution row (its top and colour per scene). */
+  ground: { paper: number; night: number; top: string; nightTop: string; tr: string };
   cn: { t: string; s: string; tr: string };
   btm: { on: boolean; t: string; tr: string };
   dots: ReadonlyArray<{ h: string; c: string; tr: string }>;
@@ -413,8 +457,6 @@ export interface SceneView {
     in: boolean;
     /** The YouTube Icon link in the row: where it goes, or null (no icon in this scene). */
     href: string | null;
-    /** The row's solid background (the icon must sit on one solid colour). */
-    plate: string;
   };
 }
 
@@ -460,6 +502,8 @@ export function buildScene(
   }
 
   const slots = slotVideos(ex);
+  const read = readGroup(cardH, slots.length);
+  const chip = (k: number): Box => chipAt(k, slots.length, read.chips);
   const DECK: ReadonlyArray<readonly [string, string]> = [
     [ex.brief.domain, ex.brief.headline],
     [ex.deck2.domain, ex.deck2.headline],
@@ -567,7 +611,8 @@ export function buildScene(
     }
     if (mode === 'big') {
       bg = v('white');
-      sh = v('sh-big');
+      // its shadow is the hero card's (it would fall on the card's own rows)
+      sh = 'none';
       rad = '18px';
     }
     if (mode === 'feed') {
@@ -675,7 +720,7 @@ export function buildScene(
   // the hero card under the thumbnail (bar row, channel row); behind the cells
   const band = {
     o: barOn ? 1 : 0,
-    t: px(heroBox.y + HERO_H - BAND_UNDER),
+    t: px(heroBox.y),
     tr: T(barOn ? `opacity .3s .5s, top .6s ${EASE}` : 'opacity .15s linear, top 0s .2s'),
   };
 
@@ -684,12 +729,14 @@ export function buildScene(
     pe: (s === 3 || s === 4 ? 'auto' : 'none') as 'auto' | 'none',
     t:
       s < 3
-        ? 'translateY(24px)'
+        ? `translateY(${px(read.card - CARD_TOP + 24)})`
         : s === 5
           ? cardS5(cardH)
-          : s === 6 || s === 7
-            ? 'translate(30px,78px) scale(.82)'
-            : 'none',
+          : s === 3 || s === 4
+            ? `translateY(${px(read.card - CARD_TOP)})`
+            : s === 6 || s === 7
+              ? 'translate(30px,78px) scale(.82)'
+              : 'none',
     tr: T(`opacity ${s === 6 ? '.45s .2s' : s === 3 ? '.45s .1s' : '.3s'}, transform .6s ${EASE}`),
     dim: s === 4 || s === 5 ? 0.28 : 1,
     deco: (s === 4 || s === 5 ? 'underline' : 'none') as 'underline' | 'none',
@@ -730,7 +777,13 @@ export function buildScene(
     anim: live && wallOn,
   };
   const creditTop =
-    s === 2 ? card2CreditTop(slots.length) : barOn ? creditTopIn(heroBox) : CREDIT_TOP[s];
+    s === 2
+      ? card2CreditTop(slots.length)
+      : s === 3 || s === 4
+        ? read.credit
+        : barOn
+          ? creditTopIn(heroBox)
+          : CREDIT_TOP[s];
   const credit = {
     on: creditTop !== undefined,
     top: creditTop ?? 0,
@@ -744,7 +797,14 @@ export function buildScene(
         ? heroWatchUrl(ex)
         : watchUrl(heroVideo(ex).id)
       : null,
-    plate: !CREDIT_ICON.has(s) ? v('clear') : barOn ? v('white') : nv ? v('night') : v('paper'),
+  };
+  const ground = {
+    paper: s === 2 ? 1 : 0,
+    night: s === 3 || s === 4 ? 1 : 0,
+    top: px(card2CreditTop(slots.length) - GROUND_EDGE),
+    nightTop: px(read.credit - GROUND_EDGE),
+    // solid before the row fades in
+    tr: T('opacity .5s .1s ease'),
   };
 
   return {
@@ -772,6 +832,7 @@ export function buildScene(
     band,
     card,
     scan,
+    ground,
     cn,
     btm,
     dots,

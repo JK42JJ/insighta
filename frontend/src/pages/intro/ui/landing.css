@@ -33,6 +33,7 @@
   --lv-scan-ring: rgba(58, 110, 165, 0.16);
   --lv-bar-track: rgba(22, 39, 63, 0.2);
   --lv-fade-end: rgba(247, 245, 240, 0);
+  --lv-night-end: rgba(19, 34, 56, 0);
   --lv-sheet-chip: #f2efe8;
   --lv-add-line: #a9a396;
   --lv-mask: #000000;
@@ -60,7 +61,7 @@
   --lv-wall-fog-1: rgba(247, 245, 240, 0.55);
   --lv-wall-fog-2: rgba(247, 245, 240, 0.12);
   /* shadows (each carries its colour) */
-  --lv-sh-band: 0 40px 70px -30px rgba(3, 9, 20, 0.55);
+  --lv-sh-band: 0 40px 70px -30px rgba(3, 9, 20, 0.55), 0 2px 6px rgba(3, 9, 20, 0.12);
   --lv-sh-deck: 0 0 0 1px rgba(20, 26, 36, 0.06), 0 30px 50px -30px rgba(20, 26, 36, 0.45);
   --lv-sh-deck-thumb: 0 0 0 1px rgba(20, 26, 36, 0.08);
   --lv-sh-card:
@@ -69,7 +70,6 @@
   /* the ring is a shadow (outside): a border would cut into the thumbnail */
   --lv-sh-chip: 0 0 0 1px var(--lv-chip-line), 0 10px 18px -10px rgba(0, 0, 0, 0.6);
   --lv-sh-chip-hero: 0 0 0 3px var(--lv-paper), 0 12px 22px -10px rgba(0, 0, 0, 0.7);
-  --lv-sh-big: 0 40px 70px -34px rgba(3, 9, 20, 0.6), 0 2px 6px rgba(3, 9, 20, 0.12);
   --lv-sh-feed: 0 4px 10px -6px rgba(20, 26, 36, 0.4);
   --lv-sh-mini: 0 14px 30px -18px rgba(20, 26, 36, 0.45), 0 0 0 1px rgba(20, 26, 36, 0.05);
   --lv-sh-card2: 0 14px 24px -12px rgba(10, 18, 30, 0.55), 0 0 0 1px rgba(20, 26, 36, 0.06);
@@ -363,15 +363,30 @@
   );
 }
 
-/* scenes 2 and 5: the hero card under the thumbnail (top and height from landing-scene.ts) */
+/* scenes 3-5: the attribution row's solid ground (top from landing-scene.ts; 28px = GROUND_EDGE) */
+.lv-ground {
+  position: absolute;
+  left: calc(-1 * var(--lv-bleed));
+  right: calc(-1 * var(--lv-bleed));
+  /* past the stage's end: the rubber band never shows its edge */
+  bottom: -80px;
+  pointer-events: none;
+  background: linear-gradient(var(--lv-fade-end) 0, var(--lv-paper) 28px);
+}
+.lv-ground[data-dark] {
+  background: linear-gradient(var(--lv-night-end) 0, var(--lv-night) 28px);
+}
+
+/* scenes 2 and 5: the hero card, behind the thumbnail (top and height from landing-scene.ts) */
 .lv-band {
   position: absolute;
   left: 28px;
   width: 334px;
   box-sizing: border-box;
-  /* past the thumbnail's end and the bar row: the channel row */
-  padding: 46px 16px 0;
-  border-radius: 0 0 18px 18px;
+  /* past the thumbnail and the bar row: the channel row */
+  padding: 216px 16px 0;
+  /* the top corners stay inside the thumbnail's 18px ones */
+  border-radius: 22px 22px 18px 18px;
   background: var(--lv-white);
   box-shadow: var(--lv-sh-band);
   display: flex;
@@ -805,11 +820,6 @@
   font-weight: 400;
   white-space: nowrap;
   pointer-events: none;
-}
-/* with the YouTube Icon: a solid plate (the icon sits on one solid colour), text then icon */
-.lv-credit[data-icon] {
-  border-radius: 8px;
-  padding-left: 10px;
 }
 /* in after the thumbnails' flight (0.6 s; tiles to chips 0.75 s) */
 .lv-credit[data-in] {

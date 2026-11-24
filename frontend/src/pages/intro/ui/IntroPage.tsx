@@ -66,6 +66,8 @@ import {
   DECK_LEAVE_MS,
   DECK_THUMB_H,
   DOTGO,
+  dotsTopAbove,
+  EASE,
   EASE_BACK,
   fitStage,
   FIRST_SCENE,
@@ -177,6 +179,9 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null);
   /** The brief card's laid-out height (its transform not included). */
   const [cardH, setCardH] = useState(0);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  /** The last sheet's laid-out height (it grows when the domain list arrives). */
+  const [sheetH, setSheetH] = useState(0);
   const t1 = useRef<number | undefined>(undefined);
   const t2 = useRef<number | undefined>(undefined);
   const lock = useRef(0);
@@ -220,6 +225,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
 
   // measured again per scene: the fonts may have arrived since
   useLayoutEffect(() => setCardH(cardRef.current?.offsetHeight ?? 0), [s, vp]);
+  useLayoutEffect(() => setSheetH(sheetRef.current?.offsetHeight ?? 0), [s, vp, domains]);
 
   // a dot reached (once per dot per visit)
   useEffect(() => {
@@ -514,6 +520,27 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
               </div>
               <div className="lv-wall-fog" />
             </div>
+
+            {/* scenes 3-5: the solid ground of the attribution row (no plate around it) */}
+            <div
+              className="lv-ground"
+              data-testid="lv-ground-paper"
+              style={{
+                top: view.ground.top,
+                opacity: view.ground.paper,
+                transition: view.ground.tr,
+              }}
+            />
+            <div
+              className="lv-ground"
+              data-dark=""
+              data-testid="lv-ground-night"
+              style={{
+                top: view.ground.nightTop,
+                opacity: view.ground.night,
+                transition: view.ground.tr,
+              }}
+            />
 
             {/* scenes 2 and 5 (after the tap): the hero card under the thumbnail (bar row, channel row) */}
             <div
@@ -893,7 +920,6 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                 top: view.credit.top + 'px',
                 right: view.credit.right + 'px',
                 color: view.credit.c,
-                backgroundColor: view.credit.plate,
                 opacity: view.credit.on ? 1 : 0,
               }}
             >
@@ -911,6 +937,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
 
             {/* scene 6: the last sheet */}
             <div
+              ref={sheetRef}
               className="lv-sheet"
               data-testid="lv-sheet"
               aria-hidden={off(T[7]!.o)}
@@ -1023,7 +1050,16 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
             />
           </div>
 
-          <div className="lv-dots" style={{ pointerEvents: 'auto' }}>
+          {/* the last scene's dots are centred between the header and the sheet, not over it */}
+          <div
+            className="lv-dots"
+            data-testid="lv-dots"
+            style={{
+              pointerEvents: 'auto',
+              top: sheetOn && sheetH > 0 ? `${dotsTopAbove(sheetH, fit.h)}px` : undefined,
+              transition: live ? `top .35s ${EASE}` : 'none',
+            }}
+          >
             {view.dots.map((d, i) => (
               <button
                 key={i}

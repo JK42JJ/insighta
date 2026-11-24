@@ -59,6 +59,7 @@ import {
 } from '@/features/landing-intro';
 import { IntroPage } from '@/pages/intro';
 import {
+  S1_TEXT,
   S3_TEXT,
   wallDomains,
   YT_CREDIT,
@@ -79,6 +80,9 @@ import {
   BAR_IN_S,
   buildScene,
   CN_H,
+  dotsTopAbove,
+  GROUND_EDGE,
+  readGroup,
   STAGE_H,
   STAGE_W,
   DOT,
@@ -482,10 +486,23 @@ describe('YouTube Icon link next to the thumbnails (YouTube API branding guideli
       expect(a.href).toBe(s === 5 ? heroWatchUrl() : HERO_PLAIN);
       expect(a.style.pointerEvents).toBe('auto');
       expect(a.tabIndex).toBe(0);
-      // the row sits on one solid colour (a token, never a literal)
-      expect(screen.getByTestId('lv-credit').style.backgroundColor).toMatch(
-        /^var\(--lv-(white|paper|night)\)$/
-      );
+      // no plate of its own: the ground under the row is one solid colour (the hero card in scenes
+      // 2 and 6, the paper / night ground in 3, 4, 5) and starts far enough above the row
+      const credit = screen.getByTestId('lv-credit');
+      expect(credit.style.backgroundColor).toBe('');
+      const paper = screen.getByTestId('lv-ground-paper');
+      const night = screen.getByTestId('lv-ground-night');
+      expect([s, paper.style.opacity, night.style.opacity]).toEqual([
+        s,
+        s === 2 ? '1' : '0',
+        s === 3 || s === 4 ? '1' : '0',
+      ]);
+      if (s === 2 || s === 3 || s === 4) {
+        const top = parseFloat((s === 2 ? paper : night).style.top);
+        expect(parseFloat(credit.style.top) - top).toBeCloseTo(GROUND_EDGE, 0);
+      } else {
+        expect(screen.getByTestId('lv-band').style.opacity).toBe('1');
+      }
     }
     goTo(7);
     // the last sheet has no thumbnails: no icon, the sheet keeps its text attribution
@@ -758,7 +775,6 @@ describe('nothing over a thumbnail (James 2026-11-25)', () => {
       n(x.v.band.t) - n(x.hero.t),
       x.v.credit.top - n(x.hero.t),
       x.v.credit.right,
-      x.v.credit.plate,
       x.v.credit.c,
     ];
     expect(look(b)).toEqual(look(a));
@@ -781,6 +797,14 @@ describe('nothing over a thumbnail (James 2026-11-25)', () => {
     expect(n(v.band.t) + BAND_H).toBeLessThanOrEqual(580);
     expect(v.credit.top + YT_ICON_BOX_H).toBeLessThanOrEqual(n(v.band.t) + BAND_H);
     expect(v.credit.top).toBeGreaterThan(n(v.bar.t) + BAR_H - 1);
+  });
+
+  it('the thumbnail casts no shadow on the hero card (the card carries it)', () => {
+    for (const s of [1, 5] as const) {
+      const { v, hero } = heroAt(s);
+      expect(hero.sh).toBe('none');
+      expect(v.band.t).toBe(hero.t);
+    }
   });
 
   it('in flight: hidden thumbnails are gone at once, the bar, name and credit come after', () => {
@@ -808,6 +832,67 @@ describe('nothing over a thumbnail (James 2026-11-25)', () => {
     expect(on({ lv: 1, ar: -1 }, 1)).toBe(false); // the other card is sliding over it
     draw();
     expect(screen.getAllByTestId('lv-deck-card')[2]!.textContent).toBe('');
+  });
+});
+
+describe('flaws seen in the stg captures (James 2026-11-25)', () => {
+  it('scene 2: "알 수 있거든요" is never split over two lines', () => {
+    expect(S1_TEXT).toContain('알\u00a0수\u00a0있거든요.');
+    draw();
+    goTo(1);
+    expect(screen.getByTestId('lv-text-1').textContent).toBe(S1_TEXT);
+  });
+
+  it.each([3, 4, 5, 6])(
+    'scenes 4/5, %i videos: card, chips, attribution are one group',
+    (count) => {
+      for (const h of [160, 202, 284]) {
+        const g = readGroup(h, count);
+        const gapAbove = g.card - 120;
+        const chipsGap = g.chips - (g.card + h);
+        const gapBelow = 582 - (g.credit + YT_ICON_BOX_H);
+        expect(gapAbove).toBeGreaterThanOrEqual(0);
+        expect(chipsGap).toBeCloseTo(20, 5);
+        // the group stays above the Google button, the free height is on both sides of it
+        expect(gapBelow).toBeGreaterThanOrEqual(0);
+        expect(gapAbove).toBeCloseTo(((gapAbove + gapBelow) * 2) / 5, 5);
+      }
+    }
+  );
+
+  it('scenes 4/5: the chips fill the content column (28..362) and keep 16:9', () => {
+    const cells = buildScene(3, 2, false, null, 0, LANDING_EXAMPLE, 202).cells;
+    const last = cells[cells.length - 1]!;
+    expect(parseFloat(cells[0]!.l)).toBe(28);
+    expect(parseFloat(last.l) + parseFloat(last.w)).toBeCloseTo(362, 0);
+    for (const c of cells) expect(parseFloat(c.w) / parseFloat(c.h)).toBeCloseTo(16 / 9, 1);
+  });
+
+  it('scenes 4 and 5 hold still between each other', () => {
+    const a = buildScene(3, 2, false, null, 0, LANDING_EXAMPLE, 202);
+    const b = buildScene(4, 2, false, null, 0, LANDING_EXAMPLE, 202);
+    expect(b.card.t).toBe(a.card.t);
+    expect(b.credit.top).toBe(a.credit.top);
+    expect(b.cells.map((c) => [c.l, c.t])).toEqual(a.cells.map((c) => [c.l, c.t]));
+  });
+
+  it('last scene: the dots are between the header and the sheet, elsewhere at the middle', () => {
+    const DOTS_H = 6 * 15;
+    for (const [sheet, stage] of [
+      [320, 650],
+      [420, 650],
+      [320, 844],
+    ] as const) {
+      const mid = dotsTopAbove(sheet, stage);
+      expect(mid - DOTS_H / 2).toBeGreaterThanOrEqual(52);
+      expect(mid + DOTS_H / 2).toBeLessThanOrEqual(stage - sheet);
+    }
+    const h = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(320);
+    draw();
+    expect(screen.getByTestId('lv-dots').style.top).toBe('');
+    goTo(7);
+    expect(screen.getByTestId('lv-dots').style.top).not.toBe('');
+    h.mockRestore();
   });
 });
 
