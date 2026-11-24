@@ -74,6 +74,8 @@ export function LoginEntry() {
   return user ? <LoginPage /> : <Navigate to={WATCH_RETURN_PATH} replace />;
 }
 
+const MOBILE_ENTRY_PATHS: ReadonlyArray<string> = ['/', '/login'];
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -91,10 +93,13 @@ export function AppRouter() {
     // back from Google sign-in on a phone: go where the person was going (e.g. the watch screen)
     const back = mobileReturnTarget(pathname, readAuthReturn());
     if (back) return <MobileAuthReturn target={back} />;
-    try {
-      sessionStorage.setItem(MOBILE_GATE_FLAG_KEY, '1');
-    } catch {
-      /* noop */
+    // the site root and /login are entry points to the intro landing, not desktop-only app routes: no notice for them
+    if (!MOBILE_ENTRY_PATHS.includes(pathname)) {
+      try {
+        sessionStorage.setItem(MOBILE_GATE_FLAG_KEY, '1');
+      } catch {
+        /* noop */
+      }
     }
     // signed-out visitors on a phone get the intro landing (James 2026-11-24: it replaces the web login)
     return <Navigate to={WATCH_RETURN_PATH} replace />;

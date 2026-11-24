@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MOBILE_GATE_FLAG_KEY } from '@/shared/lib/mobile-gate';
 
@@ -7,8 +8,12 @@ import { MOBILE_GATE_FLAG_KEY } from '@/shared/lib/mobile-gate';
  * mobile gate redirected an app route. Self-contained so LandingPage stays
  * untouched.
  */
+/** The participant address is the mobile product itself (the intro landing or the watch screens): never "desktop only". */
+const MOBILE_PRODUCT_PREFIX = '/morning-cards';
+
 export function MobileGateNotice() {
   const { t } = useTranslation();
+  const { pathname } = useLocation();
   const [visible, setVisible] = useState(() => {
     try {
       return sessionStorage.getItem(MOBILE_GATE_FLAG_KEY) === '1';
@@ -17,7 +22,7 @@ export function MobileGateNotice() {
     }
   });
 
-  if (!visible) return null;
+  if (!visible || pathname.startsWith(MOBILE_PRODUCT_PREFIX)) return null;
 
   const dismiss = () => {
     try {

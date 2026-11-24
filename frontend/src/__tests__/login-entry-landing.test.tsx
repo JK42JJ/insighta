@@ -34,3 +34,18 @@ describe('/login after the intro landing replaced the web login (James 2026-11-2
     expect(await screen.findByText('old login page')).toBeTruthy();
   });
 });
+
+describe('mobile gate notice on the participant address (2026-11-24)', () => {
+  it('is never shown on /morning-cards, even with the gate flag set', async () => {
+    const { MobileGateNotice } = await import('@/app/router/MobileGateNotice');
+    const { MOBILE_GATE_FLAG_KEY } = await import('@/shared/lib/mobile-gate');
+    sessionStorage.setItem(MOBILE_GATE_FLAG_KEY, '1');
+    const { container } = render(
+      <MemoryRouter initialEntries={['/morning-cards?view=watch']}>
+        <MobileGateNotice />
+      </MemoryRouter>
+    );
+    expect(container.textContent).toBe('');
+    sessionStorage.removeItem(MOBILE_GATE_FLAG_KEY);
+  });
+});
