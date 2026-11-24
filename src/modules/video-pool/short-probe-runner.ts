@@ -23,6 +23,7 @@
 
 import { getPrismaClient } from '@/modules/database/client';
 import { logger } from '@/utils/logger';
+import { sleep } from '@/utils/sleep';
 import { isShort, SHORT_SIGNAL, SHORT_MAX_DURATION_SEC } from './is-short';
 
 const log = logger.child({ module: 'video-pool/short-probe-runner' });
@@ -62,8 +63,6 @@ export interface ProbeRunResult {
   /** Rows soft-deleted (only when demote=true). */
   demoted: number;
 }
-
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 export async function probeAndTagShorts(opts: ProbeRunOpts = {}): Promise<ProbeRunResult> {
   const db: PrismaLike = opts.prisma ?? (getPrismaClient() as unknown as PrismaLike);

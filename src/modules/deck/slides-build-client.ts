@@ -14,6 +14,7 @@
 
 import { loadSnapshotConfig } from '@/config/snapshot';
 import { logger } from '@/utils/logger';
+import { sleep } from '@/utils/sleep';
 
 const log = logger.child({ module: 'deck/slides-build-client' });
 
@@ -31,8 +32,6 @@ interface JobStatus {
   failure_stage?: string | null;
   stage?: string | null;
 }
-
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 async function jsonGet(
   url: string,

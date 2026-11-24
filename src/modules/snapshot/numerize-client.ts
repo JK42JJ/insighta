@@ -21,6 +21,7 @@
 
 import { loadSnapshotConfig } from '@/config/snapshot';
 import { logger } from '@/utils/logger';
+import { sleep } from '@/utils/sleep';
 import { FIGURE_KINDS, type FigureKind, type FigureRef } from './types';
 
 const log = logger.child({ module: 'snapshot/numerize-client' });
@@ -53,8 +54,6 @@ interface JobStatus {
 function isFigureKind(k: unknown): k is FigureKind {
   return typeof k === 'string' && (FIGURE_KINDS as readonly string[]).includes(k);
 }
-
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** One HTTP call with a per-call timeout. Returns parsed JSON or a non-ok flag. */
 async function jsonCall(

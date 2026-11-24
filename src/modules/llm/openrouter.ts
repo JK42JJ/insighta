@@ -8,6 +8,7 @@
 
 import type { GenerationProvider, GenerateOptions } from './provider';
 import { config } from '../../config';
+import { sleep } from '@/utils/sleep';
 import { logLLMCall } from './call-logger';
 import { creditGate, creditBlockMessage, noteCreditRefusal } from './credit-guard';
 import { extractResponseMeta, type OpenRouterChatResponse } from './response-meta';
@@ -31,8 +32,6 @@ const REQUEST_TIMEOUT_MS = 120_000;
 const OPENROUTER_MAX_RETRIES = 3;
 const RETRY_BASE_MS = 1_000;
 const RETRY_CAP_MS = 30_000;
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** 429 and 5xx are safe to retry (no generation completed). */
 export function isRetryableStatus(status: number): boolean {

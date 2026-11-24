@@ -21,6 +21,7 @@ import { randomBytes } from 'crypto';
 import { getPrismaClient } from '@/modules/database/client';
 import { sendBriefIssueEmail } from '@/modules/email/transactional';
 import { logger } from '@/utils/logger';
+import { sleep } from '@/utils/sleep';
 
 import { IssueDocumentSchema } from './issue-schema';
 import { issueLabelOf } from './issue-label';
@@ -37,8 +38,6 @@ export const ISSUE_SEND_MAX_RECIPIENTS = 500;
 
 /** 24 random bytes -> 32 URL-safe characters, inside the route's 16..64 check. */
 const TOKEN_BYTES = 24;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export type IssueSendErrorCode =
   | 'NOT_FOUND'

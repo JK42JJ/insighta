@@ -20,6 +20,7 @@
 import { getPrismaClient } from '@/modules/database/client';
 import { sendMobileGuideEmail } from '@/modules/email/transactional';
 import { logger } from '@/utils/logger';
+import { sleep } from '@/utils/sleep';
 
 const log = logger.child({ module: 'email/broadcast' });
 
@@ -54,8 +55,6 @@ export interface BroadcastPlan {
   alreadySent: string[];
   total: number;
 }
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Who would receive this campaign.

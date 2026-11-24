@@ -22,6 +22,7 @@
 import { createHash } from 'crypto';
 
 import { logger } from '@/utils/logger';
+import { sleep } from '@/utils/sleep';
 import { getPrismaClient } from '@/modules/database';
 import { Prisma } from '@prisma/client';
 import { config } from '@/config/index';
@@ -551,11 +552,6 @@ async function embedOneChunkViaOpenRouter(
     clearTimeout(timer);
     opts.signal?.removeEventListener('abort', onExternalAbort);
   }
-}
-
-/** Promise-based sleep for retry backoff. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
