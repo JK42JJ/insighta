@@ -1,6 +1,6 @@
 # Insighta 클라우드 보안 아키텍처 — 진단과 목표 설계
 
-작성 2026-09-11. 실측 기준: AWS 계정 `424428551371` (us-west-2), k3s 클러스터, Supabase Cloud, GitHub `JK42JJ/insighta` (origin/main `00c5c302`).
+작성 2026-09-11. 실측 기준: AWS 계정 `<AWS_ACCOUNT_ID>` (us-west-2), k3s 클러스터, Supabase Cloud, GitHub `JK42JJ/insighta` (origin/main `00c5c302`).
 측정 방법은 §9 에 명령 단위로 기록. 값은 전부 실측이며 추정치는 "추정" 으로 표기한다.
 
 ## 0. 목적과 범위

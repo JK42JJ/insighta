@@ -393,7 +393,7 @@ level=error msg="Failed to check local etcd status for learner management:
                  context deadline exceeded"
 ```
 
-`sg-071c0c18e5bb98e1b` 의 인바운드를 확인한 결과:
+`<SECURITY_GROUP_ID>` 의 인바운드를 확인한 결과:
 
 ```
 6443  apiserver   자기참조   있음
