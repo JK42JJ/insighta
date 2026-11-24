@@ -303,6 +303,9 @@ jobs:
       - run: cd frontend && npx tsc --noEmit
       - run: cd frontend && npm run build
         env:
+          # vite build of the frontend outgrew Node's default heap (~2 GB): on 2026-11-24 three runs in a row died with
+          # "JavaScript heap out of memory" on unrelated PRs (#1808, #1809). The runner has 16 GB; give the build 6 GB.
+          NODE_OPTIONS: --max-old-space-size=6144
           VITE_API_URL: /api
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: placeholder
