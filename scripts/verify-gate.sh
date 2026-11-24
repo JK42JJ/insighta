@@ -49,8 +49,23 @@ if [ -n "$REPO_DIR" ] && [ -d "$REPO_DIR" ]; then
   cd "$REPO_DIR" || block "🚫 BLOCKED: cannot enter $REPO_DIR to check the push." 
 fi
 
+# `gh pr merge <n>` merges that PR, not this checkout: judge the PR's own files and head commit
+# (2026-11-24: a scripts-only PR was blocked because the cwd branch had frontend changes, and the
+# reverse case -- a frontend PR merged from a backend-only checkout -- would have passed unverified).
+# If GitHub cannot be asked, fall back to this checkout (the old, stricter-or-equal behaviour).
+GH_BIN="${VERIFY_GATE_GH:-gh}"
+PR_SHA=""
+PR_NUM="$(printf '%s\n' "$CMD_CODE" | grep -oE 'gh[[:space:]]+pr[[:space:]]+merge[[:space:]]+[^[:space:];&|]+' | head -1 | awk '{print $4}' | grep -oE '[0-9]+$' || true)"
+if [ -n "$PR_NUM" ]; then
+  PR_JSON="$("$GH_BIN" pr view "$PR_NUM" --json files,headRefOid 2>/dev/null || true)"
+  if [ -n "$PR_JSON" ] && echo "$PR_JSON" | jq -e '.headRefOid' > /dev/null 2>&1; then
+    CHANGED="$(echo "$PR_JSON" | jq -r '.files[].path')"
+    PR_SHA="$(echo "$PR_JSON" | jq -r '.headRefOid')"
+  fi
+fi
+
 # Check if any frontend files changed vs main
-CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null || echo "")
+[ -n "$PR_SHA" ] || CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null || echo "")
 if ! echo "$CHANGED" | grep -q 'frontend/src/'; then
   # No frontend changes → pass through
   exit 0
@@ -67,6 +82,7 @@ fi
 MARKER_TS=$(awk '{print $2}' "$MARKER" 2>/dev/null || echo "0")
 MARKER_SHA=$(awk '{print $3}' "$MARKER" 2>/dev/null || echo "none")
 CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+[ -n "$PR_SHA" ] && CURRENT_SHA="$PR_SHA"   # a merge is verified against the PR's head commit
 NOW=$(date +%s)
 
 # Expired? (10 minute window)
