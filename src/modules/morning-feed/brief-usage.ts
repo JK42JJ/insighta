@@ -79,7 +79,8 @@ export async function saveBriefFeedback(
   if (input.date > kstDayString(now)) throw new FeedValidationError('brief is in the future');
   const exists = await db.$queryRawUnsafe<Array<{ one: number }>>(
     `SELECT 1 AS one FROM public.morning_pages
-      WHERE user_id = $1::uuid AND cell = $2 AND seen_date = $3::date`,
+      WHERE user_id = $1::uuid AND cell = $2 AND seen_date = $3::date
+        AND hidden_at IS NULL`,
     ownerId,
     input.cell,
     input.date

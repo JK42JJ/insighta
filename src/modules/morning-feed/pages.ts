@@ -1,7 +1,8 @@
 /**
  * Morning feed pages: one read-only page per (user, goal cell, seen date), shown on the watch home.
  * Pages are imported by scripts/morning-pages/import-page.ts; this module validates the page JSON
- * and reads rows. It never writes.
+ * and reads rows. It never writes. Hidden pages (hidden_at set, see 009_pages_hidden.sql) are
+ * withdrawn: every read here skips them.
  */
 import {
   FEED_CELLS,
@@ -291,6 +292,7 @@ export async function readHomePages(
     `SELECT DISTINCT ON (p.cell) ${PAGE_COLUMNS}
        FROM public.morning_pages p
       WHERE p.user_id = $1::uuid AND p.seen_date <= $2::date AND p.cell = ANY($3::text[])
+        AND p.hidden_at IS NULL
       ORDER BY p.cell, p.seen_date DESC`,
     ownerId,
     today,
@@ -357,7 +359,7 @@ export async function readPage(
   const rows = await db.$queryRawUnsafe<PageRow[]>(
     `SELECT ${PAGE_COLUMNS} FROM public.morning_pages p
       WHERE p.user_id = $1::uuid AND p.cell = $2 AND p.seen_date = $3::date
-        AND p.seen_date <= $4::date`,
+        AND p.seen_date <= $4::date AND p.hidden_at IS NULL`,
     ownerId,
     cell,
     date,
@@ -380,6 +382,7 @@ export async function listPages(
     `SELECT to_char(p.seen_date, 'YYYY-MM-DD') AS seen_date, p.headline
        FROM public.morning_pages p
       WHERE p.user_id = $1::uuid AND p.cell = $2 AND p.seen_date <= $4::date
+        AND p.hidden_at IS NULL
       ORDER BY p.seen_date DESC LIMIT $3`,
     ownerId,
     cell,

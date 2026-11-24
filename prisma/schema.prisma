@@ -3582,6 +3582,9 @@ model morning_pages {
   origin     String   @default("import") @db.VarChar(32)
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
+  /// Withdrawn brief: set = hidden from every app read, row kept. Raw SQL DDL: prisma/migrations/morning-feed/009_pages_hidden.sql
+  hidden_at     DateTime? @db.Timestamptz(6)
+  hidden_reason String?
 
   @@id([user_id, cell, seen_date])
   @@schema("public")
