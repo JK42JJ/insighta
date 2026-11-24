@@ -8,6 +8,10 @@ metadata:
     app.kubernetes.io/component: frontend
 spec:
   replicas: {{ .Values.frontend.replicaCount }}
+  {{- with .Values.frontend.strategyType }}
+  strategy:
+    type: {{ . }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "insighta.selectorLabels" . | nindent 6 }}

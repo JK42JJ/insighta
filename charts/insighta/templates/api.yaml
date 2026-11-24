@@ -96,6 +96,12 @@ spec:
               value: {{ .Values.statelessness.ontologyChatDbStore | quote }}
             - name: YOUTUBE_CACHE_SHARED_INVALIDATION
               value: {{ .Values.statelessness.youtubeSharedInvalidation | quote }}
+{{- if (.Values.morningCards | default dict).enabled }}
+            - name: MOBILE_MORNING_CARDS
+              value: "true"
+            - name: MORNING_CARDS_TEST_USER_IDS
+              value: {{ .Values.morningCards.testUserIds | default "" | quote }}
+{{- end }}
           envFrom:
             - secretRef:
                 name: {{ .Values.envSecretName }}

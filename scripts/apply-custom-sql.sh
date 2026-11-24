@@ -79,6 +79,12 @@ APPLY_FILES=(
   "prisma/migrations/billing/002_billing_events.sql"
   "prisma/migrations/system-settings/001_system_settings.sql"
   "prisma/migrations/video_pool/002_add_ivfflat_index.sql"
+  # Mobile morning cards (PRD #1788): one row per swipe judgment. CREATE ... IF NOT EXISTS -- idempotent.
+  "prisma/migrations/morning-cards/001_morning_card_judgments.sql"
+  # Morning feed (오늘의 픽): annotation table + 3 judgment columns. IF NOT EXISTS -- idempotent.
+  "prisma/migrations/morning-feed/001_morning_feed.sql"
+  # Morning feed: third verdict "pass". DROP/ADD CONSTRAINT -- idempotent.
+  "prisma/migrations/morning-feed/002_pass_verdict.sql"
   "prisma/migrations/mandala_embeddings/001_add_ivfflat_index.sql"
   # CP462+ Issue #649 — Card preference signal (heart/archive/delete) +
   # mandala_relevance_pct 0-100 single fit score. Both files use
@@ -213,6 +219,10 @@ APPLY_FILES=(
   # curation-watched (2026-07-21): watched_at derived-only column for lineup row
   # meta (M/N listened / weekly complete). ADD COLUMN IF NOT EXISTS = idempotent.
   "prisma/migrations/curation-watched/001_watched_at.sql"
+  # Measurement record (shadow mode) — candidate_features per-candidate feature
+  # log, 30d TTL. CREATE TABLE/INDEX IF NOT EXISTS + NOTIFY pgrst — idempotent.
+  # Inert until MEASUREMENT_RECORD_ENABLED flips on.
+  "prisma/migrations/measurement-record/001_create_candidate_features.sql"
 )
 
 SKIP_FILES=" ${SKIP_SQL_FILES:-} "

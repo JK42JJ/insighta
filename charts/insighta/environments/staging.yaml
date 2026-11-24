@@ -66,11 +66,21 @@ worker:
 curation:
   weeklyEnabled: false
 
+# Mobile morning cards (PRD #1788): staging only. prod values stay unset (= off).
+morningCards:
+  enabled: true
+  # Comma-separated staging test account user ids (jamesjk4242, jkim0420, stg-tester).
+  testUserIds: "bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c,7285aac0-9011-4475-8081-64b74f1c0fff,0cd661ef-fd9d-4e87-89fe-65758ef4fc02"
+
 keel:
   enabled: false
 
 frontend:
   replicaCount: 1
+  # Replace the pod instead of overlapping two. The namespace quota (limits.memory)
+  # had no room for the surge pod, so the 2026-11-07 frontend rollout never
+  # started and staging kept serving the 2026-10-29 bundle. Same reason as api.
+  strategyType: Recreate
   resources:
     requests:
       memory: 16Mi
