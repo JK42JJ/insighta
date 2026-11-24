@@ -31,7 +31,7 @@
   --lv-src-on: rgba(58, 110, 165, 0.12);
   --lv-src-off: rgba(58, 110, 165, 0);
   --lv-scan-ring: rgba(58, 110, 165, 0.16);
-  --lv-bar-track: rgba(247, 245, 240, 0.28);
+  --lv-bar-track: rgba(22, 39, 63, 0.2);
   --lv-fade-end: rgba(247, 245, 240, 0);
   --lv-sheet-chip: #f2efe8;
   --lv-add-line: #a9a396;
@@ -66,13 +66,13 @@
   --lv-sh-card:
     0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 32px 64px -28px rgba(3, 9, 20, 0.7),
     0 2px 6px rgba(3, 9, 20, 0.18);
-  --lv-sh-chip: 0 10px 18px -10px rgba(0, 0, 0, 0.6);
-  --lv-sh-chip-hero: 0 0 0 2px #f7f5f0, 0 12px 22px -10px rgba(0, 0, 0, 0.7);
+  /* the ring is a shadow (outside): a border would cut into the thumbnail */
+  --lv-sh-chip: 0 0 0 1px var(--lv-chip-line), 0 10px 18px -10px rgba(0, 0, 0, 0.6);
+  --lv-sh-chip-hero: 0 0 0 3px var(--lv-paper), 0 12px 22px -10px rgba(0, 0, 0, 0.7);
   --lv-sh-big: 0 40px 70px -34px rgba(3, 9, 20, 0.6), 0 2px 6px rgba(3, 9, 20, 0.12);
   --lv-sh-feed: 0 4px 10px -6px rgba(20, 26, 36, 0.4);
   --lv-sh-mini: 0 14px 30px -18px rgba(20, 26, 36, 0.45), 0 0 0 1px rgba(20, 26, 36, 0.05);
   --lv-sh-card2: 0 14px 24px -12px rgba(10, 18, 30, 0.55), 0 0 0 1px rgba(20, 26, 36, 0.06);
-  --lv-sh-play: 0 4px 14px rgba(0, 0, 0, 0.3);
   --lv-sh-knob: 0 2px 6px rgba(0, 0, 0, 0.35);
   --lv-sh-wall-tile: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 6px 14px -8px rgba(10, 18, 30, 0.5);
   --lv-sh-sheet: 0 -1px 0 rgba(20, 26, 36, 0.06), 0 -24px 48px -28px rgba(20, 26, 36, 0.35);
@@ -214,6 +214,11 @@
   }
   100% {
     transform: translate(-26px, 18px) rotate(-80deg) scale(0.9);
+  }
+}
+@keyframes lv-credit-in {
+  from {
+    opacity: 0;
   }
 }
 @keyframes lv-wl {
@@ -358,15 +363,14 @@
   );
 }
 
-/* scene 2: the hero's channel band under the video */
+/* scenes 2 and 5: the hero card under the thumbnail (top and height from landing-scene.ts) */
 .lv-band {
   position: absolute;
   left: 28px;
-  top: 470px;
   width: 334px;
-  height: 74px;
   box-sizing: border-box;
-  padding: 28px 16px 0;
+  /* past the thumbnail's end and the bar row: the channel row */
+  padding: 46px 16px 0;
   border-radius: 0 0 18px 18px;
   background: var(--lv-white);
   box-shadow: var(--lv-sh-band);
@@ -656,8 +660,7 @@
   position: absolute;
   left: 194px;
   width: 1.5px;
-  height: 30px;
-  background: var(--lv-navy);
+  background: var(--lv-dot-idle-dark);
   transform-origin: 50% 0;
 }
 .lv-scan {
@@ -667,7 +670,6 @@
   width: 334px;
   height: 44px;
   pointer-events: none;
-  z-index: 3;
 }
 .lv-scan-line {
   position: absolute;
@@ -684,7 +686,6 @@
 .lv-cell {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid;
   display: block;
   text-decoration: none;
 }
@@ -701,28 +702,6 @@
   height: 100%;
   object-fit: fill;
   display: block;
-}
-.lv-play {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 52px;
-  height: 52px;
-  margin: -26px 0 0 -26px;
-  border-radius: 26px;
-  background: var(--lv-paper);
-  box-shadow: var(--lv-sh-play);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lv-play-tri {
-  width: 0;
-  height: 0;
-  margin-left: 4px;
-  border-left: 15px solid var(--lv-navy);
-  border-top: 9px solid transparent;
-  border-bottom: 9px solid transparent;
 }
 .lv-cell-name {
   position: absolute;
@@ -785,7 +764,7 @@
   top: 6px;
   height: 4px;
   border-radius: 2px;
-  background: var(--lv-paper);
+  background: var(--lv-navy);
 }
 .lv-bar-knob {
   position: absolute;
@@ -794,19 +773,20 @@
   height: 14px;
   margin-left: -7px;
   border-radius: 7px;
-  background: var(--lv-white);
+  background: var(--lv-navy);
   box-shadow: var(--lv-sh-knob);
 }
 .lv-bar-label {
   position: absolute;
-  top: -28px;
-  height: 22px;
+  left: 100%;
+  top: -4px;
+  margin-left: 14px;
+  height: 20px;
   padding: 0 7px;
   display: flex;
   align-items: center;
   border-radius: 6px;
   background: var(--lv-paper);
-  transform: translateX(-50%);
   font-size: 13px;
   font-weight: 700;
   color: var(--lv-navy);
@@ -829,9 +809,11 @@
 /* with the YouTube Icon: a solid plate (the icon sits on one solid colour), text then icon */
 .lv-credit[data-icon] {
   border-radius: 8px;
-}
-.lv-credit[data-icon][data-text] {
   padding-left: 10px;
+}
+/* in after the thumbnails' flight (0.6 s; tiles to chips 0.75 s) */
+.lv-credit[data-in] {
+  animation: lv-credit-in 0.3s 0.8s ease both;
 }
 /* the official YouTube Icon file, whole: never filtered, faded, cropped or reshaped */
 .lv-yt {

@@ -58,7 +58,9 @@ import {
 } from '../model/landing-content';
 import { heroVideo, heroWatchUrl, LANDING_EXAMPLE, sourceLabel } from '../model/landing-example';
 import {
+  BAND_H,
   buildScene,
+  CN_H,
   DECK_ARRIVE_MS,
   DECK_CYCLE_MS,
   DECK_LEAVE_MS,
@@ -513,11 +515,17 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
               <div className="lv-wall-fog" />
             </div>
 
-            {/* scene 2: the hero's channel band */}
+            {/* scenes 2 and 5 (after the tap): the hero card under the thumbnail (bar row, channel row) */}
             <div
               className="lv-band"
-              aria-hidden={off(T[1]!.o)}
-              style={{ opacity: T[1]!.o, transition: T[1]!.tr2 }}
+              data-testid="lv-band"
+              aria-hidden={off(view.band.o)}
+              style={{
+                top: view.band.t,
+                height: BAND_H + 'px',
+                opacity: view.band.o,
+                transition: view.band.tr,
+              }}
             >
               <span className="lv-band-av">{hero.channel.slice(0, 1)}</span>
               {hero.channel}
@@ -579,13 +587,18 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                   style={{ zIndex: d.z, transform: d.t, opacity: d.o, transition: d.tr }}
                 >
                   <div className="lv-kicker" style={{ transition: d.tto }}>
-                    <span className="lv-kicker-em">{BRIEF_KICKER}</span> · {d.dom}
+                    {/* the blank card at the back of the deck has no text */}
+                    {d.dom ? (
+                      <>
+                        <span className="lv-kicker-em">{BRIEF_KICKER}</span> · {d.dom}
+                      </>
+                    ) : null}
                   </div>
                   <div className="lv-deck-h" style={{ transition: d.tto }}>
                     {d.h}
                   </div>
                   {d.thumbs.length ? (
-                    <div className="lv-deck-thumbs">
+                    <div className="lv-deck-thumbs" style={{ opacity: d.thumbsOn ? 1 : 0 }}>
                       {d.thumbs.map((u) => (
                         <img
                           key={u}
@@ -600,7 +613,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                         <YouTubeIconLink
                           href={d.yt}
                           label={ytLinkLabel(hero.channel)}
-                          live={s === 0}
+                          live={s === 0 && d.thumbsOn}
                           tapped={tapped}
                           testId="lv-yt-deck"
                           // the clear space may overhang the row; the thumbnails stay where they were
@@ -741,7 +754,12 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
 
             <div
               className="lv-cn"
-              style={{ top: view.cn.t, transform: view.cn.s, transition: view.cn.tr }}
+              style={{
+                top: view.cn.t,
+                height: CN_H + 'px',
+                transform: view.cn.s,
+                transition: view.cn.tr,
+              }}
             />
 
             <div
@@ -782,7 +800,6 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                     height: c.h,
                     borderRadius: c.rad,
                     backgroundColor: c.bg,
-                    borderColor: c.bd,
                     boxShadow: c.sh,
                     color: c.fg,
                     opacity: c.o,
@@ -810,9 +827,6 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                       alt=""
                       decoding="async"
                     />
-                    <div className="lv-play" style={{ transform: c.pl, transition: c.tr2 }}>
-                      <div className="lv-play-tri" />
-                    </div>
                   </div>
                   <div
                     className="lv-cell-name"
@@ -821,7 +835,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                       top: c.nt,
                       height: c.nh,
                       opacity: c.no,
-                      transition: c.tr2,
+                      transition: c.trn,
                     }}
                   >
                     <span>{c.video.channel}</span>
@@ -861,7 +875,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
               <div
                 className="lv-bar-label"
                 data-testid="lv-bar-label"
-                style={{ left: view.bar.lp, opacity: view.bar.lo, transition: view.bar.ltr }}
+                style={{ opacity: view.bar.lo, transition: view.bar.ltr }}
               >
                 {ex.heroTime}
               </div>
@@ -869,10 +883,11 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
 
             {/* YouTube attribution while thumbnails are visible (the last sheet carries its own) */}
             <div
+              key={'credit-' + s}
               className="lv-credit"
               data-testid="lv-credit"
               data-icon={view.credit.href ? '' : undefined}
-              data-text={view.credit.text ? '' : undefined}
+              data-in={view.credit.in ? '' : undefined}
               aria-hidden={view.credit.on ? undefined : true}
               style={{
                 top: view.credit.top + 'px',
@@ -880,10 +895,9 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                 color: view.credit.c,
                 backgroundColor: view.credit.plate,
                 opacity: view.credit.on ? 1 : 0,
-                transition: view.credit.tr,
               }}
             >
-              {view.credit.text ? <span>{YT_CREDIT}</span> : null}
+              <span>{YT_CREDIT}</span>
               {view.credit.href ? (
                 <YouTubeIconLink
                   href={view.credit.href}

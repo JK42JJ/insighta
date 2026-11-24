@@ -74,7 +74,11 @@ import {
   timeToSeconds,
 } from '@/pages/intro/model/landing-example';
 import {
+  BAND_H,
+  BAR_H,
+  BAR_IN_S,
   buildScene,
+  CN_H,
   STAGE_H,
   STAGE_W,
   DOT,
@@ -339,7 +343,7 @@ describe('example data comes from the one config', () => {
     expect(checkLandingExample(badSrc).join('|')).toMatch(/is not a video/);
   });
 
-  it('the play dot and its label sit where the source is in the real video', () => {
+  it('the play dot sits where the source is in the real video', () => {
     const ex = LANDING_EXAMPLE;
     const at = timeToSeconds(ex.heroTime) / ex.heroDurationSec;
     for (const [ph, frac] of [
@@ -348,7 +352,6 @@ describe('example data comes from the one config', () => {
     ] as const) {
       const bar = buildScene(5, ph, true, null, 0, ex).bar;
       expect(parseFloat(bar.dl) / parseFloat(bar.w)).toBeCloseTo(frac, 2);
-      expect(parseFloat(bar.lp) / parseFloat(bar.w)).toBeCloseTo(at, 2);
     }
     const still = buildScene(5, 2, false, null, 0, ex).bar;
     expect(parseFloat(still.dl) / parseFloat(still.w)).toBeCloseTo(at, 2);
@@ -395,17 +398,17 @@ describe('YouTube policy', () => {
 
   it('attribution is shown in every scene with thumbnails, and in the last sheet', () => {
     draw();
-    const credit = screen.getByTestId('lv-credit');
-    expect(credit.textContent).toBe(YT_CREDIT);
+    // the row is drawn anew per scene
+    const credit = (): HTMLElement => screen.getByTestId('lv-credit');
+    expect(credit().textContent).toBe(YT_CREDIT);
     for (const s of [0, 1, 2, 3, 4, 5] as const) {
       goTo(s);
-      expect(credit.style.opacity).toBe('1');
-      expect(credit.getAttribute('aria-hidden')).toBeNull();
-      // scene 5: the icon alone (the text would cover the source line to the video)
-      expect(credit.textContent).toBe(s === 5 ? '' : YT_CREDIT);
+      expect(credit().style.opacity).toBe('1');
+      expect(credit().getAttribute('aria-hidden')).toBeNull();
+      expect(credit().textContent).toBe(YT_CREDIT);
     }
     goTo(7);
-    expect(credit.style.opacity).toBe('0');
+    expect(credit().style.opacity).toBe('0');
     expect(screen.getByTestId('lv-sheet-credit').textContent).toBe('영상 출처: YouTube');
   });
 
@@ -722,18 +725,89 @@ describe('last sheet domains = the wall answer `cells` (MORNING_HIDDEN_CELLS)', 
   });
 });
 
-describe('scene 5 card', () => {
-  it('keeps its bottom edge at the design place for a shorter brief, never above the text', () => {
-    const y = (h: number): number =>
-      parseFloat(
-        /translate\(30px,(-?[\d.]+)px\)/.exec(
-          buildScene(5, 2, false, null, 0, LANDING_EXAMPLE, h).card.t
-        )![1]!
-      );
-    for (const h of [180, 202, 260]) expect(148 + y(h) + 0.78 * h).toBeCloseTo(343.5, 0);
-    expect(y(284)).toBeCloseTo(-26, 0); // the design's brief
-    expect(y(400)).toBe(-26);
-    expect(y(0)).toBe(-26); // not measured yet
+describe('nothing over a thumbnail (James 2026-11-25)', () => {
+  const n = parseFloat;
+  const heroAt = (s: 1 | 5) => {
+    const v = buildScene(s, 2, false, null, 0, LANDING_EXAMPLE, 202);
+    return { v, hero: v.cells[0]!, bar: v.bar };
+  };
+
+  it('no play button; the scan line has no layer above the tiles', () => {
+    draw();
+    for (const s of [0, 1, 2, 3, 4, 5, 7] as const) {
+      goTo(s);
+      expect(document.querySelector('[class*="lv-play"]')).toBeNull();
+      // a thumbnail's box holds its image only
+      for (const surf of document.querySelectorAll('.lv-surf')) {
+        expect([...surf.children].map((c) => c.tagName)).toEqual(['IMG']);
+      }
+    }
+  });
+
+  it('the bar row is below the thumbnail, and hero and bar are the same in scenes 2 and 5', () => {
+    const a = heroAt(1);
+    const b = heroAt(5);
+    for (const x of [a, b]) expect(n(x.bar.t)).toBeGreaterThanOrEqual(n(x.hero.t) + n(x.hero.h));
+    const look = (x: typeof a) => [
+      x.hero.l,
+      x.hero.w,
+      x.hero.h,
+      x.bar.l,
+      x.bar.w,
+      n(x.bar.t) - n(x.hero.t) - n(x.hero.h),
+      n(x.v.band.t) - n(x.hero.t),
+      x.v.credit.top - n(x.hero.t),
+      x.v.credit.right,
+      x.v.credit.plate,
+      x.v.credit.c,
+    ];
+    expect(look(b)).toEqual(look(a));
+    // only the label differs (and the dot)
+    expect([a.bar.lo, b.bar.lo]).toEqual([0, 1]);
+  });
+
+  it('scene 5: brief card, line, hero card in order, above the Google button', () => {
+    const { v, hero } = heroAt(5);
+    const bottom = (h: number): number => {
+      const m = /translate\((-?[\d.]+)px,(-?[\d.]+)px\) scale\(([\d.]+)\)/.exec(
+        buildScene(5, 2, false, null, 0, LANDING_EXAMPLE, h).card.t
+      )!;
+      const top = 148 + n(m[2]!);
+      expect(top).toBeGreaterThanOrEqual(120); // the two text lines end there
+      return top + n(m[3]!) * h;
+    };
+    for (const h of [160, 202, 284]) expect(bottom(h)).toBeCloseTo(n(v.cn.t), 0);
+    expect(n(v.cn.t) + CN_H).toBeCloseTo(n(hero.t), 1);
+    expect(n(v.band.t) + BAND_H).toBeLessThanOrEqual(580);
+    expect(v.credit.top + YT_ICON_BOX_H).toBeLessThanOrEqual(n(v.band.t) + BAND_H);
+    expect(v.credit.top).toBeGreaterThan(n(v.bar.t) + BAR_H - 1);
+  });
+
+  it('in flight: hidden thumbnails are gone at once, the bar, name and credit come after', () => {
+    for (const s of [0, 1, 5, 7] as const) {
+      for (const c of buildScene(s, 0, true, null).cells.filter((x) => !x.hero)) {
+        expect(c.o).toBe(0);
+        expect(c.tr).toMatch(/opacity 0s/);
+      }
+    }
+    expect(buildScene(5, 0, true, null).bar.tr).toBe(`opacity .25s ${BAR_IN_S}s`);
+    expect(BAR_IN_S).toBeGreaterThanOrEqual(0.6); // the cells' flight
+    expect(buildScene(4, 0, true, null).bar.tr).toBe('opacity 0s');
+    for (const c of buildScene(3, 0, true, null).cells) expect(c.trn).toBe('opacity 0s');
+    draw();
+    expect(screen.getByTestId('lv-credit').hasAttribute('data-in')).toBe(true);
+  });
+
+  it('deck: the thumbnails show only on the uncovered front card; the blank card has no text', () => {
+    const on = (d: { lv: number; ar: number } | null, di: number): boolean =>
+      buildScene(0, 2, true, d, di).deck[0]!.thumbsOn;
+    expect(on({ lv: -1, ar: -1 }, 0)).toBe(true);
+    expect(on({ lv: 0, ar: -1 }, 0)).toBe(true); // leaving, on top of the others
+    expect(on({ lv: -1, ar: 0 }, 1)).toBe(false);
+    expect(on({ lv: -1, ar: -1 }, 1)).toBe(false); // behind the other card
+    expect(on({ lv: 1, ar: -1 }, 1)).toBe(false); // the other card is sliding over it
+    draw();
+    expect(screen.getAllByTestId('lv-deck-card')[2]!.textContent).toBe('');
   });
 });
 

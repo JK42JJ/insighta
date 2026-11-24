@@ -16,9 +16,11 @@
  *   - the scene-6 tiles (`s7`, always off: `on7 = false`) and the line drawing (`ln`, opacity 0
  *     in every scene) are not produced; nothing visible depends on them.
  *   - YouTube Icon link next to every thumbnail group (YouTube API branding guidelines): in the
- *     front deck card after its thumbnails (s=0) and in the attribution row (s=1..5). Scene 5's
- *     card is a little smaller and higher (scale .78, -26px instead of .82, -20px) so the row with
- *     the icon and its clear space fits between the card and the video.
+ *     front deck card after its thumbnails (s=0) and in the attribution row (s=1..5).
+ *   - nothing is drawn over a thumbnail, at rest or in flight (James 2026-11-25): no play button;
+ *     the play bar, dot and time label are a row below the thumbnail, in one hero card that is the
+ *     same in scenes 2 and 5 (channel row with attribution included); the scan line runs behind the
+ *     tiles; what would be over a moving thumbnail shows after it has arrived.
  */
 
 import {
@@ -76,6 +78,8 @@ export const STAGE_H = 650;
 
 /** design: scene 5's dot runs this long (s) after the source opened. */
 export const PLAY_RUN_S = 8;
+/** The bar row shows this long (s) after its scene starts (the thumbnail's .6 s flight). */
+export const BAR_IN_S = 0.65;
 
 export const EASE = 'cubic-bezier(.32,.72,0,1)';
 export const EASE_BACK = `transform .5s ${EASE}`;
@@ -136,52 +140,68 @@ export const YT_ICON_BOX_W = (YT_ICON_BOX_H * YT_ICON_FILE_W) / YT_ICON_FILE_H;
  */
 const CREDIT_TOP: Readonly<Partial<Record<Scene, number>>> = {
   0: 558,
-  // with the icon the row is YT_ICON_BOX_H tall: s=1 sits inside the band's content row
-  // (498..544), the others under the thumbnails (tiles end 452 with two rows, see creditTop;
-  // chips 490) and in scene 5 between the card (ends 343.5) and the video (starts 392)
-  1: 544 - YT_ICON_BOX_H,
-  // 2: under the tiles' last row, card2CreditTop (458 with the design's six)
+  // 1, 5: in the hero card's channel row (creditTopIn); 2: under the tiles (card2CreditTop)
+  // 3, 4: under the chips (they end at 490)
   3: 494,
   4: 494,
-  5: 344,
 };
 /** Scene 3's attribution row sits this far under the tiles' last row (design: 452 -> 458). */
 const CREDIT_UNDER_TILES = 6;
 /** Scenes whose attribution row carries the icon link (s=0 has it in the deck card instead). */
 const CREDIT_ICON: ReadonlySet<Scene> = new Set<Scene>([1, 2, 3, 4, 5]);
-/**
- * Scene 5 shows the icon without the "영상 출처: YouTube" text: at the row's height the text
- * would cover the line the design draws from the source chip down to the video (.lv-cn, x 194).
- */
-const CREDIT_NO_TEXT: ReadonlySet<Scene> = new Set<Scene>([5]);
-/** Right edge: the scene texts' (40, clear of the dots); scene 2: inside the band's padding (28 + 16). */
+/** Right edge: the scene texts' (40, clear of the dots); in the hero card: its padding (28 + 16). */
 const CREDIT_RIGHT = 40;
 const CREDIT_RIGHT_BAND = 44;
 
 const X = 28;
 /** .lv-card top (landing.css). */
 const CARD_TOP = 148;
-/** Scene 5: the card's scale and highest shift, and where its bottom edge is (above the icon row). */
-const CARD_S5_SCALE = 0.78;
-const CARD_S5_MIN_Y = -26;
-const CARD_S5_BOTTOM = 343.5;
-/**
- * Scene 5's card shift: a shorter brief keeps its bottom edge where the design's is, next to the
- * line down to the video. cardH = the card's laid-out height (0 = not measured yet).
- */
-const cardS5Y = (cardH: number): number =>
-  cardH > 0
-    ? Math.max(CARD_S5_MIN_Y, CARD_S5_BOTTOM - CARD_TOP - CARD_S5_SCALE * cardH)
-    : CARD_S5_MIN_Y;
 interface Box {
   x: number;
   y: number;
   w: number;
   h: number;
 }
-const H2: Box = { x: 28, y: 300, w: 334, h: 188 };
-const BIG: Box = { x: 28, y: 230, w: 334, h: 262 };
-const MID: Box = { x: 28, y: 392, w: 334, h: 188 };
+/*
+ * The hero card (scene 2 and scene 5 after the tap, identical in both): the thumbnail, then the
+ * play bar in its own row below it, then the channel row with the attribution and the icon.
+ * Nothing is drawn over a thumbnail (James 2026-11-25: only in its original look).
+ */
+const HERO_W = 334;
+const HERO_H = 188;
+const HERO_PAD = 16;
+/** Thumbnail bottom -> bar row; the row's height (landing.css .lv-bar); bar row -> channel row. */
+export const BAR_GAP = 10;
+export const BAR_H = 16;
+const CHANNEL_GAP = 2;
+/** Channel row (landing.css .lv-band: height BAND_H, the part under the thumbnail's rounded end). */
+const CHANNEL_H = 48;
+const BAND_UNDER = 18;
+export const BAND_H = BAND_UNDER + BAR_GAP + BAR_H + CHANNEL_GAP + CHANNEL_H;
+const HERO_CARD_H = HERO_H + BAND_H - BAND_UNDER;
+/** Room kept at the right end of the bar row for the time label. */
+const BAR_LABEL_W = 58;
+/** Scene 5: the hero card ends here (the Google button starts at 588 on a 650 stage). */
+const S5_BOTTOM = 576;
+/** Scene 5: the line from the brief card down to the video. */
+export const CN_H = 18;
+const H2: Box = { x: X, y: 300, w: HERO_W, h: HERO_H };
+const MID: Box = { x: X, y: S5_BOTTOM - HERO_CARD_H, w: HERO_W, h: HERO_H };
+const creditTopIn = (b: Box): number =>
+  b.y + HERO_H + BAR_GAP + BAR_H + CHANNEL_GAP + (CHANNEL_H - YT_ICON_BOX_H) / 2;
+/** Scene 5's brief card: under the text (two lines end at 120), above the line. */
+const CARD_S5_TOP = 126;
+const CARD_S5_BOTTOM = MID.y - CN_H;
+const CARD_S5_SCALE = 0.78;
+const CARD_S5_X = 30;
+/** Scene 5's card: scale .78 (less when the brief is too long for the room), its bottom on the line. */
+function cardS5(cardH: number): string {
+  const room = CARD_S5_BOTTOM - CARD_S5_TOP;
+  const k = cardH > 0 ? Math.min(CARD_S5_SCALE, room / cardH) : CARD_S5_SCALE;
+  const y = cardH > 0 ? CARD_S5_BOTTOM - CARD_TOP - k * cardH : CARD_S5_TOP - CARD_TOP;
+  const x = CARD_S5_X + ((CARD_S5_SCALE - k) * HERO_W) / 2;
+  return `translate(${px(x)},${px(y)}) scale(${Math.round(k * 1000) / 1000})`;
+}
 const MINI: Box = { x: 115, y: 470, w: 160, h: 90 };
 const grid = (i: number): Box => ({
   x: X + (i % 4) * 85,
@@ -202,6 +222,10 @@ const TILES: TileGrid = { cols: 3, dx: 114, dy: 104, w: 106, th: 60 };
 /** Four videos: 2x2 over the same 334px column, so no tile is left alone in a row. */
 const TILES_FOUR: TileGrid = { cols: 2, dx: 171, dy: 136, w: 163, th: 92 };
 const FOUR_VIDEOS = 4;
+/** Tiles to chips (s): narrow, then drop; chips that were hidden show after that. */
+const CHIP_NARROW_S = 0.35;
+const CHIP_DROP_S = 0.4;
+const CHIPS_IN_S = 0.8;
 const TILES_TOP = 262;
 /** The channel name under a thumbnail: gap, and the tile's room for it (design 4, 26). */
 const TILE_NAME_GAP = 4;
@@ -236,15 +260,14 @@ interface Surf {
   h: number;
   o: number;
   r: number;
-  pl: string;
 }
 const SURF: Record<Mode, (b: Box) => Surf> = {
-  grid: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 6, pl: 'scale(.34)' }),
-  card2: (b) => ({ l: 0, t: 0, w: b.w, h: b.h - TILE_NAME_ROOM, o: 1, r: 8, pl: 'scale(.3)' }),
-  chip: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 0, pl: 'scale(0)' }),
-  big: () => ({ l: 0, t: 0, w: 334, h: 188, o: 1, r: 0, pl: 'none' }),
-  feed: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 0, pl: 'scale(.3)' }),
-  mini: () => ({ l: 0, t: 0, w: 160, h: 90, o: 1, r: 0, pl: 'scale(.5)' }),
+  grid: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 6 }),
+  card2: (b) => ({ l: 0, t: 0, w: b.w, h: b.h - TILE_NAME_ROOM, o: 1, r: 8 }),
+  chip: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 0 }),
+  big: () => ({ l: 0, t: 0, w: 334, h: 188, o: 1, r: 0 }),
+  feed: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 0 }),
+  mini: () => ({ l: 0, t: 0, w: 160, h: 90, o: 1, r: 0 }),
 };
 /** design: name label left, top, height, opacity per mode. */
 const NAME: Record<Mode, readonly [number, number, number, number]> = {
@@ -286,6 +309,8 @@ export interface TextAnim {
 export interface DeckCard {
   dom: string;
   h: string;
+  /** Its thumbnails are drawn: the card is in front and nothing is over it. */
+  thumbsOn: boolean;
   thumbs: readonly string[];
   /** The YouTube Icon link after the thumbnails (their first video), or null without thumbnails. */
   yt: string | null;
@@ -307,7 +332,6 @@ export interface Cell {
   h: string;
   o: number;
   bg: string;
-  bd: string;
   fg: string;
   sh: string;
   rad: string;
@@ -319,7 +343,6 @@ export interface Cell {
   sr: string;
   ssh: string;
   ov: 'visible' | 'hidden';
-  pl: string;
   z: number;
   nl: string;
   nt: string;
@@ -329,6 +352,8 @@ export interface Cell {
   tr: string;
   tr2: string;
   tr3: string;
+  /** The channel name's transition. */
+  trn: string;
 }
 
 export interface SceneView {
@@ -361,9 +386,9 @@ export interface SceneView {
     lo: number;
     tr: string;
     dtr: string;
-    lp: string;
     ltr: string;
   };
+  band: { o: number; t: string; tr: string };
   card: {
     o: number;
     pe: 'auto' | 'none';
@@ -384,13 +409,12 @@ export interface SceneView {
     top: number;
     right: number;
     c: string;
-    tr: string;
+    /** Fades in after the thumbnails' flight (not under reduced motion). */
+    in: boolean;
     /** The YouTube Icon link in the row: where it goes, or null (no icon in this scene). */
     href: string | null;
     /** The row's solid background (the icon must sit on one solid colour). */
     plate: string;
-    /** The "영상 출처: YouTube" text is drawn in the row. */
-    text: boolean;
   };
 }
 
@@ -450,6 +474,8 @@ export function buildScene(
     return {
       dom,
       h: head,
+      // covered by the other card (or a card sliding over it): not drawn
+      thumbsOn: L || (!A && i === di && !(h && h.lv >= 0)),
       thumbs: i === 0 ? slots.slice(0, 3).map((x) => thumbUrl(x.id)) : [],
       yt: i === 0 ? watchUrl(slots[0]!.id) : null,
       z: L ? 4 : 3 - k,
@@ -492,9 +518,11 @@ export function buildScene(
         b = MINI;
       } else {
         mode = 'big';
-        b = BIG;
+        b = s === 0 ? H2 : MID;
       }
       o = s === 0 || s === 7 ? 0 : 1;
+      // what it replaces (deck, last sheet) is gone before it shows
+      dl = 0.2;
     } else if (s === 1) {
       const j = i - 1;
       const col = j % 3;
@@ -518,21 +546,22 @@ export function buildScene(
       mode = 'chip';
       b = chip(k);
       o = 1;
+      dl = CHIPS_IN_S;
+    } else if (s === 5) {
+      mode = 'chip';
+      b = chip(k);
     }
     let bg = v('clear');
-    let bd = v('clear');
     let fg = v('ink');
     let sh = 'none';
     let rad = '6px';
     if (mode === 'card2') rad = '8px';
     if (mode === 'chip') {
-      bd = v('chip-line');
       fg = v('paper');
       rad = '5px';
       sh = v('sh-chip');
       // decided: the others keep full opacity (design .35); the hero is marked by outline + shadow
       if (s === 4 && hero) {
-        bd = v('paper');
         sh = v('sh-chip-hero');
       }
     }
@@ -553,7 +582,18 @@ export function buildScene(
     }
     const sf = SURF[mode](b);
     const nm = NAME[mode];
-    const hasImg = mode !== 'feed';
+    // tiles -> chips: first narrow into their chip's column, then drop, so no thumbnail flies over
+    // another; otherwise the design's one move
+    const toChips = mode === 'chip' && o > 0;
+    const move = (p: string): string =>
+      !toChips
+        ? `${p} .6s ${EASE}`
+        : p === 'top'
+          ? `${p} ${CHIP_DROP_S}s ${CHIP_NARROW_S}s ${EASE}`
+          : `${p} ${CHIP_NARROW_S}s ${EASE}`;
+    const box = ['left', 'top', 'width', 'height', 'border-radius'].map(move).join(', ');
+    // a hidden cell is gone at once: the hero may fly over its place
+    const fade = o ? `opacity .45s ${dl}s` : hero ? 'opacity .15s' : 'opacity 0s';
     return {
       key: i,
       hero,
@@ -565,7 +605,6 @@ export function buildScene(
       h: px(b.h),
       o,
       bg,
-      bd,
       fg,
       sh,
       rad,
@@ -575,7 +614,6 @@ export function buildScene(
       sh2: px(sf.h),
       so: sf.o,
       sr: px(sf.r),
-      pl: hasImg && mode !== 'big' ? 'scale(0)' : sf.pl,
       z: hero ? 2 : 1,
       ssh: mode === 'card2' ? v('sh-card2') : 'none',
       ov: mode === 'card2' ? 'visible' : 'hidden',
@@ -586,25 +624,17 @@ export function buildScene(
       bo: mode === 'big' ? 1 : 0,
       tr: T(
         mode === 'feed' && ph >= 1
-          ? 'top 6s cubic-bezier(.3,0,.4,1), opacity .45s, background-color .5s'
-          : `left .6s ${EASE}, top .6s ${EASE}, width .6s ${EASE}, height .6s ${EASE}, border-radius .6s ${EASE}, opacity .45s ${dl}s, background-color .5s, border-color .5s, box-shadow .5s, color .5s`
+          ? `top 6s cubic-bezier(.3,0,.4,1), ${fade}, background-color .5s`
+          : `${box}, ${fade}, background-color .5s, box-shadow .5s, color .5s`
       ),
-      tr2: T(
-        `left .6s ${EASE}, top .6s ${EASE}, width .6s ${EASE}, height .6s ${EASE}, border-radius .6s ${EASE}, transform .6s ${EASE}, opacity .3s`
-      ),
+      tr2: T(`${box}, opacity .3s`),
+      // the name never crosses its thumbnail: out at once, in when the tile has arrived
+      trn: T(nm[3] ? 'opacity .3s .6s' : 'opacity 0s'),
       tr3: T(mode === 'big' ? 'opacity .35s .3s' : 'opacity .15s'),
     };
   });
 
-  const mini = s === 6;
-  const bb =
-    s === 1
-      ? { x: H2.x + 16, y: H2.y + 188 - 24, w: H2.w - 32 }
-      : s === 5
-        ? { x: MID.x + 16, y: MID.y + 188 - 24, w: MID.w - 32 }
-        : mini
-          ? { x: MINI.x + 10, y: MINI.y + MINI.h - 20, w: MINI.w - 20 }
-          : { x: BIG.x + 16, y: BIG.y + 188 - 24, w: BIG.w - 32 };
+  const heroBox = s >= 4 ? MID : H2;
   // the dot is where the source is in the real video (the design drew .22), then moves on as the
   // video would in the 8 s it runs (the design moved it to .3)
   const at = heroFraction(ex);
@@ -620,28 +650,33 @@ export function buildScene(
             ? at
             : heroFraction(ex, PLAY_RUN_S)
         : at;
-  const barOn = s === 1 || s === 5 || s === 6;
+  const barOn = s === 1 || s === 5;
+  const barW = HERO_W - HERO_PAD * 2 - BAR_LABEL_W;
+  const dotTr = (t: string): string => T(`left ${t}, width ${t}`);
   const bar = {
-    l: px(bb.x),
-    t: px(bb.y),
-    w: px(bb.w),
+    l: px(heroBox.x + HERO_PAD),
+    t: px(heroBox.y + HERO_H + BAR_GAP),
+    w: px(barW),
     o: barOn ? 1 : 0,
-    dl: px(pr * bb.w),
+    dl: px(pr * barW),
     lo: s === 5 ? 1 : 0,
-    tr: T(
-      `left .6s ${EASE}, top .6s ${EASE}, width .6s ${EASE}, opacity .3s ${barOn ? '.3s' : '0s'}`
-    ),
-    dtr: T(
+    // shown once the thumbnail is in its place, gone before it moves
+    tr: T(barOn ? `opacity .25s ${BAR_IN_S}s` : 'opacity 0s'),
+    dtr:
       s === 1 && ph >= 1
-        ? 'left 3.6s cubic-bezier(.45,0,.55,1), width 3.6s cubic-bezier(.45,0,.55,1)'
+        ? dotTr(`3.6s cubic-bezier(.45,0,.55,1) ${BAR_IN_S}s`)
         : s === 5 && ph === 2
-          ? `left ${PLAY_RUN_S}s linear, width ${PLAY_RUN_S}s linear`
+          ? dotTr(`${PLAY_RUN_S}s linear`)
           : s === 5 && ph === 1
-            ? `left .55s ${EASE}, width .55s ${EASE}`
-            : `left .6s ${EASE}, width .6s ${EASE}`
-    ),
-    lp: px(at * bb.w),
-    ltr: T(s === 5 ? 'opacity .35s .6s' : 'opacity .15s'),
+            ? dotTr(`.55s ${EASE} ${BAR_IN_S}s`)
+            : dotTr('0s'),
+    ltr: T(s === 5 ? `opacity .35s ${BAR_IN_S}s` : 'opacity 0s'),
+  };
+  // the hero card under the thumbnail (bar row, channel row); behind the cells
+  const band = {
+    o: barOn ? 1 : 0,
+    t: px(heroBox.y + HERO_H - BAND_UNDER),
+    tr: T(barOn ? `opacity .3s .5s, top .6s ${EASE}` : 'opacity .15s linear, top 0s .2s'),
   };
 
   const card = {
@@ -651,7 +686,7 @@ export function buildScene(
       s < 3
         ? 'translateY(24px)'
         : s === 5
-          ? `translate(30px,${px(cardS5Y(cardH))}) scale(${CARD_S5_SCALE})`
+          ? cardS5(cardH)
           : s === 6 || s === 7
             ? 'translate(30px,78px) scale(.82)'
             : 'none',
@@ -672,7 +707,7 @@ export function buildScene(
     ),
   };
   const cn = {
-    t: '376px',
+    t: px(MID.y - CN_H),
     s: s === 5 ? 'scaleY(1)' : 'scaleY(0)',
     tr: T(s === 5 ? `transform .3s .45s ${EASE}` : 'transform .15s'),
   };
@@ -694,21 +729,22 @@ export function buildScene(
     tr: live ? (wallOn ? 'opacity .9s ease' : 'opacity .2s') : 'none',
     anim: live && wallOn,
   };
-  const creditTop = s === 2 ? card2CreditTop(slots.length) : CREDIT_TOP[s];
+  const creditTop =
+    s === 2 ? card2CreditTop(slots.length) : barOn ? creditTopIn(heroBox) : CREDIT_TOP[s];
   const credit = {
     on: creditTop !== undefined,
     top: creditTop ?? 0,
-    right: s === 1 ? CREDIT_RIGHT_BAND : CREDIT_RIGHT,
-    c: nv ? v('credit-dark') : v('sub'),
-    tr: T(creditTop !== undefined ? 'opacity .4s .5s' : 'opacity .15s'),
+    right: barOn ? CREDIT_RIGHT_BAND : CREDIT_RIGHT,
+    c: nv && !barOn ? v('credit-dark') : v('sub'),
+    // the row is drawn anew per scene (IntroPage key) and fades in when the thumbnails rest
+    in: live && creditTop !== undefined,
     // the groups link to their first video (the hero); scene 5 is the hero from its source time
     href: CREDIT_ICON.has(s)
       ? s === SOURCE_OPEN_SCENE
         ? heroWatchUrl(ex)
         : watchUrl(heroVideo(ex).id)
       : null,
-    plate: !CREDIT_ICON.has(s) ? v('clear') : s === 1 ? v('white') : nv ? v('night') : v('paper'),
-    text: !CREDIT_NO_TEXT.has(s),
+    plate: !CREDIT_ICON.has(s) ? v('clear') : barOn ? v('white') : nv ? v('night') : v('paper'),
   };
 
   return {
@@ -733,6 +769,7 @@ export function buildScene(
     deck,
     cells,
     bar,
+    band,
     card,
     scan,
     cn,
