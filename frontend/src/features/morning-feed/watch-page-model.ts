@@ -96,14 +96,20 @@ export function isArticleCore(core: readonly PageCoreRef[]): boolean {
   return core.some((c) => c.para !== undefined);
 }
 
+/** One sentence of an article paragraph with its own sources. */
+export interface ArticleSentence {
+  text: string;
+  sources: PageSourceRef[];
+}
+
 /**
  * Article format: the core sentences grouped into paragraphs by `para`, in paragraph number
- * order. A paragraph's text is its sentences in their order joined by one space; its sources
- * are the sentences' sources in the same order (drawn once, after the paragraph).
+ * order, each sentence in its order with its own sources (decision 2026-11-24: every sentence's
+ * links are drawn right after that sentence, not once at the paragraph end).
  */
 export function articleParagraphs(
   core: readonly PageCoreRef[]
-): Array<{ text: string; sources: PageSourceRef[] }> {
+): Array<{ sentences: ArticleSentence[] }> {
   const byPara = new Map<number, PageCoreRef[]>();
   for (const c of core) {
     const n = c.para ?? 1;
@@ -116,8 +122,7 @@ export function articleParagraphs(
     .map((n) => {
       const items = byPara.get(n) ?? [];
       return {
-        text: items.map((c) => c.text.trim()).join(' '),
-        sources: items.flatMap((c) => [...c.sources]),
+        sentences: items.map((c) => ({ text: c.text.trim(), sources: [...c.sources] })),
       };
     });
 }

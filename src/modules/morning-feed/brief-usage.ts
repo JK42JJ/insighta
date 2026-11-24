@@ -18,6 +18,12 @@ export const USAGE_EVENT_KINDS = [
   'brief_open',
   'evidence_open',
   'video_reaction',
+  // landing page (2026-11-24): kept in the visitor's tab and sent after sign-in with login_done
+  'landing_open',
+  'landing_scroll_step3',
+  'start_click',
+  'add_click',
+  'login_done',
 ] as const;
 export type UsageEventKind = (typeof USAGE_EVENT_KINDS)[number];
 

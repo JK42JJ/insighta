@@ -537,7 +537,18 @@ export async function postBriefFeedback(input: {
   return res.data;
 }
 
-export type UsageEventKind = 'home_open' | 'brief_open' | 'evidence_open' | 'video_reaction';
+/** Same list as the server's USAGE_EVENT_KINDS (src/modules/morning-feed/brief-usage.ts). */
+export type UsageEventKind =
+  | 'home_open'
+  | 'brief_open'
+  | 'evidence_open'
+  | 'video_reaction'
+  // landing page (2026-11-24): kept in the visitor's tab, sent after sign-in with login_done
+  | 'landing_open'
+  | 'landing_scroll_step3'
+  | 'start_click'
+  | 'add_click'
+  | 'login_done';
 
 /** Fire-and-forget usage event. Never throws: the screen must not depend on it. */
 export async function postUsageEvent(input: {

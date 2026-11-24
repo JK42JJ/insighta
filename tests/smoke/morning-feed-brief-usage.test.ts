@@ -1,0 +1,72 @@
+import { FeedValidationError, type FeedDb } from '@/modules/morning-feed/feed';
+import {
+  recordUsageEvent,
+  USAGE_EVENT_KINDS,
+  validateUsageEvent,
+} from '@/modules/morning-feed/brief-usage';
+
+/*
+ * Usage event allow-list (landing page, 2026-11-24): the landing's events are kept in the
+ * visitor's tab and sent after Google sign-in with login_done, through the same POST /events.
+ */
+
+const USER = '11111111-1111-4111-8111-111111111111';
+const LANDING_KINDS = [
+  'landing_open',
+  'landing_scroll_step3',
+  'start_click',
+  'add_click',
+  'login_done',
+] as const;
+
+describe('usage event allow-list', () => {
+  it('accepts the landing kinds next to the existing ones', () => {
+    for (const kind of LANDING_KINDS) {
+      expect(USAGE_EVENT_KINDS).toContain(kind);
+      expect(validateUsageEvent({ kind })).toEqual({
+        kind,
+        cell: null,
+        seen_date: null,
+        video_id: null,
+        value: null,
+      });
+    }
+    for (const kind of ['home_open', 'brief_open', 'evidence_open', 'video_reaction']) {
+      expect(USAGE_EVENT_KINDS).toContain(kind);
+    }
+  });
+
+  it('start_click carries which button (sticky or final) as its value', () => {
+    expect(validateUsageEvent({ kind: 'start_click', value: 'sticky' }).value).toBe('sticky');
+    expect(validateUsageEvent({ kind: 'start_click', value: 'final' }).value).toBe('final');
+  });
+
+  it('rejects an unknown kind and a value outside the short-token shape', () => {
+    expect(() => validateUsageEvent({ kind: 'landing_close' })).toThrow(FeedValidationError);
+    expect(() => validateUsageEvent({ kind: 'start_click', value: 'a b' })).toThrow(
+      FeedValidationError
+    );
+    expect(() => validateUsageEvent({ kind: 'start_click', value: 'x'.repeat(17) })).toThrow(
+      FeedValidationError
+    );
+  });
+
+  it('every kind fits the kind column (varchar 32)', () => {
+    for (const kind of USAGE_EVENT_KINDS) expect(kind.length).toBeLessThanOrEqual(32);
+  });
+
+  it('records a landing event as one append-only row', async () => {
+    const calls: unknown[][] = [];
+    const db = {
+      $queryRawUnsafe: jest.fn(),
+      $executeRawUnsafe: jest.fn(async (...args: unknown[]) => {
+        calls.push(args);
+        return 1;
+      }),
+    } as unknown as FeedDb;
+    await recordUsageEvent(db, USER, validateUsageEvent({ kind: 'login_done' }));
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]![0])).toMatch(/INSERT INTO public\.morning_usage_events/);
+    expect(calls[0]!.slice(1)).toEqual([USER, 'login_done', null, null, null, null]);
+  });
+});

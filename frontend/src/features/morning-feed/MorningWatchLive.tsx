@@ -8,6 +8,7 @@ import {
   type FeedHistoryItem,
   type MorningHomePages,
 } from '@/features/morning-cards/api';
+import { useLandingArrival } from '@/features/landing-intro';
 import { toFeedCard } from '@/features/morning-feed/feed-format';
 import { takeWatchStart } from '@/features/morning-feed/watch-prefetch';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
@@ -75,6 +76,8 @@ const WATCH_SURFACE = 'watch';
  */
 export function MorningWatchLive(): JSX.Element {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  // signed in from the landing: no onboarding; its events and the ADD notice once a screen shows
+  useLandingArrival(state.status !== 'loading');
   const queue = useRef<JudgmentQueue | null>(null);
   if (queue.current === null) {
     queue.current = new JudgmentQueue({

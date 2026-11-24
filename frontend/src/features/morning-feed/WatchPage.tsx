@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 
 import type { MorningPage } from '@/features/morning-cards/api';
 import { ensureHomeFonts, waitHomeFonts } from '@/features/morning-feed/watch-home-fonts';
@@ -238,19 +238,25 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
             data-article={isArticleCore(pg.core) ? '' : undefined}
           >
             {isArticleCore(pg.core)
-              ? // article format (2026-11-22): 1 to 2 paragraphs, the sources once after each
+              ? // article format (2026-11-22): 1 to 2 paragraphs; each sentence's sources right
+                // after that sentence (decision 2026-11-24)
                 articleParagraphs(pg.core).map((q, i) => (
                   <p
                     key={i}
                     className="mf-page-core-p"
-                    data-cited={q.sources.length > 0 ? '' : undefined}
+                    data-cited={q.sentences.some((s) => s.sources.length > 0) ? '' : undefined}
                   >
-                    {q.sources.length > 0 ? q.text + ' ' : q.text}
-                    <Cites
-                      links={citeLinks(q.sources, channelOf)}
-                      onOpen={p.onOpenVideo}
-                      from="body"
-                    />
+                    {q.sentences.map((s, k) => (
+                      <Fragment key={k}>
+                        {k > 0 ? ' ' : null}
+                        {s.sources.length > 0 ? s.text + ' ' : s.text}
+                        <Cites
+                          links={citeLinks(s.sources, channelOf)}
+                          onOpen={p.onOpenVideo}
+                          from="body"
+                        />
+                      </Fragment>
+                    ))}
                   </p>
                 ))
               : pg.core.map((c, i) => (

@@ -1,0 +1,591 @@
+/*
+ * Landing page (/morning-cards?view=watch, signed out). Every value is the design's
+ * ("Insighta Intro.dc.html", 2026-11-24), copied as written. The root also carries .mf-w, so the
+ * watch tokens (--w-*) apply; the colours the watch screens do not have are defined here as
+ * tokens only. Like the design (no CSS reset), boxes are content-box unless it says border-box.
+ */
+.li {
+  --li-backdrop: #e4e1d8;
+  --li-body: #2e3644;
+  --li-tile: #d9d5ca;
+  --li-avatar: #e7e3d9;
+  --li-domain-line: #dcd8cd;
+  --li-add: #a8a397;
+  --li-tile-shadow: rgba(20, 26, 36, 0.45);
+  --li-cite-on: rgba(58, 110, 165, 0.12);
+  --li-footer-line: rgba(247, 245, 240, 0.14);
+  /* Google sign-in button, light theme (Google branding guidelines) */
+  --li-g-fill: #ffffff;
+  --li-g-stroke: #747775;
+  --li-g-text: #1f1f1f;
+  --li-g-blue: #4285f4;
+  --li-g-green: #34a853;
+  --li-g-yellow: #fbbc05;
+  --li-g-red: #ea4335;
+
+  --li-font: 'Pretendard Variable', Pretendard, sans-serif;
+  --li-serif: 'Noto Serif KR', serif;
+  --li-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --li-ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --li-ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--li-backdrop);
+}
+
+.li-frame {
+  width: 100%;
+  max-width: 430px;
+  height: min(100dvh, 932px);
+  position: relative;
+  overflow: hidden;
+  background: var(--w-paper);
+  color: var(--w-text);
+  font-family: var(--li-font);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: normal;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+.li-frame,
+.li-frame *,
+.li-frame *::before,
+.li-frame *::after {
+  box-sizing: content-box;
+}
+.li-frame button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.li-frame :focus-visible {
+  outline: 2px solid var(--w-steel);
+  outline-offset: 2px;
+}
+
+/* top bar */
+.li-top {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 3;
+  height: 64px;
+  padding: env(safe-area-inset-top, 0px) 24px 0;
+  display: flex;
+  align-items: center;
+  background: var(--w-paper);
+  box-shadow: none;
+  transition:
+    background 0.35s,
+    box-shadow 0.35s;
+}
+.li-top[data-top] {
+  box-shadow: 0 1px 0 var(--w-line);
+}
+.li-top[data-dark] {
+  background: var(--w-navy);
+  box-shadow: none;
+}
+.li-brand {
+  font: 800 15px Arial;
+  letter-spacing: 0.02em;
+  color: var(--w-navy);
+  transition: color 0.35s;
+}
+.li-top[data-dark] .li-brand {
+  color: var(--w-paper);
+}
+
+.li-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.li-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* hero */
+.li-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.li-wall {
+  position: relative;
+  flex: none;
+  margin-top: 64px;
+  overflow: hidden;
+}
+.li-wall-grid {
+  position: absolute;
+  left: -38px;
+  top: 6px;
+  width: 466px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.li-tile {
+  aspect-ratio: 16/9;
+  border-radius: 6px;
+  background: var(--li-tile);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--w-navy);
+  filter: grayscale(0.85) contrast(0.9);
+  opacity: 0.5;
+  transform: none;
+  box-shadow: none;
+  transition:
+    filter 1.1s var(--li-dl) var(--li-ease-std),
+    opacity 1.1s var(--li-dl) var(--li-ease-std),
+    transform 1.1s var(--li-dl) var(--li-ease-out),
+    box-shadow 1.1s var(--li-dl);
+}
+.li-frame[data-phase='1'] .li-tile,
+.li-frame[data-phase='2'] .li-tile {
+  filter: grayscale(1) contrast(0.85);
+  opacity: 0.16;
+}
+.li-frame[data-phase='1'] .li-tile[data-pick],
+.li-frame[data-phase='2'] .li-tile[data-pick] {
+  filter: none;
+  opacity: 1;
+  transform: scale(1.06);
+  box-shadow: 0 10px 24px -10px var(--li-tile-shadow);
+}
+.li-hero-text {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 20px 24px 112px;
+}
+.li-h1 {
+  font-family: var(--li-serif);
+  font-weight: 500;
+  font-size: 44px;
+  line-height: 1.24;
+  letter-spacing: -0.04em;
+  word-break: keep-all;
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.9s 0.2s,
+    transform 1.1s 0.2s var(--li-ease-out);
+}
+.li-hero-p {
+  margin-top: 18px;
+  font-size: 16.5px;
+  line-height: 1.66;
+  letter-spacing: -0.01em;
+  color: var(--li-body);
+  word-break: keep-all;
+  text-wrap: pretty;
+  opacity: 0;
+  transition: opacity 0.9s 0.45s;
+}
+.li-frame[data-phase='2'] .li-h1 {
+  opacity: 1;
+  transform: none;
+}
+.li-frame[data-phase='2'] .li-hero-p {
+  opacity: 1;
+}
+
+/* reveal on scroll (not with reduced motion) */
+.li-frame[data-motion] [data-rv] {
+  transition:
+    opacity 0.9s var(--li-ease-std),
+    transform 1.1s var(--li-ease-out);
+}
+.li-frame[data-motion] [data-rv]:not([data-shown]) {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+/* problem */
+.li-problem {
+  padding: 72px 24px 128px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.li-problem-p {
+  font-size: 23px;
+  line-height: 1.58;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--w-sub);
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+.li-problem-a {
+  font-size: 23px;
+  line-height: 1.5;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--w-text);
+}
+
+/* explanation: pinned illustration with three captions */
+.li-pin {
+  height: 2600px;
+  background: var(--w-navy);
+}
+.li-sticky {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 76px;
+  box-sizing: border-box;
+}
+.li-caps {
+  position: relative;
+  flex: none;
+  height: 118px;
+  margin: 0 24px;
+}
+.li-cap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  font-size: 21px;
+  line-height: 1.5;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--w-paper);
+  word-break: keep-all;
+  text-wrap: pretty;
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 0.5s,
+    transform 0.7s var(--li-ease-out);
+}
+.li-cap[data-at='past'] {
+  transform: translateY(-12px);
+}
+.li-cap[data-at='on'] {
+  opacity: 1;
+  transform: none;
+}
+.li-card {
+  flex: 1;
+  min-height: 0;
+  margin: 0 14px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px 28px 0 0;
+  background: var(--w-paper);
+}
+.li-illu {
+  width: 390px;
+  transform-origin: 0 0;
+  transition: transform 0.9s var(--li-ease-sheet);
+  padding: 26px 22px 40px;
+  box-sizing: border-box;
+}
+.li-illu-fade {
+  transition: opacity 0.5s;
+}
+.li-illu-kicker {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--w-sub);
+}
+.li-illu-h {
+  margin-top: 14px;
+  font-family: var(--li-serif);
+  font-weight: 500;
+  font-size: 27px;
+  line-height: 1.34;
+  letter-spacing: -0.03em;
+  word-break: keep-all;
+}
+.li-illu-p {
+  font-size: 16px;
+  line-height: 1.72;
+  word-break: keep-all;
+}
+.li-illu-p1 {
+  margin-top: 24px;
+}
+.li-illu-p2 {
+  margin-top: 16px;
+}
+.li-illu-cite {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--w-steel);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+  background: var(--w-clear);
+  transition: background 0.5s;
+}
+.li-illu-cite[data-on] {
+  background: var(--li-cite-on);
+}
+.li-illu-cite-rest {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--w-sub);
+}
+.li-illu-more {
+  margin-top: 22px;
+  height: 44px;
+  width: 132px;
+  border: 1px solid var(--w-branch-line);
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+}
+.li-illu-list {
+  margin-top: 44px;
+}
+.li-illu-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--w-sub);
+}
+.li-illu-rows {
+  margin-top: 6px;
+}
+.li-illu-row {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--w-line);
+}
+.li-illu-av {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  flex: none;
+  background: var(--li-avatar);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--w-navy);
+}
+.li-illu-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* principles */
+.li-principle {
+  padding: 128px 24px 0;
+}
+.li-h2 {
+  font-family: var(--li-serif);
+  font-weight: 500;
+  font-size: 36px;
+  line-height: 1.3;
+  letter-spacing: -0.04em;
+  word-break: keep-all;
+}
+.li-principle-p {
+  margin-top: 22px;
+  font-size: 17.5px;
+  line-height: 1.72;
+  color: var(--li-body);
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+
+/* domains */
+.li-domains {
+  padding: 128px 24px 0;
+}
+.li-domains-lead {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--w-sub);
+}
+.li-domains-list {
+  border-top: 1px solid var(--w-text);
+}
+.li-domain {
+  height: 58px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--li-domain-line);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.li-frame .li-add {
+  width: 100%;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--li-add);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.li-frame .li-add:active {
+  opacity: 0.5;
+  transition-duration: 0.08s;
+}
+.li-add-icon {
+  display: block;
+  stroke: var(--li-add);
+}
+
+/* final */
+.li-final {
+  margin-top: 140px;
+  background: var(--w-navy);
+  color: var(--w-paper);
+  padding: 96px 24px 0;
+}
+.li-final-line {
+  font-family: var(--li-serif);
+  font-weight: 500;
+  font-size: 30px;
+  line-height: 1.4;
+  letter-spacing: -0.035em;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+.li-footer {
+  margin-top: 96px;
+  padding: 8px 0 calc(env(safe-area-inset-bottom, 0px) + 24px);
+  border-top: 1px solid var(--li-footer-line);
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--w-navy-body);
+}
+.li-footer a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--w-navy-body);
+  text-decoration: none;
+}
+.li-footer span {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Google button (design slot; official mark and light-theme colours) */
+.li-frame .li-google {
+  height: 56px;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--li-g-stroke);
+  border-radius: 28px;
+  background: var(--li-g-fill);
+  color: var(--li-g-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: transform 0.2s var(--li-ease-out);
+}
+.li-frame .li-google:active {
+  transform: scale(0.97);
+  transition-duration: 0.08s;
+}
+.li-final .li-google {
+  margin-top: 40px;
+}
+.li-google-mark,
+.li-google-label {
+  transition: opacity 0.2s;
+}
+.li-google[data-busy] .li-google-mark,
+.li-google[data-busy] .li-google-label {
+  opacity: 0.45;
+}
+.li-google-mark {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: block;
+}
+.li-g-blue {
+  fill: var(--li-g-blue);
+}
+.li-g-green {
+  fill: var(--li-g-green);
+}
+.li-g-yellow {
+  fill: var(--li-g-yellow);
+}
+.li-g-red {
+  fill: var(--li-g-red);
+}
+
+/* bottom bar */
+.li-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  padding: 12px 20px calc(env(safe-area-inset-bottom, 0px) + 22px);
+  background: var(--w-paper);
+  transform: none;
+  transition:
+    transform 0.5s var(--li-ease-sheet),
+    background 0.35s;
+}
+.li-bar[data-dark] {
+  background: var(--w-navy);
+}
+.li-bar[data-hidden] {
+  transform: translateY(110%);
+}
+
+/* reduced motion: nothing moves (the design starts at the end state) */
+.li-frame:not([data-motion]),
+.li-frame:not([data-motion]) * {
+  transition: none !important;
+}

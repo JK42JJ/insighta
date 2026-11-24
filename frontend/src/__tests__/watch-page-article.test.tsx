@@ -33,8 +33,9 @@ vi.mock('@/features/morning-feed/PageWatch', async (actual) => {
 });
 
 /*
- * Article format (decision 2026-11-22): core items with `para` are drawn as 1 to 2 paragraphs,
- * the sources once after each paragraph; a page without `para` is drawn as before.
+ * Article format (decision 2026-11-22): core items with `para` are drawn as 1 to 2 paragraphs;
+ * each sentence's sources right after that sentence (decision 2026-11-24); a page without `para`
+ * is drawn as before.
  */
 
 const FRAME = { vh: 844, safeTop: 47, safeBottom: 34, playerH: 219, width: 390 };
@@ -80,49 +81,47 @@ function draw(
 }
 
 describe('article paragraphs (model)', () => {
-  it('groups sentences by para in order; text joined by one space, sources kept in order', () => {
+  it('groups sentences by para in order, each sentence with its own sources', () => {
     expect(isArticleCore(PAGE.core)).toBe(true);
     expect(articleParagraphs(PAGE.core)).toEqual([
       {
-        text: '첫 문장이다. 둘째 문장이다. 셋째 문장이다.',
-        sources: [
-          { video_id: A, t: 200 },
-          { video_id: B, t: 160 },
-          { video_id: A, t: 220 },
+        sentences: [
+          { text: '첫 문장이다.', sources: [{ video_id: A, t: 200 }] },
+          { text: '둘째 문장이다.', sources: [{ video_id: B, t: 160 }] },
+          { text: '셋째 문장이다.', sources: [{ video_id: A, t: 220 }] },
         ],
       },
       {
-        text: '넷째 문장이다. 다섯째 문장이다.',
-        sources: [
-          { video_id: B, t: 180 },
-          { video_id: A, t: 360 },
+        sentences: [
+          { text: '넷째 문장이다.', sources: [{ video_id: B, t: 180 }] },
+          { text: '다섯째 문장이다.', sources: [{ video_id: A, t: 360 }] },
         ],
       },
     ]);
     // one paragraph only; para 2 written before para 1 is still drawn second
     expect(articleParagraphs(PAGE.core.map((c) => ({ ...c, para: 1 as const })))).toHaveLength(1);
     const swapped = [PAGE.core[3]!, PAGE.core[0]!];
-    expect(articleParagraphs(swapped).map((q) => q.text)).toEqual([
-      '첫 문장이다.',
-      '넷째 문장이다.',
+    expect(articleParagraphs(swapped).map((q) => q.sentences.map((x) => x.text))).toEqual([
+      ['첫 문장이다.'],
+      ['넷째 문장이다.'],
     ]);
     expect(isArticleCore((pageFixture as MorningPage).core)).toBe(false);
   });
 });
 
 describe('article page (screen)', () => {
-  it('draws one paragraph per para with the links once at its end, times of one video joined', () => {
+  it("draws one paragraph per para with each sentence's links right after that sentence", () => {
     draw(PAGE);
     const ps = screen.getByTestId('mf-page-core').querySelectorAll('.mf-page-core-p');
     expect(ps).toHaveLength(2);
     expect(ps[0]!.textContent).toBe(
-      '첫 문장이다. 둘째 문장이다. 셋째 문장이다. 채널A 3:20· 3:40채널B 2:40'
+      '첫 문장이다. 채널A 3:20 둘째 문장이다. 채널B 2:40 셋째 문장이다. 채널A 3:40'
     );
-    expect(ps[1]!.textContent).toBe('넷째 문장이다. 다섯째 문장이다. 채널B 3:00채널A 6:00');
-    // the links are after the whole text, none between sentences
+    expect(ps[1]!.textContent).toBe('넷째 문장이다. 채널B 3:00 다섯째 문장이다. 채널A 6:00');
+    // the first sentence is followed by its own link, before the second sentence
     expect(ps[0]!.firstChild?.nodeType).toBe(Node.TEXT_NODE);
-    expect(ps[0]!.firstChild?.textContent).toBe('첫 문장이다. 둘째 문장이다. 셋째 문장이다. ');
-    expect(ps[0]!.querySelectorAll('[data-testid="mf-page-cite-group"]')).toHaveLength(2);
+    expect(ps[0]!.firstChild?.textContent).toBe('첫 문장이다. ');
+    expect(ps[0]!.querySelectorAll('[data-testid="mf-page-cite-group"]')).toHaveLength(3);
     expect(ps[0]!.hasAttribute('data-cited')).toBe(true);
     // the paragraph typography applies to the article format only
     expect(screen.getByTestId('mf-page-core').hasAttribute('data-article')).toBe(true);
@@ -140,14 +139,15 @@ describe('article page (screen)', () => {
     const cites = screen
       .getByTestId('mf-page-core')
       .querySelectorAll<HTMLAnchorElement>('[data-testid="mf-page-cite"]');
+    // sentence order: each link follows its sentence
     expect([...cites].map((c) => c.href)).toEqual([
       `https://www.youtube.com/watch?v=${A}&t=200s`,
-      `https://www.youtube.com/watch?v=${A}&t=220s`,
       `https://www.youtube.com/watch?v=${B}&t=160s`,
+      `https://www.youtube.com/watch?v=${A}&t=220s`,
       `https://www.youtube.com/watch?v=${B}&t=180s`,
       `https://www.youtube.com/watch?v=${A}&t=360s`,
     ]);
-    fireEvent.click(cites[1]!);
+    fireEvent.click(cites[2]!);
     expect(open).toHaveBeenCalledWith(A, 220, 'body');
     fireEvent.click(cites[3]!);
     expect(open).toHaveBeenCalledWith(B, 180, 'body');
@@ -235,12 +235,12 @@ describe('article page -> the video at that second', () => {
         onJudge={() => undefined}
       />
     );
-    // the third link of the first paragraph: 채널B 2:40
+    // the second sentence's link in the first paragraph: 채널B 2:40
     const cites = screen
       .getByTestId('mf-page-core')
       .querySelectorAll('[data-testid="mf-page-cite"]');
-    expect(cites[2]!.textContent).toBe('채널B 2:40');
-    fireEvent.click(cites[2]!);
+    expect(cites[1]!.textContent).toBe('채널B 2:40');
+    fireEvent.click(cites[1]!);
     await act(async () => {
       await Promise.resolve();
     });

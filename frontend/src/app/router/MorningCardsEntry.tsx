@@ -1,9 +1,11 @@
 import { lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { useAuthContext } from '@/features/auth/model/AuthContext';
 import { parseFixtureScreen } from '@/features/morning-feed/fixture-screen';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 
+import { AUTH_RETURN_KEY } from './mobile-auth-return';
 import { ProtectedRoute } from './ProtectedRoute';
 
 const MorningFeedRoute = lazy(() =>
@@ -19,6 +21,7 @@ const MorningWatchR3Fixture = lazy(() =>
     default: m.MorningWatchR3Fixture,
   }))
 );
+const IntroPage = lazy(() => import('@/pages/intro'));
 const MorningFeedFixture = lazy(() =>
   import('@/features/morning-feed/MorningFeedFixture').then((m) => ({
     default: m.MorningFeedFixture,
@@ -30,7 +33,8 @@ const MorningFeedFixture = lazy(() =>
  * no sign-in needed); with `&view=watch` the watch flow's test-hook screen (the mobile design
  * handoff's example data, `&screen=onb|input|watch|insight`; with `&preset=` the 수정 3 handoff's
  * presets, `&safe=47,34` and `&thumbs=` optional). Otherwise the signed-in,
- * flag-gated live feed (오늘의 픽). The earlier judging screen stays at /morning-cards/classic.
+ * flag-gated live feed (오늘의 픽); `?view=watch` signed out shows the landing page instead of the
+ * sign-in page. The earlier judging screen stays at /morning-cards/classic.
  */
 export function MorningCardsEntry() {
   const { search } = useLocation();
@@ -62,13 +66,44 @@ export function MorningCardsEntry() {
       </Suspense>
     );
   }
-  // the watch screen shows its first-open screen instead of a blank page while it starts
-  const boot = q.get('view') === 'watch' ? <WatchBoot /> : null;
+  if (q.get('view') === 'watch') return <WatchEntry />;
   return (
-    <ProtectedRoute fallback={boot}>
-      <Suspense fallback={boot}>
+    <ProtectedRoute>
+      <Suspense fallback={null}>
         <MorningFeedRoute />
       </Suspense>
     </ProtectedRoute>
+  );
+}
+
+/** After Google sign-in from the landing: always today's brief screen (decision 2026-11-24). */
+const WATCH_RETURN_PATH = '/morning-cards?view=watch';
+
+/**
+ * The participant address: signed out -> the landing page (decision 2026-11-24), signed in -> the
+ * watch screen as before. The watch screen's first-open screen shows while either starts.
+ */
+function WatchEntry(): JSX.Element {
+  const { user, isLoading, signInWithGoogle } = useAuthContext();
+  if (isLoading) return <WatchBoot />;
+  if (!user) {
+    const signIn = async (): Promise<void> => {
+      try {
+        sessionStorage.setItem(AUTH_RETURN_KEY, WATCH_RETURN_PATH);
+      } catch {
+        /* storage blocked: the return lands on / */
+      }
+      await signInWithGoogle();
+    };
+    return (
+      <Suspense fallback={<WatchBoot />}>
+        <IntroPage onSignIn={signIn} />
+      </Suspense>
+    );
+  }
+  return (
+    <Suspense fallback={<WatchBoot />}>
+      <MorningFeedRoute />
+    </Suspense>
   );
 }
