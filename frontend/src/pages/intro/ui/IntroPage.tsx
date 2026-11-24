@@ -52,6 +52,8 @@ import {
   SWIPE_HINT,
   TERMS,
   YT_CREDIT,
+  YT_ICON_ALT,
+  ytLinkLabel,
 } from '../model/landing-content';
 import { heroVideo, heroWatchUrl, LANDING_EXAMPLE, sourceLabel } from '../model/landing-example';
 import {
@@ -59,6 +61,7 @@ import {
   DECK_ARRIVE_MS,
   DECK_CYCLE_MS,
   DECK_LEAVE_MS,
+  DECK_THUMB_H,
   DOTGO,
   EASE_BACK,
   fitStage,
@@ -82,9 +85,12 @@ import {
   SWIPE_MIN_PX,
   wallTiles,
   WHEEL_MIN,
+  YT_ICON_BOX_H,
+  YT_ICON_BOX_W,
   type Phase,
   type Scene,
 } from '../model/landing-scene';
+import ytIconSrc from '../assets/yt_icon_red_digital.png';
 import { GoogleButton } from './GoogleButton';
 import { LegalSheet } from './LegalSheet';
 import './landing.css';
@@ -565,6 +571,17 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                           decoding="async"
                         />
                       ))}
+                      {d.yt ? (
+                        <YouTubeIconLink
+                          href={d.yt}
+                          label={ytLinkLabel(hero.channel)}
+                          live={s === 0}
+                          tapped={tapped}
+                          testId="lv-yt-deck"
+                          // the clear space may overhang the row; the thumbnails stay where they were
+                          bleedY={(YT_ICON_BOX_H - DECK_THUMB_H) / 2}
+                        />
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -825,20 +842,32 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
             </div>
 
             {/* YouTube attribution while thumbnails are visible (the last sheet carries its own) */}
-            <p
+            <div
               className="lv-credit"
               data-testid="lv-credit"
+              data-icon={view.credit.href ? '' : undefined}
+              data-text={view.credit.text ? '' : undefined}
               aria-hidden={view.credit.on ? undefined : true}
               style={{
                 top: view.credit.top + 'px',
                 right: view.credit.right + 'px',
                 color: view.credit.c,
+                backgroundColor: view.credit.plate,
                 opacity: view.credit.on ? 1 : 0,
                 transition: view.credit.tr,
               }}
             >
-              {YT_CREDIT}
-            </p>
+              {view.credit.text ? <span>{YT_CREDIT}</span> : null}
+              {view.credit.href ? (
+                <YouTubeIconLink
+                  href={view.credit.href}
+                  label={ytLinkLabel(hero.channel)}
+                  live={view.credit.on}
+                  tapped={tapped}
+                  testId="lv-yt"
+                />
+              ) : null}
+            </div>
 
             {/* scene 6: the last sheet */}
             <div
@@ -972,3 +1001,53 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
 }
 
 export default IntroPage;
+
+/**
+ * The official YouTube Icon as a link to the video (YouTube API branding guidelines): the file is
+ * drawn whole and unaltered (its transparent margin is the icon's clear space), at its own
+ * proportions, on the row's solid colour. A swipe that ends on it does not open YouTube.
+ */
+function YouTubeIconLink({
+  href,
+  label,
+  live,
+  tapped,
+  testId,
+  bleedY = 0,
+}: {
+  href: string;
+  label: string;
+  /** Visible and reachable in the current scene. */
+  live: boolean;
+  tapped: () => boolean;
+  testId: string;
+  /** Negative vertical margin (px) so the file's transparent margin does not grow the row. */
+  bleedY?: number;
+}): JSX.Element {
+  return (
+    <a
+      className="lv-yt"
+      data-testid={testId}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      tabIndex={live ? 0 : -1}
+      style={{ pointerEvents: live ? 'auto' : 'none', margin: `${-bleedY}px 0` }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!live || !tapped()) e.preventDefault();
+      }}
+    >
+      <img
+        className="lv-yt-img"
+        src={ytIconSrc}
+        alt={YT_ICON_ALT}
+        width={YT_ICON_BOX_W}
+        height={YT_ICON_BOX_H}
+        decoding="async"
+        draggable={false}
+      />
+    </a>
+  );
+}

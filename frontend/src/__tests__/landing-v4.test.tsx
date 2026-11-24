@@ -52,7 +52,7 @@ import {
   type LandingEventValue,
 } from '@/features/landing-intro';
 import { IntroPage } from '@/pages/intro';
-import { S3_TEXT, YT_CREDIT } from '@/pages/intro/model/landing-content';
+import { S3_TEXT, YT_CREDIT, YT_ICON_ALT, ytLinkLabel } from '@/pages/intro/model/landing-content';
 import { heroWatchUrl, LANDING_EXAMPLE, timeToSeconds } from '@/pages/intro/model/landing-example';
 import {
   buildScene,
@@ -63,6 +63,12 @@ import {
   sceneEventValue,
   SEQ,
   STEP_LOCK_MS,
+  YT_ICON_BOX_H,
+  YT_ICON_BOX_W,
+  YT_ICON_FILE_H,
+  YT_ICON_FILE_W,
+  YT_ICON_MARK_FILE_H,
+  YT_ICON_MARK_PX,
   type Scene,
 } from '@/pages/intro/model/landing-scene';
 
@@ -301,6 +307,8 @@ describe('YouTube policy', () => {
       goTo(s);
       expect(credit.style.opacity).toBe('1');
       expect(credit.getAttribute('aria-hidden')).toBeNull();
+      // scene 5: the icon alone (the text would cover the source line to the video)
+      expect(credit.textContent).toBe(s === 5 ? '' : YT_CREDIT);
     }
     goTo(7);
     expect(credit.style.opacity).toBe('0');
@@ -320,6 +328,108 @@ describe('YouTube policy', () => {
     expect(scene()).toBe(5);
     expect(hero.style.pointerEvents).toBe('auto');
     expect(hero.tabIndex).toBe(0);
+  });
+});
+
+describe('YouTube Icon link next to the thumbnails (YouTube API branding guidelines)', () => {
+  const HERO_PLAIN = `https://www.youtube.com/watch?v=${LANDING_EXAMPLE.videos[LANDING_EXAMPLE.heroIndex]!.id}`;
+  const icon = (a: HTMLElement): HTMLImageElement => a.querySelector('img') as HTMLImageElement;
+  function expectOfficial(a: HTMLAnchorElement): void {
+    expect(a.target).toBe('_blank');
+    expect(a.rel).toContain('noopener');
+    const img = icon(a);
+    // the official file, whole, in its own proportions, nothing applied to it
+    expect(img.getAttribute('src')).toContain('yt_icon_red_digital');
+    expect(img.alt).toBe(YT_ICON_ALT);
+    expect(Number(img.getAttribute('width')) / Number(img.getAttribute('height'))).toBeCloseTo(
+      YT_ICON_FILE_W / YT_ICON_FILE_H,
+      6
+    );
+    expect(img.style.filter).toBe('');
+    expect(img.style.opacity).toBe('');
+    expect(a.style.opacity).toBe('');
+  }
+
+  it('the icon body is at least 24 CSS px tall at a 375px-wide screen (published minimum 24dp)', () => {
+    const k = fitStage(375, 812).k;
+    expect((YT_ICON_BOX_H * YT_ICON_MARK_FILE_H) / YT_ICON_FILE_H).toBeCloseTo(YT_ICON_MARK_PX, 6);
+    expect(YT_ICON_MARK_PX * k).toBeGreaterThanOrEqual(24);
+    expect(YT_ICON_BOX_W / YT_ICON_BOX_H).toBeCloseTo(YT_ICON_FILE_W / YT_ICON_FILE_H, 6);
+  });
+
+  it('scene 1: the deck thumbnails carry the icon link to their first video', () => {
+    draw();
+    const a = screen.getByTestId('lv-yt-deck') as HTMLAnchorElement;
+    expect(a.closest('.lv-deck-thumbs')).not.toBeNull();
+    expect(a.href).toBe(HERO_PLAIN);
+    expectOfficial(a);
+    expect(a.tabIndex).toBe(0);
+    expect(a.getAttribute('aria-label')).toBe(
+      ytLinkLabel(LANDING_EXAMPLE.videos[LANDING_EXAMPLE.heroIndex]!.channel)
+    );
+    // the row icon is not in scene 1 (the deck has its own)
+    expect(screen.queryByTestId('lv-yt')).toBeNull();
+    goTo(1);
+    expect(screen.getByTestId('lv-yt-deck').tabIndex).toBe(-1);
+    expect(screen.getByTestId('lv-yt-deck').style.pointerEvents).toBe('none');
+  });
+
+  it('scenes 2 to 6: the attribution row carries the icon link; scene 6 from the source time', () => {
+    draw();
+    for (const s of [1, 2, 3, 4, 5] as const) {
+      goTo(s);
+      const a = screen.getByTestId('lv-yt') as HTMLAnchorElement;
+      expectOfficial(a);
+      expect(a.href).toBe(s === 5 ? heroWatchUrl() : HERO_PLAIN);
+      expect(a.style.pointerEvents).toBe('auto');
+      expect(a.tabIndex).toBe(0);
+      // the row sits on one solid colour (a token, never a literal)
+      expect(screen.getByTestId('lv-credit').style.backgroundColor).toMatch(
+        /^var\(--lv-(white|paper|night)\)$/
+      );
+    }
+    goTo(7);
+    // the last sheet has no thumbnails: no icon, the sheet keeps its text attribution
+    expect(screen.queryByTestId('lv-yt')).toBeNull();
+    expect(screen.getByTestId('lv-sheet-credit').textContent).toBe(YT_CREDIT);
+  });
+
+  it('every scene with a visible thumbnail has an icon link (model)', () => {
+    for (const s of SEQ) {
+      const v = buildScene(s, 2, false, null);
+      const thumbs =
+        v.cells.some((c) => c.o > 0) || (s === 0 && v.deck.some((d) => d.thumbs.length));
+      const linked = v.credit.href !== null || (s === 0 && v.deck.some((d) => d.yt !== null));
+      expect([s, linked]).toEqual([s, thumbs]);
+    }
+  });
+
+  it('the links follow the example config (hero changes, links change)', () => {
+    example.swap = true;
+    draw();
+    const ex = LANDING_EXAMPLE;
+    const hero = ex.videos[ex.heroIndex]!;
+    expect((screen.getByTestId('lv-yt-deck') as HTMLAnchorElement).href).toBe(
+      `https://www.youtube.com/watch?v=${hero.id}`
+    );
+    goTo(5);
+    expect((screen.getByTestId('lv-yt') as HTMLAnchorElement).href).toBe(
+      `https://www.youtube.com/watch?v=${hero.id}&t=${timeToSeconds(ex.heroTime)}s`
+    );
+  });
+
+  it('a swipe that ends on the icon does not open YouTube', () => {
+    draw();
+    goTo(2);
+    swipe(-80); // to scene 4 (s=3); the click that ends a swipe is cancelled
+    const a = screen.getByTestId('lv-yt');
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+    a.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    waitLock();
+    const ok = new MouseEvent('click', { bubbles: true, cancelable: true });
+    screen.getByTestId('lv-yt').dispatchEvent(ok);
+    expect(ok.defaultPrevented).toBe(false);
   });
 });
 

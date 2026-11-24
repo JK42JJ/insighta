@@ -81,6 +81,9 @@ export function timeToSeconds(t: string): number {
 export const thumbUrl = (id: string): string =>
   `${YT_THUMB}${encodeURIComponent(id)}${YT_THUMB_FILE}`;
 
+/** A video on YouTube (opens the YouTube app or site). */
+export const watchUrl = (id: string): string => `${YT_WATCH}${encodeURIComponent(id)}`;
+
 /** The hero video on YouTube from its source time. */
 export function heroWatchUrl(ex: LandingExample = LANDING_EXAMPLE): string {
   const hero = ex.videos[ex.heroIndex];

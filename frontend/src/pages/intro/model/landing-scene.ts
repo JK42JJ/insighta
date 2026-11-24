@@ -13,12 +13,18 @@
  *     every scene (grid/feed), so they are never seen.
  *   - the scene-6 tiles (`s7`, always off: `on7 = false`) and the line drawing (`ln`, opacity 0
  *     in every scene) are not produced; nothing visible depends on them.
+ *   - YouTube Icon link next to every thumbnail group (YouTube API branding guidelines): in the
+ *     front deck card after its thumbnails (s=0) and in the attribution row (s=1..5). Scene 5's
+ *     card is a little smaller and higher (scale .78, -26px instead of .82, -20px) so the row with
+ *     the icon and its clear space fits between the card and the video.
  */
 
 import {
   heroVideo,
+  heroWatchUrl,
   LANDING_EXAMPLE,
   thumbUrl,
+  watchUrl,
   type ExampleVideo,
   type LandingExample,
 } from './landing-example';
@@ -97,6 +103,24 @@ export function sceneEventValue(s: Scene): string {
 }
 
 /*
+ * The YouTube Icon (YouTube API branding guidelines, brand.youtube/youtube-icon): the official
+ * file yt_icon_red_digital.png, unaltered. The file carries the icon's clear space as transparent
+ * margin (icon body 827x579 inside 1255x1075; the clear space is the triangle's width / height,
+ * which the margin covers), so drawing the whole file keeps the clear space free.
+ * Size: the icon body is YT_ICON_MARK_PX design px tall: 24 CSS px (the published digital minimum
+ * "24dp") down to a stage scale of 0.96 (a 375px-wide screen).
+ */
+export const YT_ICON_FILE_W = 1255;
+export const YT_ICON_FILE_H = 1075;
+export const YT_ICON_MARK_FILE_H = 579;
+export const YT_ICON_MARK_PX = 25;
+/** .lv-deck-thumb height (landing.css): the deck's thumbnail row the icon sits in. */
+export const DECK_THUMB_H = 36;
+/** The drawn file (icon + clear space), design px, in the file's own proportions. */
+export const YT_ICON_BOX_H = (YT_ICON_MARK_PX * YT_ICON_FILE_H) / YT_ICON_MARK_FILE_H;
+export const YT_ICON_BOX_W = (YT_ICON_BOX_H * YT_ICON_FILE_W) / YT_ICON_FILE_H;
+
+/*
  * The YouTube attribution per scene (design coordinates, right-aligned to the content edge).
  * Not drawn in the design except in the last sheet; its unused `yt` positions (s=2 472, s=5 368)
  * and colours are used where they exist; scene 2 (s=1) puts it on the channel band's row (the
@@ -105,12 +129,22 @@ export function sceneEventValue(s: Scene): string {
  */
 const CREDIT_TOP: Readonly<Partial<Record<Scene, number>>> = {
   0: 558,
-  1: 512,
-  2: 472,
-  3: 498,
-  4: 498,
-  5: 368,
+  // with the icon the row is YT_ICON_BOX_H tall: s=1 sits inside the band's content row
+  // (498..544), the others under the thumbnails (tiles end 452, chips 490) and in scene 5
+  // between the card (ends 343.5) and the video (starts 392)
+  1: 544 - YT_ICON_BOX_H,
+  2: 458,
+  3: 494,
+  4: 494,
+  5: 344,
 };
+/** Scenes whose attribution row carries the icon link (s=0 has it in the deck card instead). */
+const CREDIT_ICON: ReadonlySet<Scene> = new Set<Scene>([1, 2, 3, 4, 5]);
+/**
+ * Scene 5 shows the icon without the "영상 출처: YouTube" text: at the row's height the text
+ * would cover the line the design draws from the source chip down to the video (.lv-cn, x 194).
+ */
+const CREDIT_NO_TEXT: ReadonlySet<Scene> = new Set<Scene>([5]);
 /** Right edge: the scene texts' (40, clear of the dots); scene 2: inside the band's padding (28 + 16). */
 const CREDIT_RIGHT = 40;
 const CREDIT_RIGHT_BAND = 44;
@@ -197,6 +231,8 @@ export interface DeckCard {
   dom: string;
   h: string;
   thumbs: readonly string[];
+  /** The YouTube Icon link after the thumbnails (their first video), or null without thumbnails. */
+  yt: string | null;
   z: number;
   o: number;
   t: string;
@@ -287,7 +323,19 @@ export interface SceneView {
   btm: { on: boolean; t: string; tr: string };
   dots: ReadonlyArray<{ h: string; c: string; tr: string }>;
   wall: { on: boolean; o: number; tr: string; anim: boolean };
-  credit: { on: boolean; top: number; right: number; c: string; tr: string };
+  credit: {
+    on: boolean;
+    top: number;
+    right: number;
+    c: string;
+    tr: string;
+    /** The YouTube Icon link in the row: where it goes, or null (no icon in this scene). */
+    href: string | null;
+    /** The row's solid background (the icon must sit on one solid colour). */
+    plate: string;
+    /** The "영상 출처: YouTube" text is drawn in the row. */
+    text: boolean;
+  };
 }
 
 const v = (name: string): string => `var(--lv-${name})`;
@@ -346,6 +394,7 @@ export function buildScene(
       dom,
       h: head,
       thumbs: i === 0 ? slots.slice(0, 3).map((x) => thumbUrl(x.id)) : [],
+      yt: i === 0 ? watchUrl(slots[0]!.id) : null,
       z: L ? 4 : 3 - k,
       o: A ? 0 : 1,
       tto: T(k === 0 ? 'opacity .5s .15s ease' : 'opacity .3s ease'),
@@ -542,7 +591,7 @@ export function buildScene(
       s < 3
         ? 'translateY(24px)'
         : s === 5
-          ? 'translate(30px,-20px) scale(.82)'
+          ? 'translate(30px,-26px) scale(.78)'
           : s === 6 || s === 7
             ? 'translate(30px,78px) scale(.82)'
             : 'none',
@@ -592,6 +641,14 @@ export function buildScene(
     right: s === 1 ? CREDIT_RIGHT_BAND : CREDIT_RIGHT,
     c: nv ? v('credit-dark') : v('sub'),
     tr: T(creditTop !== undefined ? 'opacity .4s .5s' : 'opacity .15s'),
+    // the groups link to their first video (the hero); scene 5 is the hero from its source time
+    href: CREDIT_ICON.has(s)
+      ? s === SOURCE_OPEN_SCENE
+        ? heroWatchUrl(ex)
+        : watchUrl(heroVideo(ex).id)
+      : null,
+    plate: !CREDIT_ICON.has(s) ? v('clear') : s === 1 ? v('white') : nv ? v('night') : v('paper'),
+    text: !CREDIT_NO_TEXT.has(s),
   };
 
   return {
