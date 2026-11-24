@@ -10,7 +10,7 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog';
 
-import { CLOSE_LABEL } from '../model/intro-content';
+import { CLOSE_LABEL } from '../model/landing-content';
 
 /*
  * Footer link -> the existing privacy policy or terms page content in a floating panel over the

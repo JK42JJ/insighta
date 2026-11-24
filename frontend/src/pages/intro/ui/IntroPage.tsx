@@ -2,9 +2,14 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  type WheelEvent,
 } from 'react';
 import { toast } from 'sonner';
 
@@ -17,95 +22,94 @@ import {
   markLandingSignIn,
   recordLandingEvent,
   type InAppBrowser,
+  type SceneValue,
 } from '@/features/landing-intro';
-import { fetchLandingWall } from '@/features/morning-cards/api';
 import { useViewportFitCover } from '@/features/morning-feed/use-watch-frame';
-import {
-  ensureHomeFonts,
-  FONT_WAIT_MS,
-  waitHomeFonts,
-} from '@/features/morning-feed/watch-home-fonts';
+import { ensureHomeFonts } from '@/features/morning-feed/watch-home-fonts';
 
 import {
   ADD_LABEL,
   BRAND,
-  CAPTIONS,
+  BRIEF_KICKER,
   DOMAINS,
   DOMAINS_LEAD,
+  DOT_LABEL,
   FINAL_LINE,
-  HERO_BODY,
-  HERO_TITLE,
-  ILLU,
-  ILLU_CHANNELS,
-  PRINCIPLE_BODY,
-  PRINCIPLE_TITLE,
-  PROBLEM,
-  PROBLEM_ANSWER,
+  LOGIN_LABEL,
   PRIVACY,
+  S0_BODY,
+  S0_TITLE,
+  S1_TEXT,
+  S2_BODY,
+  S2_TITLE,
+  S3_TEXT,
+  S4_TEXT,
+  S5_TEXT,
+  S7_BODY,
+  S7_LEAD,
+  S7_TITLE,
+  STAGE_LABEL,
+  SWIPE_HINT,
   TERMS,
-  thumbUrl,
-  WALL_CREDIT,
-  WALL_PICK,
-  wallLetters,
-  wallVideos,
-  watchUrl,
-  type WallVideo,
-} from '../model/intro-content';
+  YT_CREDIT,
+} from '../model/landing-content';
+import { heroVideo, heroWatchUrl, LANDING_EXAMPLE, sourceLabel } from '../model/landing-example';
+import {
+  buildScene,
+  DECK_ARRIVE_MS,
+  DECK_CYCLE_MS,
+  DECK_LEAVE_MS,
+  DOTGO,
+  EASE_BACK,
+  fitStage,
+  FIRST_SCENE,
+  LAST_SCENE,
+  MOUNT_PH_MS,
+  nextScene,
+  PH1_MS,
+  PH1_MS_S2,
+  PH2_MS,
+  PH2_MS_S2,
+  PULL_EDGE,
+  PULL_MAX_PX,
+  PULL_MID,
+  sceneEventValue,
+  SOURCE_OPEN_SCENE,
+  SOURCE_SCENE,
+  STAGE_H,
+  STAGE_W,
+  STEP_LOCK_MS,
+  SWIPE_MIN_PX,
+  wallTiles,
+  WHEEL_MIN,
+  type Phase,
+  type Scene,
+} from '../model/landing-scene';
 import { GoogleButton } from './GoogleButton';
 import { LegalSheet } from './LegalSheet';
-// the watch tokens (--w-*) and the .mf-w root the landing shares with the watch screens
-import '@/features/morning-feed/watch.css';
-import './intro.css';
+import './landing.css';
 
 /*
- * Landing page for a signed-out visitor of /morning-cards?view=watch (design "Insighta Intro",
- * 2026-11-24): hero with the channel wall, the problem, a pinned brief illustration in three
- * steps, the principle, the domains with ADD, and the last Google button. Scroll positions,
- * timings and sizes are the design's. A Google button (or ADD) starts Google sign-in; the
- * return goes to today's brief screen (the caller decides where).
+ * Landing v4 for a signed-out visitor of /morning-cards?view=watch ("Insighta Intro v4.dc.html",
+ * 2026-11-24): one video followed through 7 scenes (6 dots). One swipe = one scene (pointer, wheel,
+ * keys; 700 ms lock), rubber band at the ends, no native scroll. The 390x650 design stage is
+ * scaled to fit the screen (never larger than the visible height allows) and stretched in height:
+ * top-anchored parts keep their design positions, bottom-anchored ones stay at the bottom.
+ * The Google buttons, the header link and ADD start Google sign-in; the caller sets the return.
  */
 
-/** The illustration is drawn at this width and scaled to the card (design: 362/390 at 390). */
-const ILLU_W = 390;
-/** design: phase 1 (wall lights) and phase 2 (hero text) after the fonts. */
-const PHASE1_MS = 150;
-const PHASE2_MS = 1100;
-/** design: the Google buttons are dimmed this long after a tap. */
+/** A click this soon after a swipe ended belongs to the swipe (the finger lifted on a button). */
+const SWIPE_CLICK_MS = 350;
+/** design: the Google buttons are dimmed this long after a tap (busy guard). */
 const BUSY_MS = 1400;
-/** design: progress through the pinned section -> step 1/2/3. */
-const STEP1_FROM = -0.02;
-const STEP2_FROM = 0.3;
-const STEP3_FROM = 0.63;
-/** design: step 3 moves the illustration so the video list sits this far from the card top. */
-const LIST_TOP_GAP = 40;
-/** design: the top and bottom bars turn navy this far into the pinned section. */
-const DARK_EDGE = 40;
-/** design: the bottom bar leaves once the last section is this far into the screen. */
-const BAR_HIDE_INTO_FINAL = 200;
-/** design: the top bar's line shows after this much scroll. */
-const TOP_LINE_AFTER = 8;
-/** design: a section fades in once this share of it is visible. */
-const REVEAL_THRESHOLD = 0.18;
-/** design: wall delays (s): lit tiles one after another, the rest in groups of 7. */
-const PICK_DELAY_S = 0.25;
-const PICK_STEP_S = 0.07;
-const REST_STEP_S = 0.03;
-const REST_GROUP = 7;
-/** Caption faded in for this step (the others are hidden from screen readers too). */
-const STEPS = [1, 2, 3] as const;
+const KEYS_NEXT: readonly string[] = ['ArrowDown', 'PageDown', ' '];
+const KEYS_PREV: readonly string[] = ['ArrowUp', 'PageUp'];
+/** design: dark-scene background, as a token (the stage's own background colour). */
+const STAGE_BG_LIGHT = 'var(--lv-paper)';
+const STAGE_BG_DARK = 'var(--lv-night)';
+const WALL_LINE2 = ['var(--lv-wall-line2-0)', 'var(--lv-wall-line2-1)', 'var(--lv-wall-line2-2)'];
 
-type Phase = 0 | 1 | 2;
-type Step = 0 | 1 | 2 | 3;
-type From = 'sticky' | 'final' | 'add';
-
-interface ScrollView {
-  step: Step;
-  dark: boolean;
-  bar: boolean;
-  top: boolean;
-  /** Step 3's shift of the illustration (px, unscaled). */
-  ty: number;
-}
+type From = 'header' | 'sticky' | 'final' | 'add';
 
 export interface IntroPageProps {
   /** Starts Google sign-in; the return target is set by the caller. */
@@ -136,127 +140,190 @@ function leaveInApp(app: InAppBrowser): void {
   }, EXTERNAL_OPEN_CHECK_MS);
 }
 
-const WALL = wallLetters(ILLU_CHANNELS);
-const PICKS: readonly number[] = WALL_PICK;
-const FONT_HEADLINES = [...HERO_TITLE, PRINCIPLE_TITLE, FINAL_LINE, ILLU.headline].join(' ');
-const FONT_UI = [HERO_BODY, PROBLEM, PROBLEM_ANSWER, ...CAPTIONS, DOMAINS_LEAD, ...DOMAINS].join(
-  ' '
-);
+function viewport(): { vw: number; vh: number } {
+  if (typeof window === 'undefined') return { vw: STAGE_W, vh: STAGE_H };
+  return { vw: window.innerWidth || STAGE_W, vh: window.innerHeight || STAGE_H };
+}
+
+const WALL_TILES = wallTiles();
 
 export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   useViewportFitCover();
   const [reduced] = useState(prefersReducedMotion);
-  const [phase, setPhase] = useState<Phase>(reduced ? 2 : 0);
-  const [view, setView] = useState<ScrollView>({
-    step: 0,
-    dark: false,
-    bar: true,
-    top: false,
-    ty: 0,
-  });
-  const [vh, setVh] = useState(() => (typeof window === 'undefined' ? 0 : window.innerHeight));
-  const [cardW, setCardW] = useState(ILLU_W);
+  const live = !reduced;
+  const [s, setS] = useState<Scene>(FIRST_SCENE);
+  const [ph, setPh] = useState<Phase>(0);
+  const [di, setDi] = useState(0);
+  const [deckLv, setDeckLv] = useState(-1);
+  const [deckAr, setDeckAr] = useState(-1);
+  const [vp, setVp] = useState(viewport);
   const [busy, setBusy] = useState(false);
-  /** The thumbnail wall once its data arrived; null = the letter tiles. */
-  const [videos, setVideos] = useState<Array<WallVideo | null> | null>(null);
-  const scroller = useRef<HTMLDivElement>(null);
-  const pin = useRef<HTMLElement>(null);
-  const card = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLDivElement>(null);
-  const fin = useRef<HTMLElement>(null);
-  const busyTimer = useRef<number | undefined>(undefined);
-  const busyRef = useRef(false);
-  const step3Kept = useRef(false);
 
-  // the scroller's height is the hero's and the pinned view's; the card's width scales the drawing
+  const sRef = useRef<Scene>(FIRST_SCENE);
+  const diRef = useRef(0);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const pullRef = useRef<HTMLDivElement>(null);
+  const t1 = useRef<number | undefined>(undefined);
+  const t2 = useRef<number | undefined>(undefined);
+  const lock = useRef(0);
+  const y0 = useRef<number | null>(null);
+  /** When the last swipe ended: the click it produces (on a button under the finger) is not a tap. */
+  const swipedAt = useRef(-Infinity);
+  const busyRef = useRef(false);
+  const busyTimer = useRef<number | undefined>(undefined);
+
+  sRef.current = s;
+  diRef.current = di;
+
   useLayoutEffect(() => {
-    const measure = (): void => {
-      if (scroller.current) setVh(scroller.current.clientHeight);
-      if (card.current) setCardW(card.current.clientWidth);
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    const onResize = (): void => setVp(viewport());
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // entrance after the fonts and the wall data (each at most FONT_WAIT_MS), as the design waits
-  // for document.fonts; the wall stays the letter tiles when its data fails, is empty or is late
-  // (late data still replaces the letters when it arrives)
   useEffect(() => {
     recordLandingEvent('landing_open');
     ensureHomeFonts();
-    let alive = true;
+    stageRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  // a dot reached (once per dot per visit)
+  useEffect(() => {
+    recordLandingEvent('landing_scene', sceneEventValue(s) as SceneValue);
+  }, [s]);
+
+  // design componentDidMount: phase 2 after 300 ms; the deck rotation in scene 1 (not reduced)
+  useEffect(() => {
     const timers: number[] = [];
-    const abort = typeof AbortController === 'undefined' ? undefined : new AbortController();
-    const wall = fetchLandingWall(abort?.signal).then(
-      (data) => {
-        if (alive) setVideos(wallVideos(data));
-      },
-      () => undefined
+    timers.push(
+      window.setTimeout(() => {
+        if (sRef.current === 0) setPh(2);
+      }, MOUNT_PH_MS)
     );
-    const wallDecided = Promise.race([
-      wall,
-      new Promise<void>((resolve) => timers.push(window.setTimeout(resolve, FONT_WAIT_MS))),
-    ]);
-    void Promise.all([waitHomeFonts(FONT_HEADLINES, FONT_UI), wallDecided]).then(() => {
-      if (!alive || reduced) return;
-      timers.push(window.setTimeout(() => setPhase(1), PHASE1_MS));
-      timers.push(window.setTimeout(() => setPhase(2), PHASE2_MS));
-    });
+    let cyc: number | undefined;
+    if (!reduced) {
+      cyc = window.setInterval(() => {
+        if (sRef.current !== 0) return;
+        const d = diRef.current;
+        setDeckLv(d);
+        setDeckAr(-1);
+        timers.push(
+          window.setTimeout(() => {
+            setDi((d + 1) % 2);
+            setDeckLv(-1);
+            setDeckAr(d);
+            timers.push(window.setTimeout(() => setDeckAr(-1), DECK_ARRIVE_MS));
+          }, DECK_LEAVE_MS)
+        );
+      }, DECK_CYCLE_MS);
+    }
     return () => {
-      alive = false;
-      abort?.abort();
       timers.forEach((t) => window.clearTimeout(t));
+      window.clearInterval(cyc);
+      window.clearTimeout(t1.current);
+      window.clearTimeout(t2.current);
       window.clearTimeout(busyTimer.current);
     };
   }, [reduced]);
 
-  // sections fade in as they come into view (not with reduced motion)
-  useEffect(() => {
-    const root = scroller.current;
-    if (reduced || !root || typeof IntersectionObserver === 'undefined') return undefined;
-    const io = new IntersectionObserver(
-      (es) =>
-        es.forEach((e) => {
-          if (!e.isIntersecting) return;
-          e.target.setAttribute('data-shown', '');
-          io.unobserve(e.target);
-        }),
-      { root, threshold: REVEAL_THRESHOLD }
-    );
-    root.querySelectorAll('[data-rv]').forEach((n) => io.observe(n));
-    return () => io.disconnect();
-  }, [reduced]);
+  const go = useCallback(
+    (target: number) => {
+      const n = Math.max(FIRST_SCENE, Math.min(LAST_SCENE, target)) as Scene;
+      if (n === sRef.current) return;
+      window.clearTimeout(t1.current);
+      window.clearTimeout(t2.current);
+      sRef.current = n;
+      if (reduced) {
+        setS(n);
+        setPh(2);
+        return;
+      }
+      const a = n === 2 ? PH1_MS_S2 : PH1_MS;
+      const b = n === 2 ? PH2_MS_S2 : PH2_MS;
+      setS(n);
+      setPh(0);
+      t1.current = window.setTimeout(() => setPh(1), a);
+      t2.current = window.setTimeout(() => setPh(2), b);
+    },
+    [reduced]
+  );
 
-  const onScroll = useCallback(() => {
-    const el = scroller.current;
-    const p0 = pin.current;
-    const f = fin.current;
-    if (!el || !p0 || !f) return;
-    const st = el.scrollTop;
-    const h = el.clientHeight;
-    const p = (st - p0.offsetTop) / (p0.offsetHeight - h);
-    const step: Step =
-      p < STEP1_FROM ? 0 : p < STEP2_FROM ? 1 : p < STEP3_FROM ? 2 : p <= 1 ? 3 : 0;
-    const next: ScrollView = {
-      step,
-      dark: st + DARK_EDGE >= p0.offsetTop && st < p0.offsetTop + p0.offsetHeight - DARK_EDGE,
-      bar: st + h < f.offsetTop + BAR_HIDE_INTO_FINAL,
-      top: st > TOP_LINE_AFTER,
-      ty: step === 3 && list.current ? -(list.current.offsetTop - LIST_TOP_GAP) : 0,
-    };
-    if (step === 3 && !step3Kept.current) {
-      step3Kept.current = true;
-      recordLandingEvent('landing_scroll_step3');
+  const step = useCallback(
+    (d: 1 | -1) => {
+      const now = Date.now();
+      if (now - lock.current < STEP_LOCK_MS) return;
+      lock.current = now;
+      const n = nextScene(sRef.current, d);
+      if (n !== null) go(n);
+    },
+    [go]
+  );
+
+  const pull = (dy: number | null): void => {
+    const el = pullRef.current;
+    if (!el || reduced) return;
+    if (dy === null) {
+      el.style.transition = EASE_BACK;
+      el.style.transform = 'none';
+      return;
     }
-    setView((v) =>
-      v.step === next.step && v.dark === next.dark && v.bar === next.bar && v.top === next.top
-        ? v
-        : next
-    );
-  }, []);
+    const edge =
+      (dy > 0 && sRef.current === FIRST_SCENE) || (dy < 0 && sRef.current === LAST_SCENE);
+    const v = Math.max(-PULL_MAX_PX, Math.min(PULL_MAX_PX, dy * (edge ? PULL_EDGE : PULL_MID)));
+    el.style.transition = 'none';
+    el.style.transform = `translateY(${v}px)`;
+  };
+
+  /**
+   * The event happened on the stage itself: the legal sheet is a portal, so its events reach these
+   * handlers through the React tree although it is outside the stage (scrolling it must not swipe).
+   */
+  const inStage = (e: { currentTarget: EventTarget; target: EventTarget }): boolean =>
+    (e.currentTarget as Node).contains(e.target as Node);
+
+  const onPointerDown = (e: PointerEvent): void => {
+    if (!inStage(e)) return;
+    y0.current = e.clientY;
+  };
+  const onPointerMove = (e: PointerEvent): void => {
+    if (y0.current !== null) pull(e.clientY - y0.current);
+  };
+  const onPointerUp = (e: PointerEvent): void => {
+    if (y0.current === null) return;
+    const dy = e.clientY - y0.current;
+    y0.current = null;
+    pull(null);
+    if (Math.abs(dy) > SWIPE_MIN_PX) {
+      swipedAt.current = Date.now();
+      step(dy < 0 ? 1 : -1);
+    }
+  };
+  const onWheel = (e: WheelEvent): void => {
+    if (!inStage(e)) return;
+    if (Math.abs(e.deltaY) > WHEEL_MIN) step(e.deltaY > 0 ? 1 : -1);
+  };
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (!inStage(e)) return;
+    const t = e.target as HTMLElement;
+    // keys on a focused button keep their own meaning (Space presses it)
+    if (t !== e.currentTarget && (t.tagName === 'BUTTON' || t.tagName === 'A')) {
+      if (e.key === ' ') return;
+    }
+    if (KEYS_NEXT.includes(e.key)) {
+      e.preventDefault();
+      step(1);
+    }
+    if (KEYS_PREV.includes(e.key)) {
+      e.preventDefault();
+      step(-1);
+    }
+  };
+  /** A tap, not the end of a swipe. */
+  const tapped = (): boolean => Date.now() - swipedAt.current > SWIPE_CLICK_MS;
 
   const start = (from: From): void => {
+    if (!tapped()) return;
     if (busyRef.current) return; // a second tap while leaving for Google: no second sign-in, no extra event
     busyRef.current = true;
     if (from === 'add') recordLandingEvent('add_click');
@@ -276,229 +343,628 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
     void onSignIn().catch(() => undefined);
   };
 
-  const { step } = view;
-  const fade = (k: Step): number => (!step || step === k ? 1 : 0.2);
-  const dim = step ? 0.2 : 1;
-  const scale = cardW / ILLU_W;
+  const onSource = (e: { stopPropagation: () => void }): void => {
+    e.stopPropagation();
+    if (!tapped() || sRef.current !== SOURCE_SCENE) return;
+    recordLandingEvent('source_click');
+    go(SOURCE_OPEN_SCENE);
+  };
+
+  const view = useMemo(
+    () => buildScene(s, ph, live, { lv: deckLv, ar: deckAr }, di, LANDING_EXAMPLE),
+    [s, ph, live, deckLv, deckAr, di]
+  );
+  const ex = LANDING_EXAMPLE;
+  const hero = heroVideo(ex);
+  const [heroSource, ...restSources] = ex.brief.sources;
+  const fit = fitStage(vp.vw, vp.vh);
+  const colLeft = (fit.w - STAGE_W) / 2;
+  const colStyle = { left: colLeft + 'px', '--lv-bleed': colLeft + 'px' } as CSSProperties;
+  const T = view.T;
+  const off = (o: number): true | undefined => (o ? undefined : true);
+  const sheetOn = view.sheetOn;
+  const tab = (on: boolean): number | undefined => (on ? undefined : -1);
 
   return (
-    <div className="mf-w li" data-testid="li-intro">
+    <div className="lv" data-testid="lv-intro">
       <div
-        className="li-frame"
-        data-phase={phase}
-        data-motion={reduced ? undefined : ''}
-        data-screen-label="소개"
+        ref={stageRef}
+        className="lv-stage"
+        data-testid="lv-stage"
+        data-scene={s}
+        data-phase={ph}
+        data-motion={live ? '' : undefined}
+        tabIndex={0}
+        role="region"
+        aria-roledescription="carousel"
+        aria-label={STAGE_LABEL}
+        style={{
+          width: fit.w + 'px',
+          height: fit.h + 'px',
+          transform: `scale(${fit.k})`,
+          backgroundColor: view.nv ? STAGE_BG_DARK : STAGE_BG_LIGHT,
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onPointerLeave={onPointerUp}
+        onWheel={onWheel}
+        onKeyDown={onKeyDown}
       >
-        <div
-          className="li-top"
-          data-dark={view.dark ? '' : undefined}
-          data-top={view.top ? '' : undefined}
-        >
-          <div className="li-brand">{BRAND}</div>
+        {/* background: light/dark fade, two glows, noise */}
+        <div className="lv-fill lv-none" style={{ overflow: 'hidden' }}>
+          <div
+            className="lv-fill lv-bg-light"
+            style={{ opacity: view.lt, transition: view.bgtr3 }}
+          />
+          <div
+            className="lv-fill lv-bg-dark"
+            style={{ opacity: view.dk, transition: view.bgtr3 }}
+          />
+          <div className="lv-col" style={colStyle}>
+            <div
+              className="lv-glow"
+              style={{
+                width: 520,
+                height: 520,
+                margin: '-260px 0 0 -260px',
+                background: `radial-gradient(closest-side,${view.g1c},var(--lv-glow1-end))`,
+                transform: view.g1,
+                transition: view.gtr,
+              }}
+            />
+            <div
+              className="lv-glow"
+              style={{
+                width: 560,
+                height: 560,
+                margin: '-280px 0 0 -280px',
+                background: `radial-gradient(closest-side,${view.g2c},var(--lv-glow2-end))`,
+                transform: view.g2,
+                transition: view.gtr,
+              }}
+            />
+          </div>
+          <div
+            className="lv-noise"
+            style={{ opacity: view.gr, transition: view.grtr, mixBlendMode: view.grb }}
+          />
         </div>
 
-        <div ref={scroller} className="li-scroll" onScroll={onScroll} data-testid="li-scroll">
-          <section className="li-hero">
-            <div className="li-wall" aria-hidden={videos ? undefined : true} data-testid="li-wall">
-              <div className="li-wall-grid">
-                {(videos ?? WALL).map((tile, i) => {
-                  const k = PICKS.indexOf(i);
-                  const dl =
-                    k >= 0 ? PICK_DELAY_S + k * PICK_STEP_S : (i % REST_GROUP) * REST_STEP_S;
-                  const style = { '--li-dl': dl + 's' } as CSSProperties;
-                  const pick = k >= 0 ? '' : undefined;
-                  if (tile && typeof tile === 'object') {
-                    return (
-                      <a
-                        key={tile.id}
-                        className="li-tile"
-                        data-thumb=""
-                        data-pick={pick}
-                        data-testid="li-tile"
-                        style={style}
-                        href={watchUrl(tile.id)}
-                        target="_blank"
-                        rel="noopener"
-                        aria-label={tile.label || undefined}
-                      >
-                        <img className="li-thumb" src={thumbUrl(tile.id)} alt="" decoding="async" />
-                      </a>
-                    );
-                  }
-                  return (
+        <div ref={pullRef} className="lv-fill">
+          <div className="lv-col" style={colStyle}>
+            {/* scene 1 blobs */}
+            <div
+              className="lv-blobs"
+              aria-hidden="true"
+              data-move={live ? '' : undefined}
+              style={{ opacity: s === 0 ? 1 : 0 }}
+            >
+              <div className="lv-blob" data-b="a" />
+              <div className="lv-blob" data-b="b" />
+              <div className="lv-blob" data-b="c" />
+            </div>
+
+            {/* scenes 2-3: the drawn feed wall */}
+            <div
+              className="lv-wall"
+              aria-hidden="true"
+              data-testid="lv-wall"
+              style={{ opacity: view.wall.o, transition: view.wall.tr }}
+            >
+              <div className="lv-wall-tilt">
+                <div className="lv-wall-strip" data-move={view.wall.anim ? '' : undefined}>
+                  {WALL_TILES.map((t) => (
                     <div
-                      key={i}
-                      className="li-tile"
-                      data-pick={pick}
-                      data-testid="li-tile"
-                      style={style}
+                      key={t.key}
+                      className="lv-wall-tile"
+                      style={{
+                        left: t.left,
+                        top: t.top,
+                        backgroundColor: `var(--lv-wall-${t.color})`,
+                      }}
                     >
-                      {tile}
+                      <div className="lv-wall-l1" style={{ width: t.w1 }} />
+                      <div
+                        className="lv-wall-l2"
+                        style={{ width: t.w2, background: WALL_LINE2[t.a2] }}
+                      />
+                      <div
+                        className="lv-wall-disc"
+                        style={{ right: t.r, width: t.size, height: t.size }}
+                      />
+                      <div className="lv-wall-time" />
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
+              <div className="lv-wall-fog" />
             </div>
-            {videos ? (
-              <p className="li-wall-credit" data-testid="li-wall-credit">
-                {WALL_CREDIT}
-              </p>
-            ) : null}
-            <div className="li-hero-text">
-              {/* placeholder bars while the title waits for its entrance (James 2026-11-24: an
-                  empty space under the wall looked broken); they fade out as the text fades in */}
-              <div className="li-skel" aria-hidden="true" data-testid="li-skel">
-                <span className="li-skel-bar" data-w="title1" />
-                <span className="li-skel-bar" data-w="title2" />
-                <span className="li-skel-bar" data-w="p1" />
-                <span className="li-skel-bar" data-w="p2" />
-                <span className="li-skel-bar" data-w="p3" />
-              </div>
-              <h1 className="li-h1">
-                {HERO_TITLE[0]}
+
+            {/* scene 2: the hero's channel band */}
+            <div
+              className="lv-band"
+              aria-hidden={off(T[1]!.o)}
+              style={{ opacity: T[1]!.o, transition: T[1]!.tr2 }}
+            >
+              <span className="lv-band-av">{hero.channel.slice(0, 1)}</span>
+              {hero.channel}
+            </div>
+
+            {/* scene 1 */}
+            <div
+              className="lv-t0"
+              aria-hidden={off(T[0]!.o)}
+              data-testid="lv-text-0"
+              style={{ opacity: T[0]!.o, transform: T[0]!.t, transition: T[0]!.tr }}
+            >
+              <h1 className="lv-h1">
+                {S0_TITLE[0]}
                 <br />
-                {HERO_TITLE[1]}
+                {S0_TITLE[1]}
+                <br />
+                {S0_TITLE[2]}
               </h1>
-              <p className="li-hero-p" data-testid="li-hero-body">
-                {HERO_BODY}
-              </p>
+              <p className="lv-t0-p">{S0_BODY}</p>
             </div>
-          </section>
+            <button
+              type="button"
+              className="lv-hint"
+              aria-hidden={off(T[0]!.o)}
+              tabIndex={tab(s === 0)}
+              style={{
+                opacity: T[0]!.o,
+                transition: T[0]!.tr3,
+                pointerEvents: s === 0 ? undefined : 'none',
+              }}
+              onClick={() => {
+                if (tapped()) go(1);
+              }}
+            >
+              <svg width="18" height="10" viewBox="0 0 18 10" fill="none" aria-hidden="true">
+                <path
+                  className="lv-hint-arrow"
+                  d="M2 8.5l7-6.5 7 6.5"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span>{SWIPE_HINT}</span>
+            </button>
 
-          <section className="li-problem" data-rv="">
-            <p className="li-problem-p">{PROBLEM}</p>
-            <p className="li-problem-a">{PROBLEM_ANSWER}</p>
-          </section>
-
-          <section ref={pin} className="li-pin" data-testid="li-pin">
-            <div className="li-sticky" style={{ height: vh + 'px' }}>
-              <div className="li-caps">
-                {CAPTIONS.map((t, i) => {
-                  const s = STEPS[i]!;
-                  return (
-                    <p
-                      key={s}
-                      className="li-cap"
-                      data-at={step === s ? 'on' : step > s ? 'past' : undefined}
-                      aria-hidden={step === s ? undefined : true}
-                    >
-                      {t}
-                    </p>
-                  );
-                })}
-              </div>
-              <div ref={card} className="li-card">
+            <div
+              className="lv-deck-wrap"
+              aria-hidden={off(T[0]!.o)}
+              data-testid="lv-deck"
+              style={{ opacity: T[0]!.o, transform: T[0]!.t, transition: T[0]!.tr2 }}
+            >
+              {view.deck.map((d, i) => (
                 <div
-                  className="li-illu"
-                  style={{ transform: `scale(${scale}) translateY(${view.ty}px)` }}
-                  data-testid="li-illu"
+                  key={i}
+                  className="lv-deck"
+                  data-testid="lv-deck-card"
+                  style={{ zIndex: d.z, transform: d.t, opacity: d.o, transition: d.tr }}
                 >
-                  <div className="li-illu-kicker li-illu-fade" style={{ opacity: dim }}>
-                    {ILLU.kicker}
+                  <div className="lv-kicker" style={{ transition: d.tto }}>
+                    <span className="lv-kicker-em">{BRIEF_KICKER}</span> · {d.dom}
                   </div>
-                  <div className="li-illu-h li-illu-fade" style={{ opacity: fade(1) }}>
-                    {ILLU.headline}
+                  <div className="lv-deck-h" style={{ transition: d.tto }}>
+                    {d.h}
                   </div>
-                  <p className="li-illu-p li-illu-p1 li-illu-fade" style={{ opacity: fade(2) }}>
-                    {ILLU.p1}{' '}
-                    <span className="li-illu-cite" data-on={step === 2 ? '' : undefined}>
-                      {ILLU.p1Cite}
-                    </span>{' '}
-                    <span className="li-illu-cite-rest">{ILLU.p1Cite2}</span>
-                  </p>
-                  <p className="li-illu-p li-illu-p2 li-illu-fade" style={{ opacity: dim }}>
-                    {ILLU.p2} <span className="li-illu-cite-rest">{ILLU.p2Cite}</span>
-                  </p>
-                  <div className="li-illu-more li-illu-fade" style={{ opacity: dim }}>
-                    {ILLU.more}
-                  </div>
-                  <div
-                    ref={list}
-                    className="li-illu-list li-illu-fade"
-                    style={{ opacity: fade(3) }}
-                  >
-                    <div className="li-illu-label">{ILLU.listLabel}</div>
-                    <div className="li-illu-rows">
-                      {ILLU_CHANNELS.map((n) => (
-                        <div key={n} className="li-illu-row">
-                          <div className="li-illu-av">{n.slice(0, 1)}</div>
-                          <div className="li-illu-name">{n}</div>
-                        </div>
+                  {d.thumbs.length ? (
+                    <div className="lv-deck-thumbs">
+                      {d.thumbs.map((u) => (
+                        <img
+                          key={u}
+                          className="lv-deck-thumb"
+                          data-testid="lv-thumb"
+                          src={u}
+                          alt=""
+                          decoding="async"
+                        />
                       ))}
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="li-principle" data-rv="">
-            <h2 className="li-h2">{PRINCIPLE_TITLE}</h2>
-            <p className="li-principle-p">{PRINCIPLE_BODY}</p>
-          </section>
-
-          <section className="li-domains" data-rv="">
-            <p className="li-domains-lead">{DOMAINS_LEAD}</p>
-            <div className="li-domains-list">
-              {DOMAINS.map((d) => (
-                <div key={d} className="li-domain">
-                  {d}
+                  ) : null}
                 </div>
               ))}
-              <button
-                type="button"
-                className="li-add"
-                data-testid="li-add"
-                onClick={() => start('add')}
-              >
-                <span>{ADD_LABEL}</span>
-                <svg
-                  className="li-add-icon"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  aria-hidden="true"
-                >
-                  <path d="M10 3v14M3 10h14" />
-                </svg>
-              </button>
             </div>
-          </section>
 
-          <section ref={fin} className="li-final">
-            <p className="li-final-line">{FINAL_LINE}</p>
-            <GoogleButton busy={busy} onPress={() => start('final')} testId="li-google-final" />
-            <div className="li-footer">
-              <LegalSheet doc="privacy" label={PRIVACY.label}>
-                <button type="button" data-testid="li-privacy">
-                  {PRIVACY.label}
-                </button>
-              </LegalSheet>
-              <span>·</span>
-              <LegalSheet doc="terms" label={TERMS.label}>
-                <button type="button" data-testid="li-terms">
-                  {TERMS.label}
-                </button>
-              </LegalSheet>
+            {/* scene 2 */}
+            <div className="lv-fade-top" style={{ opacity: T[1]!.o, transition: view.bgtr3 }} />
+            <p
+              className="lv-t1"
+              aria-hidden={off(T[1]!.o)}
+              data-testid="lv-text-1"
+              style={{ opacity: T[1]!.o, transform: T[1]!.t, transition: T[1]!.tr }}
+            >
+              {S1_TEXT}
+            </p>
+
+            {/* scene 3 */}
+            <div
+              className="lv-t2"
+              aria-hidden={off(T[2]!.o)}
+              data-testid="lv-text-2"
+              style={{ opacity: T[2]!.o, transform: T[2]!.t, transition: T[2]!.tr }}
+            >
+              <h2 className="lv-h2a">
+                {S2_TITLE[0]}
+                <br />
+                {S2_TITLE[1]}
+              </h2>
+              <p className="lv-t2-p">{S2_BODY}</p>
             </div>
-          </section>
+
+            {/* scenes 4, 5 (before / after the source tap) */}
+            <p
+              className="lv-tn"
+              aria-hidden={off(T[3]!.o)}
+              data-testid="lv-text-3"
+              style={{ opacity: T[3]!.o, transform: T[3]!.t, transition: T[3]!.tr }}
+            >
+              {S3_TEXT}
+            </p>
+            <p
+              className="lv-tn"
+              aria-hidden={off(T[4]!.o)}
+              data-testid="lv-text-4"
+              style={{ opacity: T[4]!.o, transform: T[4]!.t, transition: T[4]!.tr }}
+            >
+              {S4_TEXT}
+            </p>
+            <p
+              className="lv-tn"
+              data-big=""
+              aria-hidden={off(T[5]!.o)}
+              data-testid="lv-text-5"
+              style={{ opacity: T[5]!.o, transform: T[5]!.t, transition: T[5]!.tr }}
+            >
+              {S5_TEXT}
+            </p>
+
+            {/* scene 6 */}
+            <div className="lv-t6" aria-hidden={off(T[6]!.o)} data-testid="lv-text-6">
+              <p
+                className="lv-t6-lead"
+                style={{ opacity: T[6]!.o, transform: T[6]!.t, transition: T[6]!.tr }}
+              >
+                {S7_LEAD}
+              </p>
+              <h2
+                className="lv-t6-h"
+                style={{ opacity: T[6]!.o, transform: T[6]!.t, transition: T[6]!.tr2 }}
+              >
+                {S7_TITLE}
+              </h2>
+              <p
+                className="lv-t6-p"
+                style={{ opacity: T[6]!.o, transform: T[6]!.t, transition: T[6]!.tr3 }}
+              >
+                {S7_BODY}
+              </p>
+            </div>
+
+            {/* the brief card */}
+            <div
+              className="lv-card"
+              aria-hidden={off(view.card.o)}
+              data-testid="lv-card"
+              style={{
+                opacity: view.card.o,
+                transform: view.card.t,
+                transition: view.card.tr,
+                pointerEvents: view.card.pe,
+              }}
+            >
+              <div className="lv-card-k" style={{ opacity: view.card.dim }}>
+                <span className="lv-kicker-em">{BRIEF_KICKER}</span>
+                <span>·</span>
+                <span>{ex.brief.domain}</span>
+              </div>
+              <div className="lv-card-h" style={{ opacity: view.card.dim }}>
+                {ex.brief.headline}
+              </div>
+              <p className="lv-card-p">
+                {ex.brief.firstSentence}{' '}
+                {heroSource ? (
+                  <span
+                    className="lv-src"
+                    role="button"
+                    tabIndex={tab(s === SOURCE_SCENE)}
+                    data-testid="lv-source"
+                    onClick={onSource}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') onSource(e);
+                    }}
+                    style={{
+                      textDecoration: view.card.deco,
+                      backgroundColor: view.card.sbg,
+                      transform: view.card.st,
+                    }}
+                  >
+                    <span className="lv-src-hit" />
+                    {sourceLabel(ex, heroSource)}
+                  </span>
+                ) : null}{' '}
+                {restSources.length ? (
+                  <span className="lv-src-rest" style={{ opacity: view.card.dim }}>
+                    · {restSources.map((x) => sourceLabel(ex, x)).join(' · ')}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+
+            <div
+              className="lv-cn"
+              style={{ top: view.cn.t, transform: view.cn.s, transition: view.cn.tr }}
+            />
+
+            <div
+              className="lv-scan"
+              style={{ opacity: view.scan.o, transform: view.scan.t, transition: view.scan.tr }}
+            >
+              <div className="lv-scan-line" />
+            </div>
+
+            {view.cells.map((c) => {
+              const link = c.hero && s === SOURCE_OPEN_SCENE;
+              const Tag = c.hero ? 'a' : 'div';
+              return (
+                <Tag
+                  key={c.key}
+                  className="lv-cell"
+                  data-testid={c.hero ? 'lv-hero' : 'lv-cell'}
+                  data-shown={c.o ? '' : undefined}
+                  aria-hidden={link ? undefined : true}
+                  {...(c.hero
+                    ? {
+                        href: heroWatchUrl(ex),
+                        target: '_blank',
+                        rel: 'noopener noreferrer',
+                        tabIndex: link ? 0 : -1,
+                        'aria-label': `${c.video.title} — ${c.video.channel} (YouTube)`,
+                        onClick: (e: MouseEvent) => {
+                          if (!link || !tapped()) e.preventDefault();
+                        },
+                      }
+                    : {})}
+                  style={{
+                    zIndex: c.z,
+                    overflow: c.ov,
+                    left: c.l,
+                    top: c.t,
+                    width: c.w,
+                    height: c.h,
+                    borderRadius: c.rad,
+                    backgroundColor: c.bg,
+                    borderColor: c.bd,
+                    boxShadow: c.sh,
+                    color: c.fg,
+                    opacity: c.o,
+                    transition: c.tr,
+                    pointerEvents: link ? 'auto' : 'none',
+                  }}
+                >
+                  <div
+                    className="lv-surf"
+                    style={{
+                      boxShadow: c.ssh,
+                      left: c.sl,
+                      top: c.st,
+                      width: c.sw,
+                      height: c.sh2,
+                      borderRadius: c.sr,
+                      opacity: c.so,
+                      transition: c.tr2,
+                    }}
+                  >
+                    <img
+                      className="lv-thumb"
+                      data-testid="lv-thumb"
+                      src={c.img}
+                      alt=""
+                      decoding="async"
+                    />
+                    <div className="lv-play" style={{ transform: c.pl, transition: c.tr2 }}>
+                      <div className="lv-play-tri" />
+                    </div>
+                  </div>
+                  <div
+                    className="lv-cell-name"
+                    style={{
+                      left: c.nl,
+                      top: c.nt,
+                      height: c.nh,
+                      opacity: c.no,
+                      transition: c.tr2,
+                    }}
+                  >
+                    {c.video.channel}
+                  </div>
+                  <div className="lv-cell-big" style={{ opacity: c.bo, transition: c.tr3 }}>
+                    <div className="lv-cell-big-ch">{c.video.channel}</div>
+                    <div
+                      className="lv-cell-big-t"
+                      data-testid={c.hero ? 'lv-hero-title' : undefined}
+                    >
+                      {c.video.title}
+                    </div>
+                  </div>
+                </Tag>
+              );
+            })}
+
+            <div
+              className="lv-bar"
+              style={{
+                left: view.bar.l,
+                top: view.bar.t,
+                width: view.bar.w,
+                opacity: view.bar.o,
+                transition: view.bar.tr,
+              }}
+            >
+              <div className="lv-bar-track" />
+              <div
+                className="lv-bar-done"
+                style={{ width: view.bar.dl, transition: view.bar.dtr }}
+              />
+              <div
+                className="lv-bar-knob"
+                style={{ left: view.bar.dl, transition: view.bar.dtr }}
+              />
+              <div
+                className="lv-bar-label"
+                data-testid="lv-bar-label"
+                style={{ left: view.bar.lp, opacity: view.bar.lo, transition: view.bar.ltr }}
+              >
+                {ex.heroTime}
+              </div>
+            </div>
+
+            {/* YouTube attribution while thumbnails are visible (the last sheet carries its own) */}
+            <p
+              className="lv-credit"
+              data-testid="lv-credit"
+              aria-hidden={view.credit.on ? undefined : true}
+              style={{
+                top: view.credit.top + 'px',
+                right: view.credit.right + 'px',
+                color: view.credit.c,
+                opacity: view.credit.on ? 1 : 0,
+                transition: view.credit.tr,
+              }}
+            >
+              {YT_CREDIT}
+            </p>
+
+            {/* scene 6: the last sheet */}
+            <div
+              className="lv-sheet"
+              data-testid="lv-sheet"
+              aria-hidden={off(T[7]!.o)}
+              style={{
+                opacity: T[7]!.o,
+                transform: T[7]!.t,
+                transition: T[7]!.tr,
+                pointerEvents: sheetOn ? 'auto' : 'none',
+              }}
+            >
+              <p className="lv-sheet-lead">{DOMAINS_LEAD}</p>
+              <div className="lv-doms">
+                {DOMAINS.map((d) => (
+                  <span key={d} className="lv-dom">
+                    {d}
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  className="lv-add"
+                  aria-label={ADD_LABEL}
+                  data-testid="lv-add"
+                  tabIndex={tab(sheetOn)}
+                  onClick={() => start('add')}
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                    <path
+                      className="lv-add-icon"
+                      d="M7 1v12M1 7h12"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <p className="lv-final">{FINAL_LINE}</p>
+              <GoogleButton
+                look="lv"
+                busy={busy}
+                onPress={() => start('final')}
+                testId="lv-google-final"
+                unreachable={!sheetOn}
+              />
+              <div className="lv-footer">
+                <LegalSheet doc="privacy" label={PRIVACY.label}>
+                  <button type="button" data-testid="lv-privacy" tabIndex={tab(sheetOn)}>
+                    {PRIVACY.label}
+                  </button>
+                </LegalSheet>
+                <span>·</span>
+                <LegalSheet doc="terms" label={TERMS.label}>
+                  <button type="button" data-testid="lv-terms" tabIndex={tab(sheetOn)}>
+                    {TERMS.label}
+                  </button>
+                </LegalSheet>
+                <span>·</span>
+                <span data-testid="lv-sheet-credit">{YT_CREDIT}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div
-          className="li-bar"
-          data-dark={view.dark ? '' : undefined}
-          data-hidden={view.bar ? undefined : ''}
-          aria-hidden={view.bar ? undefined : true}
-        >
-          <GoogleButton
-            busy={busy}
-            onPress={() => start('sticky')}
-            testId="li-google-sticky"
-            unreachable={!view.bar}
-          />
+        {/* header, sticky button, dots: outside the rubber band */}
+        <div className="lv-col lv-none" style={colStyle}>
+          <div className="lv-head">
+            <span className="lv-brand" style={{ color: view.hdr, transition: view.bgtr2 }}>
+              {BRAND}
+            </span>
+            <button
+              type="button"
+              className="lv-login"
+              data-testid="lv-login"
+              aria-hidden={view.lgO ? undefined : true}
+              tabIndex={tab(!!view.lgO)}
+              style={{
+                color: view.hdr,
+                opacity: view.lgO,
+                transition: live ? `${view.bgtr2}, opacity .3s` : 'none',
+                pointerEvents: view.lgO ? 'auto' : 'none',
+              }}
+              onClick={() => start('header')}
+            >
+              {LOGIN_LABEL}
+            </button>
+          </div>
+
+          <div
+            className="lv-sticky"
+            data-testid="lv-sticky"
+            aria-hidden={view.btm.on ? undefined : true}
+            style={{
+              transform: view.btm.t,
+              transition: view.btm.tr,
+              pointerEvents: view.btm.on ? 'auto' : 'none',
+            }}
+          >
+            <GoogleButton
+              look="lv"
+              busy={busy}
+              onPress={() => start('sticky')}
+              testId="lv-google-sticky"
+              unreachable={!view.btm.on}
+            />
+          </div>
+
+          <div className="lv-dots" style={{ pointerEvents: 'auto' }}>
+            {view.dots.map((d, i) => (
+              <button
+                key={i}
+                type="button"
+                className="lv-dot"
+                data-testid="lv-dot"
+                aria-label={DOT_LABEL(i + 1)}
+                aria-current={d.h === '16px' ? 'step' : undefined}
+                onClick={() => go(DOTGO[i]!)}
+              >
+                <div
+                  className="lv-dot-bar"
+                  style={{ height: d.h, backgroundColor: d.c, transition: d.tr }}
+                />
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

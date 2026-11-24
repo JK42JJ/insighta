@@ -1,3 +1,7 @@
+/**
+ * @deprecated [LANDING-V4] Text of the replaced scroll landing; the v4 landing reads
+ * `model/landing-content.ts` and `model/landing-example.ts`. Kept with the legacy page.
+ */
 /*
  * Landing page text and layout data, as written in the design "Insighta Intro.dc.html"
  * (2026-11-24). Two strings differ from the design by James's decision (2026-11-24): the hero
@@ -64,12 +68,8 @@ export const ADD_LABEL = 'ADD';
 export const FINAL_LINE = 'Google 계정으로 로그인하면 오늘의 영상을 바로 볼 수 있어요.';
 // James 2026-11-24 (Slack R46): Google's branding allows only Sign in / Sign up / Continue with Google and their
 // translations, so the design's "Google로 시작하기" became the translation of "Continue with Google".
-export const GOOGLE_LABEL = 'Google로 계속하기';
-/** Footer: each opens its existing page content in a sheet over the landing (James 2026-11-24). */
-export const PRIVACY = { label: '개인정보처리방침' } as const;
-export const TERMS = { label: '이용약관' } as const;
-/** The sheet's close button (accessible label). */
-export const CLOSE_LABEL = '닫기';
+// shared with the v4 landing (one definition)
+export { CLOSE_LABEL, GOOGLE_LABEL, PRIVACY, TERMS } from '../model/landing-content';
 
 /*
  * Wall of tiles above the hero (design: tiles in 4 columns; six light up). James 2026-11-24: the
