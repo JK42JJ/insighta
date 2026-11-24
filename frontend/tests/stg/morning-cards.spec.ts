@@ -9,7 +9,7 @@ const PASSWORD = process.env.STG_TEST_PASSWORD ?? '';
 const AUTH_KEY = /^sb-.+-auth-token$/;
 
 async function signIn(page: Page): Promise<void> {
-  await page.goto('/login');
+  await page.goto('/login/classic'); // /login now shows the intro landing to signed-out visitors (2026-11-24)
   await page.locator('input#email').fill(EMAIL);
   await page.locator('input#password').fill(PASSWORD);
   await page.locator('form button[type="submit"]').click();

@@ -15,7 +15,7 @@ const PROJECT_REF = process.env.STG_PROJECT_REF ?? '';
 const AUTH_KEY = /^sb-.+-auth-token$/;
 
 async function signIn(page: Page, email: string, password: string): Promise<void> {
-  await page.goto('/login');
+  await page.goto('/login/classic'); // /login now shows the intro landing to signed-out visitors (2026-11-24)
   await page.locator('input#email').fill(email);
   await page.locator('input#password').fill(password);
   await page.locator('form button[type="submit"]').click();

@@ -7,7 +7,7 @@ const EMAIL = process.env.STG_TEST_EMAIL ?? '';
 const PASSWORD = process.env.STG_TEST_PASSWORD ?? '';
 
 async function signIn(page: Page): Promise<void> {
-  await page.goto('/login');
+  await page.goto('/login/classic'); // /login now shows the intro landing to signed-out visitors (2026-11-24)
   await page.locator('input#email').fill(EMAIL);
   await page.locator('input#password').fill(PASSWORD);
   await page.locator('form button[type="submit"]').click();

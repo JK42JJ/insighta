@@ -16,7 +16,7 @@ const LOAD_TIMEOUT_MS = 25_000;
 const TOP = '[data-testid="mf-stack-layer"][data-top]';
 
 async function signIn(page: Page): Promise<void> {
-  await page.goto('/login');
+  await page.goto('/login/classic'); // /login now shows the intro landing to signed-out visitors (2026-11-24)
   await page.locator('input#email').fill(EMAIL);
   await page.locator('input#password').fill(PASSWORD);
   await page.locator('form button[type="submit"]').click();
