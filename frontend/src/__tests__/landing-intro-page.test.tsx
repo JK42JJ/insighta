@@ -100,8 +100,11 @@ describe('landing page text', () => {
     expect(tiles).toHaveLength(WALL_TILES);
     expect(WALL_TILES).toBe(12);
     const lit = tiles.filter((t) => t.hasAttribute('data-pick'));
-    expect(lit.map((t) => tiles.indexOf(t))).toEqual([...WALL_PICK]);
-    expect(lit.map((t) => t.textContent)).toEqual(ILLU_CHANNELS.map((c) => c.slice(0, 1)));
+    expect(lit.map((t) => tiles.indexOf(t))).toEqual([...WALL_PICK].sort((a, b) => a - b));
+    // the k-th lit tile in the design's order carries the k-th channel
+    WALL_PICK.forEach((pos, k) =>
+      expect(tiles[pos]!.textContent).toBe(ILLU_CHANNELS[k]!.slice(0, 1))
+    );
     expect(
       tiles.filter((t) => !t.hasAttribute('data-pick')).every((t) => t.textContent === '')
     ).toBe(true);
@@ -120,8 +123,9 @@ describe('landing page text', () => {
     const tiles = screen.getAllByTestId('li-tile');
     expect(tiles).toHaveLength(WALL_TILES);
     const lit = tiles.filter((t) => t.hasAttribute('data-pick'));
-    expect(lit.map((t) => tiles.indexOf(t))).toEqual([...WALL_PICK]);
-    lit.forEach((t, k) => {
+    expect(lit.map((t) => tiles.indexOf(t))).toEqual([...WALL_PICK].sort((a, b) => a - b));
+    WALL_PICK.forEach((pos, k) => {
+      const t = tiles[pos]!;
       const id = data.highlight[k]!;
       expect(t.getAttribute('href')).toBe(`https://www.youtube.com/watch?v=${id}`);
       expect(t.getAttribute('aria-label')).toBe(`T ${id} — C ${id}`);

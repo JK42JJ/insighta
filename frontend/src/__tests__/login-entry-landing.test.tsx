@@ -49,3 +49,33 @@ describe('mobile gate notice on the participant address (2026-11-24)', () => {
     sessionStorage.removeItem(MOBILE_GATE_FLAG_KEY);
   });
 });
+
+describe('sign-in return on a phone never leaves a black screen (James 2026-11-24)', () => {
+  it('shows the boot screen while the session is read, then goes on to the target after the cap', async () => {
+    vi.resetModules();
+    const state = { isLoading: true, isLoggedIn: false };
+    vi.doMock('@/features/auth/model/useAuth', () => ({ useAuth: () => state }));
+    vi.doMock('@/features/morning-feed/WatchBoot', () => ({
+      WatchBoot: () => <div>boot screen</div>,
+    }));
+    const { MobileAuthReturn, AUTH_RETURN_WAIT_MS } = await import('@/app/router/MobileAuthReturn');
+    vi.useFakeTimers();
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<MobileAuthReturn target="/morning-cards?view=watch" />} />
+          <Route path="/morning-cards" element={<div>watch address</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByText('boot screen')).toBeTruthy();
+    const { act } = await import('@testing-library/react');
+    act(() => {
+      vi.advanceTimersByTime(AUTH_RETURN_WAIT_MS + 10);
+    });
+    expect(screen.getByText('watch address')).toBeTruthy();
+    vi.useRealTimers();
+    vi.doUnmock('@/features/auth/model/useAuth');
+    vi.doUnmock('@/features/morning-feed/WatchBoot');
+  });
+});

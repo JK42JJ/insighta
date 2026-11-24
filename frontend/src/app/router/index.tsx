@@ -71,6 +71,8 @@ const BetaApplyPage = lazy(() => import('@/pages/beta'));
 export function LoginEntry() {
   const { user, isLoading } = useAuthContext();
   if (isLoading) return <PageLoader />;
+  // signed in on a phone: today's brief (the old login page would send a phone to the old /mobile app)
+  if (user && isMobileDevice()) return <Navigate to={WATCH_RETURN_PATH} replace />;
   return user ? <LoginPage /> : <Navigate to={WATCH_RETURN_PATH} replace />;
 }
 

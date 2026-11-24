@@ -84,7 +84,10 @@ export const CLOSE_LABEL = '닫기';
 export const WALL_COLS = 4;
 export const WALL_ROWS = 3;
 export const WALL_TILES = WALL_COLS * WALL_ROWS;
-export const WALL_PICK = [1, 3, 4, 6, 8, 11] as const;
+// The design lights six tiles on two parallel down-right diagonals of a 4 x 5 grid. On the 3-row wall
+// (James 2026-11-24) the same diagonals are kept: (0,1)(1,2)(2,3), (1,0)(2,1) and the next one's (0,3),
+// in the design's lighting order (top-left diagonal first).
+export const WALL_PICK = [1, 6, 11, 4, 9, 3] as const;
 /** Under the wall when it shows thumbnails (not in the design: James to confirm). */
 export const WALL_CREDIT = '영상 출처: YouTube';
 
@@ -138,10 +141,10 @@ export function wallVideos(data: WallData | null | undefined): Array<WallVideo |
     const channel = it?.channel?.trim() ?? '';
     return title && channel ? `${title} — ${channel}` : title || channel;
   };
-  let h = 0;
   return Array.from({ length: WALL_TILES }, (_x, i) => {
-    if (!(WALL_PICK as readonly number[]).includes(i)) return null;
-    const id = hi[h++]!;
+    const k = (WALL_PICK as readonly number[]).indexOf(i); // the brief's k-th video on the k-th lit tile
+    if (k < 0) return null;
+    const id = hi[k]!;
     return { id, label: label(id) };
   });
 }
