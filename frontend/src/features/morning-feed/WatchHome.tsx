@@ -302,3 +302,67 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     </div>
   );
 }
+
+export interface WatchHomeEmptyProps {
+  frame: Frame & { width: number };
+  account?: R3AccountView;
+  /** Today ('YYYY-MM-DD', the server's): the date row reads it as the home does. */
+  today: string;
+  /** The existing empty-state text, unchanged. */
+  message: string;
+}
+
+/**
+ * No readable brief at all (every page hidden, or none published yet): the home's own layout (top
+ * bar, date row, type and tokens) with the empty-state text in the headline's place. No button,
+ * no 지난 브리프 and no chips: there is nothing to open (decision 2026-11-24 usability test).
+ */
+export function WatchHomeEmpty(p: WatchHomeEmptyProps): JSX.Element {
+  const [acct, setAcct] = useState(false);
+  useEffect(() => ensureHomeFonts(), []);
+  const size = headlineSize(p.frame.width, p.message);
+  const rootStyle = {
+    '--w3-safe-top': p.frame.safeTop + 'px',
+    '--w3-safe-bottom': p.frame.safeBottom + 'px',
+  } as CSSProperties;
+  return (
+    <div
+      className="mf-w3-root mf-home"
+      data-testid="mf-home"
+      data-empty=""
+      data-ready=""
+      data-narrow={p.frame.width < NARROW_W ? '' : undefined}
+      style={rootStyle}
+    >
+      <div className="mf-home-col">
+        <div className="mf-home-top">
+          <div className="mf-w3-brand mf-home-brand">Insighta</div>
+          {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
+        </div>
+        <div className="mf-home-gap-top" />
+        <div className="mf-home-block">
+          <div className="mf-home-meta" data-testid="mf-home-meta">
+            <span className="mf-home-meta-d" data-testid="mf-home-seen">
+              {briefDateLabel(p.today, p.today)}
+            </span>
+          </div>
+          <h1
+            className="mf-home-headline"
+            data-testid="mf-home-empty"
+            style={{
+              fontSize: size.fontPx + 'px',
+              letterSpacing: size.trackEm + 'em',
+              lineHeight: size.lineHeight,
+            }}
+          >
+            {p.message}
+          </h1>
+        </div>
+        <div className="mf-home-gap-bottom" />
+      </div>
+      {acct && p.account ? (
+        <AccountSheet account={p.account} onClose={() => setAcct(false)} />
+      ) : null}
+    </div>
+  );
+}

@@ -2,16 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   fetchMorningPageCards,
+  fetchTestClock,
   postFeedJudgment,
   postWatchBatch,
   undoFeedJudgment,
   type FeedHistoryItem,
   type MorningHomePages,
+  type TestClockDto,
 } from '@/features/morning-cards/api';
+import { useAuth } from '@/features/auth/model/useAuth';
 import { useLandingArrival } from '@/features/landing-intro';
 import { toFeedCard } from '@/features/morning-feed/feed-format';
 import { takeWatchStart } from '@/features/morning-feed/watch-prefetch';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
+import { WatchHomeEmpty } from '@/features/morning-feed/WatchHome';
+import { TestClockControls } from '@/features/morning-feed/TestClockControls';
+import { motionStyleVars } from '@/features/morning-feed/motion-tokens';
+import { usePressFeedback } from '@/features/morning-feed/use-press';
+import { useAppShell } from '@/features/morning-feed/use-app-shell';
+import { useViewportFitCover, useWatchFrame } from '@/features/morning-feed/use-watch-frame';
+import { kstDay } from '@/features/morning-feed/watch-design';
 import { JudgmentQueue } from '@/features/morning-feed/judgment-queue';
 import type { FeedCell } from '@/features/morning-feed/MorningFeed';
 import fixture from '@/features/morning-feed/morning-feed.fixture.json';
@@ -43,8 +53,11 @@ const SAVE_WAIT_MAX_MS = 4000;
 type LoadState =
   | { status: 'loading' }
   | { status: 'error' }
-  /** brief = a participant without any brief (the experiment's empty state otherwise). */
-  | { status: 'empty'; brief?: boolean }
+  /**
+   * No readable brief (brief = a participant; the experiment's empty state otherwise), shown in
+   * the home's layout. day = the server's today, for the home's date row.
+   */
+  | { status: 'empty'; brief?: boolean; day?: string }
   | {
       status: 'ready';
       cells: FeedCell[];
@@ -103,7 +116,7 @@ export function MorningWatchLive(): JSX.Element {
                   day: pages.today,
                   experiment: false,
                 }
-              : { status: 'empty', brief: true }
+              : { status: 'empty', brief: true, day: pages?.today }
           );
           return;
         }
@@ -115,8 +128,10 @@ export function MorningWatchLive(): JSX.Element {
         const anyGoal = goalCells(t.cells).some(
           (c) => goalChipState(today[c.label]).kind !== 'none'
         );
+        // a readable brief (the newest up to today, server-picked) opens the home even when no
+        // goal has videos today
         setState(
-          anyGoal
+          anyGoal || !!pages?.current
             ? {
                 status: 'ready',
                 cells: t.cells,
@@ -126,7 +141,7 @@ export function MorningWatchLive(): JSX.Element {
                 day: t.day,
                 experiment: pages?.experiment !== false,
               }
-            : { status: 'empty' }
+            : { status: 'empty', day: pages?.today ?? t.day }
         );
       })
       .catch(() => alive && setState({ status: 'error' }));
@@ -222,9 +237,10 @@ export function MorningWatchLive(): JSX.Element {
     );
   if (state.status === 'empty')
     return (
-      <div className="mf-w" style={MESSAGE_STYLE}>
-        {state.brief ? '아직 준비된 브리프가 없습니다' : '오늘 볼 영상이 아직 없습니다'}
-      </div>
+      <EmptyHome
+        day={state.day}
+        message={state.brief ? '아직 준비된 브리프가 없습니다' : '오늘 볼 영상이 아직 없습니다'}
+      />
     );
   return (
     <MorningWatch
@@ -240,5 +256,54 @@ export function MorningWatchLive(): JSX.Element {
       connectYouTube={connectYouTube}
       experiment={state.experiment}
     />
+  );
+}
+
+/**
+ * No readable brief: the empty-state text inside the home's layout (top bar with the account,
+ * the date row), as an app screen like the home itself. The stg test clock stays reachable from
+ * the account sheet, so a virtual day without a brief can be moved back.
+ */
+function EmptyHome({ day, message }: { day?: string; message: string }): JSX.Element {
+  useViewportFitCover();
+  useAppShell();
+  const { userName, userEmail, userAvatar, signOut } = useAuth();
+  const app = useRef<HTMLDivElement>(null);
+  const frame = useWatchFrame(app);
+  usePressFeedback(app);
+  const [clock, setClock] = useState<TestClockDto | null>(null);
+  useEffect(() => {
+    let on = true;
+    fetchTestClock()
+      .then((c) => on && setClock(c))
+      .catch(() => undefined);
+    return () => {
+      on = false;
+    };
+  }, []);
+  const [now] = useState(() => new Date());
+  return (
+    <div className="mf-w">
+      <div
+        ref={app}
+        className="mf-w-app"
+        lang="ko"
+        data-testid="mf-watch-root"
+        style={motionStyleVars()}
+      >
+        <WatchHomeEmpty
+          frame={frame}
+          today={day ?? kstDay(now)}
+          message={message}
+          account={{
+            name: userName ?? '',
+            email: userEmail ?? '',
+            avatarUrl: userAvatar,
+            onLogout: () => void signOut(),
+            extra: clock ? <TestClockControls clock={clock} /> : undefined,
+          }}
+        />
+      </div>
+    </div>
   );
 }
