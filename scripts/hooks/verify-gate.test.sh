@@ -37,4 +37,17 @@ run "marker for another commit blocks" 2 y "cd $T/fe && git push origin HEAD"
 echo "PASS $(date +%s) $SHA" > "$M"
 run "fresh marker for this commit passes" 0 n "cd $T/fe && git push origin HEAD"
 run "marker written in the same command as the push is not trusted when stale" 0 n "cd $T/fe && echo x > /dev/null && git push origin HEAD"
+# gh pr merge <n> is judged by that PR's files and head commit (fake gh: no network in this test)
+FAKE="$T/fake-gh"; printf '#!/bin/bash\ncat "%s/pr-$3.json"\n' "$T" > "$FAKE"; chmod +x "$FAKE"
+printf '{"headRefOid":"%s","files":[{"path":"scripts/x.sh"}]}' "1111111111111111111111111111111111111111" > "$T/pr-11.json"
+printf '{"headRefOid":"%s","files":[{"path":"frontend/src/a.ts"}]}' "2222222222222222222222222222222222222222" > "$T/pr-12.json"
+export VERIFY_GATE_GH="$FAKE"
+rm -f "$M"
+run "merge of a backend-only PR from a checkout with frontend changes passes" 0 n "cd $T/fe && gh pr merge 11 --squash"
+run "merge of a frontend PR from a backend-only checkout needs /verify" 2 y "cd $T/be && gh pr merge 12 --squash"
+echo "PASS $(date +%s) $SHA" > "$M"
+run "marker for this checkout's commit does not cover another PR's head" 2 y "cd $T/fe && gh pr merge 12 --squash"
+echo "PASS $(date +%s) 2222222222222222222222222222222222222222" > "$M"
+run "marker for the PR head passes the merge" 0 n "cd $T/be && gh pr merge 12 --squash"
+unset VERIFY_GATE_GH
 echo "passed $pass failed $fail"; [ $fail = 0 ]
