@@ -99,6 +99,10 @@ export default defineConfig(({ mode }) => {
             /^\/mobile(\/|$)/,
             /^\/dial(\/|$)/,
             /^\/learning\//,
+            // /morning-cards (stg watch screen, player lab): a device that visited before was
+            // served the precached index.html of an older bundle without the new route and showed
+            // the app's 404 (iPhone, 2026-11-13). Hard navigations fetch the current index.html.
+            /^\/morning-cards(\/|$)/,
             /\.[^/]+$/,
           ],
           // 2026-04-22 (Phase 2 re-scoped): removed the `/api/*`

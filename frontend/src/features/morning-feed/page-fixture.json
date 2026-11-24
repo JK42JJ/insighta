@@ -1,0 +1,252 @@
+{
+ "domain": "기술/개발",
+ "seen_date": "2026-11-14",
+ "headline": "값싼 모델이 비싼 모델보다 비용이 더 많이 들 수 있다",
+ "core": [
+  {
+   "text": "작은 모델을 훈련 분포 밖으로 밀어내면 루프에 빠져 비싼 모델보다 비용이 더 많이 들 수 있다.",
+   "sources": [
+    {
+     "video_id": "QHBjufYK8TA",
+     "t": 961
+    }
+   ]
+  },
+  {
+   "text": "LLM 앱은 같은 요청에 다른 응답을 내놓는 비결정성 때문에 관측 가능성이 필요하다.",
+   "sources": [
+    {
+     "video_id": "2qgOrnopDEY",
+     "t": 46
+    }
+   ]
+  },
+  {
+   "text": "관측 가능성은 무엇이, 얼마나 오래, 어떤 비용으로 실행됐는지 기록하는 카메라와 같다.",
+   "sources": [
+    {
+     "video_id": "YkhmBOctzWE",
+     "t": 210
+    }
+   ]
+  },
+  {
+   "text": "실패한 실행 기록의 원인 설명을 코딩 에이전트에 입력해 시스템을 자동으로 개선할 수 있다.",
+   "sources": [
+    {
+     "video_id": "uuZ5DvC7bSA",
+     "t": 77
+    }
+   ]
+  },
+  {
+   "text": "AI 에이전트가 문제 해결 경험을 '스킬'로 저장하고 MCP를 통해 회사 전체에 공유할 수 있다.",
+   "sources": [
+    {
+     "video_id": "jDdgfTp_PXw",
+     "t": 431
+    }
+   ]
+  },
+  {
+   "text": "한 모델이 만든 코드는 다른 계보의 AI가 검증할 때 숨은 버그를 더 정확하게 찾을 수 있다.",
+   "sources": [
+    {
+     "video_id": "iNCOuMCzzDg",
+     "t": 0
+    }
+   ]
+  }
+ ],
+ "note": [
+  {
+   "heading": "모델 라우팅과 비용의 역설",
+   "paragraphs": [
+    {
+     "text": "토큰당 비용이 훨씬 저렴한 Haiku 모델도 훈련 분포를 벗어난 작업을 처리할 때는 도구를 루프 안에서 호출하다가, 비싼 모델인 Opus보다 비용이 더 많이 들 수 있다. Alex Atallah에 따르면 이는 각 작업에 가장 좋은 벤치마크 점수를 기록한 모델로 보내는 순진한 방식의 라우팅이 가진 문제를 보여준다.",
+     "sources": [
+      {
+       "video_id": "QHBjufYK8TA",
+       "t": 961
+      }
+     ]
+    },
+    {
+     "text": "Walden Yan은 이러한 작업 기반 라우팅이 취약하다고 지적한다. 세션이 코드베이스에 대한 질문으로 시작해 기능 요청, 실시간 디버깅으로 발전하면 처음에 선택한 모델은 발이 묶이기 때문이다.",
+     "sources": [
+      {
+       "video_id": "QHBjufYK8TA",
+       "t": 582
+      }
+     ]
+    },
+    {
+     "text": "Cognition은 프론티어 모델이 계획을 세우고 구현은 더 저렴한 모델에 위임하는 방식으로 이 문제를 해결했다. 이 접근법은 더 저렴한 모델이 코드베이스 탐색을 위해 3개의 하위 에이전트를 파생시킬 여유를 주어, 더 깊이 탐색하면서도 비용을 40% 절감했다. 또한 여러 하위 에이전트 대신 지속적인 컨텍스트를 가진 사이드킥 하나를 사용해 KV 캐시를 활성 상태로 유지하고 캐시된 토큰 비용을 약 10배 줄였다.",
+     "sources": [
+      {
+       "video_id": "QHBjufYK8TA",
+       "t": 265
+      }
+     ]
+    },
+    {
+     "text": "OpenRouter의 자동 라우터는 2년 동안 거의 사용되지 않다가, openclaw 앱이 10분마다 하트비트를 보내기 시작하면서 활성화되었다. 이는 완전히 다른 두 가지 지능 요구사항을 가진 하나의 인기 앱을 만들었다.",
+     "sources": [
+      {
+       "video_id": "QHBjufYK8TA",
+       "t": 1601
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "heading": "에이전트 관측과 평가",
+   "paragraphs": [
+    {
+     "text": "관측 가능성(Observability)은 무엇이, 얼마나 오래, 어떤 비용으로 실행되었는지 기록하는 카메라와 같다. 평가(Eval)는 그 실행이 출시할 만큼 좋은지 판단하는 심판이다. 모든 호출은 모델, 도구, 메모리라는 세 가지를 통과하며 각 단계는 추적(trace)을 남긴다.",
+     "sources": [
+      {
+       "video_id": "YkhmBOctzWE",
+       "t": 210
+      },
+      {
+       "video_id": "YkhmBOctzWE",
+       "t": 235
+      },
+      {
+       "video_id": "YkhmBOctzWE",
+       "t": 294
+      }
+     ]
+    },
+    {
+     "text": "LLM 앱은 같은 요청에도 다른 응답을 내놓는 비결정성을 가지므로 일반 API처럼 로그와 메트릭만으로는 충분하지 않다. 어제 잘 되던 것이 오늘 망가지는 '프롬프트 스래시(thrash)' 현상의 원인을 찾으려면 실제로 입력된 프롬프트와 출력 전문이 필요하다.",
+     "sources": [
+      {
+       "video_id": "2qgOrnopDEY",
+       "t": 46
+      }
+     ]
+    },
+    {
+     "text": "Langfuse는 호출 트리를 시각화하는 트레이싱(Tracing), 세 가지 평가 방식을 지원하는 평가(Evaluation), 버전 관리와 배포를 다루는 프롬프트 관리(Prompt Management), 비용 추적, 데이터셋 관리, 대시보드 기능을 한 플랫폼에서 제공한다. 트레이스는 입력부터 후처리까지 전 단계의 지연 시간, 토큰, 비용을 동시에 기록한다.",
+     "sources": [
+      {
+       "video_id": "2qgOrnopDEY",
+       "t": 133
+      },
+      {
+       "video_id": "2qgOrnopDEY",
+       "t": 444
+      }
+     ]
+    },
+    {
+     "text": "LLM-as-a-Judge를 활용하면 평가를 자동화할 수 있다. 운영 중인 트레이스를 자동으로 샘플링해 Judge LLM이 채점하고, 그 점수를 트레이스에 누적한다. 이 평가 결과는 대시보드에 시계열로 시각화되어 '지난주 대비 품질 저하' 같은 문제를 감지할 수 있다.",
+     "sources": [
+      {
+       "video_id": "2qgOrnopDEY",
+       "t": 574
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "heading": "자기 개선 에이전트 구축",
+   "paragraphs": [
+    {
+     "text": "단순한 성공/실패 레이블이 아닌, 평가에 대한 설명(eval explanations)이 에이전트를 수정하는 데 가장 영향력이 큰 입력값이다. 수백 개의 실패한 트레이스를 Claude Code와 같은 코딩 에이전트에 전달하면, 에이전트가 실패의 공통된 주제를 찾고 수정안을 제안할 수 있다.",
+     "sources": [
+      {
+       "video_id": "uuZ5DvC7bSA",
+       "t": 77
+      },
+      {
+       "video_id": "uuZ5DvC7bSA",
+       "t": 143
+      }
+     ]
+    },
+    {
+     "text": "AI 에이전트는 문제 해결 경험을 '스킬'로 저장할 수 있다. 에이전트의 작업 시간이 길어질수록, 잘못된 방향으로 깊이 추론하는 것을 막아주는 스킬의 중요성이 커진다. Voyager의 스킬 라이브러리는 성공 및 실패 실행 기록에서 절차를 추출하는 방식으로 작동한다.",
+     "sources": [
+      {
+       "video_id": "jDdgfTp_PXw",
+       "t": 20
+      },
+      {
+       "video_id": "jDdgfTp_PXw",
+       "t": 217
+      },
+      {
+       "video_id": "jDdgfTp_PXw",
+       "t": 597
+      }
+     ]
+    },
+    {
+     "text": "한 테스트 사례에서는 Sonnet 4.6 모델로 AWS Lambda에서 Chromium을 실행하는 작업의 성공률이 스킬 학습을 통해 36%에서 100%로 개선되었다. 이렇게 축적된 스킬은 MCP를 통해 비개발자도 활용할 수 있도록 배포 계층으로 사용될 수 있다.",
+     "sources": [
+      {
+       "video_id": "jDdgfTp_PXw",
+       "t": 758
+      },
+      {
+       "video_id": "jDdgfTp_PXw",
+       "t": 431
+      }
+     ]
+    },
+    {
+     "text": "여러 AI를 조합하는 멀티 에이전트 시스템도 자기 개선이 가능하다. Claude Code를 오케스트레이터로, Codex와 Gemini를 워커로 사용하는 시스템은 'codex-critic' 에이전트를 두어 Claude의 산출물을 공격적으로 리뷰하게 할 수 있다. 이 시스템은 시행착오를 'learnings.md' 파일에 기록하며 스스로 성장한다.",
+     "sources": [
+      {
+       "video_id": "iNCOuMCzzDg",
+       "t": 0
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "videos": [
+  {
+   "video_id": "QHBjufYK8TA",
+   "title": "The State of Model Routing — NVIDIA, Cognition, OpenRouter",
+   "channel": "AI Engineer",
+   "useful_for": "AI 에이전트나 멀티 모델 시스템의 비용 효율적인 아키텍처를 설계하려는 사람."
+  },
+  {
+   "video_id": "YkhmBOctzWE",
+   "title": "You Can Learn AI Agent Observability & Eval In 20 Min | LLM Ops, Traces, Treg.to, Waku.one",
+   "channel": "Sean‘s AI Stories",
+   "useful_for": "AI 에이전트의 실행 과정과 비용, 성능을 추적하고 평가하는 시스템을 만들려는 사람."
+  },
+  {
+   "video_id": "2qgOrnopDEY",
+   "title": "LLMOps 11강 - 프롬프트 노가다에서 빠져오는 방법 - Langfuse",
+   "channel": "코딩하는초롱",
+   "useful_for": "운영 단계의 LLM 애플리케이션에서 발생하는 비용, 품질 저하, 지연 문제를 해결하려는 엔지니어."
+  },
+  {
+   "video_id": "uuZ5DvC7bSA",
+   "title": "How to Build Self-Improving AI Agents with Coding Agents | Ep. 13",
+   "channel": "Arize AI",
+   "useful_for": "에이전트의 실패 사례를 수집해 시스템을 자동으로 개선하는 파이프라인을 구축하려는 사람."
+  },
+  {
+   "video_id": "jDdgfTp_PXw",
+   "title": "[한영자막] 36%에서 100%로: 자기 개선 에이전트는 어떻게 스스로 스킬을 작성할까요? — Runlayer Rafal Wilinski",
+   "channel": "Tech Bridge",
+   "useful_for": "AI 에이전트가 얻은 지식을 조직 전체의 자산으로 축적하고 재사용하는 방법을 찾으려는 사람."
+  },
+  {
+   "video_id": "iNCOuMCzzDg",
+   "title": "클로드 코드 + 코덱스 + 제미나이 동시에 굴리는 멀티 에이전트 시스템 (한 번 쓰면 못 돌아감)",
+   "channel": "AI 치트키",
+   "useful_for": "여러 LLM의 강점을 조합해 단일 모델의 한계를 넘는 고성능 AI 코딩 에이전트를 만들려는 사람."
+  }
+ ]
+}

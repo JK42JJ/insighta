@@ -4,6 +4,8 @@ import { PageLoader } from '@/shared/ui/PageLoader';
 import { ProtectedRoute } from './ProtectedRoute';
 import { AdminRoute } from './AdminRoute';
 import { MobileGateNotice } from './MobileGateNotice';
+import { MobileAuthReturn } from './MobileAuthReturn';
+import { mobileReturnTarget, readAuthReturn } from './mobile-auth-return';
 import {
   isMobileDevice,
   isPathAllowedOnMobile,
@@ -26,11 +28,17 @@ import { AdminBetaCampaign } from '@/pages/admin/ui/AdminBetaCampaign';
 import { AdminNewsletter } from '@/pages/admin/ui/AdminNewsletter';
 import { AdminNewsletterPreview } from '@/pages/admin/ui/AdminNewsletterPreview';
 import { AdminChannels } from '@/pages/admin/ui/AdminChannels';
+import { MorningCardsReviewRoute } from '@/features/morning-cards/MorningCardsReviewRoute';
+import { MorningCardsEntry } from './MorningCardsEntry';
+import { MorningCardsRoute } from '@/features/morning-cards/MorningCardsRoute';
 import BriefNotePage from '@/pages/brief/ui/BriefNotePage';
 import BriefCategoryPage from '@/pages/brief/ui/BriefCategoryPage';
 
 const IndexPage = lazy(() => import('@/pages/index'));
 const LoginPage = lazy(() => import('@/pages/login'));
+const PlayerLab = lazy(() =>
+  import('@/features/morning-feed/PlayerLab').then((m) => ({ default: m.PlayerLab }))
+);
 // MandalaSettingsPage moved to -legacy/ in Phase 5 — replaced by MandalaEditorPage
 const MandalaWizardPage = lazy(() => import('@/pages/mandala-wizard'));
 const MandalaDashboardPage = lazy(() => import('@/pages/mandala-dashboard'));
@@ -67,6 +75,9 @@ export function AppRouter() {
   // Closed-beta mobile gate: app routes are desktop-only until the mobile
   // redesign — mobile devices land on the marketing pages instead.
   if (isMobileDevice() && !isPathAllowedOnMobile(pathname)) {
+    // back from Google sign-in on a phone: go where the person was going (e.g. the watch screen)
+    const back = mobileReturnTarget(pathname, readAuthReturn());
+    if (back) return <MobileAuthReturn target={back} />;
     try {
       sessionStorage.setItem(MOBILE_GATE_FLAG_KEY, '1');
     } catch {
@@ -150,6 +161,32 @@ export function AppRouter() {
           element={
             <ProtectedRoute>
               <BillingSuccessPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/morning-cards" element={<MorningCardsEntry />} />
+        <Route
+          path="/morning-cards/classic"
+          element={
+            <ProtectedRoute>
+              <MorningCardsRoute />
+            </ProtectedRoute>
+          }
+        />
+        {/* stg device test for the watch screen's player: no sign-in, no server calls */}
+        <Route
+          path="/morning-cards/player-lab"
+          element={
+            <Suspense fallback={null}>
+              <PlayerLab />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/morning-cards/review"
+          element={
+            <ProtectedRoute>
+              <MorningCardsReviewRoute />
             </ProtectedRoute>
           }
         />

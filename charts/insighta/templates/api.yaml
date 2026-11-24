@@ -96,6 +96,18 @@ spec:
               value: {{ .Values.statelessness.ontologyChatDbStore | quote }}
             - name: YOUTUBE_CACHE_SHARED_INVALIDATION
               value: {{ .Values.statelessness.youtubeSharedInvalidation | quote }}
+{{- if (.Values.morningCards | default dict).enabled }}
+            - name: MOBILE_MORNING_CARDS
+              value: "true"
+            - name: MORNING_CARDS_TEST_USER_IDS
+              value: {{ .Values.morningCards.testUserIds | default "" | quote }}
+            - name: MORNING_VIRTUAL_DAY_USER_IDS
+              value: {{ .Values.morningCards.virtualDayUserIds | default "" | quote }}
+            - name: MORNING_BRIEF_OWNER_ID
+              value: {{ .Values.morningCards.briefOwnerId | default "" | quote }}
+            - name: MORNING_EXPERIMENT_USER_IDS
+              value: {{ .Values.morningCards.experimentUserIds | default "" | quote }}
+{{- end }}
           envFrom:
             - secretRef:
                 name: {{ .Values.envSecretName }}

@@ -480,6 +480,9 @@ model user_mandalas {
   source_template_id String?  @db.Uuid
   focus_tags         String[] @default([])
   target_level       String   @default("standard") @db.VarChar(20)
+  /// Per-mandala learner context (shape TBD). NULL = no context recorded.
+  /// Column only; no reader/writer yet. DDL: prisma/migrations/mandala-context/001_context.sql
+  context            Json?    @db.JsonB
 
   /// CP488 — per-mandala search algorithm override. NULL = use global active
   /// row from search_algorithm_versions. FK ON DELETE SET NULL so removing
@@ -2256,6 +2259,35 @@ model search_trace_candidate {
   @@schema("public")
 }
 
+/// Measurement record (SHADOW MODE) — one row per candidate video per run with
+/// source/video/reaction/channel/comment-signal features. Record only; never used
+/// for ranking or filtering. Comment text is never stored (counts only). 30d TTL.
+model candidate_features {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_id              String
+  branch              String
+  video_id            String   @db.VarChar(20)
+  cell                String?
+  source_kind         String?
+  keyword             String?
+  discovery_paths     Int?
+  video               Json?
+  reaction            Json?
+  channel             Json?
+  comment_signals     Json?
+  filter_trace        Json?
+  relevance_score     Float?
+  measurement_version Int      @default(1)
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  expires_at          DateTime @default(dbgenerated("(now() + interval '30 days')")) @db.Timestamptz(6)
+
+  @@unique([run_id, video_id], map: "uq_candidate_features_run_video")
+  @@index([run_id], map: "idx_candidate_features_run")
+  @@index([video_id], map: "idx_candidate_features_video")
+  @@index([expires_at], map: "idx_candidate_features_expires")
+  @@schema("public")
+}
+
 /// Observability Phase 2-B — daily rollup of the 5 quality axes + pool + quota +
 /// funnel, tagged with algorithm_version / flags. One row per metric_date,
 /// computed from search_trace(+candidate) + video_pool + the live key pool.
@@ -3452,5 +3484,133 @@ model nl_eval {
   issue       nl_issue @relation(fields: [issue_id], references: [id], onDelete: Cascade)
 
   @@id([issue_id, axis, at])
+  @@schema("public")
+}
+
+model morning_card_judgments {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  video_id       String   @db.VarChar(20)
+  domain         String   @db.VarChar(50)
+  verdict        String   @db.VarChar(10)
+  reason_tags    String[]
+  shown_position Int
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  cell           String?  @db.VarChar(50)
+  focus          String[]
+  canceled_at    DateTime? @db.Timestamptz(6)
+  /// NULL = swipe deck / other, 'watch' = watch screen. Raw SQL DDL: prisma/migrations/morning-feed/004_watch_batches.sql
+  surface        String?  @db.VarChar(16)
+
+  @@index([user_id, created_at(sort: Desc)], map: "idx_mc_judgments_user_created")
+  @@index([domain, video_id], map: "idx_mc_judgments_domain_video")
+  @@schema("public")
+}
+
+/// Morning feed (오늘의 픽) per-video annotation. Raw SQL DDL: prisma/migrations/morning-feed/001_morning_feed.sql
+model morning_feed_annotations {
+  video_id    String    @id @db.VarChar(20)
+  cell        String    @db.VarChar(50)
+  focus       String[]
+  why         String?   @db.VarChar(80)
+  judge_score Int?
+  judged_at   DateTime? @db.Timestamptz(6)
+  source      String    @default("manual") @db.VarChar(30)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([cell], map: "idx_mf_annotations_cell")
+  @@schema("public")
+}
+
+/// Morning feed card info items. Raw SQL DDL: prisma/migrations/morning-feed/003_card_info_watch.sql
+model morning_feed_card_info {
+  video_id       String    @id @db.VarChar(20)
+  one_liner      String?
+  reason         String?
+  audio_language String?   @db.VarChar(12)
+  link_count     Int?
+  chapters       Json?
+  refreshed_at   DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at     DateTime  @default(dbgenerated("(now() + '30 days'::interval)")) @db.Timestamptz(6)
+
+  @@index([expires_at], map: "idx_mf_card_info_expires")
+  @@schema("public")
+}
+
+/// Morning feed per-user watch progress. Raw SQL DDL: prisma/migrations/morning-feed/003_card_info_watch.sql
+model morning_feed_watch {
+  user_id         String   @db.Uuid
+  video_id        String   @db.VarChar(20)
+  watched_seconds Int      @default(0)
+  last_position   Int      @default(0)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([user_id, video_id])
+  @@schema("public")
+}
+
+/// Watch screen daily batch per goal cell (KST day). Raw SQL DDL: prisma/migrations/morning-feed/004_watch_batches.sql
+model morning_watch_batches {
+  user_id    String   @db.Uuid
+  day        DateTime @db.Date
+  cell       String   @db.VarChar(50)
+  video_ids  String[]
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([user_id, day, cell])
+  @@schema("public")
+}
+
+/// Read-only page per (user, goal cell, seen date). Raw SQL DDL: prisma/migrations/morning-feed/005_pages.sql
+/// Virtual "today" per test account (stg repeat tests). Raw SQL DDL: prisma/migrations/morning-feed/006_virtual_day.sql
+model morning_virtual_day {
+  user_id    String   @id @db.Uuid
+  day        DateTime @db.Date
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+model morning_pages {
+  user_id    String   @db.Uuid
+  cell       String   @db.VarChar(50)
+  seen_date  DateTime @db.Date
+  headline   String
+  core       Json
+  note       Json
+  videos     Json
+  origin     String   @default("import") @db.VarChar(32)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([user_id, cell, seen_date])
+  @@schema("public")
+}
+
+/// Viewer's answer on a shared brief. Raw SQL DDL: prisma/migrations/morning-feed/007_brief_feedback.sql
+model morning_brief_feedback {
+  user_id    String   @db.Uuid
+  cell       String   @db.VarChar(50)
+  seen_date  DateTime @db.Date
+  value      String   @db.VarChar(16)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([user_id, cell, seen_date])
+  @@schema("public")
+}
+
+/// Append-only usage events of the brief screens. Raw SQL DDL: prisma/migrations/morning-feed/008_usage_events.sql
+model morning_usage_events {
+  id         BigInt    @id @default(autoincrement())
+  user_id    String    @db.Uuid
+  kind       String    @db.VarChar(32)
+  cell       String?   @db.VarChar(50)
+  seen_date  DateTime? @db.Date
+  video_id   String?   @db.VarChar(32)
+  value      String?   @db.VarChar(16)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([user_id, created_at], map: "morning_usage_events_user_created_idx")
   @@schema("public")
 }
