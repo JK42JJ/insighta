@@ -18,7 +18,7 @@ test('morning feed: swipe right saves one judgment, undo cancels it (phone 390x8
   expect(EMAIL, 'STG_TEST_EMAIL is not set').not.toBe('');
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
-  await page.goto('/morning-cards?onboard=0');
+  await page.goto('/morning-cards?view=deck&onboard=0');
   await expect(page.getByTestId('mf-card')).toBeVisible({ timeout: 25_000 });
   // the live card carries a YouTube video, not the fixture text
   await expect(page.getByTestId('mf-title')).not.toHaveText('');
@@ -67,7 +67,7 @@ for (const [name, dx, dy, verdict] of [
     expect(EMAIL, 'STG_TEST_EMAIL is not set').not.toBe('');
     await page.setViewportSize({ width: 390, height: 844 });
     await signIn(page);
-    await page.goto('/morning-cards?onboard=0');
+    await page.goto('/morning-cards?view=deck&onboard=0');
     await expect(page.getByTestId('mf-card')).toBeVisible({ timeout: 25_000 });
     const saved = page.waitForRequest(
       (r) => r.url().includes('/api/v1/morning-feed/judgments') && r.method() === 'POST'
@@ -96,7 +96,7 @@ test('morning feed: playback failure notice is below the player, nothing over it
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('https://www.youtube.com/iframe_api', (route) => route.abort());
   await signIn(page);
-  await page.goto('/morning-cards?onboard=0');
+  await page.goto('/morning-cards?view=deck&onboard=0');
   await expect(page.getByTestId('mf-card')).toBeVisible({ timeout: 25_000 });
   const notice = page.getByTestId('mf-player-failed');
   await expect(notice).toBeVisible({ timeout: 15_000 });

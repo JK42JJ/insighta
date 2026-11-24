@@ -19,6 +19,7 @@ import { Label } from '@/shared/ui/label';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { apiClient } from '@/shared/lib/api-client';
 import { isMobileDevice, isPathAllowedOnMobile } from '@/shared/lib/mobile-gate';
+import { WATCH_RETURN_PATH } from '@/shared/lib/watch-path';
 
 // ── SVG Brand Icons ────────────────────────────────────────
 
@@ -107,16 +108,15 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && isLoggedIn) {
-      // Mobile users get the dial, not the desktop-only app. The mobile gate
-      // blocks app routes, so a react-router navigate to '/' would bounce to
-      // /landing; send them to the static dial via a full navigation instead
-      // (2026-07-16 incident: mobile login bounced to the landing page).
+      // A phone never gets the desktop-only app. Without an explicit target it goes to the watch
+      // screen, like the router's own phone redirects (LoginEntry, the gate on `/`); it used to
+      // go to the old /mobile app (stg, 2026-11-25).
       const returnTo = searchParams.get('returnTo');
       if (isMobileDevice()) {
         // A page that is open on phones (e.g. /morning-cards) is where the person was going.
         const target = returnTo && returnTo.startsWith('/') ? returnTo : '';
         const path = target.split(/[?#]/)[0];
-        window.location.assign(target && isPathAllowedOnMobile(path) ? target : '/mobile');
+        window.location.assign(target && isPathAllowedOnMobile(path) ? target : WATCH_RETURN_PATH);
         return;
       }
       const safeReturnTo =

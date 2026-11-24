@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { useAuthContext } from '@/features/auth/model/AuthContext';
+import { isDeckView } from '@/features/morning-feed/morning-view';
 import { parseFixtureScreen } from '@/features/morning-feed/fixture-screen';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 
@@ -32,9 +33,9 @@ const MorningFeedFixture = lazy(() =>
  * /morning-cards entry. `?fixture=1` shows the design test-hook screen (fixed cards,
  * no sign-in needed); with `&view=watch` the watch flow's test-hook screen (the mobile design
  * handoff's example data, `&screen=onb|input|watch|insight`; with `&preset=` the 수정 3 handoff's
- * presets, `&safe=47,34` and `&thumbs=` optional). Otherwise the signed-in,
- * flag-gated live feed (오늘의 픽); `?view=watch` signed out shows the landing page instead of the
- * sign-in page. The earlier judging screen stays at /morning-cards/classic.
+ * presets, `&safe=47,34` and `&thumbs=` optional). Otherwise (plain or
+ * `?view=watch`) the watch screen, the landing page when signed out; the swipe deck (오늘의 픽) only
+ * at `?view=deck`, signed in and flag-gated. The earlier judging screen stays at /morning-cards/classic.
  */
 export function MorningCardsEntry() {
   const { search } = useLocation();
@@ -66,7 +67,7 @@ export function MorningCardsEntry() {
       </Suspense>
     );
   }
-  if (q.get('view') === 'watch') return <WatchEntry />;
+  if (!isDeckView(search)) return <WatchEntry />;
   return (
     <ProtectedRoute>
       <Suspense fallback={null}>

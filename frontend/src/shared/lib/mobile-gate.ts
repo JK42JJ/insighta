@@ -12,7 +12,7 @@ export const MOBILE_GATE_MAX_WIDTH = 767;
 const ALLOWED_MOBILE_PATH_PREFIXES = [
   '/landing',
   // Mobile users must be able to sign in — after login they are routed to the
-  // mobile dial (/mobile), not the desktop-only app (2026-07-16 incident fix).
+  // watch screen (WATCH_RETURN_PATH), not the desktop-only app.
   '/login',
   '/beta',
   '/pricing',

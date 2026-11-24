@@ -28,7 +28,8 @@ import { MorningCardsEntry } from '@/app/router/MorningCardsEntry';
 
 /*
  * The participant address /morning-cards?view=watch (decision 2026-11-24): signed out -> the
- * landing page; signed in -> the watch screen as before. Other views are unchanged.
+ * landing page; signed in -> the watch screen as before. Plain /morning-cards is the same (stg
+ * 2026-11-25); the swipe deck only at ?view=deck.
  */
 
 function at(url: string): void {
@@ -69,8 +70,18 @@ describe('participant address', () => {
     expect(screen.getByTestId('boot')).toBeTruthy();
   });
 
-  it('other views signed out still go to the sign-in page', async () => {
-    at('/morning-cards');
+  it.each(['/morning-cards', '/morning-cards?view=other'])(
+    '%s is the participant address too: landing signed out, watch signed in',
+    async (url) => {
+      at(url);
+      fireEvent.click(await screen.findByTestId('intro'));
+      expect(sessionStorage.getItem('auth-return-to')).toBe('/morning-cards?view=watch');
+      expect(screen.queryByTestId('login')).toBeNull();
+    }
+  );
+
+  it('the deck (?view=deck) signed out still goes to the sign-in page', async () => {
+    at('/morning-cards?view=deck');
     expect(await screen.findByTestId('login')).toBeTruthy();
   });
 });

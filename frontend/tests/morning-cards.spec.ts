@@ -133,7 +133,7 @@ test.describe('mobile morning cards', () => {
     await fakeSession(page);
     const captured = await mockApi(page, () => CARDS);
 
-    await page.goto('/morning-cards');
+    await page.goto('/morning-cards/classic');
 
     const card = page.getByTestId('morning-card');
     await expect(card).toBeVisible();
@@ -164,7 +164,7 @@ test.describe('mobile morning cards', () => {
     await fakeSession(page);
     await mockApi(page, () => []);
 
-    await page.goto('/morning-cards');
+    await page.goto('/morning-cards/classic');
 
     await expect(page.getByTestId('morning-cards-empty')).toContainText(
       '올해 올라온 영상이 적습니다'

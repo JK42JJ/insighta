@@ -1,3 +1,4 @@
+import { WATCH_RETURN_PATH } from '@/shared/lib/watch-path';
 import { useState } from 'react';
 
 import { postTestClock, type TestClockDto } from '@/features/morning-cards/api';
@@ -14,7 +15,7 @@ export function TestClockControls({ clock }: { clock: TestClockDto }): JSX.Eleme
     if (busy) return;
     setBusy(true);
     postTestClock(action)
-      .then(() => window.location.assign('/morning-cards?view=watch'))
+      .then(() => window.location.assign(WATCH_RETURN_PATH))
       .catch(() => setBusy(false));
   };
   return (

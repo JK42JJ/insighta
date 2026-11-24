@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { fetchMorningCardsStatus } from '@/features/morning-cards/api';
+import { isDeckView } from '@/features/morning-feed/morning-view';
 import { MorningFeedLive } from '@/features/morning-feed/MorningFeedLive';
 import { prefetchWatchStart } from '@/features/morning-feed/watch-prefetch';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
@@ -14,11 +15,11 @@ const MorningWatchLive = lazy(() =>
 
 /**
  * Shows the live feed only when the server flag is on (same switch as the morning cards).
- * `?view=watch` shows the watch screen instead of the deck, behind the same flag.
+ * The watch screen, behind the same flag; the swipe deck only at `?view=deck`.
  */
 export function MorningFeedRoute() {
   const { search } = useLocation();
-  const watchView = new URLSearchParams(search).get('view') === 'watch';
+  const watchView = !isDeckView(search);
   const [on, setOn] = useState<boolean | null>(null);
   useEffect(() => {
     let alive = true;
