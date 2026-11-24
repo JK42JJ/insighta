@@ -77,7 +77,7 @@ export function MorningCardsEntry() {
 }
 
 /** After Google sign-in from the landing: always today's brief screen (decision 2026-11-24). */
-const WATCH_RETURN_PATH = '/morning-cards?view=watch';
+import { WATCH_RETURN_PATH } from './watch-path';
 
 /**
  * The participant address: signed out -> the landing page (decision 2026-11-24), signed in -> the

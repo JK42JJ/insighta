@@ -1,6 +1,7 @@
 import { OnboardingChecklist } from '@/features/onboarding';
-import { useRef, useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { WATCH_RETURN_PATH } from '@/app/router/watch-path';
 import {
   DragOverlay,
   type DragStartEvent,
@@ -51,8 +52,6 @@ import {
   cardDragId,
 } from '@/shared/lib/dnd';
 
-const LandingPage = lazy(() => import('@/pages/landing'));
-
 const IndexPage = () => {
   const { isLoggedIn, isLoading: authLoading } = useAuth();
 
@@ -61,11 +60,8 @@ const IndexPage = () => {
   }
 
   if (!isLoggedIn) {
-    return (
-      <Suspense fallback={<BootShell />}>
-        <LandingPage />
-      </Suspense>
-    );
+    // signed-out visitors of the site root get the intro landing (James 2026-11-24)
+    return <Navigate to={WATCH_RETURN_PATH} replace />;
   }
 
   return <AuthenticatedApp />;

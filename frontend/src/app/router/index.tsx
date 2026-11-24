@@ -6,6 +6,8 @@ import { AdminRoute } from './AdminRoute';
 import { MobileGateNotice } from './MobileGateNotice';
 import { MobileAuthReturn } from './MobileAuthReturn';
 import { mobileReturnTarget, readAuthReturn } from './mobile-auth-return';
+import { WATCH_RETURN_PATH } from './watch-path';
+import { useAuthContext } from '@/features/auth/model/AuthContext';
 import {
   isMobileDevice,
   isPathAllowedOnMobile,
@@ -61,6 +63,17 @@ const NotFoundPage = lazy(() => import('@/pages/not-found'));
 const LandingPage = lazy(() => import('@/pages/landing'));
 const BetaApplyPage = lazy(() => import('@/pages/beta'));
 
+/**
+ * /login: signed-out visitors get the intro landing instead of the old login page (James 2026-11-24, landing spec:
+ * "지금 쓰는 웹 로그인 페이지는 이 랜딩으로 바꾼다"). A signed-in visitor keeps the login page's own redirect to
+ * returnTo. The old page (email, Kakao) stays reachable at /login/classic.
+ */
+export function LoginEntry() {
+  const { user, isLoading } = useAuthContext();
+  if (isLoading) return <PageLoader />;
+  return user ? <LoginPage /> : <Navigate to={WATCH_RETURN_PATH} replace />;
+}
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -83,7 +96,8 @@ export function AppRouter() {
     } catch {
       /* noop */
     }
-    return <Navigate to="/landing" replace />;
+    // signed-out visitors on a phone get the intro landing (James 2026-11-24: it replaces the web login)
+    return <Navigate to={WATCH_RETURN_PATH} replace />;
   }
 
   return (
@@ -92,7 +106,8 @@ export function AppRouter() {
       <MobileGateNotice />
       <Routes>
         <Route path="/" element={<IndexPage />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<LoginEntry />} />
+        <Route path="/login/classic" element={<LoginPage />} />
         <Route path="/landing" element={<LandingPage />} />
         <Route path="/beta" element={<BetaApplyPage />} />
         <Route path="/pricing" element={<PricingPage />} />

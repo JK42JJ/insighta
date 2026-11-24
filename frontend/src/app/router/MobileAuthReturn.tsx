@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 
 import { AUTH_RETURN_KEY } from '@/app/router/mobile-auth-return';
+import { WATCH_RETURN_PATH } from '@/app/router/watch-path';
 import { useAuth } from '@/features/auth/model/useAuth';
 
 /** Waits until the session from the OAuth return is read, then goes to the target (or /landing). */
@@ -16,5 +17,5 @@ export function MobileAuthReturn({ target }: { target: string }): JSX.Element | 
     }
   }, [isLoading]);
   // nothing until the session from the return URL is read (a few hundred ms at most)
-  return isLoading ? null : <Navigate to={isLoggedIn ? target : '/landing'} replace />;
+  return isLoading ? null : <Navigate to={isLoggedIn ? target : WATCH_RETURN_PATH} replace />;
 }
