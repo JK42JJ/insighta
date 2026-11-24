@@ -61,7 +61,7 @@ describe('landing page text', () => {
     ]) {
       expect(page).toContain(t);
     }
-    expect(screen.getAllByText('Google로 시작하기')).toHaveLength(2);
+    expect(screen.getAllByText('Google로 계속하기')).toHaveLength(2);
     expect(screen.getByText('개인정보처리방침').getAttribute('href')).toBe('/privacy');
     expect(screen.getByText('이용약관').getAttribute('href')).toBe('/terms');
   });
@@ -87,11 +87,11 @@ describe('landing page actions', () => {
     fireEvent.click(screen.getByTestId('li-google-sticky'));
     expect(onSignIn).toHaveBeenCalledTimes(1);
     expect(peekLandingArrival()).toBe('google');
-    fireEvent.click(screen.getByTestId('li-google-final'));
+    fireEvent.click(screen.getByTestId('li-google-final')); // a second tap while leaving: ignored (review 11-24)
+    expect(onSignIn).toHaveBeenCalledTimes(1);
     expect(readLandingEvents()).toEqual([
       { kind: 'landing_open' },
       { kind: 'start_click', value: 'sticky' },
-      { kind: 'start_click', value: 'final' },
     ]);
   });
 

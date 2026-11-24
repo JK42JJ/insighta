@@ -62,7 +62,9 @@ export const DOMAINS = [
 export const ADD_LABEL = 'ADD';
 
 export const FINAL_LINE = 'Google 계정으로 로그인하면 오늘의 영상을 바로 볼 수 있어요.';
-export const GOOGLE_LABEL = 'Google로 시작하기';
+// James 2026-11-24 (Slack R46): Google's branding allows only Sign in / Sign up / Continue with Google and their
+// translations, so the design's "Google로 시작하기" became the translation of "Continue with Google".
+export const GOOGLE_LABEL = 'Google로 계속하기';
 export const PRIVACY = { label: '개인정보처리방침', href: '/privacy' } as const;
 export const TERMS = { label: '이용약관', href: '/terms' } as const;
 

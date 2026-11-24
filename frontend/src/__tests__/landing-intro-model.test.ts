@@ -78,7 +78,7 @@ describe('landing events (tab storage)', () => {
 
 describe('sending after sign-in', () => {
   it('sends the kept events in order, then login_done', async () => {
-    const send = vi.fn(async () => undefined);
+    const send = vi.fn(async (_e: { kind: string; value?: string }): Promise<void> => undefined);
     await sendLandingArrival(
       {
         entry: 'google',
@@ -140,5 +140,19 @@ describe('in-app browsers', () => {
     );
     expect(externalOpenUrl('instagram', UA.instaIos, PAGE)).toBeNull();
     expect(externalOpenUrl('facebook', UA.fbIos, PAGE)).toBeNull();
+  });
+});
+
+describe('landing arrival marker expiry (review 2026-11-24)', () => {
+  it('a sign-in cancelled long ago no longer counts as a landing arrival', async () => {
+    const m = await import('@/features/landing-intro/model/landing-events');
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+    m.markLandingSignIn('google');
+    expect(m.peekLandingArrival()).toBe('google');
+    vi.setSystemTime(new Date('2026-11-24T12:16:00Z'));
+    expect(m.peekLandingArrival()).toBeNull();
+    expect(sessionStorage.getItem(m.LANDING_ARRIVAL_KEY)).toBeNull();
+    vi.useRealTimers();
   });
 });

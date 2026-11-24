@@ -28,6 +28,8 @@ export interface LandingArrival {
 
 export const LANDING_EVENTS_KEY = 'insighta-landing-events';
 export const LANDING_ARRIVAL_KEY = 'insighta-landing-arrival';
+/** A sign-in that left the landing but never came back (cancelled at Google) stops counting after this. */
+export const LANDING_ARRIVAL_MAX_MS = 15 * 60 * 1000;
 /** Kept at most; repeated taps beyond this are not kept. */
 export const LANDING_EVENTS_MAX = 20;
 /** Recorded once per visit (tab). */
@@ -84,7 +86,7 @@ export function recordLandingEvent(kind: LandingEventKind, value?: StartButton):
 /** The visitor is leaving for Google sign-in from the landing. */
 export function markLandingSignIn(entry: LandingEntry): void {
   try {
-    storage()?.setItem(LANDING_ARRIVAL_KEY, entry);
+    storage()?.setItem(LANDING_ARRIVAL_KEY, `${entry}:${Date.now()}`);
   } catch {
     /* storage blocked: the arrival is not recognised (onboarding shows as for anyone) */
   }
@@ -93,8 +95,11 @@ export function markLandingSignIn(entry: LandingEntry): void {
 /** The pending arrival from the landing, without consuming it. */
 export function peekLandingArrival(): LandingEntry | null {
   try {
-    const v = storage()?.getItem(LANDING_ARRIVAL_KEY);
-    return v === 'google' || v === 'add' ? v : null;
+    const raw = storage()?.getItem(LANDING_ARRIVAL_KEY) ?? '';
+    const [v, at] = raw.split(':');
+    const fresh = Date.now() - Number(at) <= LANDING_ARRIVAL_MAX_MS;
+    if (!fresh && raw) storage()?.removeItem(LANDING_ARRIVAL_KEY); // cancelled long ago: not a landing arrival
+    return fresh && (v === 'google' || v === 'add') ? v : null;
   } catch {
     return null;
   }

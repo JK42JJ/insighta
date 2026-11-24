@@ -157,6 +157,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   const list = useRef<HTMLDivElement>(null);
   const fin = useRef<HTMLElement>(null);
   const busyTimer = useRef<number | undefined>(undefined);
+  const busyRef = useRef(false);
   const step3Kept = useRef(false);
 
   // the scroller's height is the hero's and the pinned view's; the card's width scales the drawing
@@ -234,11 +235,16 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   }, []);
 
   const start = (from: From): void => {
+    if (busyRef.current) return; // a second tap while leaving for Google: no second sign-in, no extra event
+    busyRef.current = true;
     if (from === 'add') recordLandingEvent('add_click');
     else recordLandingEvent('start_click', from);
     setBusy(true);
     window.clearTimeout(busyTimer.current);
-    busyTimer.current = window.setTimeout(() => setBusy(false), BUSY_MS);
+    busyTimer.current = window.setTimeout(() => {
+      busyRef.current = false;
+      setBusy(false);
+    }, BUSY_MS);
     const app = detectInAppBrowser(navigator.userAgent);
     if (app) {
       leaveInApp(app);
