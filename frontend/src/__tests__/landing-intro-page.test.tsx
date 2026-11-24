@@ -126,7 +126,7 @@ describe('landing page text', () => {
       expect(t.getAttribute('href')).toBe(`https://www.youtube.com/watch?v=${id}`);
       expect(t.getAttribute('aria-label')).toBe(`T ${id} — C ${id}`);
     });
-    for (const t of tiles) {
+    for (const t of lit) {
       expect(t.tagName).toBe('A');
       expect(t.getAttribute('target')).toBe('_blank');
       expect(t.getAttribute('rel')).toBe('noopener');
@@ -137,18 +137,17 @@ describe('landing page text', () => {
       // nothing on the image itself alters it
       expect(img.getAttribute('style')).toBeNull();
     }
-    const rest = tiles
-      .filter((t) => !t.hasAttribute('data-pick'))
-      .map((t) => t.getAttribute('href'));
-    expect(rest).toEqual(
-      data.others.slice(0, 6).map((id) => `https://www.youtube.com/watch?v=${id}`)
-    );
-    expect(screen.getByTestId('li-wall').hasAttribute('aria-hidden')).toBe(false);
+    // only the six lit tiles carry a picture (as in the design); the rest stay empty tiles
+    for (const t of tiles.filter((x) => !x.hasAttribute('data-pick'))) {
+      expect(t.tagName).toBe('DIV');
+      expect(t.querySelector('img')).toBeNull();
+    }
+    expect(screen.getByTestId('li-intro').querySelectorAll('img')).toHaveLength(WALL_PICK.length);
   });
 
-  it('too few videos keeps the letter tiles', async () => {
+  it('fewer than six highlighted videos keeps the letter tiles', async () => {
     const data = wallData();
-    fetchLandingWall.mockResolvedValue({ ...data, others: data.others.slice(0, 3) });
+    fetchLandingWall.mockResolvedValue({ ...data, highlight: data.highlight.slice(0, 3) });
     draw();
     await act(async () => {
       await Promise.resolve();

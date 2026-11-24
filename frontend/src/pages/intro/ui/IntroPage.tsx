@@ -158,7 +158,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   const [cardW, setCardW] = useState(ILLU_W);
   const [busy, setBusy] = useState(false);
   /** The thumbnail wall once its data arrived; null = the letter tiles. */
-  const [videos, setVideos] = useState<WallVideo[] | null>(null);
+  const [videos, setVideos] = useState<Array<WallVideo | null> | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const pin = useRef<HTMLElement>(null);
   const card = useRef<HTMLDivElement>(null);

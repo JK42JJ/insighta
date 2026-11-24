@@ -120,18 +120,18 @@ export interface WallData {
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
 /**
- * Per tile, the video: the highlight on WALL_PICK in order, the others on the rest in order.
- * null when the data cannot fill every tile (then the letter tiles are shown).
+ * Per tile: the highlighted brief's source videos on WALL_PICK in order; every other tile stays an empty
+ * tile, as in the design where only the picked tiles show a picture (James 2026-11-24: "일부 영상에 대해
+ * 썸네일이 들어가야 하는데 모두 들어가 버림"). null when the highlight cannot fill the picks (letter tiles then).
  */
-export function wallVideos(data: WallData | null | undefined): WallVideo[] | null {
+export function wallVideos(data: WallData | null | undefined): Array<WallVideo | null> | null {
   if (!data) return null;
   const ok = (id: unknown): id is string => typeof id === 'string' && VIDEO_ID_RE.test(id);
   const seen = new Set<string>();
   const uniq = (ids: readonly unknown[]): string[] =>
     ids.filter(ok).filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
   const hi = uniq(data.highlight ?? []);
-  const rest = uniq(data.others ?? []);
-  if (hi.length < WALL_PICK.length || rest.length < WALL_TILES - WALL_PICK.length) return null;
+  if (hi.length < WALL_PICK.length) return null;
   const label = (id: string): string => {
     const it = data.items?.[id];
     const title = it?.title?.trim() ?? '';
@@ -139,9 +139,9 @@ export function wallVideos(data: WallData | null | undefined): WallVideo[] | nul
     return title && channel ? `${title} — ${channel}` : title || channel;
   };
   let h = 0;
-  let r = 0;
   return Array.from({ length: WALL_TILES }, (_x, i) => {
-    const id = (WALL_PICK as readonly number[]).includes(i) ? hi[h++]! : rest[r++]!;
+    if (!(WALL_PICK as readonly number[]).includes(i)) return null;
+    const id = hi[h++]!;
     return { id, label: label(id) };
   });
 }
