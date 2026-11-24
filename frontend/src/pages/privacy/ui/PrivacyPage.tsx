@@ -5,7 +5,12 @@ import { SUPPORT_EMAIL } from '@/shared/config/constants';
 const LINK_CLASS = 'text-primary underline';
 const SR_ONLY = 'sr-only';
 
-const PrivacyPage = () => {
+export interface LegalPageProps {
+  /** Where "back to top" scrolls when the page is shown inside a panel (default: the window). */
+  onBackToTop?: () => void;
+}
+
+const PrivacyPage = ({ onBackToTop }: LegalPageProps = {}) => {
   const { t } = useTranslation();
 
   return (
@@ -253,7 +258,9 @@ const PrivacyPage = () => {
       </section>
       <div className="flex justify-center mt-8">
         <button
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          onClick={() =>
+            onBackToTop ? onBackToTop() : window.scrollTo({ top: 0, behavior: 'smooth' })
+          }
           className="inline-flex items-center gap-1.5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-surface-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           <ArrowUp className="w-4 h-4" aria-hidden="true" />

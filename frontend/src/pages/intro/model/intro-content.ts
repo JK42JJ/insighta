@@ -65,23 +65,83 @@ export const FINAL_LINE = 'Google 계정으로 로그인하면 오늘의 영상�
 // James 2026-11-24 (Slack R46): Google's branding allows only Sign in / Sign up / Continue with Google and their
 // translations, so the design's "Google로 시작하기" became the translation of "Continue with Google".
 export const GOOGLE_LABEL = 'Google로 계속하기';
-export const PRIVACY = { label: '개인정보처리방침', href: '/privacy' } as const;
-export const TERMS = { label: '이용약관', href: '/terms' } as const;
+/** Footer: each opens its existing page content in a sheet over the landing (James 2026-11-24). */
+export const PRIVACY = { label: '개인정보처리방침' } as const;
+export const TERMS = { label: '이용약관' } as const;
+/** The sheet's close button (accessible label). */
+export const CLOSE_LABEL = '닫기';
 
 /*
- * Wall of tiles above the hero (design: 20 tiles in 4 columns; tiles PICK light up). The design's
- * YouTube thumbnails are replaced by channel letter tiles (decision 2026-11-24, YouTube policy):
- * the lit tiles carry the first letter of a source channel of one brief. A signed-out visitor
- * cannot read the briefs (the pages API needs sign-in), so the channels are the example brief's
- * (ILLU_CHANNELS); the other tiles are neutral and blank.
+ * Wall of tiles above the hero (design: tiles in 4 columns; six light up). James 2026-11-24: the
+ * wall is exactly 3 rows on every screen. The design's lit positions 1, 6, 8 and 11 are kept;
+ * its 13 and 18 fall below row 3, so 3 and 4 take their place.
+ *
+ * Tiles show original YouTube thumbnails of one day's briefs (James 2026-11-24, "원본을 동적으로"):
+ * unaltered images, each a link to the video, with YouTube named under the wall (YouTube API
+ * policy). Until those arrive, or when there are none, the channel letter tiles are shown: the
+ * lit tiles carry the first letter of a source channel of the example brief (ILLU_CHANNELS).
  */
-export const WALL_TILES = 20;
-export const WALL_PICK = [1, 6, 8, 11, 13, 18] as const;
+export const WALL_COLS = 4;
+export const WALL_ROWS = 3;
+export const WALL_TILES = WALL_COLS * WALL_ROWS;
+export const WALL_PICK = [1, 3, 4, 6, 8, 11] as const;
+/** Under the wall when it shows thumbnails (not in the design: James to confirm). */
+export const WALL_CREDIT = '영상 출처: YouTube';
+
+const YT_THUMB = 'https://i.ytimg.com/vi/';
+/** mqdefault: 320x180, the tile's 16:9, so nothing is cropped. */
+const YT_THUMB_FILE = '/mqdefault.jpg';
+const YT_WATCH = 'https://www.youtube.com/watch?v=';
+export const thumbUrl = (id: string): string =>
+  `${YT_THUMB}${encodeURIComponent(id)}${YT_THUMB_FILE}`;
+export const watchUrl = (id: string): string => `${YT_WATCH}${encodeURIComponent(id)}`;
 
 /** The wall: per tile, the channel letter (lit tiles) or null. */
 export function wallLetters(channels: readonly string[] = ILLU_CHANNELS): Array<string | null> {
   return Array.from({ length: WALL_TILES }, (_x, i) => {
     const k = (WALL_PICK as readonly number[]).indexOf(i);
     return k >= 0 ? (channels[k] ?? '').slice(0, 1) || null : null;
+  });
+}
+
+export interface WallVideo {
+  id: string;
+  /** Accessible name: "<title> — <channel>". */
+  label: string;
+}
+
+/** The thumbnail wall's input (GET /morning-feed/public/wall). */
+export interface WallData {
+  highlight: readonly string[];
+  others: readonly string[];
+  items: Readonly<Record<string, { title?: string; channel?: string } | undefined>>;
+}
+
+const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+/**
+ * Per tile, the video: the highlight on WALL_PICK in order, the others on the rest in order.
+ * null when the data cannot fill every tile (then the letter tiles are shown).
+ */
+export function wallVideos(data: WallData | null | undefined): WallVideo[] | null {
+  if (!data) return null;
+  const ok = (id: unknown): id is string => typeof id === 'string' && VIDEO_ID_RE.test(id);
+  const seen = new Set<string>();
+  const uniq = (ids: readonly unknown[]): string[] =>
+    ids.filter(ok).filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
+  const hi = uniq(data.highlight ?? []);
+  const rest = uniq(data.others ?? []);
+  if (hi.length < WALL_PICK.length || rest.length < WALL_TILES - WALL_PICK.length) return null;
+  const label = (id: string): string => {
+    const it = data.items?.[id];
+    const title = it?.title?.trim() ?? '';
+    const channel = it?.channel?.trim() ?? '';
+    return title && channel ? `${title} — ${channel}` : title || channel;
+  };
+  let h = 0;
+  let r = 0;
+  return Array.from({ length: WALL_TILES }, (_x, i) => {
+    const id = (WALL_PICK as readonly number[]).includes(i) ? hi[h++]! : rest[r++]!;
+    return { id, label: label(id) };
   });
 }

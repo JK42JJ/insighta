@@ -9,6 +9,7 @@ vi.mock('@/shared/integrations/supabase/client', () => ({
 }));
 
 import {
+  fetchLandingWall,
   fetchMorningCards,
   fetchMorningCardsReview,
   fetchMorningFeedHistory,
@@ -192,5 +193,19 @@ describe('morning cards api client', () => {
     });
     fetchMock.mockRejectedValue(new Error('offline'));
     await expect(postUsageEvent({ kind: 'home_open' })).resolves.toBeUndefined();
+  });
+
+  it('reads the public landing wall without a session token, a failure throws', async () => {
+    const data = { date: '2026-11-24', highlight: ['aaaaaaaaaaa'], others: [], items: {} };
+    fetchMock.mockResolvedValue(okResponse({ status: 'ok', data }));
+    await expect(fetchLandingWall()).resolves.toEqual(data);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit | undefined];
+    expect(url).toMatch(/\/api\/v1\/morning-feed\/public\/wall$/);
+    expect(url).not.toContain('/api/v1/api/v1');
+    expect(
+      (init?.headers as Record<string, string> | undefined)?.['Authorization']
+    ).toBeUndefined();
+    fetchMock.mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+    await expect(fetchLandingWall()).rejects.toBeInstanceOf(MorningCardsApiError);
   });
 });

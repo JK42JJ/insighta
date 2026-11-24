@@ -6,6 +6,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getPrismaClient } from '@/modules/database/client';
 import {
   briefOwnerFor,
+  getMorningCardsConfig,
   isBriefReader,
   isExperimentUser,
   isMorningCardsEnabled,
@@ -30,6 +31,7 @@ import {
   recordWatch,
   FeedValidationError,
   isFeedCell,
+  kstDayString,
   saveFeedJudgment,
   type FeedDb,
 } from '@/modules/morning-feed/feed';
@@ -41,12 +43,19 @@ import {
   isRealDate,
 } from '@/modules/morning-feed/pages';
 import { withAmbient } from '@/modules/morning-feed/thumb-ambient';
+import {
+  LANDING_WALL_CACHE_MS,
+  readLandingWall,
+  type LandingWall,
+} from '@/modules/morning-feed/landing-wall';
 import { userIdOf } from '@/api/utils/request-user';
 
 export interface MorningFeedRouteDeps {
   getDb: () => FeedDb;
   /** Adds the immersive-playback background colour to the batch cards (thumbnail, server side). */
   addAmbient?: typeof withAmbient;
+  /** Clock for the public landing wall's day and cache (tests). */
+  now?: () => Date;
 }
 
 const defaultDeps: MorningFeedRouteDeps = {
@@ -85,6 +94,27 @@ async function flagGate(_request: FastifyRequest, reply: FastifyReply): Promise<
 
 export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps) {
   return async function morningFeedRoutes(fastify: FastifyInstance): Promise<void> {
+    const now = deps.now ?? (() => new Date());
+    let wallCache: { key: string; at: number; data: LandingWall } | null = null;
+
+    // Landing wall (decision 2026-11-24): PUBLIC, no sign-in. Video ids, titles and channels of
+    // one day's briefs (public YouTube metadata stored with the pages), nothing about a user.
+    // The unauthenticated global rate limit (plugins/rate-limit.ts) applies; one answer is kept
+    // in memory for LANDING_WALL_CACHE_MS per brief owner and KST day.
+    fastify.get('/public/wall', { onRequest: [flagGate] }, async (_request, reply) => {
+      const at = now();
+      const owner = getMorningCardsConfig().briefOwnerId;
+      const key = `${owner ?? ''}|${kstDayString(at)}`;
+      if (
+        !wallCache ||
+        wallCache.key !== key ||
+        at.getTime() - wallCache.at >= LANDING_WALL_CACHE_MS
+      ) {
+        wallCache = { key, at: at.getTime(), data: await readLandingWall(deps.getDb(), owner, at) };
+      }
+      return reply.send({ status: 'ok', data: wallCache.data });
+    });
+
     const guard = (request: FastifyRequest, reply: FastifyReply): string | null => {
       const userId = userIdOf(request);
       if (!userId) {

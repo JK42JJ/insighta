@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,13 +6,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/features/morning-feed/watch-home-fonts', () => ({
   ensureHomeFonts: () => undefined,
   waitHomeFonts: () => Promise.resolve('late'),
+  FONT_WAIT_MS: 1500,
 }));
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast }));
+// the landing wall (public endpoint): fails by default, so the letter tiles show
+const fetchLandingWall = vi.hoisted(() => vi.fn());
+vi.mock('@/features/morning-cards/api', () => ({ fetchLandingWall }));
+// the sheets render the real pages; their i18n text is not under test here
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (k: string) => k }),
+  Trans: ({ i18nKey }: { i18nKey: string }) => i18nKey,
+}));
 
 import { IN_APP_NOTICE, peekLandingArrival, readLandingEvents } from '@/features/landing-intro';
 import { IntroPage } from '@/pages/intro';
-import { HERO_BODY, ILLU_CHANNELS, WALL_PICK } from '@/pages/intro/model/intro-content';
+import {
+  HERO_BODY,
+  ILLU_CHANNELS,
+  WALL_CREDIT,
+  WALL_PICK,
+  WALL_ROWS,
+  WALL_TILES,
+} from '@/pages/intro/model/intro-content';
 
 /*
  * Landing page (design "Insighta Intro", decisions 2026-11-24): the text as designed with the two
@@ -34,7 +50,20 @@ function draw(onSignIn = vi.fn(() => Promise.resolve())) {
 beforeEach(() => {
   sessionStorage.clear();
   toast.mockReset();
+  fetchLandingWall.mockReset();
+  fetchLandingWall.mockRejectedValue(new Error('offline'));
 });
+
+const ids = (prefix: string, n: number): string[] =>
+  Array.from({ length: n }, (_x, i) => `${prefix}${String(i).padStart(10, '0')}`);
+function wallData() {
+  const highlight = ids('h', 6);
+  const others = ids('o', 14);
+  const items = Object.fromEntries(
+    [...highlight, ...others].map((id) => [id, { title: `T ${id}`, channel: `C ${id}` }])
+  );
+  return { date: '2026-11-24', highlight, others, items };
+}
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -62,22 +91,92 @@ describe('landing page text', () => {
       expect(page).toContain(t);
     }
     expect(screen.getAllByText('Google로 계속하기')).toHaveLength(2);
-    expect(screen.getByText('개인정보처리방침').getAttribute('href')).toBe('/privacy');
-    expect(screen.getByText('이용약관').getAttribute('href')).toBe('/terms');
   });
 
   it('the wall lights six tiles with the first letter of the example brief channels, the rest blank', () => {
     draw();
     const tiles = screen.getAllByTestId('li-tile');
-    expect(tiles).toHaveLength(20);
+    expect(WALL_ROWS).toBe(3);
+    expect(tiles).toHaveLength(WALL_TILES);
+    expect(WALL_TILES).toBe(12);
     const lit = tiles.filter((t) => t.hasAttribute('data-pick'));
     expect(lit.map((t) => tiles.indexOf(t))).toEqual([...WALL_PICK]);
     expect(lit.map((t) => t.textContent)).toEqual(ILLU_CHANNELS.map((c) => c.slice(0, 1)));
     expect(
       tiles.filter((t) => !t.hasAttribute('data-pick')).every((t) => t.textContent === '')
     ).toBe(true);
-    // no images at all on the wall (YouTube thumbnails are not used)
+    // fallback (request failed): no images, no links, no YouTube credit
     expect(screen.getByTestId('li-intro').querySelectorAll('img')).toHaveLength(0);
+    expect(screen.queryByTestId('li-wall-credit')).toBeNull();
+    expect(screen.getByTestId('li-wall').getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('with the wall data: original thumbnails as links to the video, the six on the lit tiles', async () => {
+    const data = wallData();
+    fetchLandingWall.mockResolvedValue(data);
+    draw();
+    await waitFor(() => expect(screen.getByTestId('li-wall-credit')).toBeTruthy());
+    expect(screen.getByTestId('li-wall-credit').textContent).toBe(WALL_CREDIT);
+    const tiles = screen.getAllByTestId('li-tile');
+    expect(tiles).toHaveLength(WALL_TILES);
+    const lit = tiles.filter((t) => t.hasAttribute('data-pick'));
+    expect(lit.map((t) => tiles.indexOf(t))).toEqual([...WALL_PICK]);
+    lit.forEach((t, k) => {
+      const id = data.highlight[k]!;
+      expect(t.getAttribute('href')).toBe(`https://www.youtube.com/watch?v=${id}`);
+      expect(t.getAttribute('aria-label')).toBe(`T ${id} — C ${id}`);
+    });
+    for (const t of tiles) {
+      expect(t.tagName).toBe('A');
+      expect(t.getAttribute('target')).toBe('_blank');
+      expect(t.getAttribute('rel')).toBe('noopener');
+      const img = t.querySelector('img')!;
+      expect(img.getAttribute('src')).toMatch(
+        /^https:\/\/i\.ytimg\.com\/vi\/[\w-]{11}\/mqdefault\.jpg$/
+      );
+      // nothing on the image itself alters it
+      expect(img.getAttribute('style')).toBeNull();
+    }
+    const rest = tiles
+      .filter((t) => !t.hasAttribute('data-pick'))
+      .map((t) => t.getAttribute('href'));
+    expect(rest).toEqual(
+      data.others.slice(0, 6).map((id) => `https://www.youtube.com/watch?v=${id}`)
+    );
+    expect(screen.getByTestId('li-wall').hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('too few videos keeps the letter tiles', async () => {
+    const data = wallData();
+    fetchLandingWall.mockResolvedValue({ ...data, others: data.others.slice(0, 3) });
+    draw();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('li-intro').querySelectorAll('img')).toHaveLength(0);
+    expect(screen.queryByTestId('li-wall-credit')).toBeNull();
+  });
+});
+
+describe('privacy policy and terms', () => {
+  it.each([
+    ['li-privacy', 'privacy', '개인정보처리방침', 'privacy.title'],
+    ['li-terms', 'terms', '이용약관', 'terms.title'],
+  ])('%s opens the page content in a sheet, X and Esc close it', async (link, doc, name, title) => {
+    draw();
+    const trigger = screen.getByTestId(link);
+    expect(trigger.tagName).toBe('BUTTON');
+    fireEvent.click(trigger);
+    const sheet = await screen.findByRole('dialog', { name });
+    expect(sheet.getAttribute('data-testid')).toBe(`li-sheet-${doc}`);
+    expect(await screen.findByText(title)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger);
+    const again = await screen.findByRole('dialog', { name });
+    fireEvent.keyDown(again, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
 

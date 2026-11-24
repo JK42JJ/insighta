@@ -130,12 +130,13 @@
   position: relative;
   flex: none;
   margin-top: 64px;
+  /* James 2026-11-24: exactly WALL_ROWS (3) rows of tiles; the grid sets the height */
+  padding: 6px 0;
   overflow: hidden;
 }
 .li-wall-grid {
-  position: absolute;
-  left: -38px;
-  top: 6px;
+  position: relative;
+  margin-left: -38px;
   width: 466px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -151,6 +152,8 @@
   font-size: 22px;
   font-weight: 700;
   color: var(--w-navy);
+  text-decoration: none;
+  overflow: hidden;
   filter: grayscale(0.85) contrast(0.9);
   opacity: 0.5;
   transform: none;
@@ -166,6 +169,21 @@
   filter: grayscale(1) contrast(0.85);
   opacity: 0.16;
 }
+/*
+ * Thumbnail tiles (YouTube policy: the image is not altered): full colour and opacity in every
+ * phase; the six are shown only by size and elevation (the pick rule below).
+ */
+.li-frame .li-tile[data-thumb],
+.li-frame[data-phase] .li-tile[data-thumb] {
+  filter: none;
+  opacity: 1;
+}
+.li-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .li-frame[data-phase='1'] .li-tile[data-pick],
 .li-frame[data-phase='2'] .li-tile[data-pick] {
   filter: none;
@@ -173,12 +191,16 @@
   transform: scale(1.06);
   box-shadow: 0 10px 24px -10px var(--li-tile-shadow);
 }
+.li-wall-credit {
+  margin: 4px 24px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--w-sub);
+}
+/* the text follows the wall (James 2026-11-24); 112 at the bottom keeps it clear of the bar */
 .li-hero-text {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   padding: 20px 24px 112px;
 }
 .li-h1 {
@@ -498,7 +520,7 @@
   font-size: 13px;
   color: var(--w-navy-body);
 }
-.li-footer a {
+.li-footer button {
   min-height: 44px;
   display: inline-flex;
   align-items: center;

@@ -6,7 +6,6 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import {
@@ -19,8 +18,13 @@ import {
   recordLandingEvent,
   type InAppBrowser,
 } from '@/features/landing-intro';
+import { fetchLandingWall } from '@/features/morning-cards/api';
 import { useViewportFitCover } from '@/features/morning-feed/use-watch-frame';
-import { ensureHomeFonts, waitHomeFonts } from '@/features/morning-feed/watch-home-fonts';
+import {
+  ensureHomeFonts,
+  FONT_WAIT_MS,
+  waitHomeFonts,
+} from '@/features/morning-feed/watch-home-fonts';
 
 import {
   ADD_LABEL,
@@ -39,10 +43,16 @@ import {
   PROBLEM_ANSWER,
   PRIVACY,
   TERMS,
+  thumbUrl,
+  WALL_CREDIT,
   WALL_PICK,
   wallLetters,
+  wallVideos,
+  watchUrl,
+  type WallVideo,
 } from '../model/intro-content';
 import { GoogleButton } from './GoogleButton';
+import { LegalSheet } from './LegalSheet';
 // the watch tokens (--w-*) and the .mf-w root the landing shares with the watch screens
 import '@/features/morning-feed/watch.css';
 import './intro.css';
@@ -62,10 +72,6 @@ const PHASE1_MS = 150;
 const PHASE2_MS = 1100;
 /** design: the Google buttons are dimmed this long after a tap. */
 const BUSY_MS = 1400;
-/** design: wall height = viewport minus top bar 64, hero padding 112 and text 340, within 150..360. */
-const WALL_MIN = 150;
-const WALL_MAX = 360;
-const WALL_RESERVED = 64 + 112 + 340;
 /** design: progress through the pinned section -> step 1/2/3. */
 const STEP1_FROM = -0.02;
 const STEP2_FROM = 0.3;
@@ -151,6 +157,8 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   const [vh, setVh] = useState(() => (typeof window === 'undefined' ? 0 : window.innerHeight));
   const [cardW, setCardW] = useState(ILLU_W);
   const [busy, setBusy] = useState(false);
+  /** The thumbnail wall once its data arrived; null = the letter tiles. */
+  const [videos, setVideos] = useState<WallVideo[] | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const pin = useRef<HTMLElement>(null);
   const card = useRef<HTMLDivElement>(null);
@@ -171,19 +179,33 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
     return () => window.removeEventListener('resize', measure);
   }, []);
 
-  // entrance after the fonts (at most FONT_WAIT_MS), as the design waits for document.fonts
+  // entrance after the fonts and the wall data (each at most FONT_WAIT_MS), as the design waits
+  // for document.fonts; the wall stays the letter tiles when its data fails, is empty or is late
+  // (late data still replaces the letters when it arrives)
   useEffect(() => {
     recordLandingEvent('landing_open');
     ensureHomeFonts();
     let alive = true;
     const timers: number[] = [];
-    void waitHomeFonts(FONT_HEADLINES, FONT_UI).then(() => {
+    const abort = typeof AbortController === 'undefined' ? undefined : new AbortController();
+    const wall = fetchLandingWall(abort?.signal).then(
+      (data) => {
+        if (alive) setVideos(wallVideos(data));
+      },
+      () => undefined
+    );
+    const wallDecided = Promise.race([
+      wall,
+      new Promise<void>((resolve) => timers.push(window.setTimeout(resolve, FONT_WAIT_MS))),
+    ]);
+    void Promise.all([waitHomeFonts(FONT_HEADLINES, FONT_UI), wallDecided]).then(() => {
       if (!alive || reduced) return;
       timers.push(window.setTimeout(() => setPhase(1), PHASE1_MS));
       timers.push(window.setTimeout(() => setPhase(2), PHASE2_MS));
     });
     return () => {
       alive = false;
+      abort?.abort();
       timers.forEach((t) => window.clearTimeout(t));
       window.clearTimeout(busyTimer.current);
     };
@@ -258,7 +280,6 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   const fade = (k: Step): number => (!step || step === k ? 1 : 0.2);
   const dim = step ? 0.2 : 1;
   const scale = cardW / ILLU_W;
-  const wallH = Math.max(WALL_MIN, Math.min(WALL_MAX, vh - WALL_RESERVED));
 
   return (
     <div className="mf-w li" data-testid="li-intro">
@@ -277,27 +298,52 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
         </div>
 
         <div ref={scroller} className="li-scroll" onScroll={onScroll} data-testid="li-scroll">
-          <section className="li-hero" style={{ height: vh + 'px' }}>
-            <div className="li-wall" style={{ height: wallH + 'px' }} aria-hidden="true">
+          <section className="li-hero">
+            <div className="li-wall" aria-hidden={videos ? undefined : true} data-testid="li-wall">
               <div className="li-wall-grid">
-                {WALL.map((letter, i) => {
+                {(videos ?? WALL).map((tile, i) => {
                   const k = PICKS.indexOf(i);
                   const dl =
                     k >= 0 ? PICK_DELAY_S + k * PICK_STEP_S : (i % REST_GROUP) * REST_STEP_S;
+                  const style = { '--li-dl': dl + 's' } as CSSProperties;
+                  const pick = k >= 0 ? '' : undefined;
+                  if (tile && typeof tile === 'object') {
+                    return (
+                      <a
+                        key={tile.id}
+                        className="li-tile"
+                        data-thumb=""
+                        data-pick={pick}
+                        data-testid="li-tile"
+                        style={style}
+                        href={watchUrl(tile.id)}
+                        target="_blank"
+                        rel="noopener"
+                        aria-label={tile.label || undefined}
+                      >
+                        <img className="li-thumb" src={thumbUrl(tile.id)} alt="" decoding="async" />
+                      </a>
+                    );
+                  }
                   return (
                     <div
                       key={i}
                       className="li-tile"
-                      data-pick={k >= 0 ? '' : undefined}
+                      data-pick={pick}
                       data-testid="li-tile"
-                      style={{ '--li-dl': dl + 's' } as CSSProperties}
+                      style={style}
                     >
-                      {letter}
+                      {tile}
                     </div>
                   );
                 })}
               </div>
             </div>
+            {videos ? (
+              <p className="li-wall-credit" data-testid="li-wall-credit">
+                {WALL_CREDIT}
+              </p>
+            ) : null}
             <div className="li-hero-text">
               <h1 className="li-h1">
                 {HERO_TITLE[0]}
@@ -417,9 +463,17 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
             <p className="li-final-line">{FINAL_LINE}</p>
             <GoogleButton busy={busy} onPress={() => start('final')} testId="li-google-final" />
             <div className="li-footer">
-              <Link to={PRIVACY.href}>{PRIVACY.label}</Link>
+              <LegalSheet doc="privacy" label={PRIVACY.label}>
+                <button type="button" data-testid="li-privacy">
+                  {PRIVACY.label}
+                </button>
+              </LegalSheet>
               <span>·</span>
-              <Link to={TERMS.href}>{TERMS.label}</Link>
+              <LegalSheet doc="terms" label={TERMS.label}>
+                <button type="button" data-testid="li-terms">
+                  {TERMS.label}
+                </button>
+              </LegalSheet>
             </div>
           </section>
         </div>

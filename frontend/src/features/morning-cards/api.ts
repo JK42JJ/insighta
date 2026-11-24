@@ -380,6 +380,30 @@ export async function fetchMorningPagesHome(): Promise<MorningHomePages> {
   return res.data;
 }
 
+/** One wall video's public YouTube metadata (as stored with the brief page). */
+export interface LandingWallItem {
+  title: string;
+  channel: string;
+}
+
+/** GET /morning-feed/public/wall: the landing wall's video ids (public, no sign-in). */
+export interface LandingWall {
+  date: string | null;
+  highlight: string[];
+  others: string[];
+  items: Record<string, LandingWallItem>;
+}
+
+/** The landing wall. Public: no session token is sent. */
+export async function fetchLandingWall(signal?: AbortSignal): Promise<LandingWall> {
+  const res = await fetch(`${API_BASE_URL}${MORNING_FEED_PATH}/public/wall`, { signal });
+  if (!res.ok) {
+    throw new MorningCardsApiError(`Landing wall request failed: ${res.status}`, res.status);
+  }
+  const body = (await res.json()) as { data: LandingWall };
+  return body.data;
+}
+
 /** The page of one domain and seen date, or null. */
 export async function fetchMorningPage(cell: string, date: string): Promise<MorningPage | null> {
   const q = '?cell=' + encodeURIComponent(cell) + '&date=' + encodeURIComponent(date);
