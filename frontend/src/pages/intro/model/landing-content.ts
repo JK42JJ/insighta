@@ -63,9 +63,9 @@ export const TERMS = { label: '이용약관' } as const;
 export const CLOSE_LABEL = '닫기';
 /** YouTube attribution (YouTube API policy): wherever thumbnails are visible (decision 2026-11-24). */
 export const YT_CREDIT = '영상 출처: YouTube';
-/** The YouTube Icon link next to the thumbnails: the image's text and the link's name. */
+/** The YouTube Icon next to the thumbnails: the image's text and the button's name. */
 export const YT_ICON_ALT = 'YouTube';
-export const ytLinkLabel = (channel: string): string => `YouTube에서 ${channel} 영상 보기`;
+export const ytPlayLabel = (channel: string): string => `${channel} 영상 여기서 보기`;
 /** Accessible names that are not drawn. */
 export const DOT_LABEL = (n: number): string => `장면 ${n}`;
 export const STAGE_LABEL = '인사이타 소개';

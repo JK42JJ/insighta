@@ -7,7 +7,6 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
-  type MouseEvent,
   type PointerEvent,
   type WheelEvent,
 } from 'react';
@@ -54,9 +53,15 @@ import {
   wallDomains,
   YT_CREDIT,
   YT_ICON_ALT,
-  ytLinkLabel,
+  ytPlayLabel,
 } from '../model/landing-content';
-import { heroVideo, heroWatchUrl, LANDING_EXAMPLE, sourceLabel } from '../model/landing-example';
+import {
+  heroPlay,
+  heroVideo,
+  LANDING_EXAMPLE,
+  sourceLabel,
+  type PlayTarget,
+} from '../model/landing-example';
 import {
   BAND_H,
   buildScene,
@@ -97,6 +102,7 @@ import {
 } from '../model/landing-scene';
 import ytIconSrc from '../assets/yt_icon_red_digital.png';
 import { GoogleButton } from './GoogleButton';
+import { LandingPlayer } from './LandingPlayer';
 import { LegalSheet } from './LegalSheet';
 import './landing.css';
 
@@ -180,6 +186,8 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   /** The brief card's laid-out height (its transform not included). */
   const [cardH, setCardH] = useState(0);
   const sheetRef = useRef<HTMLDivElement>(null);
+  /** The video playing over the landing, or null. A tap never leaves the landing (James 2026-11-25). */
+  const [playing, setPlaying] = useState<PlayTarget | null>(null);
   /** The last sheet's laid-out height (it grows when the domain list arrives). */
   const [sheetH, setSheetH] = useState(0);
   const t1 = useRef<number | undefined>(undefined);
@@ -637,9 +645,10 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                         />
                       ))}
                       {d.yt ? (
-                        <YouTubeIconLink
-                          href={d.yt}
-                          label={ytLinkLabel(hero.channel)}
+                        <YouTubeIconButton
+                          target={d.yt}
+                          onPlay={setPlaying}
+                          label={ytPlayLabel(hero.channel)}
                           live={s === 0 && d.thumbsOn}
                           tapped={tapped}
                           testId="lv-yt-deck"
@@ -798,7 +807,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
 
             {view.cells.map((c) => {
               const link = c.hero && s === SOURCE_OPEN_SCENE;
-              const Tag = c.hero ? 'a' : 'div';
+              const Tag = c.hero ? 'button' : 'div';
               return (
                 <Tag
                   key={c.key}
@@ -808,13 +817,11 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                   aria-hidden={link ? undefined : true}
                   {...(c.hero
                     ? {
-                        href: heroWatchUrl(ex),
-                        target: '_blank',
-                        rel: 'noopener noreferrer',
+                        type: 'button' as const,
                         tabIndex: link ? 0 : -1,
-                        'aria-label': `${c.video.title} — ${c.video.channel} (YouTube)`,
-                        onClick: (e: MouseEvent) => {
-                          if (!link || !tapped()) e.preventDefault();
+                        'aria-label': `${c.video.title} — ${ytPlayLabel(c.video.channel)}`,
+                        onClick: () => {
+                          if (link && tapped()) setPlaying(heroPlay(ex));
                         },
                       }
                     : {})}
@@ -913,7 +920,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
               key={'credit-' + s}
               className="lv-credit"
               data-testid="lv-credit"
-              data-icon={view.credit.href ? '' : undefined}
+              data-icon={view.credit.play ? '' : undefined}
               data-in={view.credit.in ? '' : undefined}
               aria-hidden={view.credit.on ? undefined : true}
               style={{
@@ -924,10 +931,11 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
               }}
             >
               <span>{YT_CREDIT}</span>
-              {view.credit.href ? (
-                <YouTubeIconLink
-                  href={view.credit.href}
-                  label={ytLinkLabel(hero.channel)}
+              {view.credit.play ? (
+                <YouTubeIconButton
+                  target={view.credit.play}
+                  onPlay={setPlaying}
+                  label={ytPlayLabel(hero.channel)}
                   live={view.credit.on}
                   tapped={tapped}
                   testId="lv-yt"
@@ -1079,6 +1087,7 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
           </div>
         </div>
       </div>
+      {playing ? <LandingPlayer target={playing} onClose={() => setPlaying(null)} /> : null}
     </div>
   );
 }
@@ -1086,19 +1095,21 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
 export default IntroPage;
 
 /**
- * The official YouTube Icon as a link to the video (YouTube API branding guidelines): the file is
- * drawn whole and unaltered (its transparent margin is the icon's clear space), at its own
- * proportions, on the row's solid colour. A swipe that ends on it does not open YouTube.
+ * The official YouTube Icon as a button that plays the video inside the landing: the file is drawn
+ * whole and unaltered (its transparent margin is the icon's clear space), at its own proportions,
+ * on the row's solid colour. A swipe that ends on it plays nothing.
  */
-function YouTubeIconLink({
-  href,
+function YouTubeIconButton({
+  target,
+  onPlay,
   label,
   live,
   tapped,
   testId,
   bleedY = 0,
 }: {
-  href: string;
+  target: PlayTarget;
+  onPlay: (t: PlayTarget) => void;
   label: string;
   /** Visible and reachable in the current scene. */
   live: boolean;
@@ -1108,18 +1119,16 @@ function YouTubeIconLink({
   bleedY?: number;
 }): JSX.Element {
   return (
-    <a
+    <button
+      type="button"
       className="lv-yt"
       data-testid={testId}
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
       aria-label={label}
       tabIndex={live ? 0 : -1}
       style={{ pointerEvents: live ? 'auto' : 'none', margin: `${-bleedY}px 0` }}
       onClick={(e) => {
         e.stopPropagation();
-        if (!live || !tapped()) e.preventDefault();
+        if (live && tapped()) onPlay(target);
       }}
     >
       <img
@@ -1131,6 +1140,6 @@ function YouTubeIconLink({
         decoding="async"
         draggable={false}
       />
-    </a>
+    </button>
   );
 }

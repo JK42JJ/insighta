@@ -15,7 +15,7 @@
  *     videos: 2x2) and its attribution row follows the tiles; scene 4/5's chips keep the design's left-aligned row.
  *   - the scene-6 tiles (`s7`, always off: `on7 = false`) and the line drawing (`ln`, opacity 0
  *     in every scene) are not produced; nothing visible depends on them.
- *   - YouTube Icon link next to every thumbnail group (YouTube API branding guidelines): in the
+ *   - YouTube Icon (plays inside the landing) next to every thumbnail group (YouTube API branding guidelines): in the
  *     front deck card after its thumbnails (s=0) and in the attribution row (s=1..5).
  *   - nothing is drawn over a thumbnail, at rest or in flight (James 2026-11-25): no play button;
  *     the play bar, dot and time label are a row below the thumbnail, in one hero card that is the
@@ -32,12 +32,12 @@ import {
   EXAMPLE_VIDEOS_MAX,
   heroFraction,
   heroVideo,
-  heroWatchUrl,
+  heroPlay,
   LANDING_EXAMPLE,
   thumbUrl,
-  watchUrl,
   type ExampleVideo,
   type LandingExample,
+  type PlayTarget,
 } from './landing-example';
 
 export type Phase = 0 | 1 | 2;
@@ -159,7 +159,7 @@ const CREDIT_TOP: Readonly<Partial<Record<Scene, number>>> = {
 export const GROUND_EDGE = 28;
 /** Scene 3's attribution row sits this far under the tiles' last row (design: 452 -> 458). */
 const CREDIT_UNDER_TILES = 6;
-/** Scenes whose attribution row carries the icon link (s=0 has it in the deck card instead). */
+/** Scenes whose attribution row carries the icon (s=0 has it in the deck card instead). */
 const CREDIT_ICON: ReadonlySet<Scene> = new Set<Scene>([1, 2, 3, 4, 5]);
 /** Right edge: the scene texts' (40, clear of the dots); in the hero card: its padding (28 + 16). */
 const CREDIT_RIGHT = 40;
@@ -354,8 +354,8 @@ export interface DeckCard {
   /** Its thumbnails are drawn: the card is in front and nothing is over it. */
   thumbsOn: boolean;
   thumbs: readonly string[];
-  /** The YouTube Icon link after the thumbnails (their first video), or null without thumbnails. */
-  yt: string | null;
+  /** What the YouTube Icon after the thumbnails plays (their first video), or null without thumbnails. */
+  yt: PlayTarget | null;
   z: number;
   o: number;
   t: string;
@@ -455,8 +455,8 @@ export interface SceneView {
     c: string;
     /** Fades in after the thumbnails' flight (not under reduced motion). */
     in: boolean;
-    /** The YouTube Icon link in the row: where it goes, or null (no icon in this scene). */
-    href: string | null;
+    /** What the YouTube Icon in the row plays inside the landing, or null (no icon in this scene). */
+    play: PlayTarget | null;
   };
 }
 
@@ -521,7 +521,7 @@ export function buildScene(
       // covered by the other card (or a card sliding over it): not drawn
       thumbsOn: L || (!A && i === di && !(h && h.lv >= 0)),
       thumbs: i === 0 ? slots.slice(0, 3).map((x) => thumbUrl(x.id)) : [],
-      yt: i === 0 ? watchUrl(slots[0]!.id) : null,
+      yt: i === 0 ? { video: slots[0]!, start: 0 } : null,
       z: L ? 4 : 3 - k,
       o: A ? 0 : 1,
       tto: T(k === 0 ? 'opacity .5s .15s ease' : 'opacity .3s ease'),
@@ -791,11 +791,11 @@ export function buildScene(
     c: nv && !barOn ? v('credit-dark') : v('sub'),
     // the row is drawn anew per scene (IntroPage key) and fades in when the thumbnails rest
     in: live && creditTop !== undefined,
-    // the groups link to their first video (the hero); scene 5 is the hero from its source time
-    href: CREDIT_ICON.has(s)
+    // the groups play their first video (the hero); scene 5 is the hero from its source time
+    play: CREDIT_ICON.has(s)
       ? s === SOURCE_OPEN_SCENE
-        ? heroWatchUrl(ex)
-        : watchUrl(heroVideo(ex).id)
+        ? heroPlay(ex)
+        : { video: heroVideo(ex), start: 0 }
       : null,
   };
   const ground = {

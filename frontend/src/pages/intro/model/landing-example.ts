@@ -142,7 +142,8 @@ const SEC_PER_MIN = 60;
 const YT_THUMB = 'https://i.ytimg.com/vi/';
 /** mqdefault: 320x180 (16:9), the boxes' ratio, so nothing is cropped. */
 const YT_THUMB_FILE = '/mqdefault.jpg';
-const YT_WATCH = 'https://www.youtube.com/watch?v=';
+/** The embedded player: the landing plays videos on itself and never opens YouTube (James 2026-11-25). */
+const YT_EMBED = 'https://www.youtube.com/embed/';
 
 /** "mm:ss" (or "h:mm:ss") -> seconds; 0 when it is not a time. */
 export function timeToSeconds(t: string): number {
@@ -154,14 +155,26 @@ export function timeToSeconds(t: string): number {
 export const thumbUrl = (id: string): string =>
   `${YT_THUMB}${encodeURIComponent(id)}${YT_THUMB_FILE}`;
 
-/** A video on YouTube (opens the YouTube app or site). */
-export const watchUrl = (id: string): string => `${YT_WATCH}${encodeURIComponent(id)}`;
+/** What a tap plays inside the landing: a video and where it starts (s). */
+export interface PlayTarget {
+  video: ExampleVideo;
+  start: number;
+}
 
-/** The hero video on YouTube from its source time. */
-export function heroWatchUrl(ex: LandingExample = LANDING_EXAMPLE): string {
-  const hero = ex.videos[ex.heroIndex];
-  const id = encodeURIComponent(hero?.id ?? '');
-  return `${YT_WATCH}${id}&t=${timeToSeconds(ex.heroTime)}s`;
+/** The embedded player's address: inline on phones, from `start`, related videos of the channel. */
+export function embedUrl(t: PlayTarget): string {
+  const q = new URLSearchParams({
+    autoplay: '1',
+    playsinline: '1',
+    rel: '0',
+    start: String(Math.max(0, Math.floor(t.start))),
+  });
+  return `${YT_EMBED}${encodeURIComponent(t.video.id)}?${q.toString()}`;
+}
+
+/** The hero video from its source time. */
+export function heroPlay(ex: LandingExample = LANDING_EXAMPLE): PlayTarget {
+  return { video: heroVideo(ex), start: timeToSeconds(ex.heroTime) };
 }
 
 /** The hero video (the first video when the index is out of range). */

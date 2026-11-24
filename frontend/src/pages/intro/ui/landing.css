@@ -1016,6 +1016,57 @@
   padding: 8px calc(20px + var(--lv-bleed)) calc(10px + env(safe-area-inset-bottom));
 }
 
+/* a video played on the landing (over the scenes) */
+.lv-player {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--lv-night);
+  color: var(--lv-paper);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+.lv-player-head {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 14px;
+}
+.lv .lv-player-close {
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--lv-paper);
+}
+.lv-player-frame {
+  display: block;
+  flex: none;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 200px;
+  max-height: 72vh;
+  margin: 8vh auto 0;
+  border: 0;
+  background: var(--lv-night);
+}
+.lv-player-text {
+  padding: 16px 28px 24px;
+}
+.lv-player-title {
+  font-size: 17px;
+  line-height: 1.5;
+  font-weight: 600;
+  word-break: keep-all;
+}
+.lv-player-sub {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--lv-credit-dark);
+}
+
 /* dots */
 .lv-dots {
   position: absolute;
