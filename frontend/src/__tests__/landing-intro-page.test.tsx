@@ -20,7 +20,8 @@ vi.mock('react-i18next', () => ({
 }));
 
 import { IN_APP_NOTICE, peekLandingArrival, readLandingEvents } from '@/features/landing-intro';
-import { IntroPage } from '@/pages/intro';
+// the replaced scroll landing, kept in -legacy (decision 2026-11-24: v4 is routed)
+import { IntroPageLegacy as IntroPage } from '@/pages/intro/-legacy/IntroPage';
 import {
   HERO_BODY,
   ILLU_CHANNELS,
@@ -28,7 +29,7 @@ import {
   WALL_PICK,
   WALL_ROWS,
   WALL_TILES,
-} from '@/pages/intro/model/intro-content';
+} from '@/pages/intro/-legacy/intro-content';
 
 /*
  * Landing page (design "Insighta Intro", decisions 2026-11-24): the text as designed with the two

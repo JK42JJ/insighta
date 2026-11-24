@@ -21,6 +21,10 @@ export const USAGE_EVENT_KINDS = [
   'video_reaction',
   // landing page (2026-11-24): kept in the visitor's tab and sent after sign-in with login_done
   'landing_open',
+  // landing v4 (2026-11-24): dot reached (value s1..s6) and the scene-5 source tap
+  'landing_scene',
+  'source_click',
+  // the replaced scroll landing; kept so tabs opened before the switch still send their events
   'landing_scroll_step3',
   'start_click',
   'add_click',

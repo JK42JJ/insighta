@@ -8,11 +8,19 @@
 
 export type LandingEventKind =
   | 'landing_open'
+  /** v4 (2026-11-24): a dot reached, value s1..s6 (once per value). */
+  | 'landing_scene'
+  /** v4: the source tap in scene 5 (once). */
+  | 'source_click'
+  /** @deprecated legacy scroll landing (-legacy/IntroPage); kept so its page still records. */
   | 'landing_scroll_step3'
   | 'start_click'
   | 'add_click';
-/** Which Google button: the bar fixed at the bottom or the one in the last section. */
-export type StartButton = 'sticky' | 'final';
+/** Which Google button: the header link, the bar fixed at the bottom or the one in the last sheet. */
+export type StartButton = 'header' | 'sticky' | 'final';
+/** A landing_scene value: the dot reached. */
+export type SceneValue = 's1' | 's2' | 's3' | 's4' | 's5' | 's6';
+export type LandingEventValue = StartButton | SceneValue;
 /** How the visitor left for sign-in: a Google button or ADD (shows the 곧 출시 notice after). */
 export type LandingEntry = 'google' | 'add';
 
@@ -33,9 +41,19 @@ export const LANDING_ARRIVAL_MAX_MS = 15 * 60 * 1000;
 /** Kept at most; repeated taps beyond this are not kept. */
 export const LANDING_EVENTS_MAX = 20;
 /** Recorded once per visit (tab). */
-const ONCE: ReadonlySet<LandingEventKind> = new Set(['landing_open', 'landing_scroll_step3']);
+const ONCE: ReadonlySet<LandingEventKind> = new Set([
+  'landing_open',
+  'source_click',
+  'landing_scroll_step3',
+]);
+/** Recorded once per visit for each value. */
+const ONCE_PER_VALUE: ReadonlySet<LandingEventKind> = new Set(['landing_scene']);
+/** The server's value rule (morning-feed/brief-usage.ts EVENT_VALUE_RE). */
+const VALUE_RE = /^[A-Za-z0-9_-]{1,16}$/;
 const KINDS: ReadonlySet<string> = new Set<LandingEventKind>([
   'landing_open',
+  'landing_scene',
+  'source_click',
   'landing_scroll_step3',
   'start_click',
   'add_click',
@@ -53,7 +71,8 @@ function isLandingEvent(x: unknown): x is LandingEvent {
   if (typeof x !== 'object' || x === null) return false;
   const e = x as Record<string, unknown>;
   return (
-    KINDS.has(e['kind'] as string) && (e['value'] === undefined || typeof e['value'] === 'string')
+    KINDS.has(e['kind'] as string) &&
+    (e['value'] === undefined || (typeof e['value'] === 'string' && VALUE_RE.test(e['value'])))
   );
 }
 
@@ -69,11 +88,13 @@ export function readLandingEvents(): LandingEvent[] {
 }
 
 /** Keeps one event in this tab (once-kinds only the first time). Never throws. */
-export function recordLandingEvent(kind: LandingEventKind, value?: StartButton): void {
+export function recordLandingEvent(kind: LandingEventKind, value?: LandingEventValue): void {
   const s = storage();
   if (!s) return;
+  if (value !== undefined && !VALUE_RE.test(value)) return;
   const list = readLandingEvents();
   if (ONCE.has(kind) && list.some((e) => e.kind === kind)) return;
+  if (ONCE_PER_VALUE.has(kind) && list.some((e) => e.kind === kind && e.value === value)) return;
   if (list.length >= LANDING_EVENTS_MAX) return;
   list.push(value === undefined ? { kind } : { kind, value });
   try {

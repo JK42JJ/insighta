@@ -11,6 +11,8 @@ export {
   type LandingEntry,
   type LandingEvent,
   type LandingEventKind,
+  type LandingEventValue,
+  type SceneValue,
   type StartButton,
 } from './landing-events';
 export {

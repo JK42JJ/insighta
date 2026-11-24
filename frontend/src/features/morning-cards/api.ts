@@ -571,6 +571,9 @@ export type UsageEventKind =
   | 'video_reaction'
   // landing page (2026-11-24): kept in the visitor's tab, sent after sign-in with login_done
   | 'landing_open'
+  // landing v4 (2026-11-24): dot reached (value s1..s6) and the scene-5 source tap
+  | 'landing_scene'
+  | 'source_click'
   | 'landing_scroll_step3'
   | 'start_click'
   | 'add_click'

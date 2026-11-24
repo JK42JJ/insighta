@@ -13,6 +13,8 @@ import {
 const USER = '11111111-1111-4111-8111-111111111111';
 const LANDING_KINDS = [
   'landing_open',
+  'landing_scene',
+  'source_click',
   'landing_scroll_step3',
   'start_click',
   'add_click',
@@ -39,6 +41,14 @@ describe('usage event allow-list', () => {
   it('start_click carries which button (sticky or final) as its value', () => {
     expect(validateUsageEvent({ kind: 'start_click', value: 'sticky' }).value).toBe('sticky');
     expect(validateUsageEvent({ kind: 'start_click', value: 'final' }).value).toBe('final');
+  });
+
+  it('landing v4: landing_scene carries the dot (s1..s6), start_click the header link too', () => {
+    for (const value of ['s1', 's2', 's3', 's4', 's5', 's6']) {
+      expect(validateUsageEvent({ kind: 'landing_scene', value }).value).toBe(value);
+    }
+    expect(validateUsageEvent({ kind: 'start_click', value: 'header' }).value).toBe('header');
+    expect(validateUsageEvent({ kind: 'source_click' }).value).toBeNull();
   });
 
   it('rejects an unknown kind and a value outside the short-token shape', () => {
