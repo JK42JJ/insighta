@@ -183,6 +183,8 @@ survey:
 
 frontend:
   replicaCount: 1
+  # "" keeps the Deployment default (RollingUpdate). staging sets Recreate; see staging.yaml.
+  strategyType: ""
   image:
     repository: ghcr.io/jk42jj/insighta-frontend
     # environments/*.yaml override this via images.frontendTag; see prod.yaml
