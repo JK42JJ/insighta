@@ -80,9 +80,9 @@ morningCards:
   briefOwnerId: "bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c"
   # Accounts that keep the experiment UI (video batches, viewing order). Needs the test list too.
   experimentUserIds: "bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c"
-  # Usability test (2026-11-26): briefs exist for 5 domains only, so these 3 goal cells are not
-  # shown to any reader (pages, lists, chips, landing wall). Empty = all 8 again.
-  hiddenCells: "인간관계/커뮤니티,건강/피트니스,학습/교육"
+  # Goal cells not shown to any reader (pages, lists, chips, landing wall). Empty = all 8
+  # (James 2026-11-25; 3 cells were hidden on 2026-11-24).
+  hiddenCells: ""
 
 keel:
   enabled: false
