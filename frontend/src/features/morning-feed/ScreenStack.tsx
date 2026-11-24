@@ -41,7 +41,10 @@ export function ScreenStack({ layers, move }: Props): JSX.Element {
     lastSeq.current = move.seq;
     const prev = lastTop.current;
     lastTop.current = top;
-    anims.current.forEach((a) => a.finish());
+    // An interrupted slide is removed, never finished: these animations use fill 'both', so a
+    // finished one keeps its end pose (the screen underneath 30 % left and dimmed) on the page for
+    // good once nothing cancels it -- the stuck home James saw after an edge swipe (2026-11-24).
+    anims.current.forEach((a) => a.cancel());
     anims.current = [];
     if (prev.id === top.id || move.native || move.dir === 'replace' || move.dir === 'none') {
       setLeaving(null);

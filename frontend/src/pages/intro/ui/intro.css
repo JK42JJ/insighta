@@ -199,9 +199,65 @@
 }
 /* the text follows the wall (James 2026-11-24); 112 at the bottom keeps it clear of the bar */
 .li-hero-text {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 20px 24px 112px;
+}
+/* skeleton in the title and paragraph place until the entrance (phase 2), then it fades out */
+.li-skel {
+  position: absolute;
+  inset: 20px 24px auto;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  transition: opacity 0.5s var(--li-ease-std);
+}
+.li-skel-bar {
+  display: block;
+  border-radius: 8px;
+  background: var(--li-tile);
+  animation: li-skel-pulse 1.2s var(--li-ease-std) infinite alternate;
+}
+.li-skel-bar[data-w^='title'] {
+  height: 40px;
+  margin-bottom: 14px;
+}
+.li-skel-bar[data-w='title1'] {
+  width: 62%;
+}
+.li-skel-bar[data-w='title2'] {
+  width: 84%;
+  margin-bottom: 30px;
+}
+.li-skel-bar[data-w^='p'] {
+  height: 16px;
+  margin-bottom: 11px;
+}
+.li-skel-bar[data-w='p1'] {
+  width: 96%;
+}
+.li-skel-bar[data-w='p2'] {
+  width: 88%;
+}
+.li-skel-bar[data-w='p3'] {
+  width: 40%;
+}
+.li-frame[data-phase='2'] .li-skel {
+  opacity: 0;
+}
+@keyframes li-skel-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .li-skel {
+    display: none;
+  }
 }
 .li-h1 {
   font-family: var(--li-serif);

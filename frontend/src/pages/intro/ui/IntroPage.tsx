@@ -345,6 +345,15 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
               </p>
             ) : null}
             <div className="li-hero-text">
+              {/* placeholder bars while the title waits for its entrance (James 2026-11-24: an
+                  empty space under the wall looked broken); they fade out as the text fades in */}
+              <div className="li-skel" aria-hidden="true" data-testid="li-skel">
+                <span className="li-skel-bar" data-w="title1" />
+                <span className="li-skel-bar" data-w="title2" />
+                <span className="li-skel-bar" data-w="p1" />
+                <span className="li-skel-bar" data-w="p2" />
+                <span className="li-skel-bar" data-w="p3" />
+              </div>
               <h1 className="li-h1">
                 {HERO_TITLE[0]}
                 <br />
