@@ -83,7 +83,6 @@ describe('landing page text', () => {
       '미리 골라 뒀어요',
       '그 수고를 인사이타가 대신할게요.',
       '왜곡 없는 정보를 지향합니다',
-      '지금은 8개 분야에서 골라 드려요.',
       'Google 계정으로 로그인하면 오늘의 영상을 바로 볼 수 있어요.',
       '개인정보처리방침',
       '이용약관',
@@ -158,6 +157,38 @@ describe('landing page text', () => {
     });
     expect(screen.getByTestId('li-intro').querySelectorAll('img')).toHaveLength(0);
     expect(screen.queryByTestId('li-wall-credit')).toBeNull();
+  });
+});
+
+describe('landing domain list (server cells, MORNING_HIDDEN_CELLS)', () => {
+  const SHOWN = ['기술/개발', '비즈니스/커리어', '재테크/투자', '창작/예술', '라이프스타일/여행'];
+  const HIDDEN = ['학습/교육', '건강/피트니스', '인간관계/커뮤니티'];
+
+  it('lists exactly the domains the wall answer sends, in its order, with their count', async () => {
+    fetchLandingWall.mockResolvedValue({ ...wallData(), cells: SHOWN });
+    draw();
+    await waitFor(() => expect(screen.getAllByTestId('li-domain')).toHaveLength(SHOWN.length));
+    expect(screen.getAllByTestId('li-domain').map((d) => d.textContent)).toEqual(SHOWN);
+    expect(screen.getByTestId('li-domains-lead').textContent).toBe(
+      '지금은 5개 분야에서 골라 드려요.'
+    );
+    const page = screen.getByTestId('li-intro').textContent ?? '';
+    for (const h of HIDDEN) expect(page).not.toContain(h);
+    expect(page).not.toContain('8개 분야');
+    expect(screen.getByTestId('li-add')).toBeTruthy();
+  });
+
+  it('no wall answer: no domain and no count is shown (nothing hardcoded), ADD stays', async () => {
+    draw();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryAllByTestId('li-domain')).toHaveLength(0);
+    expect(screen.queryByTestId('li-domains-lead')).toBeNull();
+    expect(screen.getByTestId('li-add')).toBeTruthy();
+    const page = screen.getByTestId('li-intro').textContent ?? '';
+    // (the illustration brief is a 비즈니스/커리어 example; no hidden domain is drawn anywhere)
+    for (const h of HIDDEN) expect(page).not.toContain(h);
   });
 });
 

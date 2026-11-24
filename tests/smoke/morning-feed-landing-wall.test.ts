@@ -15,7 +15,22 @@ export {};
  * with title and channel, hidden pages excluded, one brief's support videos as the highlight.
  */
 
-const ENV_KEYS = ['MOBILE_MORNING_CARDS', 'MORNING_BRIEF_OWNER_ID'] as const;
+const ENV_KEYS = [
+  'MOBILE_MORNING_CARDS',
+  'MORNING_BRIEF_OWNER_ID',
+  'MORNING_HIDDEN_CELLS',
+] as const;
+const ALL_CELLS = [
+  '기술/개발',
+  '비즈니스/커리어',
+  '재테크/투자',
+  '학습/교육',
+  '건강/피트니스',
+  '인간관계/커뮤니티',
+  '창작/예술',
+  '라이프스타일/여행',
+];
+const TEST_HIDDEN = ['인간관계/커뮤니티', '건강/피트니스', '학습/교육'];
 const BASE = '/api/v1/morning-feed';
 const OWNER = '33333333-3333-4333-8333-333333333333';
 // 2026-11-24 12:00 KST
@@ -80,6 +95,7 @@ describe('landing wall', () => {
     for (const k of ENV_KEYS) saved[k] = process.env[k];
     process.env['MOBILE_MORNING_CARDS'] = 'true';
     process.env['MORNING_BRIEF_OWNER_ID'] = OWNER;
+    delete process.env['MORNING_HIDDEN_CELLS'];
   });
   afterEach(() => {
     for (const k of ENV_KEYS) {
@@ -99,7 +115,15 @@ describe('landing wall', () => {
     const res = await app.inject({ method: 'GET', url: `${BASE}/public/wall` });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { data: Record<string, unknown> };
-    expect(Object.keys(body.data).sort()).toEqual(['date', 'highlight', 'items', 'others']);
+    expect(Object.keys(body.data).sort()).toEqual([
+      'cells',
+      'date',
+      'highlight',
+      'items',
+      'others',
+    ]);
+    // nothing hidden: every goal cell in cell order (the landing's domain list)
+    expect(body.data['cells']).toEqual(ALL_CELLS);
     expect(body.data['date']).toBe('2026-11-24');
     // first cell in goal cell order with six videos: 기술/개발
     expect(body.data['highlight']).toEqual(tech.map((v) => v.video_id));
@@ -183,6 +207,7 @@ describe('landing wall', () => {
 
     const far = fakeDb([{ cell: '기술/개발', seen_date: '2026-11-20', videos: old }]);
     expect(await readLandingWall(far.db, OWNER, NOW)).toEqual({
+      cells: ALL_CELLS,
       date: null,
       highlight: [],
       others: [],
@@ -192,6 +217,34 @@ describe('landing wall', () => {
     const none = fakeDb([]);
     expect((await readLandingWall(none.db, null, NOW)).highlight).toEqual([]);
     expect(none.sqls).toHaveLength(0);
+  });
+
+  it('MORNING_HIDDEN_CELLS: hidden cells are not queried, not on the wall, not in cells', async () => {
+    process.env['MORNING_HIDDEN_CELLS'] = TEST_HIDDEN.join(',');
+    const learn = videos(6, 'support');
+    const health = videos(6);
+    const tech = videos(3, 'support');
+    const art = videos(4);
+    const { db } = fakeDb([
+      { cell: '학습/교육', seen_date: '2026-11-24', videos: learn },
+      { cell: '건강/피트니스', seen_date: '2026-11-24', videos: health },
+      { cell: '기술/개발', seen_date: '2026-11-24', videos: tech },
+      { cell: '창작/예술', seen_date: '2026-11-24', videos: art },
+    ]);
+    const app = await build(db);
+    const res = await app.inject({ method: 'GET', url: `${BASE}/public/wall` });
+    const data = res.json().data as Record<string, unknown>;
+    const shown = ALL_CELLS.filter((c) => !TEST_HIDDEN.includes(c));
+    expect(data['cells']).toEqual(shown);
+    // the query itself only asks for the shown cells
+    expect((db.$queryRawUnsafe as jest.Mock).mock.calls[0]![4]).toEqual(shown);
+    const ids = [...(data['highlight'] as string[]), ...(data['others'] as string[])];
+    for (const v of [...learn, ...health]) expect(ids).not.toContain(v.video_id);
+    expect(ids.sort()).toEqual([...tech, ...art].map((v) => v.video_id).sort());
+    for (const h of TEST_HIDDEN) expect(res.body).not.toContain(h);
+    // no owner: still the shown domain list, no hidden one
+    expect((await readLandingWall(fakeDb([]).db, null, NOW)).cells).toEqual(shown);
+    await app.close();
   });
 
   it('keeps one answer for ten minutes', async () => {

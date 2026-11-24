@@ -30,8 +30,7 @@ import {
   ADD_LABEL,
   BRAND,
   CAPTIONS,
-  DOMAINS,
-  DOMAINS_LEAD,
+  domainsLead,
   FINAL_LINE,
   HERO_BODY,
   HERO_TITLE,
@@ -46,6 +45,7 @@ import {
   thumbUrl,
   WALL_CREDIT,
   WALL_PICK,
+  wallDomains,
   wallLetters,
   wallVideos,
   watchUrl,
@@ -139,9 +139,8 @@ function leaveInApp(app: InAppBrowser): void {
 const WALL = wallLetters(ILLU_CHANNELS);
 const PICKS: readonly number[] = WALL_PICK;
 const FONT_HEADLINES = [...HERO_TITLE, PRINCIPLE_TITLE, FINAL_LINE, ILLU.headline].join(' ');
-const FONT_UI = [HERO_BODY, PROBLEM, PROBLEM_ANSWER, ...CAPTIONS, DOMAINS_LEAD, ...DOMAINS].join(
-  ' '
-);
+// the domain names arrive with the wall (server list), so only the lead's glyphs are known here
+const FONT_UI = [HERO_BODY, PROBLEM, PROBLEM_ANSWER, ...CAPTIONS, domainsLead(0)].join(' ');
 
 export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   useViewportFitCover();
@@ -159,6 +158,8 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   const [busy, setBusy] = useState(false);
   /** The thumbnail wall once its data arrived; null = the letter tiles. */
   const [videos, setVideos] = useState<Array<WallVideo | null> | null>(null);
+  /** The shown domains from the wall answer; [] until it arrives (or when it fails). */
+  const [domains, setDomains] = useState<string[]>([]);
   const scroller = useRef<HTMLDivElement>(null);
   const pin = useRef<HTMLElement>(null);
   const card = useRef<HTMLDivElement>(null);
@@ -190,7 +191,9 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
     const abort = typeof AbortController === 'undefined' ? undefined : new AbortController();
     const wall = fetchLandingWall(abort?.signal).then(
       (data) => {
-        if (alive) setVideos(wallVideos(data));
+        if (!alive) return;
+        setVideos(wallVideos(data));
+        setDomains(wallDomains(data));
       },
       () => undefined
     );
@@ -438,10 +441,14 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
           </section>
 
           <section className="li-domains" data-rv="">
-            <p className="li-domains-lead">{DOMAINS_LEAD}</p>
+            {domains.length > 0 && (
+              <p className="li-domains-lead" data-testid="li-domains-lead">
+                {domainsLead(domains.length)}
+              </p>
+            )}
             <div className="li-domains-list">
-              {DOMAINS.map((d) => (
-                <div key={d} className="li-domain">
+              {domains.map((d) => (
+                <div key={d} className="li-domain" data-testid="li-domain">
                   {d}
                 </div>
               ))}

@@ -2,11 +2,12 @@
  * Landing wall (decision 2026-11-24): the signed-out landing page shows original YouTube
  * thumbnails of one day's briefs. This module reads the brief owner's pages of that day and
  * returns video ids plus the public metadata already stored with the page (title, channel).
- * Nothing about a user is returned. Read only; hidden pages (hidden_at set) are skipped.
+ * Nothing about a user is returned. Read only; hidden pages (hidden_at set) are skipped, and so
+ * are hidden cells (MORNING_HIDDEN_CELLS): `cells` lists only the shown domains, for the landing's
+ * domain list.
  */
 import { MS_PER_DAY, MS_PER_MINUTE } from '@/utils/time-constants';
 import {
-  FEED_CELLS,
   FeedValidationError,
   goalCellLabels,
   kstDayString,
@@ -28,6 +29,8 @@ export interface LandingWallItem {
   channel: string;
 }
 export interface LandingWall {
+  /** The shown goal cell labels in cell order (the landing's domain list); never a hidden one. */
+  cells: string[];
   /** The day the videos come from (YYYY-MM-DD), or null when there is none. */
   date: string | null;
   highlight: string[];
@@ -35,12 +38,10 @@ export interface LandingWall {
   items: Record<string, LandingWallItem>;
 }
 
-export const EMPTY_LANDING_WALL: LandingWall = Object.freeze({
-  date: null,
-  highlight: [],
-  others: [],
-  items: {},
-});
+/** No videos (no owner, or no page in the window); the domain list is still sent. */
+function emptyWall(cells: string[]): LandingWall {
+  return { cells, date: null, highlight: [], others: [], items: {} };
+}
 
 interface WallRow {
   cell: string;
@@ -87,7 +88,8 @@ export async function readLandingWall(
   ownerId: string | null,
   now: Date = new Date()
 ): Promise<LandingWall> {
-  if (!ownerId) return { ...EMPTY_LANDING_WALL };
+  const cells = goalCellLabels();
+  if (!ownerId) return emptyWall(cells);
   if (!/^[0-9a-f-]{36}$/i.test(ownerId)) throw new FeedValidationError('owner id must be a uuid');
   const today = kstDayString(now);
   const rows = await db.$queryRawUnsafe<WallRow[]>(
@@ -99,16 +101,14 @@ export async function readLandingWall(
     ownerId,
     today,
     dayBefore(today, LANDING_WALL_DAYS_BACK),
-    goalCellLabels()
+    cells
   );
-  if (rows.length === 0) return { ...EMPTY_LANDING_WALL };
+  if (rows.length === 0) return emptyWall(cells);
   const date = rows.map((r) => String(r.seen_date)).reduce((a, b) => (b > a ? b : a));
   const byCell = new Map(
     rows.filter((r) => String(r.seen_date) === date).map((r) => [r.cell, pageVideos(r.videos)])
   );
-  const order = FEED_CELLS.filter((c) => c.dom !== -1)
-    .map((c) => c.label)
-    .filter((label) => byCell.has(label));
+  const order = cells.filter((label) => byCell.has(label));
 
   const items: Record<string, LandingWallItem> = {};
   const used = new Set<string>();
@@ -140,5 +140,5 @@ export async function readLandingWall(
     for (const v of byCell.get(label) ?? []) take(v, others, LANDING_WALL_OTHERS);
   }
   if (chosen) for (const v of byCell.get(chosen) ?? []) take(v, others, LANDING_WALL_OTHERS);
-  return { date, highlight, others, items };
+  return { cells, date, highlight, others, items };
 }

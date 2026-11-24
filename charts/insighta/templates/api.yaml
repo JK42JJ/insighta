@@ -107,6 +107,8 @@ spec:
               value: {{ .Values.morningCards.briefOwnerId | default "" | quote }}
             - name: MORNING_EXPERIMENT_USER_IDS
               value: {{ .Values.morningCards.experimentUserIds | default "" | quote }}
+            - name: MORNING_HIDDEN_CELLS
+              value: {{ .Values.morningCards.hiddenCells | default "" | quote }}
 {{- end }}
           envFrom:
             - secretRef:

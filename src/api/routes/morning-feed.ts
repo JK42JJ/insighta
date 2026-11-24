@@ -30,7 +30,7 @@ import {
   getOrCreateWatchBatch,
   recordWatch,
   FeedValidationError,
-  isFeedCell,
+  isShownCell,
   kstDayString,
   saveFeedJudgment,
   type FeedDb,
@@ -100,11 +100,12 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
     // Landing wall (decision 2026-11-24): PUBLIC, no sign-in. Video ids, titles and channels of
     // one day's briefs (public YouTube metadata stored with the pages), nothing about a user.
     // The unauthenticated global rate limit (plugins/rate-limit.ts) applies; one answer is kept
-    // in memory for LANDING_WALL_CACHE_MS per brief owner and KST day.
+    // in memory for LANDING_WALL_CACHE_MS per brief owner, hidden cells and KST day.
     fastify.get('/public/wall', { onRequest: [flagGate] }, async (_request, reply) => {
       const at = now();
-      const owner = getMorningCardsConfig().briefOwnerId;
-      const key = `${owner ?? ''}|${kstDayString(at)}`;
+      const cfg = getMorningCardsConfig();
+      const owner = cfg.briefOwnerId;
+      const key = `${owner ?? ''}|${cfg.hiddenCells.join(',')}|${kstDayString(at)}`;
       if (
         !wallCache ||
         wallCache.key !== key ||
@@ -208,7 +209,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         const rawCell: unknown = request.query?.cell;
         let cell: string | undefined;
         if (rawCell !== undefined) {
-          if (!isFeedCell(rawCell)) {
+          if (!isShownCell(rawCell)) {
             return reply.code(400).send({ status: 'error', error: 'invalid_insight' });
           }
           cell = rawCell;
@@ -238,7 +239,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         const userId = guard(request, reply);
         if (!userId) return reply;
         const cell: unknown = (request.body ?? {}).cell;
-        if (!isFeedCell(cell)) {
+        if (!isShownCell(cell)) {
           return reply.code(400).send({ status: 'error', error: 'invalid_batch' });
         }
         const started = Date.now();
@@ -283,7 +284,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         const userId = guard(request, reply);
         if (!userId) return reply;
         const cell: unknown = request.query?.cell;
-        if (!isFeedCell(cell)) {
+        if (!isShownCell(cell)) {
           return reply.code(400).send({ status: 'error', error: 'invalid_insight' });
         }
         const data = await fetchWatchInsight(
@@ -340,7 +341,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         const userId = readerGuard(request, reply);
         if (!userId) return reply;
         const { cell, date } = request.query;
-        if (!isFeedCell(cell) || !isRealDate(date)) {
+        if (!isShownCell(cell) || !isRealDate(date)) {
           return reply.code(400).send({ status: 'error', error: 'invalid_page' });
         }
         const data = await readPageCards(
@@ -362,7 +363,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         const userId = readerGuard(request, reply);
         if (!userId) return reply;
         const { cell } = request.query;
-        if (!isFeedCell(cell)) {
+        if (!isShownCell(cell)) {
           return reply.code(400).send({ status: 'error', error: 'invalid_page' });
         }
         const data = await listPages(
@@ -383,7 +384,7 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         const userId = readerGuard(request, reply);
         if (!userId) return reply;
         const { cell, date } = request.query;
-        if (!isFeedCell(cell)) {
+        if (!isShownCell(cell)) {
           return reply.code(400).send({ status: 'error', error: 'invalid_page' });
         }
         if (!isRealDate(date)) {

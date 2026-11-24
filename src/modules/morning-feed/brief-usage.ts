@@ -5,6 +5,7 @@
 import {
   FeedValidationError,
   isFeedCell,
+  isShownCell,
   kstDayString,
   type FeedDb,
 } from '@/modules/morning-feed/feed';
@@ -77,7 +78,8 @@ export async function saveBriefFeedback(
   now: Date = new Date()
 ): Promise<BriefFeedbackRow> {
   if (!userId) throw new FeedValidationError('user_id required');
-  if (!isFeedCell(input.cell)) throw new FeedValidationError('unknown cell');
+  // a hidden cell's brief is not shown (MORNING_HIDDEN_CELLS), so it cannot be rated either
+  if (!isShownCell(input.cell)) throw new FeedValidationError('unknown cell');
   if (!isRealDate(input.date)) throw new FeedValidationError('invalid date');
   if (!(BRIEF_FEEDBACK_VALUES as readonly unknown[]).includes(input.value)) {
     throw new FeedValidationError('invalid value');

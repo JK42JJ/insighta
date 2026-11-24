@@ -38,6 +38,7 @@ const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 export const FEED_VERDICTS = ['useful', 'skip', 'pass'] as const;
 
 import { MS_PER_DAY, MS_PER_HOUR } from '@/utils/time-constants';
+import { getMorningCardsConfig } from '@/config/morning-cards';
 
 export interface FeedDb {
   $queryRawUnsafe<T = unknown>(sql: string, ...params: unknown[]): Promise<T>;
@@ -93,8 +94,23 @@ interface FeedRow {
 
 export class FeedValidationError extends Error {}
 
+/** A known goal cell (shown or hidden). Writers (page import, hide scripts) check this. */
 export function isFeedCell(label: unknown): label is string {
   return typeof label === 'string' && FEED_CELLS.some((c) => c.dom !== -1 && c.label === label);
+}
+
+/**
+ * The cells readers get (MORNING_HIDDEN_CELLS, decision 2026-11-24 usability test): FEED_CELLS
+ * without the hidden goal cells, same order; the centre cell is never hidden. Unset = FEED_CELLS.
+ */
+export function shownFeedCells(env: NodeJS.ProcessEnv = process.env): FeedCellDef[] {
+  const hidden = new Set(getMorningCardsConfig(env).hiddenCells);
+  return FEED_CELLS.filter((c) => c.dom === -1 || !hidden.has(c.label));
+}
+
+/** A goal cell readers are shown: known and not in MORNING_HIDDEN_CELLS. */
+export function isShownCell(label: unknown, env: NodeJS.ProcessEnv = process.env): label is string {
+  return isFeedCell(label) && !getMorningCardsConfig(env).hiddenCells.includes(label);
 }
 
 function windowStart(cell: FeedCellDef, now: Date): Date {
@@ -149,7 +165,9 @@ function viewsPerDay(row: FeedRow, now: Date): number {
  * Cards for the screen: per cell, annotated and active videos inside the cell's upload window,
  * at least 3 minutes long, not already judged by this user. Order: judge score, then views per
  * day (an ordering signal only, never an exclusion), then newest. The centre cell has no cards
- * of its own (the screen shows all cells there).
+ * of its own (the screen shows all cells there). MORNING_HIDDEN_CELLS does not apply here: the
+ * swipe deck is a test-account screen (participants get 403) laid out as a 3x3 grid of all nine
+ * positions, centre at index 4 (MorningFeed.tsx), so its grid keeps every cell.
  */
 export async function fetchFeed(
   db: FeedDb,
@@ -264,9 +282,11 @@ interface HistoryRow {
   count: number | bigint;
 }
 
-/** The 8 goal cells (the centre cell is not a goal). */
-export function goalCellLabels(): string[] {
-  return FEED_CELLS.filter((c) => c.dom !== -1).map((c) => c.label);
+/** The shown goal cells (the centre cell is not a goal; hidden cells are left out), cell order. */
+export function goalCellLabels(env: NodeJS.ProcessEnv = process.env): string[] {
+  return shownFeedCells(env)
+    .filter((c) => c.dom !== -1)
+    .map((c) => c.label);
 }
 
 /**
@@ -295,7 +315,7 @@ export async function fetchHistory(
     FEED_HISTORY_MAX
   );
   return rows
-    .filter((r) => isFeedCell(r.cell))
+    .filter((r) => isShownCell(r.cell))
     .map((r) => ({ cell: r.cell, day: String(r.day), count: Number(r.count) }))
     .slice(0, FEED_HISTORY_MAX);
 }
@@ -498,15 +518,21 @@ export async function fetchInsight(
   opts: FetchInsightOptions = {}
 ): Promise<FeedInsight> {
   if (!userId) throw new FeedValidationError('user_id required');
-  if (opts.cell !== undefined && !isFeedCell(opts.cell)) {
+  if (opts.cell !== undefined && !isShownCell(opts.cell)) {
     throw new FeedValidationError('unknown cell');
   }
   const { kst, start: dayStartUtc, end: dayEndUtc } = kstDayBounds(now);
   const params: unknown[] = [userId, dayStartUtc, dayEndUtc];
   let cellFilter = '';
+  // hidden cells (MORNING_HIDDEN_CELLS) are left out; with none hidden the query is as before
+  const hidden = getMorningCardsConfig().hiddenCells;
+  if (hidden.length > 0) {
+    params.push([...hidden]);
+    cellFilter += ` AND NOT (j.cell = ANY($${params.length}::text[]))`;
+  }
   if (opts.cell !== undefined) {
     params.push(opts.cell);
-    cellFilter = ` AND j.cell = $${params.length}`;
+    cellFilter += ` AND j.cell = $${params.length}`;
   }
   const rows = await db.$queryRawUnsafe<InsightRow[]>(
     `SELECT DISTINCT ON (j.video_id) j.video_id, j.verdict, j.cell, j.created_at,
@@ -599,7 +625,7 @@ export interface WatchToday {
   day: string;
   daily: number;
   cells: FeedCellDef[];
-  /** One entry per goal cell (8). */
+  /** One entry per shown goal cell (8 unless MORNING_HIDDEN_CELLS is set). */
   today: Record<string, WatchTodayCell>;
 }
 
@@ -646,7 +672,7 @@ const WATCH_CANDIDATE_WHERE = `
 
 function assertGoalCell(userId: string, cell: unknown): asserts cell is string {
   if (!userId) throw new FeedValidationError('user_id required');
-  if (!isFeedCell(cell)) throw new FeedValidationError('unknown cell');
+  if (!isShownCell(cell)) throw new FeedValidationError('unknown cell');
 }
 
 async function selectBatchIds(
@@ -812,7 +838,7 @@ export async function fetchWatchTodayBatches(
       entry.available = 0;
     }
   }
-  return { day, daily: WATCH_DAILY_VIDEOS, cells: [...FEED_CELLS], today };
+  return { day, daily: WATCH_DAILY_VIDEOS, cells: shownFeedCells(), today };
 }
 
 /**

@@ -388,6 +388,8 @@ export interface LandingWallItem {
 
 /** GET /morning-feed/public/wall: the landing wall's video ids (public, no sign-in). */
 export interface LandingWall {
+  /** The shown domains (goal cell labels, hidden ones left out) in cell order; the landing lists them. */
+  cells?: string[];
   date: string | null;
   highlight: string[];
   others: string[];

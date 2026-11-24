@@ -2,16 +2,18 @@
  * Morning feed pages: one read-only page per (user, goal cell, seen date), shown on the watch home.
  * Pages are imported by scripts/morning-pages/import-page.ts; this module validates the page JSON
  * and reads rows. It never writes. Hidden pages (hidden_at set, see 009_pages_hidden.sql) are
- * withdrawn: every read here skips them.
+ * withdrawn: every read here skips them. So are the pages of hidden cells (MORNING_HIDDEN_CELLS):
+ * no reader here returns a hidden cell or its pages.
  */
 import {
-  FEED_CELLS,
   type FeedCellDef,
   FeedValidationError,
   goalCellLabels,
   isFeedCell,
+  isShownCell,
   kstDayString,
   selectBatchCards,
+  shownFeedCells,
   selectWatchVerdicts,
   WATCH_SURFACE,
   type FeedCard,
@@ -75,7 +77,7 @@ export interface PageSummary {
   headline: string;
 }
 export interface HomePages {
-  /** Goal cells in /watch/today order (FEED_CELLS), so a reader without that route still has the list. */
+  /** Shown cells in /watch/today order (shownFeedCells), so a reader without that route still has the list. */
   cells: FeedCellDef[];
   current: Page | null;
   lastDomain: string | null;
@@ -286,7 +288,7 @@ export async function readHomePages(
     WATCH_SURFACE,
     goalCellLabels()
   );
-  const lastDomain = last[0] && isFeedCell(last[0].cell) ? last[0].cell : null;
+  const lastDomain = last[0] && isShownCell(last[0].cell) ? last[0].cell : null;
 
   const newest = await db.$queryRawUnsafe<PageRow[]>(
     `SELECT DISTINCT ON (p.cell) ${PAGE_COLUMNS}
@@ -299,7 +301,8 @@ export async function readHomePages(
     goalCellLabels()
   );
   const byCell = new Map(newest.map((r) => [r.cell, r]));
-  const order = FEED_CELLS.filter((c) => c.dom !== -1).map((c) => c.label);
+  const cells = shownFeedCells();
+  const order = goalCellLabels();
   // fallback: newest seen date; equal dates keep goal cell order
   const newestAny = order
     .map((label) => byCell.get(label))
@@ -316,7 +319,7 @@ export async function readHomePages(
     if (r) others.push({ domain: r.cell, seen_date: String(r.seen_date), headline: r.headline });
   }
   return {
-    cells: [...FEED_CELLS],
+    cells,
     current: currentRow ? rowToPage(currentRow) : null,
     lastDomain,
     others,
@@ -343,7 +346,8 @@ async function readGoal(db: FeedDb, userId: string): Promise<string | null> {
 
 /**
  * One page by key, or null. A page dated after today (KST) is not shown yet: pages can be
- * imported the night before (decision 2026-11-14), so every reader stops at today.
+ * imported the night before (decision 2026-11-14), so every reader stops at today. A hidden
+ * cell's page is null too.
  */
 export async function readPage(
   db: FeedDb,
@@ -356,6 +360,7 @@ export async function readPage(
   if (!userId) throw new FeedValidationError('user_id required');
   if (!isFeedCell(cell)) throw new FeedValidationError('unknown cell');
   if (!isRealDate(date)) throw new FeedValidationError('invalid date');
+  if (!isShownCell(cell)) return null;
   const rows = await db.$queryRawUnsafe<PageRow[]>(
     `SELECT ${PAGE_COLUMNS} FROM public.morning_pages p
       WHERE p.user_id = $1::uuid AND p.cell = $2 AND p.seen_date = $3::date
@@ -368,7 +373,7 @@ export async function readPage(
   return rows[0] ? rowToPage(rows[0]) : null;
 }
 
-/** Pages of one domain up to today (KST), newest first, at most PAGES_LIST_MAX. */
+/** Pages of one domain up to today (KST), newest first, at most PAGES_LIST_MAX; none for a hidden cell. */
 export async function listPages(
   db: FeedDb,
   userId: string,
@@ -378,6 +383,7 @@ export async function listPages(
 ): Promise<Array<{ seen_date: string; headline: string }>> {
   if (!userId) throw new FeedValidationError('user_id required');
   if (!isFeedCell(cell)) throw new FeedValidationError('unknown cell');
+  if (!isShownCell(cell)) return [];
   const rows = await db.$queryRawUnsafe<PageRow[]>(
     `SELECT to_char(p.seen_date, 'YYYY-MM-DD') AS seen_date, p.headline
        FROM public.morning_pages p

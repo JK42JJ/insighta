@@ -1,6 +1,6 @@
 /**
  * Mobile morning cards (PRD #1788). stg-only; unset = off (no-op).
- * Non-secret settings: flag + comma-separated test account user ids.
+ * Non-secret settings: flag + comma-separated test account user ids, hidden goal cells.
  */
 import { z } from 'zod';
 
@@ -31,6 +31,11 @@ export const morningCardsEnvSchema = z.object({
   }, z.string().uuid().nullable()),
   /** Accounts that keep the experiment UI (video batches, viewing order). Also needs the test list. */
   MORNING_EXPERIMENT_USER_IDS: idListFromEnv,
+  /**
+   * Goal cell labels no reader is shown (usability test 2026-11-26: briefs exist for 5 of the 8
+   * domains). Comma list, e.g. "학습/교육,건강/피트니스". Unset = every cell (the earlier behaviour).
+   */
+  MORNING_HIDDEN_CELLS: idListFromEnv,
 });
 
 export interface MorningCardsConfig {
@@ -40,6 +45,8 @@ export interface MorningCardsConfig {
   /** Account whose pages everyone reads; null = each user reads their own. */
   briefOwnerId: string | null;
   experimentUserIds: readonly string[];
+  /** Goal cell labels hidden from every reader; empty = all shown. */
+  hiddenCells: readonly string[];
 }
 
 export function getMorningCardsConfig(env: NodeJS.ProcessEnv = process.env): MorningCardsConfig {
@@ -49,6 +56,7 @@ export function getMorningCardsConfig(env: NodeJS.ProcessEnv = process.env): Mor
     MORNING_VIRTUAL_DAY_USER_IDS: env['MORNING_VIRTUAL_DAY_USER_IDS'],
     MORNING_BRIEF_OWNER_ID: env['MORNING_BRIEF_OWNER_ID'],
     MORNING_EXPERIMENT_USER_IDS: env['MORNING_EXPERIMENT_USER_IDS'],
+    MORNING_HIDDEN_CELLS: env['MORNING_HIDDEN_CELLS'],
   });
   return {
     enabled: parsed.MOBILE_MORNING_CARDS,
@@ -56,6 +64,7 @@ export function getMorningCardsConfig(env: NodeJS.ProcessEnv = process.env): Mor
     virtualDayUserIds: parsed.MORNING_VIRTUAL_DAY_USER_IDS,
     briefOwnerId: parsed.MORNING_BRIEF_OWNER_ID,
     experimentUserIds: parsed.MORNING_EXPERIMENT_USER_IDS,
+    hiddenCells: parsed.MORNING_HIDDEN_CELLS,
   };
 }
 

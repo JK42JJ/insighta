@@ -48,17 +48,18 @@ export const PRINCIPLE_TITLE = '왜곡 없는 정보를 지향합니다';
 export const PRINCIPLE_BODY =
   '그래서 모든 문장에 출처를 표시해 두었어요. 글은 어떤 영상을 볼지 고를 때 참고하시고, 궁금한 부분은 영상으로 직접 확인해 보세요.';
 
-export const DOMAINS_LEAD = '지금은 8개 분야에서 골라 드려요.';
-export const DOMAINS = [
-  '비즈니스/커리어',
-  '재테크/투자',
-  '학습/교육',
-  '건강/피트니스',
-  '인간관계/커뮤니티',
-  '창작/예술',
-  '라이프스타일/여행',
-  '기술/개발',
-] as const;
+/**
+ * The domain list is the server's (GET /morning-feed/public/wall `cells`: the shown goal cells,
+ * MORNING_HIDDEN_CELLS left out), so no domain is listed here (decision 2026-11-24 usability test).
+ */
+export const domainsLead = (count: number): string => `지금은 ${count}개 분야에서 골라 드려요.`;
+
+/** The wall answer's domain labels, or [] when it has none (older server, failed request). */
+export function wallDomains(data: { cells?: readonly unknown[] } | null | undefined): string[] {
+  const cells = data?.cells;
+  if (!Array.isArray(cells)) return [];
+  return cells.filter((c): c is string => typeof c === 'string' && c.trim() !== '');
+}
 export const ADD_LABEL = 'ADD';
 
 export const FINAL_LINE = 'Google 계정으로 로그인하면 오늘의 영상을 바로 볼 수 있어요.';
@@ -115,6 +116,8 @@ export interface WallVideo {
 
 /** The thumbnail wall's input (GET /morning-feed/public/wall). */
 export interface WallData {
+  /** The shown domains (goal cell labels) in cell order. */
+  cells?: readonly string[];
   highlight: readonly string[];
   others: readonly string[];
   items: Readonly<Record<string, { title?: string; channel?: string } | undefined>>;
