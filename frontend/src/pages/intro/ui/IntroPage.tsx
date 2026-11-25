@@ -26,7 +26,7 @@ import { useViewportFitCover } from '@/features/morning-feed/use-watch-frame';
 import { ensureHomeFonts } from '@/features/morning-feed/watch-home-fonts';
 
 import { DOT_LABEL, STAGE_LABEL, wallDomains } from '../model/landing-content';
-import { LANDING_EXAMPLE, type PlayTarget } from '../model/landing-example';
+import { LANDING_EXAMPLE, withoutVideos, type PlayTarget } from '../model/landing-example';
 import {
   DECK_ARRIVE_MS,
   DECK_CYCLE_MS,
@@ -131,6 +131,13 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
   const [deckAr, setDeckAr] = useState(-1);
   const [vp, setVp] = useState(viewport);
   const [busy, setBusy] = useState(false);
+  /** Videos whose thumbnail could not be loaded: another evidence video takes their place. */
+  const [dead, setDead] = useState<ReadonlySet<string>>(() => new Set());
+  const ex = useMemo(() => withoutVideos(LANDING_EXAMPLE, dead), [dead]);
+  const onDead = useCallback(
+    (id: string): void => setDead((d) => (d.has(id) ? d : new Set([...d, id]))),
+    []
+  );
   /** The shown domains from the wall answer; [] while it loads and when it fails (no list then). */
   const [domains, setDomains] = useState<string[]>([]);
 
@@ -403,6 +410,8 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
                 }}
               >
                 <ScenePane
+                  ex={ex}
+                  onDead={onDead}
                   s={pane.s}
                   ph={main ? ph : 0}
                   live={live}

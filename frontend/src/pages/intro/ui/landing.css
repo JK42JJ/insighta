@@ -54,9 +54,6 @@
   --lv-wall-line2-0: rgba(232, 201, 140, 0.85);
   --lv-wall-line2-1: rgba(247, 245, 240, 0.5);
   --lv-wall-line2-2: rgba(247, 245, 240, 0.35);
-  --lv-wall-disc: rgba(255, 255, 255, 0.28);
-  --lv-wall-disc-end: rgba(255, 255, 255, 0.06);
-  --lv-wall-time: rgba(0, 0, 0, 0.55);
   --lv-wall-sheen: rgba(255, 255, 255, 0.1);
   --lv-wall-shade: rgba(0, 0, 0, 0.12);
   --lv-wall-fog-0: rgba(247, 245, 240, 0.92);
@@ -352,21 +349,6 @@
   height: 8px;
   border-radius: 2px;
 }
-.lv-wall-disc {
-  position: absolute;
-  bottom: -12px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, var(--lv-wall-disc), var(--lv-wall-disc-end) 70%);
-}
-.lv-wall-time {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  width: 20px;
-  height: 9px;
-  border-radius: 2px;
-  background: var(--lv-wall-time);
-}
 .lv-wall-fog {
   position: absolute;
   inset: 0;
@@ -411,6 +393,10 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--lv-ink);
+}
+.lv-band-ch {
+  font-weight: 400;
+  color: var(--lv-sub);
 }
 .lv-band-av {
   width: 22px;
@@ -520,7 +506,7 @@
   height: 36px;
   border-radius: 5px;
   box-shadow: var(--lv-sh-deck-thumb);
-  object-fit: fill;
+  object-fit: contain;
 }
 .lv-fade-top {
   position: absolute;
@@ -714,7 +700,10 @@
 .lv-surf {
   position: absolute;
   overflow: hidden;
-  background: var(--lv-navy);
+}
+.lv-thumb[data-dead],
+.lv-deck-thumb[data-dead] {
+  visibility: hidden;
 }
 .lv-thumb {
   position: absolute;
@@ -722,7 +711,7 @@
   top: 0;
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: contain;
   display: block;
 }
 .lv-cell-name {

@@ -66,7 +66,7 @@ import {
   wallDomains,
   YT_CREDIT,
   YT_ICON_ALT,
-  ytPlayLabel,
+  ytPageLabel,
 } from '@/pages/intro/model/landing-content';
 import {
   checkLandingExample,
@@ -75,7 +75,9 @@ import {
   embedUrl,
   heroPlay,
   LANDING_EXAMPLE,
+  THUMB_MISSING_W,
   timeToSeconds,
+  withoutVideos,
 } from '@/pages/intro/model/landing-example';
 import {
   addSample,
@@ -687,20 +689,71 @@ describe('YouTube policy', () => {
     }
   });
 
-  it('attribution is shown in every scene with thumbnails, and in the last sheet', () => {
+  it('one icon per scene with videos and no words; the words are in the last sheet only', () => {
     draw();
-    // the row is drawn anew per scene
-    const credit = (): HTMLElement => screen.getByTestId('lv-credit');
-    expect(credit().textContent).toBe(YT_CREDIT);
+    const page = (): HTMLElement => document.querySelector<HTMLElement>('[data-page="0"]')!;
+    const icons = (): number =>
+      [...page().querySelectorAll<HTMLElement>('a.lv-yt')].filter((a) => a.tabIndex === 0).length;
     for (const s of [0, 1, 2, 3, 4, 5] as const) {
       goTo(s);
-      expect(credit().style.opacity).toBe('1');
-      expect(credit().getAttribute('aria-hidden')).toBeNull();
-      expect(credit().textContent).toBe(YT_CREDIT);
+      expect([s, icons()]).toEqual([s, 1]);
+      const words = page().querySelector('[data-testid="lv-credit"]')!.textContent;
+      expect([s, words]).toEqual([s, '']);
     }
     goTo(7);
-    expect(credit().style.opacity).toBe('0');
+    expect(icons()).toBe(0);
     expect(screen.getByTestId('lv-sheet-credit').textContent).toBe('영상 출처: YouTube');
+  });
+
+  it('a channel name is drawn only where one video is shown large (scenes 2 and 6)', () => {
+    for (const s of SEQ) {
+      const v = buildScene(s, 2, false, null);
+      expect(v.cells.every((c) => c.no === 0)).toBe(true);
+      expect([s, v.band.o]).toEqual([s, s === 1 || s === 5 ? 1 : 0]);
+    }
+  });
+
+  it('the drawn background tiles have no play sign and stay low behind thumbnails', () => {
+    draw();
+    expect(document.querySelector('[class*="lv-wall-disc"], [class*="lv-wall-time"]')).toBeNull();
+    for (const s of [1, 2] as const) {
+      for (const ph of [0, 1, 2] as const) expect(buildScene(s, ph, true, null).wall.o).toBe(0.32);
+    }
+  });
+
+  it('a thumbnail that does not load: hqdefault, then another evidence video takes its place', () => {
+    example.swap = true;
+    draw();
+    goTo(2);
+    const ids = (): string[] => [
+      ...new Set(
+        [...document.querySelectorAll<HTMLImageElement>('[data-page="0"] img.lv-thumb')].map(
+          (i) => /vi\/([\w-]{11})/.exec(i.src)![1]!
+        )
+      ),
+    ];
+    const before = ids();
+    const img = (): HTMLImageElement =>
+      document.querySelector<HTMLImageElement>('[data-page="0"] [data-testid="lv-cell"] img')!;
+    const gone = /vi\/([\w-]{11})/.exec(img().src)![1]!;
+    expect(img().src).toContain('/mqdefault.jpg');
+    fireEvent.error(img());
+    expect(img().src).toContain(`${gone}/hqdefault.jpg`);
+    // a missing picture answers 120px wide instead of an error
+    Object.defineProperty(img(), 'naturalWidth', { value: THUMB_MISSING_W, configurable: true });
+    fireEvent.load(img());
+    expect(ids()).toEqual(before.filter((x) => x !== gone));
+  });
+
+  it('withoutVideos keeps the hero, the cited sources and at least three videos', () => {
+    const ex = LANDING_EXAMPLE;
+    const hero = ex.videos[ex.heroIndex]!;
+    const other = ex.videos.find((v) => v !== hero)!;
+    const cut = withoutVideos(ex, new Set([other.id, hero.id]));
+    expect(cut.videos).not.toContain(other);
+    expect(cut.videos[cut.heroIndex]).toBe(hero);
+    expect(checkLandingExample(cut)).toEqual([]);
+    expect(withoutVideos(ex, new Set(ex.videos.map((v) => v.id)))).toBe(ex);
   });
 
   it('the big card after the source tap plays on the landing from the source time', () => {
@@ -729,7 +782,8 @@ describe('YouTube policy', () => {
   it('the player: Escape closes it; a swipe on it does not change the scene', () => {
     draw();
     goTo(5);
-    fireEvent.click(screen.getByTestId('lv-yt'));
+    waitLock();
+    fireEvent.click(screen.getByTestId('lv-hero'));
     const p = screen.getByTestId('lv-player');
     fireEvent.pointerDown(p, { clientY: 400 });
     fireEvent.pointerUp(p, { clientY: 200 });
@@ -739,20 +793,20 @@ describe('YouTube policy', () => {
     expect(screen.queryByTestId('lv-player')).toBeNull();
   });
 
-  it('no way out of Insighta: no link in any scene, with the player open too (James 2026-11-25)', () => {
+  it('only the icon leads to YouTube: videos and thumbnails play on the landing (James 2026-11-25)', () => {
     draw();
-    const links = (): number =>
-      document.querySelectorAll('a[href], a[target], [target="_blank"]').length;
     for (const s of [0, 1, 2, 3, 4, 5, 7] as const) {
       goTo(s);
-      expect([s, links()]).toEqual([s, 0]);
+      const links = [...document.querySelectorAll<HTMLAnchorElement>('a[href], [target="_blank"]')];
+      expect(links.every((a) => a.classList.contains('lv-yt'))).toBe(true);
     }
     cleanup();
     draw();
     goTo(5);
+    waitLock();
+    expect(screen.getByTestId('lv-hero').tagName).toBe('BUTTON');
     fireEvent.click(screen.getByTestId('lv-hero'));
-    expect(links()).toBe(0);
-    // the only YouTube address is the embedded player's
+    expect(screen.getByTestId('lv-player').querySelector('a')).toBeNull();
     expect(embedUrl(heroPlay())).toMatch(/^https:\/\/www\.youtube\.com\/embed\//);
     expect(embedUrl(heroPlay())).toContain('playsinline=1');
   });
@@ -761,8 +815,13 @@ describe('YouTube policy', () => {
 describe('YouTube Icon next to the thumbnails (YouTube API branding guidelines)', () => {
   const HERO_ID = LANDING_EXAMPLE.videos[LANDING_EXAMPLE.heroIndex]!.id;
   const icon = (a: HTMLElement): HTMLImageElement => a.querySelector('img') as HTMLImageElement;
+  /** The video's YouTube page, in a new tab. */
+  const page = (id: string, start = 0): string =>
+    `https://www.youtube.com/watch?v=${id}${start ? `&t=${start}s` : ''}`;
   function expectOfficial(a: HTMLElement): void {
-    expect(a.tagName).toBe('BUTTON');
+    expect(a.tagName).toBe('A');
+    expect((a as HTMLAnchorElement).target).toBe('_blank');
+    expect((a as HTMLAnchorElement).rel).toContain('noopener');
     const img = icon(a);
     // the official file, whole, in its own proportions, nothing applied to it
     expect(img.getAttribute('src')).toContain('yt_icon_red_digital');
@@ -790,11 +849,9 @@ describe('YouTube Icon next to the thumbnails (YouTube API branding guidelines)'
     expectOfficial(a);
     expect(a.tabIndex).toBe(0);
     expect(a.getAttribute('aria-label')).toBe(
-      ytPlayLabel(LANDING_EXAMPLE.videos[LANDING_EXAMPLE.heroIndex]!.channel)
+      ytPageLabel(LANDING_EXAMPLE.videos[LANDING_EXAMPLE.heroIndex]!.channel)
     );
-    fireEvent.click(a);
-    expectPlays(HERO_ID, 0);
-    fireEvent.click(screen.getByTestId('lv-player-close'));
+    expect((a as HTMLAnchorElement).href).toBe(page(HERO_ID));
     // the row icon is not in scene 1 (the deck has its own)
     expect(screen.queryByTestId('lv-yt')).toBeNull();
     goTo(1);
@@ -808,9 +865,7 @@ describe('YouTube Icon next to the thumbnails (YouTube API branding guidelines)'
       goTo(s);
       const a = screen.getByTestId('lv-yt');
       expectOfficial(a);
-      fireEvent.click(a);
-      expectPlays(HERO_ID, s === 5 ? heroPlay().start : 0);
-      fireEvent.click(screen.getByTestId('lv-player-close'));
+      expect((a as HTMLAnchorElement).href).toBe(page(HERO_ID, s === 5 ? heroPlay().start : 0));
       expect(a.style.pointerEvents).toBe('auto');
       expect(a.tabIndex).toBe(0);
       // no plate of its own: the ground under the row is one solid colour (the hero card in scenes
@@ -852,23 +907,30 @@ describe('YouTube Icon next to the thumbnails (YouTube API branding guidelines)'
     draw();
     const ex = LANDING_EXAMPLE;
     const hero = ex.videos[ex.heroIndex]!;
-    fireEvent.click(screen.getByTestId('lv-yt-deck'));
-    expectPlays(hero.id, 0);
-    fireEvent.click(screen.getByTestId('lv-player-close'));
+    expect((screen.getByTestId('lv-yt-deck') as HTMLAnchorElement).href).toBe(page(hero.id));
     goTo(5);
-    fireEvent.click(screen.getByTestId('lv-yt'));
-    expectPlays(hero.id, timeToSeconds(ex.heroTime));
+    expect((screen.getByTestId('lv-yt') as HTMLAnchorElement).href).toBe(
+      page(hero.id, timeToSeconds(ex.heroTime))
+    );
   });
 
-  it('a swipe that ends on the icon plays nothing', () => {
+  it('a swipe that ends on the icon opens nothing', () => {
     draw();
     goTo(2);
-    swipe(-80); // to scene 4 (s=3); the click that ends a swipe is not a tap
-    fireEvent.click(screen.getByTestId('lv-yt'));
-    expect(screen.queryByTestId('lv-player')).toBeNull();
+    swipe(-80);
+    const click = (): boolean => {
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+      screen.getByTestId('lv-yt').addEventListener('click', (e) => e.preventDefault(), {
+        once: true,
+        passive: false,
+      });
+      ev.preventDefault = vi.fn(ev.preventDefault.bind(ev));
+      screen.getByTestId('lv-yt').dispatchEvent(ev);
+      return vi.mocked(ev.preventDefault).mock.calls.length > 1; // the page's own, besides the test's
+    };
+    expect(click()).toBe(true);
     waitLock();
-    fireEvent.click(screen.getByTestId('lv-yt'));
-    expect(screen.getByTestId('lv-player')).toBeTruthy();
+    expect(click()).toBe(false);
   });
 });
 
@@ -1172,6 +1234,7 @@ describe('nothing over a thumbnail (James 2026-11-25)', () => {
     expect(buildScene(4, 0, true, null).bar.tr).toBe('opacity 0s');
     for (const c of buildScene(3, 0, true, null).cells) expect(c.trn).toBe('opacity 0s');
     draw();
+    goTo(1);
     expect(screen.getByTestId('lv-credit').hasAttribute('data-in')).toBe(true);
   });
 
@@ -1295,10 +1358,11 @@ describe('3 to 6 evidence videos: every scene lays them out', () => {
     const last = tiles.filter((r) => r.t === lastTop);
     const mid = (Math.min(...last.map((r) => r.l)) + Math.max(...last.map((r) => r.l + r.w))) / 2;
     expect(mid).toBeCloseTo(STAGE_W / 2, 0);
-    // five and six keep the design's attribution row (458); four are 2x2, larger tiles
-    expect(buildScene(2, 2, false, null, 0, ex).credit.top).toBe(
-      { 3: 354, 4: 522, 5: 458, 6: 458 }[n]
-    );
+    // the tiles and the icon are one group, centred between the text (246) and the button (582)
+    const top = Math.min(...tiles.map((x) => x.t));
+    const end = buildScene(2, 2, false, null, 0, ex).credit.top + YT_ICON_BOX_H;
+    expect(top - 246).toBeCloseTo(582 - end, 0);
+    expect(top).toBeGreaterThanOrEqual(246);
     if (n === 4) expect(new Set(tiles.map((r) => r.t)).size).toBe(2);
     // the thumbnails are 16:9 (YouTube thumbnails unaltered)
     for (const c of buildScene(2, 2, false, null, 0, ex).cells) {
@@ -1333,7 +1397,8 @@ describe('3 to 6 evidence videos: every scene lays them out', () => {
       expect(screen.getByTestId('lv-card').textContent).toContain(`· 채널${n - 2} 07:00`);
       for (const c of screen.getAllByTestId('lv-cell')) expect(c.style.opacity).toBe('1');
       fireEvent.click(screen.getByTestId('lv-source'));
-      fireEvent.click(screen.getByTestId('lv-yt'));
+      waitLock();
+      fireEvent.click(screen.getByTestId('lv-hero'));
       expectPlays(ex.videos[2]!.id, 65);
     }
   );

@@ -136,25 +136,19 @@ export const YT_ICON_BOX_H = (YT_ICON_MARK_PX * YT_ICON_FILE_H) / YT_ICON_MARK_F
 export const YT_ICON_BOX_W = (YT_ICON_BOX_H * YT_ICON_FILE_W) / YT_ICON_FILE_H;
 
 /*
- * The YouTube attribution per scene (design coordinates, right-aligned to the content edge).
- * Not drawn in the design except in the last sheet; its unused `yt` positions (s=2 472, s=5 368)
- * and colours are used where they exist; scene 2 (s=1) puts it on the channel band's row (the
- * design's 500 would touch the band's edge), scenes 1, 4 and 5 (s=0, 3, 4) take the free row under
- * the deck / chips.
+ * The YouTube attribution (James 2026-11-25, API policy III.F.2.a): one icon per scene with videos,
+ * at the corner of the video area, no words; scene 1 has it in the deck card, the last sheet keeps
+ * its line of text. Scenes 2 and 6: in the hero card's channel row (creditTopIn); 3: under the tiles
+ * (card2CreditTop); 4, 5: under the chips (readGroup).
  */
-const CREDIT_TOP: Readonly<Partial<Record<Scene, number>>> = {
-  0: 558,
-  // 1, 5: in the hero card's channel row (creditTopIn); 2: under the tiles (card2CreditTop)
-  // 3, 4: under the chips (readGroup)
-};
 /** The solid ground of scenes 3-5's attribution row starts this far above it (a soft edge). */
 export const GROUND_EDGE = 28;
 /** Scene 3's attribution row sits this far under the tiles' last row (design: 452 -> 458). */
 const CREDIT_UNDER_TILES = 6;
-/** Scenes whose attribution row carries the icon (s=0 has it in the deck card instead). */
+/** Scenes whose icon is drawn by the attribution row (scene 1 has it in the deck card). */
 const CREDIT_ICON: ReadonlySet<Scene> = new Set<Scene>([1, 2, 3, 4, 5]);
 /** Right edge: the scene texts' (40, clear of the dots); in the hero card: its padding (28 + 16). */
-const CREDIT_RIGHT = 40;
+const CREDIT_RIGHT = 28;
 const CREDIT_RIGHT_BAND = 44;
 
 const X = 28;
@@ -212,18 +206,24 @@ interface TileGrid {
   /** Thumbnail height (16:9). */
   th: number;
 }
-const TILES: TileGrid = { cols: 3, dx: 114, dy: 104, w: 106, th: 60 };
+const TILES: TileGrid = { cols: 3, dx: 114, dy: 68, w: 106, th: 60 };
 /** Four videos: 2x2 over the same 334px column, so no tile is left alone in a row. */
-const TILES_FOUR: TileGrid = { cols: 2, dx: 171, dy: 136, w: 163, th: 92 };
+const TILES_FOUR: TileGrid = { cols: 2, dx: 171, dy: 100, w: 163, th: 92 };
 const FOUR_VIDEOS = 4;
 /** Tiles to chips (s): narrow, then drop; chips that were hidden show after that. */
 const CHIP_NARROW_S = 0.35;
 const CHIP_DROP_S = 0.4;
 const CHIPS_IN_S = 0.8;
-const TILES_TOP = 262;
-/** The channel name under a thumbnail: gap, and the tile's room for it (design 4, 26). */
-const TILE_NAME_GAP = 4;
-const TILE_NAME_ROOM = 26;
+/** The tiles and the icon under them are one group in the room between the text and the button. */
+const TILES_ROOM_TOP = 246;
+const TILES_ROOM_BOTTOM = 582;
+const tilesH = (n: number): number => {
+  const g = tileGrid(n);
+  return (Math.ceil(n / g.cols) - 1) * g.dy + g.th;
+};
+const tilesTop = (n: number): number =>
+  TILES_ROOM_TOP +
+  (TILES_ROOM_BOTTOM - TILES_ROOM_TOP - tilesH(n) - CREDIT_UNDER_TILES - YT_ICON_BOX_H) / 2;
 const tileGrid = (n: number): TileGrid => (n === FOUR_VIDEOS ? TILES_FOUR : TILES);
 /** The k-th of n tiles; a last row that is not full is centred. */
 const card2 = (k: number, n: number): Box => {
@@ -232,17 +232,13 @@ const card2 = (k: number, n: number): Box => {
   const inRow = Math.min(g.cols, n - row * g.cols);
   return {
     x: X + (k % g.cols) * g.dx + ((g.cols - inRow) * g.dx) / 2,
-    y: TILES_TOP + row * g.dy,
+    y: tilesTop(n) + row * g.dy,
     w: g.w,
-    h: g.th + TILE_NAME_ROOM,
+    h: g.th,
   };
 };
 /** Where scene 3's attribution row goes for n tiles (458 for the design's two rows). */
-const card2CreditTop = (n: number): number => {
-  const g = tileGrid(n);
-  const rows = Math.ceil(n / g.cols);
-  return TILES_TOP + (rows - 1) * g.dy + g.th + TILE_NAME_ROOM + CREDIT_UNDER_TILES;
-};
+const card2CreditTop = (n: number): number => tilesTop(n) + tilesH(n) + CREDIT_UNDER_TILES;
 /** Scenes 4/5: the chips share the content column (six: the design's 50x28.1). */
 const CHIP_GAP = 6.8;
 const chipW = (n: number): number => (HERO_W - (Math.max(n, 3) - 1) * CHIP_GAP) / Math.max(n, 3);
@@ -283,11 +279,10 @@ interface Surf {
   w: number;
   h: number;
   o: number;
-  r: number;
 }
 const SURF: Record<Mode, (b: Box) => Surf> = {
   grid: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 6 }),
-  card2: (b) => ({ l: 0, t: 0, w: b.w, h: b.h - TILE_NAME_ROOM, o: 1, r: 8 }),
+  card2: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 8 }),
   chip: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 0 }),
   big: () => ({ l: 0, t: 0, w: 334, h: 188, o: 1, r: 0 }),
   feed: (b) => ({ l: 0, t: 0, w: b.w, h: b.h, o: 1, r: 0 }),
@@ -297,7 +292,7 @@ const SURF: Record<Mode, (b: Box) => Surf> = {
 const NAME: Record<Mode, readonly [number, number, number, number]> = {
   feed: [0, 0, 0, 0],
   grid: [0, 0, 44, 0],
-  card2: [2, 64, 22, 1],
+  card2: [0, 0, 0, 0],
   chip: [10, 0, 28, 0],
   big: [0, 0, 0, 0],
   mini: [10, 0, 28, 0],
@@ -432,7 +427,6 @@ export interface SceneView {
     on: boolean;
     top: number;
     right: number;
-    c: string;
     /** Fades in after the thumbnails' flight (not under reduced motion). */
     in: boolean;
     /** What the YouTube Icon in the row plays inside the landing, or null (no icon in this scene). */
@@ -500,7 +494,7 @@ export function buildScene(
       h: head,
       // covered by the other card (or a card sliding over it): not drawn
       thumbsOn: L || (!A && i === di && !(h && h.lv >= 0)),
-      thumbs: i === 0 ? slots.slice(0, 3).map((x) => thumbUrl(x.id)) : [],
+      thumbs: i === 0 ? slots.slice(0, 3).map((x) => x.id) : [],
       yt: i === 0 ? { video: slots[0]!, start: 0 } : null,
       z: L ? 4 : 3 - k,
       o: A ? 0 : 1,
@@ -643,7 +637,7 @@ export function buildScene(
       ssh: mode === 'card2' ? v('sh-card2') : 'none',
       ov: mode === 'card2' ? 'visible' : 'hidden',
       nl: px(nm[0]),
-      nt: px(mode === 'card2' ? sf.h + TILE_NAME_GAP : nm[1]),
+      nt: px(nm[1]),
       nh: px(nm[2]),
       no: nm[3],
       bo: mode === 'big' ? 1 : 0,
@@ -746,7 +740,8 @@ export function buildScene(
   const wallOn = s === 1 || s === 2;
   const wall = {
     on: wallOn,
-    o: !wallOn ? 0 : s === 2 && ph >= 2 ? 0.32 : 0.7,
+    // low next to real thumbnails: the drawn tiles are a background, never mistaken for videos
+    o: wallOn ? 0.32 : 0,
     tr: live ? (wallOn ? 'opacity .9s ease' : 'opacity .2s') : 'none',
     anim: live && wallOn,
   };
@@ -757,12 +752,11 @@ export function buildScene(
         ? read.credit
         : barOn
           ? creditTopIn(heroBox)
-          : CREDIT_TOP[s];
+          : undefined;
   const credit = {
     on: creditTop !== undefined,
     top: creditTop ?? 0,
     right: barOn ? CREDIT_RIGHT_BAND : CREDIT_RIGHT,
-    c: nv && !barOn ? v('credit-dark') : v('sub'),
     // the row is drawn anew per scene (IntroPage key) and fades in when the thumbnails rest
     in: live && creditTop !== undefined,
     // the groups play their first video (the hero); scene 5 is the hero from its source time
@@ -827,7 +821,6 @@ export interface WallTile {
   w2: number;
   a2: number;
   r: number;
-  size: number;
 }
 export function wallTiles(): WallTile[] {
   const tiles: WallTile[] = [];
@@ -842,8 +835,6 @@ export function wallTiles(): WallTile[] {
         w1: [62, 78, 54, 70][n % 4]!,
         w2: [40, 28, 48][n % 3]!,
         a2: n % 3,
-        r: [4, 22, 10][n % 3]!,
-        size: [40, 52, 34][n % 3]!,
       });
     }
   return tiles;

@@ -142,7 +142,13 @@ const SEC_PER_MIN = 60;
 const YT_THUMB = 'https://i.ytimg.com/vi/';
 /** mqdefault: 320x180 (16:9), the boxes' ratio, so nothing is cropped. */
 const YT_THUMB_FILE = '/mqdefault.jpg';
+/** Tried when mqdefault does not load (480x360, drawn whole). */
+const YT_THUMB_RETRY = '/hqdefault.jpg';
+/** A missing thumbnail answers with a 120px wide grey picture instead of an error. */
+export const THUMB_MISSING_W = 120;
 /** The embedded player: the landing plays videos on itself and never opens YouTube (James 2026-11-25). */
+/** A video's own page: the YouTube Icon goes there (branding rule, James 2026-11-25); cards never do. */
+const YT_WATCH = 'https://www.youtube.com/watch?v=';
 const YT_EMBED = 'https://www.youtube.com/embed/';
 
 /** "mm:ss" (or "h:mm:ss") -> seconds; 0 when it is not a time. */
@@ -172,6 +178,12 @@ export function embedUrl(t: PlayTarget): string {
   return `${YT_EMBED}${encodeURIComponent(t.video.id)}?${q.toString()}`;
 }
 
+/** The video's YouTube page, from `start` when there is one (the icon's link only). */
+export function youtubePage(t: PlayTarget): string {
+  const at = Math.max(0, Math.floor(t.start));
+  return `${YT_WATCH}${encodeURIComponent(t.video.id)}${at > 0 ? `&t=${at}s` : ''}`;
+}
+
 /** The hero video from its source time. */
 export function heroPlay(ex: LandingExample = LANDING_EXAMPLE): PlayTarget {
   return { video: heroVideo(ex), start: timeToSeconds(ex.heroTime) };
@@ -180,6 +192,32 @@ export function heroPlay(ex: LandingExample = LANDING_EXAMPLE): PlayTarget {
 /** The hero video (the first video when the index is out of range). */
 export function heroVideo(ex: LandingExample = LANDING_EXAMPLE): ExampleVideo {
   return ex.videos[ex.heroIndex] ?? ex.videos[0]!;
+}
+
+export const thumbRetryUrl = (id: string): string =>
+  `${YT_THUMB}${encodeURIComponent(id)}${YT_THUMB_RETRY}`;
+
+/**
+ * The example without the videos whose thumbnail cannot be loaded: their place goes to the next
+ * evidence video. The hero (the source the text cites) and the fewest drawable count stay.
+ */
+export function withoutVideos(ex: LandingExample, dead: ReadonlySet<string>): LandingExample {
+  if (!dead.size) return ex;
+  const hero = heroVideo(ex);
+  const rest = ex.videos.filter((v) => v === hero || !dead.has(v.id));
+  if (rest.length === ex.videos.length || rest.length < EXAMPLE_VIDEOS_MIN) return ex;
+  const cited = new Map(ex.brief.sources.map((s) => [s, ex.videos[s.video]]));
+  return {
+    ...ex,
+    videos: rest,
+    heroIndex: rest.indexOf(hero),
+    brief: {
+      ...ex.brief,
+      sources: ex.brief.sources
+        .filter((s) => rest.includes(cited.get(s)!))
+        .map((s) => ({ ...s, video: rest.indexOf(cited.get(s)!) })),
+    },
+  };
 }
 
 /** "<channel> <time>" for a source. */

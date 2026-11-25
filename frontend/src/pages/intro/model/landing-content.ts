@@ -65,6 +65,7 @@ export const CLOSE_LABEL = '닫기';
 export const YT_CREDIT = '영상 출처: YouTube';
 /** The YouTube Icon next to the thumbnails: the image's text and the button's name. */
 export const YT_ICON_ALT = 'YouTube';
+export const ytPageLabel = (channel: string): string => `${channel} 영상 YouTube에서 보기`;
 export const ytPlayLabel = (channel: string): string => `${channel} 영상 여기서 보기`;
 /** Accessible names that are not drawn. */
 export const DOT_LABEL = (n: number): string => `장면 ${n}`;

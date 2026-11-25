@@ -1,4 +1,4 @@
-import { memo, useMemo, type CSSProperties, type RefObject } from 'react';
+import { memo, useMemo, useState, type CSSProperties, type RefObject } from 'react';
 
 import {
   ADD_LABEL,
@@ -23,13 +23,18 @@ import {
   TERMS,
   YT_CREDIT,
   YT_ICON_ALT,
+  ytPageLabel,
   ytPlayLabel,
 } from '../model/landing-content';
 import {
   heroPlay,
   heroVideo,
-  LANDING_EXAMPLE,
   sourceLabel,
+  THUMB_MISSING_W,
+  thumbRetryUrl,
+  thumbUrl,
+  youtubePage,
+  type LandingExample,
   type PlayTarget,
 } from '../model/landing-example';
 import {
@@ -56,6 +61,9 @@ import { LegalSheet } from './LegalSheet';
  * not the current one shows its scene's first moment and is inert.
  */
 interface ScenePaneProps {
+  /** The example, without videos whose thumbnail cannot be loaded. */
+  ex: LandingExample;
+  onDead: (id: string) => void;
   s: Scene;
   ph: Phase;
   live: boolean;
@@ -81,6 +89,8 @@ const WALL_TILES = wallTiles();
 const WALL_LINE2 = ['var(--lv-wall-line2-0)', 'var(--lv-wall-line2-1)', 'var(--lv-wall-line2-2)'];
 
 function ScenePaneView({
+  ex,
+  onDead,
   s,
   ph,
   live,
@@ -100,7 +110,6 @@ function ScenePaneView({
   onStart,
   onPlay,
 }: ScenePaneProps): JSX.Element {
-  const ex = LANDING_EXAMPLE;
   const view = useMemo(
     () => buildScene(s, ph, live, deck, di, ex, cardH),
     [s, ph, live, deck, di, ex, cardH]
@@ -189,11 +198,6 @@ function ScenePaneView({
                       className="lv-wall-l2"
                       style={{ width: t.w2, background: WALL_LINE2[t.a2] }}
                     />
-                    <div
-                      className="lv-wall-disc"
-                      style={{ right: t.r, width: t.size, height: t.size }}
-                    />
-                    <div className="lv-wall-time" />
                   </div>
                 ))}
               </div>
@@ -235,7 +239,7 @@ function ScenePaneView({
             }}
           >
             <span className="lv-band-av">{hero.channel.slice(0, 1)}</span>
-            {hero.channel}
+            <span className="lv-band-ch">{hero.channel}</span>
           </div>
 
           {/* scene 1 */}
@@ -307,20 +311,18 @@ function ScenePaneView({
                 {d.thumbs.length ? (
                   <div className="lv-deck-thumbs" style={{ opacity: d.thumbsOn ? 1 : 0 }}>
                     {d.thumbs.map((u) => (
-                      <img
+                      <Thumb
                         key={u}
+                        id={u}
                         className="lv-deck-thumb"
-                        data-testid={tid('lv-thumb')}
-                        src={u}
-                        alt=""
-                        decoding="async"
+                        testId={tid('lv-thumb')}
+                        onDead={onDead}
                       />
                     ))}
                     {d.yt ? (
-                      <YouTubeIconButton
+                      <YouTubeIconLink
                         target={d.yt}
-                        onPlay={onPlay}
-                        label={ytPlayLabel(hero.channel)}
+                        label={ytPageLabel(hero.channel)}
                         live={s === 0 && d.thumbsOn}
                         tapped={tapped}
                         testId={tid('lv-yt-deck')}
@@ -515,12 +517,11 @@ function ScenePaneView({
                     transition: c.tr2,
                   }}
                 >
-                  <img
+                  <Thumb
+                    id={c.video.id}
                     className="lv-thumb"
-                    data-testid={tid('lv-thumb')}
-                    src={c.img}
-                    alt=""
-                    decoding="async"
+                    testId={tid('lv-thumb')}
+                    onDead={onDead}
                   />
                 </div>
                 <div
@@ -581,16 +582,13 @@ function ScenePaneView({
             style={{
               top: view.credit.top + 'px',
               right: view.credit.right + 'px',
-              color: view.credit.c,
               opacity: view.credit.on ? 1 : 0,
             }}
           >
-            <span>{YT_CREDIT}</span>
             {view.credit.play ? (
-              <YouTubeIconButton
+              <YouTubeIconLink
                 target={view.credit.play}
-                onPlay={onPlay}
-                label={ytPlayLabel(hero.channel)}
+                label={ytPageLabel(hero.channel)}
                 live={view.credit.on}
                 tapped={tapped}
                 testId={tid('lv-yt')}
@@ -701,13 +699,13 @@ function ScenePaneView({
 export const ScenePane = memo(ScenePaneView);
 
 /**
- * The official YouTube Icon as a button that plays the video inside the landing: the file is drawn
- * whole and unaltered (its transparent margin is the icon's clear space), at its own proportions,
- * on the row's solid colour. A swipe that ends on it plays nothing.
+ * The official YouTube Icon, a link to the video's YouTube page (the branding rule: the icon must
+ * link to YouTube content; James 2026-11-25). The file is drawn whole and unaltered (its transparent
+ * margin is the icon's clear space), at its own proportions, on the row's solid colour. A swipe that
+ * ends on it opens nothing. The videos and thumbnails themselves play on the landing.
  */
-function YouTubeIconButton({
+function YouTubeIconLink({
   target,
-  onPlay,
   label,
   live,
   tapped,
@@ -715,7 +713,6 @@ function YouTubeIconButton({
   bleedY = 0,
 }: {
   target: PlayTarget;
-  onPlay: (t: PlayTarget) => void;
   label: string;
   /** Visible and reachable in the current scene. */
   live: boolean;
@@ -725,16 +722,19 @@ function YouTubeIconButton({
   bleedY?: number;
 }): JSX.Element {
   return (
-    <button
-      type="button"
+    <a
       className="lv-yt"
       data-testid={testId}
+      href={youtubePage(target)}
+      target="_blank"
+      rel="noopener noreferrer"
+      draggable={false}
       aria-label={label}
       tabIndex={live ? 0 : -1}
       style={{ pointerEvents: live ? 'auto' : 'none', margin: `${-bleedY}px 0` }}
       onClick={(e) => {
         e.stopPropagation();
-        if (live && tapped()) onPlay(target);
+        if (!live || !tapped()) e.preventDefault();
       }}
     >
       <img
@@ -746,6 +746,49 @@ function YouTubeIconButton({
         decoding="async"
         draggable={false}
       />
-    </button>
+    </a>
+  );
+}
+
+/**
+ * A YouTube thumbnail, unaltered: mqdefault, then hqdefault, then it reports the video as dead (the
+ * page shows another evidence video instead). Nothing is drawn until a picture has loaded, so no
+ * empty block is ever seen.
+ */
+function Thumb({
+  id,
+  className,
+  testId,
+  onDead,
+}: {
+  id: string;
+  className: string;
+  testId: string | undefined;
+  onDead: (id: string) => void;
+}): JSX.Element {
+  const [tries, setTries] = useState({ id, n: 0 });
+  const n = tries.id === id ? tries.n : 0;
+  const next = (): void => {
+    if (n === 0) setTries({ id, n: 1 });
+    else {
+      setTries({ id, n: 2 });
+      onDead(id);
+    }
+  };
+  return (
+    <img
+      className={className}
+      data-testid={testId}
+      data-dead={n > 1 ? '' : undefined}
+      src={n === 0 ? thumbUrl(id) : thumbRetryUrl(id)}
+      alt=""
+      decoding="async"
+      draggable={false}
+      onError={next}
+      onLoad={(e) => {
+        const w = e.currentTarget.naturalWidth;
+        if (w > 0 && w <= THUMB_MISSING_W) next();
+      }}
+    />
   );
 }
