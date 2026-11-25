@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -28,11 +29,12 @@ import './watch-home.css';
  * middle, the domain chips at the bottom, the date (past briefs) and the account at the top
  * (decision 2026-11-25). Light background only (decision 2026-11-14).
  *
- * Motion (README "한 덩어리 페이드"): the headline fades as one element, opacity only. Entrance:
- * headline 0->1 450 ms ease-out, then the date, the domain name, button and chips 0->1 300 ms
- * ease-out at 450 ms. Domain switch: the chip, the domain name and the date change at once (the
- * chip's colour in 0.2 s), the headline fades out 180 ms ease-in, the text changes, it fades in
- * 450 ms ease-out while the domain name and the button slide from where they were in 300 ms cubic-bezier(.2,.8,.2,1). Taps during a switch are
+ * Motion (README "헤드라인이 만들어지는 모습"): the headline settles in reading order, opacity only, every word
+ * 0->1 in 700 ms, one after another. Entrance: the headline, then the date, the domain name and the
+ * button 0->1 in the headline's last 400 ms; the chips 0->1 300 ms at 450 ms. Domain switch: the
+ * chip, the domain name and the date change at once (the chip's colour in 0.2 s), the headline
+ * fades out 180 ms ease-in, the text changes and settles while the domain name and the button
+ * slide from where they were in 300 ms cubic-bezier(.2,.8,.2,1). Taps during a switch are
  * ignored, except on the headline (below). The headline rolls to the next domain with a brief, after the last one the
  * first; a tap during a switch is kept and done after it. The ground carries the domain's colour from the bottom up,
  * changing in 1 s (design "Insighta App Prototype", 2026-11-25). Reduced motion: no motion at all. The motion waits for the fonts at most 1.5 s.
@@ -77,12 +79,20 @@ export interface WatchHomeProps {
   onSwitch?: (from: string, to: string, how: 'chip' | 'headline') => void;
 }
 
-const FADE_IN_MS = 450;
-const REST_IN_MS = 300;
+/** One word of the headline. */
+const WORD_MS = 700;
+const WORD_EASE = 'cubic-bezier(.4,0,.2,1)';
+/** From one word to the next; all the words have begun within WORDS_MS. */
+const WORD_STEP_MS = 40;
+const WORDS_MS = 400;
+/** The date, the domain name and the button: the headline's last part. */
+const REST_IN_MS = 400;
+const CHIPS_AT_MS = 450;
+const CHIPS_IN_MS = 300;
 const FADE_OUT_MS = 180;
+/** The text changes when the old one is gone: the fade starts up to two frames after it is asked for. */
+const SWAP_AT_MS = FADE_OUT_MS + 34;
 const SLIDE_MS = 300;
-/** The new headline waits this long when its lines changed, so the sliding name and button are off its place. */
-const CLEAR_MS = 100;
 const SLIDE_EASE = 'cubic-bezier(.2,.8,.2,1)';
 /** Below this width the chips use 12.5 px (README §배치 5). */
 const NARROW_W = 360;
@@ -127,6 +137,20 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     if (el?.animate) anims.current.push(el.animate(kf, { fill: 'backwards', ...o }));
   };
 
+  /** The headline appears word after word; how long it takes. */
+  const settle = (): number => {
+    const words = Array.from(head.current?.children ?? []);
+    const step = Math.min(WORD_STEP_MS, WORDS_MS / Math.max(1, words.length));
+    words.forEach((el, i) =>
+      animate(el, [{ opacity: 0 }, { opacity: 1 }], {
+        duration: WORD_MS,
+        delay: i * step,
+        easing: WORD_EASE,
+      })
+    );
+    return Math.max(0, words.length - 1) * step + WORD_MS;
+  };
+
   // fonts first (at most 1.5 s), then the entrance once
   const allHeadlines = Object.values(p.pages)
     .map((x) => x.headline)
@@ -159,20 +183,24 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     if (!ready || !entrance.current) return;
     entrance.current = false;
     stop();
-    animate(head.current, [{ opacity: 0 }, { opacity: 1 }], {
-      duration: FADE_IN_MS,
-      easing: 'ease-out',
-    });
-    [date.current, meta.current, btn.current, chipsEl.current].forEach((el) =>
+    const whole = settle();
+    [date.current, meta.current, btn.current].forEach((el) =>
       animate(el, [{ opacity: 0 }, { opacity: 1 }], {
         duration: REST_IN_MS,
-        delay: FADE_IN_MS,
+        delay: whole - REST_IN_MS,
         easing: 'ease-out',
       })
     );
+    animate(chipsEl.current, [{ opacity: 0 }, { opacity: 1 }], {
+      duration: CHIPS_IN_MS,
+      delay: CHIPS_AT_MS,
+      easing: 'ease-out',
+    });
+    // settle only touches refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  // after the text changed: fade in, and slide the domain name and button from where they were
+  // after the text changed: settle, and slide the domain name and button from where they were
   useLayoutEffect(() => {
     const before = swap.current;
     if (!before) return;
@@ -181,11 +209,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     const moved = (el: HTMLElement | null, was: number | null): number =>
       el && was != null ? Math.round(was - el.getBoundingClientRect().top) : 0;
     const far = [moved(meta.current, before.meta), moved(btn.current, before.btn)];
-    animate(head.current, [{ opacity: 0 }, { opacity: 1 }], {
-      duration: FADE_IN_MS,
-      delay: far.some((d) => d !== 0) ? CLEAR_MS : 0,
-      easing: 'ease-out',
-    });
+    settle();
     const slide = (el: HTMLElement | null, d: number): void => {
       if (d)
         animate(el, [{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], {
@@ -196,6 +220,8 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     slide(meta.current, far[0]!);
     slide(btn.current, far[1]!);
     busy.current = false;
+    // settle only touches refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, turn]);
 
   // the domain read last (order 2026-11-25 B12): set while another screen covers the home, at once
@@ -265,7 +291,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
         }
         setShown(to);
         setTurn((n) => n + 1);
-      }, FADE_OUT_MS);
+      }, SWAP_AT_MS);
     },
     // stop/animate only touch refs
     [sel, ready, p]
@@ -322,21 +348,30 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
                 {p.chips.find((c) => c.cell === sel)?.title ?? ''}
               </span>
             </div>
-            <h1
-              ref={head}
-              className="mf-home-headline"
-              data-testid="mf-home-headline"
-              data-link=""
-              data-press="row"
+            <div
+              className="mf-home-roll"
+              data-testid="mf-home-roll"
+              data-press="head"
               onClick={roll}
-              style={{
-                fontSize: size.fontPx + 'px',
-                letterSpacing: size.trackEm + 'em',
-                lineHeight: size.lineHeight,
-              }}
             >
-              {text}
-            </h1>
+              <h1
+                ref={head}
+                className="mf-home-headline"
+                data-testid="mf-home-headline"
+                style={{
+                  fontSize: size.fontPx + 'px',
+                  letterSpacing: size.trackEm + 'em',
+                  lineHeight: size.lineHeight,
+                }}
+              >
+                {text.split(' ').map((word, i) => (
+                  <Fragment key={i}>
+                    {i > 0 ? ' ' : null}
+                    <span>{word}</span>
+                  </Fragment>
+                ))}
+              </h1>
+            </div>
             <div className="mf-home-btn-row" ref={btn}>
               <button
                 type="button"

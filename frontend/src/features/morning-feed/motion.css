@@ -10,6 +10,7 @@
  *   row   whole row         faint layer, no scale
  *   link  text link         opacity
  *   icon  icon button       scale
+ *   head  home headline     opacity
  *   soft  header text       a faint round ground, at once; no scale (decision 2026-11-25)
  */
 
@@ -78,6 +79,10 @@
 }
 .mf-w-app [data-press='link'][data-pressed] {
   opacity: var(--mo-press-link-opacity);
+}
+
+.mf-w-app [data-press='head'][data-pressed] {
+  opacity: var(--mo-press-head-opacity);
 }
 
 /* soft: there at the touch, gone in the release time; the text itself does not move */

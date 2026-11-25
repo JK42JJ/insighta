@@ -324,13 +324,51 @@ describe('rolling the headline fast', () => {
       fireEvent.click(head());
       fireEvent.click(head());
       expect(head().textContent).toBe('하나');
-      act(() => void vi.advanceTimersByTime(200));
+      act(() => void vi.advanceTimersByTime(250));
       expect(head().textContent).toBe('셋');
       expect(onSwitch.mock.calls).toEqual([
         ['기술/개발', '비즈니스/커리어', 'headline'],
         ['비즈니스/커리어', '재테크/투자', 'headline'],
       ]);
     } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('the words appear one after another; the headline itself never fades in', () => {
+    vi.useFakeTimers();
+    const calls: { el: Element; to: unknown; o: KeyframeAnimationOptions }[] = [];
+    Reflect.set(
+      Element.prototype,
+      'animate',
+      function (this: Element, kf: Keyframe[], o: KeyframeAnimationOptions) {
+        calls.push({ el: this, to: kf[1]?.opacity, o });
+        return { cancel: () => undefined };
+      }
+    );
+    try {
+      draw({
+        ...three,
+        '비즈니스/커리어': { headline: '둘째 헤드라인 세 어절', seenDate: '2026-11-25' },
+      });
+      // the whole area under the name rolls, not the letters only
+      const area = screen.getByTestId('mf-home-roll');
+      expect(area.getAttribute('data-press')).toBe('head');
+      expect(head().hasAttribute('data-press')).toBe(false);
+      fireEvent.click(area);
+      expect(calls.map((c) => [c.el, c.to, c.o.duration])).toEqual([[head(), 0, 180]]);
+      calls.length = 0;
+      act(() => void vi.advanceTimersByTime(250));
+      expect(head().textContent).toBe('둘째 헤드라인 세 어절');
+      expect(calls.map((c) => c.el)).toEqual([...head().children]);
+      expect(calls.map((c) => c.el.textContent)).toEqual(['둘째', '헤드라인', '세', '어절']);
+      expect(calls.map((c) => [c.to, c.o.duration, c.o.delay])).toEqual([
+        [1, 700, 0],
+        [1, 700, 40],
+        [1, 700, 80],
+        [1, 700, 120],
+      ]);
+    } finally {
+      Reflect.set(Element.prototype, 'animate', undefined);
       vi.useRealTimers();
     }
   });
@@ -341,13 +379,13 @@ describe('rolling the headline fast', () => {
       draw(two);
       fireEvent.click(head());
       fireEvent.click(head());
-      act(() => void vi.advanceTimersByTime(200));
+      act(() => void vi.advanceTimersByTime(250));
       fireEvent.click(head());
-      act(() => void vi.advanceTimersByTime(200));
+      act(() => void vi.advanceTimersByTime(250));
       expect(head().textContent).toMatch(/하나|둘/);
       const was = head().textContent;
       fireEvent.click(head());
-      act(() => void vi.advanceTimersByTime(200));
+      act(() => void vi.advanceTimersByTime(250));
       expect(head().textContent).not.toBe(was);
     } finally {
       vi.useRealTimers();

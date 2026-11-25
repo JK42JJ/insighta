@@ -157,8 +157,15 @@ button.mf-home-date {
   font-weight: 500;
   color: var(--h-sub);
 }
-.mf-home-headline[data-link] {
+/* what rolls the headline: from under the name to the button, the whole width */
+.mf-home-roll {
+  margin-top: -14px;
+  padding: 14px 0 26px;
   cursor: pointer;
+}
+/* a word is one piece: it appears as a whole and the lines break between words only */
+.mf-home-roll .mf-home-headline > span {
+  display: inline-block;
 }
 .mf-home-headline {
   margin: 0;
@@ -170,9 +177,6 @@ button.mf-home-date {
   text-wrap: balance;
   font-variant-numeric: lining-nums;
   font-synthesis: none;
-}
-.mf-home-btn-row {
-  margin-top: 26px;
 }
 .mf-home-btn {
   height: 54px;

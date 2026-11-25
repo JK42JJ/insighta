@@ -18,6 +18,8 @@ export const MOTION = {
     iconScale: 0.9,
     /** Text links and source marks. */
     linkOpacity: 0.5,
+    /** The home headline. */
+    headOpacity: 0.55,
     /** Pressed in at pointerdown. */
     inMs: 80,
     /** Back out after release or when the finger leaves. */
@@ -75,6 +77,7 @@ export function motionStyleVars(): CSSProperties {
     '--mo-press-btn-scale': String(m.press.btnScale),
     '--mo-press-icon-scale': String(m.press.iconScale),
     '--mo-press-link-opacity': String(m.press.linkOpacity),
+    '--mo-press-head-opacity': String(m.press.headOpacity),
     '--mo-press-in': m.press.inMs + 'ms',
     '--mo-press-out': m.press.outMs + 'ms',
     '--mo-press-dark': String(m.press.darkLayer),
