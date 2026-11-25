@@ -23,6 +23,8 @@ import {
 
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** A publish time as the YouTube API gives it. */
+const PUBLISHED_AT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 /** listPages upper bound. */
 export const PAGES_LIST_MAX = 60;
 /**
@@ -62,6 +64,8 @@ export interface PageVideo {
   useful_for: string;
   /** Article format: stored with the page, not drawn. */
   role?: PageVideoRole;
+  /** When YouTube published the video (ISO, UTC); pages before 2026-11-25 may not have it. */
+  published_at?: string;
 }
 export interface Page {
   domain: string;
@@ -208,6 +212,13 @@ export function validatePage(input: unknown): Page {
         throw new FeedValidationError(`${w}.role must be ${PAGE_VIDEO_ROLES.join(', ')}`);
       }
       video.role = role;
+    }
+    const published = v['published_at'];
+    if (published !== undefined) {
+      if (typeof published !== 'string' || !PUBLISHED_AT_RE.test(published)) {
+        throw new FeedValidationError(`${w}.published_at must look like 2026-11-20T03:04:05Z`);
+      }
+      video.published_at = published;
     }
     return video;
   });
@@ -435,7 +446,7 @@ export async function readPageCards(
         video_id: v.video_id,
         title: v.title,
         channel: v.channel,
-        published_at: '',
+        published_at: v.published_at ?? '',
         duration: 0,
         view_count: null,
         thumbnail_url: null,

@@ -60,6 +60,12 @@ describe('validatePage', () => {
     bad((p) => delete p['videos'][0].useful_for, /useful_for/);
     bad((p) => (p['note'] = 'x'), /note/);
   });
+  it('keeps the publish time of a video, refuses another shape', () => {
+    const p = goodPage();
+    p['videos'][0].published_at = '2026-11-20T03:04:05Z';
+    expect(validatePage(p)).toEqual(p);
+    bad((q) => (q['videos'][0].published_at = '3일 전'), /published_at/);
+  });
 });
 
 function fakeDb(handler: (sql: string, params: unknown[]) => unknown[]) {
@@ -142,7 +148,13 @@ describe('page readers', () => {
       ...pageRow(CELL, '2026-11-13', 'tech'),
       videos: [
         { video_id: VID, title: 'T', channel: 'C', useful_for: '' },
-        { video_id: 'zzzzzzzzzzz', title: 'not in pool', channel: 'C2', useful_for: '' },
+        {
+          video_id: 'zzzzzzzzzzz',
+          title: 'not in pool',
+          channel: 'C2',
+          useful_for: '',
+          published_at: '2026-11-20T03:04:05Z',
+        },
       ],
     };
     const ids = [VID, 'zzzzzzzzzzz'];
@@ -171,6 +183,7 @@ describe('page readers', () => {
     expect(out?.items.map((c) => c.video_id)).toEqual(ids);
     expect(out?.items[0]?.title).toBe('pool title');
     expect(out?.items[1]).toMatchObject({ title: 'not in pool', channel: 'C2', duration: 0 });
+    expect(out?.items[1]?.published_at).toBe('2026-11-20T03:04:05Z');
     expect(out?.judged).toEqual({ [ids[0]!]: 'useful' });
     // read only
     expect(queries.every((q) => /^\s*(SELECT|WITH)/i.test(q.sql))).toBe(true);
