@@ -55,21 +55,11 @@ export const LAST_SCENE: Scene = 7;
 export const SOURCE_SCENE: Scene = 4;
 export const SOURCE_OPEN_SCENE: Scene = 5;
 
-/** design: one swipe = one scene; further swipes within this are ignored. */
-export const STEP_LOCK_MS = 700;
-/** design: a drag longer than this (px) is a swipe. */
-export const SWIPE_MIN_PX = 36;
-/** design: a wheel delta larger than this is a step. */
-export const WHEEL_MIN = 12;
-/** design: rubber band: drag factor at an end / elsewhere, and the cap (px). */
-export const PULL_EDGE = 0.12;
-export const PULL_MID = 0.22;
-export const PULL_MAX_PX = 48;
-/** design: phase timers after a scene change (ms): scene 3 waits longer for its tiles. */
+/** design: phase timers (ms) after the scene is in place; scene 3 looks over its tiles first. */
 export const PH1_MS = 120;
 export const PH2_MS = 1350;
-export const PH1_MS_S2 = 820;
-export const PH2_MS_S2 = 2050;
+export const PH1_MS_S2 = 120;
+export const PH2_MS_S2 = 1300;
 /** design: first phase change after mount. */
 export const MOUNT_PH_MS = 300;
 /** design: deck rotation in scene 1: every CYCLE, card leaves for LEAVE, then re-arrives after ARRIVE. */
@@ -87,7 +77,6 @@ export const PLAY_RUN_S = 8;
 export const BAR_IN_S = 0.65;
 
 export const EASE = 'cubic-bezier(.32,.72,0,1)';
-export const EASE_BACK = `transform .5s ${EASE}`;
 
 export interface Fit {
   /** Stage scale (design px -> screen px). */
@@ -113,6 +102,9 @@ const HEAD_H = 52;
 export function dotsTopAbove(sheetH: number, stageH: number): number {
   return (HEAD_H + stageH - sheetH) / 2;
 }
+
+/** The scenes on the dark ground. */
+export const isDark = (s: Scene): boolean => s >= 3 && s <= 5;
 
 /** The scene after `s` going `d` (+1 next, -1 previous), or null at an end. */
 export function nextScene(s: Scene, d: 1 | -1): Scene | null {
@@ -194,26 +186,16 @@ export const BAND_H = HERO_CARD_H;
 /** Room kept at the right end of the bar row for the time label. */
 const BAR_LABEL_W = 58;
 /** Scene 5: the hero card ends here (the Google button starts at 588 on a 650 stage). */
-const S5_BOTTOM = 576;
-/** Scene 5: the line from the brief card down to the video. */
-export const CN_H = 18;
+const S5_BOTTOM = 582;
 const H2: Box = { x: X, y: 300, w: HERO_W, h: HERO_H };
 const MID: Box = { x: X, y: S5_BOTTOM - HERO_CARD_H, w: HERO_W, h: HERO_H };
 const creditTopIn = (b: Box): number =>
   b.y + HERO_H + BAR_GAP + BAR_H + CHANNEL_GAP + (CHANNEL_H - YT_ICON_BOX_H) / 2;
-/** Scene 5's brief card: under the text (two lines end at 120), above the line. */
-const CARD_S5_TOP = 126;
-const CARD_S5_BOTTOM = MID.y - CN_H;
-const CARD_S5_SCALE = 0.78;
-const CARD_S5_X = 30;
-/** Scene 5's card: scale .78 (less when the brief is too long for the room), its bottom on the line. */
-function cardS5(cardH: number): string {
-  const room = CARD_S5_BOTTOM - CARD_S5_TOP;
-  const k = cardH > 0 ? Math.min(CARD_S5_SCALE, room / cardH) : CARD_S5_SCALE;
-  const y = cardH > 0 ? CARD_S5_BOTTOM - CARD_TOP - k * cardH : CARD_S5_TOP - CARD_TOP;
-  const x = CARD_S5_X + ((CARD_S5_SCALE - k) * HERO_W) / 2;
-  return `translate(${px(x)},${px(y)}) scale(${Math.round(k * 1000) / 1000})`;
-}
+/**
+ * Scene 5's brief card: under the text (two lines end at 133), never scaled (James 2026-11-25: text
+ * keeps its size); what does not fit is behind the video below it.
+ */
+const CARD_S5_TOP = 134;
 const MINI: Box = { x: 115, y: 470, w: 160, h: 90 };
 const grid = (i: number): Box => ({
   x: X + (i % 4) * 85,
@@ -266,14 +248,14 @@ const CHIP_GAP = 6.8;
 const chipW = (n: number): number => (HERO_W - (Math.max(n, 3) - 1) * CHIP_GAP) / Math.max(n, 3);
 const chipH = (n: number): number => (chipW(n) * 9) / 16;
 /** Scenes 4/5: the group's room: from the two text lines' end to above the Google button. */
-const READ_TOP = 120;
+const READ_TOP = 140;
 const READ_BOTTOM = 582;
 const CARD_TO_CHIPS = 20;
 const CHIPS_TO_CREDIT = 4;
 /** Share of the free height above the group (the text above it is closer than the button). */
 const READ_ABOVE = 0.4;
 /** The card's height until it is measured (two headline lines, three text lines). */
-const CARD_H_NOMINAL = 202;
+const CARD_H_NOMINAL = 208;
 /** Where scenes 4/5 put the card, the chips and the attribution row. */
 export function readGroup(
   cardH: number,
@@ -439,12 +421,10 @@ export interface SceneView {
     dim: number;
     deco: 'underline' | 'none';
     sbg: string;
-    st: string;
   };
   scan: { o: number; t: string; tr: string };
   /** The solid ground under scenes 3-5's attribution row (its top and colour per scene). */
   ground: { paper: number; night: number; top: string; nightTop: string; tr: string };
-  cn: { t: string; s: string; tr: string };
   btm: { on: boolean; t: string; tr: string };
   dots: ReadonlyArray<{ h: string; c: string; tr: string }>;
   wall: { on: boolean; o: number; tr: string; anim: boolean };
@@ -472,7 +452,7 @@ export function buildScene(
   ex: LandingExample = LANDING_EXAMPLE,
   cardH = 0
 ): SceneView {
-  const nv = s >= 3 && s <= 5;
+  const nv = isDark(s);
   const T = (t: string): string => (live ? t : 'none');
   const GL = (
     [
@@ -731,17 +711,16 @@ export function buildScene(
       s < 3
         ? `translateY(${px(read.card - CARD_TOP + 24)})`
         : s === 5
-          ? cardS5(cardH)
+          ? `translateY(${px(CARD_S5_TOP - CARD_TOP)})`
           : s === 3 || s === 4
             ? `translateY(${px(read.card - CARD_TOP)})`
             : s === 6 || s === 7
-              ? 'translate(30px,78px) scale(.82)'
+              ? 'none'
               : 'none',
     tr: T(`opacity ${s === 6 ? '.45s .2s' : s === 3 ? '.45s .1s' : '.3s'}, transform .6s ${EASE}`),
     dim: s === 4 || s === 5 ? 0.28 : 1,
     deco: (s === 4 || s === 5 ? 'underline' : 'none') as 'underline' | 'none',
     sbg: s === 4 || s === 5 ? v('src-on') : v('src-off'),
-    st: s === 4 && ph === 1 && live ? 'scale(1.08)' : 'none',
   };
 
   const scan = {
@@ -752,11 +731,6 @@ export function buildScene(
         ? 'transform 1.1s cubic-bezier(.45,0,.55,1), opacity .25s'
         : 'opacity .25s, transform 0s .25s'
     ),
-  };
-  const cn = {
-    t: px(MID.y - CN_H),
-    s: s === 5 ? 'scaleY(1)' : 'scaleY(0)',
-    tr: T(s === 5 ? `transform .3s .45s ${EASE}` : 'transform .15s'),
   };
   const btmOn = s >= 2 && s <= 5;
   const btm = {
@@ -833,7 +807,6 @@ export function buildScene(
     card,
     scan,
     ground,
-    cn,
     btm,
     dots,
     wall,

@@ -18,7 +18,7 @@ export const BRIEF_KICKER = '오늘의 브리프';
 
 /** Scene 2 (s=1); "알 수 있거든요" is kept on one line (no-break spaces). */
 export const S1_TEXT =
-  '그런데 혼자서는 쉽지 않아요. 제목과 썸네일만으로는 무슨 내용인지 알기 어렵고, 믿을 만한 영상인지는 끝까지 봐야 알\u00a0수\u00a0있거든요.';
+  '그런데 혼자서는 쉽지 않아요. 제목과 썸네일만으로는 무슨 내용인지 알기 어렵고, 믿을\u00a0만한 영상인지는 끝까지 봐야 알\u00a0수\u00a0있거든요.';
 /** Scene 3 (s=2). */
 export const S2_TITLE = ['오늘 볼 영상,', '미리 골라 뒀어요'] as const;
 export const S2_BODY = '분야마다 의미 있는 최근 영상을 인사이타가 살펴봤어요.';

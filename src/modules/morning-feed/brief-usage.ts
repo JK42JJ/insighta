@@ -23,6 +23,8 @@ export const USAGE_EVENT_KINDS = [
   'landing_open',
   // landing v4 (2026-11-24): dot reached (value s1..s6) and the scene-5 source tap
   'landing_scene',
+  // 2026-11-25: one landing gesture, e.g. "ng_34_120" (direction + result, distance %, speed %)
+  'landing_swipe',
   'source_click',
   // the replaced scroll landing; kept so tabs opened before the switch still send their events
   'landing_scroll_step3',

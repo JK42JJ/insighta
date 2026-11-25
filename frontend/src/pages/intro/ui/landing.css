@@ -33,6 +33,8 @@
   --lv-scan-ring: rgba(58, 110, 165, 0.16);
   --lv-bar-track: rgba(22, 39, 63, 0.2);
   --lv-fade-end: rgba(247, 245, 240, 0);
+  --lv-press: rgba(20, 26, 36, 0.1);
+  --lv-press-dark: rgba(247, 245, 240, 0.18);
   --lv-night-end: rgba(19, 34, 56, 0);
   --lv-sheet-chip: #f2efe8;
   --lv-add-line: #a9a396;
@@ -139,6 +141,7 @@
   overflow: hidden;
   outline: none;
   touch-action: none;
+  overscroll-behavior: none;
   user-select: none;
   -webkit-user-select: none;
   transform-origin: 0 0;
@@ -156,6 +159,19 @@
 .lv-fill {
   position: absolute;
   inset: 0;
+}
+/* the pages and their track are layers of their own: a drag only moves them, nothing is painted again */
+.lv-track {
+  will-change: transform;
+}
+.lv-page {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 100%;
+  overflow: hidden;
+  contain: strict;
+  will-change: transform;
 }
 .lv-none {
   pointer-events: none;
@@ -392,7 +408,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--lv-ink);
 }
@@ -402,7 +418,7 @@
   border-radius: 11px;
   background: var(--lv-navy);
   color: var(--lv-paper);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -445,7 +461,7 @@
   justify-content: center;
   gap: 6px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--lv-sub);
   text-align: center;
@@ -521,8 +537,8 @@
   z-index: 5;
   left: 28px;
   right: 40px;
-  top: 64px;
-  font-size: 18px;
+  top: 80px;
+  font-size: 17px;
   line-height: 1.55;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -533,19 +549,19 @@
   position: absolute;
   left: 28px;
   right: 40px;
-  top: 64px;
+  top: 80px;
 }
 .lv-h2a {
   font-family: var(--lv-serif);
   font-weight: 500;
-  font-size: 30px;
-  line-height: 1.26;
-  letter-spacing: -0.04em;
+  font-size: 34px;
+  line-height: 1.3;
+  letter-spacing: -0.045em;
   word-break: keep-all;
 }
 .lv-t2-p {
   margin: 10px 0 0;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.55;
   color: var(--lv-sub);
   word-break: keep-all;
@@ -555,43 +571,43 @@
   position: absolute;
   left: 28px;
   right: 40px;
-  top: 64px;
+  top: 80px;
   font-size: 17px;
-  line-height: 1.48;
+  line-height: 1.55;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--lv-paper);
   word-break: keep-all;
   text-wrap: pretty;
 }
-.lv-tn[data-big] {
-  font-size: 18px;
-  line-height: 1.55;
-}
 .lv-t6 {
   position: absolute;
   left: 28px;
   right: 40px;
-  top: 84px;
+  top: 80px;
 }
 .lv-t6-lead {
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.5;
   font-weight: 500;
   color: var(--lv-sub);
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -27px;
 }
 .lv-t6-h {
-  margin: 10px 0 0;
+  margin: 0;
   font-family: var(--lv-serif);
   font-weight: 500;
-  font-size: 28px;
+  font-size: 34px;
   line-height: 1.3;
   letter-spacing: -0.045em;
   word-break: keep-all;
 }
 .lv-t6-p {
   margin: 6px 0 0;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.6;
   color: var(--lv-body);
   word-break: keep-all;
@@ -624,7 +640,7 @@
   margin-top: 6px;
   font-family: var(--lv-serif);
   font-weight: 500;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1.3;
   letter-spacing: -0.035em;
   word-break: keep-all;
@@ -633,8 +649,8 @@
 }
 .lv-card-p {
   margin: 8px 0 0;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 17px;
+  line-height: 1.5;
   letter-spacing: -0.015em;
   word-break: keep-all;
   text-wrap: wrap;
@@ -652,9 +668,7 @@
   margin: 0 -4px;
   text-underline-offset: 3px;
   text-decoration-thickness: 1.5px;
-  transition:
-    transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
-    background-color 0.4s;
+  transition: background-color 0.4s;
 }
 .lv-src-hit {
   position: absolute;
@@ -670,13 +684,6 @@
   font-weight: 500;
   color: var(--lv-sub);
   transition: opacity 0.4s;
-}
-.lv-cn {
-  position: absolute;
-  left: 194px;
-  width: 1.5px;
-  background: var(--lv-dot-idle-dark);
-  transform-origin: 50% 0;
 }
 .lv-scan {
   position: absolute;
@@ -871,7 +878,7 @@
   background: var(--lv-sheet-chip);
   display: inline-flex;
   align-items: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--lv-ink);
   white-space: nowrap;
@@ -892,7 +899,7 @@
 }
 .lv-final {
   margin: 18px 0 0;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.55;
   font-weight: 500;
   color: var(--lv-body);
@@ -938,8 +945,7 @@
   transition: transform 0.2s var(--lv-ease-out);
 }
 .lv .lv-google:active {
-  transform: scale(0.97);
-  transition-duration: 0.08s;
+  opacity: 0.85;
 }
 .lv-sheet .lv-google {
   margin-top: 12px;
@@ -987,7 +993,42 @@
   align-items: center;
   justify-content: space-between;
 }
-.lv-brand {
+/* header buttons: 44px targets; the ground is there at the touch and fades in 0.2 s */
+.lv .lv-headbtn {
+  position: relative;
+  /* 44px on a 360px-wide screen too (the stage is scaled to the width) */
+  height: 48px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.lv .lv-headbtn::before {
+  content: '';
+  position: absolute;
+  inset: 4px 0;
+  border-radius: 20px;
+  background: var(--lv-press);
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+.lv .lv-headbtn[data-dark]::before {
+  background: var(--lv-press-dark);
+}
+.lv .lv-headbtn[data-pressed]::before {
+  opacity: 1;
+  transition-duration: 0s;
+}
+.lv .lv-headbtn > span {
+  position: relative;
+}
+.lv .lv-brand {
+  /* the word itself stays on the content edge (28px) */
+  margin-left: -14px;
   font:
     800 15px Arial,
     Helvetica,
@@ -995,15 +1036,8 @@
   letter-spacing: 0.02em;
 }
 .lv .lv-login {
-  height: 44px;
-  padding: 0 14px;
-  display: flex;
-  align-items: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-}
-.lv .lv-login:active {
-  opacity: 0.5 !important;
 }
 
 /* sticky Google button (scenes 3-5) */
@@ -1063,7 +1097,7 @@
 }
 .lv-player-sub {
   margin: 6px 0 0;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--lv-credit-dark);
 }
 

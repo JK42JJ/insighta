@@ -573,6 +573,8 @@ export type UsageEventKind =
   | 'landing_open'
   // landing v4 (2026-11-24): dot reached (value s1..s6) and the scene-5 source tap
   | 'landing_scene'
+  // 2026-11-25: one landing gesture (direction, result, distance, speed)
+  | 'landing_swipe'
   | 'source_click'
   | 'landing_scroll_step3'
   | 'start_click'

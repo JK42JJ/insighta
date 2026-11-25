@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -76,11 +78,20 @@ import {
   timeToSeconds,
 } from '@/pages/intro/model/landing-example';
 import {
+  addSample,
+  DRAG_SLOP_PX,
+  dragOffset,
+  judgeSwipe,
+  releaseSpeed,
+  SETTLE_MS,
+  swipeValue,
+  type Sample,
+} from '@/pages/intro/model/landing-swipe';
+import {
   BAND_H,
   BAR_H,
   BAR_IN_S,
   buildScene,
-  CN_H,
   dotsTopAbove,
   GROUND_EDGE,
   readGroup,
@@ -90,10 +101,10 @@ import {
   DOTGO,
   fitStage,
   nextScene,
+  PH1_MS,
   PLAY_RUN_S,
   sceneEventValue,
   SEQ,
-  STEP_LOCK_MS,
   YT_ICON_BOX_H,
   YT_ICON_BOX_W,
   YT_ICON_FILE_H,
@@ -141,12 +152,52 @@ function swipe(dy: number): void {
   fireEvent.pointerMove(stage(), { clientY: 400 + dy / 2 });
   fireEvent.pointerUp(stage(), { clientY: 400 + dy });
 }
-/** Past the step lock (fake clock). */
-function waitLock(): void {
+/** The page settles (fake clock). */
+function settled(): void {
   act(() => {
-    vi.advanceTimersByTime(STEP_LOCK_MS + 1);
+    vi.advanceTimersByTime(SETTLE_MS + 1);
   });
 }
+/** Settled, and late enough for a click to be a tap again. */
+function waitLock(): void {
+  act(() => {
+    vi.advanceTimersByTime(SETTLE_MS + 400);
+  });
+}
+/** One pointer event of a gesture with its own time (ms), for the speed. */
+function ptr(type: 'Down' | 'Move' | 'Up' | 'Cancel', y: number, at: number, x = 200): void {
+  const name = `pointer${type.toLowerCase()}`;
+  const ev = new MouseEvent(name, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+  Object.defineProperty(ev, 'pointerId', { value: 1 });
+  Object.defineProperty(ev, 'timeStamp', { value: at });
+  act(() => {
+    stage().dispatchEvent(ev);
+  });
+}
+/** A finger moving evenly from y=500 by dy in ms, let go at the end (or held still before). */
+function drag(
+  dy: number,
+  ms: number,
+  opts: { dx?: number; hold?: number; end?: 'Up' | 'Cancel' } = {}
+): void {
+  const steps = 8;
+  ptr('Down', 500, 1000);
+  for (let i = 1; i <= steps; i++) {
+    ptr(
+      'Move',
+      500 + (dy * i) / steps,
+      1000 + (ms * i) / steps,
+      200 + ((opts.dx ?? 0) * i) / steps
+    );
+  }
+  ptr(
+    opts.end ?? 'Up',
+    opts.end === 'Cancel' ? 0 : 500 + dy,
+    1000 + ms + (opts.hold ?? 0),
+    200 + (opts.dx ?? 0)
+  );
+}
+const track = (): HTMLElement => screen.getByTestId('lv-track');
 function goTo(target: Scene): void {
   for (let guard = 0; scene() !== target; guard++) {
     if (guard > 10) throw new Error(`stuck at scene ${scene()} going to ${target}`);
@@ -215,39 +266,219 @@ describe('scene order and dots (design SEQ / DOT / DOTGO)', () => {
   });
 });
 
-describe('swipe: one swipe = one scene, 700 ms lock', () => {
-  it('steps on a swipe, ignores a second one inside the lock, and a short drag', () => {
+describe('swipe rules (James 2026-11-25)', () => {
+  const H = 844;
+  it('goes on by distance (12% of the height) or by speed (40% of it per second), both ways', () => {
+    expect(judgeSwipe(-H * 0.12, 0, H)).toBe(1);
+    expect(judgeSwipe(H * 0.12, 0, H)).toBe(-1);
+    expect(judgeSwipe(-H * 0.119, 0, H)).toBeNull();
+    expect(judgeSwipe(H * 0.119, 0, H)).toBeNull();
+    expect(judgeSwipe(-20, -H * 0.4, H)).toBe(1); // a short flick
+    expect(judgeSwipe(20, H * 0.4, H)).toBe(-1);
+    expect(judgeSwipe(-20, -H * 0.39, H)).toBeNull();
+    expect(judgeSwipe(-H * 0.5, H * 0.6, H)).toBeNull(); // thrown back
+    expect(judgeSwipe(0, -H, H)).toBeNull();
+  });
+
+  it('measures the speed over the last 100 ms; a finger that rested has none', () => {
+    let l: Sample[] = [];
+    for (let i = 0; i <= 10; i++) l = addSample(l, { t: i * 20, y: 500 - i * 10 });
+    expect(releaseSpeed(l, 200)).toBeCloseTo(-500, 0);
+    expect(releaseSpeed(l, 400)).toBe(0);
+    expect(l.length).toBeLessThanOrEqual(7);
+  });
+
+  it('follows the finger 1:1, with resistance only at the ends', () => {
+    expect(dragOffset(-200, H, true, true)).toBe(-200);
+    expect(dragOffset(300, H, true, true)).toBe(300);
+    expect(dragOffset(200, H, false, true)).toBe(50);
+    expect(dragOffset(-200, H, true, false)).toBe(-50);
+    expect(dragOffset(-2000, H, true, true)).toBe(-H);
+  });
+
+  it('the usage value fits the server rule', () => {
+    for (const v of [swipeValue(-34, -900, H, true), swipeValue(H * 20, H * 50, H, false)]) {
+      expect(v).toMatch(/^[A-Za-z0-9_-]{1,16}$/);
+    }
+    expect(swipeValue(-84.4, -844, H, true)).toBe('ng_10_100');
+    expect(swipeValue(84.4, 0, H, false)).toBe('pb_10_0');
+  });
+});
+
+describe('paging', () => {
+  it('a long slow drag and a short flick go on, a small slow drag comes back', () => {
     draw();
-    expect(scene()).toBe(0);
-    swipe(-80);
+    drag(-200, 900);
+    settled();
     expect(scene()).toBe(1);
-    swipe(-80); // inside the lock
-    expect(scene()).toBe(1);
-    waitLock();
-    swipe(-20); // shorter than the swipe threshold
-    expect(scene()).toBe(1);
-    swipe(-80);
+    drag(-30, 60); // a flick
+    settled();
     expect(scene()).toBe(2);
-    waitLock();
-    swipe(80); // back
+    drag(-30, 900);
+    settled();
+    expect(scene()).toBe(2);
+    drag(30, 60); // a flick back
+    settled();
+    expect(scene()).toBe(1);
+    drag(-200, 900, { hold: 400 }); // held still at the end: the distance decides
+    settled();
+    expect(scene()).toBe(2);
+  });
+
+  it('a slanted swipe goes on', () => {
+    draw();
+    drag(-60, 120, { dx: 70 });
+    settled();
     expect(scene()).toBe(1);
   });
 
-  it('wheel and keys step the same way and stop at the ends', () => {
+  it('while dragging the page follows 1:1 and the neighbour is beside it', () => {
+    draw();
+    ptr('Down', 500, 0);
+    ptr('Move', 400, 100);
+    const k = fitStage(window.innerWidth, window.innerHeight).k;
+    const at = /translate3d\(0, (-?[\d.]+)px, 0\)/.exec(track().style.transform)!;
+    expect(Number(at[1]) * k).toBeCloseTo(-(100 - DRAG_SLOP_PX), 3);
+    expect(track().style.transition).toBe('none');
+    const pages = [...document.querySelectorAll<HTMLElement>('.lv-page')];
+    expect(pages.map((p) => [p.dataset['page'], p.style.top])).toEqual([
+      ['0', '0%'],
+      ['1', '100%'],
+    ]);
+    expect(pages[1]!.textContent).toContain(S1_TEXT); // the next scene's text comes along
+    expect(pages[1]!.hasAttribute('inert')).toBe(true);
+    ptr('Up', 400, 120);
+    expect(track().style.transition).toContain(`${SETTLE_MS}ms`);
+    settled();
+    expect(scene()).toBe(1);
+    expect(track().style.transform).toBe('none'); // the new page is the current one, in place
+  });
+
+  it('three quick swipes: three scenes (the one under way goes to its end at once)', () => {
+    draw();
+    for (let i = 0; i < 3; i++) drag(-60, 80);
+    settled();
+    expect(scene()).toBe(3);
+    for (let i = 0; i < 3; i++) drag(60, 80);
+    settled();
+    expect(scene()).toBe(0);
+  });
+
+  it('pointercancel is judged by what the finger did; leaving the stage is not an end', () => {
+    draw();
+    drag(-60, 80, { end: 'Cancel' });
+    settled();
+    expect(scene()).toBe(1);
+    ptr('Down', 500, 0);
+    ptr('Move', 300, 300);
+    fireEvent.pointerLeave(stage());
+    expect(scene()).toBe(1);
+    expect(track().style.transform).toContain('translate3d');
+    ptr('Up', 300, 320);
+    settled();
+    expect(scene()).toBe(2);
+  });
+
+  it('the pressed element losing its implicit capture is not an end', () => {
+    draw();
+    ptr('Down', 500, 0);
+    ptr('Move', 440, 200);
+    const lost = new MouseEvent('lostpointercapture', { bubbles: true });
+    Object.defineProperty(lost, 'pointerId', { value: 1 });
+    act(() => {
+      track().dispatchEvent(lost);
+    });
+    ptr('Move', 300, 600);
+    expect(track().style.transition).toBe('none'); // still under the finger
+    ptr('Up', 300, 900);
+    settled();
+    expect(scene()).toBe(1);
+  });
+
+  it('another finger does not disturb the gesture', () => {
+    draw();
+    ptr('Down', 500, 0);
+    ptr('Move', 440, 60);
+    fireEvent.pointerDown(stage(), { clientY: 100, pointerId: 2 });
+    fireEvent.pointerUp(stage(), { clientY: 700, pointerId: 2 });
+    ptr('Up', 420, 80);
+    settled();
+    expect(scene()).toBe(1);
+  });
+
+  it('the steps inside a scene start when its page is in place', () => {
+    draw();
+    waitLock();
+    drag(-200, 200);
+    expect(scene()).toBe(0); // still settling
+    expect(stage().getAttribute('data-phase')).toBe('2');
+    settled();
+    expect([scene(), stage().getAttribute('data-phase')]).toEqual([1, '0']);
+    act(() => {
+      vi.advanceTimersByTime(PH1_MS + 1);
+    });
+    expect(stage().getAttribute('data-phase')).toBe('1');
+  });
+
+  it('a resize during a gesture waits for its end', () => {
+    const [w, h] = [window.innerWidth, window.innerHeight];
+    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+    draw();
+    const before = stage().style.height;
+    ptr('Down', 500, 0);
+    ptr('Move', 440, 60);
+    Object.defineProperty(window, 'innerHeight', { value: h - 90, configurable: true });
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(stage().style.height).toBe(before);
+    ptr('Up', 440, 70);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(stage().style.height).not.toBe(before);
+    Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
+    Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
+  });
+
+  it('keeps each gesture as a usage event', () => {
+    draw();
+    drag(-200, 900);
+    settled();
+    drag(-30, 900);
+    settled();
+    const v = readLandingEvents()
+      .filter((e) => e.kind === 'landing_swipe')
+      .map((e) => e.value);
+    expect(v).toHaveLength(2);
+    expect(v[0]).toMatch(/^ng_\d+_\d+$/);
+    expect(v[1]).toMatch(/^nb_\d+_\d+$/);
+  });
+
+  it('no pull-to-refresh while the landing is shown', () => {
+    draw();
+    expect(document.documentElement.style.overscrollBehavior).toBe('none');
+    expect(document.body.style.overscrollBehavior).toBe('none');
+    cleanup();
+    expect(document.body.style.overscrollBehavior).toBe('');
+  });
+
+  it('wheel (one push = one scene) and keys page the same way and stop at the ends', () => {
     draw();
     fireEvent.wheel(stage(), { deltaY: 100 });
     fireEvent.wheel(stage(), { deltaY: 100 });
+    settled();
     expect(scene()).toBe(1);
-    waitLock();
     fireEvent.keyDown(stage(), { key: 'ArrowDown' });
+    settled();
     expect(scene()).toBe(2);
-    waitLock();
     fireEvent.keyDown(stage(), { key: 'ArrowUp' });
+    settled();
     expect(scene()).toBe(1);
-    waitLock();
     fireEvent.keyDown(stage(), { key: 'PageUp' });
-    waitLock();
+    settled();
     fireEvent.keyDown(stage(), { key: 'PageUp' });
+    settled();
     expect(scene()).toBe(0);
   });
 
@@ -270,6 +501,51 @@ describe('swipe: one swipe = one scene, 700 ms lock', () => {
     goTo(4);
     fireEvent.click(screen.getByTestId('lv-source'));
     expect(scene()).toBe(5);
+  });
+});
+
+describe('header buttons (James 2026-11-25)', () => {
+  const down = (el: HTMLElement, x = 40, y = 20): void => {
+    fireEvent.pointerDown(el, { clientX: x, clientY: y });
+  };
+  it('both are buttons; the ground is on from the touch to the release', () => {
+    draw();
+    for (const id of ['lv-brand', 'lv-login']) {
+      const b = screen.getByTestId(id);
+      expect(b.tagName).toBe('BUTTON');
+      down(b);
+      expect(b.hasAttribute('data-pressed')).toBe(true);
+      fireEvent.pointerUp(b, { clientX: 40, clientY: 20 });
+      expect(b.hasAttribute('data-pressed')).toBe(false);
+    }
+  });
+
+  it('Insighta goes to the first scene (nothing happens there)', () => {
+    const onSignIn = draw();
+    goTo(3);
+    fireEvent.click(screen.getByTestId('lv-brand'));
+    expect(scene()).toBe(0);
+    fireEvent.click(screen.getByTestId('lv-brand'));
+    expect(scene()).toBe(0);
+    expect(onSignIn).not.toHaveBeenCalled();
+  });
+
+  it('a gesture that starts on a header button never turns the page; 10px cancels the press', () => {
+    const onSignIn = draw();
+    const b = screen.getByTestId('lv-login');
+    down(b);
+    fireEvent.pointerMove(b, { clientX: 40, clientY: 40 });
+    expect(b.hasAttribute('data-pressed')).toBe(false);
+    fireEvent.pointerMove(b, { clientX: 40, clientY: 300 });
+    fireEvent.pointerUp(b, { clientX: 40, clientY: 300 });
+    fireEvent.click(b, { detail: 1 });
+    settled();
+    expect(scene()).toBe(0);
+    expect(onSignIn).not.toHaveBeenCalled();
+    down(b);
+    fireEvent.pointerUp(b, { clientX: 40, clientY: 20 });
+    fireEvent.click(b, { detail: 1 });
+    expect(onSignIn).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -437,9 +713,11 @@ describe('YouTube policy', () => {
     goTo(4);
     fireEvent.click(screen.getByTestId('lv-source'));
     expect(scene()).toBe(5);
-    expect(hero.style.pointerEvents).toBe('auto');
-    expect(hero.tabIndex).toBe(0);
-    fireEvent.click(hero);
+    const open = screen.getByTestId('lv-hero');
+    expect(open.style.pointerEvents).toBe('auto');
+    expect(open.tabIndex).toBe(0);
+    waitLock();
+    fireEvent.click(open);
     const ex = LANDING_EXAMPLE;
     expectPlays(ex.videos[ex.heroIndex]!.id, timeToSeconds(ex.heroTime));
     // closing comes back to the same scene
@@ -604,7 +882,7 @@ describe('events (kept in the tab until sign-in)', () => {
     fireEvent.click(screen.getByTestId('lv-source'));
     waitLock();
     goTo(7);
-    expect(readLandingEvents()).toEqual([
+    expect(readLandingEvents().filter((e) => e.kind !== 'landing_swipe')).toEqual([
       { kind: 'landing_open' },
       { kind: 'landing_scene', value: 's1' },
       { kind: 'landing_scene', value: 's2' },
@@ -695,7 +973,9 @@ describe('reduced motion', () => {
     setReduced(true);
     draw();
     expect(stage().hasAttribute('data-motion')).toBe(false);
-    expect(document.querySelector('.lv-blobs')!.hasAttribute('data-move')).toBe(false);
+    expect(document.querySelector('[data-page="0"] .lv-blobs')!.hasAttribute('data-move')).toBe(
+      false
+    );
     const deckBefore = screen.getAllByTestId('lv-deck-card').map((d) => d.style.transform);
     act(() => {
       vi.advanceTimersByTime(8000);
@@ -705,7 +985,9 @@ describe('reduced motion', () => {
     expect(scene()).toBe(1);
     expect(stage().getAttribute('data-phase')).toBe('2');
     expect(screen.getByTestId('lv-text-1').style.transition).toBe('none');
-    expect(document.querySelector('.lv-wall-strip')!.hasAttribute('data-move')).toBe(false);
+    expect(
+      document.querySelector('[data-page="0"] .lv-wall-strip')!.hasAttribute('data-move')
+    ).toBe(false);
     for (const c of buildScene(2, 2, false, null).cells) expect(c.tr).toBe('none');
   });
 
@@ -725,7 +1007,10 @@ describe('reduced motion', () => {
         .join('|')
     ).not.toBe(before);
     swipe(-80);
-    expect(document.querySelector('.lv-wall-strip')!.hasAttribute('data-move')).toBe(true);
+    settled();
+    expect(
+      document.querySelector('[data-page="0"] .lv-wall-strip')!.hasAttribute('data-move')
+    ).toBe(true);
   });
 });
 
@@ -827,21 +1112,44 @@ describe('nothing over a thumbnail (James 2026-11-25)', () => {
     expect([a.bar.lo, b.bar.lo]).toEqual([0, 1]);
   });
 
-  it('scene 5: brief card, line, hero card in order, above the Google button', () => {
+  it('scene 5: the brief card is under the text, unscaled, its lower end behind the video', () => {
     const { v, hero } = heroAt(5);
-    const bottom = (h: number): number => {
-      const m = /translate\((-?[\d.]+)px,(-?[\d.]+)px\) scale\(([\d.]+)\)/.exec(
-        buildScene(5, 2, false, null, 0, LANDING_EXAMPLE, h).card.t
-      )!;
-      const top = 148 + n(m[2]!);
-      expect(top).toBeGreaterThanOrEqual(120); // the two text lines end there
-      return top + n(m[3]!) * h;
-    };
-    for (const h of [160, 202, 284]) expect(bottom(h)).toBeCloseTo(n(v.cn.t), 0);
-    expect(n(v.cn.t) + CN_H).toBeCloseTo(n(hero.t), 1);
-    expect(n(v.band.t) + BAND_H).toBeLessThanOrEqual(580);
+    for (const h of [160, 208, 284]) {
+      const c = buildScene(5, 2, false, null, 0, LANDING_EXAMPLE, h).card.t;
+      expect(c).toBe('translateY(-14px)'); // 148 - 14 = 134: the two text lines end at 133
+    }
+    expect(n(hero.t)).toBe(318);
+    expect(n(v.band.t) + BAND_H).toBeLessThanOrEqual(582);
     expect(v.credit.top + YT_ICON_BOX_H).toBeLessThanOrEqual(n(v.band.t) + BAND_H);
     expect(v.credit.top).toBeGreaterThan(n(v.bar.t) + BAR_H - 1);
+  });
+
+  it('text keeps its size: no scene scales the card, the source chip or a button', () => {
+    for (const s of SEQ) {
+      for (const ph of [0, 1, 2] as const) {
+        expect(buildScene(s, ph, true, null, 0, LANDING_EXAMPLE, 208).card.t).not.toContain(
+          'scale'
+        );
+      }
+    }
+    const css = readFileSync('src/pages/intro/ui/landing.css', 'utf8');
+    const rule = (sel: string): string =>
+      new RegExp(`(?:^|\\n)${sel.replace('.', '\\.')} \\{([^}]*)\\}`).exec(css)![1]!;
+    for (const sel of ['.lv-h1', '.lv-h2a', '.lv-t6-h']) {
+      expect(rule(sel)).toContain('font-size: 34px');
+      expect(rule(sel)).toContain('line-height: 1.3;');
+      expect(rule(sel)).toContain('letter-spacing: -0.045em');
+    }
+    for (const sel of ['.lv-t0', '.lv-t1', '.lv-t2', '.lv-tn', '.lv-t6']) {
+      expect(rule(sel)).toContain('top: 80px');
+    }
+    for (const sel of ['.lv-t0-p', '.lv-t1', '.lv-t2-p', '.lv-tn', '.lv-t6-p', '.lv-card-p']) {
+      expect(rule(sel)).toContain('font-size: 17px');
+    }
+    for (const sel of ['.lv-deck-h', '.lv-card-h']) expect(rule(sel)).toContain('font-size: 22px');
+    for (const sel of ['.lv-kicker', '.lv-src', '.lv-hint', '.lv-band', '.lv-credit']) {
+      expect(rule(sel)).toContain('font-size: 13px');
+    }
   });
 
   it('the thumbnail casts no shadow on the hero card (the card carries it)', () => {
@@ -893,7 +1201,7 @@ describe('flaws seen in the stg captures (James 2026-11-25)', () => {
     (count) => {
       for (const h of [160, 202, 284]) {
         const g = readGroup(h, count);
-        const gapAbove = g.card - 120;
+        const gapAbove = g.card - 140;
         const chipsGap = g.chips - (g.card + h);
         const gapBelow = 582 - (g.credit + YT_ICON_BOX_H);
         expect(gapAbove).toBeGreaterThanOrEqual(0);

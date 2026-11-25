@@ -14,6 +14,7 @@ const USER = '11111111-1111-4111-8111-111111111111';
 const LANDING_KINDS = [
   'landing_open',
   'landing_scene',
+  'landing_swipe',
   'source_click',
   'landing_scroll_step3',
   'start_click',
@@ -41,6 +42,12 @@ describe('usage event allow-list', () => {
   it('start_click carries which button (sticky or final) as its value', () => {
     expect(validateUsageEvent({ kind: 'start_click', value: 'sticky' }).value).toBe('sticky');
     expect(validateUsageEvent({ kind: 'start_click', value: 'final' }).value).toBe('final');
+  });
+
+  it('landing_swipe carries direction + result, distance and speed', () => {
+    for (const value of ['ng_34_120', 'pb_2_0', 'nb_999_999']) {
+      expect(validateUsageEvent({ kind: 'landing_swipe', value }).value).toBe(value);
+    }
   });
 
   it('landing v4: landing_scene carries the dot (s1..s6), start_click the header link too', () => {

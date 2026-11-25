@@ -10,6 +10,8 @@ export type LandingEventKind =
   | 'landing_open'
   /** v4 (2026-11-24): a dot reached, value s1..s6 (once per value). */
   | 'landing_scene'
+  /** 2026-11-25: one gesture, value "ng_34_120" (landing-swipe.ts swipeValue). */
+  | 'landing_swipe'
   /** v4: the source tap in scene 5 (once). */
   | 'source_click'
   /** @deprecated legacy scroll landing (-legacy/IntroPage); kept so its page still records. */
@@ -20,7 +22,9 @@ export type LandingEventKind =
 export type StartButton = 'header' | 'sticky' | 'final';
 /** A landing_scene value: the dot reached. */
 export type SceneValue = 's1' | 's2' | 's3' | 's4' | 's5' | 's6';
-export type LandingEventValue = StartButton | SceneValue;
+/** A landing_swipe value: direction and result, distance %, speed %. */
+export type SwipeValue = string;
+export type LandingEventValue = StartButton | SceneValue | SwipeValue;
 /** How the visitor left for sign-in: a Google button or ADD (shows the 곧 출시 notice after). */
 export type LandingEntry = 'google' | 'add';
 
@@ -40,6 +44,8 @@ export const LANDING_ARRIVAL_KEY = 'insighta-landing-arrival';
 export const LANDING_ARRIVAL_MAX_MS = 15 * 60 * 1000;
 /** Kept at most; repeated taps beyond this are not kept. */
 export const LANDING_EVENTS_MAX = 20;
+/** Gestures kept per visit, besides the events above (to tune the swipe rules). */
+export const LANDING_SWIPES_MAX = 30;
 /** Recorded once per visit (tab). */
 const ONCE: ReadonlySet<LandingEventKind> = new Set([
   'landing_open',
@@ -53,6 +59,7 @@ const VALUE_RE = /^[A-Za-z0-9_-]{1,16}$/;
 const KINDS: ReadonlySet<string> = new Set<LandingEventKind>([
   'landing_open',
   'landing_scene',
+  'landing_swipe',
   'source_click',
   'landing_scroll_step3',
   'start_click',
@@ -95,7 +102,14 @@ export function recordLandingEvent(kind: LandingEventKind, value?: LandingEventV
   const list = readLandingEvents();
   if (ONCE.has(kind) && list.some((e) => e.kind === kind)) return;
   if (ONCE_PER_VALUE.has(kind) && list.some((e) => e.kind === kind && e.value === value)) return;
-  if (list.length >= LANDING_EVENTS_MAX) return;
+  const swipes = list.filter((e) => e.kind === 'landing_swipe').length;
+  if (
+    kind === 'landing_swipe'
+      ? swipes >= LANDING_SWIPES_MAX
+      : list.length - swipes >= LANDING_EVENTS_MAX
+  ) {
+    return;
+  }
   list.push(value === undefined ? { kind } : { kind, value });
   try {
     s.setItem(LANDING_EVENTS_KEY, JSON.stringify(list));
