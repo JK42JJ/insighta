@@ -12,6 +12,8 @@ import { HomeHead } from '@/features/morning-feed/HomeHead';
 import {
   headlineSize,
   HOME_BUTTON_LABEL,
+  homeTint,
+  nextWithPage,
   seenDateLabel,
 } from '@/features/morning-feed/watch-home-model';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
@@ -31,7 +33,9 @@ import './watch-home.css';
  * ease-out at 450 ms. Domain switch: the chip, the domain name and the date change at once (the
  * chip's colour in 0.2 s), the headline fades out 180 ms ease-in, the text changes, it fades in
  * 450 ms ease-out while the domain name and the button slide from where they were in 300 ms cubic-bezier(.2,.8,.2,1). Taps during a switch are
- * ignored. Reduced motion: no motion at all. The motion waits for the fonts at most 1.5 s.
+ * ignored, except on the headline (below). The headline rolls to the next domain with a brief, after the last one the
+ * first; a tap during a switch is kept and done after it. The ground carries the domain's colour from the bottom up,
+ * changing in 1 s (design "Insighta App Prototype", 2026-11-25). Reduced motion: no motion at all. The motion waits for the fonts at most 1.5 s.
  */
 
 export interface HomeChip {
@@ -55,7 +59,7 @@ export interface WatchHomeProps {
   initial: string;
   /** A chip of a domain without a brief (none are shown to participants). */
   onOpen: (cell: string) => void;
-  /** The button and the headline: that domain's brief. */
+  /** The button: that domain's brief. */
   onOpenPage: (cell: string) => void;
   /** The date in the head: past briefs, from the shown brief's date (absent = date text only). */
   onPast?: (cell: string, date: string) => void;
@@ -69,14 +73,16 @@ export interface WatchHomeProps {
   onTop?: boolean;
   /** A headline is on screen. */
   onHeadline?: (cell: string) => void;
-  /** The domain was changed with a chip. */
-  onSwitch?: (from: string, to: string) => void;
+  /** The domain was changed, with a chip or by rolling the headline. */
+  onSwitch?: (from: string, to: string, how: 'chip' | 'headline') => void;
 }
 
 const FADE_IN_MS = 450;
 const REST_IN_MS = 300;
 const FADE_OUT_MS = 180;
 const SLIDE_MS = 300;
+/** The new headline waits this long when its lines changed, so the sliding name and button are off its place. */
+const CLEAR_MS = 100;
 const SLIDE_EASE = 'cubic-bezier(.2,.8,.2,1)';
 /** Below this width the chips use 12.5 px (README §배치 5). */
 const NARROW_W = 360;
@@ -89,9 +95,15 @@ function reducedMotion(): boolean {
   );
 }
 
+function cellsOf(p: WatchHomeProps): string[] {
+  return p.chips.map((c) => c.cell);
+}
+
 export function WatchHome(p: WatchHomeProps): JSX.Element {
   const [sel, setSel] = useState(p.initial);
   const [shown, setShown] = useState(p.initial);
+  /** One more per text change, so a roll that ends where it began still fades in. */
+  const [turn, setTurn] = useState(0);
   const [ready, setReady] = useState(!!p.settled);
   const [acct, setAcct] = useState(false);
   const head = useRef<HTMLHeadingElement>(null);
@@ -101,6 +113,8 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
   const chipsEl = useRef<HTMLDivElement>(null);
   const anims = useRef<Animation[]>([]);
   const busy = useRef(false);
+  /** Headline taps that came during a switch. */
+  const rolls = useRef(0);
   const entrance = useRef(false);
   const swap = useRef<{ meta: number | null; btn: number | null } | null>(null);
   const timer = useRef<number | null>(null);
@@ -164,23 +178,25 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     if (!before) return;
     swap.current = null;
     stop();
+    const moved = (el: HTMLElement | null, was: number | null): number =>
+      el && was != null ? Math.round(was - el.getBoundingClientRect().top) : 0;
+    const far = [moved(meta.current, before.meta), moved(btn.current, before.btn)];
     animate(head.current, [{ opacity: 0 }, { opacity: 1 }], {
       duration: FADE_IN_MS,
+      delay: far.some((d) => d !== 0) ? CLEAR_MS : 0,
       easing: 'ease-out',
     });
-    const slide = (el: HTMLElement | null, was: number | null): void => {
-      if (!el || was == null) return;
-      const d = was - el.offsetTop;
+    const slide = (el: HTMLElement | null, d: number): void => {
       if (d)
         animate(el, [{ transform: 'translateY(' + d + 'px)' }, { transform: 'none' }], {
           duration: SLIDE_MS,
           easing: SLIDE_EASE,
         });
     };
-    slide(meta.current, before.meta);
-    slide(btn.current, before.btn);
+    slide(meta.current, far[0]!);
+    slide(btn.current, far[1]!);
     busy.current = false;
-  }, [shown]);
+  }, [shown, turn]);
 
   // the domain read last (order 2026-11-25 B12): set while another screen covers the home, at once
   const { show } = p;
@@ -192,6 +208,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     stop();
     if (timer.current != null) window.clearTimeout(timer.current);
     busy.current = false;
+    rolls.current = 0;
     swap.current = null;
     setSel(show);
     setShown(show);
@@ -207,39 +224,61 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
   }, [ready, onTop, shown]);
 
   const pick = useCallback(
-    (cell: string) => {
+    (cell: string, how: 'chip' | 'headline' = 'chip') => {
       if (busy.current || cell === sel) return;
       if (!p.pages[cell]) {
         p.onOpen(cell);
         return;
       }
       p.onShow?.(cell);
-      p.onSwitch?.(sel, cell);
-      stop();
+      p.onSwitch?.(sel, cell, how);
       if (reducedMotion() || !ready) {
+        stop();
         setSel(cell);
         setShown(cell);
         return;
       }
       busy.current = true;
-      animate(head.current, [{ opacity: 1 }, { opacity: 0 }], {
+      // from how it looks now: a headline still fading in does not flash to full first
+      const now = head.current ? Number(getComputedStyle(head.current).opacity) : 1;
+      head.current?.getAnimations?.().forEach((a) => a.cancel());
+      animate(head.current, [{ opacity: now }, { opacity: 0 }], {
         duration: FADE_OUT_MS,
         easing: 'ease-in',
         fill: 'forwards',
       });
-      const was = {
-        meta: meta.current ? meta.current.offsetTop : null,
-        btn: btn.current ? btn.current.offsetTop : null,
-      };
       setSel(cell);
       timer.current = window.setTimeout(() => {
-        swap.current = was;
-        setShown(cell);
+        // where they are on the screen: the block is centred, so it moves with the line count
+        swap.current = {
+          meta: meta.current ? meta.current.getBoundingClientRect().top : null,
+          btn: btn.current ? btn.current.getBoundingClientRect().top : null,
+        };
+        // taps on the headline meanwhile: the text changes once, to where they lead
+        const to =
+          (rolls.current > 0 && nextWithPage(cellsOf(p), p.pages, cell, rolls.current)) || cell;
+        rolls.current = 0;
+        if (to !== cell) {
+          p.onShow?.(to);
+          p.onSwitch?.(cell, to, 'headline');
+          setSel(to);
+        }
+        setShown(to);
+        setTurn((n) => n + 1);
       }, FADE_OUT_MS);
     },
     // stop/animate only touch refs
     [sel, ready, p]
   );
+
+  const roll = (): void => {
+    if (busy.current) {
+      rolls.current += 1;
+      return;
+    }
+    const to = nextWithPage(cellsOf(p), p.pages, sel);
+    if (to) pick(to, 'headline');
+  };
 
   const text = p.pages[shown]?.headline ?? '';
   const day = p.pages[sel]?.seenDate ?? '';
@@ -259,6 +298,12 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
       data-narrow={p.frame.width < NARROW_W ? '' : undefined}
       style={rootStyle}
     >
+      <div
+        className="mf-home-tint"
+        data-testid="mf-home-tint"
+        data-tint={homeTint(shown)}
+        aria-hidden="true"
+      />
       <div className="mf-home-col">
         <HomeHead
           account={p.account}
@@ -283,7 +328,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
               data-testid="mf-home-headline"
               data-link=""
               data-press="row"
-              onClick={() => p.onOpenPage(sel)}
+              onClick={roll}
               style={{
                 fontSize: size.fontPx + 'px',
                 letterSpacing: size.trackEm + 'em',

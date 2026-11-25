@@ -585,7 +585,9 @@ export function MorningWatch({
           onHeadline={(cell) =>
             recordBriefEvent('headline_view', { cell, seenDate: home.pages[cell]?.seenDate })
           }
-          onSwitch={(from, to) => recordBriefEvent('field_switch', { cell: to, from, to })}
+          onSwitch={(from, to, how) =>
+            recordBriefEvent('field_switch', { cell: to, from, to, value: how })
+          }
           onOpenPage={(cell) => {
             const h = home.pages[cell];
             if (!h) return;

@@ -6,6 +6,8 @@ import {
   seenDateLabel,
   briefDateLabel,
   HOME_BUTTON_LABEL,
+  homeTint,
+  nextWithPage,
 } from '@/features/morning-feed/watch-home-model';
 
 const S21 = '에이전트의 성패는 모델보다 평가 체계에서 갈린다';
@@ -50,5 +52,32 @@ describe('home button (decision 2026-11-14: always one)', () => {
     expect(briefDateLabel('2026-11-16', '2026-11-16')).toBe('오늘 · 11월 16일');
     expect(briefDateLabel('2026-11-13', '2026-11-16')).toBe('11월 13일');
     expect(briefDateLabel('2026-02-30', '2026-11-16')).toBe('');
+  });
+});
+
+describe('home headline roll and ground colour (2026-11-25)', () => {
+  const cells = ['기술/개발', '비즈니스/커리어', '재테크/투자'];
+  it('goes to the next domain with a brief, round again; null when there is no other', () => {
+    const pages = { '기술/개발': 1, '재테크/투자': 1 };
+    expect(nextWithPage(cells, pages, '기술/개발')).toBe('재테크/투자');
+    expect(nextWithPage(cells, pages, '재테크/투자')).toBe('기술/개발');
+    expect(nextWithPage(cells, pages, '기술/개발', 2)).toBeNull();
+    expect(nextWithPage(cells, { '기술/개발': 1 }, '기술/개발')).toBeNull();
+    expect(nextWithPage(cells, {}, '기술/개발')).toBeNull();
+  });
+  it('every shown domain has its own colour', () => {
+    const all = [
+      '기술/개발',
+      '비즈니스/커리어',
+      '재테크/투자',
+      '학습/교육',
+      '건강/피트니스',
+      '인간관계/커뮤니티',
+      '창작/예술',
+      '라이프스타일/여행',
+    ].map(homeTint);
+    expect(all.every(Boolean)).toBe(true);
+    expect(new Set(all).size).toBe(8);
+    expect(homeTint('오늘 전체')).toBeUndefined();
   });
 });

@@ -16,10 +16,59 @@
   /* the sentence whose source is shown */
   --h-lit: rgba(58, 110, 165, 0.14);
   --h-clear: transparent;
+  /* the ground's colour per domain (design 2026-11-25) */
+  --h-tint-tech: #a9b8da;
+  --h-tint-biz: #a7c2c9;
+  --h-tint-fin: #b9cdb0;
+  --h-tint-learn: #e2cf9e;
+  --h-tint-health: #b4d3bf;
+  --h-tint-rel: #e3bdb4;
+  --h-tint-art: #c7b9de;
+  --h-tint-life: #e6c9a6;
   background: var(--h-bg);
   color: var(--h-fg);
   font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   font-synthesis: none;
+}
+/* under everything: full at the bottom, gone at 64 % of the height; 'soft' strength (.5) of the design */
+.mf-home-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-color: var(--h-bg);
+  transition: background-color 1s ease;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.6) 26%, transparent 64%);
+  mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.6) 26%, transparent 64%);
+}
+.mf-home-tint[data-tint='tech'] {
+  background-color: var(--h-tint-tech);
+}
+.mf-home-tint[data-tint='biz'] {
+  background-color: var(--h-tint-biz);
+}
+.mf-home-tint[data-tint='fin'] {
+  background-color: var(--h-tint-fin);
+}
+.mf-home-tint[data-tint='learn'] {
+  background-color: var(--h-tint-learn);
+}
+.mf-home-tint[data-tint='health'] {
+  background-color: var(--h-tint-health);
+}
+.mf-home-tint[data-tint='rel'] {
+  background-color: var(--h-tint-rel);
+}
+.mf-home-tint[data-tint='art'] {
+  background-color: var(--h-tint-art);
+}
+.mf-home-tint[data-tint='life'] {
+  background-color: var(--h-tint-life);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-home-tint {
+    transition: none;
+  }
 }
 .mf-home-col {
   position: absolute;

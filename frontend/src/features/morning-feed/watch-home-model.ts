@@ -68,3 +68,32 @@ export function briefDateLabel(day: string, today: string): string {
   const label = d.getUTCMonth() + 1 + '월 ' + d.getUTCDate() + '일';
   return day === today ? '오늘 · ' + label : label;
 }
+
+/** Colour of the home's ground per domain (design "Insighta App Prototype", 2026-11-25); drawn in watch-home.css. */
+const HOME_TINTS: Readonly<Record<string, string>> = {
+  '기술/개발': 'tech',
+  '비즈니스/커리어': 'biz',
+  '재테크/투자': 'fin',
+  '학습/교육': 'learn',
+  '건강/피트니스': 'health',
+  '인간관계/커뮤니티': 'rel',
+  '창작/예술': 'art',
+  '라이프스타일/여행': 'life',
+};
+/** The domain's colour name; a domain without one has the plain ground. */
+export function homeTint(cell: string): string | undefined {
+  return HOME_TINTS[cell];
+}
+
+/** The domain `steps` further among those with a brief, in chip order, round again; null = only this one. */
+export function nextWithPage(
+  cells: string[],
+  pages: Record<string, unknown>,
+  from: string,
+  steps = 1
+): string | null {
+  const open = cells.filter((c) => c in pages);
+  if (open.length === 0) return null;
+  const to = open[(Math.max(0, open.indexOf(from)) + steps) % open.length];
+  return to === undefined || to === from ? null : to;
+}

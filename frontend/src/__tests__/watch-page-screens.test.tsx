@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { MorningPage } from '@/features/morning-cards/api';
 
@@ -272,11 +272,85 @@ describe('daily home routing', () => {
     expect(screen.getByTestId('mf-home-enter').textContent).toContain('브리프 읽기');
     fireEvent.click(screen.getByTestId('mf-home-enter'));
     expect(onOpenPage).toHaveBeenLastCalledWith('재테크/투자');
+    // the headline rolls to the next domain with a brief (학습 has none), after the last the first
+    const opened = onOpenPage.mock.calls.length;
+    expect(screen.getByTestId('mf-home-tint').getAttribute('data-tint')).toBe('fin');
     fireEvent.click(screen.getByTestId('mf-home-headline'));
-    expect(onOpenPage).toHaveBeenCalledTimes(3);
+    expect(screen.getByTestId('mf-home-headline').textContent).toBe('첫 헤드라인');
+    expect(screen.getByTestId('mf-home-domain').textContent).toBe('기술·개발');
+    expect(screen.getByTestId('mf-home-tint').getAttribute('data-tint')).toBe('tech');
+    expect(chips[0]!.hasAttribute('data-on')).toBe(true);
+    fireEvent.click(screen.getByTestId('mf-home-headline'));
+    expect(screen.getByTestId('mf-home-headline').textContent).toBe('둘째 헤드라인');
+    expect(onOpenPage).toHaveBeenCalledTimes(opened);
+    expect(onOpen).toHaveBeenCalledTimes(1);
     // every pressable on the home has a pressed look
     for (const b of Array.from(document.querySelectorAll('button'))) {
       expect(b.hasAttribute('data-press')).toBe(true);
+    }
+  });
+});
+
+describe('rolling the headline fast', () => {
+  const three = {
+    '기술/개발': { headline: '하나', seenDate: '2026-11-25' },
+    '비즈니스/커리어': { headline: '둘', seenDate: '2026-11-25' },
+    '재테크/투자': { headline: '셋', seenDate: '2026-11-25' },
+  };
+  const draw = (pages: typeof three | Partial<typeof three>, onSwitch = vi.fn()) => {
+    render(
+      <WatchHome
+        frame={FRAME}
+        settled
+        chips={Object.keys(pages).map((cell) => ({ cell, title: cell }))}
+        pages={pages as typeof three}
+        initial="기술/개발"
+        onOpen={() => undefined}
+        onOpenPage={() => undefined}
+        onSwitch={onSwitch}
+      />
+    );
+    return onSwitch;
+  };
+  const head = () => screen.getByTestId('mf-home-headline');
+  // happy-dom reports every cancelled animation as an unhandled rejection (browsers do not)
+  const real = Element.prototype.animate;
+  beforeAll(() => void Reflect.set(Element.prototype, 'animate', undefined));
+  afterAll(() => void Reflect.set(Element.prototype, 'animate', real));
+  it('taps during a switch change the text once, to where they lead', () => {
+    vi.useFakeTimers();
+    try {
+      const onSwitch = draw(three);
+      fireEvent.click(head());
+      fireEvent.click(head());
+      expect(head().textContent).toBe('하나');
+      act(() => void vi.advanceTimersByTime(200));
+      expect(head().textContent).toBe('셋');
+      expect(onSwitch.mock.calls).toEqual([
+        ['기술/개발', '비즈니스/커리어', 'headline'],
+        ['비즈니스/커리어', '재테크/투자', 'headline'],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('a roll that ends where it began is not stuck', () => {
+    vi.useFakeTimers();
+    try {
+      const { '재테크/투자': _gone, ...two } = three;
+      draw(two);
+      fireEvent.click(head());
+      fireEvent.click(head());
+      act(() => void vi.advanceTimersByTime(200));
+      fireEvent.click(head());
+      act(() => void vi.advanceTimersByTime(200));
+      expect(head().textContent).toMatch(/하나|둘/);
+      const was = head().textContent;
+      fireEvent.click(head());
+      act(() => void vi.advanceTimersByTime(200));
+      expect(head().textContent).not.toBe(was);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
