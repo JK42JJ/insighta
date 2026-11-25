@@ -383,7 +383,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
 
               {p.rest.length > 0 ? (
                 <div className="mf-page-rest" data-testid="mf-page-rest">
-                  <div className="mf-page-label">다른 도메인</div>
+                  <div className="mf-page-label">다른 분야</div>
                   <div className="mf-home-chips">
                     {p.rest.map((c) => (
                       <button

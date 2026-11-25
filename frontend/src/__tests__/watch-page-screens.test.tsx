@@ -89,7 +89,7 @@ describe('브리프 page (2026-11-14 user test copy)', () => {
     fireEvent.click(screen.getByTestId('mf-page-note-toggle'));
     expect(screen.getByTestId('mf-page-note-toggle').textContent).toContain('접기');
     expect(screen.getByTestId('mf-page-videos').textContent).toContain('근거가 된 영상');
-    expect(screen.getByTestId('mf-page-rest').textContent).toContain('다른 도메인');
+    expect(screen.getByTestId('mf-page-rest').textContent).toContain('다른 분야');
     expect(screen.getByTestId('mf-page-past').textContent).toContain('지난 브리프');
     expect(screen.getByTestId('mf-page-home').textContent).toBe('홈');
     expect(screen.getByTestId('mf-page-seen').textContent).toBe('오늘 · 11월 14일');

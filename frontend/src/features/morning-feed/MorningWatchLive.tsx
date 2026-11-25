@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useLandingArrival } from '@/features/landing-intro';
 import { toFeedCard } from '@/features/morning-feed/feed-format';
+import { keepTrying, TELL_AFTER_TRIES } from '@/features/morning-feed/first-load';
 import { takeWatchStart } from '@/features/morning-feed/watch-prefetch';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 import { WatchHomeEmpty } from '@/features/morning-feed/WatchHome';
@@ -99,7 +100,13 @@ export function MorningWatchLive(): JSX.Element {
 
   useEffect(() => {
     let alive = true;
-    takeWatchStart()
+    void keepTrying(
+      takeWatchStart,
+      () => alive,
+      (tries) => {
+        if (alive && tries >= TELL_AFTER_TRIES) setState({ status: 'error' });
+      }
+    )
       .then(([t, history, pages]) => {
         if (!alive) return;
         if (t === null) {

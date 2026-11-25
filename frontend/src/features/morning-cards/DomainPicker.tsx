@@ -10,7 +10,7 @@ interface DomainPickerProps {
 /** Three-option domain picker for the morning cards screen. */
 export function DomainPicker({ value, onChange }: DomainPickerProps) {
   return (
-    <div role="tablist" aria-label="도메인" className="flex w-full gap-2">
+    <div role="tablist" aria-label="분야" className="flex w-full gap-2">
       {MORNING_CARD_DOMAIN_KEYS.map((key) => {
         const selected = key === value;
         return (

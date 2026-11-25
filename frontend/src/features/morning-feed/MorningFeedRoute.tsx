@@ -1,13 +1,14 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { fetchMorningCardsStatus } from '@/features/morning-cards/api';
+import { keepTrying, lazyScreen } from '@/features/morning-feed/first-load';
 import { isDeckView } from '@/features/morning-feed/morning-view';
 import { MorningFeedLive } from '@/features/morning-feed/MorningFeedLive';
 import { prefetchWatchStart } from '@/features/morning-feed/watch-prefetch';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 
-const MorningWatchLive = lazy(() =>
+const MorningWatchLive = lazyScreen(() =>
   import('@/features/morning-feed/MorningWatchLive').then((m) => ({
     default: m.MorningWatchLive,
   }))
@@ -25,9 +26,10 @@ export function MorningFeedRoute() {
     let alive = true;
     // the watch screen's first reads go out together with the flag check, not after it
     if (watchView) prefetchWatchStart();
-    fetchMorningCardsStatus()
-      .then((s) => alive && setOn(s.enabled))
-      .catch(() => alive && setOn(false));
+    // only an answer decides: a request that fails is tried again, it is not "off"
+    void keepTrying(fetchMorningCardsStatus, () => alive).then((s) => {
+      if (alive) setOn(s.enabled);
+    });
     return () => {
       alive = false;
     };

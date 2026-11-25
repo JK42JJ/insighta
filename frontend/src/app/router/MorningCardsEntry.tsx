@@ -1,7 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { useAuthContext } from '@/features/auth/model/AuthContext';
+import { lazyScreen } from '@/features/morning-feed/first-load';
 import { isDeckView } from '@/features/morning-feed/morning-view';
 import { parseFixtureScreen } from '@/features/morning-feed/fixture-screen';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
@@ -9,21 +10,21 @@ import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 import { AUTH_RETURN_KEY } from './mobile-auth-return';
 import { ProtectedRoute } from './ProtectedRoute';
 
-const MorningFeedRoute = lazy(() =>
+const MorningFeedRoute = lazyScreen(() =>
   import('@/features/morning-feed/MorningFeedRoute').then((m) => ({ default: m.MorningFeedRoute }))
 );
-const MorningWatchFixture = lazy(() =>
+const MorningWatchFixture = lazyScreen(() =>
   import('@/features/morning-feed/MorningWatchFixture').then((m) => ({
     default: m.MorningWatchFixture,
   }))
 );
-const MorningWatchR3Fixture = lazy(() =>
+const MorningWatchR3Fixture = lazyScreen(() =>
   import('@/features/morning-feed/MorningWatchR3Fixture').then((m) => ({
     default: m.MorningWatchR3Fixture,
   }))
 );
-const IntroPage = lazy(() => import('@/pages/intro'));
-const MorningFeedFixture = lazy(() =>
+const IntroPage = lazyScreen(() => import('@/pages/intro'));
+const MorningFeedFixture = lazyScreen(() =>
   import('@/features/morning-feed/MorningFeedFixture').then((m) => ({
     default: m.MorningFeedFixture,
   }))
