@@ -86,9 +86,40 @@ describe('briefText on a published page (재테크 2026-11-25)', () => {
       sentenceId: 'p0.s0',
       text: PAGE.core[0]!.text,
       t: PAGE.core[0]!.sources[0]!.t,
+      more: [],
     });
-    const keys = parts.map((x) => x.sentenceId.split('.')[0] + '|' + x.t + '|' + x.sentenceId);
-    expect(new Set(keys).size).toBe(parts.length);
+    // a text is listed once, whatever the number of its seconds
+    for (const v of PAGE.videos) {
+      const texts = usedParts(PAGE, v.video_id).map((x) => x.text);
+      expect(new Set(texts).size).toBe(texts.length);
+    }
+  });
+  it('one part per note paragraph: its first sentence, the first second, the others ascending (2026-11-26)', () => {
+    const at = (t: number, video_id = 'a') => ({ video_id, t });
+    const page = {
+      core: [{ text: '핵심.', sources: [at(140)], para: 1 }],
+      note: [
+        {
+          heading: '소제목',
+          paragraphs: [
+            { text: '첫 문장. 둘째 문장.', sources: [at(100), at(740), at(520)] },
+            { text: '셋째. 넷째.', sources: [at(240), at(220)] },
+            // several videos: whose words the first sentence is, is not known
+            { text: '남의 말. 이 영상 말.', sources: [at(9, 'b'), at(300)] },
+            { text: '또 남의 말. 또 이 영상 말.', sources: [at(11, 'b'), at(80)] },
+          ],
+        },
+      ],
+    };
+    expect(usedParts(page, 'a')).toEqual([
+      { sentenceId: 'p0.s0', text: '핵심.', t: 140, more: [] },
+      { sentenceId: 'p1.s0', text: '첫 문장.', t: 100, more: [520, 740] },
+      { sentenceId: 'p2.s0', text: '셋째.', t: 240, more: [220] },
+      { sentenceId: 'p3.s0', text: '소제목', t: 300, more: [80] },
+    ]);
+    expect(usedParts(page, 'b')).toEqual([
+      { sentenceId: 'p3.s0', text: '소제목', t: 9, more: [11] },
+    ]);
   });
 });
 

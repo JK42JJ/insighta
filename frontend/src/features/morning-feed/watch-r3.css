@@ -516,6 +516,23 @@
   max-height: none;
   display: block;
 }
+/* the same text's other seconds, under the text (42 + 8) */
+.mf-w3-part-more {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -6px 0 2px 42px;
+}
+.mf-w3-part-more button {
+  min-width: 44px;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  font: 700 13px var(--w3-num);
+  color: var(--w3-steel);
+  text-align: left;
+  cursor: pointer;
+}
 
 /* 아이콘 줄 */
 .mf-w3-icons {

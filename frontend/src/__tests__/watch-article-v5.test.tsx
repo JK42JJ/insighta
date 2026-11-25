@@ -299,10 +299,10 @@ describe('B9 이 브리프에 쓰인 부분', () => {
         goalTitle="기술·개발"
         videos={[
           video(A, [
-            { sentenceId: 'p0.s0', text: '둘이 받친다.', t: 160 },
-            { sentenceId: 'p2.s0', text: '소제목', t: 200 },
+            { sentenceId: 'p0.s0', text: '둘이 받친다.', t: 160, more: [] },
+            { sentenceId: 'p2.s0', text: '문단 첫 문장.', t: 200, more: [230, 320] },
           ]),
-          video(B, [{ sentenceId: 'p0.s0', text: '둘이 받친다.', t: 30 }]),
+          video(B, [{ sentenceId: 'p0.s0', text: '둘이 받친다.', t: 30, more: [] }]),
         ]}
         frame={FRAME}
         loading={false}
@@ -322,7 +322,7 @@ describe('B9 이 브리프에 쓰인 부분', () => {
     const cur = screen.getAllByTestId('mf-w3-card')[0]!;
     expect(cur.querySelector('.mf-w3-av')).toBeNull();
     const rows = cur.querySelectorAll('[data-testid="mf-w3-part"]');
-    expect([...rows].map((r) => r.textContent)).toEqual(['2:40둘이 받친다.', '3:20소제목']);
+    expect([...rows].map((r) => r.textContent)).toEqual(['2:40둘이 받친다.', '3:20문단 첫 문장.']);
     fireEvent.click(rows[1]!);
     expect(load).toHaveBeenLastCalledWith(A, 200, true);
     expect(cur.querySelector('[data-testid="mf-w3-next-at"]')?.textContent).toBe('쓰인 부분 0:30');

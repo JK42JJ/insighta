@@ -176,28 +176,42 @@ export function briefSentences(page: Pick<MorningPage, 'core' | 'note'>): BriefS
 
 export interface UsedPart {
   sentenceId: string;
-  /** The sentence; where the source is the whole paragraph's, the note section's heading. */
+  /**
+   * The sentence. Where the sources are the whole paragraph's: its first sentence, or the section's
+   * heading when the paragraph tells of several videos (the first sentence may be another one's).
+   */
   text: string;
   t: number;
+  /** The same text's other seconds in this video, ascending. */
+  more: number[];
 }
 
-/** Where the page uses a video: the sentence and the second, in reading order. */
+/**
+ * Where the page uses a video, in reading order: one part per sentence, or per paragraph where the
+ * sources are the paragraph's. A text is listed once with all its seconds (one part per second
+ * repeated the same heading up to 8 times, 2026-11-26).
+ */
 export function usedParts(page: Pick<MorningPage, 'core' | 'note'>, videoId: string): UsedPart[] {
   const t = briefText(page);
   const all = [
     ...t.core.map((p) => ({ p, heading: '' })),
-    ...t.note.flatMap((s) => s.paragraphs.map((p) => ({ p, heading: s.heading }))),
+    ...t.note.flatMap((n) => n.paragraphs.map((p) => ({ p, heading: n.heading }))),
   ];
-  return all.flatMap(({ p, heading }) => {
-    const seen = new Set<number>();
-    return p.sentences.flatMap((s) =>
-      s.sources.flatMap((x) => {
-        // a paragraph's source is listed once
-        if (x.video_id !== videoId || (s.scope === 'paragraph' && seen.has(x.t))) return [];
-        seen.add(x.t);
-        const text = (s.scope === 'paragraph' && heading) || s.text;
-        return [{ sentenceId: s.id, text, t: x.t }];
-      })
-    );
+  const out = new Map<string, { sentenceId: string; ts: number[] }>();
+  for (const { p, heading } of all) {
+    p.sentences.forEach((s, k) => {
+      if (s.scope === 'paragraph' && k > 0) return;
+      const ts = s.sources.filter((x) => x.video_id === videoId).map((x) => x.t);
+      if (ts.length === 0) return;
+      const mixed = s.scope === 'paragraph' && p.videoCount > 1;
+      const text = (mixed && heading) || s.text;
+      const had = out.get(text);
+      if (had) had.ts.push(...ts);
+      else out.set(text, { sentenceId: s.id, ts });
+    });
+  }
+  return [...out].map(([text, { sentenceId, ts }]) => {
+    const [first, ...rest] = [...new Set(ts)];
+    return { sentenceId, text, t: first!, more: rest.sort((a, b) => a - b) };
   });
 }

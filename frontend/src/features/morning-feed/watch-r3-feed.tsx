@@ -204,13 +204,13 @@ function ProgressFill({
 
 /** '2:40, 5:10' where the brief uses a video ('' = not a brief's video, or no second known). */
 function usedAt(v: R3Video): string {
-  const ts = [...new Set((v.parts ?? []).map((x) => x.t))]
+  const ts = [...new Set((v.parts ?? []).flatMap((x) => [x.t, ...x.more]))]
     .filter((t) => t > 0)
     .sort((a, b) => a - b);
   return ts.length > 0 ? '쓰인 부분 ' + ts.slice(0, USED_AT_MAX).map(stampOf).join(', ') : '';
 }
 
-/** 이 브리프에 쓰인 부분: the sentence and its second; a tap plays from there. */
+/** 이 브리프에 쓰인 부분: the sentence and its second (the panel: its other seconds below); a tap plays from there. */
 function PartList({
   parts,
   onPick,
@@ -225,20 +225,36 @@ function PartList({
     <div className="mf-w3-parts" data-whole={whole ? '' : undefined} data-testid="mf-w3-parts">
       <div className="mf-w3-label">이 브리프에 쓰인 부분</div>
       {parts.map((x) => (
-        <button
-          key={x.sentenceId + x.t}
-          type="button"
-          className="mf-w3-part"
-          data-press="row"
-          data-testid="mf-w3-part"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPick(x.t);
-          }}
-        >
-          <span className="mf-w3-pt-at">{x.t > 0 ? stampOf(x.t) : '처음'}</span>
-          <span className="mf-w3-part-t">{x.text}</span>
-        </button>
+        <div key={x.sentenceId} data-testid="mf-w3-part-row">
+          <button
+            type="button"
+            className="mf-w3-part"
+            data-press="row"
+            data-testid="mf-w3-part"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPick(x.t);
+            }}
+          >
+            <span className="mf-w3-pt-at">{x.t > 0 ? stampOf(x.t) : '처음'}</span>
+            <span className="mf-w3-part-t">{x.text}</span>
+          </button>
+          {whole && x.more.length > 0 ? (
+            <div className="mf-w3-part-more">
+              {x.more.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  data-press="link"
+                  data-testid="mf-w3-part-more"
+                  onClick={() => onPick(t)}
+                >
+                  {stampOf(t)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       ))}
     </div>
   );
