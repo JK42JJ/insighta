@@ -11,10 +11,13 @@ export interface CardTextShown {
   showWhy: boolean;
   showSummary: boolean;
   chapterRows: number;
+  /** 이 브리프에 쓰인 부분: how many there are and how many rows are drawn. */
+  parts?: number;
+  partRows?: number;
 }
 
 /** Text blocks whose height is limited on the card (line clamp). */
-export const CLAMPED_TEXT_SELECTOR = '.mf-w3-why-t, .mf-w3-title, .mf-w3-sum-t';
+export const CLAMPED_TEXT_SELECTOR = '.mf-w3-why-t, .mf-w3-title, .mf-w3-sum-t, .mf-w3-part-t';
 /** Sub-pixel rounding between scrollHeight and clientHeight is not a cut. */
 const CLIP_TOLERANCE_PX = 1;
 
@@ -23,7 +26,8 @@ export function leftOut(c: CardTextShown): boolean {
   return (
     (!!c.why && !c.showWhy) ||
     (!!c.summary && !c.showSummary) ||
-    c.chapters > Math.max(0, c.chapterRows)
+    c.chapters > Math.max(0, c.chapterRows) ||
+    (c.parts ?? 0) > (c.partRows ?? 0)
   );
 }
 

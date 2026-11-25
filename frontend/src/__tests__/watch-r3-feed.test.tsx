@@ -17,8 +17,6 @@ function video(i: number): R3Video {
     videoId: 'v000000000' + i,
     title: '제목 ' + i,
     channel: '채널',
-    initial: '채',
-    altIcon: false,
     durationSec: 360,
     ageText: '3일 전',
     fresh: true,

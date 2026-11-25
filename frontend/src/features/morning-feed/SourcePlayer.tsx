@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { PlayRanges, type PlayRange } from '@/features/morning-feed/play-range';
 import { PlaySeconds } from '@/features/morning-feed/play-seconds';
 import { useWatchReporter, YT_STATE_PLAYING } from '@/features/morning-feed/use-watch-reporter';
 import { loadYouTubeApi, type YtPlayer } from '@/features/morning-feed/youtube-iframe-api';
@@ -16,6 +17,8 @@ export interface SourceTarget {
   t: number;
   /** Changes with every tap on a source (the same source tapped again plays from its second). */
   key: number;
+  /** The sentence it was opened from (what a played part is recorded with). */
+  sid?: string;
 }
 
 export interface SourcePlayerHandle {
@@ -30,15 +33,22 @@ interface Props {
   handle: { current: SourcePlayerHandle | null };
   /** Whole seconds a video played (after it was switched, closed, or the page was hidden). */
   onWatched: (videoId: string, seconds: number) => void;
+  /** A part of a video that was played without a jump. */
+  onRange?: (r: PlayRange, sid: string | undefined) => void;
 }
 
-export function SourcePlayer({ target, handle, onWatched }: Props): JSX.Element {
+/** How often the position is read for the played parts. */
+const RANGE_SAMPLE_MS = 500;
+
+export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX.Element {
   const host = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const want = useRef(target);
   const apply = useRef<((t: SourceTarget) => void) | null>(null);
   const watched = useRef(onWatched);
   watched.current = onWatched;
+  const ranged = useRef(onRange);
+  ranged.current = onRange;
   const { reporter, positionRef } = useWatchReporter(target.videoId);
 
   useEffect(() => {
@@ -57,6 +67,17 @@ export function SourcePlayer({ target, handle, onWatched }: Props): JSX.Element 
     let blocked = false;
     let stopped = false;
     const seconds = new PlaySeconds();
+    const ranges = new PlayRanges((r) => ranged.current?.(r, loaded?.sid));
+    let playing = false;
+    const sample = (): void => {
+      if (!instance || !loaded) return;
+      try {
+        ranges.sample(loaded.videoId, instance.getCurrentTime(), playing, Date.now());
+      } catch {
+        /* not ready or already gone */
+      }
+    };
+    const sampler = window.setInterval(() => playing && sample(), RANGE_SAMPLE_MS);
     const report = (n: number): void => {
       if (loaded && n > 0) watched.current(loaded.videoId, n);
     };
@@ -65,6 +86,8 @@ export function SourcePlayer({ target, handle, onWatched }: Props): JSX.Element 
 
     const start = (p: YtPlayer, t: SourceTarget): void => {
       report(seconds.end());
+      ranges.end();
+      playing = false;
       loaded = t;
       played = false;
       const at = { videoId: t.videoId, startSeconds: Math.max(0, t.t) };
@@ -111,6 +134,8 @@ export function SourcePlayer({ target, handle, onWatched }: Props): JSX.Element 
                 played = true;
                 blocked = false;
               }
+              playing = e.data === YT_STATE_PLAYING;
+              sample();
               seconds.onState(e.data);
               reporter.onState(e.data);
             },
@@ -130,6 +155,9 @@ export function SourcePlayer({ target, handle, onWatched }: Props): JSX.Element 
     const stop = (): void => {
       stopped = true;
       report(seconds.end());
+      if (playing) sample();
+      ranges.end();
+      playing = false;
       try {
         instance?.pauseVideo?.();
       } catch {
@@ -148,15 +176,21 @@ export function SourcePlayer({ target, handle, onWatched }: Props): JSX.Element 
       },
     };
     const onHide = (): void => {
-      if (document.visibilityState === 'hidden') report(seconds.take());
+      if (document.visibilityState !== 'hidden') return;
+      report(seconds.take());
+      ranges.end();
     };
-    const onPageHide = (): void => report(seconds.take());
+    const onPageHide = (): void => {
+      report(seconds.take());
+      ranges.end();
+    };
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', onPageHide);
     return () => {
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
       stop();
+      window.clearInterval(sampler);
       alive = false;
       handle.current = null;
       apply.current = null;

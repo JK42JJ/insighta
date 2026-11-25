@@ -69,6 +69,7 @@ describe('watch 수정 4: immersive playback (README §2, YouTube controls kept 
 
   it('with bars, all data: 고른 이유 + next preview', () => {
     expect(immersiveBlocks(SAFARI, FULL)).toEqual({
+      partRows: 0,
       showWhy: true,
       nextBig: true,
       showSummary: false,
@@ -84,6 +85,7 @@ describe('watch 수정 4: immersive playback (README §2, YouTube controls kept 
 
   it('without bars, all data: 고른 이유 + preview + 요약 + 순서 1줄', () => {
     expect(immersiveBlocks(HOME, FULL)).toEqual({
+      partRows: 0,
       showWhy: true,
       nextBig: true,
       showSummary: true,
@@ -206,6 +208,7 @@ describe('watch 수정 4: live video view', () => {
     );
     expect(v.why).toBe('첫째 둘째');
     expect(v.checks).toEqual(['한국어 음성']);
-    expect(v.altIcon).toBe(true);
+    // no channel picture from the API: no icon (order 2026-11-25 B9)
+    expect(v.channelThumb).toBeUndefined();
   });
 });

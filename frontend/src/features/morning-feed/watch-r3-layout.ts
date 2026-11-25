@@ -24,6 +24,10 @@ export const CHECKS_H = 24;
 /** Feed: table of contents, top 12 + label 16 + 2 rows × 26. */
 export const POINTS_H = 80;
 export const FEED_POINT_ROWS = 2;
+/** 이 브리프에 쓰인 부분: top 10 + label 16 (+ 4), then 44 per row, at most three rows on a card. */
+export const PARTS_HEAD_H = 30;
+export const PART_ROW_H = 44;
+export const PART_ROWS_MAX = 3;
 /** Immersive: the next-video line (48), grown to the preview (92), a second preview (+92). */
 export const NEXT_LINE_H = 48;
 export const NEXT_BIG_H = 92;
@@ -63,12 +67,22 @@ export interface Frame {
   playerH: number;
 }
 
+/** As many rows of 이 브리프에 쓰인 부분 as fit (the first one with its label). */
+function fitParts(parts: number, max: number, fit: (h: number) => boolean): number {
+  let rows = 0;
+  while (rows < Math.min(parts, max) && fit(PART_ROW_H + (rows === 0 ? PARTS_HEAD_H : 0)))
+    rows += 1;
+  return rows;
+}
+
 export interface FeedBlocks {
   showWhy: boolean;
   showSummary: boolean;
   showChecks: boolean;
   /** Table-of-contents rows shown in the feed (0 or FEED_POINT_ROWS at most). */
   pointRows: number;
+  /** Rows of 이 브리프에 쓰인 부분. */
+  partRows: number;
   /** Card height: fixed part + title/meta + the blocks that went in. */
   height: number;
 }
@@ -80,7 +94,7 @@ export interface FeedBlocks {
  */
 export function feedBlocks(
   f: Frame,
-  has: { why: boolean; summary: boolean; checks: boolean; points: number }
+  has: { why: boolean; summary: boolean; checks: boolean; points: number; parts?: number }
 ): FeedBlocks {
   const base = feedBaseHeight(f.playerH);
   const budget = f.vh - f.safeTop - f.safeBottom - HEADER_H - NEXT_PEEK_H - base;
@@ -91,10 +105,11 @@ export function feedBlocks(
     return true;
   };
   const showWhy = has.why && fit(WHY_H);
+  const partRows = fitParts(has.parts ?? 0, PART_ROWS_MAX, fit);
   const showSummary = has.summary && fit(SUMMARY_H);
   const showChecks = showWhy && has.checks && fit(CHECKS_H);
   const pointRows = has.points > 0 && fit(POINTS_H) ? Math.min(has.points, FEED_POINT_ROWS) : 0;
-  return { showWhy, showSummary, showChecks, pointRows, height: base + used };
+  return { showWhy, showSummary, showChecks, pointRows, partRows, height: base + used };
 }
 
 /** Immersive card height: the app area minus the safe areas and the header (598 / 719). */
@@ -111,16 +126,25 @@ export interface ImmersiveBlocks {
   nextSecond: boolean;
   /** Table-of-contents rows shown (0 = none). */
   chapterRows: number;
+  /** Rows of 이 브리프에 쓰인 부분. */
+  partRows: number;
 }
 
 /**
  * Immersive playback, README 수정 4 §2: title + views/length (66), the icon row (56) and the
  * next-video line (48) are fixed; the rest is filled in this order while it lasts: 고른 이유 →
- * next preview (+44) → 한 줄 요약 → second preview (+92) → 설명란 순서 (22 + 44 per row).
+ * (a brief's video: 쓰인 부분) → next preview (+44) → 한 줄 요약 → second preview (+92) → 설명란 순서 (22 + 44 per row).
  */
 export function immersiveBlocks(
   f: Frame,
-  has: { why: boolean; summary: boolean; next: boolean; afterNext: boolean; chapters: number }
+  has: {
+    why: boolean;
+    summary: boolean;
+    next: boolean;
+    afterNext: boolean;
+    chapters: number;
+    parts?: number;
+  }
 ): ImmersiveBlocks {
   let free =
     immersiveHeight(f) -
@@ -136,14 +160,19 @@ export function immersiveBlocks(
     return true;
   };
   const showWhy = has.why && fit(WHY_H);
+  // a brief's video: one part, the next video, then the other parts
+  const parts = has.parts ?? 0;
+  let partRows = fitParts(parts, 1, fit);
   const nextBig = has.next && fit(NEXT_BIG_H - NEXT_LINE_H);
+  while (partRows > 0 && partRows < Math.min(parts, PART_ROWS_MAX) && fit(PART_ROW_H))
+    partRows += 1;
   const showSummary = has.summary && fit(SUMMARY_H);
   const nextSecond = nextBig && has.afterNext && fit(NEXT_SECOND_H);
   const chapterRows =
     has.chapters > 0 && free >= CHAPTER_MIN_H
       ? Math.min(has.chapters, Math.floor((free - CHAPTER_HEAD_H) / CHAPTER_ROW_H))
       : 0;
-  return { showWhy, nextBig, showSummary, nextSecond, chapterRows };
+  return { showWhy, nextBig, showSummary, nextSecond, chapterRows, partRows };
 }
 
 const SECONDS_IN_MINUTE = 60;

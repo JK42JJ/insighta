@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -158,6 +158,109 @@ describe('briefs are read ahead and kept', () => {
     expect(screen.getByTestId('mf-home')).toBe(home);
     expect(screen.getByTestId('mf-home-domain').textContent).toBe('비즈니스');
     expect(screen.getByTestId('mf-home-headline').textContent).toBe('비즈니스/커리어 2026-11-22');
+  });
+});
+
+describe('다른 분야 (order 2026-11-25 B12)', () => {
+  const same: MorningHomePages = {
+    ...HOME,
+    others: [{ domain: '비즈니스/커리어', seen_date: TODAY, headline: '비즈니스 오늘' }],
+  };
+  beforeEach(async () => {
+    cleanup();
+    api.start = [null, [], same];
+    api.postUsageEvent.mockClear();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <MorningWatchLive />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('mf-home-headline').textContent).not.toBe(''));
+    await settle();
+  });
+
+  it('opens that brief straight away; back is the first brief; ‹ 홈 is the home at the field opened last', async () => {
+    const home = screen.getByTestId('mf-home');
+    fireEvent.click(screen.getByTestId('mf-home-enter'));
+    await settle();
+    const a = top().getByTestId('mf-page');
+    expect(
+      top()
+        .getAllByTestId('mf-page-other')
+        .map((x) => x.textContent)
+    ).toEqual(['비즈니스비즈니스 오늘']);
+    fireEvent.click(top().getByTestId('mf-page-other'));
+    // the very same render: its title and text, no lines
+    expect(top().getByTestId('mf-page-headline').textContent).toContain('비즈니스');
+    expect(top().getByTestId('mf-page-core').textContent).toContain('비즈니스/커리어 본문.');
+    expect(screen.queryByTestId('mf-page-skeleton')).toBeNull();
+    await settle();
+    expect(events('brief_open')).toHaveLength(2);
+    expect(top().getByTestId('mf-page-home').textContent).toBe('홈');
+    await browserBack(1);
+    expect(top().getByTestId('mf-page')).toBe(a);
+    const go = vi.spyOn(window.history, 'go').mockImplementation(() => undefined);
+    fireEvent.click(top().getByTestId('mf-page-home'));
+    expect(go).toHaveBeenLastCalledWith(-1);
+    await browserBack(0);
+    expect(top().getByTestId('mf-home')).toBe(home);
+    expect(top().getByTestId('mf-home-domain').textContent).toBe('비즈니스');
+    expect(top().getByTestId('mf-home-headline').textContent).toBe('비즈니스 오늘');
+    go.mockRestore();
+  });
+
+  it('‹ 홈 goes over the briefs in between', async () => {
+    fireEvent.click(screen.getByTestId('mf-home-enter'));
+    await settle();
+    fireEvent.click(top().getByTestId('mf-page-other'));
+    await settle();
+    const go = vi.spyOn(window.history, 'go').mockImplementation(() => undefined);
+    fireEvent.click(top().getByTestId('mf-page-home'));
+    expect(go).toHaveBeenLastCalledWith(-2);
+    go.mockRestore();
+  });
+
+  it('a field without a brief that day is not listed', async () => {
+    fireEvent.click(screen.getByTestId('mf-home-past'));
+    await settle();
+    // 2026-11-21: the other field's list has one of that day
+    fireEvent.click(top().getByTestId('mf-past-row'));
+    await settle();
+    await settle();
+    expect(
+      top()
+        .getAllByTestId('mf-page-other')
+        .map((x) => x.textContent)
+    ).toEqual(['비즈니스더 지난 헤드라인']);
+    expect(top().getByTestId('mf-page-home').textContent).toBe('지난 브리프');
+  });
+});
+
+describe('shared brief address (order 2026-11-25 B8)', () => {
+  it('opens that brief over the home; the home under it shows its field', async () => {
+    cleanup();
+    window.history.replaceState(
+      null,
+      '',
+      '/morning-cards?view=watch&cell=' + encodeURIComponent('비즈니스/커리어') + '&date=2026-11-22'
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <MorningWatchLive />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('mf-page-headline')).toBeTruthy());
+    await settle();
+    expect(top().getByTestId('mf-page-headline').textContent).toBe('비즈니스/커리어 2026-11-22');
+    expect(top().getByTestId('mf-page-core').textContent).toContain('비즈니스/커리어 본문.');
+    expect(window.history.state).toMatchObject({ mfScreen: 1 });
+    await browserBack(0);
+    expect(top().getByTestId('mf-home-domain').textContent).toBe('비즈니스');
+    window.history.replaceState(null, '', '/');
   });
 });
 

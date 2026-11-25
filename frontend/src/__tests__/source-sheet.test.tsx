@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MorningPage } from '@/features/morning-cards/api';
+import * as events from '@/features/morning-feed/brief-events';
 import { PageWithWatch, type SheetUsage } from '@/features/morning-feed/PageWithWatch';
 import { PlaySeconds } from '@/features/morning-feed/play-seconds';
 
@@ -17,7 +18,7 @@ vi.mock('@/features/morning-cards/api', async (actual) => ({
 }));
 
 /*
- * Order 2026-11-25 B5: a source in the text opens a sheet over the article with one YouTube
+ * Order 2026-11-25 B5: a sentence opens its sources' sheet over the article with one YouTube
  * player; the article keeps its place; the browser's back closes the sheet only.
  */
 
@@ -93,7 +94,7 @@ function draw() {
       page={PAGE}
       domainTitle="기술·개발"
       order={[]}
-      rest={[]}
+      others={[]}
       today="2026-11-25"
       back={{ label: '홈', onBack }}
       onPast={() => undefined}
@@ -105,9 +106,11 @@ function draw() {
       onSheet={(e: SheetUsage) => usage.push([e.kind, e.videoId, e.value])}
     />
   );
-  const cites = screen.getAllByTestId('mf-page-cite');
+  const cites = screen.getAllByTestId('mf-page-sent');
   return { usage, evidence, onBack, cites };
 }
+
+const lit = (): Element | null => document.querySelector('.mf-page-sent[data-lit]');
 
 const tick = async (ms: number): Promise<void> => {
   await act(async () => {
@@ -162,8 +165,7 @@ describe('source sheet', () => {
     expect(screen.getByTestId('mf-src-at').textContent).toBe('이 부분 3:20');
     expect(screen.getByTestId('mf-src-full').textContent).toContain('영상 전체 보기');
     expect(document.activeElement).toBe(screen.getByTestId('mf-src-close'));
-    expect(screen.getByTestId('mf-page-lit').textContent).toBe('첫 문장이다.');
-    expect(cites[0]!.hasAttribute('data-shown')).toBe(true);
+    expect(lit()?.textContent).toBe('첫 문장이다.');
     expect(screen.getByTestId('mf-page-scroll').hasAttribute('data-locked')).toBe(true);
     expect(screen.queryByTestId('mf-page-watch')).toBeNull();
     await tick(SLIDE_MS);
@@ -205,7 +207,7 @@ describe('source sheet', () => {
     expect(screen.getByTestId('mf-src-title').textContent).toBe('영상 B');
     // no time in the video: no "이 부분"
     expect(screen.queryByTestId('mf-src-at')).toBeNull();
-    expect(screen.getByTestId('mf-page-lit').textContent).toBe('둘째 문장이다.');
+    expect(lit()?.textContent).toBe('둘째 문장이다.');
     expect(evidence).toEqual([A + ' body', B + ' body']);
     expect(usage).toEqual([
       ['source_sheet_open', A, 'body'],
@@ -229,7 +231,7 @@ describe('source sheet', () => {
     expect(yt.calls[yt.calls.length - 1]).toBe('pause');
     expect(scroll.scrollTop).toBe(420);
     expect(document.activeElement).toBe(cites[0]);
-    expect(screen.queryByTestId('mf-page-lit')).toBeNull();
+    expect(lit()).toBeNull();
     await tick(600);
     expect(screen.queryByTestId('mf-src-sheet')).toBeNull();
     expect(yt.destroyed).toBe(true);
@@ -324,6 +326,25 @@ describe('source sheet', () => {
   });
 });
 
+describe('played parts', () => {
+  it('a part belongs to the sentence it was played for, also after a switch to another sentence', async () => {
+    const sent = vi.spyOn(events, 'recordBriefEvent').mockImplementation(() => undefined);
+    const { cites } = draw();
+    const yt = await openFirst(cites);
+    yt.time = 200;
+    act(() => yt.opts.events.onStateChange!({ data: PLAYING }));
+    for (let i = 1; i <= 4; i++) {
+      yt.time = 200 + i;
+      await tick(1000);
+    }
+    fireEvent.click(cites[1]!);
+    expect(sent.mock.calls.filter((c) => c[0] === 'play_range').map((c) => c[1])).toEqual([
+      expect.objectContaining({ sentenceId: 'p0.s0', videoId: A, startSec: 200, endSec: 204 }),
+    ]);
+    sent.mockRestore();
+  });
+});
+
 describe('dragging the sheet', () => {
   const pointer = (el: Element, type: string, y: number, at: number, x = 100): void => {
     const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
@@ -394,11 +415,10 @@ describe('PlaySeconds', () => {
 describe('the sentence above the sheet', () => {
   it('moves the box, not the scroll position, only when the sheet would cover the sentence', async () => {
     const rect = (top: number, bottom: number) => ({ top, bottom }) as DOMRect;
-    const tops: Record<string, [number, number]> = { lit: [500, 560], cite: [540, 560] };
+    const tops: Record<string, [number, number]> = { lit: [500, 560] };
     const orig = Element.prototype.getBoundingClientRect;
     Element.prototype.getBoundingClientRect = function (this: Element) {
       if (this.classList.contains('mf-page-lit')) return rect(...tops.lit!);
-      if (this.hasAttribute('data-shown')) return rect(...tops.cite!);
       return rect(0, 0);
     };
     const h = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(400);
@@ -411,7 +431,6 @@ describe('the sentence above the sheet', () => {
     expect(scroll.scrollTop).toBe(300);
     // already in view: the box stays where it is
     tops.lit = [480, 520];
-    tops.cite = [500, 520];
     fireEvent.click(cites[1]!);
     expect(scroll.style.transform).toBe('translate3d(0,-312px,0)');
     fireEvent.click(screen.getByTestId('mf-src-close'));

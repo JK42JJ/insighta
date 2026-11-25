@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { BRIEF_EVENT_KINDS } from '@/shared/lib/brief-event-kinds';
+
 /*
  * Session replay (work order B4, 2026-11-25): on only with a key AND VITE_POSTHOG_REPLAY=1; started
  * after sign-in; the person is the user id only; input masking is left at PostHog's default.
@@ -119,6 +121,31 @@ describe('PostHog session replay', () => {
     for (const event of ['$pageview', 'card_added', '$autocapture']) {
       expect(onlyReplay({ event })).toBeNull();
     }
+  });
+
+  it('brief events go to PostHog by the same name, only for a person who may be recorded', async () => {
+    vi.stubEnv('VITE_POSTHOG_REPLAY_EXCLUDE', 'james-1');
+    const m = await load('phc_k', '1');
+    for (const event of BRIEF_EVENT_KINDS) expect(m.onlyReplay({ event })).toEqual({ event });
+    m.captureBriefEvent('share', { cell: 'c' }); // before sign-in
+    m.identifyUser('james-1', PROPS);
+    m.captureBriefEvent('share', { cell: 'c' });
+    expect(ph.capture).not.toHaveBeenCalled();
+    m.identifyUser('participant', PROPS);
+    m.captureBriefEvent('share', { cell: 'c' });
+    expect(ph.capture.mock.calls).toEqual([['share', { cell: 'c' }]]);
+    m.resetUser();
+    m.captureBriefEvent('share', { cell: 'c' });
+    expect(ph.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('a build without replay captures brief events whenever PostHog is on', async () => {
+    const m = await load('phc_k', '');
+    m.captureBriefEvent('field_switch', {});
+    expect(ph.capture).toHaveBeenCalledWith('field_switch', {});
+    const off = await load('', '');
+    off.captureBriefEvent('field_switch', {});
+    expect(ph.capture).toHaveBeenCalledTimes(1);
   });
 
   it('sign-out stops the recording', async () => {

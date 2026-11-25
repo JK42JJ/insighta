@@ -10,6 +10,7 @@ import {
   type FeedDb,
 } from '@/modules/morning-feed/feed';
 import { isRealDate } from '@/modules/morning-feed/pages';
+import { MS_PER_DAY } from '@/utils/time-constants';
 
 export const BRIEF_FEEDBACK_VALUES = ['useful', 'not_useful'] as const;
 export type BriefFeedbackValue = (typeof BRIEF_FEEDBACK_VALUES)[number];
@@ -41,10 +42,40 @@ export const USAGE_EVENT_KINDS = [
 ] as const;
 export type UsageEventKind = (typeof USAGE_EVENT_KINDS)[number];
 
+/**
+ * Brief behaviour events (work order D1, 2026-11-25): what a reader does, down to the sentence.
+ * Same list as the app's BRIEF_EVENT_KINDS (frontend/src/shared/lib/brief-event-kinds.ts).
+ */
+export const BRIEF_EVENT_KINDS = [
+  'headline_view',
+  'headline_select',
+  'read_depth',
+  'sentence_tap',
+  'play_range',
+  'video_full',
+  'reaction',
+  'share',
+  'suggest',
+  'field_switch',
+  'past_open',
+  'other_fields_view',
+  'other_field_select',
+] as const;
+export type BriefEventKind = (typeof BRIEF_EVENT_KINDS)[number];
+
 /** Same shape as a YouTube id; matches varchar(32) with room. */
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 /** Free value of an event (e.g. a verdict); short token only. */
 const EVENT_VALUE_RE = /^[A-Za-z0-9_-]{1,16}$/;
+/** p<paragraph>.s<sentence>; matches varchar(16) with room. */
+const SENTENCE_ID_RE = /^p\d{1,3}\.s\d{1,3}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PARAGRAPH_MAX = 999;
+/** Seconds into a video: a day is far over the longest one. */
+const VIDEO_SEC_MAX = 24 * 60 * 60;
+/** The phone's clock is believed this far; outside it the arrival time is the only one kept. */
+const OCCURRED_PAST_MAX_MS = 7 * MS_PER_DAY;
+const OCCURRED_FUTURE_MAX_MS = 5 * 60 * 1000;
 
 export interface BriefFeedbackRow {
   cell: string;
@@ -58,6 +89,22 @@ export interface UsageEventInput {
   seen_date: string | null;
   video_id: string | null;
   value: string | null;
+}
+
+export interface BriefEventInput {
+  kind: BriefEventKind;
+  cell: string | null;
+  seen_date: string | null;
+  video_id: string | null;
+  value: string | null;
+  sentence_id: string | null;
+  paragraph: number | null;
+  start_sec: number | null;
+  end_sec: number | null;
+  from_cell: string | null;
+  to_cell: string | null;
+  occurred_at: string | null;
+  client_event_id: string | null;
 }
 
 /** The viewer's feedback on one brief, or null. */
@@ -146,6 +193,97 @@ export function validateUsageEvent(body: unknown): UsageEventInput {
     video_id: videoId,
     value: value,
   };
+}
+
+export function isBriefEventKind(v: unknown): v is BriefEventKind {
+  return (BRIEF_EVENT_KINDS as readonly unknown[]).includes(v);
+}
+
+function intOrNull(v: unknown, max: number): number | null {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max ? v : null;
+}
+
+function matchOrNull(v: unknown, re: RegExp): string | null {
+  return typeof v === 'string' && re.test(v) ? v : null;
+}
+
+function occurredOrNull(v: unknown, now: Date): string | null {
+  if (typeof v !== 'string' || v.length > 40) return null;
+  const at = Date.parse(v);
+  if (Number.isNaN(at)) return null;
+  const late = now.getTime() - at;
+  if (late > OCCURRED_PAST_MAX_MS || late < -OCCURRED_FUTURE_MAX_MS) return null;
+  return new Date(at).toISOString();
+}
+
+/**
+ * Validates a brief event body. Only the kind can refuse it: the rest says where it happened, so a
+ * field that does not fit becomes null and the event is still kept (a refused event is lost data).
+ * @throws FeedValidationError
+ */
+export function validateBriefEvent(body: unknown, now: Date = new Date()): BriefEventInput {
+  const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  const kind = b['kind'];
+  if (!isBriefEventKind(kind)) throw new FeedValidationError('invalid kind');
+  let start = intOrNull(b['start_sec'], VIDEO_SEC_MAX);
+  let end = intOrNull(b['end_sec'], VIDEO_SEC_MAX);
+  if (start !== null && end !== null && end < start) start = end = null;
+  return {
+    kind,
+    cell: isFeedCell(b['cell']) ? b['cell'] : null,
+    seen_date: isRealDate(b['date']) ? b['date'] : null,
+    video_id: matchOrNull(b['video_id'], VIDEO_ID_RE),
+    value: matchOrNull(b['value'], EVENT_VALUE_RE),
+    sentence_id: matchOrNull(b['sentence_id'], SENTENCE_ID_RE),
+    paragraph: intOrNull(b['paragraph'], PARAGRAPH_MAX),
+    start_sec: start,
+    end_sec: end,
+    from_cell: isFeedCell(b['from']) ? b['from'] : null,
+    to_cell: isFeedCell(b['to']) ? b['to'] : null,
+    occurred_at: occurredOrNull(b['at'], now),
+    client_event_id: matchOrNull(b['id'], UUID_RE),
+  };
+}
+
+/**
+ * Appends one brief event for the viewer, once per client event id (the app sends an event again
+ * when it cannot tell whether it arrived). `ownerId` + cell + date name the brief.
+ */
+export async function recordBriefEvent(
+  db: FeedDb,
+  userId: string,
+  ownerId: string,
+  event: BriefEventInput
+): Promise<void> {
+  if (!userId) throw new FeedValidationError('user_id required');
+  const owner = event.cell !== null && event.seen_date !== null ? ownerId : null;
+  await db.$executeRawUnsafe(
+    `INSERT INTO public.morning_usage_events
+       (user_id, kind, cell, seen_date, video_id, value, brief_owner_id, sentence_id, paragraph,
+        start_sec, end_sec, from_cell, to_cell, occurred_at, client_event_id)
+     SELECT $1::uuid, $2::varchar, $3::varchar, $4::date, $5::varchar, $6::varchar, $7::uuid,
+            $8::varchar, $9::smallint, $10::integer, $11::integer, $12::varchar, $13::varchar,
+            $14::timestamptz, $15::uuid
+      WHERE NOT EXISTS (
+        SELECT 1 FROM public.morning_usage_events
+         WHERE client_event_id = $15::uuid AND user_id = $1::uuid
+      )`,
+    userId,
+    event.kind,
+    event.cell,
+    event.seen_date,
+    event.video_id,
+    event.value,
+    owner,
+    event.sentence_id,
+    event.paragraph,
+    event.start_sec,
+    event.end_sec,
+    event.from_cell,
+    event.to_cell,
+    event.occurred_at,
+    event.client_event_id
+  );
 }
 
 /** Appends one usage event for the viewer. */

@@ -5,6 +5,7 @@ const MS_PER_DAY = 86_400_000;
 
 /** m:ss, or h:mm:ss from one hour on (the reference shows 14:22). */
 export function formatDuration(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds)) return '';
   const t = Math.max(0, Math.round(totalSeconds));
   const h = Math.floor(t / 3600);
   const m = Math.floor((t % 3600) / 60);
@@ -35,7 +36,7 @@ export function agoLabel(
 
 /** 1,234 -> 1,234회 / 12,345 -> 1.2만회 */
 export function formatViews(n: number | null): string {
-  if (n == null) return '';
+  if (n == null || !Number.isFinite(n)) return '';
   if (n >= 10_000) return `조회수 ${(n / 10_000).toFixed(1).replace(/\.0$/, '')}만회`;
   return `조회수 ${n.toLocaleString('ko-KR')}회`;
 }

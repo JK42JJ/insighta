@@ -3,7 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 // Watch screen (/morning-cards?view=watch) on the deployed staging site, user-test structure
 // (decision 2026-11-14): every signed-in account reads the shared briefs; the experiment UI
 // (today's videos, viewing order, judgments) belongs to the main account only. The staging test
-// account is a participant: home -> brief -> a source opens its sheet over the article -> closed
+// account is a participant: home -> brief -> a sentence opens its sources' sheet over the article -> closed
 // at the same place -> the sheet's full view opens the video screen -> back at the same place; the brief reaction is saved; the screen never asks a route of the experiment (a new
 // account, not on the test list, is refused by those routes on the server).
 
@@ -93,10 +93,11 @@ test('morning watch: a participant reads a brief, opens its evidence and comes b
   await expect(brief.getByTestId('mf-page-today')).toHaveCount(0);
   await expect(brief.getByTestId('mf-page-order')).toHaveCount(0);
 
-  // a source opens its sheet (with the player) over the article; closing it keeps the place
+  // the text carries no source marks; a sentence opens its sheet (with the player) over the article; closing it keeps the place
   const scroll = brief.getByTestId('mf-page-scroll');
   const place = () => scroll.evaluate((el) => el.scrollTop);
-  const cite = brief.getByTestId('mf-page-core').getByTestId('mf-page-cite').last();
+  await expect(brief.getByTestId('mf-page-cite')).toHaveCount(0);
+  const cite = brief.getByTestId('mf-page-core').locator('.mf-page-sent[data-tap]').last();
   await cite.scrollIntoViewIfNeeded();
   await scroll.evaluate((el) => el.scrollBy(0, 60));
   const before = await place();
@@ -109,12 +110,12 @@ test('morning watch: a participant reads a brief, opens its evidence and comes b
   expect(frame?.width).toBeGreaterThanOrEqual(200);
   expect(frame?.height).toBeGreaterThanOrEqual(200);
   await expect(page.getByTestId('mf-watch-counter')).toHaveCount(0);
-  await expect(brief.getByTestId('mf-page-lit')).toHaveCount(1);
+  await expect(brief.locator('.mf-page-sent[data-lit]')).toHaveCount(1);
   await info.attach('source-sheet', { body: await page.screenshot(), contentType: 'image/png' });
   expect(await place()).toBe(before);
   await page.getByTestId('mf-src-close').click();
   await expect(sheet).toHaveCount(0);
-  await expect(brief.getByTestId('mf-page-lit')).toHaveCount(0);
+  await expect(brief.locator('.mf-page-sent[data-lit]')).toHaveCount(0);
   expect(await place()).toBe(before);
   // the browser's back closes the sheet, not the article
   await cite.click();

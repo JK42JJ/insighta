@@ -63,6 +63,14 @@ export interface WatchHomeProps {
   onShow?: (cell: string) => void;
   /** A later home of the same visit: its fonts are in, so it is drawn at once, without entrance. */
   settled?: boolean;
+  /** The domain whose headline to show from now on (the one read last); changed while covered. */
+  show?: string;
+  /** This home is the screen on top (its headline is seen). */
+  onTop?: boolean;
+  /** A headline is on screen. */
+  onHeadline?: (cell: string) => void;
+  /** The domain was changed with a chip. */
+  onSwitch?: (from: string, to: string) => void;
 }
 
 const FADE_IN_MS = 450;
@@ -174,6 +182,30 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     busy.current = false;
   }, [shown]);
 
+  // the domain read last (order 2026-11-25 B12): set while another screen covers the home, at once
+  const { show } = p;
+  const shownFor = useRef(show);
+  useEffect(() => {
+    if (shownFor.current === show) return;
+    shownFor.current = show;
+    if (!show || !p.pages[show]) return;
+    stop();
+    if (timer.current != null) window.clearTimeout(timer.current);
+    busy.current = false;
+    swap.current = null;
+    setSel(show);
+    setShown(show);
+    // only when the domain to show changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]);
+
+  const seen = useRef(p.onHeadline);
+  seen.current = p.onHeadline;
+  const onTop = p.onTop !== false;
+  useEffect(() => {
+    if (ready && onTop) seen.current?.(shown);
+  }, [ready, onTop, shown]);
+
   const pick = useCallback(
     (cell: string) => {
       if (busy.current || cell === sel) return;
@@ -182,6 +214,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
         return;
       }
       p.onShow?.(cell);
+      p.onSwitch?.(sel, cell);
       stop();
       if (reducedMotion() || !ready) {
         setSel(cell);

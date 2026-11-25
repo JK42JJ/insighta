@@ -25,8 +25,6 @@ function r3(i: number): R3Video {
     videoId: ID[i]!,
     title: '제목 ' + i,
     channel: '채널',
-    initial: '채',
-    altIcon: false,
     durationSec: 360,
     ageText: '',
     fresh: false,
@@ -148,7 +146,7 @@ describe('brief -> its videos -> back', () => {
         page={PAGE}
         domainTitle="기술·개발"
         order={[]}
-        rest={[]}
+        others={[]}
         today="2026-11-14"
         back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}

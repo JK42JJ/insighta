@@ -1,3 +1,4 @@
+import { parseBriefAddress } from '@/features/morning-feed/brief-address';
 import { isPathAllowedOnMobile } from '@/shared/lib/mobile-gate';
 
 /**
@@ -15,6 +16,16 @@ export function mobileReturnTarget(pathname: string, stored: string | null): str
   const path = stored.split(/[?#]/)[0];
   if (path === '/' || path === '/login') return null;
   return isPathAllowedOnMobile(path) ? stored : null;
+}
+
+/**
+ * The same on a computer, only for a shared brief's address (order 2026-11-25 B8): there `/` is
+ * the app itself, so every other target keeps its present way.
+ */
+export function briefReturnTarget(pathname: string, stored: string | null): string | null {
+  const target = mobileReturnTarget(pathname, stored);
+  const search = target?.split('?')[1];
+  return target && search && parseBriefAddress('?' + search) ? target : null;
 }
 
 export function readAuthReturn(): string | null {

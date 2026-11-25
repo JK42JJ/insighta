@@ -14,9 +14,12 @@ import {
   isVirtualDayUser,
 } from '@/config/morning-cards';
 import {
+  isBriefEventKind,
   readBriefFeedback,
+  recordBriefEvent,
   recordUsageEvent,
   saveBriefFeedback,
+  validateBriefEvent,
   validateUsageEvent,
 } from '@/modules/morning-feed/brief-usage';
 import {
@@ -442,7 +445,16 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
         const userId = readerGuard(request, reply);
         if (!userId) return reply;
         try {
-          await recordUsageEvent(deps.getDb(), userId, validateUsageEvent(request.body));
+          if (isBriefEventKind((request.body as { kind?: unknown } | null)?.kind)) {
+            await recordBriefEvent(
+              deps.getDb(),
+              userId,
+              briefOwnerFor(userId),
+              validateBriefEvent(request.body)
+            );
+          } else {
+            await recordUsageEvent(deps.getDb(), userId, validateUsageEvent(request.body));
+          }
           return reply.code(204).send();
         } catch (err) {
           if (err instanceof FeedValidationError) {

@@ -66,15 +66,6 @@
   text-wrap: pretty;
   font-synthesis: none;
 }
-/*
- * With source links: plain wrapping (decision 2026-11-14, measured on the real page at 320/390/430
- * in Chrome and WebKit): text-wrap: pretty pulled the last word down with the links in 2 to 4
- * places at 390; wrap never did.
- */
-.mf-page-core-p[data-cited],
-.mf-page-para[data-cited] {
-  text-wrap: wrap;
-}
 .mf-page-core-p {
   font-size: 17px;
   font-weight: 500;
@@ -294,17 +285,48 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mf-page-rest {
+/* 다른 분야 (order 2026-11-25 B12): the domain, then that day's headline in up to two lines */
+.mf-page-others {
   margin-top: 40px;
 }
-/* 오늘의 영상 모두 보기: the same link as 지난 장 모두 보기, above 다른 도메인 */
+.mf-page-other {
+  display: block;
+  width: 100%;
+  padding: 14px 0 16px;
+  border: 0;
+  border-top: 1px solid var(--h-line);
+  background: var(--h-clear);
+  color: inherit;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+.mf-page-other-k {
+  display: block;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--h-accent);
+}
+.mf-page-other-h {
+  margin-top: 5px;
+  font-family: 'Noto Serif KR', serif;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+  font-synthesis: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* 오늘의 영상 모두 보기: the same link as 지난 브리프, above it */
 .mf-page-today {
-  margin-top: 40px;
+  margin-top: 28px;
   display: flex;
   width: fit-content;
-}
-.mf-page-today + .mf-page-rest {
-  margin-top: 20px;
 }
 .mf-page-past {
   margin-top: 20px;
@@ -440,15 +462,52 @@
 }
 
 /* a source is shown in its sheet (James 2026-11-25): the sentence, and the article held still */
+/* the tap on a sentence is shown by the sentence itself, at once (not the browser's grey box) */
+.mf-page-sent[data-tap] {
+  cursor: pointer;
+  border-radius: 3px;
+  -webkit-tap-highlight-color: transparent;
+}
+.mf-page-sent[data-tap]:focus {
+  outline: none;
+}
+.mf-page-sent[data-tap]:focus-visible {
+  outline: 2px solid var(--h-accent);
+  outline-offset: 2px;
+}
+/* how many videos are behind the paragraph */
+.mf-page-ev {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: var(--h-sub);
+  font-variant-numeric: tabular-nums;
+}
+/* once per device, over the article's lower edge */
+.mf-w-app .mf-page .mf-page-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--w3-safe-bottom, 0px) + 20px);
+  z-index: 4;
+  transform: translateX(-50%);
+  height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--h-solid);
+  color: var(--h-on-solid);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
 .mf-page-lit {
   background: var(--h-lit);
   border-radius: 3px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-}
-.mf-page-cite[data-shown] {
-  color: var(--h-accent);
-  text-decoration-color: currentColor;
 }
 .mf-page-scroll {
   transition: transform var(--mo-sheet-ms, 0s) var(--mo-sheet-ease, ease);
