@@ -64,7 +64,9 @@ RUN if [ -n "$VITE_POSTHOG_REPLAY" ]; then \
     fi
 
 # Build the application
-RUN npm run build
+# 14.5k modules reach node's default heap of about 2 GB (run 45545089524 died there; locally 2048
+# fails and 4096 builds, peak RSS 3.4 GB, 2026-11-25). The CI runner has 16 GB.
+RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 # =============================================================================
 # Stage 2: Production with Nginx
