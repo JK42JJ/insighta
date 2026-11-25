@@ -41,6 +41,16 @@ describe('brand logo', () => {
     };
     for (const i of m.icons) expect([i.src, existsSync('public' + i.src)]).toEqual([i.src, true]);
     expect(m.icons.some((i) => i.purpose === 'maskable')).toBe(true);
+    // work order B11: the same app from any screen, opened at the root, sign-in stays inside its scope
+    expect(m).toMatchObject({
+      name: 'Insighta',
+      short_name: 'Insighta',
+      display: 'standalone',
+      start_url: '/',
+      scope: '/',
+      background_color: '#F5F3EE',
+      theme_color: '#F5F3EE',
+    });
     const html = readFileSync('index.html', 'utf8');
     for (const f of ['/favicon.svg', '/favicon-32x32.png', '/apple-touch-icon.png']) {
       expect(html).toContain(`href="${f}"`);
