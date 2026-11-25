@@ -118,7 +118,7 @@ describe('up button (screen)', () => {
     expect(scroll.scrollTop).toBe(0);
   });
 
-  it('is hidden over the reaction area and while the source sheet is open', () => {
+  it('is hidden over the reaction area; with the source sheet open it stays above the sheet', () => {
     const { rerender } = render(<WatchPage {...PROPS} />);
     size();
     to(1500);
@@ -131,9 +131,9 @@ describe('up button (screen)', () => {
     fb.getBoundingClientRect = () => ({ top: 700, bottom: 800 }) as DOMRect;
     to(1300);
     expect(shown()).toBe(true);
-    act(() => rerender(<WatchPage {...PROPS} source={{ sid: 'p0.s0', sheetH: 0 }} />));
-    expect(shown()).toBe(false);
-    act(() => rerender(<WatchPage {...PROPS} source={null} />));
-    expect(shown()).toBe(false);
+    // the article scrolls on under the open source sheet (B5-2): the button stays, above the sheet
+    act(() => rerender(<WatchPage {...PROPS} source={{ sid: 'p0.s0', tap: 1, room: 287 }} />));
+    expect(shown()).toBe(true);
+    expect(screen.getByTestId('mf-page').style.getPropertyValue('--src-room')).toBe('287px');
   });
 });

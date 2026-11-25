@@ -100,7 +100,7 @@ const wait = (ms: number): Promise<void> =>
   });
 
 describe('B5 sentence with several sources', () => {
-  it('turns over in the same sheet (buttons), one player, the sentence stays marked; a sentence without sources is no button', async () => {
+  it('turns over in the same sheet (its button goes round), one player, the sentence stays marked; a sentence without sources is no button', async () => {
     drawPage();
     const s = screen.getAllByTestId('mf-page-sent');
     expect(s[1]!.getAttribute('role')).toBeNull();
@@ -108,12 +108,13 @@ describe('B5 sentence with several sources', () => {
     await wait(400);
     expect(screen.getByTestId('mf-src-turn-n').textContent).toBe('1/2');
     expect(screen.getByTestId('player').textContent).toBe(A + '@160');
-    expect((screen.getByTestId('mf-src-prev') as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByTestId('mf-src-next'));
+    fireEvent.click(screen.getByTestId('mf-src-turn'));
     expect(screen.getByTestId('mf-src-turn-n').textContent).toBe('2/2');
     expect(screen.getAllByTestId('player').map((x) => x.textContent)).toEqual([B + '@30']);
-    expect(screen.getByTestId('mf-src-title').textContent).toBe('영상 B');
+    expect(screen.getByTestId('mf-src-line').textContent).toContain('영상 B');
     expect(s[0]!.hasAttribute('data-lit')).toBe(true);
+    fireEvent.click(screen.getByTestId('mf-src-turn'));
+    expect(screen.getByTestId('mf-src-turn-n').textContent).toBe('1/2');
     expect(sent.mock.calls.filter((c) => c[0] === 'sentence_tap')).toEqual([
       [
         'sentence_tap',
@@ -128,11 +129,11 @@ describe('B5 sentence with several sources', () => {
     ]);
   });
 
-  it('a sideways swipe turns over; a downward one still closes', async () => {
+  it('a sideways swipe turns over', async () => {
     drawPage();
     fireEvent.click(screen.getAllByTestId('mf-page-sent')[0]!);
     await wait(400);
-    const info = screen.getByTestId('mf-src-title');
+    const info = screen.getByTestId('mf-src-line');
     const sheet = screen.getByTestId('mf-src-sheet');
     const ptr = (el: Element, type: string, x: number, y: number, at: number): void => {
       const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
@@ -155,11 +156,11 @@ describe('B5 sentence with several sources', () => {
     expect(screen.getByTestId('mf-src-turn-n').textContent).toBe('1/2');
   });
 
-  it('a note sentence says its sources are the paragraph’s', async () => {
+  it('a note sentence shows its paragraph’s sources', async () => {
     drawPage();
     fireEvent.click(screen.getByTestId('mf-page-note-toggle'));
     fireEvent.click(screen.getByTestId('mf-page-note').querySelectorAll('.mf-page-sent')[1]!);
-    expect(screen.getByTestId('mf-src-at').textContent).toBe('이 문단의 근거 3:20');
+    expect(screen.getByTestId('mf-src-line').textContent).toMatch(/^3:20 · /);
     expect(screen.getByTestId('mf-src-turn-n').textContent).toBe('1/2');
     expect(document.querySelectorAll('[data-lit]')).toHaveLength(1);
   });
@@ -181,7 +182,7 @@ describe('B5 sentence with several sources', () => {
     };
     const first = render(<Fresh {...props} />);
     expect(screen.getByTestId('mf-page-hint').textContent).toBe('문장을 누르면 근거 영상이 나와요');
-    first.rerender(<Fresh {...props} source={{ sid: 'p0.s0', sheetH: 0 }} />);
+    first.rerender(<Fresh {...props} source={{ sid: 'p0.s0', tap: 1, room: 0 }} />);
     expect(screen.queryByTestId('mf-page-hint')).toBeNull();
     first.unmount();
     render(<Fresh {...props} />);

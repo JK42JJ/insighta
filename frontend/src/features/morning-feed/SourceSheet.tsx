@@ -1,14 +1,14 @@
 import {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
   type MouseEvent,
   type PointerEvent,
+  type ReactNode,
 } from 'react';
 
-import { MOTION, prefersReducedMotion } from '@/features/morning-feed/motion-tokens';
+import { MOTION } from '@/features/morning-feed/motion-tokens';
 import {
   SourcePlayer,
   type SourcePlayerHandle,
@@ -16,30 +16,45 @@ import {
 } from '@/features/morning-feed/SourcePlayer';
 import type { PlayRange } from '@/features/morning-feed/play-range';
 import { stampOf } from '@/features/morning-feed/watch-page-model';
+import { youtubeThumb } from '@/features/morning-feed/feed-format';
 import './source-sheet.css';
 
 /*
- * The sources of a sentence, over the article (James 2026-11-25): the video from the source's
- * second in a sheet of about 60 % of the screen; the article stays behind it, still readable, so
- * another sentence can be tapped (the same player changes its video). A sentence with several
- * sources turns them over here (buttons or a sideways swipe). It closes by dragging it down, the
- * close button, a tap outside or the browser's back (PageWithWatch). The player is not mounted
- * before the sheet is in place (YouTube: no automatic playback before the player is visible) and
- * goes away the moment the sheet starts to leave for the video screen.
+ * The sources of a sentence under the article (order 2026-11-25 B5-2). It does not block: the
+ * article over it scrolls and its sentences are tapped as before. Two forms: 'base' (grip, player,
+ * one line of text) and 'mini', a bar left when the base form is dragged down (the video pauses; a
+ * tap or an upward swipe brings it back where it stopped, a downward one closes). The sheet and
+ * its one player stay mounted when it is put away, so a later sentence does not start a new one.
+ *
+ * YouTube's required minimum functionality decides three things here: the player keeps its size
+ * and is moved out of the screen instead of getting small (at least 200x200 px); the bar lies
+ * under the sheet, so nothing is ever drawn over the player; and the bar's thumbnail, which starts
+ * playback, is at least 120x70 px.
  */
 
+export type SheetForm = 'base' | 'mini' | 'closed';
 /** How a source sheet was closed (usage record). */
-export type SheetCloseHow = 'button' | 'outside' | 'drag' | 'back' | 'key';
+export type SheetCloseHow = 'button' | 'drag' | 'back' | 'key' | 'list' | 'leave';
+/** How it changed between the base form and the bar (usage record). */
+export type SheetFormHow = 'drag' | 'tap' | 'key';
 
 /** A pointer that moves less than this is a tap: the sheet takes the pointer only after it (px). */
 const DRAG_SLOP_PX = 8;
 /** A sideways swipe this long turns to the next or previous source. */
 const TURN_PX = 48;
-const FLICK_MIN_PX = 24;
-/** Dragged down this far it closes: from the text under the player a small phone has ~90 px left. */
-const CLOSE_PX = 60;
-/** After the slide's own length, the sheet is gone even if the animation never reported. */
-const GONE_GRACE_MS = 120;
+const FLICK_MIN_PX = 14;
+/**
+ * The base form dragged down this far becomes the bar. Its line of text is the last 52 px of the
+ * screen, so a finger that starts there has little more than this below it.
+ */
+const MINI_PX = 24;
+/** The bar dragged this far up or down opens the base form or closes. */
+const BAR_PX = 28;
+/**
+ * The slide is fast first: more than half of the player is in view after this share of it, and
+ * only then may the video start (YouTube).
+ */
+const LIVE_SHARE = 0.5;
 
 interface Props {
   target: SourceTarget;
@@ -48,20 +63,20 @@ interface Props {
   /** Which of the sentence's sources is shown (0-based) and how many there are. */
   at: number;
   count: number;
-  /** The sources are the whole paragraph's, not this sentence's alone. */
-  ofParagraph: boolean;
   onTurn: (to: number) => void;
-  /** The sheet is leaving: it slides down, then `onGone`. */
-  closing: boolean;
+  form: SheetForm;
+  /** No slide (the browser's own back drew one, or the sheet rides away with the article). */
+  instant: boolean;
   /** Gone to the video screen: no player any more, the sheet rides away with the article. */
   frozen: boolean;
   player: { current: SourcePlayerHandle | null };
+  onForm: (form: 'base' | 'mini', how: SheetFormHow) => void;
   onClose: (how: SheetCloseHow) => void;
-  onGone: () => void;
   onFull: () => void;
   onWatched: (videoId: string, seconds: number) => void;
   onRange: (r: PlayRange, sid: string | undefined) => void;
-  onHeight: (h: number) => void;
+  /** The heights of the two forms: the article keeps that much room under its last line. */
+  onHeight: (h: { base: number; mini: number }) => void;
 }
 
 interface Drag {
@@ -77,107 +92,228 @@ interface Drag {
 
 export function SourceSheet(p: Props): JSX.Element {
   const sheet = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
-  const drag = useRef<Drag | null>(null);
-  /** The last gesture was a drag: the click that ends it is not a press. */
-  const dragged = useRef(false);
-  const dy = useRef(0);
-  /** The entrance or the way back up after a short drag. */
-  const moving = useRef<Animation | null>(null);
-  const [entered, setEntered] = useState(false);
-  const { ms, ease, closeVelocity } = MOTION.sheet;
+  const barBtn = useRef<HTMLButtonElement>(null);
+  /** The form on screen: the first one is drawn closed, so it slides in. */
+  const [form, setForm] = useState<SheetForm>('closed');
+  const [live, setLive] = useState(false);
+  /** The bar is seen under the sheet while it is dragged. */
+  const [peek, setPeek] = useState(false);
+  const { ms } = MOTION.sheet;
 
   useLayoutEffect(() => {
-    const el = sheet.current;
-    if (el && typeof el.animate === 'function') {
-      moving.current = el.animate(
-        prefersReducedMotion()
-          ? [{ opacity: 0 }, { opacity: 1 }]
-          : [{ transform: 'translate3d(0,100%,0)' }, { transform: 'translate3d(0,0,0)' }],
-        { duration: ms, easing: ease }
-      );
-      moving.current.finished.catch(() => undefined);
-    }
-    closeBtn.current?.focus({ preventScroll: true });
-    const t = window.setTimeout(() => setEntered(true), ms);
-    return () => window.clearTimeout(t);
-    // one entrance per sheet
+    if (!sheet.current || !bar.current) return undefined;
+    const measure = (): void => {
+      if (!sheet.current || !bar.current) return;
+      p.onHeight({ base: sheet.current.offsetHeight, mini: bar.current.offsetHeight });
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(sheet.current);
+    ro.observe(bar.current);
+    return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useLayoutEffect(() => {
-    if (sheet.current) p.onHeight(sheet.current.offsetHeight);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.target.key]);
+    // the place it leaves from is drawn before the new one, so the browser slides between them
+    void sheet.current?.offsetHeight;
+    if (sheet.current) sheet.current.style.transform = '';
+    if (bar.current) bar.current.style.transform = '';
+    setPeek(false);
+    setForm(p.form);
+    setLive(false);
+    if (p.form !== 'base') return undefined;
+    const t = window.setTimeout(() => setLive(true), ms * LIVE_SHARE);
+    return () => window.clearTimeout(t);
+  }, [p.form, ms]);
 
-  const goneRef = useRef(p.onGone);
-  goneRef.current = p.onGone;
-  useLayoutEffect(() => {
-    if (!p.closing) return undefined;
-    const el = sheet.current;
-    let done = false;
-    const finish = (): void => {
-      if (done) return;
-      done = true;
-      goneRef.current();
-    };
-    const t = window.setTimeout(finish, ms + GONE_GRACE_MS);
-    if (el && typeof el.animate === 'function') {
-      const a = el.animate(
-        prefersReducedMotion()
-          ? [{ opacity: 1 }, { opacity: 0 }]
-          : [
-              { transform: `translate3d(0,${dy.current}px,0)` },
-              { transform: 'translate3d(0,100%,0)' },
-            ],
-        { duration: ms, easing: ease, fill: 'forwards' }
-      );
-      void a.finished.then(finish, () => undefined);
-    } else {
-      finish();
-    }
-    return () => {
-      done = true;
-      window.clearTimeout(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.closing]);
+  useEffect(() => {
+    if (form === 'base') closeBtn.current?.focus({ preventScroll: true });
+    else if (form === 'mini') barBtn.current?.focus({ preventScroll: true });
+  }, [form]);
 
-  const still = p.closing || p.frozen;
+  const still = p.frozen || p.form === 'closed';
   const closeRef = useRef(p.onClose);
   closeRef.current = p.onClose;
   useEffect(() => {
+    if (still) return undefined;
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') closeRef.current('key');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [still]);
 
-  const setY = (v: number): void => {
-    dy.current = v;
-    if (sheet.current) sheet.current.style.transform = v > 0 ? `translate3d(0,${v}px,0)` : '';
+  const turn = (to: number): void => {
+    if (!still && p.count > 1) p.onTurn((to + p.count) % p.count);
   };
-  const springBack = useCallback((): void => {
-    const el = sheet.current;
-    const from = dy.current;
-    setY(0);
-    if (el && from > 0 && typeof el.animate === 'function' && !prefersReducedMotion()) {
-      moving.current = el.animate(
-        [{ transform: `translate3d(0,${from}px,0)` }, { transform: 'translate3d(0,0,0)' }],
-        { duration: ms, easing: ease }
-      );
-      moving.current.finished.catch(() => undefined);
+
+  const sheetDrag = useDrag(sheet, {
+    off: still || p.form !== 'base',
+    sideways: p.count > 1,
+    allow: (dy) => dy > 0,
+    onStart: () => setPeek(true),
+    onEnd: (dy, fast) => {
+      const down = dy >= MINI_PX || (fast && dy >= FLICK_MIN_PX);
+      if (down) p.onForm('mini', 'drag');
+      else setPeek(false);
+      return down;
+    },
+    onTurn: (step) => turn(p.at + step),
+  });
+  const barDrag = useDrag(bar, {
+    off: still || p.form !== 'mini',
+    sideways: false,
+    // the bar itself only leaves downwards
+    allow: () => true,
+    clamp: (dy) => Math.max(0, dy),
+    onEnd: (dy, fast) => {
+      const far = Math.abs(dy) >= BAR_PX || (fast && Math.abs(dy) >= FLICK_MIN_PX);
+      if (far && dy < 0) p.onForm('base', 'drag');
+      else if (far) p.onClose('drag');
+      return far;
+    },
+  });
+
+  const { t, videoId } = p.target;
+  const stopped = peek || form === 'mini' ? (p.player.current?.position() ?? null) : null;
+  const text = [t > 0 ? stampOf(t) : '', p.channel, p.title].filter((x) => x).join(' · ');
+  const drawn = p.instant ? '' : undefined;
+
+  return (
+    <>
+      <div
+        ref={bar}
+        className="mf-src-bar"
+        data-testid="mf-src-bar"
+        data-form={form}
+        data-peek={peek ? '' : undefined}
+        data-instant={drawn}
+        {...barDrag}
+      >
+        <button
+          ref={barBtn}
+          type="button"
+          className="mf-src-bar-open"
+          data-testid="mf-src-bar-open"
+          aria-label={'이어서 보기: ' + p.title}
+          onClick={(e) => !still && p.onForm('base', e.detail === 0 ? 'key' : 'tap')}
+        >
+          <img className="mf-src-bar-thumb" src={youtubeThumb(videoId)} alt="" draggable={false} />
+          <span className="mf-src-bar-text">
+            <span className="mf-src-bar-at" data-testid="mf-src-bar-at">
+              {stopped === null ? stampOf(t) + '부터' : stampOf(stopped) + '에서 멈춤'}
+            </span>
+            <span className="mf-src-bar-t">
+              {[p.channel, p.title].filter((x) => x).join(' · ')}
+            </span>
+          </span>
+        </button>
+        <IconButton testId="mf-src-bar-close" label="닫기" onClick={() => p.onClose('button')}>
+          <path d="M6 6l12 12M18 6L6 18" />
+        </IconButton>
+      </div>
+      <div
+        ref={sheet}
+        className="mf-src"
+        role="dialog"
+        aria-modal="false"
+        aria-label={'출처 영상: ' + p.title}
+        data-testid="mf-src-sheet"
+        data-form={form}
+        data-instant={drawn}
+        {...sheetDrag}
+      >
+        <div className="mf-src-head" data-testid="mf-src-head">
+          <span className="mf-src-grip" aria-hidden="true" />
+        </div>
+        <div className="mf-src-player" data-testid="mf-src-player">
+          {/* under the player until it is drawn (never over it): no black box while it loads */}
+          <img className="mf-src-under" src={youtubeThumb(videoId)} alt="" draggable={false} />
+          {!p.frozen ? (
+            <SourcePlayer
+              target={p.target}
+              live={live && p.form === 'base'}
+              handle={p.player}
+              onWatched={p.onWatched}
+              onRange={p.onRange}
+            />
+          ) : null}
+        </div>
+        <div className="mf-src-info" data-testid="mf-src-info">
+          {p.count > 1 ? (
+            <button
+              type="button"
+              className="mf-src-turn"
+              data-press="soft"
+              data-testid="mf-src-turn"
+              aria-label={'다음 근거 영상 (' + (p.at + 1) + '/' + p.count + ')'}
+              onClick={() => turn(p.at + 1)}
+            >
+              <span aria-live="polite" data-testid="mf-src-turn-n">
+                {p.at + 1 + '/' + p.count}
+              </span>
+              <span aria-hidden="true">›</span>
+            </button>
+          ) : null}
+          <div className="mf-src-line" data-testid="mf-src-line">
+            {text}
+          </div>
+          <IconButton testId="mf-src-full" label="영상 전체 보기" onClick={p.onFull}>
+            <path d="M8 16L17 7M9.5 7H17v7.5" />
+          </IconButton>
+          <IconButton
+            testId="mf-src-close"
+            label="닫기"
+            onClick={() => p.onClose('button')}
+            inner={closeBtn}
+          >
+            <path d="M6 6l12 12M18 6L6 18" />
+          </IconButton>
+        </div>
+      </div>
+    </>
+  );
+}
+
+interface DragOptions {
+  off: boolean;
+  sideways: boolean;
+  /** A vertical gesture of this direction is the sheet's. */
+  allow: (dy: number) => boolean;
+  clamp?: (dy: number) => number;
+  onStart?: () => void;
+  /** True: the gesture did something; false: the element goes back. */
+  onEnd: (dy: number, fast: boolean) => boolean;
+  onTurn?: (step: 1 | -1) => void;
+}
+
+/** The element follows the finger after the slop; the click that ends a drag presses nothing. */
+function useDrag(el: { current: HTMLElement | null }, o: DragOptions): Record<string, unknown> {
+  const drag = useRef<Drag | null>(null);
+  const dragged = useRef(false);
+  const { closeVelocity } = MOTION.sheet;
+
+  const move = (dy: number | null): void => {
+    const e = el.current;
+    if (!e) return;
+    const y = dy === null ? 0 : (o.clamp?.(dy) ?? dy);
+    e.toggleAttribute('data-drag', dy !== null);
+    e.style.transform = y !== 0 ? `translate3d(0,${y}px,0)` : '';
+  };
+  const take = (id: number): void => {
+    try {
+      // the pointer is kept, so a gesture that ends outside still counts
+      el.current?.setPointerCapture?.(id);
+    } catch {
+      /* the pointer is already gone */
     }
-  }, [ms, ease]);
-
-  const turn = (step: 1 | -1): void => {
-    const to = p.at + step;
-    if (!still && to >= 0 && to < p.count) p.onTurn(to);
   };
-
-  const onDown = (e: PointerEvent): void => {
-    if (still || drag.current || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const onPointerDown = (e: PointerEvent): void => {
+    if (o.off || drag.current || (e.pointerType === 'mouse' && e.button !== 0)) return;
     dragged.current = false;
     drag.current = {
       id: e.pointerId,
@@ -189,198 +325,116 @@ export function SourceSheet(p: Props): JSX.Element {
       dx: null,
     };
   };
-  const onMove = (e: PointerEvent): void => {
+  const onPointerMove = (e: PointerEvent): void => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
+    const mx = e.clientX - d.x0;
     const my = e.clientY - d.y0;
     if (d.dx !== null) {
-      d.dx = e.clientX - d.x0;
+      d.dx = mx;
       return;
     }
     if (!d.on) {
-      if (Math.hypot(e.clientX - d.x0, my) < DRAG_SLOP_PX) return;
-      // only a downward gesture is the sheet's; any gesture past the slop is no tap any more
+      if (Math.hypot(mx, my) < DRAG_SLOP_PX) return;
       dragged.current = true;
-      if (Math.abs(e.clientX - d.x0) > Math.abs(my)) {
-        // the pointer is kept, so a swipe that ends outside the sheet still counts
-        if (p.count > 1) {
-          d.dx = e.clientX - d.x0;
-          try {
-            sheet.current?.setPointerCapture?.(e.pointerId);
-          } catch {
-            /* the pointer is already gone */
-          }
-        } else drag.current = null;
+      if (Math.abs(mx) > Math.abs(my)) {
+        if (!o.sideways) drag.current = null;
+        else {
+          d.dx = mx;
+          take(e.pointerId);
+        }
         return;
       }
-      if (my <= 0) {
+      if (!o.allow(my)) {
         drag.current = null;
         return;
       }
       d.on = true;
-      try {
-        sheet.current?.setPointerCapture?.(e.pointerId);
-      } catch {
-        /* the pointer is already gone */
-      }
-      moving.current?.cancel();
+      take(e.pointerId);
+      o.onStart?.();
     }
-    d.dy = Math.max(0, my);
-    setY(d.dy);
+    d.dy = o.allow(my) ? my : 0;
+    move(d.dy);
   };
-  const onUp = (e: PointerEvent): void => {
+  const onPointerUp = (e: PointerEvent): void => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
     drag.current = null;
     if (d.dx !== null) {
-      if (d.dx <= -TURN_PX) turn(1);
-      else if (d.dx >= TURN_PX) turn(-1);
+      if (d.dx <= -TURN_PX) o.onTurn?.(1);
+      else if (d.dx >= TURN_PX) o.onTurn?.(-1);
       return;
     }
     if (!d.on) return;
-    const v = d.dy / Math.max(1, e.timeStamp - d.t0);
-    if (d.dy >= CLOSE_PX || (v >= closeVelocity && d.dy >= FLICK_MIN_PX)) p.onClose('drag');
-    else springBack();
+    const v = Math.abs(d.dy) / Math.max(1, e.timeStamp - d.t0);
+    el.current?.removeAttribute('data-drag');
+    // a gesture that counted slides on from here to the new form
+    if (!o.onEnd(d.dy, v >= closeVelocity)) move(null);
   };
-  const onCancel = (e: PointerEvent): void => {
+  const onPointerCancel = (e: PointerEvent): void => {
     if (drag.current?.id !== e.pointerId) return;
+    const on = drag.current.on;
     drag.current = null;
-    springBack();
+    if (!on) return;
+    o.onEnd(0, false);
+    move(null);
   };
-  /**
-   * Taking the pointer makes the element under the finger lose its implicit capture, and that
-   * loss bubbles up here: only the sheet's own loss ends the drag.
-   */
-  const onLost = (e: PointerEvent): void => {
-    if (e.target === sheet.current) onCancel(e);
+  return {
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
+    /**
+     * Taking the pointer makes the element under the finger lose its implicit capture, and that
+     * loss bubbles up here: only the element's own loss ends the drag.
+     */
+    onLostPointerCapture: (e: PointerEvent): void => {
+      if (e.target === el.current) onPointerCancel(e);
+    },
+    onClickCapture: (e: MouseEvent): void => {
+      if (!dragged.current || e.detail === 0) return;
+      dragged.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
   };
-  const onClickCapture = (e: MouseEvent): void => {
-    if (!dragged.current || e.detail === 0) return;
-    dragged.current = false;
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  return (
-    <div
-      ref={sheet}
-      className="mf-src"
-      role="dialog"
-      aria-modal="false"
-      aria-label={'출처 영상: ' + p.title}
-      data-testid="mf-src-sheet"
-      data-closing={p.closing ? '' : undefined}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={onCancel}
-      onLostPointerCapture={onLost}
-      onClickCapture={onClickCapture}
-    >
-      <div className="mf-src-head" data-testid="mf-src-head">
-        <span className="mf-src-grip" aria-hidden="true" />
-        {p.count > 1 ? (
-          <div className="mf-src-turn" data-testid="mf-src-turn">
-            <TurnButton dir={-1} off={p.at === 0} onClick={() => turn(-1)} />
-            <span className="mf-src-turn-n" data-testid="mf-src-turn-n" aria-live="polite">
-              {p.at + 1 + '/' + p.count}
-            </span>
-            <TurnButton dir={1} off={p.at === p.count - 1} onClick={() => turn(1)} />
-          </div>
-        ) : null}
-        <button
-          ref={closeBtn}
-          type="button"
-          className="mf-src-close"
-          data-press="soft"
-          data-testid="mf-src-close"
-          aria-label="닫기"
-          onClick={() => p.onClose('button')}
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
-      </div>
-      <div className="mf-src-player" data-testid="mf-src-player">
-        {entered && !p.frozen ? (
-          <SourcePlayer
-            target={p.target}
-            handle={p.player}
-            onWatched={p.onWatched}
-            onRange={p.onRange}
-          />
-        ) : null}
-      </div>
-      <div className="mf-src-info">
-        <div className="mf-src-ch" data-testid="mf-src-channel">
-          {p.channel}
-        </div>
-        <div className="mf-src-title" data-testid="mf-src-title">
-          {p.title}
-        </div>
-        <div className="mf-src-foot">
-          {p.target.t > 0 ? (
-            <div className="mf-src-at" data-testid="mf-src-at">
-              {(p.ofParagraph ? '이 문단의 근거 ' : '이 부분 ') + stampOf(p.target.t)}
-            </div>
-          ) : null}
-          <button
-            type="button"
-            className="mf-src-full"
-            data-press="btn"
-            data-testid="mf-src-full"
-            onClick={p.onFull}
-          >
-            <span>영상 전체 보기</span>
-            <span aria-hidden="true">→</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
-function TurnButton({
-  dir,
-  off,
+function IconButton({
+  testId,
+  label,
   onClick,
+  inner,
+  children,
 }: {
-  dir: 1 | -1;
-  off: boolean;
+  testId: string;
+  label: string;
   onClick: () => void;
+  inner?: { current: HTMLButtonElement | null };
+  children: ReactNode;
 }): JSX.Element {
   return (
     <button
+      ref={inner}
       type="button"
-      className="mf-src-turn-btn"
+      className="mf-src-icon"
       data-press="soft"
-      data-testid={dir === 1 ? 'mf-src-next' : 'mf-src-prev'}
-      aria-label={dir === 1 ? '다음 근거 영상' : '이전 근거 영상'}
-      disabled={off}
+      data-testid={testId}
+      aria-label={label}
       onClick={onClick}
     >
       <svg
-        width="16"
-        height="16"
-        viewBox="0 0 20 20"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.4"
+        strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
       >
-        <path d={dir === 1 ? 'M8 4l6 6-6 6' : 'M12 4l-6 6 6 6'} />
+        {children}
       </svg>
     </button>
   );

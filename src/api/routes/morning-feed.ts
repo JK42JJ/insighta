@@ -361,6 +361,8 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
           await effectiveNow(deps.getDb(), userId),
           briefOwnerFor(userId)
         );
+        // the same background colour as the daily batch's cards
+        if (data && deps.addAmbient) data.items = await deps.addAmbient(data.items);
         return reply.send({ status: 'ok', data });
       }
     );

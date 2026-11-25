@@ -21,6 +21,7 @@ import {
   type BriefSentence,
   type SentenceSource,
 } from '@/features/morning-feed/brief-sentences';
+import { formatDuration, youtubeThumb } from '@/features/morning-feed/feed-format';
 import { BackButton } from '@/features/morning-feed/BackButton';
 import { haptic, popIcon } from '@/features/morning-feed/motion-tokens';
 import { briefDateLabel, headlineSize } from '@/features/morning-feed/watch-home-model';
@@ -87,8 +88,10 @@ export interface WatchPageProps {
   onOpenVideo?: OpenVideo;
   /** A sentence: its sources' sheet over the article (absent = plain text). */
   onOpenSource?: OpenSource;
-  /** The source shown in the sheet: its sentence is marked and kept above the sheet. */
+  /** The source shown in the sheet: its sentence is marked, the last lines stay above the sheet. */
   source?: ShownSource | null;
+  /** Something that covers the article opens: the sheet goes first (absent = at once). */
+  onLeave?: (go: () => void) => void;
   /** This brief's own address, for the share button (absent = not drawn). */
   shareUrl?: string;
   /** The article's scroll box, for the caller that restores its position. */
@@ -104,6 +107,8 @@ const NARROW_W = 360;
 
 /** The "up" button never lies on the reaction area at the article's end. */
 const TO_TOP_AVOID = '[data-testid="mf-page-feedback"]';
+
+const runNow = (go: () => void): void => go();
 
 function reducedMotion(): boolean {
   return (
@@ -130,15 +135,15 @@ type OpenSource = (tap: SourceTap) => void;
 
 export interface ShownSource {
   sid: string;
-  /** The sheet's height; 0 until it is measured. */
-  sheetH: number;
+  /** Changes with every tap on a sentence: it is then moved above the sheet. */
+  tap: number;
+  /** How much of the lower edge the sheet (or its bar) covers; 0 until it is measured. */
+  room: number;
 }
 
 /** Room between the marked sentence and the sheet (px). */
 const LIT_CLEAR_PX = 16;
 
-/** What a tap on the article means a sentence (the open sheet switches instead of closing). */
-export const SENTENCE_SELECTOR = '.mf-page-sent[data-tap]';
 /** A press this long is a text selection, not a tap. */
 const TAP_MAX_MS = 500;
 
@@ -224,10 +229,11 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
   const scroll = p.scrollRef ?? ownScroll;
   const toTopBtn = useRef<HTMLButtonElement>(null);
   const source = p.source ?? null;
-  const toTop = useToTop(scroll, toTopBtn, TO_TOP_AVOID, !!source);
+  const room = source?.room ?? 0;
+  const toTop = useToTop(scroll, toTopBtn, TO_TOP_AVOID);
   const text = useMemo(() => (pg ? briefText(pg) : null), [pg]);
   const tapSource = { onSource: p.onOpenSource, source };
-  useReadDepth(scroll, !!pg, !!source, (paragraph) =>
+  useReadDepth(scroll, !!pg, room, (paragraph) =>
     recordBriefEvent('read_depth', { cell: pg?.domain, seenDate: pg?.seen_date, paragraph })
   );
 
@@ -249,28 +255,26 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
     if (source) setHint(false);
   }, [source]);
 
-  // The sentence is kept above the sheet by moving the whole scroll box up, so the article's own
-  // scroll position never changes and closing only moves the box back.
-  const [shift, setShift] = useState(0);
-  const { safeTop, vh } = p.frame;
+  // The tapped sentence is scrolled up to just above the sheet when the sheet would cover it; the
+  // article has that much more room under its last line, so this works there too. Only a tap moves
+  // it: what the reader scrolled to since then stays.
+  const movedFor = useRef<number | null>(null);
+  const { safeTop } = p.frame;
   useLayoutEffect(() => {
     const box = scroll.current;
-    if (!source || !box) {
-      setShift(0);
-      return;
-    }
-    if (source.sheetH === 0) return;
-    const base = box.getBoundingClientRect().top;
+    if (!source || !box || source.room === 0 || movedFor.current === source.tap) return;
+    movedFor.current = source.tap;
+    const view = box.getBoundingClientRect();
     const marks = [...box.querySelectorAll('.mf-page-lit')].map((m) => m.getBoundingClientRect());
     if (marks.length === 0) return;
-    const top = Math.min(...marks.map((m) => m.top)) - base;
-    const bottom = Math.max(...marks.map((m) => m.bottom)) - base;
-    const limit = vh - source.sheetH - LIT_CLEAR_PX;
-    const lo = Math.max(0, bottom - limit);
-    // a switch keeps the box where it is when the new sentence is already in view
-    const hi = Math.max(lo, top - safeTop - LIT_CLEAR_PX);
-    setShift((was) => Math.round(Math.min(Math.max(was, lo), hi, source.sheetH)));
-  }, [scroll, source, vh, safeTop]);
+    const top = Math.min(...marks.map((m) => m.top)) - view.top;
+    const bottom = Math.max(...marks.map((m) => m.bottom)) - view.top;
+    const over = bottom - (view.height - source.room - LIT_CLEAR_PX);
+    const by = Math.round(Math.min(over, top - safeTop - LIT_CLEAR_PX));
+    if (by <= 0) return;
+    if (reducedMotion() || typeof box.scrollTo !== 'function') box.scrollTop += by;
+    else box.scrollTo({ top: box.scrollTop + by, behavior: 'smooth' });
+  }, [scroll, source, safeTop]);
 
   const headline = pg?.headline ?? p.title?.headline ?? '';
   const seenDate = pg?.seen_date ?? p.title?.seenDate ?? '';
@@ -288,6 +292,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
   const rootStyle = {
     '--w3-safe-top': p.frame.safeTop + 'px',
     '--w3-safe-bottom': p.frame.safeBottom + 'px',
+    '--src-room': room + 'px',
   } as CSSProperties;
 
   return (
@@ -297,16 +302,15 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
       data-narrow={p.frame.width < NARROW_W ? '' : undefined}
       style={rootStyle}
     >
-      <div
-        ref={scroll}
-        className="mf-page-scroll"
-        data-testid="mf-page-scroll"
-        data-locked={source ? '' : undefined}
-        style={shift > 0 ? { transform: `translate3d(0,${-shift}px,0)` } : undefined}
-      >
+      <div ref={scroll} className="mf-page-scroll" data-testid="mf-page-scroll">
         <div className="mf-page-top">
           <BackButton label={p.back.label} onBack={p.back.onBack} testId="mf-page-home" />
-          {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
+          {p.account ? (
+            <AccountButton
+              account={p.account}
+              onOpen={() => (p.onLeave ?? runNow)(() => setAcct(true))}
+            />
+          ) : null}
         </div>
         <div>
           <div className="mf-page-meta">
@@ -405,18 +409,23 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                         : undefined
                     }
                   >
-                    <div className="mf-page-video-text">
-                      <div className="mf-page-video-title">{v.title}</div>
-                      <div className="mf-page-video-ch">{v.channel}</div>
-                      {v.useful_for ? (
-                        <div className="mf-page-video-use">{v.useful_for}</div>
-                      ) : null}
+                    <div className="mf-page-video-top">
+                      <img
+                        className="mf-page-thumb"
+                        src={youtubeThumb(v.video_id)}
+                        alt=""
+                        draggable={false}
+                      />
+                      <div className="mf-page-video-text">
+                        <div className="mf-page-video-title">{v.title}</div>
+                        <div className="mf-page-video-ch" data-testid="mf-page-video-ch">
+                          {[v.channel, v.duration_sec ? formatDuration(v.duration_sec) : '']
+                            .filter((x) => x)
+                            .join(' · ')}
+                        </div>
+                      </div>
                     </div>
-                    <img
-                      className="mf-page-thumb"
-                      src={'https://i.ytimg.com/vi/' + v.video_id + '/mqdefault.jpg'}
-                      alt=""
-                    />
+                    {v.useful_for ? <div className="mf-page-video-use">{v.useful_for}</div> : null}
                   </a>
                 ))}
               </div>

@@ -10,7 +10,8 @@
   inset: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: calc(var(--w3-safe-top, 0px) + 4px) 22px calc(var(--w3-safe-bottom, 0px) + 28px);
+  padding: calc(var(--w3-safe-top, 0px) + 4px) 22px
+    calc(max(var(--w3-safe-bottom, 0px), var(--src-room, 0px)) + 28px);
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -186,50 +187,64 @@
   color: var(--h-sub);
   margin-bottom: 12px;
 }
+/* order 2026-11-25 B15: the thumbnail left at about 40 % of the screen, the title and channel
+   beside it, the one-line use under both */
 .mf-page-video {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
+  display: block;
   padding: 16px 0;
   border-top: 1px solid var(--h-line);
   color: inherit;
   text-decoration: none;
+}
+.mf-page-video-top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
 }
 .mf-page-video-text {
   flex: 1;
   min-width: 0;
 }
 .mf-page-video-title {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.42;
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.4;
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 .mf-page-video-ch {
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 500;
   color: var(--h-sub);
   margin-top: 5px;
+  font-variant-numeric: tabular-nums;
 }
 .mf-page-video-use {
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--h-sub);
-  margin-top: 6px;
+  margin-top: 10px;
   word-break: keep-all;
   text-wrap: pretty;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
+/* 150 of the 346 px of a 390 px screen; it opens a video, so at least 120 x 70 px (YouTube) */
 .mf-page-thumb {
   flex: none;
-  width: 80px;
-  height: 45px;
-  margin-top: 3px;
+  width: 43.4%;
+  min-width: 125px;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: 4px;
+  display: block;
+  border-radius: 8px;
   background: var(--h-line);
 }
 .mf-page-order {
@@ -461,7 +476,6 @@
   color: var(--h-sub);
 }
 
-/* a source is shown in its sheet (James 2026-11-25): the sentence, and the article held still */
 /* the tap on a sentence is shown by the sentence itself, at once (not the browser's grey box) */
 .mf-page-sent[data-tap] {
   cursor: pointer;
@@ -488,7 +502,7 @@
 .mf-w-app .mf-page .mf-page-hint {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--w3-safe-bottom, 0px) + 20px);
+  bottom: calc(max(var(--w3-safe-bottom, 0px), var(--src-room, 0px)) + 20px);
   z-index: 4;
   transform: translateX(-50%);
   height: 44px;
@@ -509,18 +523,12 @@
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
-.mf-page-scroll {
-  transition: transform var(--mo-sheet-ms, 0s) var(--mo-sheet-ease, ease);
-}
-.mf-page-scroll[data-locked] {
-  overflow-y: hidden;
-}
 
 /* up to the top (James 2026-11-25) */
 .mf-w-app .mf-page .mf-page-up {
   position: absolute;
   right: 16px;
-  bottom: calc(var(--w3-safe-bottom, 0px) + 16px);
+  bottom: calc(max(var(--w3-safe-bottom, 0px), var(--src-room, 0px)) + 16px);
   z-index: 3;
   width: 44px;
   height: 44px;
@@ -554,7 +562,6 @@
   border-radius: 50%;
 }
 @media (prefers-reduced-motion: reduce) {
-  .mf-page-scroll,
   .mf-w-app .mf-page .mf-page-up,
   .mf-w-app .mf-page .mf-page-up[data-shown] {
     transition: none;

@@ -6,10 +6,11 @@ import { useWatchReporter, YT_STATE_PLAYING } from '@/features/morning-feed/use-
 import { loadYouTubeApi, type YtPlayer } from '@/features/morning-feed/youtube-iframe-api';
 
 /*
- * The source sheet's one YouTube player: the same iframe for every source tapped while the sheet
- * is open. It starts with sound at the source's second. When the browser refuses that (iPhone),
- * the video is left cued, so YouTube's own play button shows; it is never started muted instead.
- * Nothing is drawn over it.
+ * The source sheet's one YouTube player: the same iframe for every source tapped in this article,
+ * also after the sheet was put away (order 2026-11-25 B5-2). Another video is loaded into it, the
+ * same video only moves to the source's second, and the sheet's small form pauses it. It starts
+ * with sound. When the browser refuses that (iPhone), the video is left cued, so YouTube's own
+ * play button shows; it is never started muted instead. Nothing is drawn over it.
  */
 
 export interface SourceTarget {
@@ -22,14 +23,16 @@ export interface SourceTarget {
 }
 
 export interface SourcePlayerHandle {
-  /** Stops playing for good (the sheet is going away) and reports the seconds played. */
-  stop: () => void;
+  /** Pauses (the sheet gets small or goes away) and reports what was played so far. */
+  pause: () => void;
   /** Where the shown video is; null = it has not played yet. */
   position: () => number | null;
 }
 
 interface Props {
   target: SourceTarget;
+  /** The player is in view: only then a video is started (YouTube: more than half is visible). */
+  live: boolean;
   handle: { current: SourcePlayerHandle | null };
   /** Whole seconds a video played (after it was switched, closed, or the page was hidden). */
   onWatched: (videoId: string, seconds: number) => void;
@@ -40,11 +43,14 @@ interface Props {
 /** How often the position is read for the played parts. */
 const RANGE_SAMPLE_MS = 500;
 
-export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX.Element {
+export function SourcePlayer({ target, live, handle, onWatched, onRange }: Props): JSX.Element {
   const host = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
+  /** A failed load is tried again with the next tap. */
+  const [attempt, setAttempt] = useState(0);
   const want = useRef(target);
-  const apply = useRef<((t: SourceTarget) => void) | null>(null);
+  const liveRef = useRef(live);
+  const sync = useRef<(() => void) | null>(null);
   const watched = useRef(onWatched);
   watched.current = onWatched;
   const ranged = useRef(onRange);
@@ -53,10 +59,16 @@ export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX
 
   useEffect(() => {
     want.current = target;
-    apply.current?.(target);
+    liveRef.current = live;
+    if (failed && live) {
+      setFailed(false);
+      setAttempt((n) => n + 1);
+      return;
+    }
+    sync.current?.();
     // a new tap is a new key
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target.key]);
+  }, [target.key, live]);
 
   useEffect(() => {
     let alive = true;
@@ -65,7 +77,9 @@ export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX
     let loaded: SourceTarget | null = null;
     let played = false;
     let blocked = false;
-    let stopped = false;
+    let ready = false;
+    /** The shown video was started, and was not paused by us since. */
+    let started = false;
     const seconds = new PlaySeconds();
     const ranges = new PlayRanges((r) => ranged.current?.(r, loaded?.sid));
     let playing = false;
@@ -84,17 +98,40 @@ export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX
     const mount = document.createElement('div');
     host.current?.appendChild(mount);
 
-    const start = (p: YtPlayer, t: SourceTarget): void => {
-      report(seconds.end());
-      ranges.end();
-      playing = false;
-      loaded = t;
-      played = false;
+    /** Plays what is wanted, as soon as the player is ready and in view. */
+    const go = (): void => {
+      const p = instance;
+      if (!p || !ready || !loaded || !liveRef.current) return;
+      const t = want.current;
+      if (loaded.key === t.key) {
+        // back from the small form: on from where it was paused
+        if (!started) {
+          started = true;
+          p.playVideo();
+        }
+        return;
+      }
+      const same = loaded.videoId === t.videoId;
       const at = { videoId: t.videoId, startSeconds: Math.max(0, t.t) };
-      // refused once and not played since: it would be refused again, the play button shows
-      if (blocked) p.cueVideoById(at);
-      else p.loadVideoById(at);
+      ranges.end();
+      report(same ? seconds.take() : seconds.end());
+      loaded = t;
+      started = true;
+      if (blocked) {
+        // refused once and not played since: it would be refused again, the play button shows
+        played = false;
+        playing = false;
+        p.cueVideoById(at);
+      } else if (same) {
+        p.seekTo(at.startSeconds, true);
+        p.playVideo();
+      } else {
+        played = false;
+        playing = false;
+        p.loadVideoById(at);
+      }
     };
+    sync.current = go;
 
     loadYouTubeApi()
       .then((yt) => {
@@ -115,22 +152,24 @@ export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX
           },
           events: {
             onReady: (e) => {
-              // closed before it was ready: it does not start while the sheet slides away
-              if (!alive || stopped) return;
+              if (!alive) return;
               const p = e.target;
+              instance = p;
+              ready = true;
               positionRef.current = () => p.getCurrentTime();
               // YouTube remembers the muted state of the video screen's player
               p.unMute();
-              apply.current = (t) => {
-                if (alive && loaded?.key !== t.key) start(p, t);
-              };
-              if (want.current.key !== first.key) start(p, want.current);
-              else p.playVideo();
+              go();
             },
             onError: () => undefined, // YouTube says so in the player itself
             onStateChange: (e) => {
               if (!alive) return;
               if (e.data === YT_STATE_PLAYING) {
+                // a start that was on its way while the sheet got small or left
+                if (!liveRef.current) {
+                  instance?.pauseVideo();
+                  return;
+                }
                 played = true;
                 blocked = false;
               }
@@ -142,18 +181,17 @@ export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX
             onAutoplayBlocked: () => {
               if (!alive || !instance || !loaded) return;
               blocked = true;
-              instance.cueVideoById({
-                videoId: loaded.videoId,
-                startSeconds: Math.max(0, loaded.t),
-              });
+              // on from where it was, when it had played before
+              const from = played ? instance.getCurrentTime() : loaded.t;
+              instance.cueVideoById({ videoId: loaded.videoId, startSeconds: Math.max(0, from) });
             },
           },
         });
       })
       .catch(() => alive && setFailed(true));
 
-    const stop = (): void => {
-      stopped = true;
+    const pause = (): void => {
+      started = false;
       report(seconds.end());
       if (playing) sample();
       ranges.end();
@@ -165,9 +203,10 @@ export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX
       }
     };
     handle.current = {
-      stop,
+      pause,
       position: () => {
-        if (!played) return null;
+        // another video was asked for and not given to the player yet
+        if (!played || loaded?.videoId !== want.current.videoId) return null;
         try {
           return instance?.getCurrentTime() ?? null;
         } catch {
@@ -189,11 +228,11 @@ export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX
     return () => {
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
-      stop();
+      pause();
       window.clearInterval(sampler);
       alive = false;
       handle.current = null;
-      apply.current = null;
+      sync.current = null;
       try {
         instance?.destroy();
       } catch {
@@ -201,9 +240,9 @@ export function SourcePlayer({ target, handle, onWatched, onRange }: Props): JSX
       }
       mount.remove();
     };
-    // one player for the sheet's whole visit
+    // one player for the article's whole visit
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attempt]);
 
   return (
     <>

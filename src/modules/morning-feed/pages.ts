@@ -23,6 +23,7 @@ import {
 
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const youtubeThumbUrl = (id: string): string => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 /** A publish time as the YouTube API gives it. */
 const PUBLISHED_AT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 /** listPages upper bound. */
@@ -66,6 +67,8 @@ export interface PageVideo {
   role?: PageVideoRole;
   /** When YouTube published the video (ISO, UTC); pages before 2026-11-25 may not have it. */
   published_at?: string;
+  /** Length in whole seconds (YouTube contentDetails.duration); older pages may not have it. */
+  duration_sec?: number;
 }
 export interface Page {
   domain: string;
@@ -219,6 +222,13 @@ export function validatePage(input: unknown): Page {
         throw new FeedValidationError(`${w}.published_at must look like 2026-11-20T03:04:05Z`);
       }
       video.published_at = published;
+    }
+    const length = v['duration_sec'];
+    if (length !== undefined) {
+      if (typeof length !== 'number' || !Number.isInteger(length) || length <= 0) {
+        throw new FeedValidationError(`${w}.duration_sec must be an integer > 0 (seconds)`);
+      }
+      video.duration_sec = length;
     }
     return video;
   });
@@ -440,16 +450,19 @@ export async function readPageCards(
     selectWatchVerdicts(db, userId, ids),
   ]);
   const byId = new Map(cards.map((c) => [c.video_id, c]));
+  const withThumb = (c: FeedCard | undefined): FeedCard | undefined =>
+    c && { ...c, thumbnail_url: c.thumbnail_url ?? youtubeThumbUrl(c.video_id) };
   const items = page.videos.map(
     (v): FeedCard =>
-      byId.get(v.video_id) ?? {
+      withThumb(byId.get(v.video_id)) ?? {
         video_id: v.video_id,
         title: v.title,
         channel: v.channel,
         published_at: v.published_at ?? '',
-        duration: 0,
+        duration: v.duration_sec ?? 0,
         view_count: null,
-        thumbnail_url: null,
+        // YouTube's own, as on the brief page: the immersive background colour is read from it
+        thumbnail_url: youtubeThumbUrl(v.video_id),
         cell,
         focus: [],
         why: '',

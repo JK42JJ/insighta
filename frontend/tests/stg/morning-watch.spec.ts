@@ -12,6 +12,8 @@ const PASSWORD = process.env.STG_TEST_PASSWORD ?? '';
 const API = '/api/v1/morning-feed';
 /** watch-design.ts WATCH_ONB_SEEN_KEY */
 const ONB_SEEN_KEY = 'mf_watch_onb_seen';
+/** The sheet's slide and the sentence's scroll above it. */
+const SHEET_SETTLE_MS = 1200;
 const LOAD_TIMEOUT_MS = 25_000;
 const TOP = '[data-testid="mf-stack-layer"][data-top]';
 
@@ -93,7 +95,7 @@ test('morning watch: a participant reads a brief, opens its evidence and comes b
   await expect(brief.getByTestId('mf-page-today')).toHaveCount(0);
   await expect(brief.getByTestId('mf-page-order')).toHaveCount(0);
 
-  // the text carries no source marks; a sentence opens its sheet (with the player) over the article; closing it keeps the place
+  // the text carries no source marks; a sentence opens its sheet (with the player) under the article, which stays readable; closing it keeps the place
   const scroll = brief.getByTestId('mf-page-scroll');
   const place = () => scroll.evaluate((el) => el.scrollTop);
   await expect(brief.getByTestId('mf-page-cite')).toHaveCount(0);
@@ -112,21 +114,48 @@ test('morning watch: a participant reads a brief, opens its evidence and comes b
   await expect(page.getByTestId('mf-watch-counter')).toHaveCount(0);
   await expect(brief.locator('.mf-page-sent[data-lit]')).toHaveCount(1);
   await info.attach('source-sheet', { body: await page.screenshot(), contentType: 'image/png' });
-  expect(await place()).toBe(before);
+  // the tapped sentence is above the sheet and the article still scrolls
+  const sheetTop = (await sheet.boundingBox())!.y;
+  await expect
+    .poll(async () => {
+      const lit = await brief.locator('.mf-page-sent[data-lit]').boundingBox();
+      return lit!.y + lit!.height;
+    })
+    .toBeLessThanOrEqual(sheetTop);
+  await scroll.evaluate((el) => el.scrollBy({ top: -40, behavior: 'instant' }));
+  const read = await place();
+  // dragged down it is a bar (the player keeps its size), a tap brings it back
+  const grip = (await page.getByTestId('mf-src-head').boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + 90, { steps: 8 });
+  await page.mouse.up();
+  await expect(sheet).toBeHidden();
+  const bar = page.getByTestId('mf-src-bar');
+  await expect(bar).toBeVisible();
+  const thumb = (await bar.locator('img').boundingBox())!;
+  expect(thumb.width).toBeGreaterThanOrEqual(120);
+  expect(thumb.height).toBeGreaterThanOrEqual(70);
+  await info.attach('source-bar', { body: await page.screenshot(), contentType: 'image/png' });
+  await page.getByTestId('mf-src-bar-open').click();
+  await expect(sheet).toBeVisible();
+  await expect(bar).toBeHidden();
+  await expect(sheet.locator('iframe')).toHaveCount(1);
   await page.getByTestId('mf-src-close').click();
-  await expect(sheet).toHaveCount(0);
+  await expect(sheet).toBeHidden();
   await expect(brief.locator('.mf-page-sent[data-lit]')).toHaveCount(0);
-  expect(await place()).toBe(before);
+  expect(await place()).toBe(read);
   // the browser's back closes the sheet, not the article
   await cite.click();
   await expect(sheet).toBeVisible();
   await page.goBack();
-  await expect(sheet).toHaveCount(0);
+  await expect(sheet).toBeHidden();
   await expect(brief.getByTestId('mf-page-headline')).toBeVisible();
-  expect(await place()).toBe(before);
 
   // the sheet's full view opens the video screen; back returns to the same place in the brief
   await cite.click();
+  await page.waitForTimeout(SHEET_SETTLE_MS);
+  const full = await place();
   await page.getByTestId('mf-src-full').click();
   await expect(page.getByTestId('mf-watch-counter')).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
   await expect(sheet).toHaveCount(0);
@@ -134,7 +163,7 @@ test('morning watch: a participant reads a brief, opens its evidence and comes b
   await page.getByTestId('mf-watch-back').click();
   await expect(page.getByTestId('mf-page-watch')).toHaveCount(0, { timeout: 5000 });
   await expect(brief.getByTestId('mf-page-headline')).toBeVisible();
-  expect(await place()).toBe(before);
+  expect(await place()).toBe(full);
 
   // the reaction: shown at once, saved with the viewer, domain and date. The account may have
   // answered this brief in an earlier run, so the other answer is pressed (a change is saved).

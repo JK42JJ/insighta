@@ -9,17 +9,12 @@
 .mf-pw-under {
   position: absolute;
   inset: 0;
+  /* the source sheet waits under the lower edge; nothing scrolls to it */
+  overflow: clip;
 }
 .mf-pw-article {
   position: absolute;
   inset: 0;
-}
-/* a tap on any text outside the sheet is a click on an iPhone too */
-.mf-pw-article[data-behind] {
-  cursor: pointer;
-}
-.mf-pw-article[data-still] .mf-page-scroll {
-  transition: none;
 }
 .mf-pw-under[data-covered] {
   visibility: hidden;

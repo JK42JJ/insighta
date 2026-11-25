@@ -8,19 +8,21 @@ import { useEffect, useRef, type RefObject } from 'react';
 export const READ_REST_MS = 1000;
 const PARAGRAPH = '[data-para]';
 
-/** @param off not measured now (the source sheet is open) */
+/** @param covered how much of the lower edge the source sheet covers (px): not in view */
 export function useReadDepth(
   scroll: RefObject<HTMLElement>,
   ready: boolean,
-  off: boolean,
+  covered: number,
   onRead: (paragraph: number) => void
 ): void {
   const read = useRef(new Set<number>());
   const cb = useRef(onRead);
   cb.current = onRead;
+  const room = useRef(covered);
+  room.current = covered;
   useEffect(() => {
     const box = scroll.current;
-    if (!box || !ready || off) return undefined;
+    if (!box || !ready) return undefined;
     let timer: number | null = null;
     const look = (): void => {
       const view = box.getBoundingClientRect();
@@ -30,7 +32,7 @@ export function useReadDepth(
         const n = Number(el.dataset.para);
         // a folded note's paragraphs are not shown
         if (read.current.has(n) || el.closest('[data-folded]')) return;
-        if (el.getBoundingClientRect().bottom > view.bottom) return;
+        if (el.getBoundingClientRect().bottom > view.bottom - room.current) return;
         read.current.add(n);
         cb.current(n);
       });
@@ -47,5 +49,5 @@ export function useReadDepth(
       box.removeEventListener('scroll', rest);
       box.removeEventListener('click', rest);
     };
-  }, [scroll, ready, off]);
+  }, [scroll, ready]);
 }

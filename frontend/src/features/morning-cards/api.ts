@@ -343,6 +343,8 @@ export interface MorningPage {
     channel: string;
     useful_for: string;
     role?: 'support' | 'condition' | 'other';
+    /** The video's length (YouTube contentDetails.duration); pages before 2026-11-26 have none. */
+    duration_sec?: number;
   }>;
   /** Single page read only (GET /pages): this viewer's answer on the brief, or null. */
   feedback?: BriefFeedbackValue | null;

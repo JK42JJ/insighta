@@ -128,6 +128,8 @@ describe('article page (screen)', () => {
       '문단. 근거 영상 1개'
     );
     expect(screen.getAllByTestId('mf-page-video')).toHaveLength(3);
+    // no length stored: the channel alone
+    expect(screen.getAllByTestId('mf-page-video-ch')[0]!.textContent).not.toContain('·');
     expect(screen.getByTestId('mf-page').textContent).not.toMatch(/support|condition|other/);
   });
 
@@ -266,7 +268,7 @@ describe('article page -> the video at that second', () => {
     expect(pushState).toHaveBeenCalledTimes(1);
     expect(evidence).toEqual([B]);
     // the sheet, over the article; the video screen only from its button
-    expect(screen.getByTestId('mf-src-sheet').textContent).toContain('이 부분 2:40');
+    expect(screen.getByTestId('mf-src-line').textContent).toMatch(/^2:40 · /);
     expect(opened).toEqual([]);
     fireEvent.click(screen.getByTestId('mf-src-full'));
     await act(async () => {

@@ -66,6 +66,14 @@ describe('validatePage', () => {
     expect(validatePage(p)).toEqual(p);
     bad((q) => (q['videos'][0].published_at = '3일 전'), /published_at/);
   });
+  it('keeps the length of a video, refuses another shape', () => {
+    const p = goodPage();
+    p['videos'][0].duration_sec = 1271;
+    expect(validatePage(p)).toEqual(p);
+    for (const v of [0, -1, 1.5, '21:11', null]) {
+      bad((q) => (q['videos'][0].duration_sec = v), /duration_sec/);
+    }
+  });
 });
 
 function fakeDb(handler: (sql: string, params: unknown[]) => unknown[]) {
@@ -154,6 +162,7 @@ describe('page readers', () => {
           channel: 'C2',
           useful_for: '',
           published_at: '2026-11-20T03:04:05Z',
+          duration_sec: 754,
         },
       ],
     };
@@ -182,7 +191,11 @@ describe('page readers', () => {
     const out = await readPageCards(db, USER, CELL, '2026-11-13');
     expect(out?.items.map((c) => c.video_id)).toEqual(ids);
     expect(out?.items[0]?.title).toBe('pool title');
-    expect(out?.items[1]).toMatchObject({ title: 'not in pool', channel: 'C2', duration: 0 });
+    expect(out?.items[1]).toMatchObject({ title: 'not in pool', channel: 'C2', duration: 754 });
+    // a thumbnail in any case: the immersive background colour is read from it
+    expect(out?.items.map((c) => c.thumbnail_url)).toEqual(
+      ids.map((id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`)
+    );
     expect(out?.items[1]?.published_at).toBe('2026-11-20T03:04:05Z');
     expect(out?.judged).toEqual({ [ids[0]!]: 'useful' });
     // read only
@@ -233,15 +246,37 @@ describe('page routes', () => {
     }
   });
 
-  async function build(db: FeedDb, authed = true): Promise<FastifyInstance> {
+  async function build(db: FeedDb, authed = true, deps = {}): Promise<FastifyInstance> {
     const app = Fastify();
     app.decorate('authenticate', async (request: any, reply: any) => {
       if (!authed) return reply.code(401).send({ status: 'error', error: 'unauthenticated' });
       request.user = { userId: USER };
     });
-    await app.register(createMorningFeedRoutes({ getDb: () => db }), { prefix: BASE });
+    await app.register(createMorningFeedRoutes({ getDb: () => db, ...deps }), { prefix: BASE });
     return app;
   }
+
+  it('GET /pages/cards: every card has its background colour, also a video outside the pool', async () => {
+    const { db } = fakeDb((sql) => {
+      if (!sql.includes('FROM public.morning_pages')) return [];
+      const { domain, ...rest } = goodPage();
+      return [{ cell: domain, ...rest }];
+    });
+    const seen: Array<string | null> = [];
+    const addAmbient = async <T extends { thumbnail_url: string | null }>(items: readonly T[]) =>
+      items.map((it) => {
+        seen.push(it.thumbnail_url);
+        return { ...it, ambient: '#123456' };
+      });
+    const app = await build(db, true, { addAmbient });
+    const q = `cell=${encodeURIComponent(CELL)}&date=2026-11-13`;
+    const res = await app.inject({ method: 'GET', url: `${BASE}/pages/cards?${q}` });
+    expect(res.statusCode).toBe(200);
+    const { items } = res.json().data;
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((x: { ambient?: string }) => x.ambient === '#123456')).toBe(true);
+    expect(seen.every((u) => u?.startsWith('https://i.ytimg.com/vi/'))).toBe(true);
+  });
 
   it('GET /pages/home', async () => {
     const { db } = fakeDb((sql) => (sql.includes('morning_watch_batches') ? [] : []));

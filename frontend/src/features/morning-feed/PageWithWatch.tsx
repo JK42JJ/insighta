@@ -16,23 +16,29 @@ import { recordBriefEvent } from '@/features/morning-feed/brief-events';
 import { usedParts, type SentenceSource } from '@/features/morning-feed/brief-sentences';
 import type { PlayRange } from '@/features/morning-feed/play-range';
 import type { SourcePlayerHandle } from '@/features/morning-feed/SourcePlayer';
-import { SourceSheet, type SheetCloseHow } from '@/features/morning-feed/SourceSheet';
+import {
+  SourceSheet,
+  type SheetCloseHow,
+  type SheetForm,
+  type SheetFormHow,
+} from '@/features/morning-feed/SourceSheet';
 import { appBack, popIsNative, trackEdgeSwipe } from '@/features/morning-feed/use-screen-history';
 import {
-  SENTENCE_SELECTOR,
   WatchPage,
   type OpenFrom,
   type SourceTap,
   type WatchPageProps,
 } from '@/features/morning-feed/WatchPage';
+import { loadYouTubeApi } from '@/features/morning-feed/youtube-iframe-api';
 import './page-watch.css';
 
 /*
  * A brief with its videos one tap away (decision 2026-11-14). A sentence opens its sources' sheet
- * over the article (James 2026-11-25, SourceSheet); a row of the evidence list, and the sheet's
- * "영상 전체 보기", open the video screen. Either one pushes one history entry (the sheet's entry
- * becomes the video screen's), so the browser's back (and Safari's edge swipe, which is a history
- * back) returns to the article, at the place it was read.
+ * under the article (order 2026-11-25 B5-2, SourceSheet), which stays readable; a row of the
+ * evidence list, and the sheet's "영상 전체 보기", open the video screen. Either one pushes one
+ * history entry (the sheet's entry becomes the video screen's), so the browser's back (and
+ * Safari's edge swipe, which is a history back) returns to the article, at the place it was read.
+ * Anything that leaves the article puts the sheet away first, so its entry never stays behind.
  * Motion (decision 2026-11-14 "앱처럼 반응", values in motion-tokens.ts): the video screen slides
  * in from the right while the brief moves 30 % left and darkens; going back is exactly the
  * reverse. The browser's own back (button, edge swipe) closes at once, so the screen never moves
@@ -49,7 +55,7 @@ export interface SheetUsage {
 
 export interface PageWithWatchProps extends Omit<
   WatchPageProps,
-  'onOpenVideo' | 'onOpenSource' | 'source' | 'scrollRef'
+  'onOpenVideo' | 'onOpenSource' | 'source' | 'scrollRef' | 'onLeave'
 > {
   loadCards: () => Promise<PageWatchCards | null>;
   sound: boolean;
@@ -77,19 +83,24 @@ function layerState(key: string): Record<string, unknown> {
 type BriefEvent = typeof recordBriefEvent;
 
 interface Sheet {
-  /** One per opening (a new player); `key` changes with every tap. */
+  /** One per player (a new one after the video screen). */
   id: number;
+  /** Changes with every tap. */
   key: number;
+  /** Changes with every tap on a sentence: the article moves it above the sheet. */
+  tap: number;
   /** The tapped sentence's sources and which one is shown. */
   sources: SentenceSource[];
   at: number;
-  ofParagraph: boolean;
   from: OpenFrom;
   sid: string;
-  closing: boolean;
+  /** 'closed': out of the screen, the player kept for the next sentence. */
+  form: SheetForm;
   /** Left for the video screen. */
   frozen: boolean;
 }
+
+const isOpen = (s: Sheet | null): s is Sheet => !!s && s.form !== 'closed' && !s.frozen;
 
 export function PageWithWatch({
   loadCards,
@@ -104,7 +115,7 @@ export function PageWithWatch({
   /** 'in' while sliding in, 'out' while sliding back; null at rest. */
   const [phase, setPhase] = useState<'in' | 'out' | null>(null);
   const [sheet, setSheetState] = useState<Sheet | null>(null);
-  const [sheetH, setSheetH] = useState(0);
+  const [heights, setHeights] = useState({ base: 0, mini: 0 });
   /** The browser's own back closed the sheet: nothing of ours moves. */
   const [still, setStill] = useState(false);
   /** The layer our history entry stands for. */
@@ -133,7 +144,6 @@ export function PageWithWatch({
   const setSheet = useCallback((s: Sheet | null): void => {
     sheetRef.current = s;
     setSheetState(s);
-    if (!s) setSheetH(0);
   }, []);
 
   /** Slides, then draws the rested state (`rest`) before the animations are removed. */
@@ -207,22 +217,24 @@ export function PageWithWatch({
     window.history.back();
   }, []);
 
+  /** The video screen is gone. */
   const closeNow = useCallback(() => {
     anims.current.forEach((a) => a.cancel());
     anims.current = [];
     setPhase(null);
     setWatch(null);
-    setSheet(null);
     restorePlace();
     focusBack();
-  }, [setSheet, restorePlace, focusBack]);
+  }, [restorePlace, focusBack]);
 
-  /** The video stops and the closing is recorded; once per sheet. */
+  /** The video pauses and the closing is recorded; once per opening. */
   const endSheet = useCallback((how: SheetCloseHow): Sheet | null => {
     const s = sheetRef.current;
-    if (!s || s.closing || s.frozen) return null;
-    player.current?.stop();
-    usage.current?.({ kind: 'source_sheet_close', videoId: shownOf(s).video_id, value: how });
+    if (!isOpen(s)) return null;
+    player.current?.pause();
+    const videoId = shownOf(s).video_id;
+    usage.current?.({ kind: 'source_sheet_close', videoId, value: how });
+    event.current('sheet_close', { sentenceId: s.sid, videoId, value: how });
     return s;
   }, []);
 
@@ -230,12 +242,38 @@ export function PageWithWatch({
     (how: SheetCloseHow): void => {
       const s = endSheet(how);
       if (!s) return;
-      setSheet({ ...s, closing: true });
+      keepPlace();
+      setStill(how === 'back');
+      setSheet({ ...s, form: 'closed' });
       dropEntry();
       restorePlace();
       focusBack();
     },
-    [endSheet, setSheet, dropEntry, restorePlace, focusBack]
+    [endSheet, setSheet, dropEntry, keepPlace, restorePlace, focusBack]
+  );
+
+  /** Puts the sheet away, then goes on (its history entry is dropped first). */
+  const leave = useCallback(
+    (go: () => void): void => {
+      closeSheet('leave');
+      // after every listener of that history move: a screen pushed inside it would be popped again
+      if (backPending.current) afterBack.current = () => void window.setTimeout(go, 0);
+      else go();
+    },
+    [closeSheet]
+  );
+
+  const setForm = useCallback(
+    (form: 'base' | 'mini', how: SheetFormHow): void => {
+      const s = sheetRef.current;
+      if (!isOpen(s) || s.form === form) return;
+      if (form === 'mini') player.current?.pause();
+      const videoId = shownOf(s).video_id;
+      event.current('sheet_form', { sentenceId: s.sid, videoId, value: form + '_' + how });
+      setStill(false);
+      setSheet({ ...s, form });
+    },
+    [setSheet]
   );
 
   useEffect(() => {
@@ -261,9 +299,7 @@ export function PageWithWatch({
       pushed.current = null;
       if (was === 'sheet') {
         popIsNative(e);
-        endSheet('back');
-        setStill(true);
-        closeNow();
+        closeSheet('back');
         return;
       }
       if (popIsNative(e)) {
@@ -283,14 +319,14 @@ export function PageWithWatch({
         window.history.back();
       }
     };
-  }, [closeNow, endSheet, restorePlace]);
+  }, [closeNow, closeSheet, restorePlace]);
 
   // the slides run once the layer is drawn
   useLayoutEffect(() => {
     if (phase === 'in') {
       slide('in', () => {
         setPhase((p) => (p === 'in' ? null : p));
-        // covered now: the sheet it came from goes, the article is at its place again
+        // covered now: the sheet it came from goes
         setStill(true);
         setSheet(null);
       });
@@ -305,18 +341,20 @@ export function PageWithWatch({
         afterBack.current = () => open(videoId, t, from);
         return;
       }
+      // a list row under the open sheet: the sheet rides away and its entry is the video screen's
+      const s = endSheet('list');
+      if (s) setSheet({ ...s, frozen: true });
       keepPlace();
       seq.current += 1;
       setWatch({ videoId, t, key: seq.current });
       setPhase('in');
       onEvidence?.(videoId, from);
       event.current('video_full', { videoId, value: from });
-      if (!pushed.current) {
-        window.history.pushState(layerState(WATCH_KEY), '');
-        pushed.current = 'watch';
-      }
+      if (pushed.current === 'sheet') window.history.replaceState(layerState(WATCH_KEY), '');
+      else if (!pushed.current) window.history.pushState(layerState(WATCH_KEY), '');
+      pushed.current = 'watch';
     },
-    [onEvidence, keepPlace]
+    [onEvidence, keepPlace, endSheet, setSheet]
   );
   const close = useCallback(() => {
     if (pushed.current) appBack();
@@ -334,35 +372,36 @@ export function PageWithWatch({
       const { sources, sid, from } = tap;
       const first = sources[0];
       if (!first) return;
-      const ofParagraph = tap.scope === 'paragraph';
       seq.current += 1;
       const key = seq.current;
       cite.current = tap.el;
-      onEvidence?.(first.video_id, from);
-      event.current('sentence_tap', { sentenceId: sid, videoId: first.video_id, value: from });
-      if (cur && !cur.closing) {
-        // the same sheet and player, another sentence's video
-        setSheet({ ...cur, key, sources, at: 0, ofParagraph, from, sid });
-        return;
+      const videoId = first.video_id;
+      onEvidence?.(videoId, from);
+      event.current('sentence_tap', { sentenceId: sid, videoId, value: from });
+      const open = isOpen(cur);
+      // the same player: another sentence's video, also from the bar or after the sheet was away
+      if (open && cur.form === 'mini') {
+        event.current('sheet_form', { sentenceId: sid, videoId, value: 'base_sentence' });
       }
-      keepPlace();
       setStill(false);
       setSheet({
-        id: key,
+        id: cur?.id ?? key,
         key,
+        tap: key,
         sources,
         at: 0,
-        ofParagraph,
         from,
         sid,
-        closing: false,
+        form: 'base',
         frozen: false,
       });
-      usage.current?.({ kind: 'source_sheet_open', videoId: first.video_id, value: from });
+      if (open) return;
+      usage.current?.({ kind: 'source_sheet_open', videoId, value: from });
+      event.current('sheet_open', { sentenceId: sid, videoId, value: from });
       window.history.pushState(layerState(SHEET_KEY), '');
       pushed.current = 'sheet';
     },
-    [onEvidence, keepPlace, setSheet]
+    [onEvidence, setSheet]
   );
 
   /** The next or previous source of the same sentence, in the same player. */
@@ -370,7 +409,7 @@ export function PageWithWatch({
     (to: number): void => {
       const s = sheetRef.current;
       const next = s?.sources[to];
-      if (!s || !next || s.closing || s.frozen || to === s.at) return;
+      if (!isOpen(s) || !next || to === s.at) return;
       seq.current += 1;
       onEvidence?.(next.video_id, s.from);
       setSheet({ ...s, key: seq.current, at: to });
@@ -381,9 +420,10 @@ export function PageWithWatch({
   /** 영상 전체 보기: the video screen, from where the sheet's video is. */
   const openFull = useCallback((): void => {
     const s = sheetRef.current;
-    if (!s || s.closing || s.frozen) return;
+    if (!isOpen(s)) return;
     const at = player.current?.position() ?? null;
-    player.current?.stop();
+    player.current?.pause();
+    keepPlace();
     const { video_id: videoId, t } = shownOf(s);
     usage.current?.({ kind: 'source_sheet_full', videoId });
     event.current('video_full', { sentenceId: s.sid, videoId, value: 'sheet' });
@@ -394,7 +434,7 @@ export function PageWithWatch({
     // the sheet's entry becomes the video screen's: back returns to the article
     window.history.replaceState(layerState(WATCH_KEY), '');
     pushed.current = 'watch';
-  }, [setSheet]);
+  }, [setSheet, keepPlace]);
 
   const onWatched = useCallback(
     (videoId: string, seconds: number): void =>
@@ -411,16 +451,13 @@ export function PageWithWatch({
     (r: PlayRange): void => event.current('play_range', { ...r, value: 'full' }),
     []
   );
-  const sheetGone = useCallback((): void => {
-    if (sheetRef.current?.closing) setSheet(null);
-  }, [setSheet]);
-
-  const shown = sheet && !sheet.closing ? sheet : null;
+  const shown = isOpen(sheet) ? sheet : null;
+  const room = shown ? heights[shown.form === 'mini' ? 'mini' : 'base'] : 0;
   const source = useMemo(
-    () => (shown ? { sid: shown.sid, sheetH } : null),
-    // a tap on the same sentence, or its next source, is no new place in the text
+    () => (shown ? { sid: shown.sid, tap: shown.tap, room } : null),
+    // the next source of the same sentence is no new place in the text
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shown?.sid, sheetH]
+    [shown?.sid, shown?.tap, room]
   );
   const target = useMemo(
     () =>
@@ -431,6 +468,15 @@ export function PageWithWatch({
     [sheet?.key]
   );
   const video = target ? page.page?.videos.find((v) => v.video_id === target.videoId) : undefined;
+  const others = useMemo(
+    () => page.others.map((o) => ({ ...o, onPick: () => leave(o.onPick) })),
+    [page.others, leave]
+  );
+  const { todayVideos } = page;
+  // the IFrame API is there before the first sentence is tapped
+  useEffect(() => {
+    void loadYouTubeApi().catch(() => undefined);
+  }, []);
   const parts = useCallback(
     (videoId: string) => (page.page ? usedParts(page.page, videoId) : []),
     [page.page]
@@ -450,25 +496,18 @@ export function PageWithWatch({
           } as CSSProperties
         }
       >
-        {/* while the sheet is open a tap on another sentence switches it, any other tap closes it;
-            the empty onClick makes plain text clickable on an iPhone */}
-        <div
-          className="mf-pw-article"
-          data-behind={shown ? '' : undefined}
-          data-still={still ? '' : undefined}
-          onClick={NOTHING}
-          onClickCapture={(e) => {
-            if (!sheetRef.current || sheetRef.current.closing) return;
-            if ((e.target as Element).closest(SENTENCE_SELECTOR)) return;
-            e.preventDefault();
-            e.stopPropagation();
-            closeSheet('outside');
-          }}
-        >
+        <div className="mf-pw-article">
           <WatchPage
             {...page}
+            back={{ ...page.back, onBack: () => leave(page.back.onBack) }}
+            onPast={() => leave(page.onPast)}
+            others={others}
+            todayVideos={
+              todayVideos && { ...todayVideos, onGo: () => leave(() => todayVideos.onGo()) }
+            }
             onOpenVideo={open}
             onOpenSource={openSource}
+            onLeave={leave}
             source={source}
             scrollRef={scroll}
           />
@@ -481,17 +520,17 @@ export function PageWithWatch({
             title={video?.title ?? ''}
             at={sheet.at}
             count={sheet.sources.length}
-            ofParagraph={sheet.ofParagraph}
             onTurn={turn}
-            closing={sheet.closing}
+            form={sheet.form}
+            instant={still}
             frozen={sheet.frozen}
             player={player}
+            onForm={setForm}
             onClose={closeSheet}
-            onGone={sheetGone}
             onFull={openFull}
             onWatched={onWatched}
             onRange={onRange}
-            onHeight={setSheetH}
+            onHeight={setHeights}
           />
         ) : null}
         <div ref={dim} className="mf-stack-dim" />
@@ -516,5 +555,3 @@ export function PageWithWatch({
     </div>
   );
 }
-
-const NOTHING = (): void => undefined;

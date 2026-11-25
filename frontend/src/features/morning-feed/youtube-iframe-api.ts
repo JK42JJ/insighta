@@ -10,6 +10,7 @@ export interface YtPlayer {
   mute(): void;
   unMute(): void;
   isMuted(): boolean;
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
   getPlayerState(): number;
   getCurrentTime(): number;
   getDuration(): number;

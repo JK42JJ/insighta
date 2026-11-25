@@ -18,8 +18,9 @@ vi.mock('@/features/morning-cards/api', async (actual) => ({
 }));
 
 /*
- * Order 2026-11-25 B5: a sentence opens its sources' sheet over the article with one YouTube
- * player; the article keeps its place; the browser's back closes the sheet only.
+ * Orders 2026-11-25 B5 and B5-2: a sentence opens its sources' sheet under the article with one
+ * YouTube player, kept for every later sentence; the article stays readable; the sheet dragged down
+ * is a bar; the browser's back closes the sheet only.
  */
 
 const FRAME = { vh: 664, safeTop: 0, safeBottom: 0, playerH: 219, width: 390 };
@@ -32,6 +33,7 @@ const PAGE: MorningPage = {
   core: [
     { text: '첫 문장이다.', sources: [{ video_id: A, t: 200 }], para: 1 },
     { text: '둘째 문장이다.', sources: [{ video_id: B, t: 0 }], para: 1 },
+    { text: '셋째 문장이다.', sources: [{ video_id: A, t: 260 }], para: 1 },
   ],
   note: [{ heading: '소제목', paragraphs: [{ text: '문단.', sources: [{ video_id: B, t: 30 }] }] }],
   videos: [
@@ -61,6 +63,10 @@ class FakeYt {
   loadVideoById(a: { videoId: string; startSeconds: number }): void {
     this.calls.push(`load ${a.videoId} ${a.startSeconds}`);
   }
+  seekTo(t: number): void {
+    this.time = t;
+    this.calls.push(`seek ${t}`);
+  }
   cueVideoById(a: { videoId: string; startSeconds: number }): void {
     this.calls.push(`cue ${a.videoId} ${a.startSeconds}`);
   }
@@ -88,6 +94,7 @@ function draw() {
   const usage: Array<[string, string, string | undefined]> = [];
   const evidence: string[] = [];
   const onBack = vi.fn();
+  const onPast = vi.fn(() => window.history.pushState({ mfScreen: 2 }, ''));
   render(
     <PageWithWatch
       frame={FRAME}
@@ -97,7 +104,7 @@ function draw() {
       others={[]}
       today="2026-11-25"
       back={{ label: '홈', onBack }}
-      onPast={() => undefined}
+      onPast={onPast}
       loadCards={() => new Promise(() => undefined)}
       sound={false}
       onSound={() => undefined}
@@ -107,10 +114,13 @@ function draw() {
     />
   );
   const cites = screen.getAllByTestId('mf-page-sent');
-  return { usage, evidence, onBack, cites };
+  return { usage, evidence, onBack, onPast, cites };
 }
 
 const lit = (): Element | null => document.querySelector('.mf-page-sent[data-lit]');
+
+const formOf = (): string | undefined => screen.getByTestId('mf-src-sheet').dataset.form;
+const lineOf = (): string | null => screen.getByTestId('mf-src-line').textContent;
 
 const tick = async (ms: number): Promise<void> => {
   await act(async () => {
@@ -152,28 +162,29 @@ afterEach(() => {
 });
 
 describe('source sheet', () => {
-  it('opens over the article: one player at the second, the texts, the sentence marked, the article locked', async () => {
+  it('opens over the article: one player at the second, the texts, the sentence marked, the article not locked', async () => {
     const { usage, evidence, cites } = draw();
     cites[0]!.focus();
     fireEvent.click(cites[0]!);
-    // no player before the sheet is in place
-    expect(FakeYt.all).toHaveLength(0);
+    expect(formOf()).toBe('base');
     const sheet = screen.getByRole('dialog');
     expect(sheet.getAttribute('aria-label')).toContain('영상 A');
-    expect(screen.getByTestId('mf-src-channel').textContent).toBe('채널A');
-    expect(screen.getByTestId('mf-src-title').textContent).toBe('영상 A');
-    expect(screen.getByTestId('mf-src-at').textContent).toBe('이 부분 3:20');
-    expect(screen.getByTestId('mf-src-full').textContent).toContain('영상 전체 보기');
+    // one line: the second, the channel, the title
+    expect(lineOf()).toBe('3:20 · 채널A · 영상 A');
+    expect(screen.getByTestId('mf-src-full').getAttribute('aria-label')).toBe('영상 전체 보기');
     expect(document.activeElement).toBe(screen.getByTestId('mf-src-close'));
     expect(lit()?.textContent).toBe('첫 문장이다.');
-    expect(screen.getByTestId('mf-page-scroll').hasAttribute('data-locked')).toBe(true);
+    expect(screen.getByTestId('mf-page-scroll').hasAttribute('data-locked')).toBe(false);
     expect(screen.queryByTestId('mf-page-watch')).toBeNull();
-    await tick(SLIDE_MS);
+    await tick(0);
     expect(FakeYt.all).toHaveLength(1);
     const yt = FakeYt.all[0]!;
     expect(yt.opts.videoId).toBe(A);
     expect(yt.opts.playerVars).toMatchObject({ start: 200, controls: 1, playsinline: 1 });
     act(() => yt.opts.events.onReady!({ target: yt }));
+    // nothing plays before the sheet is in view
+    expect(yt.calls).toEqual(['unMute']);
+    await tick(SLIDE_MS);
     // with sound, never muted
     expect(yt.calls).toEqual(['unMute', 'play']);
     expect(evidence).toEqual([A + ' body']);
@@ -204,9 +215,8 @@ describe('source sheet', () => {
     fireEvent.click(cites[1]!);
     expect(FakeYt.all).toHaveLength(1);
     expect(yt.calls[yt.calls.length - 1]).toBe(`load ${B} 0`);
-    expect(screen.getByTestId('mf-src-title').textContent).toBe('영상 B');
-    // no time in the video: no "이 부분"
-    expect(screen.queryByTestId('mf-src-at')).toBeNull();
+    // no time in the video: no second
+    expect(lineOf()).toBe('채널B · 영상 B');
     expect(lit()?.textContent).toBe('둘째 문장이다.');
     expect(evidence).toEqual([A + ' body', B + ' body']);
     expect(usage).toEqual([
@@ -217,25 +227,25 @@ describe('source sheet', () => {
     push.mockRestore();
   });
 
-  it('close button: stops, records seconds and how, drops its entry, focus and place come back', async () => {
+  it('close button: pauses, records seconds and how, drops its entry, focus back, the place read to stays', async () => {
     const { usage, cites, onBack } = draw();
     const scroll = screen.getByTestId('mf-page-scroll');
-    scroll.scrollTop = 420;
     const yt = await openFirst(cites);
     act(() => yt.opts.events.onStateChange!({ data: PLAYING }));
     await tick(3000);
     act(() => yt.opts.events.onStateChange!({ data: PAUSED }));
-    // moved by the browser while the sheet was open
-    scroll.scrollTop = 0;
+    // read on while the sheet was open
+    scroll.scrollTop = 420;
     fireEvent.click(screen.getByTestId('mf-src-close'));
     expect(yt.calls[yt.calls.length - 1]).toBe('pause');
     expect(scroll.scrollTop).toBe(420);
     expect(document.activeElement).toBe(cites[0]);
     expect(lit()).toBeNull();
     await tick(600);
-    expect(screen.queryByTestId('mf-src-sheet')).toBeNull();
-    expect(yt.destroyed).toBe(true);
-    expect(scroll.hasAttribute('data-locked')).toBe(false);
+    expect(formOf()).toBe('closed');
+    // the player is kept for the next sentence
+    expect(yt.destroyed).toBe(false);
+    expect(scroll.scrollTop).toBe(420);
     expect(usage.slice(1)).toEqual([
       ['source_sheet_watch', A, '3'],
       ['source_sheet_close', A, 'button'],
@@ -244,26 +254,72 @@ describe('source sheet', () => {
     expect(window.history.state).toEqual({ mfScreen: 1 });
   });
 
-  it('a tap outside closes it and does nothing else; a source tap right after opens it again', async () => {
-    const { usage, cites, onBack } = draw();
+  it('a tap on the article does what it does: plain text nothing, a screen change puts the sheet away first', async () => {
+    const { usage, cites, onBack, onPast } = draw();
+    const yt = await openFirst(cites);
+    fireEvent.click(screen.getByTestId('mf-page-headline'));
+    expect(formOf()).toBe('base');
+    fireEvent.click(screen.getByTestId('mf-page-past'));
+    // its entry is dropped first, then the screen is pushed on the article's own entry
+    expect(yt.calls[yt.calls.length - 1]).toBe('pause');
+    expect(usage[usage.length - 1]).toEqual(['source_sheet_close', A, 'leave']);
+    await tick(100);
+    expect(onPast).toHaveBeenCalledTimes(1);
+    expect(window.history.state).toEqual({ mfScreen: 2 });
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it('the back button leaves the article in one press', async () => {
+    const { cites, onBack } = draw();
     await openFirst(cites);
     fireEvent.click(screen.getByTestId('mf-page-home'));
-    expect(onBack).not.toHaveBeenCalled();
-    expect(usage[usage.length - 1]).toEqual(['source_sheet_close', A, 'outside']);
+    await tick(100);
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(window.history.state).toEqual({ mfScreen: 1 });
+  });
+
+  it('a list row under the open sheet opens the video screen in the same entry', async () => {
+    const { usage, cites } = draw();
+    const push = vi.spyOn(window.history, 'pushState');
+    await openFirst(cites);
+    fireEvent.click(screen.getAllByTestId('mf-page-video')[1]!);
+    expect(usage[usage.length - 1]).toEqual(['source_sheet_close', A, 'list']);
+    expect(window.history.state).toEqual({ mfScreen: 1, mfPageWatch: true });
+    expect(push).toHaveBeenCalledTimes(1);
+    push.mockRestore();
+  });
+
+  it('a sentence tapped right after closing opens it again, in the same player', async () => {
+    const { usage, cites } = draw();
+    const yt = await openFirst(cites);
+    fireEvent.click(screen.getByTestId('mf-src-close'));
     // the entry is still being dropped: the next opening waits for it and then has its own
     fireEvent.click(cites[1]!);
     await tick(600);
-    expect(screen.getByTestId('mf-src-title').textContent).toBe('영상 B');
+    expect(formOf()).toBe('base');
+    expect(lineOf()).toBe('채널B · 영상 B');
+    expect(FakeYt.all).toHaveLength(1);
+    expect(yt.calls[yt.calls.length - 1]).toBe(`load ${B} 0`);
     expect(window.history.state).toEqual({ mfScreen: 1, mfSourceSheet: true });
     expect(usage.filter((u) => u[0] === 'source_sheet_open')).toHaveLength(2);
     expect(usage.filter((u) => u[0] === 'source_sheet_close')).toHaveLength(1);
+  });
+
+  it('another sentence of the same video only moves to its second', async () => {
+    const { cites } = draw();
+    const yt = await openFirst(cites);
+    act(() => yt.opts.events.onStateChange!({ data: PLAYING }));
+    fireEvent.click(cites[2]!);
+    expect(yt.calls.slice(-2)).toEqual(['seek 260', 'play']);
+    expect(yt.calls.some((c) => c.startsWith('load'))).toBe(false);
+    expect(lineOf()).toBe('4:20 · 채널A · 영상 A');
   });
 
   it("the browser's back closes the sheet only, at once; forward does not bring a dead entry", async () => {
     const { usage, cites, onBack } = draw();
     await openFirst(cites);
     await pop();
-    expect(screen.queryByTestId('mf-src-sheet')).toBeNull();
+    expect(formOf()).toBe('closed');
     expect(screen.getByTestId('mf-page')).toBeTruthy();
     expect(onBack).not.toHaveBeenCalled();
     expect(usage[usage.length - 1]).toEqual(['source_sheet_close', A, 'back']);
@@ -274,7 +330,7 @@ describe('source sheet', () => {
     });
     await tick(100);
     expect(window.history.state).toEqual({ mfScreen: 1 });
-    expect(screen.queryByTestId('mf-src-sheet')).toBeNull();
+    expect(formOf()).toBe('closed');
   });
 
   it('Escape closes it', async () => {
@@ -356,9 +412,12 @@ describe('dragging the sheet', () => {
     act(() => void el.dispatchEvent(e));
   };
 
-  it('follows the finger after the slop; far enough down closes it', async () => {
+  it('follows the finger after the slop; far enough down it is the bar, paused, with where it stopped', async () => {
+    const sent = vi.spyOn(events, 'recordBriefEvent').mockImplementation(() => undefined);
     const { usage, cites } = draw();
-    await openFirst(cites);
+    const yt = await openFirst(cites);
+    act(() => yt.opts.events.onStateChange!({ data: PLAYING }));
+    yt.time = 211.4;
     const sheet = screen.getByTestId('mf-src-sheet');
     const head = screen.getByTestId('mf-src-head');
     pointer(head, 'pointerdown', 300, 10);
@@ -371,7 +430,77 @@ describe('dragging the sheet', () => {
     pointer(sheet, 'pointermove', 400, 800);
     expect(sheet.style.transform).toBe('translate3d(0,100px,0)');
     pointer(sheet, 'pointerup', 400, 900);
+    expect(formOf()).toBe('mini');
+    expect(yt.calls[yt.calls.length - 1]).toBe('pause');
+    expect(screen.getByTestId('mf-src-bar-at').textContent).toBe('3:31에서 멈춤');
+    expect(usage.some((u) => u[0] === 'source_sheet_close')).toBe(false);
+    // the sentence stays marked; the entry stays
+    expect(lit()?.textContent).toBe('첫 문장이다.');
+    expect(window.history.state).toEqual({ mfScreen: 1, mfSourceSheet: true });
+    // a start that was still on its way does not play out of the screen
+    act(() => yt.opts.events.onStateChange!({ data: PLAYING }));
+    expect(yt.calls[yt.calls.length - 1]).toBe('pause');
+    // the bar brings it back where it stopped
+    fireEvent.click(screen.getByTestId('mf-src-bar-open'), { detail: 1 });
+    expect(formOf()).toBe('base');
+    expect(yt.calls[yt.calls.length - 1]).toBe('pause');
+    await tick(SLIDE_MS);
+    expect(yt.calls[yt.calls.length - 1]).toBe('play');
+    expect(FakeYt.all).toHaveLength(1);
+    expect(
+      sent.mock.calls
+        .filter((c) => String(c[0]).startsWith('sheet_'))
+        .map((c) => [c[0], c[1]?.sentenceId, c[1]?.value])
+    ).toEqual([
+      ['sheet_open', 'p0.s0', 'body'],
+      ['sheet_form', 'p0.s0', 'mini_drag'],
+      ['sheet_form', 'p0.s0', 'base_tap'],
+    ]);
+    sent.mockRestore();
+  });
+
+  const toBar = async (cites: HTMLElement[]): Promise<FakeYt> => {
+    const yt = await openFirst(cites);
+    const sheet = screen.getByTestId('mf-src-sheet');
+    pointer(sheet, 'pointerdown', 600, 10);
+    pointer(sheet, 'pointermove', 640, 300);
+    pointer(sheet, 'pointerup', 640, 320);
+    expect(formOf()).toBe('mini');
+    return yt;
+  };
+
+  it('the bar: an upward swipe opens it, a downward one or its button closes it', async () => {
+    const { usage, cites } = draw();
+    await toBar(cites);
+    const bar = screen.getByTestId('mf-src-bar');
+    // not played yet: where it starts
+    expect(screen.getByTestId('mf-src-bar-at').textContent).toBe('3:20부터');
+    pointer(bar, 'pointerdown', 630, 1000);
+    pointer(bar, 'pointermove', 590, 1200);
+    // the bar itself does not leave its place upwards
+    expect(bar.style.transform).toBe('');
+    pointer(bar, 'pointerup', 590, 1300);
+    expect(formOf()).toBe('base');
+    const sheet = screen.getByTestId('mf-src-sheet');
+    pointer(sheet, 'pointerdown', 600, 2000);
+    pointer(sheet, 'pointermove', 640, 2300);
+    pointer(sheet, 'pointerup', 640, 2320);
+    pointer(bar, 'pointerdown', 620, 3000);
+    pointer(bar, 'pointermove', 655, 3300);
+    expect(bar.style.transform).toBe('translate3d(0,35px,0)');
+    pointer(bar, 'pointerup', 655, 3400);
+    expect(formOf()).toBe('closed');
     expect(usage[usage.length - 1]).toEqual(['source_sheet_close', A, 'drag']);
+  });
+
+  it('a sentence tapped while it is the bar plays in the base form again', async () => {
+    const { cites } = draw();
+    const yt = await toBar(cites);
+    fireEvent.click(cites[1]!);
+    expect(formOf()).toBe('base');
+    await tick(SLIDE_MS);
+    expect(yt.calls[yt.calls.length - 1]).toBe(`load ${B} 0`);
+    expect(FakeYt.all).toHaveLength(1);
   });
 
   it('a short slow drag goes back, and the click that ends it presses nothing', async () => {
@@ -380,8 +509,8 @@ describe('dragging the sheet', () => {
     const sheet = screen.getByTestId('mf-src-sheet');
     const full = screen.getByTestId('mf-src-full');
     pointer(full, 'pointerdown', 600, 10);
-    pointer(full, 'pointermove', 640, 500);
-    pointer(sheet, 'pointerup', 640, 600);
+    pointer(full, 'pointermove', 615, 500);
+    pointer(sheet, 'pointerup', 615, 600);
     expect(sheet.style.transform).toBe('');
     fireEvent.click(full, { detail: 1 });
     expect(screen.queryByTestId('mf-page-watch')).toBeNull();
@@ -413,29 +542,31 @@ describe('PlaySeconds', () => {
 });
 
 describe('the sentence above the sheet', () => {
-  it('moves the box, not the scroll position, only when the sheet would cover the sentence', async () => {
-    const rect = (top: number, bottom: number) => ({ top, bottom }) as DOMRect;
+  it('a tap scrolls it above the sheet only when the sheet would cover it; the room is under the last line', async () => {
     const tops: Record<string, [number, number]> = { lit: [500, 560] };
     const orig = Element.prototype.getBoundingClientRect;
     Element.prototype.getBoundingClientRect = function (this: Element) {
-      if (this.classList.contains('mf-page-lit')) return rect(...tops.lit!);
-      return rect(0, 0);
+      const [top, bottom] = this.classList.contains('mf-page-lit') ? tops.lit! : [0, 664];
+      return { top, bottom, height: bottom - top } as DOMRect;
     };
-    const h = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(400);
+    const h = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(300);
     const { cites } = draw();
     const scroll = screen.getByTestId('mf-page-scroll');
+    (scroll as { scrollTo?: unknown }).scrollTo = undefined;
     scroll.scrollTop = 300;
     fireEvent.click(cites[0]!);
-    // 560 must be above 664 - 400 - 16
-    expect(scroll.style.transform).toBe('translate3d(0,-312px,0)');
-    expect(scroll.scrollTop).toBe(300);
-    // already in view: the box stays where it is
-    tops.lit = [480, 520];
+    // 560 must be above 664 - 300 - 16
+    expect(scroll.scrollTop).toBe(300 + 212);
+    expect(screen.getByTestId('mf-page').style.getPropertyValue('--src-room')).toBe('300px');
+    // already in view: the article stays where it is
+    tops.lit = [100, 160];
     fireEvent.click(cites[1]!);
-    expect(scroll.style.transform).toBe('translate3d(0,-312px,0)');
+    expect(scroll.scrollTop).toBe(512);
+    // the place read to since then stays on closing
+    scroll.scrollTop = 777;
     fireEvent.click(screen.getByTestId('mf-src-close'));
-    expect(scroll.style.transform).toBe('');
-    expect(scroll.scrollTop).toBe(300);
+    expect(scroll.scrollTop).toBe(777);
+    expect(screen.getByTestId('mf-page').style.getPropertyValue('--src-room')).toBe('0px');
     Element.prototype.getBoundingClientRect = orig;
     h.mockRestore();
   });

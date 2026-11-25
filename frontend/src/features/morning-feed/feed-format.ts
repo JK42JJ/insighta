@@ -15,7 +15,7 @@ export function formatDuration(totalSeconds: number): string {
 }
 
 const YT_THUMB = 'https://i.ytimg.com/vi/';
-function youtubeThumb(videoId: string): string | undefined {
+export function youtubeThumb(videoId: string): string | undefined {
   return videoId ? `${YT_THUMB}${videoId}/mqdefault.jpg` : undefined;
 }
 

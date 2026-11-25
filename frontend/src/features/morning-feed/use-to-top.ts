@@ -56,13 +56,11 @@ const CLEAR_PX = 12;
 
 /**
  * @param avoid finds the area the button must not lie on
- * @param off the button is not used now (the source sheet is open)
  */
 export function useToTop(
   scroll: RefObject<HTMLElement>,
   button: RefObject<HTMLElement>,
-  avoid: string,
-  off: boolean
+  avoid: string
 ): { shown: boolean; over: boolean; go: () => void } {
   const [shown, setShown] = useState(false);
   /** It would lie on what it must not cover: gone at once, without a fade. */
@@ -74,10 +72,6 @@ export function useToTop(
   useEffect(() => {
     const el = scroll.current;
     if (!el) return undefined;
-    if (off) {
-      setShown(false);
-      return undefined;
-    }
     state.current = {
       ...TO_TOP_START,
       from: el.scrollTop,
@@ -112,7 +106,7 @@ export function useToTop(
       el.removeEventListener('pointerdown', onTouch);
       el.removeEventListener('wheel', onTouch);
     };
-  }, [scroll, button, avoid, off]);
+  }, [scroll, button, avoid]);
 
   const go = useCallback(() => {
     const el = scroll.current;
@@ -124,5 +118,5 @@ export function useToTop(
     else el.scrollTo({ top: 0, behavior: 'smooth' });
   }, [scroll]);
 
-  return { shown: shown && !off, over, go };
+  return { shown, over, go };
 }

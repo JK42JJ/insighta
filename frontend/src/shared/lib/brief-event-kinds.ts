@@ -8,6 +8,10 @@ export const BRIEF_EVENT_KINDS = [
   'headline_select',
   'read_depth',
   'sentence_tap',
+  // the source sheet (2026-11-25 B5-2): opened (value = where), base <-> bar (value = form_how), closed
+  'sheet_open',
+  'sheet_form',
+  'sheet_close',
   'play_range',
   'video_full',
   'reaction',
