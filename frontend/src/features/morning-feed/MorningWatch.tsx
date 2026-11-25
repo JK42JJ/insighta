@@ -203,7 +203,11 @@ export function MorningWatch({
     void postUsageEvent({ kind: 'home_open' });
   }, [screen.kind]);
 
+  const onboardingDone = useRef(false);
   const finishOnboarding = (): void => {
+    // skipped while the YouTube window was open: its end must not move the screen a second time
+    if (onboardingDone.current) return;
+    onboardingDone.current = true;
     writeOnboardingSeen();
     // the onboarding is not a place to go back to
     setScreen({ kind: 'input' }, { replace: true });

@@ -174,7 +174,6 @@ export function WatchOnboarding({
           className="mf-w-onb-skip"
           data-press="link"
           data-testid="mf-w-onb-skip"
-          disabled={busy}
           onClick={onSkip}
         >
           건너뛰기
