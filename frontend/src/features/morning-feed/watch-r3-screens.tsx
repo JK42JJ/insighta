@@ -162,8 +162,8 @@ export function AccountSheet({
               <div className="mf-w3-acct-who">
                 <Avatar url={account.avatarUrl} size={44} icon={24} />
                 <div className="mf-w3-acct-text">
-                  <div className="mf-w3-acct-name">{account.name}</div>
-                  <div className="mf-w3-acct-email">{account.email}</div>
+                  <div className="mf-w3-acct-name ph-mask">{account.name}</div>
+                  <div className="mf-w3-acct-email ph-mask">{account.email}</div>
                 </div>
               </div>
               {account.extra}
