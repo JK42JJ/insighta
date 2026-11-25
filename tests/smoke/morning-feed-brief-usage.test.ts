@@ -68,6 +68,30 @@ describe('usage event allow-list', () => {
     );
   });
 
+  it('source sheet: opened (where), seconds played, full view, closed (how)', () => {
+    const ok: Array<[string, string | null]> = [
+      ['source_sheet_open', 'body'],
+      ['source_sheet_open', 'note'],
+      ['source_sheet_watch', '1'],
+      ['source_sheet_watch', '35999'],
+      ['source_sheet_full', null],
+      ['source_sheet_close', 'outside'],
+      ['source_sheet_close', 'back'],
+    ];
+    for (const [kind, value] of ok) {
+      expect(validateUsageEvent({ kind, video_id: 'aaaaaaaaaaa', value })).toEqual({
+        kind,
+        cell: null,
+        seen_date: null,
+        video_id: 'aaaaaaaaaaa',
+        value,
+      });
+    }
+    expect(() => validateUsageEvent({ kind: 'source_sheet_watch', value: '1.5' })).toThrow(
+      FeedValidationError
+    );
+  });
+
   it('every kind fits the kind column (varchar 32)', () => {
     for (const kind of USAGE_EVENT_KINDS) expect(kind.length).toBeLessThanOrEqual(32);
   });

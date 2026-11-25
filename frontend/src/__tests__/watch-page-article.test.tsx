@@ -194,7 +194,7 @@ describe('article page (screen)', () => {
 });
 
 describe('article page -> the video at that second', () => {
-  it('a paragraph link opens the watch layer at that video, starting at the linked second', async () => {
+  it("a paragraph link opens its sheet; the sheet's full view opens the watch layer at that video and second", async () => {
     const pushState = vi.spyOn(window.history, 'pushState');
     const evidence: string[] = [];
     opened.length = 0;
@@ -244,6 +244,16 @@ describe('article page -> the video at that second', () => {
     await act(async () => {
       await Promise.resolve();
     });
+    expect(pushState).toHaveBeenCalledTimes(1);
+    expect(evidence).toEqual([B]);
+    // the sheet, over the article; the video screen only from its button
+    expect(screen.getByTestId('mf-src-sheet').textContent).toContain('이 부분 2:40');
+    expect(opened).toEqual([]);
+    fireEvent.click(screen.getByTestId('mf-src-full'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // the same history entry, and one source open is one evidence record
     expect(pushState).toHaveBeenCalledTimes(1);
     expect(evidence).toEqual([B]);
     // 2:40 = 160 s into video B

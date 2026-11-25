@@ -130,7 +130,7 @@ const card = (i: number): WatchVideo => ({
 });
 
 describe('brief -> its videos -> back', () => {
-  it('a source opens the layer at that video and pushes history; back closes it and the page keeps its state', async () => {
+  it('an evidence row opens the layer at that video and pushes history; back closes it and the page keeps its state', async () => {
     const pushState = vi.spyOn(window.history, 'pushState');
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {
       window.dispatchEvent(new PopStateEvent('popstate'));
@@ -162,12 +162,13 @@ describe('brief -> its videos -> back', () => {
     // open the note first: its state must survive the round trip
     fireEvent.click(screen.getByTestId('mf-page-note-toggle'));
     expect(screen.getByTestId('mf-page-note').hasAttribute('data-open')).toBe(true);
-    fireEvent.click(screen.getAllByTestId('mf-page-cite')[0]!);
+    fireEvent.click(screen.getAllByTestId('mf-page-video')[1]!);
     await act(async () => {
       await Promise.resolve();
     });
     expect(pushState).toHaveBeenCalledTimes(1);
-    expect(onEvidence).toHaveBeenCalledWith(ID[1], 'body');
+    expect(onEvidence).toHaveBeenCalledWith(ID[1], 'list');
+    expect(screen.queryByTestId('mf-src-sheet')).toBeNull();
     expect(screen.getByTestId('mf-page-watch')).toBeTruthy();
     // during the slide-in the feed (and its player) is not mounted yet: no playback mid-slide
     expect(screen.queryByTestId('mf-watch-counter')).toBeNull();

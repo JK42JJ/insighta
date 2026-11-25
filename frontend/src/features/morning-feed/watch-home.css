@@ -13,6 +13,8 @@
   --h-chip-on-bg: #eaf0f7;
   /* the pressed ground of the head's text buttons (the landing header's) */
   --h-press: rgba(20, 26, 36, 0.1);
+  /* the sentence whose source is shown */
+  --h-lit: rgba(58, 110, 165, 0.14);
   --h-clear: transparent;
   background: var(--h-bg);
   color: var(--h-fg);
