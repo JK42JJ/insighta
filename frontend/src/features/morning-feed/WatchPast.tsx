@@ -29,11 +29,13 @@ export interface WatchPastProps {
   initial: string;
   /** The pages of a domain, newest first. */
   load: (cell: string) => Promise<PastRow[]>;
-  onOpen: (cell: string, seenDate: string) => void;
+  onOpen: (cell: string, seenDate: string, headline: string) => void;
   /** Top left: back to the screen this came from ("‹ 홈"). */
   back: { label: string; onBack: () => void };
   /** Today ('YYYY-MM-DD'): a brief of that date reads '오늘 · …'. */
   today: string;
+  /** 오늘로, at the top of the list: shown while an earlier date is being looked at. */
+  onToday?: (cell: string) => void;
 }
 
 const NARROW_W = 360;
@@ -74,6 +76,17 @@ export function WatchPast(p: WatchPastProps): JSX.Element {
           {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
         </div>
         <div className="mf-past-list">
+          {p.onToday ? (
+            <button
+              type="button"
+              className="mf-past-today"
+              data-press="soft"
+              data-testid="mf-past-today"
+              onClick={() => p.onToday?.(sel)}
+            >
+              <span>오늘로</span>
+            </button>
+          ) : null}
           <div className="mf-past-dom" data-testid="mf-past-dom">
             {title}
           </div>
@@ -84,7 +97,7 @@ export function WatchPast(p: WatchPastProps): JSX.Element {
               className="mf-past-row"
               data-press="row"
               data-testid="mf-past-row"
-              onClick={() => p.onOpen(sel, r.seen_date)}
+              onClick={() => p.onOpen(sel, r.seen_date, r.headline)}
             >
               <div className="mf-past-date">{briefDateLabel(r.seen_date, p.today)}</div>
               <div className="mf-past-head" style={{ fontSize: fs + 'px' }}>

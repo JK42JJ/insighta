@@ -39,30 +39,54 @@ test('morning watch: a participant reads a brief, opens its evidence and comes b
   page.on('request', (r) => {
     if (/\/morning-feed\/(watch\/|judgments|history)/.test(r.url())) experimentCalls.push(r.url());
   });
+  const briefReads: Array<{ url: string; status: number }> = [];
+  page.on('response', (r) => {
+    if (r.url().includes(`${API}/pages?`) && r.request().method() === 'GET')
+      briefReads.push({ url: r.url(), status: r.status() });
+  });
   await signIn(page);
+  briefReads.length = 0;
   await page.goto('/morning-cards?view=watch');
 
-  // the brief home: Insighta alone at the top, the date only, always 브리프 읽기
+  // the brief home: Insighta and the account, then the date (a button to the past briefs); the
+  // chosen domain's name above the headline; always 브리프 읽기
   const homeEl = page.locator(`${TOP} [data-testid="mf-home"]`);
   await expect(homeEl).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
   await expect(page.getByTestId('mf-home-goal')).toHaveCount(0);
   await expect(page.locator('.mf-home-top')).toContainText('Insighta');
-  await expect(page.getByTestId('mf-home-seen')).toHaveText(/^(오늘 · )?\d+월 \d+일$/);
+  await expect(page.getByTestId('mf-home-seen')).toHaveText(/^\d+월 \d+일 [일월화수목금토]요일$/);
   await expect(page.getByTestId('mf-home-enter')).toContainText('브리프 읽기');
-  await expect(page.getByTestId('mf-home-past')).toHaveText('지난 브리프');
+  const dateButton = page.getByTestId('mf-home-past');
+  await expect(dateButton).toHaveText(/^\d+월 \d+일 [일월화수목금토]요일$/);
+  expect((await dateButton.boundingBox())?.height).toBe(44);
+  await expect(page.getByTestId('mf-home-domain')).toHaveText(
+    (await page.locator('[data-testid="mf-home-chip"][data-on]').textContent()) ?? ''
+  );
+  await expect(homeEl).not.toContainText('지난 브리프');
+  // the date opens the past briefs; the browser's back returns to the same home
+  await dateButton.click();
+  await expect(page.locator(`${TOP} [data-testid="mf-past"]`)).toBeVisible();
+  await page.goBack();
+  await expect(homeEl).toBeVisible();
   // textContent: the text may still be hidden while its fonts load (innerText would be empty)
   const headline = ((await page.getByTestId('mf-home-headline').textContent()) ?? '').trim();
   expect(headline).not.toBe('');
 
-  const briefRead = page.waitForResponse(
-    (r) => r.url().includes(`${API}/pages?`) && r.request().method() === 'GET'
-  );
+  // the shown brief was read ahead when the home was entered (a good answer), so opening it reads
+  // nothing again
+  const chipCount = await page.getByTestId('mf-home-chip').count();
+  await expect
+    .poll(() => briefReads.length, { timeout: LOAD_TIMEOUT_MS })
+    .toBeGreaterThanOrEqual(chipCount);
+  expect(briefReads.map((r) => r.status).filter((x) => x !== 200)).toEqual([]);
+  const readsBefore = briefReads.length;
   await page.getByTestId('mf-home-enter').click();
-  const read = await briefRead;
-  expect(read.status()).toBe(200);
   const brief = page.locator(`${TOP} [data-testid="mf-page"]`);
   await expect(brief).toBeVisible();
   await expect(brief.getByTestId('mf-page-headline')).toHaveText(headline);
+  await expect(brief.getByTestId('mf-page-core')).toBeVisible();
+  await expect(page.getByTestId('mf-page-skeleton')).toHaveCount(0);
+  expect(briefReads.length).toBe(readsBefore);
   await expect(brief.getByTestId('mf-page-home')).toHaveText('홈');
   await expect(brief.getByTestId('mf-page-videos')).toContainText('근거가 된 영상');
   // no experiment UI for a participant

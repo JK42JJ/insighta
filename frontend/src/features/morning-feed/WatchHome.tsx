@@ -8,31 +8,29 @@ import {
 } from 'react';
 
 import { ensureHomeFonts, waitHomeFonts } from '@/features/morning-feed/watch-home-fonts';
+import { HomeHead } from '@/features/morning-feed/HomeHead';
 import {
-  briefDateLabel,
   headlineSize,
   HOME_BUTTON_LABEL,
+  seenDateLabel,
 } from '@/features/morning-feed/watch-home-model';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
-import {
-  AccountButton,
-  AccountSheet,
-  type R3AccountView,
-} from '@/features/morning-feed/watch-r3-screens';
+import { AccountSheet, type R3AccountView } from '@/features/morning-feed/watch-r3-screens';
 import { SkeletonLines } from '@/features/morning-feed/SkeletonLines';
 import { useSkeleton } from '@/features/morning-feed/use-skeleton';
 import './watch-home.css';
 
 /*
  * Daily home (design handoff "design_handoff_insighta_home", HomeMotionPhone.dc.html is the
- * reference): yesterday's headline of the last watched domain, the date it was seen, the button
- * into today's videos and the domain chips. Light background only (decision 2026-11-14).
+ * reference): the newest headline of the chosen domain with the button into its brief in the
+ * middle, the domain chips at the bottom, the date (past briefs) and the account at the top
+ * (decision 2026-11-25). Light background only (decision 2026-11-14).
  *
  * Motion (README "한 덩어리 페이드"): the headline fades as one element, opacity only. Entrance:
- * headline 0->1 450 ms ease-out, then the seen-date row, button and chips 0->1 300 ms ease-out
- * at 450 ms. Domain switch: the chip changes at once (0.2 s colour), the headline fades out
- * 180 ms ease-in, the text changes, it fades in 450 ms ease-out while the seen-date row and the
- * button slide from where they were in 300 ms cubic-bezier(.2,.8,.2,1). Taps during a switch are
+ * headline 0->1 450 ms ease-out, then the date, the domain name, button and chips 0->1 300 ms
+ * ease-out at 450 ms. Domain switch: the chip, the domain name and the date change at once (the
+ * chip's colour in 0.2 s), the headline fades out 180 ms ease-in, the text changes, it fades in
+ * 450 ms ease-out while the domain name and the button slide from where they were in 300 ms cubic-bezier(.2,.8,.2,1). Taps during a switch are
  * ignored. Reduced motion: no motion at all. The motion waits for the fonts at most 1.5 s.
  */
 
@@ -55,14 +53,16 @@ export interface WatchHomeProps {
   pages: Record<string, HomeHeadline>;
   /** The last watched domain (it has a page). */
   initial: string;
-  /** Today in KST ('YYYY-MM-DD'): a page of that date is "today's page". */
-  today: string;
   /** A chip of a domain without a brief (none are shown to participants). */
   onOpen: (cell: string) => void;
   /** The button and the headline: that domain's brief. */
   onOpenPage: (cell: string) => void;
-  /** The link at the right end of the date row: past briefs (absent = not drawn). */
-  onPast?: (cell: string) => void;
+  /** The date in the head: past briefs, from the shown brief's date (absent = date text only). */
+  onPast?: (cell: string, date: string) => void;
+  /** A domain was chosen with its chip. */
+  onShow?: (cell: string) => void;
+  /** A later home of the same visit: its fonts are in, so it is drawn at once, without entrance. */
+  settled?: boolean;
 }
 
 const FADE_IN_MS = 450;
@@ -72,7 +72,7 @@ const SLIDE_MS = 300;
 const SLIDE_EASE = 'cubic-bezier(.2,.8,.2,1)';
 /** Below this width the chips use 12.5 px (README §배치 5). */
 const NARROW_W = 360;
-const UI_TEXT = '오늘 · 지난 브리프 브리프 읽기 →0123456789월일';
+const UI_TEXT = '브리프 읽기 →0123456789월일화수목금토요';
 
 function reducedMotion(): boolean {
   return (
@@ -84,9 +84,10 @@ function reducedMotion(): boolean {
 export function WatchHome(p: WatchHomeProps): JSX.Element {
   const [sel, setSel] = useState(p.initial);
   const [shown, setShown] = useState(p.initial);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(!!p.settled);
   const [acct, setAcct] = useState(false);
   const head = useRef<HTMLHeadingElement>(null);
+  const date = useRef<HTMLDivElement>(null);
   const meta = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLDivElement>(null);
   const chipsEl = useRef<HTMLDivElement>(null);
@@ -112,11 +113,12 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     UI_TEXT +
     p.chips.map((c) => c.title).join('') +
     Object.values(p.pages)
-      .map((x) => briefDateLabel(x.seenDate, p.today))
+      .map((x) => seenDateLabel(x.seenDate))
       .join('');
   useEffect(() => {
     let alive = true;
     ensureHomeFonts();
+    if (p.settled) return undefined;
     void waitHomeFonts(allHeadlines, uiText).then((r) => {
       if (!alive) return;
       entrance.current = r === 'ready' && !reducedMotion();
@@ -139,7 +141,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
       duration: FADE_IN_MS,
       easing: 'ease-out',
     });
-    [meta.current, btn.current, chipsEl.current].forEach((el) =>
+    [date.current, meta.current, btn.current, chipsEl.current].forEach((el) =>
       animate(el, [{ opacity: 0 }, { opacity: 1 }], {
         duration: REST_IN_MS,
         delay: FADE_IN_MS,
@@ -148,7 +150,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     );
   }, [ready]);
 
-  // after the text changed: fade in, and slide the date row and button from where they were
+  // after the text changed: fade in, and slide the domain name and button from where they were
   useLayoutEffect(() => {
     const before = swap.current;
     if (!before) return;
@@ -179,6 +181,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
         p.onOpen(cell);
         return;
       }
+      p.onShow?.(cell);
       stop();
       if (reducedMotion() || !ready) {
         setSel(cell);
@@ -205,8 +208,8 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
     [sel, ready, p]
   );
 
-  const page = p.pages[shown];
-  const text = page?.headline ?? '';
+  const text = p.pages[shown]?.headline ?? '';
+  const day = p.pages[sel]?.seenDate ?? '';
   const size = headlineSize(p.frame.width, text);
   const vis = ready ? 'visible' : 'hidden';
   const skeleton = useSkeleton(ready);
@@ -224,29 +227,22 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
       style={rootStyle}
     >
       <div className="mf-home-col">
-        <div className="mf-home-top">
-          <div className="mf-w3-brand mf-home-brand">Insighta</div>
-          {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
-        </div>
+        <HomeHead
+          account={p.account}
+          onAccount={() => setAcct(true)}
+          day={day}
+          onDate={p.onPast ? () => p.onPast?.(sel, day) : undefined}
+          hidden={!ready}
+          dateRef={date}
+        />
         <div className="mf-home-gap-top" />
         <div className="mf-home-block" style={{ position: 'relative' }}>
           {skeleton ? <SkeletonLines testId="mf-home-skeleton" /> : null}
           <div style={{ visibility: vis }}>
             <div className="mf-home-meta" ref={meta} data-testid="mf-home-meta">
-              <span className="mf-home-meta-d" data-testid="mf-home-seen">
-                {page ? briefDateLabel(page.seenDate, p.today) : ''}
+              <span className="mf-home-meta-k" data-testid="mf-home-domain">
+                {p.chips.find((c) => c.cell === sel)?.title ?? ''}
               </span>
-              {p.onPast ? (
-                <button
-                  type="button"
-                  className="mf-home-past"
-                  data-press="link"
-                  data-testid="mf-home-past"
-                  onClick={() => p.onPast?.(sel)}
-                >
-                  지난 브리프
-                </button>
-              ) : null}
             </div>
             <h1
               ref={head}
@@ -254,7 +250,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
               data-testid="mf-home-headline"
               data-link=""
               data-press="row"
-              onClick={() => p.onOpenPage(shown)}
+              onClick={() => p.onOpenPage(sel)}
               style={{
                 fontSize: size.fontPx + 'px',
                 letterSpacing: size.trackEm + 'em',
@@ -270,7 +266,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
                 data-press="fill"
                 data-testid="mf-home-enter"
                 data-target="page"
-                onClick={() => p.onOpenPage(shown)}
+                onClick={() => p.onOpenPage(sel)}
               >
                 <span>{HOME_BUTTON_LABEL}</span>
                 <span className="mf-home-arrow">→</span>
@@ -306,7 +302,7 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
 export interface WatchHomeEmptyProps {
   frame: Frame & { width: number };
   account?: R3AccountView;
-  /** Today ('YYYY-MM-DD', the server's): the date row reads it as the home does. */
+  /** Today ('YYYY-MM-DD', the server's): the head's date. */
   today: string;
   /** The existing empty-state text, unchanged. */
   message: string;
@@ -314,8 +310,8 @@ export interface WatchHomeEmptyProps {
 
 /**
  * No readable brief at all (every page hidden, or none published yet): the home's own layout (top
- * bar, date row, type and tokens) with the empty-state text in the headline's place. No button,
- * no 지난 브리프 and no chips: there is nothing to open (decision 2026-11-24 usability test).
+ * bar, date, type and tokens) with the empty-state text in the headline's place. No button, no past
+ * briefs behind the date and no chips: there is nothing to open (decision 2026-11-24 usability test).
  */
 export function WatchHomeEmpty(p: WatchHomeEmptyProps): JSX.Element {
   const [acct, setAcct] = useState(false);
@@ -335,17 +331,9 @@ export function WatchHomeEmpty(p: WatchHomeEmptyProps): JSX.Element {
       style={rootStyle}
     >
       <div className="mf-home-col">
-        <div className="mf-home-top">
-          <div className="mf-w3-brand mf-home-brand">Insighta</div>
-          {p.account ? <AccountButton account={p.account} onOpen={() => setAcct(true)} /> : null}
-        </div>
+        <HomeHead account={p.account} onAccount={() => setAcct(true)} day={p.today} />
         <div className="mf-home-gap-top" />
         <div className="mf-home-block">
-          <div className="mf-home-meta" data-testid="mf-home-meta">
-            <span className="mf-home-meta-d" data-testid="mf-home-seen">
-              {briefDateLabel(p.today, p.today)}
-            </span>
-          </div>
           <h1
             className="mf-home-headline"
             data-testid="mf-home-empty"

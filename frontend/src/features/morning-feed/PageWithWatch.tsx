@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import type { WatchVerdict, WatchVideo } from '@/features/morning-feed/watch-list';
 import { MOTION, prefersReducedMotion } from '@/features/morning-feed/motion-tokens';
 import { PageWatch, type PageWatchCards } from '@/features/morning-feed/PageWatch';
-import { popIsNative, trackEdgeSwipe } from '@/features/morning-feed/use-screen-history';
+import { appBack, popIsNative, trackEdgeSwipe } from '@/features/morning-feed/use-screen-history';
 import { WatchPage, type OpenFrom, type WatchPageProps } from '@/features/morning-feed/WatchPage';
 
 /*
@@ -11,9 +12,9 @@ import { WatchPage, type OpenFrom, type WatchPageProps } from '@/features/mornin
  * so the browser's back (and Safari's edge swipe, which is a history back) returns to the brief.
  * Motion (decision 2026-11-14 "앱처럼 반응", values in motion-tokens.ts): the video screen slides
  * in from the right while the brief moves 30 % left and darkens; going back is exactly the
- * reverse. A back the browser animates itself (Safari's edge swipe) closes at once, so the
- * screen never moves twice. The back button goes through history.back() too, so the history
- * stays one entry deep. The brief stays mounted under the layer (scroll and note kept).
+ * reverse. The browser's own back (button, edge swipe) closes at once, so the screen never moves
+ * twice. The back button goes through the history too (appBack), so the history stays one entry
+ * deep. The brief stays mounted under the layer (scroll and note kept).
  */
 
 export interface PageWithWatchProps extends Omit<WatchPageProps, 'onOpenVideo'> {
@@ -45,7 +46,8 @@ export function PageWithWatch({
   const layer = useRef<HTMLDivElement>(null);
   const anims = useRef<Animation[]>([]);
 
-  const slide = useCallback((dir: 'in' | 'out'): Promise<void> => {
+  /** Slides, then draws the rested state (`rest`) before the animations are removed. */
+  const slide = useCallback((dir: 'in' | 'out', rest: () => void): void => {
     anims.current.forEach((a) => a.cancel());
     anims.current = [];
     const { ms, ease, underShift, underDim } = MOTION.push;
@@ -66,7 +68,11 @@ export function PageWithWatch({
       run(dim.current, rev([{ opacity: 0 }, { opacity: underDim }]));
     }
     const list = anims.current;
-    return Promise.all(list.map((a) => a.finished.catch(() => undefined))).then(() => {
+    void Promise.all(list.map((a) => a.finished.catch(() => undefined))).then(() => {
+      // a newer slide or a close took over
+      if (anims.current !== list) return;
+      // removed first, the leaving video screen would cover the brief again for one frame
+      flushSync(rest);
       list.forEach((a) => a.cancel());
     });
   }, []);
@@ -104,9 +110,9 @@ export function PageWithWatch({
   // the slides run once the layer is drawn
   useLayoutEffect(() => {
     if (phase === 'in') {
-      void slide('in').then(() => setPhase((p) => (p === 'in' ? null : p)));
+      slide('in', () => setPhase((p) => (p === 'in' ? null : p)));
     } else if (phase === 'out') {
-      void slide('out').then(() => {
+      slide('out', () => {
         setPhase(null);
         setWatch(null);
       });
@@ -127,7 +133,7 @@ export function PageWithWatch({
     [onEvidence]
   );
   const close = useCallback(() => {
-    if (pushed.current) window.history.back();
+    if (pushed.current) appBack();
     else closeNow();
   }, [closeNow]);
 

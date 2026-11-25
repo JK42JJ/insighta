@@ -37,6 +37,7 @@ vi.mock('@/features/morning-cards/api', async (orig) => ({
   ...(await orig<typeof import('@/features/morning-cards/api')>()),
   fetchTestClock: () => Promise.resolve(null),
   fetchMorningPageList: () => Promise.resolve([]),
+  fetchMorningPage: () => Promise.resolve(null),
   postUsageEvent: () => Promise.resolve(),
 }));
 
@@ -87,7 +88,7 @@ describe('participant without today’s brief', () => {
     await waitFor(() =>
       expect(screen.getByTestId('mf-home-headline').textContent).toBe('지난 브리프 헤드라인')
     );
-    expect(screen.getByTestId('mf-home-seen').textContent).toBe('11월 22일');
+    expect(screen.getByTestId('mf-home-seen').textContent).toBe('11월 22일 일요일');
     expect(screen.queryByTestId('mf-home-empty')).toBeNull();
     expect(document.body.textContent).not.toContain('아직 준비된 브리프가 없습니다');
   });
@@ -100,7 +101,10 @@ describe('participant without today’s brief', () => {
     const root = screen.getByTestId('mf-home');
     expect(root.hasAttribute('data-empty')).toBe(true);
     expect(root.querySelector('.mf-home-brand')?.textContent).toBe('Insighta');
-    expect(screen.getByTestId('mf-home-seen').textContent).toBe('오늘 · 11월 24일');
+    expect(screen.getByTestId('mf-home-seen').textContent).toBe('11월 24일 화요일');
+    // nothing to open: the date is text, not a button
+    expect(screen.getByTestId('mf-home-seen').closest('button')).toBeNull();
+    expect(screen.queryByTestId('mf-home-meta')).toBeNull();
     expect(screen.queryByTestId('mf-home-past')).toBeNull();
     expect(screen.queryByTestId('mf-home-enter')).toBeNull();
     expect(screen.queryByTestId('mf-home-headline')).toBeNull();

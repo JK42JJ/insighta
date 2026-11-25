@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 
 import type { ScreenMove } from '@/features/morning-feed/use-screen-history';
 import { MOTION, prefersReducedMotion } from '@/features/morning-feed/motion-tokens';
@@ -7,8 +8,8 @@ import { MOTION, prefersReducedMotion } from '@/features/morning-feed/motion-tok
  * One level in or out (decision 2026-11-14 "앱처럼 반응"): the new screen slides in from the
  * right while the one underneath moves 30 % to the left and darkens a little; going back is
  * exactly the reverse. Screens under the top stay mounted (hidden), so they are not read again
- * and keep their scroll position. A move the browser animates itself (Safari's edge swipe) and
- * a replace change at once. Reduced motion: opacity only.
+ * and keep their scroll position. The browser's own moves (back/forward button, edge swipe) and a
+ * replace change at once. Reduced motion: opacity only.
  */
 
 export interface StackLayer {
@@ -104,9 +105,14 @@ export function ScreenStack({ layers, move }: Props): JSX.Element {
     let on = true;
     void Promise.all(list.map((a) => a.finished.catch(() => undefined))).then(() => {
       if (!on) return;
+      // The screens are drawn at rest first, then the animations are removed. The other way round
+      // the leaving screen lost its end pose while it was still on the page and covered the home
+      // for one frame: the flicker at the end of every back (James 2026-11-25).
+      flushSync(() => {
+        setLeaving(null);
+        setMoving(new Set());
+      });
       list.forEach((a) => a.cancel());
-      setLeaving(null);
-      setMoving(new Set());
     });
     return () => {
       on = false;

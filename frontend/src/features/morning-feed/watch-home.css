@@ -11,8 +11,8 @@
   --h-on-solid: #ffffff;
   --h-chip-line: #e2dfd6;
   --h-chip-on-bg: #eaf0f7;
-  /* the past-pages link underline (page handoff, home proposal) */
-  --h-past-line: #c9c4b6;
+  /* the pressed ground of the head's text buttons (the landing header's) */
+  --h-press: rgba(20, 26, 36, 0.1);
   --h-clear: transparent;
   background: var(--h-bg);
   color: var(--h-fg);
@@ -34,8 +34,39 @@
   align-items: center;
   gap: 10px;
 }
-.mf-home-brand {
-  flex: 1;
+/* the head's text buttons: the text stays on the content edge, the pressed ground goes past it */
+.mf-home-brand,
+.mf-home-date {
+  flex: none;
+  height: 44px;
+  margin-left: -12px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--h-clear);
+  display: inline-flex;
+  align-items: center;
+  text-align: left;
+  white-space: nowrap;
+}
+button.mf-home-brand,
+button.mf-home-date {
+  cursor: pointer;
+}
+.mf-home-top .mf-w3-acct-btn {
+  margin-left: auto;
+}
+.mf-home-date-row {
+  height: 44px;
+  flex: none;
+  /* the two rows read as one head */
+  margin-top: -6px;
+}
+.mf-home-date {
+  gap: 4px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--h-sub);
 }
 .mf-home-today {
   font-size: 12px;
@@ -74,19 +105,6 @@
 .mf-home-meta-d {
   font-weight: 500;
   color: var(--h-sub);
-}
-.mf-home-past {
-  margin: -13px 0 -13px auto;
-  padding: 13px 0 13px 12px;
-  border: 0;
-  background: var(--h-clear);
-  font: inherit;
-  font-weight: 500;
-  color: var(--h-sub);
-  text-decoration: underline;
-  text-decoration-color: var(--h-past-line);
-  text-underline-offset: 3px;
-  cursor: pointer;
 }
 .mf-home-headline[data-link] {
   cursor: pointer;

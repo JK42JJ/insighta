@@ -1,15 +1,15 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useRef } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { MOTION, motionStyleVars } from '@/features/morning-feed/motion-tokens';
 import { ScreenStack } from '@/features/morning-feed/ScreenStack';
 import { usePressFeedback } from '@/features/morning-feed/use-press';
-import { isNativeBack } from '@/features/morning-feed/use-screen-history';
+import { appBack, isNativeBack, popIsNative } from '@/features/morning-feed/use-screen-history';
 
 /* Decision 2026-11-14 "앱처럼 반응": the shared press, stack and values. */
 
-function PressHost(): JSX.Element {
+function PressHost({ onSoft }: { onSoft?: () => void }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   usePressFeedback(ref);
   return (
@@ -19,6 +19,9 @@ function PressHost(): JSX.Element {
       </button>
       <button type="button" data-press="btn" data-testid="off" disabled>
         꺼짐
+      </button>
+      <button type="button" data-press="soft" data-testid="soft" onClick={onSoft}>
+        <span>날짜</span>
       </button>
     </div>
   );
@@ -45,6 +48,30 @@ describe('pressed look', () => {
     const off = screen.getByTestId('off');
     fireEvent.pointerDown(off, { pointerId: 3 });
     expect(off.hasAttribute('data-pressed')).toBe(false);
+  });
+
+  it('soft (head text buttons): shown at the touch; 10 px of movement ends it and its click', () => {
+    const onSoft = vi.fn();
+    render(<PressHost onSoft={onSoft} />);
+    const b = screen.getByTestId('soft');
+    b.getBoundingClientRect = () => ({ left: 0, right: 200, top: 0, bottom: 44 }) as DOMRect;
+    fireEvent.pointerDown(b, { pointerId: 4, clientX: 20, clientY: 20 });
+    expect(b.hasAttribute('data-pressed')).toBe(true);
+    // inside the button, but moved
+    fireEvent.pointerMove(window, { pointerId: 4, clientX: 29, clientY: 20 });
+    expect(b.hasAttribute('data-pressed')).toBe(true);
+    fireEvent.pointerMove(window, { pointerId: 4, clientX: 31, clientY: 20 });
+    expect(b.hasAttribute('data-pressed')).toBe(false);
+    fireEvent.pointerUp(window, { pointerId: 4 });
+    fireEvent.click(b, { detail: 1 });
+    expect(onSoft).not.toHaveBeenCalled();
+    // the next touch is a press again; a keyboard click always is
+    fireEvent.pointerDown(b, { pointerId: 5, clientX: 20, clientY: 20 });
+    fireEvent.pointerUp(window, { pointerId: 5 });
+    expect(b.hasAttribute('data-pressed')).toBe(false);
+    fireEvent.click(b, { detail: 1 });
+    fireEvent.click(b, { detail: 0 });
+    expect(onSoft).toHaveBeenCalledTimes(2);
   });
 
   it('the values live in one place and reach the CSS as custom properties', () => {
@@ -107,5 +134,18 @@ describe("Safari's own back transition", () => {
     expect(isNativeBack(plain, 0, 1000)).toBe(false);
     expect(isNativeBack(plain, 900, 1000)).toBe(true);
     expect(isNativeBack(plain, 900, 5000)).toBe(false);
+  });
+});
+
+describe('whose history move it is (James 2026-11-25)', () => {
+  it("the browser's own back never slides; the app's back does, once", () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    expect(popIsNative(new PopStateEvent('popstate'))).toBe(true);
+    appBack();
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(popIsNative(new PopStateEvent('popstate'))).toBe(false);
+    // the next one is the browser's again
+    expect(popIsNative(new PopStateEvent('popstate'))).toBe(true);
+    back.mockRestore();
   });
 });

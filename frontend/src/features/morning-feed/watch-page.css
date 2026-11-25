@@ -335,6 +335,22 @@
   }
 }
 
+/* 오늘로 at the top of the list (decision 2026-11-25), a head text button like the home's date */
+.mf-past-today {
+  height: 44px;
+  margin: 4px 0 -14px -12px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--h-clear);
+  display: flex;
+  align-items: center;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--h-accent);
+  cursor: pointer;
+}
+
 /* 지난 장 목록 (README §지난 장 목록) */
 .mf-past-list {
   flex: 1 1 0;

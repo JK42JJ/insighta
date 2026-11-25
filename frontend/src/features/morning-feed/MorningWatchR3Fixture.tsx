@@ -456,7 +456,8 @@ export function MorningWatchR3Fixture({
         initial={CHIPS[0]!}
         load={(cell) => Promise.resolve(cell === CHIPS[0] ? PAST_ROWS : [])}
         onOpen={() => setScreen('page')}
-        onHome={() => setScreen('home')}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => setScreen('home') }}
       />
     );
   } else if (screen === 'home') {
@@ -473,13 +474,10 @@ export function MorningWatchR3Fixture({
     body = (
       <WatchHome
         frame={frame}
-        goal="AI Agent 서비스 출시"
         account={{ name: '[이름]', email: '[이메일]', onLogout: () => undefined }}
         chips={CHIPS.slice(0, HOME_PAGE_CHIPS).map((c) => ({ cell: c, title: c }))}
         pages={pages}
         initial={CHIPS[0]!}
-        today="2026-11-14"
-        todayCount={() => (pr.homeNoEnter ? 0 : VIDS.length)}
         onOpen={() => setScreen('feed')}
         onOpenPage={() => setScreen('page')}
         onPast={() => setScreen('past')}
