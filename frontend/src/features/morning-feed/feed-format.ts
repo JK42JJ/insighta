@@ -13,15 +13,20 @@ export function formatDuration(totalSeconds: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
+const YT_THUMB = 'https://i.ytimg.com/vi/';
+function youtubeThumb(videoId: string): string | undefined {
+  return videoId ? `${YT_THUMB}${videoId}/mqdefault.jpg` : undefined;
+}
+
 /** SPEC section 5.4: N일 전 (1~6), N주 전, N개월 전. Under 7 days the badge is orange. */
 export function agoLabel(
   publishedAt: string,
   now: Date = new Date()
 ): { text: string; fresh: boolean } {
-  const days = Math.max(
-    0,
-    Math.floor((now.getTime() - new Date(publishedAt).getTime()) / MS_PER_DAY)
-  );
+  const at = new Date(publishedAt).getTime();
+  // a brief's video that is not in the video pool has no date: no age is drawn
+  if (!Number.isFinite(at)) return { text: '', fresh: false };
+  const days = Math.max(0, Math.floor((now.getTime() - at) / MS_PER_DAY));
   if (days < 1) return { text: '오늘', fresh: true };
   if (days < 7) return { text: `${days}일 전`, fresh: true };
   if (days < 30) return { text: `${Math.floor(days / 7)}주 전`, fresh: false };
@@ -100,7 +105,8 @@ export function toFeedCard(
     focus: c.focus.join(' · '),
     why: c.why,
     videoId: c.video_id,
-    thumbUrl: c.thumbnail_url ?? undefined,
+    // not in the video pool: YouTube's own thumbnail, as on the brief page
+    thumbUrl: c.thumbnail_url ?? youtubeThumb(c.video_id),
     publishedAt: c.published_at,
     ...(c.ambient ? { ambient: c.ambient } : {}),
     ...infoFields(c.info),
