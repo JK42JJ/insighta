@@ -22,6 +22,7 @@ import {
   type SceneValue,
 } from '@/features/landing-intro';
 import { fetchLandingWall } from '@/features/morning-cards/api';
+import { useAppShell } from '@/features/morning-feed/use-app-shell';
 import { useViewportFitCover } from '@/features/morning-feed/use-watch-frame';
 import { ensureHomeFonts } from '@/features/morning-feed/watch-home-fonts';
 
@@ -178,20 +179,15 @@ export function IntroPage({ onSignIn }: IntroPageProps): JSX.Element {
     };
   }, []);
 
-  // no pull-to-refresh and no page scroll behind the landing while it is shown
+  // installed from the landing it is the brief app; no pull-to-refresh, no scroll behind it
+  useAppShell();
   useEffect(() => {
-    const roots = [document.documentElement, document.body];
-    const before = roots.map((r) => r.style.overscrollBehavior);
-    roots.forEach((r) => (r.style.overscrollBehavior = 'none'));
     const el = stageRef.current;
     const hold = (e: TouchEvent): void => {
       if (e.cancelable) e.preventDefault();
     };
     el?.addEventListener('touchmove', hold, { passive: false });
-    return () => {
-      roots.forEach((r, i) => (r.style.overscrollBehavior = before[i]!));
-      el?.removeEventListener('touchmove', hold);
-    };
+    return () => el?.removeEventListener('touchmove', hold);
   }, []);
 
   useEffect(() => {

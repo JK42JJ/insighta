@@ -86,7 +86,7 @@ import { WATCH_RETURN_PATH } from './watch-path';
  */
 function WatchEntry(): JSX.Element {
   const { user, isLoading, signInWithGoogle } = useAuthContext();
-  if (isLoading) return <WatchBoot />;
+  if (isLoading) return <WatchBoot logoOnly />;
   if (!user) {
     const signIn = async (): Promise<void> => {
       try {

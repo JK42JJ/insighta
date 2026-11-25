@@ -10,6 +10,7 @@ import {
 } from '@/features/morning-feed/watch-design';
 import { counterText, segmentStates } from '@/features/morning-feed/watch-list';
 import { MOTION } from '@/features/morning-feed/motion-tokens';
+import { BrandLogo } from '@/shared/ui/brand-logo';
 
 const CHECK_MARK = '✓';
 
@@ -276,7 +277,9 @@ export function WatchInputScreen(p: WatchInputScreenProps): JSX.Element {
         data-testid="mf-w-scroll"
       >
         <div className="mf-w-head">
-          <div className="mf-w-brand">Insighta</div>
+          <div className="mf-w-brand">
+            <BrandLogo />
+          </div>
           <div className="mf-w-date" data-testid="mf-w-date">
             {p.dateLabel}
           </div>

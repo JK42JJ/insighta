@@ -8,6 +8,7 @@ import {
   BOOT_LINE_MS,
   BOOT_SKELETON_MS,
 } from '@/features/morning-feed/watch-boot-stage';
+import { BrandLogo } from '@/shared/ui/brand-logo';
 import './watch-boot.css';
 
 /*
@@ -19,12 +20,17 @@ import './watch-boot.css';
  */
 
 const SKELETON_CHIPS = 8;
+/** The logo alone in the middle of the screen. */
+const BOOT_WORD_PX = 30;
 const pageStart = typeof performance !== 'undefined' ? performance.now() : 0;
 
 export function WatchBoot({
   fixed,
   safe,
+  logoOnly = false,
 }: {
+  /** While it is not known who is there: the logo, never a screen's skeleton (James 2026-11-25). */
+  logoOnly?: boolean;
   /** Fixture only: hold this stage. */
   fixed?: BootStage;
   /** Fixture only: safe areas a desktop browser does not have. */
@@ -33,7 +39,7 @@ export function WatchBoot({
   // env(safe-area-inset-*) is 0 until the viewport covers the screen (same as the watch screen)
   useViewportFitCover();
   const [timed, setStage] = useState<BootStage>(() => bootStage(performance.now() - pageStart));
-  const stage = fixed ?? timed;
+  const stage = fixed ?? (logoOnly && timed === 'skeleton' ? 'line' : timed);
   useEffect(() => {
     if (fixed || stage === 'skeleton') return undefined;
     const elapsed = performance.now() - pageStart;
@@ -62,11 +68,7 @@ export function WatchBoot({
     >
       {stage !== 'skeleton' ? (
         <div className="mf-boot-logo">
-          <div className="mf-boot-char" aria-hidden="true">
-            <div className="mf-boot-eye" />
-            <div className="mf-boot-eye" />
-          </div>
-          <div className="mf-boot-name">Insighta</div>
+          <BrandLogo word={BOOT_WORD_PX} />
           <div className="mf-boot-line" data-on={stage === 'line' ? '' : undefined}>
             {stage === 'line' ? <div className="mf-boot-run" /> : null}
           </div>
@@ -74,7 +76,7 @@ export function WatchBoot({
       ) : (
         <div className="mf-boot-skel">
           <div className="mf-boot-head">
-            <div className="mf-boot-brand">Insighta</div>
+            <BrandLogo />
             <div className="mf-boot-av" />
           </div>
           <div className="mf-boot-wide-line">

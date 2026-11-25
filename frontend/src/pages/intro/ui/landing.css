@@ -412,27 +412,44 @@
 }
 
 /* scene texts */
-.lv-t0 {
+.lv-t0,
+.lv-t1,
+.lv-t2,
+.lv-tn,
+.lv-t6 {
   position: absolute;
   left: 28px;
-  right: 40px;
+  right: 28px;
   top: 80px;
+  color: var(--lv-ink);
 }
-.lv-h1 {
+.lv-t1 {
+  z-index: 5;
+}
+.lv-tn {
+  color: var(--lv-paper);
+}
+/* the one title and the one text style of all scenes */
+.lv-title {
+  margin: 0;
   font-family: var(--lv-serif);
   font-weight: 500;
   font-size: 34px;
   line-height: 1.3;
   letter-spacing: -0.045em;
   word-break: keep-all;
+  text-wrap: balance;
 }
-.lv-t0-p {
-  margin: 14px 0 0;
+.lv-text {
+  margin: 10px 12px 0 0;
   font-size: 17px;
-  line-height: 1.6;
+  line-height: 1.55;
   color: var(--lv-sub);
   word-break: keep-all;
   text-wrap: pretty;
+}
+.lv-tn .lv-text {
+  color: var(--lv-credit-dark);
 }
 .lv-hint {
   position: absolute;
@@ -513,91 +530,10 @@
   left: calc(-1 * var(--lv-bleed));
   right: calc(-1 * var(--lv-bleed));
   top: 0;
-  height: 236px;
+  height: 300px;
   z-index: 4;
   pointer-events: none;
-  background: linear-gradient(var(--lv-paper) 0, var(--lv-paper) 200px, var(--lv-fade-end) 236px);
-}
-.lv-t1 {
-  position: absolute;
-  z-index: 5;
-  left: 28px;
-  right: 40px;
-  top: 80px;
-  font-size: 17px;
-  line-height: 1.55;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  word-break: keep-all;
-  text-wrap: pretty;
-}
-.lv-t2 {
-  position: absolute;
-  left: 28px;
-  right: 40px;
-  top: 80px;
-}
-.lv-h2a {
-  font-family: var(--lv-serif);
-  font-weight: 500;
-  font-size: 34px;
-  line-height: 1.3;
-  letter-spacing: -0.045em;
-  word-break: keep-all;
-}
-.lv-t2-p {
-  margin: 10px 0 0;
-  font-size: 17px;
-  line-height: 1.55;
-  color: var(--lv-sub);
-  word-break: keep-all;
-  text-wrap: pretty;
-}
-.lv-tn {
-  position: absolute;
-  left: 28px;
-  right: 40px;
-  top: 80px;
-  font-size: 17px;
-  line-height: 1.55;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--lv-paper);
-  word-break: keep-all;
-  text-wrap: pretty;
-}
-.lv-t6 {
-  position: absolute;
-  left: 28px;
-  right: 40px;
-  top: 80px;
-}
-.lv-t6-lead {
-  font-size: 17px;
-  line-height: 1.5;
-  font-weight: 500;
-  color: var(--lv-sub);
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -27px;
-}
-.lv-t6-h {
-  margin: 0;
-  font-family: var(--lv-serif);
-  font-weight: 500;
-  font-size: 34px;
-  line-height: 1.3;
-  letter-spacing: -0.045em;
-  word-break: keep-all;
-}
-.lv-t6-p {
-  margin: 6px 0 0;
-  font-size: 17px;
-  line-height: 1.6;
-  color: var(--lv-body);
-  word-break: keep-all;
-  text-wrap: pretty;
+  background: linear-gradient(var(--lv-paper) 0, var(--lv-paper) 262px, var(--lv-fade-end) 300px);
 }
 
 /* the brief card (scenes 4-5) */
@@ -1014,15 +950,12 @@
 }
 .lv .lv-headbtn > span {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 .lv .lv-brand {
   /* the word itself stays on the content edge (28px) */
   margin-left: -14px;
-  font:
-    800 15px Arial,
-    Helvetica,
-    sans-serif;
-  letter-spacing: 0.02em;
 }
 .lv .lv-login {
   font-size: 13px;

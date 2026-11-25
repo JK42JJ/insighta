@@ -10,14 +10,17 @@ import {
   PRIVACY,
   S0_BODY,
   S0_TITLE,
-  S1_TEXT,
+  S1_BODY,
+  S1_TITLE,
   S2_BODY,
   S2_TITLE,
-  S3_TEXT,
-  S4_TEXT,
-  S5_TEXT,
+  S3_BODY,
+  S3_TITLE,
+  S4_BODY,
+  S4_TITLE,
+  S5_BODY,
+  S5_TITLE,
   S7_BODY,
-  S7_LEAD,
   S7_TITLE,
   SWIPE_HINT,
   TERMS,
@@ -52,6 +55,8 @@ import {
 } from '../model/landing-scene';
 import ytIconSrc from '../assets/yt_icon_red_digital.png';
 import { GoogleButton } from './GoogleButton';
+import { BrandLogo } from '@/shared/ui/brand-logo';
+
 import { HeadButton } from './HeadButton';
 import { LegalSheet } from './LegalSheet';
 
@@ -249,14 +254,14 @@ function ScenePaneView({
             data-testid={tid('lv-text-0')}
             style={{ opacity: T[0]!.o, transform: T[0]!.t, transition: T[0]!.tr }}
           >
-            <h1 className="lv-h1">
+            <h1 className="lv-title">
               {S0_TITLE[0]}
               <br />
               {S0_TITLE[1]}
               <br />
               {S0_TITLE[2]}
             </h1>
-            <p className="lv-t0-p">{S0_BODY}</p>
+            <p className="lv-text">{S0_BODY}</p>
           </div>
           <button
             type="button"
@@ -338,14 +343,15 @@ function ScenePaneView({
 
           {/* scene 2 */}
           <div className="lv-fade-top" style={{ opacity: T[1]!.o, transition: view.bgtr3 }} />
-          <p
+          <div
             className="lv-t1"
             aria-hidden={off(T[1]!.o)}
             data-testid={tid('lv-text-1')}
             style={{ opacity: T[1]!.o, transform: T[1]!.t, transition: T[1]!.tr }}
           >
-            {S1_TEXT}
-          </p>
+            <h2 className="lv-title">{S1_TITLE}</h2>
+            <p className="lv-text">{S1_BODY}</p>
+          </div>
 
           {/* scene 3 */}
           <div
@@ -354,57 +360,53 @@ function ScenePaneView({
             data-testid={tid('lv-text-2')}
             style={{ opacity: T[2]!.o, transform: T[2]!.t, transition: T[2]!.tr }}
           >
-            <h2 className="lv-h2a">
+            <h2 className="lv-title">
               {S2_TITLE[0]}
               <br />
               {S2_TITLE[1]}
             </h2>
-            <p className="lv-t2-p">{S2_BODY}</p>
+            <p className="lv-text">{S2_BODY}</p>
           </div>
 
           {/* scenes 4, 5 (before / after the source tap) */}
-          <p
+          <div
             className="lv-tn"
             aria-hidden={off(T[3]!.o)}
             data-testid={tid('lv-text-3')}
             style={{ opacity: T[3]!.o, transform: T[3]!.t, transition: T[3]!.tr }}
           >
-            {S3_TEXT}
-          </p>
-          <p
+            <h2 className="lv-title">{S3_TITLE}</h2>
+            <p className="lv-text">{S3_BODY}</p>
+          </div>
+          <div
             className="lv-tn"
             aria-hidden={off(T[4]!.o)}
             data-testid={tid('lv-text-4')}
             style={{ opacity: T[4]!.o, transform: T[4]!.t, transition: T[4]!.tr }}
           >
-            {S4_TEXT}
-          </p>
-          <p
+            <h2 className="lv-title">{S4_TITLE}</h2>
+            <p className="lv-text">{S4_BODY}</p>
+          </div>
+          <div
             className="lv-tn"
-            data-big=""
             aria-hidden={off(T[5]!.o)}
             data-testid={tid('lv-text-5')}
             style={{ opacity: T[5]!.o, transform: T[5]!.t, transition: T[5]!.tr }}
           >
-            {S5_TEXT}
-          </p>
+            <h2 className="lv-title">{S5_TITLE}</h2>
+            <p className="lv-text">{S5_BODY}</p>
+          </div>
 
           {/* scene 6 */}
           <div className="lv-t6" aria-hidden={off(T[6]!.o)} data-testid={tid('lv-text-6')}>
-            <p
-              className="lv-t6-lead"
-              style={{ opacity: T[6]!.o, transform: T[6]!.t, transition: T[6]!.tr }}
-            >
-              {S7_LEAD}
-            </p>
             <h2
-              className="lv-t6-h"
+              className="lv-title"
               style={{ opacity: T[6]!.o, transform: T[6]!.t, transition: T[6]!.tr2 }}
             >
               {S7_TITLE}
             </h2>
             <p
-              className="lv-t6-p"
+              className="lv-text"
               style={{ opacity: T[6]!.o, transform: T[6]!.t, transition: T[6]!.tr3 }}
             >
               {S7_BODY}
@@ -420,6 +422,7 @@ function ScenePaneView({
             style={{
               opacity: view.card.o,
               transform: view.card.t,
+              clipPath: view.card.clip,
               transition: view.card.tr,
               pointerEvents: view.card.pe,
             }}
@@ -675,8 +678,9 @@ function ScenePaneView({
             testId={tid('lv-brand')}
             dark={view.nv}
             onPress={onBrand}
-            style={{ color: view.hdr, transition: view.bgtr2 }}
-          />
+          >
+            <BrandLogo dark={view.nv} />
+          </HeadButton>
           <HeadButton
             label={LOGIN_LABEL}
             className="lv-login"

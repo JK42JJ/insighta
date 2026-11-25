@@ -16,24 +16,32 @@ export const SWIPE_HINT = '위로 밀어 보세요';
 /** Deck card kicker before the domain. */
 export const BRIEF_KICKER = '오늘의 브리프';
 
-/** Scene 2 (s=1); "알 수 있거든요" is kept on one line (no-break spaces). */
-export const S1_TEXT =
-  '그런데 혼자서는 쉽지 않아요. 제목과 썸네일만으로는 무슨 내용인지 알기 어렵고, 믿을\u00a0만한 영상인지는 끝까지 봐야 알\u00a0수\u00a0있거든요.';
+/*
+ * Every scene has one title (serif 34px, the same top) and one text (17px). Scenes 2, 4, 5 and 6: the
+ * sentences are the design's, the first one is the title (James 2026-11-25: the top of the scenes must
+ * not grow and shrink).
+ */
+/** Scene 2 (s=1); "알 수 있거든요" and "믿을 만한" are kept on one line (no-break spaces). */
+export const S1_TITLE = '그런데 혼자서는 쉽지 않아요.';
+export const S1_BODY =
+  '제목과 썸네일만으로는 무슨 내용인지 알기 어렵고, 믿을\u00a0만한 영상인지는 끝까지 봐야 알\u00a0수\u00a0있거든요.';
 /** Scene 3 (s=2). */
 export const S2_TITLE = ['오늘 볼 영상,', '미리 골라 뒀어요'] as const;
 export const S2_BODY = '분야마다 의미 있는 최근 영상을 인사이타가 살펴봤어요.';
 /** Scene 4 (s=3), James-confirmed spacing (2026-11-24). */
-export const S3_TEXT =
-  '관심 있는 글을 가볍게 읽어요. 자세한 건 영상으로 확인하면 맥락이 만들어집니다.';
+export const S3_TITLE = '관심 있는 글을 가볍게 읽어요.';
+export const S3_BODY = '자세한 건 영상으로 확인하면 맥락이 만들어집니다.';
 /** Scene 5 before the source tap (s=4). */
-export const S4_TEXT =
-  '문장마다 어느 영상에서 나온 이야기인지 표시해 두었어요. 출처를 눌러 보세요.';
+export const S4_TITLE = '문장마다 어느 영상에서 나온 이야기인지 표시해 두었어요.';
+export const S4_BODY = '출처를 눌러 보세요.';
 /** Scene 5 after the source tap (s=5). */
-export const S5_TEXT = '영상이 그 부분부터 나와요. 읽은 내용이 맞는지 직접 확인해 보세요.';
+export const S5_TITLE = '영상이 그 부분부터 나와요.';
+export const S5_BODY = '읽은 내용이 맞는지 직접 확인해 보세요.';
 /** Scene 6 (s=7). */
-export const S7_LEAD = '방금 해 보신 것이 그 습관이에요.';
 export const S7_TITLE = '왜곡 없는 정보를 지향합니다';
-export const S7_BODY = '매일 아침 이렇게 읽고 확인할 수 있게 준비해 둘게요.';
+/** The design draws the first sentence above the title; here the title comes first, as in every scene. */
+export const S7_BODY =
+  '방금 해 보신 것이 그 습관이에요. 매일 아침 이렇게 읽고 확인할 수 있게 준비해 둘게요.';
 
 /** The last sheet. */
 /**

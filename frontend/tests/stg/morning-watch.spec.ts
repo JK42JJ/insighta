@@ -53,7 +53,7 @@ test('morning watch: a participant reads a brief, opens its evidence and comes b
   const homeEl = page.locator(`${TOP} [data-testid="mf-home"]`);
   await expect(homeEl).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
   await expect(page.getByTestId('mf-home-goal')).toHaveCount(0);
-  await expect(page.locator('.mf-home-top')).toContainText('Insighta');
+  await expect(page.locator('.mf-home-top').getByLabel('Insighta').first()).toBeVisible();
   await expect(page.getByTestId('mf-home-seen')).toHaveText(/^\d+월 \d+일 [일월화수목금토]요일$/);
   await expect(page.getByTestId('mf-home-enter')).toContainText('브리프 읽기');
   const dateButton = page.getByTestId('mf-home-past');

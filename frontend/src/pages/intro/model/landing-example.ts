@@ -93,6 +93,10 @@ export const LANDING_EXAMPLE: LandingExample = {
 /** The landing draws 3 to 6 evidence videos (the deck shows the first three). */
 export const EXAMPLE_VIDEOS_MIN = 3;
 export const EXAMPLE_VIDEOS_MAX = 6;
+/** Three lines of the card (17px): more would push the card into the Google button in scenes 4 and 5. */
+export const FIRST_SENTENCE_MAX = 78;
+/** Two lines of the card's headline (22px). */
+export const HEADLINE_MAX = 30;
 const YT_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const TIME_RE = /^(\d+:)?\d{1,2}:\d{2}$/;
 
@@ -123,6 +127,12 @@ export function checkLandingExample(ex: LandingExample): string[] {
   }
   if (!ex.brief.domain.trim() || !ex.brief.headline.trim() || !ex.brief.firstSentence.trim()) {
     bad.push('brief: domain, headline and first sentence are needed');
+  }
+  if (ex.brief.firstSentence.length > FIRST_SENTENCE_MAX) {
+    bad.push(`brief.firstSentence is longer than ${FIRST_SENTENCE_MAX}`);
+  }
+  if (ex.brief.headline.length > HEADLINE_MAX) {
+    bad.push(`brief.headline is longer than ${HEADLINE_MAX}`);
   }
   if (!ex.brief.sources.length) bad.push('brief.sources is empty');
   ex.brief.sources.forEach((src, i) => {

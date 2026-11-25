@@ -1,0 +1,37 @@
+/* Brand colours (design handoff 2026-11-25): defined once here, referenced everywhere else. */
+:root {
+  --brand-ink: #141a24;
+  --brand-dot: #4d68a8;
+  --brand-ink-dark: #f5f3ee;
+  --brand-dot-dark: #93a8d6;
+}
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  color: var(--brand-ink);
+  transition: color 0.6s ease;
+}
+.brand-logo[data-dark] {
+  color: var(--brand-ink-dark);
+}
+.brand-logo svg {
+  display: block;
+  flex: none;
+}
+.brand-logo-stroke {
+  fill: currentColor;
+}
+.brand-logo-dot {
+  fill: var(--brand-dot);
+  transition: fill 0.6s ease;
+}
+.brand-logo[data-dark] .brand-logo-dot {
+  fill: var(--brand-dot-dark);
+}
+.brand-logo-word {
+  font-family: 'Pretendard Variable', Pretendard, sans-serif;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}

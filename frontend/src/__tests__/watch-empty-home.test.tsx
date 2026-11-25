@@ -100,7 +100,9 @@ describe('participant without today’s brief', () => {
     expect(empty.textContent).toBe('아직 준비된 브리프가 없습니다');
     const root = screen.getByTestId('mf-home');
     expect(root.hasAttribute('data-empty')).toBe(true);
-    expect(root.querySelector('.mf-home-brand')?.textContent).toBe('Insighta');
+    expect(
+      root.querySelector('.mf-home-brand')?.querySelector('[aria-label="Insighta"]')?.textContent
+    ).toBe('insighta');
     expect(screen.getByTestId('mf-home-seen').textContent).toBe('11월 24일 화요일');
     // nothing to open: the date is text, not a button
     expect(screen.getByTestId('mf-home-seen').closest('button')).toBeNull();

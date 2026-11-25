@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 
 /** A press that moves further than this is not a press any more (px). */
 export const PRESS_CANCEL_PX = 10;
@@ -10,6 +10,7 @@ export const PRESS_CANCEL_PX = 10;
  * never turns the page: the stage does not get the pointer.
  */
 export function HeadButton({
+  children,
   label,
   className,
   dark,
@@ -18,6 +19,8 @@ export function HeadButton({
   style,
   hidden = false,
 }: {
+  /** What is drawn when it is not the label itself (the logo). */
+  children?: ReactNode;
   label: string;
   className: string;
   /** On the dark scenes. */
@@ -61,6 +64,7 @@ export function HeadButton({
       data-testid={testId}
       data-pressed={pressed ? '' : undefined}
       data-dark={dark ? '' : undefined}
+      aria-label={children ? label : undefined}
       aria-hidden={hidden ? true : undefined}
       tabIndex={hidden ? -1 : undefined}
       style={{ ...style, pointerEvents: hidden ? 'none' : 'auto' }}
@@ -76,7 +80,7 @@ export function HeadButton({
         onPress();
       }}
     >
-      <span>{label}</span>
+      <span>{children ?? label}</span>
     </button>
   );
 }

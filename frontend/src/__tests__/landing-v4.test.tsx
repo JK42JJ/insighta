@@ -61,8 +61,10 @@ import {
 } from '@/features/landing-intro';
 import { IntroPage } from '@/pages/intro';
 import {
-  S1_TEXT,
-  S3_TEXT,
+  S1_BODY,
+  S1_TITLE,
+  S3_BODY,
+  S3_TITLE,
   wallDomains,
   YT_CREDIT,
   YT_ICON_ALT,
@@ -347,7 +349,7 @@ describe('paging', () => {
       ['0', '0%'],
       ['1', '100%'],
     ]);
-    expect(pages[1]!.textContent).toContain(S1_TEXT); // the next scene's text comes along
+    expect(pages[1]!.textContent).toContain(S1_TITLE); // the next scene's text comes along
     expect(pages[1]!.hasAttribute('inert')).toBe(true);
     ptr('Up', 400, 120);
     expect(track().style.transition).toContain(`${SETTLE_MS}ms`);
@@ -441,6 +443,16 @@ describe('paging', () => {
     expect(stage().style.height).not.toBe(before);
     Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
     Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
+  });
+
+  it('every scene starts with one title and one text of the same two styles', () => {
+    draw();
+    for (const s of [0, 1, 2, 3, 4, 5, 7] as const) {
+      goTo(s);
+      const box = screen.getByTestId(`lv-text-${s === 7 ? 6 : s}`);
+      const kids = [...box.children].map((c) => c.className);
+      expect([s, kids]).toEqual([s, ['lv-title', 'lv-text']]);
+    }
   });
 
   it('keeps each gesture as a usage event', () => {
@@ -570,9 +582,9 @@ describe('text', () => {
   it('scene 4 has the James-confirmed spacing and both Google buttons say 계속하기', () => {
     draw();
     expect(screen.getByTestId('lv-text-3').textContent).toBe(
-      '관심 있는 글을 가볍게 읽어요. 자세한 건 영상으로 확인하면 맥락이 만들어집니다.'
+      '관심 있는 글을 가볍게 읽어요.' + '자세한 건 영상으로 확인하면 맥락이 만들어집니다.'
     );
-    expect(S3_TEXT).not.toMatch(/관심있는|자세한건|만들어 집니다/);
+    expect(S3_TITLE + ' ' + S3_BODY).not.toMatch(/관심있는|자세한건|만들어 집니다/);
     expect(screen.getByTestId('lv-google-sticky').textContent).toBe('Google로 계속하기');
     expect(screen.getByTestId('lv-google-final').textContent).toBe('Google로 계속하기');
     expect(stage().textContent).not.toMatch(/시작하기/);
@@ -1174,11 +1186,14 @@ describe('nothing over a thumbnail (James 2026-11-25)', () => {
     expect([a.bar.lo, b.bar.lo]).toEqual([0, 1]);
   });
 
-  it('scene 5: the brief card is under the text, unscaled, its lower end behind the video', () => {
+  it('scene 5: the brief card is unscaled, under the text, its sentence kept above the video', () => {
     const { v, hero } = heroAt(5);
-    for (const h of [160, 208, 284]) {
-      const c = buildScene(5, 2, false, null, 0, LANDING_EXAMPLE, h).card.t;
-      expect(c).toBe('translateY(-14px)'); // 148 - 14 = 134: the two text lines end at 133
+    for (const h of [160, 203, 284]) {
+      const c = buildScene(5, 2, false, null, 0, LANDING_EXAMPLE, h).card;
+      const top = 148 + n(/translateY\((-?[\d.]+)px\)/.exec(c.t)![1]!);
+      const cut = n(/inset\(([\d.]+)px/.exec(c.clip)![1]!);
+      expect(top + cut).toBeGreaterThanOrEqual(212); // the text (two title lines, one line) ends at 205
+      if (cut > 0) expect(top + h).toBe(318 + 14); // its lower end is behind the video's edge
     }
     expect(n(hero.t)).toBe(318);
     expect(n(v.band.t) + BAND_H).toBeLessThanOrEqual(582);
@@ -1197,15 +1212,14 @@ describe('nothing over a thumbnail (James 2026-11-25)', () => {
     const css = readFileSync('src/pages/intro/ui/landing.css', 'utf8');
     const rule = (sel: string): string =>
       new RegExp(`(?:^|\\n)${sel.replace('.', '\\.')} \\{([^}]*)\\}`).exec(css)![1]!;
-    for (const sel of ['.lv-h1', '.lv-h2a', '.lv-t6-h']) {
+    for (const sel of ['.lv-title']) {
       expect(rule(sel)).toContain('font-size: 34px');
       expect(rule(sel)).toContain('line-height: 1.3;');
       expect(rule(sel)).toContain('letter-spacing: -0.045em');
     }
-    for (const sel of ['.lv-t0', '.lv-t1', '.lv-t2', '.lv-tn', '.lv-t6']) {
-      expect(rule(sel)).toContain('top: 80px');
-    }
-    for (const sel of ['.lv-t0-p', '.lv-t1', '.lv-t2-p', '.lv-tn', '.lv-t6-p', '.lv-card-p']) {
+    // one rule places the top of every scene
+    expect(css).toMatch(/\n\.lv-t0,\n\.lv-t1,\n\.lv-t2,\n\.lv-tn,\n\.lv-t6 \{[^}]*top: 80px/);
+    for (const sel of ['.lv-text', '.lv-card-p']) {
       expect(rule(sel)).toContain('font-size: 17px');
     }
     for (const sel of ['.lv-deck-h', '.lv-card-h']) expect(rule(sel)).toContain('font-size: 22px');
@@ -1253,20 +1267,20 @@ describe('nothing over a thumbnail (James 2026-11-25)', () => {
 
 describe('flaws seen in the stg captures (James 2026-11-25)', () => {
   it('scene 2: "알 수 있거든요" is never split over two lines', () => {
-    expect(S1_TEXT).toContain('알\u00a0수\u00a0있거든요.');
+    expect(S1_BODY).toContain('알\u00a0수\u00a0있거든요.');
     draw();
     goTo(1);
-    expect(screen.getByTestId('lv-text-1').textContent).toBe(S1_TEXT);
+    expect(screen.getByTestId('lv-text-1').textContent).toBe(S1_TITLE + S1_BODY);
   });
 
   it.each([3, 4, 5, 6])(
     'scenes 4/5, %i videos: card, chips, attribution are one group',
     (count) => {
-      for (const h of [160, 202, 284]) {
+      for (const h of [160, 202, 208]) {
         const g = readGroup(h, count);
-        const gapAbove = g.card - 140;
+        const gapAbove = g.card - 252;
         const chipsGap = g.chips - (g.card + h);
-        const gapBelow = 582 - (g.credit + YT_ICON_BOX_H);
+        const gapBelow = 585 - (g.credit + YT_ICON_BOX_H);
         expect(gapAbove).toBeGreaterThanOrEqual(0);
         expect(chipsGap).toBeCloseTo(20, 5);
         // the group stays above the Google button, the free height is on both sides of it

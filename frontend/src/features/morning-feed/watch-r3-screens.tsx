@@ -5,6 +5,7 @@ import { BottomSheet } from '@/features/morning-feed/BottomSheet';
 import { SUGGEST_LABEL, SuggestForm } from '@/features/morning-feed/SuggestForm';
 import type { InsightView, WatchReaction } from '@/features/morning-feed/watch-design';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
+import { BrandLogo } from '@/shared/ui/brand-logo';
 
 /*
  * 입력 and 다 본 뒤 of design handoff "design_handoff_insighta_watch_v2" (수정 3, README §9 · §10).
@@ -248,7 +249,9 @@ export function WatchInputR3(p: WatchInputR3Props): JSX.Element {
       <div className="mf-w3-input">
         <div className="mf-w3-input-col">
           <div className="mf-w3-input-head">
-            <div className="mf-w3-brand">Insighta</div>
+            <div className="mf-w3-brand">
+              <BrandLogo />
+            </div>
             <div className="mf-w3-date" data-testid="mf-w-date">
               {p.dateLabel}
             </div>

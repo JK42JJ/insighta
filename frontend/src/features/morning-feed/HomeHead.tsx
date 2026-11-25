@@ -2,6 +2,7 @@ import type { Ref } from 'react';
 
 import { seenDateLabel } from '@/features/morning-feed/watch-home-model';
 import { AccountButton, type R3AccountView } from '@/features/morning-feed/watch-r3-screens';
+import { BrandLogo } from '@/shared/ui/brand-logo';
 import './watch-home.css';
 
 /*
@@ -38,7 +39,7 @@ export function HomeHead({
           data-press="soft"
           data-testid="mf-home-brand"
         >
-          <span>Insighta</span>
+          <BrandLogo />
         </button>
         {account ? <AccountButton account={account} onOpen={onAccount} /> : null}
       </div>

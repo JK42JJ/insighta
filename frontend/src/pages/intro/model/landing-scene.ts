@@ -186,10 +186,22 @@ const MID: Box = { x: X, y: S5_BOTTOM - HERO_CARD_H, w: HERO_W, h: HERO_H };
 const creditTopIn = (b: Box): number =>
   b.y + HERO_H + BAR_GAP + BAR_H + CHANNEL_GAP + (CHANNEL_H - YT_ICON_BOX_H) / 2;
 /**
- * Scene 5's brief card: under the text (two lines end at 133), never scaled (James 2026-11-25: text
- * keeps its size); what does not fit is behind the video below it.
+ * Scene 5's brief card, never scaled (text keeps its size): it stands behind the video's upper edge
+ * and shows from under the scene's text down; what does not fit is cut from its top, so the sentence
+ * with the tapped source stays.
  */
-const CARD_S5_TOP = 134;
+const CARD_S5_FROM = 212;
+const CARD_S5_BEHIND = 14;
+function cardS5(cardH: number): { t: string; clip: string } {
+  const top = MID.y + CARD_S5_BEHIND - (cardH > 0 ? cardH : CARD_H_NOMINAL);
+  const cut = Math.max(0, CARD_S5_FROM - top);
+  return {
+    t: `translateY(${px(Math.max(top, CARD_S5_FROM - cut) - CARD_TOP)})`,
+    clip: `inset(${px(cut)} 0 0 0 round 18px)`,
+  };
+}
+/** The card whole (the shadow included). */
+const CLIP_NONE = 'inset(-80px -80px -120px -80px round 18px)';
 const MINI: Box = { x: 115, y: 470, w: 160, h: 90 };
 const grid = (i: number): Box => ({
   x: X + (i % 4) * 85,
@@ -241,11 +253,16 @@ const card2 = (k: number, n: number): Box => {
 const card2CreditTop = (n: number): number => tilesTop(n) + tilesH(n) + CREDIT_UNDER_TILES;
 /** Scenes 4/5: the chips share the content column (six: the design's 50x28.1). */
 const CHIP_GAP = 6.8;
-const chipW = (n: number): number => (HERO_W - (Math.max(n, 3) - 1) * CHIP_GAP) / Math.max(n, 3);
+/** Three videos take the size of four (a row of three would be too tall for the room). */
+const CHIP_COLS_MIN = 4;
+const chipW = (n: number): number => {
+  const cols = Math.max(n, CHIP_COLS_MIN);
+  return (HERO_W - (cols - 1) * CHIP_GAP) / cols;
+};
 const chipH = (n: number): number => (chipW(n) * 9) / 16;
 /** Scenes 4/5: the group's room: from the two text lines' end to above the Google button. */
-const READ_TOP = 140;
-const READ_BOTTOM = 582;
+const READ_TOP = 252;
+const READ_BOTTOM = 585;
 const CARD_TO_CHIPS = 20;
 const CHIPS_TO_CREDIT = 4;
 /** Share of the free height above the group (the text above it is closer than the button). */
@@ -412,6 +429,7 @@ export interface SceneView {
     o: number;
     pe: 'auto' | 'none';
     t: string;
+    clip: string;
     tr: string;
     dim: number;
     deco: 'underline' | 'none';
@@ -705,14 +723,18 @@ export function buildScene(
       s < 3
         ? `translateY(${px(read.card - CARD_TOP + 24)})`
         : s === 5
-          ? `translateY(${px(CARD_S5_TOP - CARD_TOP)})`
+          ? cardS5(cardH).t
           : s === 3 || s === 4
             ? `translateY(${px(read.card - CARD_TOP)})`
             : s === 6 || s === 7
               ? 'none'
               : 'none',
-    tr: T(`opacity ${s === 6 ? '.45s .2s' : s === 3 ? '.45s .1s' : '.3s'}, transform .6s ${EASE}`),
-    dim: s === 4 || s === 5 ? 0.28 : 1,
+    clip: s === 5 ? cardS5(cardH).clip : CLIP_NONE,
+    tr: T(
+      `opacity ${s === 6 ? '.45s .2s' : s === 3 ? '.45s .1s' : '.3s'}, transform .6s ${EASE}, clip-path .6s ${EASE}`
+    ),
+    // scene 6: the headline is cut off with the card's top, so it is gone, not half seen
+    dim: s === 4 ? 0.28 : s === 5 ? 0 : 1,
     deco: (s === 4 || s === 5 ? 'underline' : 'none') as 'underline' | 'none',
     sbg: s === 4 || s === 5 ? v('src-on') : v('src-off'),
   };

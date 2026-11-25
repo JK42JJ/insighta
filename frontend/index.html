@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="google" content="notranslate" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
@@ -69,6 +70,11 @@
       html:not(.dark) .boot-shell-brand {
         color: hsl(220, 16%, 20%);
       }
+      .boot-shell-brand svg { display: inline-block; vertical-align: -6px; margin-right: 7px; }
+      .boot-shell-brand .bsk { fill: currentColor; }
+      /* brand dot (src/shared/ui/brand-logo/brand-logo.css), before any stylesheet */
+      .boot-shell-brand .bsd { fill: #93a8d6; }
+      html:not(.dark) .boot-shell-brand .bsd { fill: #4d68a8; }
       .boot-shell-pulse {
         width: 48px;
         height: 3px;
@@ -101,7 +107,7 @@
     <div id="root"></div>
 
     <div id="boot-shell" role="presentation" aria-hidden="true">
-      <div class="boot-shell-brand">Insighta</div>
+      <div class="boot-shell-brand"><svg width="34" height="34" viewBox="0 0 48 48"><rect class="bsk" x="12" y="20" width="11" height="22" rx="5.5" /><circle class="bsd" cx="30" cy="12" r="6.5" /></svg>insighta</div>
       <div class="boot-shell-pulse"></div>
     </div>
     <script>
