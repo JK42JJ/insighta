@@ -58,7 +58,7 @@ import {
   type OpenFrom,
   type PageRestChip,
 } from '@/features/morning-feed/WatchPage';
-import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
+import { PageWithWatch, type SheetUsage } from '@/features/morning-feed/PageWithWatch';
 import { TestClockControls } from '@/features/morning-feed/TestClockControls';
 import { useTestClock } from '@/features/morning-feed/use-test-clock';
 import type { PageWatchCards } from '@/features/morning-feed/PageWatch';
@@ -398,6 +398,8 @@ export function MorningWatch({
           }),
     onEvidence: (cell, date, videoId, from) =>
       void postUsageEvent({ kind: 'evidence_open', cell, date, video_id: videoId, value: from }),
+    onSheet: (cell, date, e) =>
+      void postUsageEvent({ kind: e.kind, cell, date, video_id: e.videoId, value: e.value }),
   };
 
   /** Where the screen under this one is, by name ("‹ 홈"); none = the home. */
@@ -650,6 +652,8 @@ interface PageWatchBridge {
   onJudge: (video: WatchVideo, verdict: WatchVerdict, index: number) => void;
   /** A source link or an evidence row opened a video (usage count). */
   onEvidence: (cell: string, date: string, videoId: string, from: OpenFrom) => void;
+  /** The source sheet was opened, played, left for the full video or closed (usage count). */
+  onSheet: (cell: string, date: string, e: SheetUsage) => void;
 }
 
 /**
@@ -763,6 +767,7 @@ function LiveDone({
         onSound={pageWatch.onSound}
         onJudge={pageWatch.onJudge}
         onEvidence={(id, from) => pageWatch.onEvidence(goal.label, page.seen_date, id, from)}
+        onSheet={(e) => pageWatch.onSheet(goal.label, page.seen_date, e)}
       />
     );
   }
@@ -858,6 +863,7 @@ function LivePage({
       onSound={pageWatch.onSound}
       onJudge={pageWatch.onJudge}
       onEvidence={(id, from) => pageWatch.onEvidence(cell, date, id, from)}
+      onSheet={(e) => pageWatch.onSheet(cell, date, e)}
     />
   );
 }

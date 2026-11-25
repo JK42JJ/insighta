@@ -95,10 +95,7 @@
   line-height: 1.75;
 }
 .mf-page-cite {
-  font-family:
-    'Pretendard Variable',
-    Pretendard,
-    sans-serif;
+  font-family: 'Pretendard Variable', Pretendard, sans-serif;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0;
@@ -285,7 +282,9 @@
 .mf-page-order-n {
   flex: none;
   width: 16px;
-  font: 700 12px Arial, sans-serif;
+  font:
+    700 12px Arial,
+    sans-serif;
   color: var(--h-sub);
 }
 .mf-page-order-t {
@@ -438,4 +437,67 @@
 .mf-page-fb-err {
   font-size: 13px;
   color: var(--h-sub);
+}
+
+/* a source is shown in its sheet (James 2026-11-25): the sentence, and the article held still */
+.mf-page-lit {
+  background: var(--h-lit);
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.mf-page-cite[data-shown] {
+  color: var(--h-accent);
+  text-decoration-color: currentColor;
+}
+.mf-page-scroll {
+  transition: transform var(--mo-sheet-ms, 0s) var(--mo-sheet-ease, ease);
+}
+.mf-page-scroll[data-locked] {
+  overflow-y: hidden;
+}
+
+/* up to the top (James 2026-11-25) */
+.mf-w-app .mf-page .mf-page-up {
+  position: absolute;
+  right: 16px;
+  bottom: calc(var(--w3-safe-bottom, 0px) + 16px);
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--h-line);
+  border-radius: 50%;
+  background: var(--h-bg);
+  color: var(--h-fg);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    visibility 0s linear 0.2s;
+}
+.mf-w-app .mf-page .mf-page-up[data-shown] {
+  opacity: 1;
+  /* not 'visible': a covered screen hides it with everything else */
+  visibility: inherit;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
+}
+.mf-w-app .mf-page .mf-page-up[data-over] {
+  transition: none;
+}
+.mf-w-app .mf-page .mf-page-up[data-press='soft']::before {
+  inset: 0;
+  border-radius: 50%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-page-scroll,
+  .mf-w-app .mf-page .mf-page-up,
+  .mf-w-app .mf-page .mf-page-up[data-shown] {
+    transition: none;
+  }
 }

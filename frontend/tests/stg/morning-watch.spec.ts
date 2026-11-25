@@ -3,8 +3,8 @@ import { test, expect, type Page } from '@playwright/test';
 // Watch screen (/morning-cards?view=watch) on the deployed staging site, user-test structure
 // (decision 2026-11-14): every signed-in account reads the shared briefs; the experiment UI
 // (today's videos, viewing order, judgments) belongs to the main account only. The staging test
-// account is a participant: home -> brief -> a source opens the video screen -> back to the
-// brief; the brief reaction is saved; the screen never asks a route of the experiment (a new
+// account is a participant: home -> brief -> a source opens its sheet over the article -> closed
+// at the same place -> the sheet's full view opens the video screen -> back at the same place; the brief reaction is saved; the screen never asks a route of the experiment (a new
 // account, not on the test list, is refused by those routes on the server).
 
 const EMAIL = process.env.STG_TEST_EMAIL ?? '';
@@ -93,13 +93,47 @@ test('morning watch: a participant reads a brief, opens its evidence and comes b
   await expect(brief.getByTestId('mf-page-today')).toHaveCount(0);
   await expect(brief.getByTestId('mf-page-order')).toHaveCount(0);
 
-  // a source opens the video screen; back returns to the brief
-  await brief.getByTestId('mf-page-core').getByTestId('mf-page-cite').first().click();
+  // a source opens its sheet (with the player) over the article; closing it keeps the place
+  const scroll = brief.getByTestId('mf-page-scroll');
+  const place = () => scroll.evaluate((el) => el.scrollTop);
+  const cite = brief.getByTestId('mf-page-core').getByTestId('mf-page-cite').last();
+  await cite.scrollIntoViewIfNeeded();
+  await scroll.evaluate((el) => el.scrollBy(0, 60));
+  const before = await place();
+  expect(before).toBeGreaterThan(0);
+  const sheet = page.getByTestId('mf-src-sheet');
+  await cite.click();
+  await expect(sheet).toBeVisible();
+  await expect(sheet.locator('iframe')).toHaveCount(1, { timeout: LOAD_TIMEOUT_MS });
+  const frame = await sheet.locator('iframe').boundingBox();
+  expect(frame?.width).toBeGreaterThanOrEqual(200);
+  expect(frame?.height).toBeGreaterThanOrEqual(200);
+  await expect(page.getByTestId('mf-watch-counter')).toHaveCount(0);
+  await expect(brief.getByTestId('mf-page-lit')).toHaveCount(1);
+  await info.attach('source-sheet', { body: await page.screenshot(), contentType: 'image/png' });
+  expect(await place()).toBe(before);
+  await page.getByTestId('mf-src-close').click();
+  await expect(sheet).toHaveCount(0);
+  await expect(brief.getByTestId('mf-page-lit')).toHaveCount(0);
+  expect(await place()).toBe(before);
+  // the browser's back closes the sheet, not the article
+  await cite.click();
+  await expect(sheet).toBeVisible();
+  await page.goBack();
+  await expect(sheet).toHaveCount(0);
+  await expect(brief.getByTestId('mf-page-headline')).toBeVisible();
+  expect(await place()).toBe(before);
+
+  // the sheet's full view opens the video screen; back returns to the same place in the brief
+  await cite.click();
+  await page.getByTestId('mf-src-full').click();
   await expect(page.getByTestId('mf-watch-counter')).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
+  await expect(sheet).toHaveCount(0);
   await info.attach('evidence-video', { body: await page.screenshot(), contentType: 'image/png' });
   await page.getByTestId('mf-watch-back').click();
   await expect(page.getByTestId('mf-page-watch')).toHaveCount(0, { timeout: 5000 });
   await expect(brief.getByTestId('mf-page-headline')).toBeVisible();
+  expect(await place()).toBe(before);
 
   // the reaction: shown at once, saved with the viewer, domain and date. The account may have
   // answered this brief in an earlier run, so the other answer is pressed (a change is saved).

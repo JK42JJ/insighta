@@ -569,6 +569,12 @@ export type UsageEventKind =
   | 'brief_open'
   | 'evidence_open'
   | 'video_reaction'
+  // a source's sheet over the article (2026-11-25): opened (value = body/note), whole seconds its
+  // video played, gone to the full video screen, closed (value = how)
+  | 'source_sheet_open'
+  | 'source_sheet_watch'
+  | 'source_sheet_full'
+  | 'source_sheet_close'
   // landing page (2026-11-24): kept in the visitor's tab, sent after sign-in with login_done
   | 'landing_open'
   // landing v4 (2026-11-24): dot reached (value s1..s6) and the scene-5 source tap

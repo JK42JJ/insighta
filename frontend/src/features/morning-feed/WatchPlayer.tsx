@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useWatchReporter } from '@/features/morning-feed/use-watch-reporter';
+import { loadYouTubeApi, type YtPlayer } from '@/features/morning-feed/youtube-iframe-api';
 
 /*
  * The one YouTube IFrame player of the watch screen (design 수정 4). It is created once and kept
@@ -20,51 +21,6 @@ import { useWatchReporter } from '@/features/morning-feed/use-watch-reporter';
  * PLAYING at 4.7 s, muted at 1.5 s).
  */
 
-interface YtPlayer {
-  loadVideoById(arg: { videoId: string; startSeconds?: number }): void;
-  mute(): void;
-  unMute(): void;
-  isMuted(): boolean;
-  getPlayerState(): number;
-  getCurrentTime(): number;
-  getDuration(): number;
-  playVideo(): void;
-  pauseVideo(): void;
-  destroy(): void;
-}
-interface YtApi {
-  Player: new (
-    el: HTMLElement,
-    opts: {
-      width: string;
-      height: string;
-      playerVars: Record<string, string | number>;
-      events: {
-        onReady: (e: { target: YtPlayer }) => void;
-        onError: () => void;
-        onStateChange: (e: { data: number }) => void;
-        onAutoplayBlocked: () => void;
-      };
-    }
-  ) => YtPlayer;
-}
-/*
- * The IFrame API lives on window. It is read through these accessors instead of a global Window
- * augmentation: widgets/video-player declares window.YT with a different shape, and two global
- * declarations of the same property must match (TS2687).
- */
-interface YtWindow {
-  YT?: YtApi;
-  onYouTubeIframeAPIReady?: () => void;
-}
-function ytWindow(): YtWindow {
-  return window as unknown as YtWindow;
-}
-function ytApi(): YtApi | undefined {
-  return ytWindow().YT;
-}
-
-const API_SRC = 'https://www.youtube.com/iframe_api';
 /** YT.PlayerState */
 export const YT_PLAYING = 1;
 export const YT_BUFFERING = 3;
@@ -74,32 +30,6 @@ export const PLAYER_POLL_MS = 250;
 export const SOUND_CHECK_MS = 1500;
 /** Still loading by then: give up on sound for this video. */
 export const SOUND_WAIT_MAX_MS = 6000;
-let apiPromise: Promise<YtApi> | null = null;
-
-function loadYouTubeApi(): Promise<YtApi> {
-  const ready = ytApi();
-  if (ready && ready.Player) return Promise.resolve(ready);
-  if (apiPromise) return apiPromise;
-  apiPromise = new Promise<YtApi>((resolve, reject) => {
-    const w = ytWindow();
-    const prev = w.onYouTubeIframeAPIReady;
-    w.onYouTubeIframeAPIReady = () => {
-      prev?.();
-      const yt = ytApi();
-      if (yt) resolve(yt);
-    };
-    const s = document.createElement('script');
-    s.src = API_SRC;
-    s.async = true;
-    s.onerror = () => {
-      apiPromise = null;
-      reject(new Error('youtube api failed to load'));
-    };
-    document.head.appendChild(s);
-  });
-  return apiPromise;
-}
-
 /** Lets the screen drive the player. Every call is a no-op until the player is ready. */
 export interface PlayerController {
   /** Starts the video (muted or with sound). Call only when the layer is more than half visible. */
