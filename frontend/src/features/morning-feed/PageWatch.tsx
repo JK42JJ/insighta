@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
+import type { UsedPart } from '@/features/morning-feed/brief-sentences';
+import { PlayRanges, type PlayRange } from '@/features/morning-feed/play-range';
 import type { WatchVerdict, WatchVideo } from '@/features/morning-feed/watch-list';
 import { WatchFeed, type R3Reaction, type R3Verdict } from '@/features/morning-feed/watch-r3-feed';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
@@ -28,6 +30,10 @@ export interface PageWatchProps {
   load: () => Promise<PageWatchCards | null>;
   /** The tapped video and second (0 = from the start). */
   start: { videoId: string; t: number };
+  /** Where the brief uses a video (이 브리프에 쓰인 부분). */
+  parts: (videoId: string) => UsedPart[];
+  /** A part of a video that was played without a jump. */
+  onRange?: (r: PlayRange) => void;
   sound: boolean;
   onSound: (on: boolean) => void;
   onJudge: (video: WatchVideo, verdict: WatchVerdict, index: number) => void;
@@ -73,7 +79,28 @@ export function PageWatch(p: PageWatchProps): JSX.Element {
     // one load per open
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const videos = useMemo(() => (cards?.items ?? []).map(r3VideoOf), [cards]);
+  const { parts } = p;
+  const videos = useMemo(
+    () =>
+      (cards?.items ?? []).map((v, i) => ({
+        ...r3VideoOf(v, i),
+        parts: v.videoId ? parts(v.videoId) : [],
+      })),
+    [cards, parts]
+  );
+  const ranged = useRef(p.onRange);
+  ranged.current = p.onRange;
+  const [ranges] = useState(() => new PlayRanges((r) => ranged.current?.(r)));
+  useEffect(() => {
+    const onHide = (): void => {
+      if (document.visibilityState === 'hidden') ranges.end();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      ranges.end();
+    };
+  }, [ranges]);
   const startIdx = Math.max(0, cards?.items.findIndex((v) => v.videoId === p.start.videoId) ?? 0);
   return (
     <div className="mf-pw-body" data-testid="mf-page-watch">
@@ -109,7 +136,10 @@ export function PageWatch(p: PageWatchProps): JSX.Element {
               onReady={events.onReady}
               onPlaying={events.onPlaying}
               onMuted={events.onMuted}
-              onTick={events.onTick}
+              onTick={(t) => {
+                ranges.sample(t.videoId, t.seconds, t.playing, Date.now());
+                events.onTick(t);
+              }}
               onFailed={events.onFailed}
             />
           )}

@@ -30,14 +30,14 @@ const PAGE: MorningPage = {
 };
 
 describe('브리프 page (2026-11-14 user test copy)', () => {
-  it('sources follow the text after one space, core sentences and note paragraphs alike (revised handoff)', () => {
+  it('the text carries no source marks; the paragraph says how many videos are behind it (order 2026-11-25 B5)', () => {
     render(
       <WatchPage
         frame={FRAME}
         page={PAGE}
         domainTitle="기술·개발"
         order={[]}
-        rest={[]}
+        others={[]}
         today="2026-11-14"
         back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
@@ -46,16 +46,14 @@ describe('브리프 page (2026-11-14 user test copy)', () => {
     const core = screen.getByTestId('mf-page-core');
     expect(core.querySelector('.mf-page-core-src')).toBeNull();
     expect(core.querySelector('.mf-page-core-p')?.textContent).toBe(
-      '핵심 문장 하나. AI Engineer 16:01'
+      '핵심 문장 하나. 근거 영상 1개'
     );
     const para = screen.getByTestId('mf-page-note').querySelector('.mf-page-para');
-    expect(para?.textContent).toBe('문단. AI Engineer 0:30');
-    const cite = screen.getAllByTestId('mf-page-cite')[0] as HTMLAnchorElement;
-    expect(cite.href).toBe('https://www.youtube.com/watch?v=QHBjufYK8TA&t=961s');
-    expect(cite.target).toBe('_blank');
+    expect(para?.textContent).toBe('문단. 근거 영상 1개');
+    expect(screen.queryByTestId('mf-page-cite')).toBeNull();
   });
 
-  it("copy is filled; one video's source links are one unit; today's videos link; a long order is capped", () => {
+  it("copy is filled; two seconds of one video are one video; today's videos link; a long order is capped", () => {
     const two: MorningPage = {
       ...PAGE,
       core: [
@@ -75,7 +73,14 @@ describe('브리프 page (2026-11-14 user test copy)', () => {
         page={two}
         domainTitle="기술·개발"
         order={Array.from({ length: 25 }, (_x, i) => ({ key: 'k' + i, title: '영상 ' + i }))}
-        rest={[{ cell: '재테크/투자', title: '재테크', onPick: () => undefined }]}
+        others={[
+          {
+            cell: '재테크/투자',
+            title: '재테크',
+            headline: '다른 헤드라인',
+            onPick: () => undefined,
+          },
+        ]}
         today="2026-11-14"
         back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
@@ -89,15 +94,13 @@ describe('브리프 page (2026-11-14 user test copy)', () => {
     fireEvent.click(screen.getByTestId('mf-page-note-toggle'));
     expect(screen.getByTestId('mf-page-note-toggle').textContent).toContain('접기');
     expect(screen.getByTestId('mf-page-videos').textContent).toContain('근거가 된 영상');
-    expect(screen.getByTestId('mf-page-rest').textContent).toContain('다른 분야');
+    expect(screen.getByTestId('mf-page-others').textContent).toBe('다른 분야재테크다른 헤드라인');
     expect(screen.getByTestId('mf-page-past').textContent).toContain('지난 브리프');
     expect(screen.getByTestId('mf-page-home').textContent).toBe('홈');
     expect(screen.getByTestId('mf-page-seen').textContent).toBe('오늘 · 11월 14일');
-    const groups = Array.from(
-      screen.getByTestId('mf-page-core').querySelectorAll('[data-testid="mf-page-cite-group"]')
-    );
-    expect(groups).toHaveLength(1);
-    expect(groups[0]!.textContent).toBe('AI Engineer 3:51· 6:19');
+    expect(
+      screen.getByTestId('mf-page-core').querySelector('[data-testid="mf-page-ev"]')?.textContent
+    ).toBe('근거 영상 1개');
     expect(screen.getByTestId('mf-page-today').textContent).toContain(
       '오늘의 영상 모두 보기 (3편)'
     );
@@ -109,21 +112,21 @@ describe('브리프 page (2026-11-14 user test copy)', () => {
     expect(screen.getByTestId('mf-page-order-list').hasAttribute('data-capped')).toBe(true);
   });
 
-  it('본 순서 and 남은 도메인 are hidden when empty, shown when given', () => {
+  it('본 순서 and 다른 분야 are hidden when empty, shown when given; the end is in the ordered sequence', () => {
     const { rerender } = render(
       <WatchPage
         frame={FRAME}
         page={PAGE}
         domainTitle="기술·개발"
         order={[]}
-        rest={[]}
+        others={[]}
         today="2026-11-14"
         back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
       />
     );
     expect(screen.queryByTestId('mf-page-order')).toBeNull();
-    expect(screen.queryByTestId('mf-page-rest')).toBeNull();
+    expect(screen.queryByTestId('mf-page-others')).toBeNull();
     const onPick = vi.fn();
     rerender(
       <WatchPage
@@ -131,14 +134,29 @@ describe('브리프 page (2026-11-14 user test copy)', () => {
         page={PAGE}
         domainTitle="기술·개발"
         order={[{ key: 'a', title: '영상 제목' }]}
-        rest={[{ cell: '재테크/투자', title: '재테크', onPick }]}
+        others={[{ cell: '재테크/투자', title: '재테크', headline: '다른 헤드라인', onPick }]}
+        feedback={{ value: null, onPick: () => Promise.resolve() }}
+        shareUrl="https://example.com/b"
+        todayVideos={{ count: 2, onGo: () => undefined }}
         today="2026-11-14"
         back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
       />
     );
     expect(screen.getByTestId('mf-page-order')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('mf-page-rest-chip'));
+    const at = ['feedback', 'others', 'today', 'past'].map((k) =>
+      screen.getByTestId('mf-page-' + k)
+    );
+    for (let i = 1; i < at.length; i++) {
+      const rel = at[i - 1]!.compareDocumentPosition(at[i]!);
+      expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(
+      [...screen.getByTestId('mf-page-feedback').querySelectorAll('button')].map((b) =>
+        b.getAttribute('aria-label')
+      )
+    ).toEqual(['별로', '좋아', '공유']);
+    fireEvent.click(screen.getByTestId('mf-page-other'));
     expect(onPick).toHaveBeenCalledTimes(1);
   });
 });
@@ -152,7 +170,7 @@ describe('브리프 while its text is still read (2026-11-25)', () => {
       title: { headline: PAGE.headline, seenDate: '2026-11-14' },
       domainTitle: '기술·개발',
       order: [],
-      rest: [],
+      others: [],
       today: '2026-11-14',
       back: { label: '홈', onBack: () => undefined },
       onPast: () => undefined,
@@ -184,7 +202,7 @@ describe('브리프 while its text is still read (2026-11-25)', () => {
         page={PAGE}
         domainTitle="기술·개발"
         order={[]}
-        rest={[]}
+        others={[]}
         today="2026-11-14"
         back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
@@ -273,7 +291,7 @@ describe('brief reaction (이 브리프가 쓸모 있었나요)', () => {
         page={PAGE}
         domainTitle="기술·개발"
         order={[]}
-        rest={[]}
+        others={[]}
         today="2026-11-14"
         back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}

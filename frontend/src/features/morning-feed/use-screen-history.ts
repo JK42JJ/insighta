@@ -86,6 +86,12 @@ export function appBack(): void {
   window.history.back();
 }
 
+/** The app's own back over several entries at once (a brief's "‹ 홈" over other briefs). */
+export function appBackBy(steps: number): void {
+  appBackAt = Date.now();
+  window.history.go(-steps);
+}
+
 /** This history move is the browser's, not the app's: the screens change without our slide. */
 export function popIsNative(e: PopStateEvent): boolean {
   const now = Date.now();
@@ -96,20 +102,26 @@ export function popIsNative(e: PopStateEvent): boolean {
   return native;
 }
 
+/**
+ * @param above a screen shown on top of the initial one from the start (an address that names it);
+ * it has its own entry, so back leads to the initial screen
+ */
 export function useScreenHistory<T>(
   initial: () => T,
-  isSame: (a: T, b: T) => boolean
+  isSame: (a: T, b: T) => boolean,
+  above?: () => T | null
 ): [T, (next: T, opts?: { replace?: boolean }) => void, ScreenStackView<T>] {
   const seq = useRef(1);
   const [view, setView] = useState<{
     stack: Array<ScreenEntry<T>>;
     idx: number;
     move: ScreenMove;
-  }>(() => ({
-    stack: [{ id: seq.current++, screen: initial() }],
-    idx: 0,
-    move: { dir: 'none', native: false, seq: 0 },
-  }));
+  }>(() => {
+    const stack = [{ id: seq.current++, screen: initial() }];
+    const top = above?.() ?? null;
+    if (top !== null) stack.push({ id: seq.current++, screen: top });
+    return { stack, idx: stack.length - 1, move: { dir: 'none', native: false, seq: 0 } };
+  });
   const nav = useRef(view);
   nav.current = view;
   const sameRef = useRef(isSame);
@@ -144,7 +156,14 @@ export function useScreenHistory<T>(
   }, []);
 
   useEffect(() => {
-    window.history.replaceState({ ...(window.history.state ?? {}), mfScreen: nav.current.idx }, '');
+    const at = nav.current.idx;
+    const was = (window.history.state as { mfScreen?: unknown } | null)?.mfScreen;
+    if (at > 0 && was !== at) {
+      window.history.replaceState({ ...(window.history.state ?? {}), mfScreen: 0 }, '');
+      for (let i = 1; i <= at; i++) window.history.pushState({ mfScreen: i }, '');
+    } else {
+      window.history.replaceState({ ...(window.history.state ?? {}), mfScreen: at }, '');
+    }
     const onPop = (e: PopStateEvent): void => {
       const i = (e.state as { mfScreen?: unknown } | null)?.mfScreen;
       const n = nav.current;

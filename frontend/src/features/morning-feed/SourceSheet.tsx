@@ -14,13 +14,15 @@ import {
   type SourcePlayerHandle,
   type SourceTarget,
 } from '@/features/morning-feed/SourcePlayer';
+import type { PlayRange } from '@/features/morning-feed/play-range';
 import { stampOf } from '@/features/morning-feed/watch-page-model';
 import './source-sheet.css';
 
 /*
- * A source of the article, over the article (James 2026-11-25): the video from the source's second
- * in a sheet of about 60 % of the screen; the article stays behind it, still readable, so another
- * source can be tapped (the same player changes its video). It closes by dragging it down, the
+ * The sources of a sentence, over the article (James 2026-11-25): the video from the source's
+ * second in a sheet of about 60 % of the screen; the article stays behind it, still readable, so
+ * another sentence can be tapped (the same player changes its video). A sentence with several
+ * sources turns them over here (buttons or a sideways swipe). It closes by dragging it down, the
  * close button, a tap outside or the browser's back (PageWithWatch). The player is not mounted
  * before the sheet is in place (YouTube: no automatic playback before the player is visible) and
  * goes away the moment the sheet starts to leave for the video screen.
@@ -31,6 +33,8 @@ export type SheetCloseHow = 'button' | 'outside' | 'drag' | 'back' | 'key';
 
 /** A pointer that moves less than this is a tap: the sheet takes the pointer only after it (px). */
 const DRAG_SLOP_PX = 8;
+/** A sideways swipe this long turns to the next or previous source. */
+const TURN_PX = 48;
 const FLICK_MIN_PX = 24;
 /** Dragged down this far it closes: from the text under the player a small phone has ~90 px left. */
 const CLOSE_PX = 60;
@@ -41,6 +45,12 @@ interface Props {
   target: SourceTarget;
   channel: string;
   title: string;
+  /** Which of the sentence's sources is shown (0-based) and how many there are. */
+  at: number;
+  count: number;
+  /** The sources are the whole paragraph's, not this sentence's alone. */
+  ofParagraph: boolean;
+  onTurn: (to: number) => void;
   /** The sheet is leaving: it slides down, then `onGone`. */
   closing: boolean;
   /** Gone to the video screen: no player any more, the sheet rides away with the article. */
@@ -50,6 +60,7 @@ interface Props {
   onGone: () => void;
   onFull: () => void;
   onWatched: (videoId: string, seconds: number) => void;
+  onRange: (r: PlayRange, sid: string | undefined) => void;
   onHeight: (h: number) => void;
 }
 
@@ -60,6 +71,8 @@ interface Drag {
   t0: number;
   dy: number;
   on: boolean;
+  /** A sideways gesture: how far; null = not one. */
+  dx: number | null;
 }
 
 export function SourceSheet(p: Props): JSX.Element {
@@ -158,6 +171,11 @@ export function SourceSheet(p: Props): JSX.Element {
     }
   }, [ms, ease]);
 
+  const turn = (step: 1 | -1): void => {
+    const to = p.at + step;
+    if (!still && to >= 0 && to < p.count) p.onTurn(to);
+  };
+
   const onDown = (e: PointerEvent): void => {
     if (still || drag.current || (e.pointerType === 'mouse' && e.button !== 0)) return;
     dragged.current = false;
@@ -168,17 +186,34 @@ export function SourceSheet(p: Props): JSX.Element {
       t0: e.timeStamp,
       dy: 0,
       on: false,
+      dx: null,
     };
   };
   const onMove = (e: PointerEvent): void => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
     const my = e.clientY - d.y0;
+    if (d.dx !== null) {
+      d.dx = e.clientX - d.x0;
+      return;
+    }
     if (!d.on) {
       if (Math.hypot(e.clientX - d.x0, my) < DRAG_SLOP_PX) return;
       // only a downward gesture is the sheet's; any gesture past the slop is no tap any more
       dragged.current = true;
-      if (my <= 0 || Math.abs(e.clientX - d.x0) > my) {
+      if (Math.abs(e.clientX - d.x0) > Math.abs(my)) {
+        // the pointer is kept, so a swipe that ends outside the sheet still counts
+        if (p.count > 1) {
+          d.dx = e.clientX - d.x0;
+          try {
+            sheet.current?.setPointerCapture?.(e.pointerId);
+          } catch {
+            /* the pointer is already gone */
+          }
+        } else drag.current = null;
+        return;
+      }
+      if (my <= 0) {
         drag.current = null;
         return;
       }
@@ -197,6 +232,11 @@ export function SourceSheet(p: Props): JSX.Element {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
     drag.current = null;
+    if (d.dx !== null) {
+      if (d.dx <= -TURN_PX) turn(1);
+      else if (d.dx >= TURN_PX) turn(-1);
+      return;
+    }
     if (!d.on) return;
     const v = d.dy / Math.max(1, e.timeStamp - d.t0);
     if (d.dy >= CLOSE_PX || (v >= closeVelocity && d.dy >= FLICK_MIN_PX)) p.onClose('drag');
@@ -239,6 +279,15 @@ export function SourceSheet(p: Props): JSX.Element {
     >
       <div className="mf-src-head" data-testid="mf-src-head">
         <span className="mf-src-grip" aria-hidden="true" />
+        {p.count > 1 ? (
+          <div className="mf-src-turn" data-testid="mf-src-turn">
+            <TurnButton dir={-1} off={p.at === 0} onClick={() => turn(-1)} />
+            <span className="mf-src-turn-n" data-testid="mf-src-turn-n" aria-live="polite">
+              {p.at + 1 + '/' + p.count}
+            </span>
+            <TurnButton dir={1} off={p.at === p.count - 1} onClick={() => turn(1)} />
+          </div>
+        ) : null}
         <button
           ref={closeBtn}
           type="button"
@@ -264,7 +313,12 @@ export function SourceSheet(p: Props): JSX.Element {
       </div>
       <div className="mf-src-player" data-testid="mf-src-player">
         {entered && !p.frozen ? (
-          <SourcePlayer target={p.target} handle={p.player} onWatched={p.onWatched} />
+          <SourcePlayer
+            target={p.target}
+            handle={p.player}
+            onWatched={p.onWatched}
+            onRange={p.onRange}
+          />
         ) : null}
       </div>
       <div className="mf-src-info">
@@ -277,7 +331,7 @@ export function SourceSheet(p: Props): JSX.Element {
         <div className="mf-src-foot">
           {p.target.t > 0 ? (
             <div className="mf-src-at" data-testid="mf-src-at">
-              {'이 부분 ' + stampOf(p.target.t)}
+              {(p.ofParagraph ? '이 문단의 근거 ' : '이 부분 ') + stampOf(p.target.t)}
             </div>
           ) : null}
           <button
@@ -293,5 +347,41 @@ export function SourceSheet(p: Props): JSX.Element {
         </div>
       </div>
     </div>
+  );
+}
+
+function TurnButton({
+  dir,
+  off,
+  onClick,
+}: {
+  dir: 1 | -1;
+  off: boolean;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="mf-src-turn-btn"
+      data-press="soft"
+      data-testid={dir === 1 ? 'mf-src-next' : 'mf-src-prev'}
+      aria-label={dir === 1 ? '다음 근거 영상' : '이전 근거 영상'}
+      disabled={off}
+      onClick={onClick}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d={dir === 1 ? 'M8 4l6 6-6 6' : 'M12 4l-6 6 6 6'} />
+      </svg>
+    </button>
   );
 }

@@ -6,7 +6,7 @@ import articleFixture from '@/features/morning-feed/page-fixture-article.json';
 import pageFixture from '@/features/morning-feed/page-fixture.json';
 import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
 import { toFeedCard } from '@/features/morning-feed/feed-format';
-import { WatchPage } from '@/features/morning-feed/WatchPage';
+import { WatchPage, type SourceTap } from '@/features/morning-feed/WatchPage';
 import { articleParagraphs, isArticleCore } from '@/features/morning-feed/watch-page-model';
 
 // no network in tests: the font links are not added and the wait ends at once ('late')
@@ -34,8 +34,7 @@ vi.mock('@/features/morning-feed/PageWatch', async (actual) => {
 
 /*
  * Article format (decision 2026-11-22): core items with `para` are drawn as 1 to 2 paragraphs;
- * each sentence's sources right after that sentence (decision 2026-11-24); a page without `para`
- * is drawn as before.
+ * the text carries no source marks, a sentence opens its sources (order 2026-11-25 B5).
  */
 
 const FRAME = { vh: 844, safeTop: 47, safeBottom: 34, playerH: 219, width: 390 };
@@ -63,19 +62,21 @@ const PAGE: MorningPage = {
 
 function draw(
   page: MorningPage,
-  onOpenVideo?: (id: string, t: number, from: 'body' | 'note' | 'list') => void
-): void {
-  render(
+  onOpenVideo?: (id: string, t: number, from: 'body' | 'note' | 'list') => void,
+  onOpenSource?: (tap: SourceTap) => void
+): ReturnType<typeof render> {
+  return render(
     <WatchPage
       frame={FRAME}
       page={page}
       domainTitle="재테크"
       order={[]}
-      rest={[]}
+      others={[]}
       today="2026-11-22"
       back={{ label: '홈', onBack: () => undefined }}
       onPast={() => undefined}
       onOpenVideo={onOpenVideo}
+      onOpenSource={onOpenSource}
     />
   );
 }
@@ -110,62 +111,82 @@ describe('article paragraphs (model)', () => {
 });
 
 describe('article page (screen)', () => {
-  it("draws one paragraph per para with each sentence's links right after that sentence", () => {
+  it('draws one paragraph per para, text only, with how many videos are behind it', () => {
     draw(PAGE);
     const ps = screen.getByTestId('mf-page-core').querySelectorAll('.mf-page-core-p');
     expect(ps).toHaveLength(2);
-    expect(ps[0]!.textContent).toBe(
-      '첫 문장이다. 채널A 3:20 둘째 문장이다. 채널B 2:40 셋째 문장이다. 채널A 3:40'
-    );
-    expect(ps[1]!.textContent).toBe('넷째 문장이다. 채널B 3:00 다섯째 문장이다. 채널A 6:00');
-    // the first sentence is followed by its own link, before the second sentence
-    expect(ps[0]!.firstChild?.nodeType).toBe(Node.TEXT_NODE);
-    expect(ps[0]!.firstChild?.textContent).toBe('첫 문장이다. ');
-    expect(ps[0]!.querySelectorAll('[data-testid="mf-page-cite-group"]')).toHaveLength(3);
-    expect(ps[0]!.hasAttribute('data-cited')).toBe(true);
+    expect(ps[0]!.textContent).toBe('첫 문장이다. 둘째 문장이다. 셋째 문장이다. 근거 영상 2개');
+    expect(ps[1]!.textContent).toBe('넷째 문장이다. 다섯째 문장이다. 근거 영상 2개');
+    expect(screen.queryByTestId('mf-page-cite')).toBeNull();
+    expect(
+      [...ps[1]!.querySelectorAll('.mf-page-sent')].map((x) => x.getAttribute('data-sid'))
+    ).toEqual(['p1.s0', 'p1.s1']);
     // the paragraph typography applies to the article format only
     expect(screen.getByTestId('mf-page-core').hasAttribute('data-article')).toBe(true);
     // the note and the video list are drawn as before
     expect(screen.getByTestId('mf-page-note').querySelector('.mf-page-para')?.textContent).toBe(
-      '문단. 채널C 0:30'
+      '문단. 근거 영상 1개'
     );
     expect(screen.getAllByTestId('mf-page-video')).toHaveLength(3);
     expect(screen.getByTestId('mf-page').textContent).not.toMatch(/support|condition|other/);
   });
 
-  it('a paragraph link opens that video at that second (address and in-app)', () => {
+  it('a sentence gives its own sources, its id and where it is', () => {
     const open = vi.fn();
-    draw(PAGE, open);
-    const cites = screen
-      .getByTestId('mf-page-core')
-      .querySelectorAll<HTMLAnchorElement>('[data-testid="mf-page-cite"]');
-    // sentence order: each link follows its sentence
-    expect([...cites].map((c) => c.href)).toEqual([
-      `https://www.youtube.com/watch?v=${A}&t=200s`,
-      `https://www.youtube.com/watch?v=${B}&t=160s`,
-      `https://www.youtube.com/watch?v=${A}&t=220s`,
-      `https://www.youtube.com/watch?v=${B}&t=180s`,
-      `https://www.youtube.com/watch?v=${A}&t=360s`,
-    ]);
-    fireEvent.click(cites[2]!);
-    expect(open).toHaveBeenCalledWith(A, 220, 'body');
-    fireEvent.click(cites[3]!);
-    expect(open).toHaveBeenCalledWith(B, 180, 'body');
+    draw(PAGE, undefined, open);
+    const sents = screen.getByTestId('mf-page-core').querySelectorAll<HTMLElement>('.mf-page-sent');
+    fireEvent.click(sents[2]!);
+    expect(open).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        sources: [{ video_id: A, t: 220 }],
+        sid: 'p0.s2',
+        from: 'body',
+        scope: 'sentence',
+        el: sents[2],
+      })
+    );
+    fireEvent.keyDown(sents[3]!, { key: 'Enter' });
+    expect(open).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sources: [{ video_id: B, t: 180 }], sid: 'p1.s0' })
+    );
   });
 
-  it('tells a body link from a list row and a note link (usage records)', () => {
+  it('a long press or a selection is no tap; without the handler a sentence is plain text', () => {
     const open = vi.fn();
-    draw(PAGE, open);
+    const { unmount } = draw(PAGE, undefined, open);
+    const s = screen.getAllByTestId('mf-page-sent')[0]!;
+    const press = (type: string, at: number): void => {
+      const e = new MouseEvent(type, { bubbles: true, detail: 1 });
+      Object.defineProperty(e, 'timeStamp', { value: at });
+      act(() => void s.dispatchEvent(e));
+    };
+    press('pointerdown', 100);
+    press('click', 900);
+    expect(open).not.toHaveBeenCalled();
+    const sel = vi
+      .spyOn(window, 'getSelection')
+      .mockReturnValue({ isCollapsed: false, toString: () => '첫' } as Selection);
+    press('pointerdown', 1000);
+    press('click', 1080);
+    expect(open).not.toHaveBeenCalled();
+    sel.mockRestore();
+    press('pointerdown', 2000);
+    press('click', 2080);
+    expect(open).toHaveBeenCalledTimes(1);
+    unmount();
+    draw(PAGE);
+    expect(screen.getAllByTestId('mf-page-sent')[0]!.getAttribute('role')).toBeNull();
+  });
+
+  it('tells a body sentence from a list row and a note sentence (usage records)', () => {
+    const open = vi.fn();
+    const tap = vi.fn();
+    draw(PAGE, open, tap);
     fireEvent.click(screen.getAllByTestId('mf-page-video')[0]!);
     expect(open).toHaveBeenLastCalledWith(PAGE.videos[0]!.video_id, 0, 'list');
     fireEvent.click(screen.getByTestId('mf-page-note-toggle'));
-    const noteCite = screen
-      .getByTestId('mf-page-note')
-      .querySelector('[data-testid="mf-page-cite"]');
-    if (noteCite) {
-      fireEvent.click(noteCite);
-      expect(open.mock.calls[open.mock.calls.length - 1]![2]).toBe('note');
-    }
+    fireEvent.click(screen.getByTestId('mf-page-note').querySelector('.mf-page-sent')!);
+    expect(tap).toHaveBeenLastCalledWith(expect.objectContaining({ from: 'note', sid: 'p2.s0' }));
   });
 
   it('the earlier format is drawn as before: one paragraph per core sentence with its own links', () => {
@@ -194,7 +215,7 @@ describe('article page (screen)', () => {
 });
 
 describe('article page -> the video at that second', () => {
-  it("a paragraph link opens its sheet; the sheet's full view opens the watch layer at that video and second", async () => {
+  it("a sentence opens its sheet; the sheet's full view opens the watch layer at that video and second", async () => {
     const pushState = vi.spyOn(window.history, 'pushState');
     const evidence: string[] = [];
     opened.length = 0;
@@ -222,7 +243,7 @@ describe('article page -> the video at that second', () => {
         page={PAGE}
         domainTitle="재테크"
         order={[]}
-        rest={[]}
+        others={[]}
         today="2026-11-22"
         back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}
@@ -235,12 +256,10 @@ describe('article page -> the video at that second', () => {
         onJudge={() => undefined}
       />
     );
-    // the second sentence's link in the first paragraph: 채널B 2:40
-    const cites = screen
-      .getByTestId('mf-page-core')
-      .querySelectorAll('[data-testid="mf-page-cite"]');
-    expect(cites[1]!.textContent).toBe('채널B 2:40');
-    fireEvent.click(cites[1]!);
+    // the second sentence of the first paragraph: 채널B 2:40
+    const sents = screen.getByTestId('mf-page-core').querySelectorAll('.mf-page-sent');
+    expect(sents[1]!.textContent).toBe('둘째 문장이다.');
+    fireEvent.click(sents[1]!);
     await act(async () => {
       await Promise.resolve();
     });

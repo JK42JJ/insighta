@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 
 import { useAuthContext } from '@/features/auth/model/AuthContext';
 import { lazyScreen } from '@/features/morning-feed/first-load';
+import { returnPathOf } from '@/features/morning-feed/brief-address';
 import { isDeckView } from '@/features/morning-feed/morning-view';
 import { parseFixtureScreen } from '@/features/morning-feed/fixture-screen';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
@@ -78,20 +79,20 @@ export function MorningCardsEntry() {
   );
 }
 
-/** After Google sign-in from the landing: always today's brief screen (decision 2026-11-24). */
-import { WATCH_RETURN_PATH } from './watch-path';
-
 /**
  * The participant address: signed out -> the landing page (decision 2026-11-24), signed in -> the
- * watch screen as before. The watch screen's first-open screen shows while either starts.
+ * watch screen as before. The watch screen's first-open screen shows while either starts. After
+ * Google sign-in: today's brief screen (decision 2026-11-24), or the brief whose shared address
+ * this is (order 2026-11-25 B8).
  */
 function WatchEntry(): JSX.Element {
   const { user, isLoading, signInWithGoogle } = useAuthContext();
+  const { search } = useLocation();
   if (isLoading) return <WatchBoot logoOnly />;
   if (!user) {
     const signIn = async (): Promise<void> => {
       try {
-        sessionStorage.setItem(AUTH_RETURN_KEY, WATCH_RETURN_PATH);
+        sessionStorage.setItem(AUTH_RETURN_KEY, returnPathOf(search));
       } catch {
         /* storage blocked: the return lands on / */
       }

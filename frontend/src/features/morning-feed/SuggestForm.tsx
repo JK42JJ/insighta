@@ -1,6 +1,7 @@
 import { useRef, useState, type CSSProperties, type FormEvent } from 'react';
 
 import { postAppFeedback, type AppFeedbackWhere } from '@/features/morning-cards/api';
+import { recordBriefEvent } from '@/features/morning-feed/brief-events';
 import { feedbackPath } from '@/features/morning-feed/feedback-path';
 import { useKeyboardInset } from '@/features/morning-feed/use-keyboard-inset';
 import { getReplayUrl } from '@/shared/lib/posthog';
@@ -46,6 +47,12 @@ export function SuggestForm({
       ...where,
     })
       .then(() => {
+        // the comment itself is never part of the event
+        recordBriefEvent('suggest', {
+          cell: where.cell,
+          seenDate: where.date,
+          value: where.screen,
+        });
         toast(SUGGEST_THANKS);
         onSent();
       })

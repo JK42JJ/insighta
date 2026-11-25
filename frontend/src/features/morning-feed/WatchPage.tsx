@@ -3,24 +3,36 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useMemo,
   useState,
   type CSSProperties,
-  type ReactNode,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
   type RefObject,
 } from 'react';
 
 import type { MorningPage } from '@/features/morning-cards/api';
 import { ensureHomeFonts } from '@/features/morning-feed/watch-home-fonts';
+import { recordBriefEvent } from '@/features/morning-feed/brief-events';
+import {
+  briefText,
+  type BriefParagraph,
+  type BriefSentence,
+  type SentenceSource,
+} from '@/features/morning-feed/brief-sentences';
 import { BackButton } from '@/features/morning-feed/BackButton';
 import { haptic, popIcon } from '@/features/morning-feed/motion-tokens';
 import { briefDateLabel, headlineSize } from '@/features/morning-feed/watch-home-model';
+import { shareBrief } from '@/features/morning-feed/share-brief';
 import {
-  articleParagraphs,
-  citeLinks,
-  isArticleCore,
-  youtubeAt,
-  type CiteLink,
-} from '@/features/morning-feed/watch-page-model';
+  markSentenceHintSeen,
+  SENTENCE_HINT,
+  SENTENCE_HINT_MS,
+  sentenceHintSeen,
+} from '@/features/morning-feed/sentence-hint';
+import { useReadDepth } from '@/features/morning-feed/use-read-depth';
+import { isArticleCore, youtubeAt } from '@/features/morning-feed/watch-page-model';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
 import {
   AccountButton,
@@ -29,22 +41,23 @@ import {
 } from '@/features/morning-feed/watch-r3-screens';
 import { PageSkeleton } from '@/features/morning-feed/PageSkeleton';
 import { useToTop } from '@/features/morning-feed/use-to-top';
+import { toast } from '@/shared/ui/sonner';
 import './watch-home.css';
 import './watch-page.css';
 
 /*
  * "한 장" (design handoff "design_handoff_insighta_page", PagePhone.dc.html is the reference):
  * one domain's day as one long scrolling page. Pretendard body, the source list with thumbnails,
- * light background only (decisions 2026-11-14). Source links follow the revised handoff: one space
- * after the last character, then each link as an inline-block that does not wrap inside, so only
- * the links move to the next line and the last word stays (core sentences and note paragraphs
- * alike). In the app a source link opens its sheet and a source row the video screen; without
- * the app's handlers both open YouTube at that second in a new window.
+ * light background only (decisions 2026-11-14). The text carries no source marks (order 2026-11-25
+ * B5): a tap on a sentence opens its sources' sheet, the paragraph's end says how many videos are
+ * behind it. A row of the evidence list opens the video screen (YouTube without the app's handler).
  */
 
-export interface PageRestChip {
+/** Another domain's brief of the same day (order 2026-11-25 B12). */
+export interface OtherField {
   cell: string;
   title: string;
+  headline: string;
   onPick: () => void;
 }
 
@@ -65,15 +78,19 @@ export interface WatchPageProps {
   feedback?: BriefFeedbackProps;
   /** 본 순서 (main account only): that day's watch record; empty = the section is hidden. */
   order: Array<{ key: string; title: string }>;
-  /** 남은 도메인: goals with videos left today; empty = the section is hidden. */
-  rest: PageRestChip[];
+  /** 다른 분야: the other domains' headlines of that day; empty = the section is hidden. */
+  others: OtherField[];
+  /** They came into view (once per page). */
+  onOthersView?: () => void;
   onPast: () => void;
   /** A source row: that video in the watch screen (absent = YouTube). */
   onOpenVideo?: OpenVideo;
-  /** A source link in the text: its sheet over the article (absent = as a source row). */
+  /** A sentence: its sources' sheet over the article (absent = plain text). */
   onOpenSource?: OpenSource;
   /** The source shown in the sheet: its sentence is marked and kept above the sheet. */
   source?: ShownSource | null;
+  /** This brief's own address, for the share button (absent = not drawn). */
+  shareUrl?: string;
   /** The article's scroll box, for the caller that restores its position. */
   scrollRef?: RefObject<HTMLDivElement>;
   /** Videos of this domain left today: the "오늘의 영상 모두 보기 (n편)" link (absent = hidden). */
@@ -101,19 +118,17 @@ type OpenVideo = (videoId: string, t: number, from: OpenFrom) => void;
 export type OpenFrom = 'body' | 'note' | 'list';
 
 export interface SourceTap {
-  videoId: string;
-  t: number;
+  sources: SentenceSource[];
+  scope: BriefSentence['scope'];
   from: OpenFrom;
-  /** The sentence (or note paragraph) the link belongs to. */
+  /** The sentence (brief-sentences.ts). */
   sid: string;
-  /** The tapped link: gets the focus back when the sheet is gone. */
+  /** The tapped sentence: gets the focus back when the sheet is gone. */
   el: HTMLElement;
 }
 type OpenSource = (tap: SourceTap) => void;
 
 export interface ShownSource {
-  videoId: string;
-  t: number;
   sid: string;
   /** The sheet's height; 0 until it is measured. */
   sheetH: number;
@@ -122,92 +137,74 @@ export interface ShownSource {
 /** Room between the marked sentence and the sheet (px). */
 const LIT_CLEAR_PX = 16;
 
-interface CiteProps {
-  links: CiteLink[];
-  sid: string;
+/** What a tap on the article means a sentence (the open sheet switches instead of closing). */
+export const SENTENCE_SELECTOR = '.mf-page-sent[data-tap]';
+/** A press this long is a text selection, not a tap. */
+const TAP_MAX_MS = 500;
+
+interface SentencesProps {
+  paragraph: BriefParagraph;
   from: OpenFrom;
-  onOpen?: OpenVideo;
   onSource?: OpenSource;
   source?: ShownSource | null;
 }
 
-/** A sentence, marked while its source is shown in the sheet. */
-function Said({
-  text,
-  sid,
-  cited,
-  source,
-}: {
-  text: string;
-  sid: string;
-  cited: boolean;
-  source?: ShownSource | null;
-}): JSX.Element {
-  const space: ReactNode = cited ? ' ' : null;
-  if (source?.sid !== sid) return <>{cited ? text + ' ' : text}</>;
+/** A paragraph's sentences (each one opens its sources) and how many videos are behind them. */
+function Sentences({ paragraph, from, onSource, source }: SentencesProps): JSX.Element {
+  const downAt = useRef<number | null>(null);
+  const tap = (s: BriefSentence, e: MouseEvent<HTMLElement>): void => {
+    const held = downAt.current === null ? 0 : e.timeStamp - downAt.current;
+    downAt.current = null;
+    if (e.detail !== 0 && held > TAP_MAX_MS) return;
+    // text is being selected (long press, or a drag with a mouse)
+    const chosen = window.getSelection?.();
+    if (chosen && !chosen.isCollapsed && chosen.toString() !== '') return;
+    onSource?.({ sources: s.sources, scope: s.scope, from, sid: s.id, el: e.currentTarget });
+  };
   return (
     <>
-      <span className="mf-page-lit" data-testid="mf-page-lit">
-        {text}
-      </span>
-      {space}
-    </>
-  );
-}
-
-/**
- * One video's links (channel and its times) as one unit that does not wrap inside (decision
- * 2026-11-14: a second time was left alone on the next line); units of different videos can
- * still wrap between them.
- */
-function Cites({ links, ...rest }: CiteProps): JSX.Element {
-  const groups: CiteLink[][] = [];
-  for (const c of links) {
-    const last = groups[groups.length - 1];
-    if (last && last[0]!.videoId === c.videoId) last.push(c);
-    else groups.push([c]);
-  }
-  return (
-    <>
-      {groups.map((g, k) => (
-        <span key={k} className="mf-page-cite-group" data-testid="mf-page-cite-group">
-          <CiteLinks links={g} {...rest} />
-        </span>
-      ))}
-    </>
-  );
-}
-
-function CiteLinks({ links, sid, from, onOpen, onSource, source }: CiteProps): JSX.Element {
-  const isShown = (c: CiteLink): boolean =>
-    !!source && source.sid === sid && source.videoId === c.videoId && source.t === c.t;
-  return (
-    <>
-      {links.map((c, i) => (
-        <a
-          key={i}
-          className="mf-page-cite"
-          data-press="link"
-          data-gap={c.gap}
-          data-shown={isShown(c) ? '' : undefined}
-          data-testid="mf-page-cite"
-          href={c.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={
-            onSource || onOpen
-              ? (e) => {
-                  e.preventDefault();
-                  if (onSource) {
-                    onSource({ videoId: c.videoId, t: c.t, from, sid, el: e.currentTarget });
-                  } else onOpen?.(c.videoId, c.t, from);
-                }
-              : undefined
-          }
-        >
-          {c.label}
-        </a>
-      ))}
+      {paragraph.sentences.map((s, k) => {
+        const lit = source?.sid === s.id;
+        const tappable = !!onSource && s.sources.length > 0;
+        return (
+          <Fragment key={s.id}>
+            {k > 0 ? ' ' : null}
+            <span
+              className={lit ? 'mf-page-sent mf-page-lit' : 'mf-page-sent'}
+              data-testid="mf-page-sent"
+              data-sid={s.id}
+              data-lit={lit ? '' : undefined}
+              data-tap={tappable ? '' : undefined}
+              {...(tappable
+                ? {
+                    role: 'button',
+                    tabIndex: 0,
+                    'aria-haspopup': 'dialog' as const,
+                    onPointerDown: (e: PointerEvent) => {
+                      downAt.current = e.timeStamp;
+                    },
+                    onClick: (e: MouseEvent<HTMLElement>) => tap(s, e),
+                    onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+                      if (e.key !== 'Enter' && e.key !== ' ') return;
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    },
+                  }
+                : {})}
+            >
+              {s.text}
+            </span>
+          </Fragment>
+        );
+      })}
+      {paragraph.videoCount > 0 ? (
+        <>
+          {' '}
+          <span className="mf-page-ev" data-testid="mf-page-ev">
+            {'근거 영상 ' + paragraph.videoCount + '개'}
+          </span>
+        </>
+      ) : null}
     </>
   );
 }
@@ -218,8 +215,6 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
   const [moved, setMoved] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
   const [acct, setAcct] = useState(false);
-  const channelOf = (id: string): string =>
-    pg?.videos.find((v) => v.video_id === id)?.channel ?? '';
 
   // The title is drawn as it stays from the first frame: no waiting for fonts and no fade (the
   // fade made it grey over a finished text, James 2026-11-25). The home has its fonts already.
@@ -230,7 +225,29 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
   const toTopBtn = useRef<HTMLButtonElement>(null);
   const source = p.source ?? null;
   const toTop = useToTop(scroll, toTopBtn, TO_TOP_AVOID, !!source);
-  const citeOpen = { onOpen: p.onOpenVideo, onSource: p.onOpenSource, source };
+  const text = useMemo(() => (pg ? briefText(pg) : null), [pg]);
+  const tapSource = { onSource: p.onOpenSource, source };
+  useReadDepth(scroll, !!pg, !!source, (paragraph) =>
+    recordBriefEvent('read_depth', { cell: pg?.domain, seenDate: pg?.seen_date, paragraph })
+  );
+
+  // once per device: how to reach the sources
+  const [hint, setHint] = useState(false);
+  const canTap = !!pg && !!p.onOpenSource;
+  useEffect(() => {
+    if (!canTap || sentenceHintSeen()) return undefined;
+    markSentenceHintSeen();
+    setHint(true);
+    return undefined;
+  }, [canTap]);
+  useEffect(() => {
+    if (!hint) return undefined;
+    const t = window.setTimeout(() => setHint(false), SENTENCE_HINT_MS);
+    return () => window.clearTimeout(t);
+  }, [hint]);
+  useEffect(() => {
+    if (source) setHint(false);
+  }, [source]);
 
   // The sentence is kept above the sheet by moving the whole scroll box up, so the article's own
   // scroll position never changes and closing only moves the box back.
@@ -244,9 +261,7 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
     }
     if (source.sheetH === 0) return;
     const base = box.getBoundingClientRect().top;
-    const marks = [...box.querySelectorAll('.mf-page-lit, .mf-page-cite[data-shown]')].map((m) =>
-      m.getBoundingClientRect()
-    );
+    const marks = [...box.querySelectorAll('.mf-page-lit')].map((m) => m.getBoundingClientRect());
     if (marks.length === 0) return;
     const top = Math.min(...marks.map((m) => m.top)) - base;
     const bottom = Math.max(...marks.map((m) => m.bottom)) - base;
@@ -260,6 +275,15 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
   const headline = pg?.headline ?? p.title?.headline ?? '';
   const seenDate = pg?.seen_date ?? p.title?.seenDate ?? '';
   const size = headlineSize(p.frame.width, headline);
+  const share = (title: string, url: string): void => {
+    void shareBrief(title, url).then((r) => {
+      if (r === 'shared' || r === 'copied') {
+        recordBriefEvent('share', { cell: pg?.domain, seenDate, value: r });
+      }
+      if (r === 'copied') toast(SHARE_COPIED);
+      else if (r === 'failed') toast(SHARE_FAILED);
+    });
+  };
   const still = !moved || reducedMotion();
   const rootStyle = {
     '--w3-safe-top': p.frame.safeTop + 'px',
@@ -311,54 +335,11 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                 data-selectable=""
                 data-article={isArticleCore(pg.core) ? '' : undefined}
               >
-                {isArticleCore(pg.core)
-                  ? // article format (2026-11-22): 1 to 2 paragraphs; each sentence's sources right
-                    // after that sentence (decision 2026-11-24)
-                    articleParagraphs(pg.core).map((q, i) => (
-                      <p
-                        key={i}
-                        className="mf-page-core-p"
-                        data-cited={q.sentences.some((s) => s.sources.length > 0) ? '' : undefined}
-                      >
-                        {q.sentences.map((s, k) => (
-                          <Fragment key={k}>
-                            {k > 0 ? ' ' : null}
-                            <Said
-                              text={s.text}
-                              sid={`c${i}-${k}`}
-                              cited={s.sources.length > 0}
-                              source={p.source}
-                            />
-                            <Cites
-                              links={citeLinks(s.sources, channelOf)}
-                              sid={`c${i}-${k}`}
-                              from="body"
-                              {...citeOpen}
-                            />
-                          </Fragment>
-                        ))}
-                      </p>
-                    ))
-                  : pg.core.map((c, i) => (
-                      <p
-                        key={i}
-                        className="mf-page-core-p"
-                        data-cited={c.sources.length > 0 ? '' : undefined}
-                      >
-                        <Said
-                          text={c.text}
-                          sid={`c${i}`}
-                          cited={c.sources.length > 0}
-                          source={p.source}
-                        />
-                        <Cites
-                          links={citeLinks(c.sources, channelOf)}
-                          sid={`c${i}`}
-                          from="body"
-                          {...citeOpen}
-                        />
-                      </p>
-                    ))}
+                {text?.core.map((q) => (
+                  <p key={q.index} className="mf-page-core-p" data-para={q.index}>
+                    <Sentences paragraph={q} from="body" {...tapSource} />
+                  </p>
+                ))}
               </div>
 
               {pg.note.length > 0 ? (
@@ -381,32 +362,18 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                     className="mf-page-note"
                     data-open={open ? '' : undefined}
                     data-still={still ? '' : undefined}
+                    data-folded={open ? undefined : ''}
                     data-testid="mf-page-note"
                   >
                     <div className="mf-page-note-clip">
                       <div className="mf-page-note-body" data-selectable="">
-                        {pg.note.map((s, i) => (
+                        {text?.note.map((s, i) => (
                           <section key={i}>
                             <h2 className="mf-page-h2">{s.heading}</h2>
                             <div className="mf-page-paras">
-                              {s.paragraphs.map((q, k) => (
-                                <p
-                                  key={k}
-                                  className="mf-page-para"
-                                  data-cited={q.sources.length > 0 ? '' : undefined}
-                                >
-                                  <Said
-                                    text={q.text}
-                                    sid={`n${i}-${k}`}
-                                    cited={q.sources.length > 0}
-                                    source={p.source}
-                                  />
-                                  <Cites
-                                    links={citeLinks(q.sources, channelOf)}
-                                    sid={`n${i}-${k}`}
-                                    from="note"
-                                    {...citeOpen}
-                                  />
+                              {s.paragraphs.map((q) => (
+                                <p key={q.index} className="mf-page-para" data-para={q.index}>
+                                  <Sentences paragraph={q} from="note" {...tapSource} />
                                 </p>
                               ))}
                             </div>
@@ -454,11 +421,6 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                 ))}
               </div>
 
-              {p.feedback ? (
-                // a reaction read later from the server redraws the buttons with it
-                <BriefFeedback key={p.feedback.value ?? 'none'} {...p.feedback} />
-              ) : null}
-
               {p.order.length > 0 ? (
                 <div className="mf-page-order" data-testid="mf-page-order">
                   <button
@@ -488,6 +450,19 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                 </div>
               ) : null}
 
+              {p.feedback ? (
+                // a reaction read later from the server redraws the buttons with it
+                <BriefFeedback
+                  key={p.feedback.value ?? 'none'}
+                  {...p.feedback}
+                  onShare={p.shareUrl ? () => share(headline, p.shareUrl!) : undefined}
+                />
+              ) : null}
+
+              {p.others.length > 0 ? (
+                <OtherFields others={p.others} onView={p.onOthersView} scroll={scroll} />
+              ) : null}
+
               {p.todayVideos && p.todayVideos.count > 0 ? (
                 <button
                   type="button"
@@ -499,26 +474,6 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
                   <span>{'오늘의 영상 모두 보기 (' + p.todayVideos.count + '편)'}</span>
                   <span className="mf-page-past-arrow">→</span>
                 </button>
-              ) : null}
-
-              {p.rest.length > 0 ? (
-                <div className="mf-page-rest" data-testid="mf-page-rest">
-                  <div className="mf-page-label">다른 분야</div>
-                  <div className="mf-home-chips">
-                    {p.rest.map((c) => (
-                      <button
-                        key={c.cell}
-                        type="button"
-                        className="mf-home-chip"
-                        data-press="btn"
-                        data-testid="mf-page-rest-chip"
-                        onClick={c.onPick}
-                      >
-                        {c.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               ) : null}
 
               <button
@@ -565,13 +520,75 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
           <path d="M10 16V4M5 9l5-5 5 5" />
         </svg>
       </button>
+      {hint ? (
+        <button
+          type="button"
+          className="mf-page-hint"
+          data-testid="mf-page-hint"
+          onClick={() => setHint(false)}
+        >
+          <span role="status">{SENTENCE_HINT}</span>
+        </button>
+      ) : null}
       {acct && p.account ? (
         <AccountSheet
           account={p.account}
-          where={{ screen: 'page', cell: pg.domain, date: pg.seen_date }}
+          where={{ screen: 'page', cell: pg?.domain, date: pg?.seen_date ?? seenDate }}
           onClose={() => setAcct(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+const SHARE_COPIED = '링크를 복사했어요';
+const SHARE_FAILED = '링크를 복사하지 못했어요';
+/** This much of the list in view counts as seen. */
+const OTHERS_VIEW_SHARE = 0.5;
+
+/** 다른 분야 (order 2026-11-25 B12): each opens its brief of that day straight away. */
+function OtherFields({
+  others,
+  onView,
+  scroll,
+}: {
+  others: OtherField[];
+  onView?: () => void;
+  scroll: RefObject<HTMLElement>;
+}): JSX.Element {
+  const box = useRef<HTMLDivElement>(null);
+  const cb = useRef(onView);
+  cb.current = onView;
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver(
+      (seen) => {
+        if (!seen.some((x) => x.isIntersecting)) return;
+        io.disconnect();
+        cb.current?.();
+      },
+      { root: scroll.current, threshold: OTHERS_VIEW_SHARE }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [scroll]);
+  return (
+    <div ref={box} className="mf-page-others" data-testid="mf-page-others">
+      <div className="mf-page-label">다른 분야</div>
+      {others.map((o) => (
+        <button
+          key={o.cell}
+          type="button"
+          className="mf-page-other"
+          data-press="row"
+          data-testid="mf-page-other"
+          onClick={o.onPick}
+        >
+          <span className="mf-page-other-k">{o.title}</span>
+          <span className="mf-page-other-h">{o.headline}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -585,13 +602,15 @@ export interface BriefFeedbackProps {
   value: BriefFeedbackValue | null;
   /** Saves in the background; rejects when it could not be saved (the press is undone). */
   onPick: (v: BriefFeedbackValue) => Promise<void>;
+  /** The share button (absent = not drawn). */
+  onShare?: () => void;
 }
 
 /**
  * 이 브리프가 쓸모 있었나요 (decision 2026-11-14 user test): the video card's 좋아/별로 buttons.
  * The press shows at once and is saved behind; a failed save goes back and says so briefly.
  */
-export function BriefFeedback({ value, onPick }: BriefFeedbackProps): JSX.Element {
+export function BriefFeedback({ value, onPick, onShare }: BriefFeedbackProps): JSX.Element {
   const [v, setV] = useState<BriefFeedbackValue | null>(value);
   const [failed, setFailed] = useState(false);
   const like = useRef<HTMLButtonElement>(null);
@@ -670,6 +689,31 @@ export function BriefFeedback({ value, onPick }: BriefFeedbackProps): JSX.Elemen
             <path d="M12 20.5s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 7.5 2.5c0 5.4-7.5 10-7.5 10z" />
           </svg>
         </button>
+        {onShare ? (
+          <button
+            type="button"
+            className="mf-w3-react"
+            data-press="icon"
+            data-kind="share"
+            data-testid="mf-page-share"
+            aria-label="공유"
+            onClick={onShare}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6" />
+            </svg>
+          </button>
+        ) : null}
         {failed ? (
           <span className="mf-page-fb-err" role="status" data-testid="mf-page-feedback-error">
             저장하지 못했습니다

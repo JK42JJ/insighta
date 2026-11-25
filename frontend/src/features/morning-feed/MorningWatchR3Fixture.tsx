@@ -231,8 +231,6 @@ function toVideos(thumbs: string[], count: number): R3Video[] {
       videoId: 'fx' + i,
       title: v.t,
       channel: v.ch,
-      initial: v.ch.replace('[', '')[0] ?? '',
-      altIcon: i % 2 === 1,
       durationSec: v.min * 60,
       ageText: v.up,
       fresh: !!v.fresh,
@@ -414,7 +412,13 @@ export function MorningWatchR3Fixture({
         page={pg}
         domainTitle={pr.article ? CHIPS[2]! : CHIPS[0]!}
         order={pg.videos.map((v) => ({ key: v.video_id, title: v.title }))}
-        rest={CHIPS.slice(1).map((c) => ({ cell: c, title: c, onPick: () => setScreen('feed') }))}
+        others={CHIPS.slice(1, 4).map((c, i) => ({
+          cell: c,
+          title: c,
+          headline: HOME_SENTENCES[i % HOME_SENTENCES.length]!,
+          onPick: () => setScreen('feed'),
+        }))}
+        shareUrl={window.location.href}
         today={pg.seen_date}
         back={{ label: '홈', onBack: () => setScreen('home') }}
         onPast={() => setScreen('past')}

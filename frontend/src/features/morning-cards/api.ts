@@ -587,6 +587,40 @@ export type UsageEventKind =
   | 'add_click'
   | 'login_done';
 
+/** How a POST /events ended: 'refused' = the server will never take it, 'failed' = try again later. */
+export type FeedEventResult = 'sent' | 'refused' | 'failed' | 'signed_out';
+/** Client errors that a later try can pass. */
+const RETRY_STATUS: ReadonlySet<number> = new Set([401, 403, 404, 408, 429]);
+
+/** One event to POST /events. Never throws. `keepalive`: the request outlives the page. */
+export async function sendFeedEvent(
+  body: Record<string, string | number>,
+  forUser?: string
+): Promise<FeedEventResult> {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    // an event kept from an earlier sign-in is not sent as somebody else
+    if (forUser !== undefined && session?.user?.id !== forUser) return 'signed_out';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+    // 204 has no body, so this does not go through call() (which parses JSON)
+    const res = await fetch(`${API_BASE_URL}${MORNING_FEED_PATH}/events`, {
+      method: 'POST',
+      keepalive: true,
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return 'sent';
+    return res.status >= 400 && res.status < 500 && !RETRY_STATUS.has(res.status)
+      ? 'refused'
+      : 'failed';
+  } catch {
+    return 'failed';
+  }
+}
+
 /** Fire-and-forget usage event. Never throws: the screen must not depend on it. */
 export async function postUsageEvent(input: {
   kind: UsageEventKind;
@@ -595,27 +629,12 @@ export async function postUsageEvent(input: {
   video_id?: string;
   value?: string;
 }): Promise<void> {
-  try {
-    const body: Record<string, string> = { kind: input.kind };
-    if (input.cell !== undefined) body.cell = input.cell;
-    if (input.date !== undefined) body.date = input.date;
-    if (input.video_id !== undefined) body.video_id = input.video_id;
-    if (input.value !== undefined) body.value = input.value;
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
-    // 204 has no body, so this does not go through call() (which parses JSON)
-    await fetch(`${API_BASE_URL}${MORNING_FEED_PATH}/events`, {
-      method: 'POST',
-      keepalive: true,
-      headers,
-      body: JSON.stringify(body),
-    });
-  } catch {
-    /* usage events are best effort */
-  }
+  const body: Record<string, string> = { kind: input.kind };
+  if (input.cell !== undefined) body.cell = input.cell;
+  if (input.date !== undefined) body.date = input.date;
+  if (input.video_id !== undefined) body.video_id = input.video_id;
+  if (input.value !== undefined) body.value = input.value;
+  await sendFeedEvent(body);
 }
 
 /** Where in the app a comment was sent from. */

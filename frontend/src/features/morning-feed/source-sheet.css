@@ -37,6 +37,39 @@
   border-radius: 2px;
   background: var(--w-branch-line);
 }
+.mf-src-turn {
+  position: absolute;
+  left: 6px;
+  top: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+}
+.mf-w-app .mf-src .mf-src-turn-btn {
+  --h-press: var(--mo-press-fill);
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: var(--w-clear);
+  color: var(--w-text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.mf-w-app .mf-src .mf-src-turn-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.mf-src-turn-n {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--w-sub);
+  font-variant-numeric: tabular-nums;
+}
 .mf-w-app .mf-src .mf-src-close {
   --h-press: var(--mo-press-fill);
   position: absolute;

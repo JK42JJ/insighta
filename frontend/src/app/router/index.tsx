@@ -5,7 +5,7 @@ import { ProtectedRoute } from './ProtectedRoute';
 import { AdminRoute } from './AdminRoute';
 import { MobileGateNotice } from './MobileGateNotice';
 import { MobileAuthReturn } from './MobileAuthReturn';
-import { mobileReturnTarget, readAuthReturn } from './mobile-auth-return';
+import { briefReturnTarget, mobileReturnTarget, readAuthReturn } from './mobile-auth-return';
 import { WATCH_RETURN_PATH } from './watch-path';
 import { useAuthContext } from '@/features/auth/model/AuthContext';
 import {
@@ -106,6 +106,9 @@ export function AppRouter() {
     // signed-out visitors on a phone get the intro landing (James 2026-11-24: it replaces the web login)
     return <Navigate to={WATCH_RETURN_PATH} replace />;
   }
+
+  const toBrief = briefReturnTarget(pathname, readAuthReturn());
+  if (toBrief) return <MobileAuthReturn target={toBrief} />;
 
   return (
     <Suspense fallback={<PageLoader />}>

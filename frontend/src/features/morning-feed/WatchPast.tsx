@@ -36,6 +36,8 @@ export interface WatchPastProps {
   today: string;
   /** 오늘로, at the top of the list: shown while an earlier date is being looked at. */
   onToday?: (cell: string) => void;
+  /** The domain was changed with a chip. */
+  onSwitch?: (from: string, to: string) => void;
 }
 
 const NARROW_W = 360;
@@ -115,7 +117,10 @@ export function WatchPast(p: WatchPastProps): JSX.Element {
               data-press="btn"
               data-testid="mf-past-chip"
               data-on={c.cell === sel ? '' : undefined}
-              onClick={() => setSel(c.cell)}
+              onClick={() => {
+                if (c.cell !== sel) p.onSwitch?.(sel, c.cell);
+                setSel(c.cell);
+              }}
             >
               {c.title}
             </button>

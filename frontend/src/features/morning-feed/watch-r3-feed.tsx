@@ -14,6 +14,8 @@ import type { PlayerController, PlayerTick } from '@/features/morning-feed/Watch
 import { haptic } from '@/features/morning-feed/motion-tokens';
 import { usePhoneLandscape } from '@/features/morning-feed/use-phone-landscape';
 import { cutInside, leftOut } from '@/features/morning-feed/watch-r3-clip';
+import type { UsedPart } from '@/features/morning-feed/brief-sentences';
+import { stampOf } from '@/features/morning-feed/watch-page-model';
 import { chapterStamp } from '@/features/morning-feed/watch-design';
 import {
   ambientOrDefault,
@@ -48,9 +50,8 @@ export interface R3Video {
   videoId?: string;
   title: string;
   channel: string;
-  /** Channel icon: first letter, and which of the two icon colours. */
-  initial: string;
-  altIcon: boolean;
+  /** The channel's own picture from the API; none = the name alone (order 2026-11-25 B9). */
+  channelThumb?: string;
   durationSec: number | null;
   publishedAt?: string;
   /** '3일 전' / '2개월 전'; `fresh` (under 7 days) draws it as a filled pill. */
@@ -67,6 +68,8 @@ export interface R3Video {
   summary: string;
   checks: string[];
   chapters: Array<{ at: string; title: string }>;
+  /** A brief's video: where the brief uses it. */
+  parts?: UsedPart[];
 }
 
 export type R3Verdict = 'useful' | 'skip' | 'pass';
@@ -129,6 +132,8 @@ const DISLIKE_ADVANCE_MS = 800;
 const WHEEL_MIN_DELTA = 40;
 const WHEEL_GAP_MS = 1100;
 const CLICK_GUARD_MS = 60;
+/** Seconds named on a row of the next videos. */
+const USED_AT_MAX = 3;
 /** When the player never reports PLAYING (autoplay refused), the line stops running after this. */
 export const PLAYER_SHOW_FALLBACK_MS = 2500;
 
@@ -197,6 +202,48 @@ function ProgressFill({
   return <div ref={el} className="mf-w3-line-fill" data-testid="mf-w3-progress" />;
 }
 
+/** '2:40, 5:10' where the brief uses a video ('' = not a brief's video, or no second known). */
+function usedAt(v: R3Video): string {
+  const ts = [...new Set((v.parts ?? []).map((x) => x.t))]
+    .filter((t) => t > 0)
+    .sort((a, b) => a - b);
+  return ts.length > 0 ? '쓰인 부분 ' + ts.slice(0, USED_AT_MAX).map(stampOf).join(', ') : '';
+}
+
+/** 이 브리프에 쓰인 부분: the sentence and its second; a tap plays from there. */
+function PartList({
+  parts,
+  onPick,
+  whole = false,
+}: {
+  parts: UsedPart[];
+  onPick: (t: number) => void;
+  /** The whole sentence (the panel); two lines on the card. */
+  whole?: boolean;
+}): JSX.Element {
+  return (
+    <div className="mf-w3-parts" data-whole={whole ? '' : undefined} data-testid="mf-w3-parts">
+      <div className="mf-w3-label">이 브리프에 쓰인 부분</div>
+      {parts.map((x) => (
+        <button
+          key={x.sentenceId + x.t}
+          type="button"
+          className="mf-w3-part"
+          data-press="row"
+          data-testid="mf-w3-part"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPick(x.t);
+          }}
+        >
+          <span className="mf-w3-pt-at">{x.t > 0 ? stampOf(x.t) : '처음'}</span>
+          <span className="mf-w3-part-t">{x.text}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function WatchFeed(p: WatchFeedProps): JSX.Element {
   const init = p.initial ?? {};
   const n = p.videos.length;
@@ -241,6 +288,8 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
   );
   const recordPass = p.recordPass ?? true;
   const timeRef = useRef<(PlayerTick & { at: number }) | null>(null);
+  /** Lengths the player told, for videos whose length the server does not know. */
+  const [lengths, setLengths] = useState<Readonly<Record<string, number>>>({});
   const loadSeq = useRef(0);
 
   const later = useCallback((fn: () => void, ms: number) => {
@@ -264,6 +313,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
           summary: !!v.summary,
           checks: v.checks.length > 0,
           points: v.chapters.length,
+          parts: v.parts?.length ?? 0,
         });
         const ib = immersiveBlocks(f, {
           why: !!v.why,
@@ -271,6 +321,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
           next: i + 1 < n,
           afterNext: i + 2 < n,
           chapters: v.chapters.length,
+          parts: v.parts?.length ?? 0,
         });
         return { fb, ib, h: imm ? immH : fb.height };
       }),
@@ -471,8 +522,20 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
     onTick: (t) => {
       timeRef.current = { ...t, at: performance.now() };
       if (t.seconds > 0) positions.current.set(t.videoId, t.seconds);
+      if (t.duration > 0) {
+        setLengths((m) => (m[t.videoId] ? m : { ...m, [t.videoId]: t.duration }));
+      }
     },
     onFailed: setFailed,
+  };
+
+  /** 이 브리프에 쓰인 부분: the same video from that second. */
+  const playFrom = (t: number): void => {
+    const id = p.videos[st.current.idx]?.videoId;
+    if (!id || st.current.settling) return;
+    positions.current.set(id, t);
+    setSheet(false);
+    startVideo(st.current.idx);
   };
 
   /** The button shows the state now: the feed always plays without sound. */
@@ -512,9 +575,15 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
     '--w3-safe-bottom': f.safeBottom + 'px',
   } as CSSProperties;
 
+  const lengthOf = (v: R3Video): number | null =>
+    v.durationSec || (v.videoId ? (lengths[v.videoId] ?? null) : null);
   const sheetVideo = cur;
   const hasSheet =
-    !!sheetVideo && (!!sheetVideo.why || !!sheetVideo.summary || sheetVideo.chapters.length > 0);
+    !!sheetVideo &&
+    (!!sheetVideo.why ||
+      !!sheetVideo.summary ||
+      sheetVideo.chapters.length > 0 ||
+      (sheetVideo.parts?.length ?? 0) > 0);
 
   return (
     <div
@@ -576,7 +645,8 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
               const nx = p.videos[i + 1];
               const nx2 = p.videos[i + 2];
               const lowHidden = imm && (i < idx || (isCur && moving));
-              const meta = viewsLengthText(v.viewsText, v.durationSec);
+              const meta = viewsLengthText(v.viewsText, lengthOf(v));
+              const partRows = imm ? ib.partRows : fb.partRows;
               const showWhy = imm ? ib.showWhy : fb.showWhy;
               const showSum = imm ? ib.showSummary : fb.showSummary;
               const ptRows = imm ? ib.chapterRows : fb.pointRows;
@@ -595,9 +665,9 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                   style={style}
                 >
                   <div className="mf-w3-ch-row">
-                    <div className="mf-w3-av" data-alt={v.altIcon ? '' : undefined}>
-                      {v.initial}
-                    </div>
+                    {v.channelThumb ? (
+                      <img className="mf-w3-av" src={v.channelThumb} alt="" draggable={false} />
+                    ) : null}
                     <div className="mf-w3-ch">{v.channel}</div>
                     {v.ageText ? (
                       <div
@@ -684,6 +754,8 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                             showWhy,
                             showSummary: showSum,
                             chapterRows: ptRows,
+                            parts: v.parts?.length ?? 0,
+                            partRows,
                           }) || cutInside(el);
                         // nothing cut off: the panel would repeat the card
                         if (hidden) setSheet(true);
@@ -712,6 +784,12 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                       <div className="mf-w3-meta" data-testid="mf-w3-meta">
                         {meta}
                       </div>
+                      {partRows > 0 ? (
+                        <PartList
+                          parts={(v.parts ?? []).slice(0, partRows)}
+                          onPick={(t) => tap(() => isCur && playFrom(t))()}
+                        />
+                      ) : null}
                       {showSum ? (
                         <div className="mf-w3-sum" data-testid="mf-oneliner">
                           <div className="mf-w3-label">한 줄 요약</div>
@@ -832,6 +910,11 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                           <div className="mf-w3-next-body">
                             <div className="mf-w3-next-ch">{x.channel}</div>
                             <div className="mf-w3-next-t">{x.title}</div>
+                            {usedAt(x) ? (
+                              <div className="mf-w3-next-at" data-testid="mf-w3-next-at">
+                                {usedAt(x)}
+                              </div>
+                            ) : null}
                           </div>
                           {k === 0 ? <UpArrow /> : null}
                         </div>
@@ -846,7 +929,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                       <UpArrow />
                       {nx ? (
                         <div className="mf-w3-next-text">
-                          {[nx.channel, nx.title].filter((x) => x).join(' · ')}
+                          {[nx.channel, nx.title, usedAt(nx)].filter((x) => x).join(' · ')}
                         </div>
                       ) : (
                         <div className="mf-w3-next-kick">오늘 본 것</div>
@@ -913,7 +996,7 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
           <div className="mf-w3-sheet-body">
             <div className="mf-w3-sheet-title">{sheetVideo.title}</div>
             <div className="mf-w3-sheet-meta">
-              {[sheetVideo.ageText, viewsLengthText(sheetVideo.viewsText, sheetVideo.durationSec)]
+              {[sheetVideo.ageText, viewsLengthText(sheetVideo.viewsText, lengthOf(sheetVideo))]
                 .filter((x) => x)
                 .join(' · ')}
             </div>
@@ -932,6 +1015,11 @@ export function WatchFeed(p: WatchFeedProps): JSX.Element {
                     ))}
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+            {sheetVideo.parts && sheetVideo.parts.length > 0 ? (
+              <div className="mf-w3-sheet-sec" data-first={sheetVideo.why ? undefined : ''}>
+                <PartList parts={sheetVideo.parts} onPick={playFrom} whole />
               </div>
             ) : null}
             {sheetVideo.summary ? (

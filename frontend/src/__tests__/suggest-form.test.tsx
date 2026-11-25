@@ -194,7 +194,7 @@ describe('sending', () => {
         page={PAGE}
         domainTitle="기술·개발"
         order={[]}
-        rest={[]}
+        others={[]}
         today="2026-11-25"
         back={{ label: '홈', onBack: () => undefined }}
         onPast={() => undefined}

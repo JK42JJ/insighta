@@ -222,19 +222,8 @@
   height: 32px;
   flex: none;
   border-radius: 16px;
-  background: var(--w3-navy);
-  color: var(--w3-on);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 800;
-}
-.mf-w3-av[data-alt] {
-  background: var(--w3-steel);
-}
-.mf-w3-card[data-mode='imm'] .mf-w3-av {
-  background: var(--w3-on-soft);
+  object-fit: cover;
+  display: block;
 }
 .mf-w3-ch {
   flex: 1;
@@ -482,6 +471,52 @@
   flex: none;
 }
 
+/* 이 브리프에 쓰인 부분 (order 2026-11-25 B9): 30 + 44 per row */
+.mf-w3-parts {
+  padding-top: 10px;
+}
+.mf-w3-parts .mf-w3-label {
+  margin-bottom: 4px;
+}
+.mf-w3-part {
+  width: 100%;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.mf-w3-part-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  line-height: 19px;
+  max-height: 38px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.mf-w3-card[data-mode='imm'] .mf-w3-part .mf-w3-pt-at {
+  color: var(--w3-on);
+}
+.mf-w3-parts[data-whole] .mf-w3-part {
+  height: auto;
+  min-height: 44px;
+  padding: 6px 0;
+  align-items: flex-start;
+}
+.mf-w3-parts[data-whole] .mf-w3-part-t {
+  max-height: none;
+  display: block;
+}
+
 /* 아이콘 줄 */
 .mf-w3-icons {
   height: 56px;
@@ -668,6 +703,16 @@
   max-height: 40px;
   overflow: hidden;
   margin-top: 2px;
+}
+.mf-w3-next-at {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--w3-on-sub);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mf-w3-up {
   flex: none;

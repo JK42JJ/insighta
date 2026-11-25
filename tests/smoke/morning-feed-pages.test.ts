@@ -477,6 +477,27 @@ describe('shared brief: owner vs viewer, participants, feedback, events', () => 
     await app.close();
   });
 
+  it('POST /events takes a brief event down to the sentence, 204; a misfit field is kept out', async () => {
+    const { db, queries } = fakeDb(() => []);
+    const app = await build(db, PARTICIPANT);
+    const ok = await post(app, '/events', {
+      kind: 'sentence_tap',
+      cell: CELL,
+      date: '2026-11-13',
+      sentence_id: 'p1.s2',
+      video_id: VID,
+      start_sec: 160,
+      value: 'a b',
+    });
+    expect(ok.statusCode).toBe(204);
+    expect(queries).toHaveLength(1);
+    const p = queries[0]!.params;
+    expect(p.slice(0, 6)).toEqual([PARTICIPANT, 'sentence_tap', CELL, '2026-11-13', VID, null]);
+    expect(p[6]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(p.slice(7, 11)).toEqual(['p1.s2', null, 160, null]);
+    await app.close();
+  });
+
   it('flag off 404 and no user 401 on the new routes', async () => {
     process.env['MOBILE_MORNING_CARDS'] = 'false';
     const app = await build(fakeDb(() => []).db, PARTICIPANT);

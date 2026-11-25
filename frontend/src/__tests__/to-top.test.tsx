@@ -57,7 +57,7 @@ const PROPS = {
   page: PAGE,
   domainTitle: '기술·개발',
   order: [],
-  rest: [],
+  others: [],
   today: '2026-11-25',
   back: { label: '홈', onBack: () => undefined },
   onPast: () => undefined,
@@ -131,11 +131,7 @@ describe('up button (screen)', () => {
     fb.getBoundingClientRect = () => ({ top: 700, bottom: 800 }) as DOMRect;
     to(1300);
     expect(shown()).toBe(true);
-    act(() =>
-      rerender(
-        <WatchPage {...PROPS} source={{ videoId: 'aaaaaaaaaaa', t: 77, sid: 'c0', sheetH: 0 }} />
-      )
-    );
+    act(() => rerender(<WatchPage {...PROPS} source={{ sid: 'p0.s0', sheetH: 0 }} />));
     expect(shown()).toBe(false);
     act(() => rerender(<WatchPage {...PROPS} source={null} />));
     expect(shown()).toBe(false);

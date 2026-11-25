@@ -45,9 +45,15 @@ import {
 import { ONB_LAST_STEP, WatchOnboarding } from '@/features/morning-feed/watch-screens';
 import { WatchPlayer, type PlayerController } from '@/features/morning-feed/WatchPlayer';
 import { WatchHome, type HomeHeadline } from '@/features/morning-feed/WatchHome';
+import {
+  parseBriefAddress,
+  briefPath,
+  type BriefAddress,
+} from '@/features/morning-feed/brief-address';
+import { recordBriefEvent } from '@/features/morning-feed/brief-events';
 import { createBriefCache, type BriefCache } from '@/features/morning-feed/brief-cache';
 import { loadBriefFonts } from '@/features/morning-feed/watch-home-fonts';
-import { appBack, useScreenHistory } from '@/features/morning-feed/use-screen-history';
+import { appBack, appBackBy, useScreenHistory } from '@/features/morning-feed/use-screen-history';
 import { motionStyleVars } from '@/features/morning-feed/motion-tokens';
 import { ScreenStack } from '@/features/morning-feed/ScreenStack';
 import { usePressFeedback } from '@/features/morning-feed/use-press';
@@ -56,13 +62,14 @@ import './motion.css';
 import {
   type BriefFeedbackProps,
   type OpenFrom,
-  type PageRestChip,
+  type OtherField,
 } from '@/features/morning-feed/WatchPage';
 import { PageWithWatch, type SheetUsage } from '@/features/morning-feed/PageWithWatch';
 import { TestClockControls } from '@/features/morning-feed/TestClockControls';
 import { useTestClock } from '@/features/morning-feed/use-test-clock';
 import type { PageWatchCards } from '@/features/morning-feed/PageWatch';
 import { WatchPast } from '@/features/morning-feed/WatchPast';
+import { WATCH_RETURN_PATH } from '@/shared/lib/watch-path';
 import './watch.css';
 import './watch-r3.css';
 
@@ -158,10 +165,28 @@ export function MorningWatch({
   const app = useRef<HTMLDivElement>(null);
   const frame = useWatchFrame(app);
   // every screen change is a browser history entry (back returns to the previous screen)
-  const [screen, setScreen, stack] = useScreenHistory<Screen>(
-    () => (readOnboardingSeen() ? { kind: 'input' } : { kind: 'onb', step: 0 }),
-    sameScreen
+  // an address that names a brief opens it over the home (order 2026-11-25 B8)
+  const [linked] = useState<Extract<Screen, { kind: 'page' }> | null>(() =>
+    linkedBrief(parseBriefAddress(window.location.search), pages, goalCells(cells))
   );
+  const [screen, setScreen, stack] = useScreenHistory<Screen>(
+    () =>
+      readOnboardingSeen() ? { kind: 'input', focus: linked?.cell } : { kind: 'onb', step: 0 },
+    sameScreen,
+    () => (linked && readOnboardingSeen() ? linked : null)
+  );
+  useEffect(() => {
+    // the address has done its work: a reload later opens what is on screen's own start, the home
+    if (parseBriefAddress(window.location.search)) {
+      window.history.replaceState(window.history.state, '', WATCH_RETURN_PATH);
+    }
+  }, []);
+  /** The domain of the brief opened last: what the home shows when it is back. */
+  const [lastRead, setLastRead] = useState<string | undefined>(linked?.cell);
+  const openPage = (cell: string, date: string, headline: string): void => {
+    setLastRead(cell);
+    setScreen({ kind: 'page', cell, date, headline });
+  };
   const [connecting, setConnecting] = useState(false);
   // today's state per goal, moved on locally with each batch and answer so no reload is needed
   const [today, setToday] = useState<WatchTodayMap>(todayFromServer);
@@ -210,7 +235,8 @@ export function MorningWatch({
     onboardingDone.current = true;
     writeOnboardingSeen();
     // the onboarding is not a place to go back to
-    setScreen({ kind: 'input' }, { replace: true });
+    setScreen({ kind: 'input', focus: linked?.cell }, { replace: true });
+    if (linked) setScreen(linked);
   };
 
   const onbNext = (): void => {
@@ -375,15 +401,62 @@ export function MorningWatch({
   };
   /** The user has at least one page: the old 다 본 뒤 screen gives way to the home. */
   const hasPages = !!pages?.current;
-  /** 한 장's 다른 도메인: domains with a page; a chip shows that domain's headline on the home. */
-  const pageRest = (cell: string): PageRestChip[] =>
-    pageChips
-      .filter((g) => g.label !== cell)
-      .map((g) => ({
-        cell: g.label,
-        title: g.short,
-        onPick: () => setScreen({ kind: 'input', focus: g.label }),
-      }));
+  /** The past lists of other domains, read once per visit (for an earlier day's 다른 분야). */
+  const [lists] = useState(() => new Map<string, ReturnType<typeof fetchMorningPageList>>());
+  const listOf = (cell: string): ReturnType<typeof fetchMorningPageList> => {
+    const kept = lists.get(cell);
+    if (kept) return kept;
+    const read = fetchMorningPageList(cell);
+    lists.set(cell, read);
+    read.catch(() => lists.delete(cell));
+    return read;
+  };
+  /** 다른 분야 of a brief (order 2026-11-25 B12): the other domains' briefs of the same day. */
+  const otherFields: OtherFieldsBridge = {
+    known: (cell, date) =>
+      pageChips.flatMap((g) => {
+        const h = home?.pages[g.label];
+        return g.label !== cell && h?.seenDate === date
+          ? [{ cell: g.label, headline: h.headline }]
+          : [];
+      }),
+    // a domain whose newest brief is of a later day may still have one of that day
+    read: async (cell, date) => {
+      const later = pageChips.filter(
+        (g) => g.label !== cell && (home?.pages[g.label]?.seenDate ?? '') > date
+      );
+      const found = await Promise.all(
+        later.map((g) =>
+          listOf(g.label)
+            .then((rows) => rows.find((r) => r.seen_date === date))
+            .then((r) => (r ? { cell: g.label, headline: r.headline } : null))
+            .catch(() => null)
+        )
+      );
+      return found.flatMap((x) => (x ? [x] : []));
+    },
+    order: pageChips.map((g) => g.label),
+    title: shortOf,
+    onPick: (from, date, o) => {
+      recordBriefEvent('other_field_select', {
+        cell: from,
+        seenDate: date,
+        from,
+        to: o.cell,
+      });
+      openPage(o.cell, date, o.headline);
+    },
+    // in view: read ahead with their fonts, so opening one shows it at once
+    onView: (cell, date, list) => {
+      recordBriefEvent('other_fields_view', { cell, seenDate: date });
+      list.forEach((o) => {
+        briefs
+          .load(o.cell, date)
+          .then((pg) => pg && loadBriefFonts(briefText(pg)))
+          .catch(() => undefined);
+      });
+    },
+  };
 
   /** What a page needs to open its videos in the watch screen (session sound, judgments). */
   const pageWatch: PageWatchBridge = {
@@ -400,6 +473,13 @@ export function MorningWatch({
             video_id: video.videoId ?? undefined,
             value: verdict,
           }),
+    onReaction: (cell, date, video, verdict) =>
+      recordBriefEvent('reaction', {
+        cell,
+        seenDate: date,
+        videoId: video.videoId ?? undefined,
+        value: verdict,
+      }),
     onEvidence: (cell, date, videoId, from) =>
       void postUsageEvent({ kind: 'evidence_open', cell, date, video_id: videoId, value: from }),
     onSheet: (cell, date, e) =>
@@ -424,10 +504,31 @@ export function MorningWatch({
     };
   };
 
+  /**
+   * A brief's way back: over the briefs under it to what they were opened from, the past list or
+   * the home ("상단 ‹ 홈은 홈으로", order 2026-11-25 B12). The browser's back is one brief back.
+   */
+  const pageBackOf = (depth: number, fallback: Screen): { label: string; onBack: () => void } => {
+    let i = depth - 1;
+    while (i >= 0 && entries[i]!.screen.kind === 'page') i -= 1;
+    const from = i >= 0 ? entries[i]!.screen : undefined;
+    if (from?.kind === 'past') return { label: '지난 브리프', onBack: () => appBackBy(depth - i) };
+    while (i >= 0 && entries[i]!.screen.kind !== 'input') i -= 1;
+    return {
+      label: '홈',
+      onBack: () => (i >= 0 ? appBackBy(depth - i) : setScreen(fallback)),
+    };
+  };
+
   /** 오늘로: the home at today's brief of that domain, else of the first domain that has one. */
   const todayCellFor = (cell: string): string | undefined => {
     const isToday = (c: string): boolean => home?.pages[c]?.seenDate === dayToday;
     return [cell, home?.initial ?? cell, ...pageChips.map((g) => g.label)].find(isToday);
+  };
+
+  const openPast = (cell: string, from: string): void => {
+    recordBriefEvent('past_open', { cell, seenDate: from, value: 'list' });
+    setScreen({ kind: 'past', cell, from });
   };
 
   const renderScreen = (screen: Screen, depth: number): JSX.Element => {
@@ -479,11 +580,19 @@ export function MorningWatch({
             const g = cellOf(cell);
             if (g) openGoal(g);
           }}
+          show={lastRead}
+          onTop={depth === entries.length - 1}
+          onHeadline={(cell) =>
+            recordBriefEvent('headline_view', { cell, seenDate: home.pages[cell]?.seenDate })
+          }
+          onSwitch={(from, to) => recordBriefEvent('field_switch', { cell: to, from, to })}
           onOpenPage={(cell) => {
             const h = home.pages[cell];
-            if (h) setScreen({ kind: 'page', cell, date: h.seenDate, headline: h.headline });
+            if (!h) return;
+            recordBriefEvent('headline_select', { cell, seenDate: h.seenDate });
+            openPage(cell, h.seenDate, h.headline);
           }}
-          onPast={(cell, from) => setScreen({ kind: 'past', cell, from })}
+          onPast={openPast}
         />
       ) : (
         <WatchInputR3
@@ -550,9 +659,9 @@ export function MorningWatch({
           briefs={briefs}
           today={dayToday}
           shortOf={shortOf}
-          rest={pageRest(screen.cell)}
-          back={backOf(depth, { kind: 'input', focus: screen.cell })}
-          onPast={() => setScreen({ kind: 'past', cell: screen.cell, from: screen.date })}
+          others={otherFields}
+          back={pageBackOf(depth, { kind: 'input', focus: screen.cell })}
+          onPast={() => openPast(screen.cell, screen.date)}
           pageWatch={pageWatch}
           todayVideos={todayVideosOf(screen.cell)}
           experiment={experiment}
@@ -567,7 +676,11 @@ export function MorningWatch({
           initial={screen.cell}
           today={dayToday}
           load={fetchMorningPageList}
-          onOpen={(cell, date, headline) => setScreen({ kind: 'page', cell, date, headline })}
+          onSwitch={(from, to) => recordBriefEvent('field_switch', { cell: to, from, to })}
+          onOpen={(cell, date, headline) => {
+            recordBriefEvent('past_open', { cell, seenDate: date, value: 'brief' });
+            openPage(cell, date, headline);
+          }}
           onToday={
             screen.from !== dayToday && todayCellFor(screen.cell)
               ? (cell) => setScreen({ kind: 'input', focus: todayCellFor(cell) })
@@ -604,8 +717,8 @@ export function MorningWatch({
           experiment={experiment}
           today={dayToday}
           account={pageAccount}
-          pageRest={pageRest(screen.goal.label)}
-          onPast={() => setScreen({ kind: 'past', cell: screen.goal.label, from: dayToday })}
+          others={otherFields}
+          onPast={() => openPast(screen.goal.label, dayToday)}
           briefs={briefs}
           pageWatch={pageWatch}
           todayVideos={todayVideosOf(screen.goal.label)}
@@ -654,10 +767,82 @@ interface PageWatchBridge {
   sound: boolean;
   onSound: (on: boolean) => void;
   onJudge: (video: WatchVideo, verdict: WatchVerdict, index: number) => void;
+  onReaction: (cell: string, date: string, video: WatchVideo, verdict: WatchVerdict) => void;
   /** A source link or an evidence row opened a video (usage count). */
   onEvidence: (cell: string, date: string, videoId: string, from: OpenFrom) => void;
   /** The source sheet was opened, played, left for the full video or closed (usage count). */
   onSheet: (cell: string, date: string, e: SheetUsage) => void;
+}
+
+interface OtherHeadline {
+  cell: string;
+  headline: string;
+}
+
+/** What 다른 분야 needs from the visit. */
+interface OtherFieldsBridge {
+  /** Headlines of that day already on the home. */
+  known: (cell: string, date: string) => OtherHeadline[];
+  /** The rest of that day's, for a brief of an earlier day. */
+  read: (cell: string, date: string) => Promise<OtherHeadline[]>;
+  /** The home's chip order. */
+  order: string[];
+  title: (cell: string) => string;
+  onPick: (from: string, date: string, o: OtherHeadline) => void;
+  onView: (cell: string, date: string, list: OtherHeadline[]) => void;
+}
+
+/** The end of a brief: the other domains' headlines of its day (order 2026-11-25 B12). */
+function useOtherFields(
+  bridge: OtherFieldsBridge,
+  cell: string,
+  date: string,
+  ready: boolean
+): { others: OtherField[]; onOthersView: () => void } {
+  const [more, setMore] = useState<OtherHeadline[]>([]);
+  const ref = useRef(bridge);
+  ref.current = bridge;
+  useEffect(() => {
+    if (!ready) return undefined;
+    let on = true;
+    void ref.current.read(cell, date).then((r) => on && r.length > 0 && setMore(r));
+    return () => {
+      on = false;
+    };
+  }, [cell, date, ready]);
+  const at = (c: string): number => bridge.order.indexOf(c);
+  const list = [...bridge.known(cell, date), ...more].sort((a, b) => at(a.cell) - at(b.cell));
+  return {
+    others: list.map((o) => ({
+      cell: o.cell,
+      title: bridge.title(o.cell),
+      headline: o.headline,
+      onPick: () => bridge.onPick(cell, date, o),
+    })),
+    onOthersView: () => bridge.onView(cell, date, list),
+  };
+}
+
+/** A brief's shared address. */
+function shareUrlOf(cell: string, date: string): string {
+  return window.location.origin + briefPath({ cell, date });
+}
+
+/** The brief an address names, when its domain is one of the shown ones. */
+function linkedBrief(
+  address: BriefAddress | null,
+  pages: MorningHomePages | null,
+  goals: readonly FeedCell[]
+): Extract<Screen, { kind: 'page' }> | null {
+  const home = homeHeadlines(pages, goals);
+  const h = address ? home?.pages[address.cell] : undefined;
+  if (!address || !h) return null;
+  return {
+    kind: 'page',
+    cell: address.cell,
+    date: address.date,
+    headline: h.seenDate === address.date ? h.headline : '',
+  };
 }
 
 /**
@@ -691,7 +876,7 @@ function LiveDone({
   onClose,
   today,
   account,
-  pageRest,
+  others,
   onPast,
   pageWatch,
   todayVideos,
@@ -709,7 +894,7 @@ function LiveDone({
   /** Today in KST ('YYYY-MM-DD'): the day whose page replaces this screen when it exists. */
   today: string;
   account: R3AccountView;
-  pageRest: PageRestChip[];
+  others: OtherFieldsBridge;
   onPast: () => void;
   pageWatch: PageWatchBridge;
   todayVideos?: { count: number; onGo: () => void };
@@ -744,6 +929,7 @@ function LiveDone({
     };
   }, [briefs, goal.label, today]);
   const view = data && data.reacted + data.passed > 0 ? insightViewFromData(data, shortOf) : null;
+  const other = useOtherFields(others, goal.label, today, !!page);
   // decision 2026-11-14: no page today but pages elsewhere -> the home, not the old stats screen
   const toHome = page === null && hasPages;
   useEffect(() => {
@@ -760,7 +946,8 @@ function LiveDone({
         page={page}
         domainTitle={goal.short}
         order={(view?.rows ?? []).map((r) => ({ key: r.key, title: r.title }))}
-        rest={pageRest}
+        {...other}
+        shareUrl={shareUrlOf(goal.label, page.seen_date)}
         today={today}
         back={{ label: '홈', onBack: onClose }}
         onPast={onPast}
@@ -769,7 +956,10 @@ function LiveDone({
         loadCards={() => pageWatch.load(goal.label, page.seen_date)}
         sound={pageWatch.sound}
         onSound={pageWatch.onSound}
-        onJudge={pageWatch.onJudge}
+        onJudge={(video, verdict, index) => {
+          pageWatch.onJudge(video, verdict, index);
+          pageWatch.onReaction(goal.label, page.seen_date, video, verdict);
+        }}
         onEvidence={(id, from) => pageWatch.onEvidence(goal.label, page.seen_date, id, from)}
         onSheet={(e) => pageWatch.onSheet(goal.label, page.seen_date, e)}
       />
@@ -791,7 +981,7 @@ function LivePage({
   briefs,
   today,
   shortOf,
-  rest,
+  others,
   back,
   onPast,
   pageWatch,
@@ -809,7 +999,7 @@ function LivePage({
   briefs: BriefCache;
   today: string;
   shortOf: (label: string) => string;
-  rest: PageRestChip[];
+  others: OtherFieldsBridge;
   back: { label: string; onBack: () => void };
   onPast: () => void;
   pageWatch: PageWatchBridge;
@@ -843,6 +1033,7 @@ function LivePage({
     // one page per mount (keyed by cell and date)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const other = useOtherFields(others, cell, date, !!page);
   // not found: back (the link that led here is stale)
   useEffect(() => {
     if (page === null) back.onBack();
@@ -856,7 +1047,8 @@ function LivePage({
       title={{ headline, seenDate: date }}
       domainTitle={title}
       order={order}
-      rest={rest}
+      {...other}
+      shareUrl={shareUrlOf(cell, date)}
       today={today}
       back={back}
       onPast={onPast}
@@ -865,7 +1057,10 @@ function LivePage({
       loadCards={() => pageWatch.load(cell, date)}
       sound={pageWatch.sound}
       onSound={pageWatch.onSound}
-      onJudge={pageWatch.onJudge}
+      onJudge={(video, verdict, index) => {
+        pageWatch.onJudge(video, verdict, index);
+        pageWatch.onReaction(cell, date, video, verdict);
+      }}
       onEvidence={(id, from) => pageWatch.onEvidence(cell, date, id, from)}
       onSheet={(e) => pageWatch.onSheet(cell, date, e)}
     />
@@ -882,7 +1077,7 @@ function briefFeedbackOf(briefs: BriefCache, cell: string, page: MorningPage): B
       const was = briefs.peek(cell, date)?.feedback ?? null;
       briefs.setFeedback(cell, date, value);
       return postBriefFeedback({ cell, date, value }).then(
-        () => undefined,
+        () => recordBriefEvent('reaction', { cell, seenDate: date, value }),
         (e: unknown) => {
           briefs.setFeedback(cell, date, was);
           throw e;
