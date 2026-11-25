@@ -419,7 +419,11 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
       </div>
       <div className="mf-page-safe-top" aria-hidden="true" />
       {acct && p.account ? (
-        <AccountSheet account={p.account} onClose={() => setAcct(false)} />
+        <AccountSheet
+          account={p.account}
+          where={{ screen: 'page', cell: pg.domain, date: pg.seen_date }}
+          onClose={() => setAcct(false)}
+        />
       ) : null}
     </div>
   );

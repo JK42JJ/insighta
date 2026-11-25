@@ -71,3 +71,21 @@ describe('Ontology raw-fetch URL contract (useGraphData)', () => {
     expect(content).toContain("fetchWithAuth('/subgraph')");
   });
 });
+
+// The morning feed client has its own call(): pin the comment route to the BE route it posts to.
+describe('Morning feed comment URL contract (POST /morning-feed/app-feedback)', () => {
+  const client = fs.readFileSync(path.resolve(ROOT, 'features/morning-cards/api.ts'), 'utf-8');
+  const route = fs.readFileSync(
+    path.resolve(ROOT, '../../src/api/routes/morning-feed.ts'),
+    'utf-8'
+  );
+  const block = client.slice(client.indexOf('export async function postAppFeedback'));
+
+  it('posts to the path the server registers, with a single /api/v1', () => {
+    expect(client).toContain("const MORNING_FEED_PATH = '/api/v1/morning-feed'");
+    expect(block).toMatch(/'\/app-feedback',\s*\{ method: 'POST'/);
+    expect(block).toContain('MORNING_FEED_PATH');
+    expect(block).not.toContain('/api/v1');
+    expect(route).toMatch(/fastify\.post\(\s*'\/app-feedback'/);
+  });
+});

@@ -123,7 +123,11 @@ export function WatchPast(p: WatchPastProps): JSX.Element {
         </div>
       </div>
       {acct && p.account ? (
-        <AccountSheet account={p.account} onClose={() => setAcct(false)} />
+        <AccountSheet
+          account={p.account}
+          where={{ screen: 'past', cell: sel }}
+          onClose={() => setAcct(false)}
+        />
       ) : null}
     </div>
   );

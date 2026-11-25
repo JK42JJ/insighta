@@ -20,6 +20,7 @@ import {
   fetchWatchInsight,
   fetchWatchToday,
   patchReasonTags,
+  postAppFeedback,
   postBriefFeedback,
   postFeedJudgment,
   postUsageEvent,
@@ -207,5 +208,53 @@ describe('morning cards api client', () => {
     ).toBeUndefined();
     fetchMock.mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
     await expect(fetchLandingWall()).rejects.toBeInstanceOf(MorningCardsApiError);
+  });
+
+  it('posts a comment to /app-feedback; context it does not have is left out', async () => {
+    fetchMock.mockResolvedValue(okResponse({ status: 'ok' }));
+    await postAppFeedback({
+      kind: 'menu',
+      body: 'x',
+      path: '/morning-cards?view=watch',
+      replayUrl: null,
+      screen: 'empty',
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/api\/v1\/morning-feed\/app-feedback$/);
+    expect(url).not.toContain('/api/api');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      kind: 'menu',
+      body: 'x',
+      screen: 'empty',
+      path: '/morning-cards?view=watch',
+    });
+    await postAppFeedback({
+      kind: 'brief',
+      body: 'x',
+      path: '/a',
+      replayUrl: 'https://us.posthog.com/project/k/replay/s',
+      screen: 'page',
+      cell: '기술/개발',
+      date: '2026-11-25',
+    });
+    expect(
+      JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string)
+    ).toEqual({
+      kind: 'brief',
+      body: 'x',
+      screen: 'page',
+      path: '/a',
+      cell: '기술/개발',
+      date: '2026-11-25',
+      replay_url: 'https://us.posthog.com/project/k/replay/s',
+    });
+  });
+
+  it('a refused comment rejects (the sheet keeps the line)', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 429, json: async () => ({}) });
+    await expect(
+      postAppFeedback({ kind: 'menu', body: 'x', path: '/a', replayUrl: null, screen: 'home' })
+    ).rejects.toBeInstanceOf(MorningCardsApiError);
   });
 });

@@ -611,3 +611,41 @@ export async function postUsageEvent(input: {
     /* usage events are best effort */
   }
 }
+
+/** Where in the app a comment was sent from. */
+export interface AppFeedbackWhere {
+  /** Screen name ('home', 'page', 'past', ...). */
+  screen: string;
+  /** The goal cell label on screen. */
+  cell?: string;
+  /** Seen date of the brief on screen ('YYYY-MM-DD'); with `cell` it names the brief. */
+  date?: string;
+}
+
+/**
+ * One comment from the account sheet ('menu') or under a brief ('brief'); rejects when it was not
+ * saved. `replay_url` is sent only when a session recording is running.
+ */
+export async function postAppFeedback(
+  input: {
+    kind: 'menu' | 'brief';
+    body: string;
+    path: string;
+    replayUrl: string | null;
+  } & AppFeedbackWhere
+): Promise<void> {
+  const body: Record<string, string> = {
+    kind: input.kind,
+    body: input.body,
+    screen: input.screen,
+    path: input.path,
+  };
+  if (input.cell !== undefined) body.cell = input.cell;
+  if (input.date !== undefined) body.date = input.date;
+  if (input.replayUrl !== null) body.replay_url = input.replayUrl;
+  await call<unknown>(
+    '/app-feedback',
+    { method: 'POST', body: JSON.stringify(body) },
+    MORNING_FEED_PATH
+  );
+}

@@ -98,6 +98,10 @@ APPLY_FILES=(
   # Morning feed: brief feedback per (viewer, cell, date) + append-only usage events. IF NOT EXISTS -- idempotent.
   "prisma/migrations/morning-feed/007_brief_feedback.sql"
   "prisma/migrations/morning-feed/008_usage_events.sql"
+  # Morning feed: comments sent from the app (append-only, RLS on, no policy). IF NOT EXISTS -- idempotent.
+  "prisma/migrations/morning-feed/009_app_feedback.sql"
+  # anon/authenticated lose every access to the morning tables (no policy; the API is the owner)
+  "prisma/migrations/morning-feed/010_rls.sql"
   # Per-mandala learner context column (nullable jsonb, no reader/writer yet). IF NOT EXISTS -- idempotent.
   "prisma/migrations/mandala-context/001_context.sql"
   "prisma/migrations/mandala_embeddings/001_add_ivfflat_index.sql"

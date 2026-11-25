@@ -19,6 +19,12 @@ import {
   saveBriefFeedback,
   validateUsageEvent,
 } from '@/modules/morning-feed/brief-usage';
+import {
+  APP_FEEDBACK_BODY_LIMIT_BYTES,
+  deviceOf,
+  saveAppFeedback,
+  validateAppFeedback,
+} from '@/modules/morning-feed/app-feedback';
 import { effectiveNow, moveTestClock, readTestClock } from '@/modules/morning-feed/virtual-day';
 import {
   cancelLastFeedJudgment,
@@ -443,6 +449,42 @@ export function createMorningFeedRoutes(deps: MorningFeedRouteDeps = defaultDeps
             return reply.code(400).send({ status: 'error', error: 'invalid_event' });
           }
           throw err;
+        }
+      }
+    );
+
+    // Comments from the app (2026-11-25). The text is stored and never logged: an unexpected error
+    // is answered here, not passed to the server's error handler, which prints error messages.
+    fastify.post(
+      '/app-feedback',
+      {
+        onRequest: [flagGate, fastify.authenticate],
+        bodyLimit: APP_FEEDBACK_BODY_LIMIT_BYTES,
+      },
+      async (request, reply) => {
+        const userId = readerGuard(request, reply);
+        if (!userId) return reply;
+        try {
+          const saved = await saveAppFeedback(
+            deps.getDb(),
+            userId,
+            briefOwnerFor(userId),
+            validateAppFeedback(request.body),
+            deviceOf(request.headers['user-agent'])
+          );
+          if (!saved) {
+            return reply.code(429).send({ status: 'error', error: 'too_many_feedback' });
+          }
+          return reply.code(201).send({ status: 'ok' });
+        } catch (err) {
+          if (err instanceof FeedValidationError) {
+            return reply.code(400).send({ status: 'error', error: 'invalid_feedback' });
+          }
+          request.log.error(
+            { errName: err instanceof Error ? err.name : 'unknown' },
+            'app feedback not saved'
+          );
+          return reply.code(500).send({ status: 'error', error: 'not_saved' });
         }
       }
     );
