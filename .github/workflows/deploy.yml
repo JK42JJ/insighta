@@ -403,6 +403,9 @@ jobs:
             VITE_API_URL=/api
             VITE_SUPABASE_URL=${{ vars.STG_SUPABASE_URL }}
             VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.STG_SUPABASE_ANON_KEY }}
+            VITE_POSTHOG_KEY=${{ secrets.VITE_POSTHOG_KEY }}
+            VITE_POSTHOG_REPLAY=1
+            VITE_POSTHOG_REPLAY_UNTIL=2026-12-09
             VITE_CHATBOT_PROVIDER=qwen-lora
           cache-from: type=gha
           cache-to: type=gha,mode=max

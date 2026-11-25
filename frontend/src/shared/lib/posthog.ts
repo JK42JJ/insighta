@@ -13,9 +13,36 @@ const POSTHOG_HOST = 'https://us.i.posthog.com';
  * Session replay for the usability test: '1' = record signed-in people (non-secret build flag).
  * Anything else = the behaviour without it. Input masking stays PostHog's default (all inputs).
  */
-const REPLAY_ON = import.meta.env.VITE_POSTHOG_REPLAY === '1';
+const REPLAY_BUILD = import.meta.env.VITE_POSTHOG_REPLAY === '1';
+/** Last day of recording (KST, 'YYYY-MM-DD'): the plan's free allowance ends then (James 2026-11-25). */
+const REPLAY_UNTIL = (import.meta.env.VITE_POSTHOG_REPLAY_UNTIL as string | undefined) ?? '';
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/**
+ * Whether this visit may be recorded: a replay build, not past the last day, and not an automated
+ * browser (the deploy's own tests would use up the allowance).
+ */
+export function replayAllowed(
+  now: Date,
+  automated: boolean,
+  build = REPLAY_BUILD,
+  until = REPLAY_UNTIL
+): boolean {
+  if (!build || automated || !/^\d{4}-\d{2}-\d{2}$/.test(until)) return false;
+  return new Date(now.getTime() + KST_OFFSET_MS).toISOString().slice(0, 10) <= until;
+}
+const REPLAY_ON = replayAllowed(
+  new Date(),
+  typeof navigator !== 'undefined' && navigator.webdriver === true
+);
 /** The replay address points this many seconds before the moment it is asked for. */
 const REPLAY_LOOK_BACK_S = 10;
+
+/** What a replay build may send: the recording and who it is. Product events stay prod's. */
+const REPLAY_EVENTS: ReadonlySet<string> = new Set(['$snapshot', '$identify', '$set']);
+export function onlyReplay<T extends { event: string }>(e: T | null): T | null {
+  return e && REPLAY_EVENTS.has(e.event) ? e : null;
+}
 
 let initialized = false;
 
@@ -24,10 +51,11 @@ export function initPostHog(): void {
   posthog.init(POSTHOG_KEY, {
     api_host: POSTHOG_HOST,
     autocapture: false,
-    capture_pageview: true,
+    // a replay build shares the project with prod: it sends recordings and their user id only
+    capture_pageview: !REPLAY_BUILD,
     person_profiles: 'identified_only',
     // recording starts in identifyUser, so nothing is recorded before sign-in
-    ...(REPLAY_ON ? { disable_session_recording: true } : {}),
+    ...(REPLAY_BUILD ? { disable_session_recording: true, before_send: onlyReplay } : {}),
   });
   initialized = true;
 }
@@ -37,10 +65,11 @@ export function identifyUser(
   properties?: { email?: string; created_at?: string }
 ): void {
   if (!initialized) return;
-  if (!REPLAY_ON) {
+  if (!REPLAY_BUILD) {
     posthog.identify(userId, properties);
     return;
   }
+  if (!REPLAY_ON) return;
   // recorded sessions carry the user id only: no email or other properties
   posthog.identify(userId);
   if (!posthog.sessionRecordingStarted()) {

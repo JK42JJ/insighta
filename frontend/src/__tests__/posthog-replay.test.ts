@@ -20,10 +20,13 @@ vi.mock('posthog-js', () => ({ default: ph }));
 const URL_ = 'https://us.posthog.com/project/k/replay/s?t=5';
 const PROPS = { email: 'p@example.com', created_at: '2026-01-01' };
 
-async function load(key: string, flag: string) {
+async function load(key: string, flag: string, until = '2999-12-31') {
   vi.resetModules();
+  // happy-dom calls itself automated; a participant's browser is not
+  vi.spyOn(navigator, 'webdriver', 'get').mockReturnValue(false);
   vi.stubEnv('VITE_POSTHOG_KEY', key);
   vi.stubEnv('VITE_POSTHOG_REPLAY', flag);
+  vi.stubEnv('VITE_POSTHOG_REPLAY_UNTIL', until);
   const mod = await import('@/shared/lib/posthog');
   mod.initPostHog();
   return mod;
@@ -76,6 +79,36 @@ describe('PostHog session replay', () => {
     ph.sessionRecordingStarted.mockReturnValue(true);
     m.identifyUser('u1', PROPS);
     expect(ph.startSessionRecording).toHaveBeenCalledTimes(1);
+  });
+
+  it('past the last day, or without one: no recording and no person', async () => {
+    for (const until of ['2000-01-01', '']) {
+      const m = await load('phc_k', '1', until);
+      m.identifyUser('u1', PROPS);
+      expect(ph.identify).not.toHaveBeenCalled();
+      expect(ph.startSessionRecording).not.toHaveBeenCalled();
+      expect(m.getReplayUrl()).toBeNull();
+    }
+  });
+
+  it('the last day is a Korean day; an automated browser is never recorded', async () => {
+    const { replayAllowed } = await load('phc_k', '1');
+    const at = (iso: string): boolean => replayAllowed(new Date(iso), false, true, '2026-12-09');
+    expect(at('2026-12-09T14:59:59Z')).toBe(true); // 23:59 KST
+    expect(at('2026-12-09T15:00:00Z')).toBe(false); // the 10th in Korea
+    expect(replayAllowed(new Date('2026-12-01'), true, true, '2026-12-09')).toBe(false);
+    expect(replayAllowed(new Date('2026-12-01'), false, false, '2026-12-09')).toBe(false);
+  });
+
+  it('a replay build sends the recording and the user id only, never product events', async () => {
+    const { onlyReplay } = await load('phc_k', '1');
+    const cfg = ph.init.mock.calls[0]![1];
+    expect(cfg.capture_pageview).toBe(false);
+    expect(cfg.before_send).toBe(onlyReplay);
+    expect(onlyReplay({ event: '$snapshot' })).toEqual({ event: '$snapshot' });
+    for (const event of ['$pageview', 'card_added', '$autocapture']) {
+      expect(onlyReplay({ event })).toBeNull();
+    }
   });
 
   it('sign-out stops the recording', async () => {
