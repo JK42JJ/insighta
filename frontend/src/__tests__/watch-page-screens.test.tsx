@@ -143,10 +143,63 @@ describe('브리프 page (2026-11-14 user test copy)', () => {
   });
 });
 
+describe('브리프 while its text is still read (2026-11-25)', () => {
+  it('the title and date handed over are drawn at once as they stay; lines only in the text place', () => {
+    const animate = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate });
+    const props = {
+      frame: FRAME,
+      title: { headline: PAGE.headline, seenDate: '2026-11-14' },
+      domainTitle: '기술·개발',
+      order: [],
+      rest: [],
+      today: '2026-11-14',
+      back: { label: '홈', onBack: () => undefined },
+      onPast: () => undefined,
+    };
+    const { rerender } = render(<WatchPage {...props} page={null} />);
+    const h1 = screen.getByTestId('mf-page-headline');
+    expect(h1.textContent).toBe(PAGE.headline);
+    for (let e: HTMLElement | null = h1; e; e = e.parentElement) {
+      expect(e.style.visibility).not.toBe('hidden');
+      expect(e.style.opacity).toBe('');
+    }
+    expect(screen.getByTestId('mf-page-seen').textContent).toBe('오늘 · 11월 14일');
+    const lines = screen.getByTestId('mf-page-skeleton');
+    expect(h1.compareDocumentPosition(lines) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByTestId('mf-page-core')).toBeNull();
+    // the text arrives: the lines go at once, the title is the same element and never faded
+    rerender(<WatchPage {...props} page={PAGE} />);
+    expect(screen.getByTestId('mf-page-core')).toBeTruthy();
+    expect(screen.queryByTestId('mf-page-skeleton')).toBeNull();
+    expect(screen.getByTestId('mf-page-headline')).toBe(h1);
+    expect(animate).not.toHaveBeenCalled();
+    delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate;
+  });
+
+  it('a kept brief is drawn with no lines at all', () => {
+    render(
+      <WatchPage
+        frame={FRAME}
+        page={PAGE}
+        domainTitle="기술·개발"
+        order={[]}
+        rest={[]}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => undefined }}
+        onPast={() => undefined}
+      />
+    );
+    expect(screen.queryByTestId('mf-page-skeleton')).toBeNull();
+    expect(screen.getByTestId('mf-page-core')).toBeTruthy();
+  });
+});
+
 describe('daily home routing', () => {
   it('a chip changes the headline; the button is always 브리프 읽기 and opens the shown brief', () => {
     const onOpen = vi.fn();
     const onOpenPage = vi.fn();
+    const onPast = vi.fn();
     render(
       <WatchHome
         frame={FRAME}
@@ -160,16 +213,28 @@ describe('daily home routing', () => {
           '재테크/투자': { headline: '둘째 헤드라인', seenDate: '2026-11-12' },
         }}
         initial="기술/개발"
-        today="2026-11-14"
         onOpen={onOpen}
         onOpenPage={onOpenPage}
-        onPast={() => undefined}
+        onPast={onPast}
       />
     );
     expect(screen.getByTestId('mf-home-headline').textContent).toBe('첫 헤드라인');
-    // the date only; a brief of today reads 오늘 ·
-    expect(screen.getByTestId('mf-home-meta').textContent).toContain('오늘 · 11월 14일');
-    expect(screen.getByTestId('mf-home-past').textContent).toBe('지난 브리프');
+    // the head (2026-11-25): the date of the shown brief with its weekday, a button to past briefs
+    expect(screen.getByTestId('mf-home-past').textContent).toBe('11월 14일 토요일');
+    fireEvent.click(screen.getByTestId('mf-home-past'));
+    expect(onPast).toHaveBeenLastCalledWith('기술/개발', '2026-11-14');
+    // above the headline: the chosen domain's name alone
+    expect(screen.getByTestId('mf-home-meta').textContent).toBe('기술·개발');
+    expect(document.body.textContent).not.toContain('오늘 ·');
+    expect(document.body.textContent).not.toContain('지난 브리프');
+    // Insighta is a button with the head's press feel and stays on the home
+    const brand = screen.getByTestId('mf-home-brand');
+    expect(brand.tagName).toBe('BUTTON');
+    expect(brand.getAttribute('data-press')).toBe('soft');
+    expect(screen.getByTestId('mf-home-past').getAttribute('data-press')).toBe('soft');
+    fireEvent.click(brand);
+    expect(onOpenPage).not.toHaveBeenCalled();
+    expect(screen.getByTestId('mf-home-headline').textContent).toBe('첫 헤드라인');
     // no goal in the top row: the brand only
     expect(screen.queryByTestId('mf-home-goal')).toBeNull();
     expect(screen.getByTestId('mf-home-enter').textContent).toContain('브리프 읽기');
@@ -181,7 +246,11 @@ describe('daily home routing', () => {
     // jsdom: fonts never arrive, so the switch is immediate (no motion before ready)
     fireEvent.click(chips[1]!);
     expect(screen.getByTestId('mf-home-headline').textContent).toBe('둘째 헤드라인');
-    expect(screen.getByTestId('mf-home-seen').textContent).toBe('11월 12일');
+    // the domain name and the date change with the chip
+    expect(screen.getByTestId('mf-home-domain').textContent).toBe('재테크');
+    expect(screen.getByTestId('mf-home-seen').textContent).toBe('11월 12일 목요일');
+    fireEvent.click(screen.getByTestId('mf-home-past'));
+    expect(onPast).toHaveBeenLastCalledWith('재테크/투자', '2026-11-12');
     expect(screen.getByTestId('mf-home-enter').textContent).toContain('브리프 읽기');
     fireEvent.click(screen.getByTestId('mf-home-enter'));
     expect(onOpenPage).toHaveBeenLastCalledWith('재테크/투자');
@@ -262,12 +331,37 @@ describe('지난 브리프 목록', () => {
     const rows = screen.getAllByTestId('mf-past-row');
     expect(rows.map((r) => r.textContent)).toEqual(['오늘 · 11월 14일가', '11월 13일나']);
     fireEvent.click(rows[1]!);
-    expect(onOpen).toHaveBeenCalledWith('기술/개발', '2026-11-13');
+    expect(onOpen).toHaveBeenCalledWith('기술/개발', '2026-11-13', '나');
     fireEvent.click(screen.getAllByTestId('mf-past-chip')[1]!);
     await act(async () => {
       await Promise.resolve();
     });
     expect(screen.getByTestId('mf-past-dom').textContent).toBe('건강');
     expect(screen.queryAllByTestId('mf-past-row')).toHaveLength(0);
+    // opened from today: no 오늘로
+    expect(screen.queryByTestId('mf-past-today')).toBeNull();
+  });
+
+  it('오늘로 is the first thing in the list when given, and gives the chosen domain', async () => {
+    const onToday = vi.fn();
+    render(
+      <WatchPast
+        frame={FRAME}
+        chips={[{ cell: '기술/개발', title: '기술·개발' }]}
+        initial="기술/개발"
+        load={() => Promise.resolve([{ seen_date: '2026-11-13', headline: '나' }])}
+        onOpen={() => undefined}
+        onToday={onToday}
+        today="2026-11-14"
+        back={{ label: '홈', onBack: () => undefined }}
+      />
+    );
+    await screen.findAllByTestId('mf-past-row');
+    const go = screen.getByTestId('mf-past-today');
+    expect(go.textContent).toBe('오늘로');
+    expect(go.getAttribute('data-press')).toBe('soft');
+    expect(document.querySelector('.mf-past-list')!.firstElementChild).toBe(go);
+    fireEvent.click(go);
+    expect(onToday).toHaveBeenCalledWith('기술/개발');
   });
 });

@@ -38,6 +38,20 @@ export function ensureHomeFonts(): void {
   }
 }
 
+/** Loads the pieces a brief's text needs, ahead of opening it (best effort, nothing waits). */
+export function loadBriefFonts(text: string): void {
+  if (typeof document === 'undefined' || !document.fonts) return;
+  const started = Date.now();
+  const tryLoad = (): void => {
+    if (facesDeclared()) {
+      document.fonts.load("400 17px 'Pretendard Variable'", text).catch(() => undefined);
+    } else if (Date.now() - started <= FONT_WAIT_MS) {
+      window.setTimeout(tryLoad, SHEET_POLL_MS);
+    }
+  };
+  tryLoad();
+}
+
 function facesDeclared(): boolean {
   const fams = [...document.fonts].map((f) => f.family).join('|');
   return /Noto Serif KR/.test(fams) && /Pretendard/.test(fams);

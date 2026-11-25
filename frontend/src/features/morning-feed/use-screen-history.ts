@@ -9,8 +9,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *
  * The whole stack is returned as well (decision 2026-11-14 "앱처럼 반응"): screens under the top
  * can stay mounted, so going back neither reads them again nor loses their scroll position, and
- * the last move says which way to slide. A back that the browser already animates itself
- * (Safari's edge swipe) is marked `native`, and the screens then change without our slide.
+ * the last move says which way to slide. Only a move the app started itself (a push, or its own
+ * back button through appBack) slides; every other history move is the browser's (its back and
+ * forward buttons, Safari's edge swipe) and is marked `native`: the browser draws its own
+ * transition, so the screens change without ours (decision 2026-11-25).
  */
 
 export interface ScreenEntry<T> {
@@ -21,7 +23,7 @@ export interface ScreenEntry<T> {
 
 export interface ScreenMove {
   dir: 'push' | 'pop' | 'replace' | 'none';
-  /** The browser draws its own transition for this move (do not slide again). */
+  /** The browser's own move (back/forward button, edge swipe): do not slide. */
   native: boolean;
   /** Changes with every move. */
   seq: number;
@@ -73,9 +75,23 @@ export function trackEdgeSwipe(): () => void {
     }
   };
 }
-/** This history move was drawn by the browser itself (do not slide again). */
+
+/** The popstate of an app back comes within this time; later ones are the browser's. */
+const APP_BACK_WINDOW_MS = 1000;
+let appBackAt = 0;
+
+/** The app's own back (its back buttons): one history entry back, with the app's slide. */
+export function appBack(): void {
+  appBackAt = Date.now();
+  window.history.back();
+}
+
+/** This history move is the browser's, not the app's: the screens change without our slide. */
 export function popIsNative(e: PopStateEvent): boolean {
-  const native = isNativeBack(e, edgeTouchAt, Date.now());
+  const now = Date.now();
+  const fromApp = appBackAt > 0 && now - appBackAt <= APP_BACK_WINDOW_MS;
+  const native = !fromApp || isNativeBack(e, edgeTouchAt, now);
+  appBackAt = 0;
   edgeTouchAt = 0;
   return native;
 }

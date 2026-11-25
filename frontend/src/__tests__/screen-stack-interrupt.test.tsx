@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ScreenStack } from '@/features/morning-feed/ScreenStack';
@@ -55,5 +55,38 @@ describe('ScreenStack: an interrupted slide leaves nothing behind', () => {
       expect(a.finish).not.toHaveBeenCalled();
       expect(a.cancel).toHaveBeenCalled();
     }
+  });
+});
+
+/*
+ * Regression (James 2026-11-25): at the end of a back slide the animations were removed before the
+ * leaving screen was taken away, so it lost its end pose and covered the home for one frame.
+ */
+describe('ScreenStack: the end of a back slide', () => {
+  it('takes the leaving screen away before its animation is removed', async () => {
+    let finish: () => void = () => undefined;
+    const done = new Promise<void>((r) => {
+      finish = r;
+    });
+    const leavingAtCancel: boolean[] = [];
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value: () => ({
+        finished: done,
+        cancel: () => leavingAtCancel.push(screen.queryByText('screen 2') !== null),
+      }),
+    });
+    const { rerender } = render(
+      <ScreenStack layers={[layer(1), layer(2)]} move={move('none', 0)} />
+    );
+    rerender(<ScreenStack layers={[layer(1)]} move={move('pop', 1)} />);
+    expect(screen.queryByText('screen 2')).not.toBeNull();
+    await act(async () => {
+      finish();
+      await done;
+    });
+    expect(screen.queryByText('screen 2')).toBeNull();
+    expect(leavingAtCancel.length).toBeGreaterThan(0);
+    expect(leavingAtCancel.every((there) => !there)).toBe(true);
   });
 });
