@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 /*
  * The brief screens as an app (decision 2026-11-14 "웹 티 없애기", 11-07 명세 모바일 웹 완성도):
  * - added to the home screen it opens full screen at the brief home (its own manifest:
- *   standalone, scope /morning-cards, start /morning-cards?view=watch, paper status bar);
+ *   standalone, scope and start /, paper status bar — the root sends a signed-in person here);
  * - the page itself never rubber-bands or pulls to refresh; only the content scrolls.
  * Everything is put back when the screen unmounts.
  */
