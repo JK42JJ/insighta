@@ -20,16 +20,18 @@ import { youtubeThumb } from '@/features/morning-feed/feed-format';
 import './source-sheet.css';
 
 /*
- * The sources of a sentence under the article (order 2026-11-25 B5-2). It does not block: the
- * article over it scrolls and its sentences are tapped as before. Two forms: 'base' (grip, player,
- * one line of text) and 'mini', a bar left when the base form is dragged down (the video pauses; a
- * tap or an upward swipe brings it back where it stopped, a downward one closes). The sheet and
- * its one player stay mounted when it is put away, so a later sentence does not start a new one.
+ * The sources of a sentence under the article (order 2026-11-25 B5-2, design "Insighta App
+ * Prototype", 읽으며 보기). It does not block: the article over it scrolls and its sentences are
+ * tapped as before. One dark panel in two forms: 'base' (grip, player, one line) and 'mini', the
+ * same panel gone down to a bar when it is dragged down: the video pauses and its thumbnail
+ * shrinks into the bar's left; a tap or an upward swipe brings it back where it stopped, a downward
+ * one closes. The panel and its one player stay mounted when it is put away, so a later sentence
+ * does not start a new one.
  *
  * YouTube's required minimum functionality decides three things here: the player keeps its size
- * and is moved out of the screen instead of getting small (at least 200x200 px); the bar lies
- * under the sheet, so nothing is ever drawn over the player; and the bar's thumbnail, which starts
- * playback, is at least 120x70 px.
+ * and is hidden instead of getting small (at least 200x200 px); nothing is drawn over it while it
+ * is shown; and the bar's thumbnail, which starts playback, is at least 120x70 px (96x54 in the
+ * design).
  */
 
 export type SheetForm = 'base' | 'mini' | 'closed';
@@ -49,7 +51,7 @@ const FLICK_MIN_PX = 14;
  */
 const MINI_PX = 24;
 /** The bar dragged this far up or down opens the base form or closes. */
-const BAR_PX = 28;
+const BAR_PX = 24;
 /**
  * The slide is fast first: more than half of the player is in view after this share of it, and
  * only then may the video start (YouTube).
@@ -97,10 +99,10 @@ export function SourceSheet(p: Props): JSX.Element {
   const barBtn = useRef<HTMLButtonElement>(null);
   /** The form on screen: the first one is drawn closed, so it slides in. */
   const [form, setForm] = useState<SheetForm>('closed');
+  /** How it is drawn: while it goes away it stays as it was. */
+  const [look, setLook] = useState<'base' | 'mini'>('base');
   const [live, setLive] = useState(false);
-  /** The bar is seen under the sheet while it is dragged. */
-  const [peek, setPeek] = useState(false);
-  const { ms } = MOTION.sheet;
+  const { ms } = MOTION.source;
 
   useLayoutEffect(() => {
     if (!sheet.current || !bar.current) return undefined;
@@ -120,13 +122,15 @@ export function SourceSheet(p: Props): JSX.Element {
   useLayoutEffect(() => {
     // the place it leaves from is drawn before the new one, so the browser slides between them
     void sheet.current?.offsetHeight;
-    if (sheet.current) sheet.current.style.transform = '';
-    if (bar.current) bar.current.style.transform = '';
-    setPeek(false);
+    sheet.current?.style.removeProperty('--src-drag');
     setForm(p.form);
     setLive(false);
-    if (p.form !== 'base') return undefined;
-    const t = window.setTimeout(() => setLive(true), ms * LIVE_SHARE);
+    if (p.form !== 'closed') setLook(p.form);
+    if (p.form === 'mini') return undefined;
+    const t =
+      p.form === 'base'
+        ? window.setTimeout(() => setLive(true), ms * LIVE_SHARE)
+        : window.setTimeout(() => setLook('base'), ms);
     return () => window.clearTimeout(t);
   }, [p.form, ms]);
 
@@ -151,49 +155,93 @@ export function SourceSheet(p: Props): JSX.Element {
     if (!still && p.count > 1) p.onTurn((to + p.count) % p.count);
   };
 
-  const sheetDrag = useDrag(sheet, {
-    off: still || p.form !== 'base',
-    sideways: p.count > 1,
-    allow: (dy) => dy > 0,
-    onStart: () => setPeek(true),
+  const isBar = p.form === 'mini';
+  const drag = useDrag(sheet, {
+    off: still,
+    sideways: p.count > 1 && !isBar,
+    allow: (dy) => isBar || dy > 0,
+    // the bar itself only leaves downwards
+    clamp: (dy) => Math.max(0, dy),
     onEnd: (dy, fast) => {
-      const down = dy >= MINI_PX || (fast && dy >= FLICK_MIN_PX);
-      if (down) p.onForm('mini', 'drag');
-      else setPeek(false);
-      return down;
+      const far = Math.abs(dy) >= (isBar ? BAR_PX : MINI_PX);
+      if (!far && !(fast && Math.abs(dy) >= FLICK_MIN_PX)) return false;
+      if (!isBar) p.onForm('mini', 'drag');
+      else if (dy < 0) p.onForm('base', 'drag');
+      else p.onClose('drag');
+      return true;
     },
     onTurn: (step) => turn(p.at + step),
   });
-  const barDrag = useDrag(bar, {
-    off: still || p.form !== 'mini',
-    sideways: false,
-    // the bar itself only leaves downwards
-    allow: () => true,
-    clamp: (dy) => Math.max(0, dy),
-    onEnd: (dy, fast) => {
-      const far = Math.abs(dy) >= BAR_PX || (fast && Math.abs(dy) >= FLICK_MIN_PX);
-      if (far && dy < 0) p.onForm('base', 'drag');
-      else if (far) p.onClose('drag');
-      return far;
-    },
-  });
 
   const { t, videoId } = p.target;
-  const stopped = peek || form === 'mini' ? (p.player.current?.position() ?? null) : null;
-  const text = [t > 0 ? stampOf(t) : '', p.channel, p.title].filter((x) => x).join(' · ');
-  const drawn = p.instant ? '' : undefined;
+  const stopped = look === 'mini' ? (p.player.current?.position() ?? null) : null;
+  const from = t > 0 ? stampOf(t) + '부터' : '';
 
   return (
-    <>
-      <div
-        ref={bar}
-        className="mf-src-bar"
-        data-testid="mf-src-bar"
-        data-form={form}
-        data-peek={peek ? '' : undefined}
-        data-instant={drawn}
-        {...barDrag}
-      >
+    <div
+      ref={sheet}
+      className="mf-src"
+      role="dialog"
+      aria-modal="false"
+      aria-label={'출처 영상: ' + p.title}
+      data-testid="mf-src-sheet"
+      data-form={form}
+      data-look={look}
+      data-instant={p.instant ? '' : undefined}
+      {...drag}
+    >
+      <div className="mf-src-head" data-testid="mf-src-head">
+        <span className="mf-src-grip" aria-hidden="true" />
+      </div>
+      {/* under the player until it has the video (never over it); it shrinks into the bar */}
+      <div className="mf-src-media" data-testid="mf-src-media" aria-hidden="true">
+        <img src={youtubeThumb(videoId)} alt="" draggable={false} />
+      </div>
+      <div className="mf-src-player" data-testid="mf-src-player" data-live={live ? '' : undefined}>
+        {!p.frozen ? (
+          <SourcePlayer
+            target={p.target}
+            live={live && p.form === 'base'}
+            handle={p.player}
+            onWatched={p.onWatched}
+            onRange={p.onRange}
+          />
+        ) : null}
+      </div>
+      <div className="mf-src-info" data-testid="mf-src-info">
+        {p.count > 1 ? (
+          <button
+            type="button"
+            className="mf-src-turn"
+            data-press="icon"
+            data-testid="mf-src-turn"
+            aria-label={'다음 근거 영상 (' + (p.at + 1) + '/' + p.count + ')'}
+            onClick={() => turn(p.at + 1)}
+          >
+            <span aria-live="polite" data-testid="mf-src-turn-n">
+              {p.at + 1 + '/' + p.count}
+            </span>
+            <span aria-hidden="true">›</span>
+          </button>
+        ) : null}
+        <div className="mf-src-line" data-testid="mf-src-line">
+          <span className="mf-src-ch">{p.channel}</span>
+          {from ? <span className="mf-src-from">{from}</span> : null}
+        </div>
+        <IconButton testId="mf-src-full" label="영상 전체 보기" onClick={p.onFull}>
+          <rect x="3.5" y="5" width="13" height="10" rx="2" />
+          <path d="M8.5 8.2v3.6l3-1.8z" fill="currentColor" stroke="none" />
+        </IconButton>
+        <IconButton
+          testId="mf-src-close"
+          label="닫기"
+          onClick={() => p.onClose('button')}
+          inner={closeBtn}
+        >
+          <path d="M5 5l10 10M15 5L5 15" />
+        </IconButton>
+      </div>
+      <div ref={bar} className="mf-src-bar" data-testid="mf-src-bar">
         <button
           ref={barBtn}
           type="button"
@@ -202,80 +250,16 @@ export function SourceSheet(p: Props): JSX.Element {
           aria-label={'이어서 보기: ' + p.title}
           onClick={(e) => !still && p.onForm('base', e.detail === 0 ? 'key' : 'tap')}
         >
-          <img className="mf-src-bar-thumb" src={youtubeThumb(videoId)} alt="" draggable={false} />
-          <span className="mf-src-bar-text">
-            <span className="mf-src-bar-at" data-testid="mf-src-bar-at">
-              {stopped === null ? stampOf(t) + '부터' : stampOf(stopped) + '에서 멈춤'}
-            </span>
-            <span className="mf-src-bar-t">
-              {[p.channel, p.title].filter((x) => x).join(' · ')}
-            </span>
+          <span className="mf-src-bar-at" data-testid="mf-src-bar-at">
+            {stopped === null ? from : stampOf(stopped) + ' · 멈춤'}
           </span>
+          <span className="mf-src-bar-t">{[p.channel, p.title].filter((x) => x).join(' · ')}</span>
         </button>
         <IconButton testId="mf-src-bar-close" label="닫기" onClick={() => p.onClose('button')}>
-          <path d="M6 6l12 12M18 6L6 18" />
+          <path d="M5 5l10 10M15 5L5 15" />
         </IconButton>
       </div>
-      <div
-        ref={sheet}
-        className="mf-src"
-        role="dialog"
-        aria-modal="false"
-        aria-label={'출처 영상: ' + p.title}
-        data-testid="mf-src-sheet"
-        data-form={form}
-        data-instant={drawn}
-        {...sheetDrag}
-      >
-        <div className="mf-src-head" data-testid="mf-src-head">
-          <span className="mf-src-grip" aria-hidden="true" />
-        </div>
-        <div className="mf-src-player" data-testid="mf-src-player">
-          {/* under the player until it is drawn (never over it): no black box while it loads */}
-          <img className="mf-src-under" src={youtubeThumb(videoId)} alt="" draggable={false} />
-          {!p.frozen ? (
-            <SourcePlayer
-              target={p.target}
-              live={live && p.form === 'base'}
-              handle={p.player}
-              onWatched={p.onWatched}
-              onRange={p.onRange}
-            />
-          ) : null}
-        </div>
-        <div className="mf-src-info" data-testid="mf-src-info">
-          {p.count > 1 ? (
-            <button
-              type="button"
-              className="mf-src-turn"
-              data-press="soft"
-              data-testid="mf-src-turn"
-              aria-label={'다음 근거 영상 (' + (p.at + 1) + '/' + p.count + ')'}
-              onClick={() => turn(p.at + 1)}
-            >
-              <span aria-live="polite" data-testid="mf-src-turn-n">
-                {p.at + 1 + '/' + p.count}
-              </span>
-              <span aria-hidden="true">›</span>
-            </button>
-          ) : null}
-          <div className="mf-src-line" data-testid="mf-src-line">
-            {text}
-          </div>
-          <IconButton testId="mf-src-full" label="영상 전체 보기" onClick={p.onFull}>
-            <path d="M8 16L17 7M9.5 7H17v7.5" />
-          </IconButton>
-          <IconButton
-            testId="mf-src-close"
-            label="닫기"
-            onClick={() => p.onClose('button')}
-            inner={closeBtn}
-          >
-            <path d="M6 6l12 12M18 6L6 18" />
-          </IconButton>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -285,7 +269,6 @@ interface DragOptions {
   /** A vertical gesture of this direction is the sheet's. */
   allow: (dy: number) => boolean;
   clamp?: (dy: number) => number;
-  onStart?: () => void;
   /** True: the gesture did something; false: the element goes back. */
   onEnd: (dy: number, fast: boolean) => boolean;
   onTurn?: (step: 1 | -1) => void;
@@ -302,7 +285,8 @@ function useDrag(el: { current: HTMLElement | null }, o: DragOptions): Record<st
     if (!e) return;
     const y = dy === null ? 0 : (o.clamp?.(dy) ?? dy);
     e.toggleAttribute('data-drag', dy !== null);
-    e.style.transform = y !== 0 ? `translate3d(0,${y}px,0)` : '';
+    if (y !== 0) e.style.setProperty('--src-drag', y + 'px');
+    else e.style.removeProperty('--src-drag');
   };
   const take = (id: number): void => {
     try {
@@ -351,7 +335,6 @@ function useDrag(el: { current: HTMLElement | null }, o: DragOptions): Record<st
       }
       d.on = true;
       take(e.pointerId);
-      o.onStart?.();
     }
     d.dy = o.allow(my) ? my : 0;
     move(d.dy);
@@ -418,7 +401,7 @@ function IconButton({
       ref={inner}
       type="button"
       className="mf-src-icon"
-      data-press="soft"
+      data-press="icon"
       data-testid={testId}
       aria-label={label}
       onClick={onClick}
@@ -426,10 +409,10 @@ function IconButton({
       <svg
         width="20"
         height="20"
-        viewBox="0 0 24 24"
+        viewBox="0 0 20 20"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.2"
+        strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"

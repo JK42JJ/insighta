@@ -111,7 +111,7 @@ describe('B5 sentence with several sources', () => {
     fireEvent.click(screen.getByTestId('mf-src-turn'));
     expect(screen.getByTestId('mf-src-turn-n').textContent).toBe('2/2');
     expect(screen.getAllByTestId('player').map((x) => x.textContent)).toEqual([B + '@30']);
-    expect(screen.getByTestId('mf-src-line').textContent).toContain('영상 B');
+    expect(screen.getByTestId('mf-src-line').textContent).toContain('채널B');
     expect(s[0]!.hasAttribute('data-lit')).toBe(true);
     fireEvent.click(screen.getByTestId('mf-src-turn'));
     expect(screen.getByTestId('mf-src-turn-n').textContent).toBe('1/2');
@@ -149,7 +149,7 @@ describe('B5 sentence with several sources', () => {
     ptr(info, 'pointermove', 180, 603, 60);
     ptr(sheet, 'pointerup', 180, 603, 80);
     expect(screen.getByTestId('mf-src-turn-n').textContent).toBe('2/2');
-    expect(sheet.style.transform).toBe('');
+    expect(sheet.style.getPropertyValue('--src-drag')).toBe('');
     ptr(info, 'pointerdown', 150, 600, 200);
     ptr(info, 'pointermove', 210, 602, 230);
     ptr(sheet, 'pointerup', 210, 602, 260);
@@ -160,7 +160,7 @@ describe('B5 sentence with several sources', () => {
     drawPage();
     fireEvent.click(screen.getByTestId('mf-page-note-toggle'));
     fireEvent.click(screen.getByTestId('mf-page-note').querySelectorAll('.mf-page-sent')[1]!);
-    expect(screen.getByTestId('mf-src-line').textContent).toMatch(/^3:20 · /);
+    expect(screen.getByTestId('mf-src-line').textContent).toMatch(/3:20부터$/);
     expect(screen.getByTestId('mf-src-turn-n').textContent).toBe('1/2');
     expect(document.querySelectorAll('[data-lit]')).toHaveLength(1);
   });

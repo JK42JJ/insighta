@@ -10,7 +10,9 @@ import { loadYouTubeApi, type YtPlayer } from '@/features/morning-feed/youtube-i
  * also after the sheet was put away (order 2026-11-25 B5-2). Another video is loaded into it, the
  * same video only moves to the source's second, and the sheet's small form pauses it. It starts
  * with sound. When the browser refuses that (iPhone), the video is left cued, so YouTube's own
- * play button shows; it is never started muted instead. Nothing is drawn over it.
+ * play button shows; it is never started muted instead. Nothing is drawn over it. While a video is
+ * being put into it the player is not shown (the thumbnail under it is), and it only starts once
+ * it is shown again: the black frame of a loading player is not seen (design 2026-11-25).
  */
 
 export interface SourceTarget {
@@ -40,12 +42,18 @@ interface Props {
   onRange?: (r: PlayRange, sid: string | undefined) => void;
 }
 
+/** YT.PlayerState.CUED */
+const YT_STATE_CUED = 5;
+/** The player is shown after this long also when it never said it was ready with the video. */
+const SHOW_LATEST_MS = 1500;
 /** How often the position is read for the played parts. */
 const RANGE_SAMPLE_MS = 500;
 
 export function SourcePlayer({ target, live, handle, onWatched, onRange }: Props): JSX.Element {
   const host = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
+  /** The player has the wanted video: it is drawn over the thumbnail. */
+  const [shown, setShown] = useState(false);
   /** A failed load is tried again with the next tap. */
   const [attempt, setAttempt] = useState(0);
   const want = useRef(target);
@@ -80,6 +88,9 @@ export function SourcePlayer({ target, live, handle, onWatched, onRange }: Props
     let ready = false;
     /** The shown video was started, and was not paused by us since. */
     let started = false;
+    /** A video was cued and is not in the player yet. */
+    let coming = false;
+    let latest: number | null = null;
     const seconds = new PlaySeconds();
     const ranges = new PlayRanges((r) => ranged.current?.(r, loaded?.sid));
     let playing = false;
@@ -98,6 +109,24 @@ export function SourcePlayer({ target, live, handle, onWatched, onRange }: Props
     const mount = document.createElement('div');
     host.current?.appendChild(mount);
 
+    /** The cued video is in the player: it is shown, then played. */
+    const arrived = (): void => {
+      if (latest !== null) window.clearTimeout(latest);
+      latest = null;
+      if (!coming || !alive) return;
+      coming = false;
+      setShown(true);
+      if (started && !blocked && liveRef.current) instance?.playVideo();
+    };
+    const put = (p: YtPlayer, at: { videoId: string; startSeconds: number }): void => {
+      coming = true;
+      played = false;
+      playing = false;
+      setShown(false);
+      p.cueVideoById(at);
+      if (latest !== null) window.clearTimeout(latest);
+      latest = window.setTimeout(arrived, SHOW_LATEST_MS);
+    };
     /** Plays what is wanted, as soon as the player is ready and in view. */
     const go = (): void => {
       const p = instance;
@@ -107,7 +136,7 @@ export function SourcePlayer({ target, live, handle, onWatched, onRange }: Props
         // back from the small form: on from where it was paused
         if (!started) {
           started = true;
-          p.playVideo();
+          if (!coming) p.playVideo();
         }
         return;
       }
@@ -117,18 +146,12 @@ export function SourcePlayer({ target, live, handle, onWatched, onRange }: Props
       report(same ? seconds.take() : seconds.end());
       loaded = t;
       started = true;
-      if (blocked) {
-        // refused once and not played since: it would be refused again, the play button shows
-        played = false;
-        playing = false;
-        p.cueVideoById(at);
-      } else if (same) {
+      // blocked: refused once and not played since, it would be refused again (the play button shows)
+      if (!same || blocked || coming) {
+        put(p, at);
+      } else {
         p.seekTo(at.startSeconds, true);
         p.playVideo();
-      } else {
-        played = false;
-        playing = false;
-        p.loadVideoById(at);
       }
     };
     sync.current = go;
@@ -159,11 +182,18 @@ export function SourcePlayer({ target, live, handle, onWatched, onRange }: Props
               positionRef.current = () => p.getCurrentTime();
               // YouTube remembers the muted state of the video screen's player
               p.unMute();
+              if (want.current.videoId === first.videoId) setShown(true);
               go();
             },
-            onError: () => undefined, // YouTube says so in the player itself
+            onError: () => {
+              // YouTube says so in the player itself
+              if (!alive) return;
+              coming = false;
+              setShown(true);
+            },
             onStateChange: (e) => {
               if (!alive) return;
+              if (e.data === YT_STATE_CUED) arrived();
               if (e.data === YT_STATE_PLAYING) {
                 // a start that was on its way while the sheet got small or left
                 if (!liveRef.current) {
@@ -230,7 +260,9 @@ export function SourcePlayer({ target, live, handle, onWatched, onRange }: Props
       window.removeEventListener('pagehide', onPageHide);
       pause();
       window.clearInterval(sampler);
+      if (latest !== null) window.clearTimeout(latest);
       alive = false;
+      setShown(false);
       handle.current = null;
       sync.current = null;
       try {
@@ -246,7 +278,12 @@ export function SourcePlayer({ target, live, handle, onWatched, onRange }: Props
 
   return (
     <>
-      <div ref={host} className="mf-src-yt" data-testid="mf-src-yt" />
+      <div
+        ref={host}
+        className="mf-src-yt"
+        data-testid="mf-src-yt"
+        data-shown={shown ? '' : undefined}
+      />
       {failed ? (
         <p className="mf-src-fail" role="status">
           영상을 불러오지 못했습니다

@@ -270,8 +270,9 @@ export function WatchPage(p: WatchPageProps): JSX.Element {
     const top = Math.min(...marks.map((m) => m.top)) - view.top;
     const bottom = Math.max(...marks.map((m) => m.bottom)) - view.top;
     const over = bottom - (view.height - source.room - LIT_CLEAR_PX);
-    const by = Math.round(Math.min(over, top - safeTop - LIT_CLEAR_PX));
-    if (by <= 0) return;
+    // up above the sheet, its first line never over the top edge; one cut by the top edge comes down
+    const by = Math.round(Math.min(Math.max(over, 0), top - safeTop - LIT_CLEAR_PX));
+    if (by === 0) return;
     if (reducedMotion() || typeof box.scrollTo !== 'function') box.scrollTop += by;
     else box.scrollTo({ top: box.scrollTop + by, behavior: 'smooth' });
   }, [scroll, source, safeTop]);

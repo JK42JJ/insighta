@@ -268,7 +268,7 @@ describe('article page -> the video at that second', () => {
     expect(pushState).toHaveBeenCalledTimes(1);
     expect(evidence).toEqual([B]);
     // the sheet, over the article; the video screen only from its button
-    expect(screen.getByTestId('mf-src-line').textContent).toMatch(/^2:40 · /);
+    expect(screen.getByTestId('mf-src-line').textContent).toMatch(/2:40부터$/);
     expect(opened).toEqual([]);
     fireEvent.click(screen.getByTestId('mf-src-full'));
     await act(async () => {

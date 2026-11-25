@@ -47,6 +47,11 @@ export const MOTION = {
     closeDistance: 90,
     closeVelocity: 0.5,
   },
+  /** The source sheet of a sentence and its bar (design 2026-11-25). */
+  source: {
+    ms: 380,
+    ease: 'cubic-bezier(0.32, 0.72, 0, 1)',
+  },
   /** A state that changes at once (좋아/별로, the brief reaction). */
   pop: {
     scale: 1.15,
@@ -79,6 +84,8 @@ export function motionStyleVars(): CSSProperties {
     '--mo-push-ease': m.push.ease,
     '--mo-sheet-ms': m.sheet.ms + 'ms',
     '--mo-sheet-ease': m.sheet.ease,
+    '--mo-src-ms': m.source.ms + 'ms',
+    '--mo-src-ease': m.source.ease,
     '--mo-sheet-scrim': String(m.sheet.scrim),
     '--mo-pop-scale': String(m.pop.scale),
     '--mo-pop-ms': m.pop.ms + 'ms',

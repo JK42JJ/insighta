@@ -1,102 +1,123 @@
 /*
- * The source sheet under the article (order 2026-11-25 B5-2). Colours are tokens defined here, the
- * rest come from the watch and home tokens. The article is not darkened and not locked.
+ * The source sheet under the article (order 2026-11-25 B5-2; design "Insighta App Prototype",
+ * 읽으며 보기: values from there). The article is not darkened and not locked.
  */
-.mf-src,
-.mf-src-bar {
-  --src-edge: rgba(20, 26, 36, 0.16);
-  /* the bar: its thumbnail starts playback, so it is at least 120 x 70 px (YouTube) */
-  --src-bar-h: 72px;
+.mf-src {
+  --src-bg: #141a24;
+  --src-fg: #f7f5f0;
+  --src-at: #93a8d6;
+  --src-grip: rgba(247, 245, 240, 0.32);
+  --src-press: rgba(247, 245, 240, 0.08);
+  --src-edge: rgba(20, 26, 36, 0.6);
+  --src-clear: transparent;
+  --src-head-h: 20px;
+  --src-info-h: 56px;
+  --src-safe: var(--src-safe-bottom, 0px);
+  /* the bar's thumbnail starts playback: at least 120 x 70 px (YouTube; 96 x 54 in the design) */
+  --src-thumb-w: 125px;
+  --src-thumb-h: 70px;
+  --src-bar-h: 82px;
+  --src-fade: 0.2s;
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--w-card);
-  color: var(--w-text);
-  box-shadow: 0 -2px 24px var(--src-edge);
+  z-index: 5;
+  overflow: hidden;
+  padding-bottom: var(--src-safe);
+  border-radius: 14px 14px 0 0;
+  background: var(--src-bg);
+  color: var(--src-fg);
+  box-shadow: 0 -18px 40px -24px var(--src-edge);
   font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   touch-action: none;
   overscroll-behavior: contain;
+  will-change: transform;
   /* out of the screen at its full size: the player never gets small */
-  transform: translate3d(0, 100%, 0);
+  transform: translate3d(0, 110%, 0);
   visibility: hidden;
   transition:
-    transform var(--mo-sheet-ms, 0s) var(--mo-sheet-ease, ease),
-    visibility 0s linear var(--mo-sheet-ms, 0s);
-}
-.mf-src {
-  z-index: 5;
-  max-height: calc(100% - var(--src-safe-top, 0px));
-  padding-bottom: var(--src-safe-bottom, 0px);
-  display: flex;
-  flex-direction: column;
-  border-radius: 12px 12px 0 0;
+    transform var(--mo-src-ms, 0s) var(--mo-src-ease, ease),
+    visibility 0s linear var(--mo-src-ms, 0s);
 }
 .mf-src[data-form='base'],
-.mf-src-bar[data-form='mini'],
-.mf-src-bar[data-peek] {
-  transform: none;
+.mf-src[data-form='mini'] {
   visibility: inherit;
-  transition: transform var(--mo-sheet-ms, 0s) var(--mo-sheet-ease, ease);
+  transition: transform var(--mo-src-ms, 0s) var(--mo-src-ease, ease);
 }
-/* under the sheet, so it is uncovered by it and never lies over the player */
-.mf-src-bar {
-  z-index: 4;
-  padding-bottom: var(--src-safe-bottom, 0px);
-  display: flex;
-  align-items: center;
+.mf-src[data-form='base'] {
+  transform: translate3d(0, var(--src-drag, 0px), 0);
 }
-/* it is there at once when the sheet uncovers it, and gone once the sheet covers it again */
-.mf-src-bar[data-peek],
-.mf-src-bar[data-form='mini'] {
-  transition: none;
-}
-.mf-src-bar[data-form='base']:not([data-peek]) {
-  transform: none;
-  transition: visibility 0s linear var(--mo-sheet-ms, 0s);
+/* the bar is the panel's first 82 px: the rest is below the screen */
+.mf-src[data-form='mini'] {
+  transform: translate3d(
+    0,
+    calc(100% - var(--src-bar-h) - var(--src-safe) + var(--src-drag, 0px)),
+    0
+  );
 }
 .mf-src[data-drag],
-.mf-src-bar[data-drag],
-.mf-src[data-instant],
-.mf-src-bar[data-instant] {
+.mf-src[data-instant] {
   transition: none;
 }
 .mf-src-head {
   position: relative;
-  flex: none;
-  height: 16px;
-}
-/* a thumb-sized place to take hold of it, over the article and not over the player */
-.mf-src-head::before {
-  content: '';
-  position: absolute;
-  left: 25%;
-  right: 25%;
-  top: -12px;
-  height: 28px;
+  height: var(--src-head-h);
 }
 .mf-src-grip {
   position: absolute;
   left: 50%;
-  top: 6px;
+  top: 8px;
   width: 36px;
   height: 4px;
   margin-left: -18px;
   border-radius: 2px;
-  background: var(--w-branch-line);
+  background: var(--src-grip);
+  transition: opacity var(--src-fade);
+}
+.mf-src[data-look='mini'] .mf-src-grip {
+  opacity: 0;
 }
 /* 16:9 over the whole width, never under YouTube's 200 px */
 .mf-src-player {
   position: relative;
-  flex: none;
   width: 100%;
   aspect-ratio: 16 / 9;
   min-height: 200px;
-  background: var(--w-branch-line);
+  /* hidden at once when it is no base form any more: the bar is never drawn over it */
+  visibility: hidden;
 }
-.mf-src-under {
+.mf-src[data-look='base'] .mf-src-player[data-live],
+.mf-src[data-form='closed'][data-look='base'] .mf-src-player {
+  visibility: inherit;
+}
+/* the thumbnail: under the player, then in the bar */
+.mf-src-media {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: var(--src-head-h);
+  width: 100%;
+  height: calc(100% - var(--src-head-h) - var(--src-info-h) - var(--src-safe));
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    left var(--mo-src-ms, 0s) var(--mo-src-ease, ease),
+    top var(--mo-src-ms, 0s) var(--mo-src-ease, ease),
+    width var(--mo-src-ms, 0s) var(--mo-src-ease, ease),
+    height var(--mo-src-ms, 0s) var(--mo-src-ease, ease),
+    border-radius var(--mo-src-ms, 0s) var(--mo-src-ease, ease);
+}
+.mf-src[data-look='mini'] .mf-src-media {
+  left: 12px;
+  top: calc((var(--src-bar-h) - var(--src-thumb-h)) / 2);
+  width: var(--src-thumb-w);
+  height: var(--src-thumb-h);
+  border-radius: 6px;
+}
+.mf-src[data-instant] .mf-src-media {
+  transition: none;
+}
+.mf-src-media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -105,6 +126,11 @@
 .mf-src-yt {
   position: absolute;
   inset: 0;
+  opacity: 0;
+}
+.mf-src-yt[data-shown] {
+  opacity: 1;
+  transition: opacity 0.25s;
 }
 .mf-src-yt iframe {
   display: block;
@@ -119,103 +145,127 @@
   display: grid;
   place-items: center;
   font-size: 14px;
-  background: var(--w3-video-bg, var(--w-navy));
-  color: var(--w-white);
+  background: var(--src-bg);
+  color: var(--src-fg);
 }
 .mf-src-info {
-  flex: none;
-  height: 52px;
-  padding: 0 4px 0 16px;
+  height: var(--src-info-h);
+  padding: 0 6px 0 18px;
   display: flex;
   align-items: center;
+  gap: 4px;
+  transition:
+    opacity var(--src-fade),
+    visibility 0s linear var(--src-fade);
+  opacity: 0;
+  visibility: hidden;
+}
+.mf-src[data-look='base'] .mf-src-info {
+  opacity: 1;
+  visibility: inherit;
+  transition: opacity var(--src-fade);
 }
 .mf-src-line {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  line-height: 1.3;
   white-space: nowrap;
+}
+.mf-src-ch {
+  min-width: 0;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.mf-src-from {
+  flex: none;
+  font-weight: 600;
+  color: var(--src-at);
   font-variant-numeric: tabular-nums;
 }
 .mf-w-app .mf-src-icon,
 .mf-w-app .mf-src-turn {
-  --h-press: var(--mo-press-fill);
   flex: none;
   min-width: 44px;
   height: 44px;
   padding: 0;
   border: 0;
-  background: var(--w-clear);
-  color: var(--w-text);
+  border-radius: 22px;
+  background: var(--src-clear);
+  color: var(--src-fg);
   display: grid;
   place-items: center;
   cursor: pointer;
+}
+.mf-w-app .mf-src-icon[data-pressed],
+.mf-w-app .mf-src-turn[data-pressed] {
+  background: var(--src-press);
 }
 .mf-w-app .mf-src-turn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  margin: 0 8px 0 -8px;
+  margin-left: -10px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 700;
-  color: var(--w-steel);
+  color: var(--src-at);
   font-variant-numeric: tabular-nums;
+}
+.mf-src-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  padding: 0 6px var(--src-safe) 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--src-fade),
+    visibility 0s linear var(--src-fade);
+}
+.mf-src[data-look='mini'] .mf-src-bar {
+  opacity: 1;
+  visibility: inherit;
+  transition: opacity var(--src-fade);
 }
 .mf-w-app .mf-src-bar-open {
   flex: 1;
   min-width: 0;
   height: var(--src-bar-h);
-  padding: 0;
+  padding: 0 0 0 calc(var(--src-thumb-w) + 24px);
   border: 0;
-  background: var(--w-clear);
+  background: var(--src-clear);
   color: inherit;
   font-family: inherit;
   text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-}
-.mf-src-bar-thumb {
-  flex: none;
-  width: calc(var(--src-bar-h) * 16 / 9);
-  height: var(--src-bar-h);
-  object-fit: cover;
-  display: block;
-  background: var(--w-branch-line);
-}
-.mf-src-bar-text {
-  flex: 1;
-  min-width: 0;
-}
-.mf-src-bar-at,
-.mf-src-bar-t {
-  display: block;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
 }
 .mf-src-bar-at {
   font-size: 13px;
-  line-height: 18px;
   font-weight: 700;
-  color: var(--w-steel);
+  color: var(--src-at);
   font-variant-numeric: tabular-nums;
 }
 .mf-src-bar-t {
-  margin-top: 2px;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 14px;
   font-weight: 500;
-  color: var(--w-sub);
-}
-.mf-src-bar .mf-src-icon {
-  margin-right: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* a phone held sideways: the video keeps its 200 px */
 @media (max-height: 460px) {
@@ -226,9 +276,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .mf-src,
-  .mf-src-bar,
   .mf-src[data-form='base'],
-  .mf-src-bar[data-form='mini'] {
+  .mf-src[data-form='mini'],
+  .mf-src-media {
     transition: none;
   }
 }

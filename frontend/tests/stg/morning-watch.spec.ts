@@ -130,10 +130,14 @@ test('morning watch: a participant reads a brief, opens its evidence and comes b
   await page.mouse.down();
   await page.mouse.move(grip.x + grip.width / 2, grip.y + 90, { steps: 8 });
   await page.mouse.up();
-  await expect(sheet).toBeHidden();
   const bar = page.getByTestId('mf-src-bar');
   await expect(bar).toBeVisible();
-  const thumb = (await bar.locator('img').boundingBox())!;
+  await page.waitForTimeout(SHEET_SETTLE_MS);
+  await expect(sheet.locator('iframe')).toBeHidden();
+  const small = (await sheet.locator('iframe').boundingBox())!;
+  expect(small.width).toBeGreaterThanOrEqual(200);
+  expect(small.height).toBeGreaterThanOrEqual(200);
+  const thumb = (await page.getByTestId('mf-src-media').boundingBox())!;
   expect(thumb.width).toBeGreaterThanOrEqual(120);
   expect(thumb.height).toBeGreaterThanOrEqual(70);
   await info.attach('source-bar', { body: await page.screenshot(), contentType: 'image/png' });
