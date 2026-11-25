@@ -2,13 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   fetchMorningPageCards,
-  fetchTestClock,
   postFeedJudgment,
   postWatchBatch,
   undoFeedJudgment,
   type FeedHistoryItem,
   type MorningHomePages,
-  type TestClockDto,
 } from '@/features/morning-cards/api';
 import { useAuth } from '@/features/auth/model/useAuth';
 import { useLandingArrival } from '@/features/landing-intro';
@@ -17,6 +15,7 @@ import { takeWatchStart } from '@/features/morning-feed/watch-prefetch';
 import { WatchBoot } from '@/features/morning-feed/WatchBoot';
 import { WatchHomeEmpty } from '@/features/morning-feed/WatchHome';
 import { TestClockControls } from '@/features/morning-feed/TestClockControls';
+import { useTestClock } from '@/features/morning-feed/use-test-clock';
 import { motionStyleVars } from '@/features/morning-feed/motion-tokens';
 import { usePressFeedback } from '@/features/morning-feed/use-press';
 import { useAppShell } from '@/features/morning-feed/use-app-shell';
@@ -271,16 +270,7 @@ function EmptyHome({ day, message }: { day?: string; message: string }): JSX.Ele
   const app = useRef<HTMLDivElement>(null);
   const frame = useWatchFrame(app);
   usePressFeedback(app);
-  const [clock, setClock] = useState<TestClockDto | null>(null);
-  useEffect(() => {
-    let on = true;
-    fetchTestClock()
-      .then((c) => on && setClock(c))
-      .catch(() => undefined);
-    return () => {
-      on = false;
-    };
-  }, []);
+  const clock = useTestClock();
   const [now] = useState(() => new Date());
   return (
     <div className="mf-w">
@@ -301,6 +291,7 @@ function EmptyHome({ day, message }: { day?: string; message: string }): JSX.Ele
             avatarUrl: userAvatar,
             onLogout: () => void signOut(),
             extra: clock ? <TestClockControls clock={clock} /> : undefined,
+            suggest: clock === null,
           }}
         />
       </div>

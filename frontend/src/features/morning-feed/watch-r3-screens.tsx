@@ -1,6 +1,8 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 
+import type { AppFeedbackWhere } from '@/features/morning-cards/api';
 import { BottomSheet } from '@/features/morning-feed/BottomSheet';
+import { SUGGEST_LABEL, SuggestForm } from '@/features/morning-feed/SuggestForm';
 import type { InsightView, WatchReaction } from '@/features/morning-feed/watch-design';
 import type { Frame } from '@/features/morning-feed/watch-r3-layout';
 
@@ -72,6 +74,8 @@ export interface R3AccountView {
   onLogout: () => void;
   /** stg test controls shown above 로그아웃 (virtual today); absent = nothing. */
   extra?: ReactNode;
+  /** 제안하기 in the place of `extra` (every account without the test controls). */
+  suggest?: boolean;
 }
 
 function PersonIcon({ size }: { size: number }): JSX.Element {
@@ -111,13 +115,22 @@ function Avatar({
 /** The account sheet over the screen (README 수정 4 §6); also used by the daily home. */
 export function AccountSheet({
   account,
+  where,
   onClose,
 }: {
   account: R3AccountView;
+  /** Where 제안하기 is sent from: the screen and the brief on it. */
+  where: AppFeedbackWhere;
   onClose: () => void;
 }): JSX.Element {
+  const [suggesting, setSuggesting] = useState(false);
   return (
-    <BottomSheet onClose={onClose} className="mf-w3-acct" testId="mf-w3-acct" label="계정">
+    <BottomSheet
+      onClose={onClose}
+      className={suggesting ? 'mf-w3-acct mf-suggest' : 'mf-w3-acct'}
+      testId="mf-w3-acct"
+      label={suggesting ? SUGGEST_LABEL : '계정'}
+    >
       {(close) => (
         <>
           <div className="mf-w3-acct-top">
@@ -142,23 +155,40 @@ export function AccountSheet({
               </svg>
             </button>
           </div>
-          <div className="mf-w3-acct-who">
-            <Avatar url={account.avatarUrl} size={44} icon={24} />
-            <div className="mf-w3-acct-text">
-              <div className="mf-w3-acct-name">{account.name}</div>
-              <div className="mf-w3-acct-email">{account.email}</div>
-            </div>
-          </div>
-          {account.extra}
-          <button
-            type="button"
-            className="mf-w3-logout"
-            data-press="btn"
-            data-testid="mf-w3-logout"
-            onClick={account.onLogout}
-          >
-            로그아웃
-          </button>
+          {suggesting ? (
+            <SuggestForm where={where} onSent={close} />
+          ) : (
+            <>
+              <div className="mf-w3-acct-who">
+                <Avatar url={account.avatarUrl} size={44} icon={24} />
+                <div className="mf-w3-acct-text">
+                  <div className="mf-w3-acct-name">{account.name}</div>
+                  <div className="mf-w3-acct-email">{account.email}</div>
+                </div>
+              </div>
+              {account.extra}
+              {account.suggest ? (
+                <button
+                  type="button"
+                  className="mf-suggest-open"
+                  data-press="row"
+                  data-testid="mf-suggest-open"
+                  onClick={() => setSuggesting(true)}
+                >
+                  {SUGGEST_LABEL}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="mf-w3-logout"
+                data-press="btn"
+                data-testid="mf-w3-logout"
+                onClick={account.onLogout}
+              >
+                로그아웃
+              </button>
+            </>
+          )}
         </>
       )}
     </BottomSheet>
@@ -354,7 +384,13 @@ export function WatchInputR3(p: WatchInputR3Props): JSX.Element {
           ) : null}
         </div>
       </div>
-      {acct && account ? <AccountSheet account={account} onClose={() => setAcct(false)} /> : null}
+      {acct && account ? (
+        <AccountSheet
+          account={account}
+          where={{ screen: 'input' }}
+          onClose={() => setAcct(false)}
+        />
+      ) : null}
     </div>
   );
 }

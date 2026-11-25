@@ -3,10 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchMorningPage,
   fetchMorningPageList,
-  fetchTestClock,
   postBriefFeedback,
   postUsageEvent,
-  type TestClockDto,
   fetchWatchInsight,
   type FeedHistoryItem,
   type InsightData,
@@ -62,6 +60,7 @@ import {
 import { PageSkeleton } from '@/features/morning-feed/PageSkeleton';
 import { PageWithWatch } from '@/features/morning-feed/PageWithWatch';
 import { TestClockControls } from '@/features/morning-feed/TestClockControls';
+import { useTestClock } from '@/features/morning-feed/use-test-clock';
 import type { PageWatchCards } from '@/features/morning-feed/PageWatch';
 import { WatchPast } from '@/features/morning-feed/WatchPast';
 import './watch.css';
@@ -176,17 +175,8 @@ export function MorningWatch({
   /** Videos answered in this visit, read synchronously so a changed verdict is not counted twice. */
   const answered = useRef(new Set<string>());
   const [now] = useState(() => new Date());
-  /** stg virtual today, only for an allowed account (404 -> null: nothing is shown). */
-  const [clock, setClock] = useState<TestClockDto | null>(null);
-  useEffect(() => {
-    let on = true;
-    fetchTestClock()
-      .then((c) => on && setClock(c))
-      .catch(() => undefined);
-    return () => {
-      on = false;
-    };
-  }, []);
+  /** stg virtual today, only for an allowed account; everyone else has 제안하기 in its place. */
+  const clock = useTestClock();
 
   useEffect(() => {
     alive.current = true;
@@ -328,12 +318,14 @@ export function MorningWatch({
   // "today" as the server decided it (virtual day on stg), else the device's KST day
   const dayToday = pages?.today ?? serverDay ?? kstDay(now);
   const testControls = clock ? <TestClockControls clock={clock} /> : undefined;
+  const suggest = clock === null;
   const pageAccount = {
     name: userName ?? '',
     email: userEmail ?? '',
     avatarUrl: userAvatar,
     onLogout: () => void signOut(),
     extra: testControls,
+    suggest,
   };
   const home = homeHeadlines(pages, goals);
   /** Chips everywhere (decision 2026-11-14): only domains with a page. */
@@ -430,6 +422,7 @@ export function MorningWatch({
         // signed out: the route's sign-in check sends the person to sign in again
         onLogout: () => void signOut(),
         extra: testControls,
+        suggest,
       };
       const focus = screen.focus && home?.pages[screen.focus] ? screen.focus : home?.initial;
       body = home ? (

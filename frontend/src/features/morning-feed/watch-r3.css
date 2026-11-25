@@ -1494,3 +1494,80 @@ button.mf-w3-navy-card {
   opacity: 0.45;
   cursor: default;
 }
+
+/* 제안하기 in the account sheet, in the place of the test controls (participants) */
+.mf-suggest-open {
+  width: 100%;
+  height: 52px;
+  margin-top: 18px;
+  border: 1px solid var(--w3-navy-line);
+  border-radius: 12px;
+  background: var(--w3-clear);
+  color: var(--w3-on);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mf-suggest-open + .mf-w3-logout {
+  margin-top: 10px;
+}
+/* the sheet stays on the app's bottom edge; its content rises over the keyboard */
+.mf-w3-acct.mf-suggest {
+  padding-bottom: 0;
+}
+.mf-suggest-form {
+  margin: 0;
+  padding-bottom: calc(max(var(--mf-kb, 0px), var(--w3-safe-bottom, 0px)) + 22px);
+}
+.mf-suggest-guide {
+  display: block;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--w3-on);
+}
+.mf-suggest-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+/* 16px: a smaller field makes iOS zoom the page in when it is tapped */
+.mf-suggest-input {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--w3-navy-line);
+  border-radius: 12px;
+  background: var(--w3-card);
+  color: var(--w3-text);
+  font: inherit;
+  font-size: 16px;
+  touch-action: manipulation;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.mf-suggest-send {
+  flex: none;
+  min-width: 80px;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--w3-navy-line);
+  border-radius: 12px;
+  background: var(--w3-steel);
+  color: var(--w3-on);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mf-suggest-send:disabled {
+  background: var(--w3-clear);
+  opacity: 0.45;
+  cursor: default;
+}
+.mf-suggest-err {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--w3-navy-body);
+}

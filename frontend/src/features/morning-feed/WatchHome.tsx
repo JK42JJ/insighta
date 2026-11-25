@@ -297,7 +297,11 @@ export function WatchHome(p: WatchHomeProps): JSX.Element {
         </div>
       </div>
       {acct && p.account ? (
-        <AccountSheet account={p.account} onClose={() => setAcct(false)} />
+        <AccountSheet
+          account={p.account}
+          where={{ screen: 'home', cell: sel, date: p.pages[sel]?.seenDate }}
+          onClose={() => setAcct(false)}
+        />
       ) : null}
     </div>
   );
@@ -361,7 +365,11 @@ export function WatchHomeEmpty(p: WatchHomeEmptyProps): JSX.Element {
         <div className="mf-home-gap-bottom" />
       </div>
       {acct && p.account ? (
-        <AccountSheet account={p.account} onClose={() => setAcct(false)} />
+        <AccountSheet
+          account={p.account}
+          where={{ screen: 'empty' }}
+          onClose={() => setAcct(false)}
+        />
       ) : null}
     </div>
   );

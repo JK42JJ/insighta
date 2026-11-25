@@ -29,6 +29,8 @@ ARG VITE_SUPABASE_PUBLISHABLE_KEY=
 ARG VITE_APP_NAME=Insighta
 ARG VITE_APP_VERSION=2.0.0
 ARG VITE_POSTHOG_KEY=
+# '1' = session replay for signed-in people (needs VITE_POSTHOG_KEY); empty = off
+ARG VITE_POSTHOG_REPLAY=
 ARG VITE_CHATBOT_PROVIDER=
 
 ENV VITE_API_URL=${VITE_API_URL}
@@ -37,6 +39,7 @@ ENV VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
 ENV VITE_APP_NAME=${VITE_APP_NAME}
 ENV VITE_APP_VERSION=${VITE_APP_VERSION}
 ENV VITE_POSTHOG_KEY=${VITE_POSTHOG_KEY}
+ENV VITE_POSTHOG_REPLAY=${VITE_POSTHOG_REPLAY}
 ENV VITE_CHATBOT_PROVIDER=${VITE_CHATBOT_PROVIDER}
 
 # CP449 — Vite's import.meta.env replacement reads from .env files reliably
@@ -47,6 +50,9 @@ ENV VITE_CHATBOT_PROVIDER=${VITE_CHATBOT_PROVIDER}
 # Hard Rule which lists only .env / .env.local / .env.production).
 RUN if [ -n "$VITE_CHATBOT_PROVIDER" ]; then \
       echo "VITE_CHATBOT_PROVIDER=$VITE_CHATBOT_PROVIDER" >> .env.production.local; \
+    fi
+RUN if [ -n "$VITE_POSTHOG_REPLAY" ]; then \
+      echo "VITE_POSTHOG_REPLAY=$VITE_POSTHOG_REPLAY" >> .env.production.local; \
     fi
 
 # Build the application
