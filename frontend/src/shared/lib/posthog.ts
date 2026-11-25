@@ -7,6 +7,8 @@
 
 import posthog from 'posthog-js';
 
+import { BRIEF_EVENT_KINDS, type BriefEventKind } from '@/shared/lib/brief-event-kinds';
+
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 const POSTHOG_HOST = 'https://us.i.posthog.com';
 /**
@@ -45,13 +47,23 @@ const REPLAY_ON = replayAllowed(
 /** The replay address points this many seconds before the moment it is asked for. */
 const REPLAY_LOOK_BACK_S = 10;
 
-/** What a replay build may send: the recording and who it is. Product events stay prod's. */
-const REPLAY_EVENTS: ReadonlySet<string> = new Set(['$snapshot', '$identify', '$set']);
+/**
+ * What a replay build may send: the recording, who it is, and the brief events (James 2026-11-25,
+ * D1). The other product events stay prod's.
+ */
+const REPLAY_EVENTS: ReadonlySet<string> = new Set([
+  '$snapshot',
+  '$identify',
+  '$set',
+  ...BRIEF_EVENT_KINDS,
+]);
 export function onlyReplay<T extends { event: string }>(e: T | null): T | null {
   return e && REPLAY_EVENTS.has(e.event) ? e : null;
 }
 
 let initialized = false;
+/** A replay build knows who this is and may send their events (not an excluded account). */
+let replayPerson = false;
 
 export function initPostHog(): void {
   if (!POSTHOG_KEY || initialized) return;
@@ -76,7 +88,8 @@ export function identifyUser(
     posthog.identify(userId, properties);
     return;
   }
-  if (!REPLAY_ON || REPLAY_EXCLUDE.has(userId)) return;
+  replayPerson = REPLAY_ON && !REPLAY_EXCLUDE.has(userId);
+  if (!replayPerson) return;
   // recorded sessions carry the user id only: no email or other properties
   posthog.identify(userId);
   if (!posthog.sessionRecordingStarted()) {
@@ -87,6 +100,7 @@ export function identifyUser(
 
 export function resetUser(): void {
   if (!initialized) return;
+  replayPerson = false;
   if (REPLAY_ON) posthog.stopSessionRecording();
   posthog.reset();
 }
@@ -107,6 +121,22 @@ export function getReplayUrl(): string | null {
 }
 
 // ─── Event helpers ───
+
+/**
+ * A brief event under the same name as in our API. In a replay build it goes out only for a person
+ * who may be recorded, so nothing is sent before sign-in or for an excluded account.
+ */
+export function captureBriefEvent(
+  kind: BriefEventKind,
+  props: Record<string, string | number>
+): void {
+  if (!initialized || (REPLAY_BUILD && !replayPerson)) return;
+  try {
+    posthog.capture(kind, props);
+  } catch {
+    /* analytics is best effort; our API is the source of truth */
+  }
+}
 
 export function trackMandalaCreated(props: {
   mandala_id: string;

@@ -102,6 +102,8 @@ APPLY_FILES=(
   "prisma/migrations/morning-feed/009_app_feedback.sql"
   # anon/authenticated lose every access to the morning tables (no policy; the API is the owner)
   "prisma/migrations/morning-feed/010_rls.sql"
+  # Brief behaviour events (nullable columns) and sentence concepts (D1). Additive, idempotent.
+  "prisma/migrations/morning-feed/011_brief_events.sql"
   # Per-mandala learner context column (nullable jsonb, no reader/writer yet). IF NOT EXISTS -- idempotent.
   "prisma/migrations/mandala-context/001_context.sql"
   "prisma/migrations/mandala_embeddings/001_add_ivfflat_index.sql"
