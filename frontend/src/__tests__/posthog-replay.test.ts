@@ -81,6 +81,16 @@ describe('PostHog session replay', () => {
     expect(ph.startSessionRecording).toHaveBeenCalledTimes(1);
   });
 
+  it('an excluded account (James, the deploy test) is neither recorded nor identified', async () => {
+    vi.stubEnv('VITE_POSTHOG_REPLAY_EXCLUDE', 'james-1, test-1');
+    const m = await load('phc_k', '1');
+    for (const id of ['james-1', 'test-1']) m.identifyUser(id, PROPS);
+    expect(ph.identify).not.toHaveBeenCalled();
+    expect(ph.startSessionRecording).not.toHaveBeenCalled();
+    m.identifyUser('participant', PROPS);
+    expect(ph.startSessionRecording).toHaveBeenCalledWith(true);
+  });
+
   it('past the last day, or without one: no recording and no person', async () => {
     for (const until of ['2000-01-01', '']) {
       const m = await load('phc_k', '1', until);

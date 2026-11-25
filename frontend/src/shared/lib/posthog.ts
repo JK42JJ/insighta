@@ -16,6 +16,13 @@ const POSTHOG_HOST = 'https://us.i.posthog.com';
 const REPLAY_BUILD = import.meta.env.VITE_POSTHOG_REPLAY === '1';
 /** Last day of recording (KST, 'YYYY-MM-DD'): the plan's free allowance ends then (James 2026-11-25). */
 const REPLAY_UNTIL = (import.meta.env.VITE_POSTHOG_REPLAY_UNTIL as string | undefined) ?? '';
+/** Accounts that are never recorded (user ids, not emails): James's and the deploy test's (James 2026-11-25). */
+const REPLAY_EXCLUDE: ReadonlySet<string> = new Set(
+  String(import.meta.env.VITE_POSTHOG_REPLAY_EXCLUDE ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /**
@@ -69,7 +76,7 @@ export function identifyUser(
     posthog.identify(userId, properties);
     return;
   }
-  if (!REPLAY_ON) return;
+  if (!REPLAY_ON || REPLAY_EXCLUDE.has(userId)) return;
   // recorded sessions carry the user id only: no email or other properties
   posthog.identify(userId);
   if (!posthog.sessionRecordingStarted()) {

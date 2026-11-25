@@ -406,6 +406,7 @@ jobs:
             VITE_POSTHOG_KEY=${{ secrets.VITE_POSTHOG_KEY }}
             VITE_POSTHOG_REPLAY=1
             VITE_POSTHOG_REPLAY_UNTIL=2026-12-09
+            VITE_POSTHOG_REPLAY_EXCLUDE=bdf3c0ae-33f5-43d5-b8a8-2cf824e6625c,7285aac0-9011-4475-8081-64b74f1c0fff,0cd661ef-fd9d-4e87-89fe-65758ef4fc02,00000000-0000-0000-0000-000000000001
             VITE_CHATBOT_PROVIDER=qwen-lora
           cache-from: type=gha
           cache-to: type=gha,mode=max
