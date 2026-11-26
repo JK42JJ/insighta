@@ -12,8 +12,16 @@
 # prod-built frontend has the prod Supabase URL compiled in and must never run
 # in staging.
 images:
-  apiTag: 4bdf07ebd49931dfc24e431796ccb78ffd5c8ba9
-  frontendTag: none
-  redisTag: 057d82c1b9d5f9e46cd4d182dced5c594910514d
+  apiTag: 23cb16b0e4d287e8708823240b3a0127a610e9df
+  frontendTag: 23cb16b0e4d287e8708823240b3a0127a610e9df
+  redisTag: 691d9a54a6472850a376e7db3f85176eca70ab23
+# stg-repo-override api begin
+api:
+  image:
+    repository: insighta-stg-api
+# stg-repo-override api end
+# stg-repo-override frontend begin
 frontend:
-  replicaCount: 0
+  image:
+    repository: insighta-stg-frontend
+# stg-repo-override frontend end
