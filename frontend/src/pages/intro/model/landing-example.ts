@@ -158,7 +158,6 @@ const YT_THUMB_RETRY = '/hqdefault.jpg';
 export const THUMB_MISSING_W = 120;
 /** The embedded player: the landing plays videos on itself and never opens YouTube (James 2026-11-25). */
 /** A video's own page: the YouTube Icon goes there (branding rule, James 2026-11-25); cards never do. */
-const YT_WATCH = 'https://www.youtube.com/watch?v=';
 const YT_EMBED = 'https://www.youtube.com/embed/';
 
 /** "mm:ss" (or "h:mm:ss") -> seconds; 0 when it is not a time. */
@@ -186,12 +185,6 @@ export function embedUrl(t: PlayTarget): string {
     start: String(Math.max(0, Math.floor(t.start))),
   });
   return `${YT_EMBED}${encodeURIComponent(t.video.id)}?${q.toString()}`;
-}
-
-/** The video's YouTube page, from `start` when there is one (the icon's link only). */
-export function youtubePage(t: PlayTarget): string {
-  const at = Math.max(0, Math.floor(t.start));
-  return `${YT_WATCH}${encodeURIComponent(t.video.id)}${at > 0 ? `&t=${at}s` : ''}`;
 }
 
 /** The hero video from its source time. */

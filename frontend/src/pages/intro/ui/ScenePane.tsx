@@ -26,7 +26,6 @@ import {
   TERMS,
   YT_CREDIT,
   YT_ICON_ALT,
-  ytPageLabel,
   ytPlayLabel,
 } from '../model/landing-content';
 import {
@@ -36,7 +35,6 @@ import {
   THUMB_MISSING_W,
   thumbRetryUrl,
   thumbUrl,
-  youtubePage,
   type LandingExample,
   type PlayTarget,
 } from '../model/landing-example';
@@ -325,11 +323,8 @@ function ScenePaneView({
                       />
                     ))}
                     {d.yt ? (
-                      <YouTubeIconLink
-                        target={d.yt}
-                        label={ytPageLabel(hero.channel)}
+                      <YouTubeIcon
                         live={s === 0 && d.thumbsOn}
-                        tapped={tapped}
                         testId={tid('lv-yt-deck')}
                         // the clear space may overhang the row; the thumbnails stay where they were
                         bleedY={(YT_ICON_BOX_H - DECK_THUMB_H) / 2}
@@ -588,15 +583,7 @@ function ScenePaneView({
               opacity: view.credit.on ? 1 : 0,
             }}
           >
-            {view.credit.play ? (
-              <YouTubeIconLink
-                target={view.credit.play}
-                label={ytPageLabel(hero.channel)}
-                live={view.credit.on}
-                tapped={tapped}
-                testId={tid('lv-yt')}
-              />
-            ) : null}
+            {view.credit.play ? <YouTubeIcon live={view.credit.on} testId={tid('lv-yt')} /> : null}
           </div>
 
           {/* scene 6: the last sheet */}
@@ -703,43 +690,29 @@ function ScenePaneView({
 export const ScenePane = memo(ScenePaneView);
 
 /**
- * The official YouTube Icon, a link to the video's YouTube page (the branding rule: the icon must
- * link to YouTube content; James 2026-11-25). The file is drawn whole and unaltered (its transparent
- * margin is the icon's clear space), at its own proportions, on the row's solid colour. A swipe that
- * ends on it opens nothing. The videos and thumbnails themselves play on the landing.
+ * The official YouTube Icon beside the videos it marks as YouTube's: shown, never a link (James
+ * 2026-11-26: on the landing nothing leaves for YouTube; the videos play here, in the embedded
+ * player, which keeps its own YouTube links). The file is drawn whole and unaltered (its transparent
+ * margin is the icon's clear space), at its own proportions, on the row's solid colour. Taps pass
+ * through it to the scene.
  */
-function YouTubeIconLink({
-  target,
-  label,
+function YouTubeIcon({
   live,
-  tapped,
   testId,
   bleedY = 0,
 }: {
-  target: PlayTarget;
-  label: string;
-  /** Visible and reachable in the current scene. */
+  /** Visible in the current scene. */
   live: boolean;
-  tapped: () => boolean;
   testId: string | undefined;
   /** Negative vertical margin (px) so the file's transparent margin does not grow the row. */
   bleedY?: number;
 }): JSX.Element {
   return (
-    <a
+    <span
       className="lv-yt"
       data-testid={testId}
-      href={youtubePage(target)}
-      target="_blank"
-      rel="noopener noreferrer"
-      draggable={false}
-      aria-label={label}
-      tabIndex={live ? 0 : -1}
-      style={{ pointerEvents: live ? 'auto' : 'none', margin: `${-bleedY}px 0` }}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!live || !tapped()) e.preventDefault();
-      }}
+      data-live={live ? '' : undefined}
+      style={{ pointerEvents: 'none', margin: `${-bleedY}px 0` }}
     >
       <img
         className="lv-yt-img"
@@ -750,7 +723,7 @@ function YouTubeIconLink({
         decoding="async"
         draggable={false}
       />
-    </a>
+    </span>
   );
 }
 

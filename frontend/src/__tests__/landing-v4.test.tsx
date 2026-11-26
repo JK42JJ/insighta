@@ -68,7 +68,6 @@ import {
   wallDomains,
   YT_CREDIT,
   YT_ICON_ALT,
-  ytPageLabel,
 } from '@/pages/intro/model/landing-content';
 import {
   checkLandingExample,
@@ -704,8 +703,7 @@ describe('YouTube policy', () => {
   it('one icon per scene with videos and no words; the words are in the last sheet only', () => {
     draw();
     const page = (): HTMLElement => document.querySelector<HTMLElement>('[data-page="0"]')!;
-    const icons = (): number =>
-      [...page().querySelectorAll<HTMLElement>('a.lv-yt')].filter((a) => a.tabIndex === 0).length;
+    const icons = (): number => page().querySelectorAll<HTMLElement>('.lv-yt[data-live]').length;
     for (const s of [0, 1, 2, 3, 4, 5] as const) {
       goTo(s);
       expect([s, icons()]).toEqual([s, 1]);
@@ -805,12 +803,14 @@ describe('YouTube policy', () => {
     expect(screen.queryByTestId('lv-player')).toBeNull();
   });
 
-  it('only the icon leads to YouTube: videos and thumbnails play on the landing (James 2026-11-25)', () => {
+  it('nothing on the landing leads to YouTube: videos and thumbnails play here (James 2026-11-26)', () => {
     draw();
     for (const s of [0, 1, 2, 3, 4, 5, 7] as const) {
       goTo(s);
-      const links = [...document.querySelectorAll<HTMLAnchorElement>('a[href], [target="_blank"]')];
-      expect(links.every((a) => a.classList.contains('lv-yt'))).toBe(true);
+      const links = [
+        ...document.querySelectorAll<HTMLElement>('a[href*="youtube"], [target="_blank"]'),
+      ];
+      expect([s, links.length]).toEqual([s, 0]);
     }
     cleanup();
     draw();
@@ -825,15 +825,13 @@ describe('YouTube policy', () => {
 });
 
 describe('YouTube Icon next to the thumbnails (YouTube API branding guidelines)', () => {
-  const HERO_ID = LANDING_EXAMPLE.videos[LANDING_EXAMPLE.heroIndex]!.id;
   const icon = (a: HTMLElement): HTMLImageElement => a.querySelector('img') as HTMLImageElement;
-  /** The video's YouTube page, in a new tab. */
-  const page = (id: string, start = 0): string =>
-    `https://www.youtube.com/watch?v=${id}${start ? `&t=${start}s` : ''}`;
+  /** Shown, not a link: no href, no new tab, taps pass through (James 2026-11-26). */
   function expectOfficial(a: HTMLElement): void {
-    expect(a.tagName).toBe('A');
-    expect((a as HTMLAnchorElement).target).toBe('_blank');
-    expect((a as HTMLAnchorElement).rel).toContain('noopener');
+    expect(a.tagName).toBe('SPAN');
+    expect(a.closest('a')).toBeNull();
+    expect(a.hasAttribute('href')).toBe(false);
+    expect(a.style.pointerEvents).toBe('none');
     const img = icon(a);
     // the official file, whole, in its own proportions, nothing applied to it
     expect(img.getAttribute('src')).toContain('yt_icon_red_digital');
@@ -854,32 +852,25 @@ describe('YouTube Icon next to the thumbnails (YouTube API branding guidelines)'
     expect(YT_ICON_BOX_W / YT_ICON_BOX_H).toBeCloseTo(YT_ICON_FILE_W / YT_ICON_FILE_H, 6);
   });
 
-  it('scene 1: the deck thumbnails carry the icon link to their first video', () => {
+  it('scene 1: the deck thumbnails carry the icon', () => {
     draw();
     const a = screen.getByTestId('lv-yt-deck');
     expect(a.closest('.lv-deck-thumbs')).not.toBeNull();
     expectOfficial(a);
-    expect(a.tabIndex).toBe(0);
-    expect(a.getAttribute('aria-label')).toBe(
-      ytPageLabel(LANDING_EXAMPLE.videos[LANDING_EXAMPLE.heroIndex]!.channel)
-    );
-    expect((a as HTMLAnchorElement).href).toBe(page(HERO_ID));
+    expect(a.hasAttribute('data-live')).toBe(true);
     // the row icon is not in scene 1 (the deck has its own)
     expect(screen.queryByTestId('lv-yt')).toBeNull();
     goTo(1);
-    expect(screen.getByTestId('lv-yt-deck').tabIndex).toBe(-1);
-    expect(screen.getByTestId('lv-yt-deck').style.pointerEvents).toBe('none');
+    expect(screen.getByTestId('lv-yt-deck').hasAttribute('data-live')).toBe(false);
   });
 
-  it('scenes 2 to 6: the attribution row carries the icon link; scene 6 from the source time', () => {
+  it('scenes 2 to 6: the attribution row carries the icon', () => {
     draw();
     for (const s of [1, 2, 3, 4, 5] as const) {
       goTo(s);
       const a = screen.getByTestId('lv-yt');
       expectOfficial(a);
-      expect((a as HTMLAnchorElement).href).toBe(page(HERO_ID, s === 5 ? heroPlay().start : 0));
-      expect(a.style.pointerEvents).toBe('auto');
-      expect(a.tabIndex).toBe(0);
+      expect(a.hasAttribute('data-live')).toBe(true);
       // no plate of its own: the ground under the row is one solid colour (the hero card in scenes
       // 2 and 6, the paper / night ground in 3, 4, 5) and starts far enough above the row
       const credit = screen.getByTestId('lv-credit');
@@ -904,7 +895,7 @@ describe('YouTube Icon next to the thumbnails (YouTube API branding guidelines)'
     expect(screen.getByTestId('lv-sheet-credit').textContent).toBe(YT_CREDIT);
   });
 
-  it('every scene with a visible thumbnail has an icon link (model)', () => {
+  it('every scene with a visible thumbnail has an icon (model)', () => {
     for (const s of SEQ) {
       const v = buildScene(s, 2, false, null);
       const thumbs =
@@ -914,35 +905,13 @@ describe('YouTube Icon next to the thumbnails (YouTube API branding guidelines)'
     }
   });
 
-  it('the links follow the example config (hero changes, links change)', () => {
-    example.swap = true;
-    draw();
-    const ex = LANDING_EXAMPLE;
-    const hero = ex.videos[ex.heroIndex]!;
-    expect((screen.getByTestId('lv-yt-deck') as HTMLAnchorElement).href).toBe(page(hero.id));
-    goTo(5);
-    expect((screen.getByTestId('lv-yt') as HTMLAnchorElement).href).toBe(
-      page(hero.id, timeToSeconds(ex.heroTime))
-    );
-  });
-
-  it('a swipe that ends on the icon opens nothing', () => {
+  it('a tap on the icon opens nothing and leaves nothing', () => {
     draw();
     goTo(2);
-    swipe(-80);
-    const click = (): boolean => {
-      const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
-      screen.getByTestId('lv-yt').addEventListener('click', (e) => e.preventDefault(), {
-        once: true,
-        passive: false,
-      });
-      ev.preventDefault = vi.fn(ev.preventDefault.bind(ev));
-      screen.getByTestId('lv-yt').dispatchEvent(ev);
-      return vi.mocked(ev.preventDefault).mock.calls.length > 1; // the page's own, besides the test's
-    };
-    expect(click()).toBe(true);
     waitLock();
-    expect(click()).toBe(false);
+    fireEvent.click(screen.getByTestId('lv-yt'));
+    expect(screen.queryByTestId('lv-player')).toBeNull();
+    expect(document.querySelector('a[href*="youtube.com/watch"]')).toBeNull();
   });
 });
 
@@ -1401,7 +1370,7 @@ describe('3 to 6 evidence videos: every scene lays them out', () => {
       );
       for (const img of screen.getAllByTestId('lv-thumb'))
         expect(img.getAttribute('style')).toBeNull();
-      // the deck shows the first three (hero first) and its icon link
+      // the deck shows the first three (hero first) and its icon
       expect(
         screen.getAllByTestId('lv-deck-card')[0]!.querySelectorAll('img.lv-deck-thumb')
       ).toHaveLength(3);
