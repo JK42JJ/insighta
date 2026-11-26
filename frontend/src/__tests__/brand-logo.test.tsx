@@ -52,7 +52,7 @@ describe('brand logo', () => {
       theme_color: '#F5F3EE',
     });
     const html = readFileSync('index.html', 'utf8');
-    for (const f of ['/favicon.svg', '/favicon-32x32.png', '/apple-touch-icon.png']) {
+    for (const f of ['/favicon.svg', '/favicon-32x32.png', '/apple-touch-icon-v2.png']) {
       expect(html).toContain(`href="${f}"`);
       expect(existsSync('public' + f)).toBe(true);
     }
